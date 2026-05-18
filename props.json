@@ -1,0 +1,6 @@
+{
+  "success": false,
+  "type": "error",
+  "code": 401,
+  "error": "Token not valid"
+}

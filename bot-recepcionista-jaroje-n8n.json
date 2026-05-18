@@ -1,0 +1,266 @@
+{
+  "name": "Bot Recepcionista IA + Pago Seguro (Stripe)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp-incoming",
+        "options": {}
+      },
+      "id": "webhook-whatsapp",
+      "name": "Webhook (WhatsApp Entrada)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "systemMessage": "Eres la recepcionista virtual inteligente del Condominio Jaroje. Tu tono debe ser servicial, premium y profesional.\n\nTU ÚNICO OBJETIVO: Ayudar al cliente a encontrar disponibilidad y enviarle el link de pago para cerrar la venta.\n\nREGLAS DE ORO:\n1. Usa SIEMPRE la herramienta 'ConsultarDisponibilidad' para revisar si las fechas que pide el cliente están libres.\n2. Si están ocupadas, dile amablemente que no hay disponibilidad y ofrécele otras fechas cercanas.\n3. Si están libres y el cliente quiere reservar, PÍDELE SU NOMBRE COMPLETO y luego envíale el Link de Pago Oficial: https://buy.stripe.com/test_ejemplo_jaroje_123\n4. BAJO NINGÚN CONCEPTO reserves tú la habitación. Explícale que la reserva solo se bloquea automáticamente en cuanto complete el pago en el enlace."
+        }
+      },
+      "id": "ai-agent",
+      "name": "Agente IA Recepcionista",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1,
+      "position": [300, 200]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {}
+      },
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [300, 400]
+    },
+    {
+      "parameters": {
+        "sessionIdKey": "={{$node[\"Webhook (WhatsApp Entrada)\"].json[\"body\"][\"phoneNumber\"]}}"
+      },
+      "id": "memory",
+      "name": "Memoria de WhatsApp",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1,
+      "position": [450, 400]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://tu-app-jaroje.vercel.app/api/reservas",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TU_TOKEN_SECRETO"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "tool-consultar",
+      "name": "ConsultarDisponibilidad",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1,
+      "position": [600, 400],
+      "notes": "Lee el calendario de Jaroje para cruzar fechas libres"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tu-proveedor-whatsapp.com/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "={{$node[\"Webhook (WhatsApp Entrada)\"].json[\"body\"][\"phoneNumber\"]}}"
+            },
+            {
+              "name": "message",
+              "value": "={{$node[\"Agente IA Recepcionista\"].json[\"output\"]}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "responder-whatsapp",
+      "name": "Responder Cliente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [600, 200]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stripe-webhook-pago",
+        "options": {}
+      },
+      "id": "webhook-stripe",
+      "name": "Webhook (Stripe Pago Completado)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [0, 800],
+      "notes": "Stripe dispara esto cuando la tarjeta pasa exitosamente."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tu-app-jaroje.vercel.app/api/reservas",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer TU_TOKEN_SECRETO"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "roomId",
+              "value": "={{$json[\"body\"][\"data\"][\"object\"][\"metadata\"][\"roomId\"]}}"
+            },
+            {
+              "name": "checkIn",
+              "value": "={{$json[\"body\"][\"data\"][\"object\"][\"metadata\"][\"checkIn\"]}}"
+            },
+            {
+              "name": "checkOut",
+              "value": "={{$json[\"body\"][\"data\"][\"object\"][\"metadata\"][\"checkOut\"]}}"
+            },
+            {
+              "name": "guestName",
+              "value": "={{$json[\"body\"][\"data\"][\"object\"][\"customer_details\"][\"name\"]}}"
+            },
+            {
+              "name": "isBlock",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bloquear-jaroje-beds24",
+      "name": "API: Forzar Bloqueo en App + Beds24",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [300, 800],
+      "notes": "Inyecta el dinero, bloquea la BD local y envía el PUSH a Beds24 para cerrar Airbnb/Booking."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tu-proveedor-whatsapp.com/send",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "={{$node[\"Webhook (Stripe Pago Completado)\"].json[\"body\"][\"data\"][\"object\"][\"customer_details\"][\"phone\"]}}"
+            },
+            {
+              "name": "message",
+              "value": "={{'🎉 ¡Pago Confirmado ' + $json.body.data.object.customer_details.name + '!\n\nTu reserva en Condominio Jaroje está 100% garantizada y las fechas han sido bloqueadas. Te esperamos el ' + $json.body.data.object.metadata.checkIn + '.\n\nCualquier duda, escríbeme por aquí.'}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "whatsapp-confirmacion",
+      "name": "WhatsApp: Confirmación Pago",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [550, 800]
+    }
+  ],
+  "connections": {
+    "Webhook (WhatsApp Entrada)": {
+      "main": [
+        [
+          {
+            "node": "Agente IA Recepcionista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente IA Recepcionista": {
+      "main": [
+        [
+          {
+            "node": "Responder Cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente IA Recepcionista",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria de WhatsApp": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente IA Recepcionista",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ConsultarDisponibilidad": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente IA Recepcionista",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook (Stripe Pago Completado)": {
+      "main": [
+        [
+          {
+            "node": "API: Forzar Bloqueo en App + Beds24",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API: Forzar Bloqueo en App + Beds24": {
+      "main": [
+        [
+          {
+            "node": "WhatsApp: Confirmación Pago",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
