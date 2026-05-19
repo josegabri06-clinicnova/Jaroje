@@ -15,7 +15,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 type Account = {
   id: string;
   name: string;
-  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO';
+  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR';
   balance: number;
   currency: string;
 };
@@ -345,6 +345,7 @@ export default function FinanzasPage() {
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {renderGroup('Efectivo', 'EFECTIVO', 'text-emerald-600', 'bg-emerald-50', Wallet)}
           {renderGroup('Bancos', 'BANCOS', 'text-blue-600', 'bg-blue-50', Landmark)}
+          {renderGroup('Cuentas x Cobrar', 'CUENTAS X COBRAR', 'text-amber-600', 'bg-amber-50', Landmark)}
           {renderGroup('Ahorros', 'AHORROS', 'text-indigo-600', 'bg-indigo-50', PiggyBank)}
           {renderGroup('Extranjero', 'EXTRANJERO', 'text-violet-600', 'bg-violet-50', Globe)}
           
