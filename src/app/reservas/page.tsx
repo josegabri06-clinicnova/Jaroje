@@ -49,8 +49,7 @@ export default function ReservasList() {
   const [paymentMethod, setPaymentMethod] = useState('efectivo');
   const [paymentReference, setPaymentReference] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [preCheckinDocUrl, setPreCheckinDocUrl] = useState<string | null>(null);
-  const [preCheckinDocUrl, setPreCheckinDocUrl] = useState<string | null>(null);
+  const [accounts, setAccounts] = useState<any[]>([]);
 
   useEffect(() => {
     if (selectedRes) {
@@ -58,6 +57,19 @@ export default function ReservasList() {
       setIsCheckedIn(selectedRes.is_checked_in || false);
     }
   }, [selectedRes]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && reservas.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const searchId = params.get('id');
+      if (searchId) {
+        const found = reservas.find(r => r.id.toString() === searchId);
+        if (found) {
+          setSelectedRes(found);
+        }
+      }
+    }
+  }, [reservas]);
 
   const handleConfirmCheckIn = async () => {
     setCheckInLoading(true);
@@ -70,7 +82,7 @@ export default function ReservasList() {
         const fileName = `${selectedRes.id}_dni_${Date.now()}.${fileExt}`;
         
         const { error: uploadError } = await supabase.storage
-          .from('guest_documents')
+          .from('dni_images')
           .upload(fileName, documentFile);
           
         if (uploadError) {
@@ -78,54 +90,46 @@ export default function ReservasList() {
           alert("Hubo un error subiendo el DNI. Se guardará el Check-in sin adjunto.");
         } else {
           const { data: publicUrlData } = supabase.storage
-            .from('guest_documents')
+            .from('dni_images')
             .getPublicUrl(fileName);
           document_url = publicUrlData.publicUrl;
         }
-      } else if (preCheckinDocUrl) {
-        document_url = preCheckinDocUrl;
       }
 
-      // 1. Guardar el Check-in (O actualizar si ya hay pre_checkin)
-      const { data: existingCheckin } = await supabase
-        .from('checkins')
-        .select('id')
-        .eq('reservation_id', selectedRes.id.toString())
-        .eq('status', 'pre_checkin')
-        .single();
-
-      if (existingCheckin) {
-        await supabase.from('checkins').update({
-          status: 'checked_in',
-          checked_in_by: 'Admin',
-          document_url: document_url
-        }).eq('id', existingCheckin.id);
-      } else {
-        await supabase.from('checkins').insert([{
-          reservation_id: selectedRes.id.toString(),
-          guest_name: selectedRes.guest_name,
-          room: selectedRes.room_name,
-          check_in_date: selectedRes.check_in,
-          check_out_date: selectedRes.check_out,
-          status: 'checked_in',
-          checked_in_by: 'Admin',
-          document_url: document_url
-        }]);
-      }
+      // 1. Guardar el Check-in
+      await supabase.from('checkins').insert([{
+        reservation_id: selectedRes.id.toString(),
+        guest_name: selectedRes.guest_name,
+        room: selectedRes.room_name,
+        check_in_date: selectedRes.check_in,
+        check_out_date: selectedRes.check_out,
+        status: 'checked_in',
+        checked_in_by: 'Admin',
+        document_url: document_url
+      }]);
 
       // 2. Registrar el Ingreso Financiero
-      const paymentDetail = paymentMethod === 'efectivo' ? `Sobre/Caja: ${paymentReference}` : 
-                            paymentMethod === 'tarjeta' ? `Terminal/Autorización: ${paymentReference}` : 
-                            `Cuenta destino: ${paymentReference}`;
+      const accountName = accounts.find(a => a.id === paymentReference)?.name || paymentReference;
+      const paymentDetail = paymentMethod === 'efectivo' ? `Sobre/Caja: ${accountName}` : 
+                            paymentMethod === 'tarjeta' ? `Terminal/Autorización: ${accountName}` : 
+                            `Cuenta destino: ${accountName}`;
 
-      await supabase.from('finances').insert([{
+      const { error: financeErr } = await supabase.from('finances').insert([{
         type: 'ingreso',
         amount: selectedRes.price_estimate,
         category: 'Alojamiento',
         description: `Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail}`,
         payment_method: paymentMethod,
+        account_id: paymentReference,
         date: new Date().toISOString().split('T')[0]
       }]);
+
+      if (!financeErr && paymentReference) {
+        const acc = accounts.find(a => a.id === paymentReference);
+        if (acc) {
+          await supabase.from('accounts').update({ balance: acc.balance + selectedRes.price_estimate }).eq('id', paymentReference);
+        }
+      }
 
       setIsCheckedIn(true);
       setShowPaymentFlow(false);
@@ -155,13 +159,15 @@ export default function ReservasList() {
     setIsLoading(true);
     setTokenError(false);
     try {
-      const [res, chk] = await Promise.all([
+      const [res, chk, acc] = await Promise.all([
         fetch('/api/reservas'),
-        supabase.from('checkins').select('*')
+        supabase.from('checkins').select('*'),
+        supabase.from('accounts').select('*')
       ]);
       const json = await res.json();
       
       let checkinMap: Record<string, any> = {};
+      if (acc.data) setAccounts(acc.data);
       if (chk.data) {
         chk.data.forEach(c => { checkinMap[String(c.reservation_id)] = c; });
       }
@@ -226,37 +232,7 @@ export default function ReservasList() {
 
   useEffect(() => { fetchReservas(); }, []);
 
-  useEffect(() => {
-    if (reservas.length > 0 && typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const scanId = urlParams.get('scan');
-      if (scanId) {
-        const res = reservas.find(r => r.id.toString() === scanId);
-        if (res) {
-          handleSelectReservaAndScan(res);
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      }
-    }
-  }, [reservas]);
 
-  const handleSelectReservaAndScan = async (r: any) => {
-    setSelectedRes(r);
-    setShowPaymentFlow(true);
-    setPreCheckinDocUrl(null);
-    setDocumentFile(null);
-
-    const { data } = await supabase
-      .from('checkins')
-      .select('document_url')
-      .eq('reservation_id', r.id.toString())
-      .eq('status', 'pre_checkin')
-      .single();
-
-    if (data && data.document_url) {
-      setPreCheckinDocUrl(data.document_url);
-    }
-  };
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -594,14 +570,23 @@ export default function ReservasList() {
                        paymentMethod === 'tarjeta' ? 'Número de Terminal (Datáfono)' : 
                        'Cuenta de Depósito'}
                     </label>
-                    <input 
-                      type="text"
+                    <select
                       required
-                      placeholder={paymentMethod === 'efectivo' ? 'Ej. Sobre 3' : paymentMethod === 'tarjeta' ? 'Ej. Terminal Clip' : 'Ej. Bancomer Terminación 4421'}
                       value={paymentReference}
                       onChange={e => setPaymentReference(e.target.value)}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 placeholder:text-zinc-400 font-medium"
-                    />
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900"
+                    >
+                      <option value="" disabled>Selecciona una opción</option>
+                      {accounts
+                        .filter(a => {
+                          if (paymentMethod === 'efectivo') return a.group_type === 'EFECTIVO';
+                          if (paymentMethod === 'tarjeta') return a.group_type === 'BANCOS' && a.name.toLowerCase().includes('terminal');
+                          return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
+                        })
+                        .map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                    </select>
                   </div>
 
                   <div className="flex gap-2">

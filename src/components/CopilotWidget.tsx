@@ -1,14 +1,33 @@
+
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useChat } from "@ai-sdk/react";
+import { useChat } from "ai/react";
 import { Bot, X, Send, Sparkles, Loader2, User } from "lucide-react";
 
 export default function CopilotWidget() {
   const [isOpen, setIsOpen] = useState(false);
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
+  const [role, setRole] = useState<string | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  useEffect(() => {
+    setRole(localStorage.getItem('jaroje_role'));
+  }, []);
+
+  // Watch for panel-open class on body (set by calendar sheet and other modals)
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setPanelOpen(document.body.classList.contains('panel-open'));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const { messages, input, handleInputChange, handleSubmit, isLoading, error } = useChat({
     api: "/api/copilot",
-  }) as any;
+    body: { role: role || 'recepcion' }
+  });
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom
@@ -16,17 +35,27 @@ export default function CopilotWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Listen for custom event to open
+  useEffect(() => {
+    const handleOpen = () => setIsOpen(true);
+    window.addEventListener('open-copilot', handleOpen);
+    return () => window.removeEventListener('open-copilot', handleOpen);
+  }, []);
+
+  // Auto-close when a panel opens
+  useEffect(() => { if (panelOpen) setIsOpen(false); }, [panelOpen]);
+
   return (
     <>
-      {/* Floating Button */}
-      <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 w-14 h-14 bg-zinc-900 hover:bg-black text-white rounded-full flex items-center justify-center shadow-2xl transition-all active:scale-95 z-50 ${
-          isOpen ? "scale-0 opacity-0 pointer-events-none" : "scale-100 opacity-100"
-        }`}
-      >
-        <Sparkles size={24} />
-      </button>
+      {/* Floating Button — hidden when any bottom sheet is open */}
+      {!panelOpen && (
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="fixed bottom-6 right-6 w-12 h-12 bg-zinc-900 hover:bg-black text-white rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 z-40"
+        >
+          {isOpen ? <X size={20} /> : <Sparkles size={20} />}
+        </button>
+      )}
 
       {/* Chat Window */}
       <div
@@ -55,15 +84,15 @@ export default function CopilotWidget() {
           </button>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#fafafa]">
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-zinc-50/50">
           {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center text-center px-4 space-y-3 opacity-60">
-              <div className="w-12 h-12 bg-zinc-200 rounded-full flex items-center justify-center mb-2">
-                <Sparkles size={24} className="text-zinc-500" />
+            <div className="h-full flex flex-col items-center justify-center text-center px-4">
+              <div className="w-12 h-12 bg-zinc-100 rounded-full flex items-center justify-center mb-3">
+                <Sparkles size={24} className="text-zinc-400" />
               </div>
-              <p className="text-[14px] font-bold text-zinc-900">¿En qué te ayudo hoy?</p>
-              <p className="text-[12px] font-medium text-zinc-500">
+              <h4 className="text-[15px] font-bold text-zinc-900 mb-1">¿En qué te ayudo hoy?</h4>
+              <p className="text-[12px] text-zinc-500 leading-relaxed max-w-[250px]">
                 Pregúntame sobre nóminas, gastos en sobres, o llegadas de huéspedes. Leo la base de datos en tiempo real.
               </p>
             </div>
@@ -75,22 +104,17 @@ export default function CopilotWidget() {
                   m.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
                 }`}
               >
-                {/* Avatar */}
                 <div
                   className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-1 ${
-                    m.role === "user"
-                      ? "bg-zinc-200 text-zinc-600"
-                      : "bg-zinc-900 text-white"
+                    m.role === "user" ? "bg-blue-600 text-white" : "bg-zinc-900 text-white"
                   }`}
                 >
                   {m.role === "user" ? <User size={12} /> : <Bot size={12} />}
                 </div>
-
-                {/* Message Bubble */}
                 <div
-                  className={`px-4 py-2.5 rounded-2xl text-[14px] leading-relaxed shadow-sm ${
+                  className={`px-4 py-3 rounded-2xl shadow-sm text-[13px] leading-relaxed whitespace-pre-wrap ${
                     m.role === "user"
-                      ? "bg-zinc-900 text-white rounded-tr-sm"
+                      ? "bg-blue-600 text-white rounded-tr-sm"
                       : "bg-white border border-zinc-200 text-zinc-800 rounded-tl-sm"
                   }`}
                 >
@@ -109,7 +133,16 @@ export default function CopilotWidget() {
               </div>
             </div>
           )}
+          
+          {error && (
+            <div className="mx-auto mb-4 bg-red-100 text-red-700 text-[12px] p-3 rounded-xl border border-red-200">
+              <span className="font-bold">Error del servidor:</span> {error.message}
+              <br/><br/>
+              Si el error menciona "OPENAI_API_KEY", necesitas agregar tu clave de OpenAI en Vercel (y en .env.local).
+            </div>
+          )}
           <div ref={messagesEndRef} />
+
         </div>
 
         {/* Input Area */}
@@ -127,7 +160,7 @@ export default function CopilotWidget() {
             />
             <button
               type="submit"
-              disabled={isLoading || !input.trim()}
+              disabled={isLoading || !(input || '').trim()}
               className="w-9 h-9 bg-zinc-900 hover:bg-black text-white rounded-xl flex items-center justify-center shrink-0 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Send size={16} />

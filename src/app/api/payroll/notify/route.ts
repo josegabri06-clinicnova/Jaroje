@@ -33,7 +33,7 @@ export async function POST(req: Request) {
         to: cleanPhone,
         type: "template",
         template: {
-          name: "nominas_jaroje",
+          name: document_url ? "nominas_jaroje_2" : "nominas_jaroje",
           language: {
             code: "es_MX"
           },

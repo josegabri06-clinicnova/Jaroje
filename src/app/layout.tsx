@@ -15,6 +15,9 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
+  // KEY: Prevents the keyboard from resizing the viewport on Android Chrome
+  // This stops fixed elements (nav, panels) from jumping when keyboard opens
+  interactiveWidget: 'resizes-visual',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

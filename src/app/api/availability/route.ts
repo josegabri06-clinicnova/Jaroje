@@ -22,7 +22,7 @@ async function getBeds24Token(): Promise<string> {
   const refreshData = await refreshRes.json();
 
   if (!refreshData.token) {
-    throw new Error('Token de Beds24 caducado. Ve a Beds24 > Account > API y genera un nuevo Refresh Token.');
+    throw new Error('TOKEN_EXPIRED');
   }
 
   process.env.BEDS24_TEMP_TOKEN = refreshData.token;
@@ -38,19 +38,19 @@ const ROOM_MAP = [
     roomId: '679077', 
     name: 'Habitación Estándar',
     units: [
-      { unitId: '1', name: '001' },
-      { unitId: '2', name: '002' },
-      { unitId: '3', name: '003' },
-      { unitId: '4', name: '004' },
-      { unitId: '5', name: '005' },
-      { unitId: '6', name: '006' }
+      { unitId: '1', name: '301' },
+      { unitId: '2', name: '302' },
+      { unitId: '3', name: '303' },
+      { unitId: '4', name: '304' },
+      { unitId: '5', name: '305' },
+      { unitId: '6', name: '306' }
     ]
   },
   { 
     roomId: '679087', 
     name: 'Condominio 1R',
     units: [
-      { unitId: '1', name: 'Condominio 1R (Único)' }
+      { unitId: '1', name: '401' }
     ]
   },
   { 
@@ -69,20 +69,20 @@ const ROOM_MAP = [
     roomId: '679092', 
     name: 'Condominio 3R',
     units: [
-      { unitId: '1', name: '301' },
-      { unitId: '2', name: '302' },
-      { unitId: '3', name: '303' },
-      { unitId: '4', name: '304' },
-      { unitId: '5', name: '305' },
-      { unitId: '6', name: '306' },
-      { unitId: '7', name: '307' }
+      { unitId: '1', name: '101' },
+      { unitId: '2', name: '102' },
+      { unitId: '3', name: '103' },
+      { unitId: '4', name: '104' },
+      { unitId: '5', name: '105' },
+      { unitId: '6', name: '106' },
+      { unitId: '7', name: '107' }
     ]
   },
   { 
     roomId: '679093', 
     name: 'Casa de Lujo',
     units: [
-      { unitId: '1', name: 'Casa de Lujo (Única)' }
+      { unitId: '1', name: '402' }
     ]
   }
 ];

@@ -8,13 +8,40 @@ import { usePathname } from 'next/navigation';
 export function BottomNav() {
   const [menuOpen, setMenuOpen]   = useState(false);
   const [role, setRole]           = useState<string | null>('loading');
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const pathname = usePathname();
 
   useEffect(() => {
     setRole(localStorage.getItem('jaroje_role'));
   }, [pathname]);
 
-  if (role === 'loading' || pathname === '/login') return null;
+  // Hide nav when virtual keyboard appears OR when any panel/sheet is open
+  useEffect(() => {
+    const onFocusIn = (e: FocusEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        setKeyboardOpen(true);
+      }
+    };
+    const onFocusOut = () => setKeyboardOpen(false);
+
+    // Also watch for panel-open class on body
+    const observer = new MutationObserver(() => {
+      setKeyboardOpen(document.body.classList.contains('panel-open'));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+    document.addEventListener('focusin', onFocusIn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn);
+      document.removeEventListener('focusout', onFocusOut);
+      observer.disconnect();
+    };
+  }, []);
+
+  if (role === 'loading' || pathname === '/login' || keyboardOpen) return null;
+
 
   if (role === 'staff_limpieza' || role === 'staff_mantenimiento' || role === 'recepcion') {
     const homePath = role === 'recepcion' ? '/recepcion' : '/staff';
@@ -99,7 +126,7 @@ export function BottomNav() {
           <div className="h-px w-full bg-zinc-100"></div>
           <Link href="/finanzas" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-emerald-50/80 transition-colors group">
             <div className="bg-emerald-100/50 rounded-lg p-1.5 text-emerald-600 group-hover:text-emerald-700 group-hover:bg-emerald-100 shadow-sm transition-all"><Wallet size={16} strokeWidth={2.5}/></div>
-            <span className="font-semibold text-emerald-700 text-[13px]">Libro de Caja</span>
+            <span className="font-semibold text-emerald-700 text-[13px]">Finanzas</span>
           </Link>
           <div className="h-px w-full bg-zinc-100"></div>
           <Link href="/equipo" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-blue-50/80 transition-colors group">

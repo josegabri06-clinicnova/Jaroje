@@ -53,10 +53,11 @@ export default function FinanzasPage() {
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Modal Edit Balance State
+  // Modal Quick Transact Account State
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [editBalance, setEditBalance] = useState('');
-  const [editAccountName, setEditAccountName] = useState('');
+  const [quickAmount, setQuickAmount] = useState('');
+  const [quickConcept, setQuickConcept] = useState('Ajuste');
+  const [quickDescription, setQuickDescription] = useState('');
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -155,20 +156,53 @@ export default function FinanzasPage() {
     setIsSaving(false);
   };
 
-  const handleUpdateBalance = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingAccount || !editBalance) return;
+  const handleQuickMovement = async (type: 'ingreso' | 'gasto') => {
+    if (!editingAccount || !quickAmount || isNaN(Number(quickAmount))) {
+      alert("Por favor ingresa un monto válido");
+      return;
+    }
     
     setIsSaving(true);
-    const { error } = await supabase.from('accounts').update({ 
-      balance: Number(editBalance),
-      name: editAccountName 
+    const amountNum = Number(quickAmount);
+    
+    const newRecord = {
+      type: type,
+      amount: amountNum,
+      category: quickConcept,
+      description: quickDescription || `Ajuste de ${type === 'ingreso' ? 'ingreso' : 'gasto'}`,
+      account_id: editingAccount.id,
+      payment_method: 'sobre',
+      date: new Date().toISOString().split('T')[0]
+    };
+    
+    // 1. Insert financial record
+    const { error: insertErr } = await supabase.from('finances').insert([newRecord]);
+    
+    if (insertErr) {
+      console.error(insertErr);
+      alert("Error al registrar el movimiento en Supabase");
+      setIsSaving(false);
+      return;
+    }
+    
+    // 2. Update account balance
+    const balanceChange = type === 'ingreso' ? amountNum : -amountNum;
+    const newBalance = editingAccount.balance + balanceChange;
+    
+    const { error: updateErr } = await supabase.from('accounts').update({ 
+      balance: newBalance 
     }).eq('id', editingAccount.id);
+    
     setIsSaving(false);
     
-    if (!error) {
+    if (!updateErr) {
       setEditingAccount(null);
+      setQuickAmount('');
+      setQuickDescription('');
+      setQuickConcept('Ajuste');
       fetchData();
+    } else {
+      alert("Error al actualizar el saldo del sobre");
     }
   };
 
@@ -399,42 +433,74 @@ export default function FinanzasPage() {
         </div>
       )}
 
-      {/* Modal Editar Saldo Manual */}
+      {/* Modal Registrar Movimiento en Cuenta/Sobre */}
       {editingAccount && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4">
           <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
              <div className="flex justify-between items-center mb-5">
               <h3 className="text-lg font-bold text-zinc-900 leading-tight">
-                Ajustar Saldo<br/><span className="text-sm font-medium text-zinc-500">{editingAccount.name}</span>
+                Registrar Movimiento<br/>
+                <span className="text-xs font-semibold text-zinc-500">Sobre: {editingAccount.name} (${editingAccount.balance.toLocaleString('es-MX')})</span>
               </h3>
-              <button onClick={() => setEditingAccount(null)} className="p-2 bg-zinc-100 rounded-full text-zinc-500">
+              <button onClick={() => { setEditingAccount(null); setQuickAmount(''); setQuickDescription(''); }} className="p-2 bg-zinc-100 rounded-full text-zinc-500">
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleUpdateBalance} className="space-y-4">
+            <div className="space-y-4">
               <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Nombre del Sobre</label>
-                <input 
-                  type="text" required
-                  value={editAccountName} onChange={e => setEditAccountName(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all font-bold text-zinc-900 text-base"
-                />
-              </div>
-              <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Nuevo Saldo Exacto</label>
+                <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Monto (MXN)</label>
                 <input 
                   type="number" step="0.01" required
-                  value={editBalance} onChange={e => setEditBalance(e.target.value)}
-                  className="w-full text-3xl font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all text-center"
+                  placeholder="0.00" autoFocus
+                  value={quickAmount} onChange={e => setQuickAmount(e.target.value)}
+                  className="w-full text-2xl font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all text-center placeholder:text-zinc-300"
                 />
               </div>
-              <button 
-                type="submit" disabled={isSaving}
-                className="w-full py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
-              >
-                {isSaving ? 'Guardando...' : 'Actualizar Sobre'}
-              </button>
-            </form>
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Concepto / Categoría</label>
+                <select 
+                  value={quickConcept} onChange={e => setQuickConcept(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none font-bold text-[13px] focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                >
+                  <option>Ajuste</option>
+                  <option>Reserva Directa</option>
+                  <option>Venta Extra</option>
+                  <option>Suministros</option>
+                  <option>Limpieza</option>
+                  <option>Mantenimiento</option>
+                  <option>Servicios (Luz, Agua)</option>
+                  <option>Nómina</option>
+                  <option>Otros</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Descripción (Opcional)</label>
+                <input 
+                  type="text"
+                  placeholder="Comentario sobre el movimiento"
+                  value={quickDescription} onChange={e => setQuickDescription(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button 
+                  onClick={() => handleQuickMovement('ingreso')}
+                  disabled={isSaving || !quickAmount}
+                  className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] cursor-pointer"
+                >
+                  <ArrowDownLeft size={16} strokeWidth={2.5} />
+                  + Ingreso
+                </button>
+                <button 
+                  onClick={() => handleQuickMovement('gasto')}
+                  disabled={isSaving || !quickAmount}
+                  className="py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] cursor-pointer"
+                >
+                  <ArrowUpRight size={16} strokeWidth={2.5} />
+                  - Gasto
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

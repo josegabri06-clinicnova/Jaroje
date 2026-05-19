@@ -31,6 +31,7 @@ export default function VercelActionForm() {
   const router = useRouter();
   const [mode, setMode] = useState<'reserva' | 'bloqueo'>('reserva');
   const [loading, setLoading] = useState(false);
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   
   const [form, setForm] = useState({
     roomId: '',
@@ -207,6 +208,7 @@ export default function VercelActionForm() {
             <input 
               type="date" 
               required
+              min={todayStr}
               className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkIn}
               onChange={e => {
@@ -219,6 +221,7 @@ export default function VercelActionForm() {
             <input 
               type="date" 
               required
+              min={form.checkIn || todayStr}
               className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkOut}
               onChange={e => {

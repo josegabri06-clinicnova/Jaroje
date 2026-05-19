@@ -5,8 +5,9 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   CheckCircle2, AlertTriangle, Wrench, Sparkles, BedDouble,
-  ArrowDownLeft, ArrowUpRight, Clock, Plus, X, Send,
-  ChevronDown, CheckCheck, Camera, Bell, Package, Minus
+  ArrowDownLeft, Clock, Plus, X, Send,
+  ChevronDown, CheckCheck, Camera, Bell, Package, Minus,
+  RefreshCw, ShieldAlert
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
@@ -14,17 +15,56 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-interface Reserva { id: string; room: string; guest_name?: string; check_in: string; check_out: string; }
-interface Task { id: string; type: string; room: string; description: string; status: string; reported_by: string; direction: string; created_at: string; image_base64?: string; }
+// Habitaciones físicas consistentes (101 a 402) según requerimiento de Jaroje OS
+const ROOMS = [
+  '101','102','103','104','105','106','107',
+  '201','202','203','204','205','206',
+  '301','302','303','304','305','306',
+  '401','402'
+];
 
-const ROOMS = ['A1','A2','A3','A4','A5','B1','B2','B3','B4','B5','C1','C2','C3','C4','C5','D1','D2','D3','D4','D5'];
+interface Reserva {
+  id: string;
+  room: string;
+  guest_name?: string;
+  check_in: string;
+  check_out: string;
+}
+
+interface Task {
+  id: string;
+  type: string;
+  room: string;
+  description: string;
+  status: string;
+  reported_by: string;
+  direction: string;
+  created_at: string;
+  image_base64?: string;
+}
+
+interface RoomStatus {
+  room_number: string;
+  status: 'disponible' | 'en_limpieza' | 'limpia';
+  updated_at: string;
+  updated_by: string;
+  guest_name?: string;
+}
+
 const TYPE_CFG: Record<string, any> = {
-  limpieza:      { icon: Sparkles,      label: 'Limpieza',      bg: '#fffbeb', border: '#fde68a', text: '#b45309', dot: '#f59e0b' },
-  mantenimiento: { icon: Wrench,        label: 'Mantenimiento', bg: '#fef2f2', border: '#fecaca', text: '#b91c1c', dot: '#ef4444' },
-  otro:          { icon: AlertTriangle, label: 'Otro',          bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8', dot: '#3b82f6' },
-  aviso:         { icon: Bell,          label: 'Aviso Admin',   bg: '#f5f3ff', border: '#ddd6fe', text: '#6d28d9', dot: '#8b5cf6' },
+  limpieza:      { icon: Sparkles,      label: 'Limpieza',      bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700', dot: 'bg-amber-500' },
+  mantenimiento: { icon: Wrench,        label: 'Mantenimiento', bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-700', dot: 'bg-rose-500' },
+  otro:          { icon: AlertTriangle, label: 'Otro',          bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', dot: 'bg-blue-500' },
+  aviso:         { icon: Bell,          label: 'Aviso Admin',   bg: 'bg-purple-50', border: 'border-purple-200', text: 'text-purple-700', dot: 'bg-purple-500' },
 };
-const elapsed = (d: string) => { const m = Math.floor((Date.now()-new Date(d).getTime())/60000); if(m<1)return'Ahora mismo'; if(m<60)return`${m} min`; const h=Math.floor(m/60); return h<24?`${h}h`:`${Math.floor(h/24)}d`; };
+
+const elapsed = (d: string) => {
+  const m = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
+  if (m < 1) return 'Ahora mismo';
+  if (m < 60) return `${m} min`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+};
 
 async function compressImage(file: File): Promise<string> {
   return new Promise(resolve => {
@@ -32,8 +72,12 @@ async function compressImage(file: File): Promise<string> {
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        const MAX = 900; let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) { if (w > h) { h = (h*MAX)/w; w=MAX; } else { w=(w*MAX)/h; h=MAX; } }
+        const MAX = 900;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = (h * MAX) / w; w = MAX; }
+          else { w = (w * MAX) / h; h = MAX; }
+        }
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
@@ -47,54 +91,88 @@ async function compressImage(file: File): Promise<string> {
 
 export default function StaffPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
-  const [tasks, setTasks]       = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
-  const [taskTab, setTaskTab]   = useState<'activas' | 'historial'>('activas');
-  const [mainTab, setMainTab]   = useState<'tareas' | 'inventario'>('tareas');
+  const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
+  const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping' | 'inventario'>('tareas');
+  const [taskTab, setTaskTab] = useState<'activas' | 'historial'>('activas');
+  
+  // Modales
   const [showForm, setShowForm] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+  
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  
   const staffName = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_staff_name') || 'Personal') : 'Personal';
-  const role = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : 'staff';
+  const role = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_role') || 'staff_limpieza') : 'staff_limpieza';
+  
   const isMantenimiento = role === 'staff_mantenimiento';
   const isLimpieza = role === 'staff_limpieza';
+  const isRecepcionOrAdmin = role === 'reception' || role === 'admin';
+  const canModifyStatus = isLimpieza || role === 'reception'; // Solo personal de limpieza y recepción modifican limpieza, Admin lee
+
   const [form, setForm] = useState({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Lock body on modal open
   useEffect(() => {
-    if (showForm) {
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
+    if (showForm || showStatusModal) {
+      document.body.classList.add('overflow-hidden');
     } else {
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
+      document.body.classList.remove('overflow-hidden');
     }
-    return () => { document.body.style.overflow=''; document.body.style.position=''; document.body.style.width=''; };
-  }, [showForm]);
+    return () => { document.body.classList.remove('overflow-hidden'); };
+  }, [showForm, showStatusModal]);
 
   const fetchData = async () => {
     try {
-      const [r, t, inv] = await Promise.all([
-        fetch('/api/reservas'), 
+      const [r, t, inv, rs] = await Promise.all([
+        fetch('/api/reservas'),
         fetch('/api/tasks'),
-        supabase.from('inventory').select('*').order('category').order('item_name')
+        supabase.from('inventory').select('*').order('category').order('item_name'),
+        fetch('/api/room-status')
       ]);
-      const rj = await r.json(); const tj = await t.json();
+      
+      const rj = await r.json();
+      const tj = await t.json();
+      const rsj = await rs.json();
+      
       if (rj.success && rj.data) setReservas(rj.data);
       if (tj.success) setTasks(tj.data);
       if (inv.data) setInventory(inv.data);
-    } catch {}
+      if (rsj.success && rsj.data) setRoomStatuses(rsj.data);
+    } catch (e) {
+      console.error('Error al cargar datos en Staff:', e);
+    }
   };
 
   useEffect(() => {
     fetchData();
-    const iv = setInterval(fetchData, 10_000);
-    return () => clearInterval(iv);
+
+    // ── SUPABASE REALTIME EN TIEMPO REAL PARA ROOM_STATUS ──
+    const channel = supabase
+      .channel('room_status_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'room_status' },
+        (payload) => {
+          console.log('Cambio en room_status recibido por Realtime:', payload);
+          fetchData(); // Sincroniza al instante todos los datos sin recargar la página
+        }
+      )
+      .subscribe();
+
+    // Polling secundario de seguridad cada 15 segundos
+    const iv = setInterval(fetchData, 15_000);
+    
+    return () => {
+      clearInterval(iv);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const llegadas = reservas.filter(r => r.check_in === todayStr);
@@ -114,7 +192,8 @@ export default function StaffPage() {
   const updateTaskStatus = async (id: string, status: string) => {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
     await fetch('/api/tasks', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'update_status', id, status }),
     });
     fetchData();
@@ -126,20 +205,65 @@ export default function StaffPage() {
     await supabase.from('inventory').update({ stock: currentStock + change, last_updated_by: staffName }).eq('id', id);
   };
 
-  const markAsClean = async (room: string) => {
-    // Prevent double clicking by adding a temporary optimistic task
-    const tempTask: Task = { id: Math.random().toString(), type: 'limpieza', room, description: 'Habitación limpia y lista para check-in.', status: 'resuelta', reported_by: staffName, direction: 'staff_to_admin', created_at: new Date().toISOString() };
-    setTasks(prev => [tempTask, ...prev]);
-    
-    await fetch('/api/tasks', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'limpieza', room, description: 'Habitación limpia y lista para check-in.', reported_by: staffName, direction: 'staff_to_admin', status: 'resuelta' }),
+  const changeRoomStatus = async (roomNumber: string, newStatus: 'disponible' | 'en_limpieza' | 'limpia') => {
+    // Si cambia a limpia, crear también una tarea resuelta en /api/tasks para mantener el registro
+    if (newStatus === 'limpia') {
+      const tempTask: Task = {
+        id: Math.random().toString(),
+        type: 'limpieza',
+        room: roomNumber,
+        description: 'Habitación limpia y lista para check-in (Tablero Staff).',
+        status: 'resuelta',
+        reported_by: staffName,
+        direction: 'staff_to_admin',
+        created_at: new Date().toISOString()
+      };
+      setTasks(prev => [tempTask, ...prev]);
+
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'limpieza',
+          room: roomNumber,
+          description: `Habitación limpia y lista para check-in · Reportado por ${staffName}`,
+          reported_by: staffName,
+          direction: 'staff_to_admin',
+          status: 'resuelta'
+        }),
+      });
+    }
+
+    // Guardar en la tabla room_status de Supabase
+    const res = await fetch('/api/room-status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        room_number: roomNumber,
+        status: newStatus,
+        updated_by: staffName
+      }),
     });
+    
+    const json = await res.json();
+    if (json.success) {
+      setSuccessMsg(`Habitación ${roomNumber} marcada como ${newStatus}`);
+      setTimeout(() => setSuccessMsg(''), 3000);
+    }
+    
+    setShowStatusModal(false);
     fetchData();
   };
 
   const isRoomClean = (roomName: string) => {
-    return tasks.some(t => t.room === roomName && t.type === 'limpieza' && t.status === 'resuelta' && t.created_at.startsWith(todayStr));
+    // Extraer número de habitación para comparar
+    const m = roomName.match(/(\d{3})/);
+    const roomNum = m ? m[1] : roomName;
+    const dbStatus = roomStatuses.find(rs => rs.room_number === roomNum);
+    if (dbStatus) {
+      return dbStatus.status === 'limpia' || dbStatus.status === 'disponible';
+    }
+    return tasks.some(t => t.room.includes(roomNum) && t.type === 'limpieza' && t.status === 'resuelta' && t.created_at.startsWith(todayStr));
   };
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -153,299 +277,500 @@ export default function StaffPage() {
     if (!form.description.trim()) return;
     setSubmitting(true);
     await fetch('/api/tasks', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...form, reported_by: staffName, direction: 'staff_to_admin', image_base64: imagePreview }),
     });
-    setForm({ type: 'limpieza', room: ROOMS[0], description: '' });
+    setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
     setImagePreview(null);
     setShowForm(false);
-    setSuccessMsg('¡Incidencia enviada!');
+    setSuccessMsg('¡Reporte enviado con éxito!');
     fetchData();
     setTimeout(() => setSuccessMsg(''), 3000);
     setSubmitting(false);
   };
 
-  const Card = ({ children, borderColor = '#f4f4f5' }: any) => (
-    <div style={{ background: 'white', borderRadius: 18, border: `1px solid ${borderColor}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>{children}</div>
-  );
-  const SectionHead = ({ icon, title, count, color = '#52525b', onAction, actionLabel }: any) => (
-    <div style={{ display:'flex', alignItems:'center', gap:10, padding:'14px 16px', borderBottom:'1px solid #f9f9f9' }}>
-      <div style={{ width:26, height:26, borderRadius:8, background:'#f4f4f5', display:'flex', alignItems:'center', justifyContent:'center' }}>{icon}</div>
-      <span style={{ fontSize:14, fontWeight:700, color:'#18181b' }}>{title}</span>
-      {count > 0 && <span style={{ fontSize:11, fontWeight:700, color, background: color+'22', padding:'2px 8px', borderRadius:999 }}>{count}</span>}
-      {onAction && (
-        <button onClick={onAction} style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:6, background:'#2563eb', color:'white', fontSize:12, fontWeight:700, padding:'8px 14px', borderRadius:10, border:'none', cursor:'pointer' }}>
-          <Plus size={12}/>{actionLabel}
-        </button>
-      )}
-    </div>
-  );
+  const openMaintenanceReport = () => {
+    setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+    setImagePreview(null);
+    setShowForm(true);
+  };
+
+  // Obtener estado de una habitación
+  const getRoomState = (roomNum: string) => {
+    const dbStatus = roomStatuses.find(rs => rs.room_number === roomNum);
+    return dbStatus || { room_number: roomNum, status: 'disponible' as const, updated_by: 'Sistema', updated_at: new Date().toISOString() };
+  };
 
   return (
-    <div style={{ minHeight:'100vh', background:'#f5f5f7', paddingBottom: 32 }}>
-      {/* Header */}
-      <div style={{ background:'linear-gradient(135deg, #2563eb, #1d4ed8)', padding:'20px 20px 32px' }}>
-        <p style={{ color:'#93c5fd', fontSize:12, fontWeight:500, margin:'0 0 4px', textTransform:'capitalize' }}>
-          {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
-        </p>
-        <h1 style={{ color:'white', fontSize:24, fontWeight:800, margin:'0 0 2px' }}>
-          {isMantenimiento ? 'Mantenimiento' : 'Limpieza'}
-        </h1>
-        <p style={{ color:'#93c5fd', fontSize:13, margin:0 }}>Bienvenido/a, {staffName}</p>
-      </div>
+    <div className="min-h-screen bg-zinc-50 pb-24 text-zinc-800">
+      
+      {/* Header Fijo Premium */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-zinc-200/50 px-6 py-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-[20px] font-black text-zinc-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
+            {isMantenimiento ? 'Mtto. Técnico' : 'Personal Operativo'}
+            <span className="text-[11px] font-black tracking-widest uppercase bg-zinc-900 text-white px-2 py-0.5 rounded-md scale-90">
+              {role === 'staff_limpieza' ? 'Limpieza' : role === 'staff_mantenimiento' ? 'Mtto' : role}
+            </span>
+          </h2>
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <p className="text-[12px] font-semibold text-zinc-500 capitalize">
+              {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })} · {staffName}
+            </p>
+          </div>
+        </div>
 
-      <div style={{ padding:'0 16px', marginTop:-16, display:'flex', flexDirection:'column', gap:14 }}>
+        {/* BOTÓN UNIFICADO DE REPORTE DE MANTENIMIENTO (LLAVE INGLESA) */}
+        <button
+          onClick={openMaintenanceReport}
+          className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-md shadow-rose-200 active:scale-95 transition-all cursor-pointer"
+        >
+          <Wrench size={13} strokeWidth={2.5} />
+          <span>Reportar Mtto.</span>
+        </button>
+      </header>
+
+      <div className="max-w-md mx-auto px-4 mt-4 space-y-4">
         
-        {/* Main Tabs */}
-        <div style={{ display: 'flex', gap: 8, background: '#e4e4e7', padding: 4, borderRadius: 12, marginBottom: 4 }}>
-          <button onClick={() => setMainTab('tareas')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800, background: mainTab === 'tareas' ? 'white' : 'transparent', color: mainTab === 'tareas' ? '#18181b' : '#71717a', boxShadow: mainTab === 'tareas' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none', cursor: 'pointer', transition: 'all 0.15s' }}>{isMantenimiento ? 'Incidencias' : 'Tareas & Limpieza'}</button>
-          <button onClick={() => setMainTab('inventario')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800, background: mainTab === 'inventario' ? 'white' : 'transparent', color: mainTab === 'inventario' ? '#18181b' : '#71717a', boxShadow: mainTab === 'inventario' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none', cursor: 'pointer', transition: 'all 0.15s' }}>Inventario</button>
-        </div>
-
-        {mainTab === 'tareas' ? (
-          <>
-            {/* KPIs */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
-          {[
-            { label:'Llegan', value:llegadas.length, color:'#22c55e' },
-            { label:'Salen',  value:salidas.length,  color:'#ef4444' },
-            { label:'Ocupadas',value:ocupadas.length, color:'#3b82f6' },
-          ].map((k,i)=>(
-            <div key={i} style={{ background:'white', borderRadius:16, padding:'14px 12px', border:'1px solid #f4f4f5', boxShadow:'0 1px 6px rgba(0,0,0,0.05)' }}>
-              <p style={{ fontSize:26, fontWeight:800, color:'#18181b', margin:'0 0 2px' }}>{k.value}</p>
-              <p style={{ fontSize:11, fontWeight:700, color:'#a1a1aa', textTransform:'uppercase', letterSpacing:'0.06em', margin:0 }}>{k.label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Llegadas */}
-        {(!isMantenimiento && llegadas.length > 0) && (
-          <Card>
-            <SectionHead icon={<ArrowDownLeft size={13} color="#16a34a"/>} title="Check-in hoy" count={llegadas.length} color="#16a34a"/>
-            {llegadas.map((r,i)=>(
-              <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', borderBottom: i<llegadas.length-1?'1px solid #f9f9f9':'none' }}>
-                <div style={{ width:38, height:38, borderRadius:12, background:'#f0fdf4', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                  <BedDouble size={16} color="#16a34a"/>
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <p style={{ fontSize:14, fontWeight:700, color:'#18181b', margin:'0 0 2px' }}>{r.room||'Sin asignar'}</p>
-                  <p style={{ fontSize:12, color:'#a1a1aa', margin:0 }}>{r.guest_name||'Huésped'}</p>
-                </div>
-                <span style={{ fontSize:11, fontWeight:700, color:'#16a34a', background:'#f0fdf4', border:'1px solid #bbf7d0', padding:'5px 10px', borderRadius:10 }}>Hoy</span>
-              </div>
-            ))}
-          </Card>
-        )}
-
-        {/* Salidas */}
-        {!isMantenimiento && (
-          <Card>
-            <SectionHead icon={<Sparkles size={13} color="#d97706"/>} title="Limpieza requerida hoy" count={salidas.length} color="#d97706"/>
-            {salidas.length === 0 ? (
-              <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-                <p style={{ fontSize: 13, fontWeight: 600, color: '#a1a1aa', margin: 0 }}>No hay check-outs programados para hoy.</p>
-              </div>
-            ) : (
-              salidas.map((r,i) => {
-                const cleaned = isRoomClean(r.room || '');
-                return (
-                  <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', borderBottom: i<salidas.length-1?'1px solid #f9f9f9':'none' }}>
-                    <div style={{ width:38, height:38, borderRadius:12, background: cleaned ? '#f0fdf4' : '#fffbeb', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      {cleaned ? <CheckCircle2 size={16} color="#16a34a"/> : <Sparkles size={16} color="#d97706"/>}
-                    </div>
-                    <div style={{ flex:1 }}>
-                      <p style={{ fontSize:14, fontWeight:700, color:'#18181b', margin:'0 0 2px' }}>{r.room||'Sin asignar'}</p>
-                      <p style={{ fontSize:12, color:'#a1a1aa', margin:0 }}>{cleaned ? 'Habitación lista' : 'Sale hoy · Preparar habitación'}</p>
-                    </div>
-                    {cleaned ? (
-                      <span style={{ fontSize:11, fontWeight:700, color:'#16a34a', background:'#f0fdf4', padding:'6px 12px', borderRadius:10, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <CheckCircle2 size={12} /> Lista
-                      </span>
-                    ) : (
-                      <button 
-                        onClick={() => markAsClean(r.room || '')}
-                        className="active:scale-95"
-                        style={{ fontSize:11, fontWeight:700, color:'white', background:'#d97706', border:'none', padding:'8px 14px', borderRadius:10, cursor: 'pointer', transition: 'all 0.1s' }}
-                      >
-                        Marcar Lista
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </Card>
-        )}
-
-        {/* Mis incidencias */}
-        <Card>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderBottom: '1px solid #f9f9f9' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 26, height: 26, borderRadius: 8, background: '#f4f4f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <AlertTriangle size={13} color="#52525b" />
-              </div>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#18181b' }}>Mis incidencias</span>
-            </div>
-            <button onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#2563eb', color: 'white', fontSize: 12, fontWeight: 700, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: 'pointer' }}>
-              <Plus size={12} /> Reportar
+        {/* Pestañas Principales Integradas */}
+        <div className="flex bg-zinc-200/60 p-1 rounded-2xl">
+          <button 
+            onClick={() => setMainTab('tareas')} 
+            className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all cursor-pointer ${mainTab === 'tareas' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
+          >
+            {isMantenimiento ? 'Mis Tareas' : 'Tareas de Hoy'}
+          </button>
+          
+          {/* Ocultar pestaña Housekeeping al personal puramente técnico de mantenimiento */}
+          {!isMantenimiento && (
+            <button 
+              onClick={() => setMainTab('housekeeping')} 
+              className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all cursor-pointer ${mainTab === 'housekeeping' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
+            >
+              Habitaciones
             </button>
-          </div>
-
-          <div style={{ padding: '8px 16px', background: '#fafafa', borderBottom: '1px solid #f4f4f5' }}>
-            <div style={{ display: 'flex', gap: 8, background: '#e4e4e7', padding: 4, borderRadius: 10 }}>
-              <button onClick={() => setTaskTab('activas')} style={{ flex: 1, padding: '6px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, background: taskTab === 'activas' ? 'white' : 'transparent', color: taskTab === 'activas' ? '#18181b' : '#71717a', boxShadow: taskTab === 'activas' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.15s' }}>Activas ({activas.length})</button>
-              <button onClick={() => setTaskTab('historial')} style={{ flex: 1, padding: '6px', borderRadius: 8, border: 'none', fontSize: 12, fontWeight: 700, background: taskTab === 'historial' ? 'white' : 'transparent', color: taskTab === 'historial' ? '#18181b' : '#71717a', boxShadow: taskTab === 'historial' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none', cursor: 'pointer', transition: 'all 0.15s' }}>Historial ({historial.length})</button>
-            </div>
-          </div>
-
-          {taskTab === 'activas' ? (
-            activas.length === 0 ? (
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 16px', gap:10 }}>
-                <CheckCircle2 size={28} color="#22c55e"/>
-                <p style={{ fontSize:13, color:'#71717a', margin:0 }}>Sin incidencias activas</p>
-              </div>
-            ) : (
-              activas.map((t,i) => {
-                const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                const Icon = cfg.icon;
-                return (
-                  <div key={t.id} style={{ padding:'16px', borderBottom: i<activas.length-1?'1px solid #f9f9f9':'none' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                      <div style={{ width:28, height:28, borderRadius:9, background:cfg.bg, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                        <Icon size={13} color={cfg.text}/>
-                      </div>
-                      <span style={{ fontSize:13, fontWeight:700, color:cfg.text }}>{cfg.label}</span>
-                      <span style={{ fontSize:11, fontWeight:600, color:'#71717a', background:'#f4f4f5', padding:'2px 8px', borderRadius:999 }}>{t.room === 'General' ? 'Todos' : `Hab. ${t.room}`}</span>
-                      <span style={{ marginLeft:'auto', fontSize:10, color:'#a1a1aa' }}>{elapsed(t.created_at)}</span>
-                    </div>
-                    {t.description && <p style={{ fontSize:13, color:'#52525b', lineHeight:1.5, margin:'0 0 12px', paddingLeft:36 }}>{t.description}</p>}
-                    {t.image_base64 && (
-                      <div style={{ paddingLeft:36, marginBottom:12 }}>
-                        <img src={t.image_base64} alt="foto" style={{ width:'100%', maxHeight:180, objectFit:'cover', borderRadius:10, border:'1px solid #e4e4e7' }}/>
-                      </div>
-                    )}
-                    <div style={{ paddingLeft:36, display: 'flex', gap: 6 }}>
-                      <button 
-                        onClick={() => updateTaskStatus(t.id, 'en_proceso')}
-                        style={{ flex: 1, padding: '6px', borderRadius: 8, border: t.status === 'en_proceso' ? '1px solid #3b82f6' : '1px solid #e4e4e7', background: t.status === 'en_proceso' ? '#eff6ff' : 'white', color: t.status === 'en_proceso' ? '#2563eb' : '#71717a', fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
-                      >
-                        En Proceso
-                      </button>
-                      <button 
-                        onClick={() => updateTaskStatus(t.id, 'resuelta')}
-                        style={{ flex: 1, padding: '6px', borderRadius: 8, border: '1px solid #e4e4e7', background: 'white', color: '#16a34a', fontSize: 11, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}
-                      >
-                        ✓ Marcar Resuelta
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )
-          ) : (
-            historial.length === 0 ? (
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 16px', gap:10 }}>
-                <Clock size={28} color="#a1a1aa"/>
-                <p style={{ fontSize:13, color:'#71717a', margin:0 }}>Historial vacío</p>
-              </div>
-            ) : (
-              historial.map((t,i) => {
-                const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                const Icon = cfg.icon;
-                return (
-                  <div key={t.id} style={{ padding:'14px 16px', borderBottom: i<historial.length-1?'1px solid #f9f9f9':'none', opacity: 0.85, background: '#fafafa' }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
-                      <div style={{ width:26, height:26, borderRadius:8, background:'#e4e4e7', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                        <Icon size={12} color="#71717a"/>
-                      </div>
-                      <span style={{ fontSize:13, fontWeight:600, color:'#52525b' }}>{cfg.label}</span>
-                      <span style={{ fontSize:11, fontWeight:600, color:'#a1a1aa', background:'white', padding:'2px 8px', borderRadius:999, border: '1px solid #e4e4e7' }}>Hab. {t.room}</span>
-                    </div>
-                    {t.description && <p style={{ fontSize:12, color:'#a1a1aa', lineHeight:1.5, margin:'0 0 8px', paddingLeft:34 }}>{t.description}</p>}
-                    <div style={{ paddingLeft:34, display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <CheckCheck size={14} color="#22c55e" />
-                      <span style={{ fontSize:11, fontWeight:600, color: '#22c55e' }}>Resuelta por {t.reported_by === staffName ? 'Admin/Personal' : t.reported_by}</span>
-                      <span style={{ marginLeft:'auto', fontSize:10, color:'#a1a1aa' }}>{elapsed(t.created_at)}</span>
-                    </div>
-                  </div>
-                );
-              })
-            )
           )}
-        </Card>
-          </>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <Card>
-              <SectionHead icon={<Package size={13} color="#ea580c"/>} title="Stock Actual" count={inventory.length} color="#ea580c"/>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {inventory.map((item, index) => {
-                  const isLow = item.stock <= item.min_stock;
-                  return (
-                    <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: isLow ? '#fff1f2' : 'white', borderBottom: index < inventory.length - 1 ? '1px solid #f9f9f9' : 'none' }}>
-                      <div>
-                        <p style={{ fontSize: 14, fontWeight: 700, color: '#18181b', margin: '0 0 2px' }}>{item.item_name}</p>
-                        <p style={{ fontSize: 11, fontWeight: 600, color: isLow ? '#e11d48' : '#a1a1aa', margin: 0 }}>Stock: {item.stock} <span style={{ opacity: 0.5 }}>(Min: {item.min_stock})</span></p>
+
+          <button 
+            onClick={() => setMainTab('inventario')} 
+            className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all cursor-pointer ${mainTab === 'inventario' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
+          >
+            Inventario
+          </button>
+        </div>
+
+        {/* ── SECCIÓN 1: TAREAS Y LIMPIEZA PROGRAMADA ── */}
+        {mainTab === 'tareas' && (
+          <div className="space-y-4">
+            
+            {/* KPI Cards */}
+            <div className="grid grid-cols-3 gap-2.5">
+              {[
+                { label: 'Llegan', value: llegadas.length, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+                { label: 'Salen', value: salidas.length, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100' },
+                { label: 'Ocupadas', value: ocupadas.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
+              ].map((k, i) => (
+                <div key={i} className={`bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center ${k.bg}`}>
+                  <p className={`text-2xl font-black ${k.color} leading-none mb-1`}>{k.value}</p>
+                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{k.label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Llegadas de Hoy (Check-in) */}
+            {!isMantenimiento && llegadas.length > 0 && (
+              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
+                  <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
+                  <span className="text-[13px] font-extrabold text-zinc-800">Próximos Check-ins ({llegadas.length})</span>
+                </div>
+                <div className="divide-y divide-zinc-100">
+                  {llegadas.map((r) => (
+                    <div key={r.id} className="p-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                          <BedDouble size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-bold text-zinc-900 leading-tight">Hab. {r.room || 'Sin asignar'}</p>
+                          <p className="text-[12px] font-semibold text-zinc-400 truncate mt-0.5">{r.guest_name || 'Huésped'}</p>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f4f4f5', padding: 4, borderRadius: 10 }}>
-                        <button onClick={() => updateStock(item.id, item.stock, -1)} disabled={item.stock===0} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', color: '#52525b', opacity: item.stock===0?0.5:1 }}><Minus size={16} strokeWidth={2.5}/></button>
-                        <span style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 800, color: '#18181b' }}>{item.stock}</span>
-                        <button onClick={() => updateStock(item.id, item.stock, 1)} style={{ width: 32, height: 32, borderRadius: 8, border: 'none', background: '#18181b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', color: 'white' }}><Plus size={16} strokeWidth={2.5}/></button>
-                      </div>
+                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-100/70 text-emerald-700">Hoy</span>
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Salidas de Hoy / Limpiezas Requeridas */}
+            {!isMantenimiento && (
+              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
+                  <Sparkles size={16} className="text-amber-600" strokeWidth={2.5} />
+                  <span className="text-[13px] font-extrabold text-zinc-800">Limpiezas Programadas (Check-outs)</span>
+                </div>
+                
+                {salidas.length === 0 ? (
+                  <div className="p-6 text-center text-zinc-400 text-[13px] font-semibold">
+                    No hay salidas programadas para hoy.
+                  </div>
+                ) : (
+                  <div className="divide-y divide-zinc-100">
+                    {salidas.map((r) => {
+                      const cleaned = isRoomClean(r.room || '');
+                      return (
+                        <div key={r.id} className="p-4 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cleaned ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                              {cleaned ? <CheckCircle2 size={18} /> : <Sparkles size={18} />}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[14px] font-bold text-zinc-900 leading-tight">Hab. {r.room || 'Sin asignar'}</p>
+                              <p className="text-[12px] font-semibold text-zinc-400 mt-0.5">{cleaned ? 'Habitación Lista para Check-in' : 'Preparación Requerida por Salida'}</p>
+                            </div>
+                          </div>
+                          
+                          {cleaned ? (
+                            <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 flex items-center gap-1">
+                              ✓ Lista
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => changeRoomStatus(r.room, 'limpia')}
+                              className="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-black tracking-wide uppercase px-3 py-2 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                            >
+                              Marcar Lista
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TABLERO DE INCIDENCIAS (Filtrado para evitar ruido a Limpieza/Recepción) */}
+            {(isMantenimiento || role === 'admin') ? (
+              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle size={16} className="text-zinc-600" />
+                    <span className="text-[13px] font-extrabold text-zinc-800">Control de Incidencias</span>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-zinc-50 border-b border-zinc-100 flex gap-2">
+                  <button 
+                    onClick={() => setTaskTab('activas')} 
+                    className={`flex-1 py-2 text-[11px] font-black rounded-lg transition-all ${taskTab === 'activas' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+                  >
+                    Activas ({activas.length})
+                  </button>
+                  <button 
+                    onClick={() => setTaskTab('historial')} 
+                    className={`flex-1 py-2 text-[11px] font-black rounded-lg transition-all ${taskTab === 'historial' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+                  >
+                    Historial ({historial.length})
+                  </button>
+                </div>
+
+                {taskTab === 'activas' ? (
+                  activas.length === 0 ? (
+                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                      <CheckCircle2 size={24} className="text-emerald-500" />
+                      <p className="text-[12px] font-semibold text-zinc-400">Sin incidencias técnicas activas</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-zinc-100">
+                      {activas.map((t) => {
+                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                        const Icon = cfg.icon;
+                        return (
+                          <div key={t.id} className="p-4 space-y-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                                  <Icon size={14} className={cfg.text} />
+                                </div>
+                                <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
+                                <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
+                              </div>
+                              <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                            </div>
+
+                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1">{t.description}</p>
+
+                            {t.image_base64 && (
+                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
+                                <img src={t.image_base64} alt="Evidencia" className="w-full max-h-48 object-cover" />
+                              </div>
+                            )}
+
+                            <div className="flex gap-2 pt-1">
+                              <button 
+                                onClick={() => updateTaskStatus(t.id, 'en_proceso')}
+                                className={`flex-1 py-2 rounded-xl text-[11px] font-black border transition-all cursor-pointer ${t.status === 'en_proceso' ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-zinc-200 text-zinc-500'}`}
+                              >
+                                En Proceso
+                              </button>
+                              <button 
+                                onClick={() => updateTaskStatus(t.id, 'resuelta')}
+                                className="flex-1 py-2 rounded-xl text-[11px] font-black bg-emerald-600 text-white hover:bg-emerald-500 transition-all cursor-pointer"
+                              >
+                                ✓ Resolver
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                ) : (
+                  historial.length === 0 ? (
+                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                      <Clock size={24} className="text-zinc-300" />
+                      <p className="text-[12px] font-semibold text-zinc-400">Historial vacío</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-zinc-100 bg-zinc-50/50">
+                      {historial.map((t) => {
+                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                        const Icon = cfg.icon;
+                        return (
+                          <div key={t.id} className="p-4 space-y-2 opacity-85">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded-lg bg-zinc-200 flex items-center justify-center shrink-0">
+                                  <Icon size={12} className="text-zinc-600" />
+                                </div>
+                                <span className="text-[12px] font-bold text-zinc-650">{cfg.label}</span>
+                                <span className="text-[11px] font-bold text-zinc-400 bg-white px-2 py-0.5 rounded-md border border-zinc-150">Hab. {t.room}</span>
+                              </div>
+                              <span className="text-[10px] font-semibold text-zinc-400">{elapsed(t.created_at)}</span>
+                            </div>
+                            <p className="text-[12px] text-zinc-400 italic pl-1">{t.description}</p>
+                            <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600 pl-1">
+                              <CheckCheck size={14} />
+                              <span>Resuelto por {t.reported_by}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+              </div>
+            ) : (
+              // BÁNNER INFORMATIVO Y HERMOSO SI ES CLEANER / RECEPCIÓN (ELIMINA EL RUIDO VISUAL)
+              <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden border border-zinc-800">
+                <div className="absolute right-0 bottom-0 opacity-10 translate-x-4 translate-y-4">
+                  <Wrench size={160} />
+                </div>
+                <div className="relative z-10 space-y-4">
+                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                    <ShieldAlert size={20} className="text-rose-400" />
+                  </div>
+                  <div>
+                    <h4 className="text-[15px] font-black">Reporte de Daños Técnicos</h4>
+                    <p className="text-[12px] text-zinc-400 leading-relaxed mt-1">
+                      Si encuentras fugas de agua, fallos eléctricos, cerraduras rotas o cualquier anomalía, notifícalo directamente al administrador.
+                    </p>
+                  </div>
+                  <button 
+                    onClick={openMaintenanceReport}
+                    className="bg-white text-zinc-950 text-[11px] font-black uppercase px-4 py-2.5 rounded-xl flex items-center gap-2 active:scale-95 transition-all cursor-pointer shadow-lg"
+                  >
+                    <Wrench size={12} strokeWidth={2.5} />
+                    Reportar Incidencia
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── SECCIÓN 2: TABLERO HOUSEKEEPING (Grid de Habitaciones 101 a 402 en tiempo real) ── */}
+        {mainTab === 'housekeeping' && !isMantenimiento && (
+          <div className="space-y-4">
+            
+            <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-4">
+              <div>
+                <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
+                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
+              </div>
+
+              {/* Leyenda de Estados */}
+              <div className="flex gap-2 flex-wrap text-[10px] font-black tracking-wide uppercase">
+                <span className="px-2 py-1 rounded bg-zinc-100 border border-zinc-200 text-zinc-600">Disponible</span>
+                <span className="px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-700 animate-pulse">En Limpieza</span>
+                <span className="px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">Limpia</span>
+              </div>
+
+              {/* Grid Interactivo */}
+              <div className="grid grid-cols-3 gap-2">
+                {ROOMS.map((r) => {
+                  const stateInfo = getRoomState(r);
+                  let stateStyle = 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50';
+                  let badge = '';
+
+                  if (stateInfo.status === 'en_limpieza') {
+                    stateStyle = 'bg-gradient-to-br from-amber-50 to-orange-50/70 border-amber-200 text-amber-700 shadow-sm shadow-amber-50';
+                    badge = 'bg-amber-500';
+                  } else if (stateInfo.status === 'limpia') {
+                    stateStyle = 'bg-gradient-to-br from-emerald-50 to-teal-50/70 border-emerald-200 text-emerald-700 shadow-sm shadow-emerald-50';
+                    badge = 'bg-emerald-500';
+                  }
+
+                  return (
+                    <button
+                      key={r}
+                      onClick={() => {
+                        if (canModifyStatus) {
+                          setSelectedRoom(r);
+                          setShowStatusModal(true);
+                        }
+                      }}
+                      disabled={!canModifyStatus}
+                      className={`relative border rounded-2xl p-3 flex flex-col justify-between h-20 text-left transition-all ${stateStyle} ${canModifyStatus ? 'active:scale-95 cursor-pointer' : 'opacity-90 cursor-default'}`}
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span className="text-[14px] font-black leading-none">{r}</span>
+                        {badge && (
+                          <span className="relative flex h-2 w-2">
+                            {stateInfo.status === 'en_limpieza' && (
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            )}
+                            <span className={`relative inline-flex rounded-full h-2 w-2 ${badge}`}></span>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="space-y-0.5">
+                        <p className="text-[9px] font-black uppercase opacity-80 leading-none truncate">
+                          {stateInfo.status === 'en_limpieza' ? 'En Limpieza' : stateInfo.status === 'limpia' ? 'Limpia' : 'Disponible'}
+                        </p>
+                        {stateInfo.guest_name && (
+                          <p className="text-[8px] font-bold text-zinc-400 truncate leading-none max-w-[80px]">
+                            {stateInfo.guest_name}
+                          </p>
+                        )}
+                      </div>
+                    </button>
                   );
                 })}
               </div>
-            </Card>
+            </div>
+          </div>
+        )}
+
+        {/* ── SECCIÓN 3: CONTROL DE INVENTARIO ── */}
+        {mainTab === 'inventario' && (
+          <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
+              <Package size={16} className="text-zinc-650" />
+              <span className="text-[13px] font-extrabold text-zinc-800">Control de Insumos</span>
+            </div>
+
+            <div className="divide-y divide-zinc-150">
+              {inventory.map((item, index) => {
+                const isLow = item.stock <= item.min_stock;
+                return (
+                  <div key={item.id} className={`p-4 flex items-center justify-between gap-3 ${isLow ? 'bg-rose-50/60' : 'bg-white'}`}>
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-bold text-zinc-900 leading-tight">{item.item_name}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200/50 uppercase">{item.category}</span>
+                        <p className={`text-[11px] font-bold ${isLow ? 'text-rose-600' : 'text-zinc-400'}`}>
+                          Stock: {item.stock} <span className="opacity-60">(Min: {item.min_stock})</span>
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 bg-zinc-100 p-1.5 rounded-xl border border-zinc-200/60 shrink-0">
+                      <button 
+                        onClick={() => updateStock(item.id, item.stock, -1)} 
+                        disabled={item.stock === 0} 
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 text-zinc-600 flex items-center justify-center cursor-pointer active:scale-90 transition-transform disabled:opacity-40"
+                      >
+                        <Minus size={14} strokeWidth={2.5} />
+                      </button>
+                      <span className="w-8 text-center text-sm font-black text-zinc-950">{item.stock}</span>
+                      <button 
+                        onClick={() => updateStock(item.id, item.stock, 1)} 
+                        className="w-8 h-8 rounded-lg bg-zinc-950 text-white flex items-center justify-center cursor-pointer active:scale-90 transition-transform"
+                      >
+                        <Plus size={14} strokeWidth={2.5} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Toast */}
+      {/* ── NOTIFICACIONES TOAST ── */}
       {successMsg && (
-        <div style={{ position:'fixed', bottom:24, left:16, right:16, zIndex:9000 }}>
-          <div style={{ background:'#18181b', color:'white', fontSize:13, fontWeight:600, padding:'14px 20px', borderRadius:16, textAlign:'center', boxShadow:'0 8px 30px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-            <CheckCheck size={16} color="#22c55e"/>{successMsg}
+        <div className="fixed bottom-6 left-4 right-4 z-[9000] animate-in fade-in slide-in-from-bottom-5">
+          <div className="bg-zinc-900 text-white text-[13px] font-bold px-5 py-3.5 rounded-2xl text-center shadow-xl flex items-center justify-center gap-2 max-w-md mx-auto border border-zinc-800">
+            <CheckCheck size={16} className="text-emerald-400 shrink-0" />
+            <span>{successMsg}</span>
           </div>
         </div>
       )}
 
-      {/* Modal nueva incidencia */}
+      {/* ── MODAL REPORTE DE INCIDENCIA (BOTTOM SHEET PREMIUM) ── */}
       {showForm && (
-        <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', flexDirection:'column', justifyContent:'flex-end' }}>
-          <div onClick={() => setShowForm(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)', backdropFilter:'blur(4px)' }}/>
-          <div style={{ position:'relative', background:'white', borderRadius:'24px 24px 0 0', boxShadow:'0 -8px 40px rgba(0,0,0,0.15)', maxHeight:'90vh', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div onClick={() => setShowForm(false)} className="absolute inset-0" />
+          <div className="relative bg-white rounded-t-[32px] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
             
-            {/* Handle */}
-            <div style={{ display:'flex', justifyContent:'center', padding:'12px 0 4px', flexShrink:0 }}>
-              <div style={{ width:40, height:4, borderRadius:999, background:'#e4e4e7' }}/>
+            {/* Tirador */}
+            <div className="flex justify-center py-3 flex-shrink-0">
+              <div className="w-10 h-1.5 rounded-full bg-zinc-200" />
             </div>
 
-            {/* Header modal */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 20px 16px', flexShrink:0 }}>
-              <h3 style={{ fontSize:18, fontWeight:800, color:'#18181b', margin:0 }}>Nueva Incidencia</h3>
-              <button onClick={() => setShowForm(false)} style={{ width:32, height:32, borderRadius:10, background:'#f4f4f5', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                <X size={15} color="#71717a" strokeWidth={2.5}/>
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pb-4 border-b border-zinc-100 flex-shrink-0">
+              <h3 className="text-lg font-black text-zinc-900 flex items-center gap-2">
+                <Wrench size={18} className="text-rose-600" />
+                Reportar Daño Técnico
+              </h3>
+              <button 
+                onClick={() => setShowForm(false)} 
+                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+              >
+                <X size={15} strokeWidth={2.5} />
               </button>
             </div>
 
-            {/* Scroll content */}
-            <div style={{ overflowY:'auto', flex:1, padding:'0 20px 20px', display:'flex', flexDirection:'column', gap:18 }}>
-
-              {/* Tipo */}
+            {/* Contenido Scrollable */}
+            <div className="overflow-y-auto flex-1 p-6 space-y-5">
+              
+              {/* Tipo de Tarea */}
               <div>
-                <p style={{ fontSize:11, fontWeight:700, color:'#a1a1aa', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Tipo de incidencia</p>
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
-                  {(['limpieza','mantenimiento','otro'] as const).map(k => {
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2.5">Tipo de Incidencia</label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {(['limpieza', 'mantenimiento', 'otro'] as const).map((k) => {
                     const cfg = TYPE_CFG[k];
                     const Icon = cfg.icon;
                     const active = form.type === k;
                     return (
-                      <button key={k} onClick={() => setForm(f=>({...f,type:k}))} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, padding:'14px 8px', borderRadius:14, border: `2px solid ${active ? cfg.border : '#f4f4f5'}`, background: active ? cfg.bg : '#fafafa', cursor:'pointer', transition:'all 0.15s' }}>
-                        <div style={{ width:34, height:34, borderRadius:10, background: active ? 'white' : '#f4f4f5', display:'flex', alignItems:'center', justifyContent:'center', boxShadow: active ? '0 1px 4px rgba(0,0,0,0.1)' : 'none' }}>
-                          <Icon size={16} color={active ? cfg.text : '#a1a1aa'}/>
+                      <button 
+                        key={k}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, type: k }))}
+                        className={`flex flex-col items-center gap-2 py-3 rounded-2xl border-2 transition-all cursor-pointer ${active ? `${cfg.bg} ${cfg.border} ${cfg.text}` : 'border-zinc-100 bg-zinc-50/50 text-zinc-400'}`}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? 'bg-white shadow-sm' : 'bg-zinc-100'}`}>
+                          <Icon size={15} className={active ? cfg.text : 'text-zinc-400'} />
                         </div>
-                        <span style={{ fontSize:11, fontWeight:700, color: active ? cfg.text : '#a1a1aa' }}>{cfg.label}</span>
+                        <span className="text-[11px] font-black">{cfg.label}</span>
                       </button>
                     );
                   })}
@@ -454,49 +779,124 @@ export default function StaffPage() {
 
               {/* Habitación */}
               <div>
-                <p style={{ fontSize:11, fontWeight:700, color:'#a1a1aa', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Habitación</p>
-                <div style={{ position:'relative' }}>
-                  <select value={form.room} onChange={e=>setForm(f=>({...f,room:e.target.value}))} style={{ width:'100%', background:'#fafafa', border:'2px solid #f4f4f5', borderRadius:14, padding:'13px 40px 13px 16px', fontSize:14, fontWeight:600, color:'#18181b', appearance:'none', outline:'none', boxSizing:'border-box' }}>
-                    {ROOMS.map(r=><option key={r} value={r}>Habitación {r}</option>)}
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Habitación / Ubicación</label>
+                <div className="relative">
+                  <select 
+                    value={form.room} 
+                    onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 pr-10 text-[14px] font-bold text-zinc-900 outline-none appearance-none focus:ring-2 focus:ring-zinc-950/5"
+                  >
+                    {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
                   </select>
-                  <ChevronDown size={16} color="#a1a1aa" style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)', pointerEvents:'none' }}/>
+                  <ChevronDown size={16} className="text-zinc-450 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
               </div>
 
               {/* Descripción */}
               <div>
-                <p style={{ fontSize:11, fontWeight:700, color:'#a1a1aa', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Descripción</p>
-                <textarea value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Describe el problema con detalle..." rows={3} style={{ width:'100%', background:'#fafafa', border:'2px solid #f4f4f5', borderRadius:14, padding:'13px 16px', fontSize:14, color:'#18181b', resize:'none', outline:'none', lineHeight:1.5, boxSizing:'border-box' as const }}/>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Descripción del Daño</label>
+                <textarea 
+                  required
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Detalla qué está fallando (ej. gotea grifo del baño)..."
+                  rows={3}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 text-[14px] text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-950/5 resize-none leading-relaxed"
+                />
               </div>
 
-              {/* Foto */}
+              {/* Foto Evidencia */}
               <div>
-                <p style={{ fontSize:11, fontWeight:700, color:'#a1a1aa', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Foto (opcional)</p>
-                <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handleImage} style={{ display:'none' }}/>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Foto de la Falla (Opcional)</label>
+                <input 
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleImage}
+                  className="hidden"
+                />
                 {imagePreview ? (
-                  <div style={{ position:'relative' }}>
-                    <img src={imagePreview} alt="preview" style={{ width:'100%', height:160, objectFit:'cover', borderRadius:14, border:'2px solid #f4f4f5' }}/>
-                    <button onClick={()=>setImagePreview(null)} style={{ position:'absolute', top:8, right:8, width:28, height:28, borderRadius:999, background:'rgba(0,0,0,0.6)', border:'none', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                      <X size={13} color="white"/>
+                  <div className="relative rounded-2xl overflow-hidden border border-zinc-200">
+                    <img src={imagePreview} alt="Evidencia" className="w-full h-40 object-cover" />
+                    <button 
+                      type="button"
+                      onClick={() => setImagePreview(null)}
+                      className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80"
+                    >
+                      <X size={12} />
                     </button>
                   </div>
                 ) : (
-                  <button onClick={()=>fileRef.current?.click()} style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:10, padding:'16px', borderRadius:14, border:'2px dashed #e4e4e7', background:'#fafafa', cursor:'pointer', color:'#71717a', fontSize:13, fontWeight:600 }}>
-                    <Camera size={18} color="#a1a1aa"/>
-                    Tomar foto o elegir de la galería
+                  <button 
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="w-full border-2 border-dashed border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 rounded-2xl py-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-zinc-500 transition-colors"
+                  >
+                    <Camera size={20} className="text-zinc-450" />
+                    <span className="text-[12px] font-bold">Tomar foto o subir de galería</span>
                   </button>
                 )}
               </div>
 
-              {/* Botón enviar */}
-              <button onClick={submit} disabled={!form.description.trim()||submitting} style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:10, background:'#2563eb', color:'white', fontSize:14, fontWeight:800, padding:'16px', borderRadius:16, border:'none', cursor:'pointer', opacity:!form.description.trim()||submitting?0.4:1, marginTop:4 }}>
-                <Send size={16}/>
-                {submitting ? 'Enviando...' : 'Enviar Incidencia al Administrador'}
+              {/* Botón de Envío */}
+              <button 
+                type="button"
+                onClick={submit}
+                disabled={!form.description.trim() || submitting}
+                className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold py-4 rounded-2xl text-[14px] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-98"
+              >
+                <Send size={14} />
+                <span>{submitting ? 'Enviando Reporte...' : 'Enviar Reporte al Administrador'}</span>
               </button>
+
             </div>
           </div>
         </div>
       )}
+
+      {/* ── MODAL CAMBIAR ESTADO DE HABITACIÓN (BOTTOM SHEET SELECCIÓN RÁPIDA) ── */}
+      {showStatusModal && selectedRoom && (
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div onClick={() => setShowStatusModal(false)} className="absolute inset-0" />
+          <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-zinc-900">Habitación {selectedRoom}</h3>
+                <p className="text-[11px] text-zinc-450 font-bold mt-0.5">Asignar estatus operativo real</p>
+              </div>
+              <button 
+                onClick={() => setShowStatusModal(false)} 
+                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-505 cursor-pointer hover:bg-zinc-200"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Opciones */}
+            <div className="space-y-3">
+              {[
+                { id: 'disponible', title: 'Disponible', desc: 'Habitación limpia, lista para huéspedes y libre de detalles.', color: 'border-zinc-200 hover:bg-zinc-50 text-zinc-800' },
+                { id: 'en_limpieza', title: 'En Limpieza', desc: 'El personal de limpieza está trabajando actualmente en la unidad.', color: 'border-amber-200 bg-amber-50/10 hover:bg-amber-50/30 text-amber-800' },
+                { id: 'limpia', title: 'Limpia (Inspeccionada)', desc: 'Unidad completamente aseada, sanitizada e inspeccionada.', color: 'border-emerald-200 bg-emerald-50/10 hover:bg-emerald-50/30 text-emerald-800' }
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => changeRoomStatus(selectedRoom, opt.id as any)}
+                  className={`w-full text-left p-4 border-2 rounded-2xl flex flex-col justify-center transition-all cursor-pointer active:scale-[0.99] ${opt.color}`}
+                >
+                  <span className="text-[14px] font-black leading-tight">{opt.title}</span>
+                  <span className="text-[11px] opacity-75 font-semibold mt-1 leading-snug">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

@@ -1,22 +1,57 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { format } from 'date-fns';
+import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
-  UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus
+  UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
+  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-interface Reserva { id: string; room: string; unit_id?: string; guest_name?: string; check_in: string; check_out: string; checked_in?: boolean; checked_out?: boolean; dni_image?: string; }
-interface Task { id: string; type: string; room: string; description: string; status: string; reported_by: string; direction: string; created_at: string; image_base64?: string; }
+interface Reserva {
+  id: string;
+  room: string;
+  unit_id?: string;
+  guest_name?: string;
+  guest_phone?: string;
+  guest_email?: string;
+  check_in: string;
+  check_out: string;
+  checked_in?: boolean;
+  checked_out?: boolean;
+  dni_image?: string;
+  nights?: number;
+  price_estimate?: number;
+  num_adult?: number;
+  num_child?: number;
+}
 
-const ROOMS = ['A1','A2','A3','A4','A5','B1','B2','B3','B4','B5','C1','C2','C3','C4','C5','D1','D2','D3','D4','D5'];
+interface Task {
+  id: string;
+  type: string;
+  room: string;
+  description: string;
+  status: string;
+  reported_by: string;
+  direction: string;
+  created_at: string;
+  image_base64?: string;
+}
+
+const ROOMS = [
+  '101','102','103','104','105','106','107',
+  '201','202','203','204','205','206',
+  '301','302','303','304','305','306',
+  '401','402'
+];
 
 const BEDS24_ROOMS = [
   { id: '679077', name: 'Habitación Estándar' },
@@ -26,16 +61,45 @@ const BEDS24_ROOMS = [
   { id: '679093', name: 'Casa de Lujo' }
 ];
 
+const PRICES: Record<string, Record<string, number>> = {
+  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 },
+  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 },
+};
+
+function getSeason(dateStr: string): string {
+  const d = new Date(dateStr);
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  if (month === 12 && day >= 20) return 'alta';
+  if (month === 1 && day <= 10) return 'alta';
+  if (month === 3 || month === 4) return 'media_alta';
+  if (month === 7 || month === 8) return 'media';
+  return 'baja';
+}
+
 async function compressImage(file: File): Promise<string> {
   return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        const MAX = 900; let w = img.width, h = img.height;
-        if (w > MAX || h > MAX) { if (w > h) { h = (h*MAX)/w; w=MAX; } else { w=(w*MAX)/h; h=MAX; } }
+        const MAX = 900;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) {
+            h = (h * MAX) / w;
+            w = MAX;
+          } else {
+            w = (w * MAX) / h;
+            h = MAX;
+          }
+        }
         const canvas = document.createElement('canvas');
-        canvas.width = w; canvas.height = h;
+        canvas.width = w;
+        canvas.height = h;
         canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
         resolve(canvas.toDataURL('image/jpeg', 0.75));
       };
@@ -49,17 +113,25 @@ export default function RecepcionPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
   const todayStr = new Date().toISOString().split('T')[0];
+  const tomorrowStr = addDays(new Date(), 1).toISOString().split('T')[0];
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   // Modal Check-In / Walk-In
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
   const [dniPreview, setDniPreview] = useState<string | null>(null);
+  const [dniFile, setDniFile] = useState<File | null>(null);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
+  const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
 
   // Modal Mtto
   const [showForm, setShowForm] = useState(false);
@@ -69,6 +141,62 @@ export default function RecepcionPage() {
   // Availability check for Walk-In
   const [roomInventory, setRoomInventory] = useState<any[]>([]);
   const [checkingAvail, setCheckingAvail] = useState(false);
+
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Interceptar URL para Walk-in desde el Calendario o Widget
+    const isWalkin = searchParams.get('walkin');
+    const walkinRoom = searchParams.get('room');
+    const walkinUnit = searchParams.get('unit');
+    const walkinDate = searchParams.get('date');
+
+    if (isWalkin) {
+      const targetRoom = walkinRoom || '679077';
+      const targetDate = walkinDate || todayStr;
+      const nextDay = addDays(new Date(targetDate), 1).toISOString().split('T')[0];
+      setRoomInventory([]);
+      setSelectedReserva({
+        id: 'walkin',
+        room: targetRoom,
+        unit_id: walkinUnit || undefined,
+        check_in: targetDate,
+        check_out: nextDay,
+        guest_name: ''
+      });
+      setShowCheckInModal(true);
+      fetchAvailability(targetDate, nextDay);
+
+      // Limpiar URL
+      router.replace('/recepcion');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (selectedReserva?.id === 'walkin' && selectedReserva.room && selectedReserva.check_in && selectedReserva.check_out && !isPriceUnlocked) {
+      const season = getSeason(selectedReserva.check_in);
+      const basePrice = PRICES[selectedReserva.room]?.[season] || 2000;
+      const diffTime = Math.abs(new Date(selectedReserva.check_out).getTime() - new Date(selectedReserva.check_in).getTime());
+      const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+
+      const priceWithChannel = Math.round(basePrice * 1.0);
+      const tax = Math.round(priceWithChannel * 0.19);
+      const totalPerNight = priceWithChannel + tax;
+      const totalStay = totalPerNight * nights;
+
+      setPaymentAmount(totalStay.toString());
+    }
+  }, [selectedReserva?.room, selectedReserva?.check_in, selectedReserva?.check_out, isPriceUnlocked]);
+
+  const handleUnlockPrice = () => {
+    if (pinInput === '1234') {
+      setIsPriceUnlocked(true);
+      setShowPinModal(false);
+      setPinInput('');
+    } else {
+      alert('PIN Incorrecto');
+    }
+  };
 
   const fetchAvailability = async (checkIn: string, checkOut: string) => {
     if (!checkIn || !checkOut || checkIn >= checkOut) return;
@@ -86,27 +214,23 @@ export default function RecepcionPage() {
     }
   };
 
-  useEffect(() => {
-    if (showCheckInModal || showForm) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-  }, [showCheckInModal, showForm]);
-
   const fetchData = async () => {
     try {
-      const [r, t, inv, chk] = await Promise.all([
+      const [r, t, inv, chk, acc] = await Promise.all([
         fetch('/api/reservas'),
         fetch('/api/tasks'),
         supabase.from('inventory').select('*').order('category').order('item_name'),
-        supabase.from('checkins').select('*')
+        supabase.from('checkins').select('*'),
+        supabase.from('accounts').select('*')
       ]);
-      const rj = await r.json(); const tj = await t.json();
-      
+      const rj = await r.json();
+      const tj = await t.json();
+
       let checkinMap: Record<string, any> = {};
       if (chk.data) {
-        chk.data.forEach(c => { checkinMap[String(c.reservation_id)] = c; });
+        chk.data.forEach(c => {
+          checkinMap[String(c.reservation_id)] = c;
+        });
       }
 
       if (rj.success && rj.data) {
@@ -125,31 +249,33 @@ export default function RecepcionPage() {
       }
       if (tj.success) setTasks(tj.data);
       if (inv.data) setInventory(inv.data);
-    } catch {}
+      if (acc.data) setAccounts(acc.data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
     fetchData();
-    const iv = setInterval(fetchData, 10_000);
+    const iv = setInterval(fetchData, 15000);
     return () => clearInterval(iv);
   }, []);
 
   const llegadas = reservas.filter(r => r.check_in === todayStr);
-  const salidas  = reservas.filter(r => r.check_out === todayStr);
-  const checkins = llegadas.filter(r => !r.checked_in);
-  const checkouts = salidas.filter(r => !r.checked_out);
+  const salidas = reservas.filter(r => r.check_out === todayStr);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const b64 = await compressImage(file);
     setDniPreview(b64);
+    setDniFile(file);
   };
 
   const processCheckIn = async () => {
     if (!selectedReserva) return;
     setSubmitting(true);
-    
+
     // Si es walkin, crear en Beds24 primero
     if (selectedReserva.id === 'walkin') {
       try {
@@ -171,12 +297,12 @@ export default function RecepcionPage() {
           setSubmitting(false);
           return;
         }
-        // Usar el ID real devuelto por Beds24 o generar uno temporal local
+
         const b24Array = resData.data;
-        const beds24AssignedId = (Array.isArray(b24Array) && b24Array[0]?.new?.id) 
-          ? String(b24Array[0].new.id) 
+        const beds24AssignedId = (Array.isArray(b24Array) && b24Array[0]?.new?.id)
+          ? String(b24Array[0].new.id)
           : (resData.data && resData.data.id ? String(resData.data.id) : `b24-${Date.now()}`);
-        
+
         const baseRoomName = BEDS24_ROOMS.find(r => r.id === selectedReserva.room)?.name || selectedReserva.room;
         let finalRoomName = baseRoomName;
         if (selectedReserva.unit_id && roomInventory.length > 0) {
@@ -188,7 +314,17 @@ export default function RecepcionPage() {
         }
         const roomNameHuman = finalRoomName;
 
-        // Save to Supabase checkins table
+        let finalDniUrl = null;
+        if (dniFile) {
+          const fileExt = dniFile.name.split('.').pop() || 'jpg';
+          const fileName = `dni_${beds24AssignedId}_${Date.now()}.${fileExt}`;
+          const { data, error } = await supabase.storage.from('dni_images').upload(fileName, dniFile);
+          if (!error && data) {
+            const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
+            finalDniUrl = publicUrlData.publicUrl;
+          }
+        }
+
         const { error: upsertErr } = await supabase.from('checkins').upsert({
           reservation_id: beds24AssignedId,
           guest_name: selectedReserva.guest_name,
@@ -197,11 +333,11 @@ export default function RecepcionPage() {
           check_out_date: selectedReserva.check_out || todayStr,
           status: 'checked_in',
           checked_in_by: 'Recepcion',
-          dni_image: dniPreview || null // If column doesn't exist, this might fail unless user adds it
+          dni_image: finalDniUrl || null
         }, { onConflict: 'reservation_id' });
+
         if (upsertErr) console.error("Supabase Walkin Upsert Error:", upsertErr);
 
-        // Update local state IMMEDIATELY so it doesn't appear in 'Check-ins Hoy' again
         setReservas(prev => [...prev, {
           id: beds24AssignedId,
           guest_name: selectedReserva.guest_name,
@@ -209,7 +345,7 @@ export default function RecepcionPage() {
           check_in: todayStr,
           check_out: selectedReserva.check_out || todayStr,
           checked_in: true,
-          dni_image: dniPreview || undefined
+          dni_image: finalDniUrl || undefined
         }]);
 
       } catch (err: any) {
@@ -217,33 +353,61 @@ export default function RecepcionPage() {
         setSubmitting(false);
         return;
       }
+    } else {
+      // Check-in de reserva existente
+      let finalDniUrl = null;
+      if (dniFile) {
+        const fileExt = dniFile.name.split('.').pop() || 'jpg';
+        const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
+        const { data, error } = await supabase.storage.from('dni_images').upload(fileName, dniFile);
+        if (!error && data) {
+          const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
+          finalDniUrl = publicUrlData.publicUrl;
+        }
+      }
+
+      const { error: upsertErr } = await supabase.from('checkins').upsert({
+        reservation_id: String(selectedReserva.id),
+        guest_name: selectedReserva.guest_name,
+        room: selectedReserva.room,
+        check_in_date: selectedReserva.check_in,
+        check_out_date: selectedReserva.check_out,
+        status: 'checked_in',
+        checked_in_by: 'Recepcion',
+        dni_image: finalDniUrl || null
+      }, { onConflict: 'reservation_id' });
+
+      if (upsertErr) console.error("Supabase Checkin Error:", upsertErr);
+
+      setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined } : r));
     }
-    
+
+    // Registrar pago si corresponde
     if (paymentMode && paymentAmount) {
       await supabase.from('finances').insert({
         type: 'ingreso',
         amount: Number(paymentAmount),
-        category: 'Reserva',
+        category: 'Reserva Directa',
         description: `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room}`,
         payment_method: paymentMode,
         date: todayStr
       });
     }
-    
+
     setShowCheckInModal(false);
     setSelectedReserva(null);
     setDniPreview(null);
+    setDniFile(null);
     setPaymentMode(null);
     setPaymentAmount('');
     setSubmitting(false);
-    fetchData(); // Refresh data from Beds24
+    fetchData();
   };
 
   const processCheckOut = async (r: Reserva) => {
-    // Marcar como checked_out
+    // Marcar como checked_out localmente
     setReservas(prev => prev.map(res => res.id === r.id ? { ...res, checked_out: true } : res));
-    
-    // Save to Supabase
+
     const { error } = await supabase.from('checkins').upsert({
       reservation_id: String(r.id),
       guest_name: r.guest_name,
@@ -258,25 +422,45 @@ export default function RecepcionPage() {
       alert('Error al guardar Check-Out en base de datos: ' + error.message);
       return;
     }
-    
-    await fetch('/api/tasks', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'limpieza', room: r.room || 'General', description: `Check-out completado. Habitación ${r.room} lista para limpieza.`, reported_by: 'Recepción', direction: 'staff_to_staff', status: 'pendiente' }),
-    });
-    fetchData();
-  };
 
-  const sendTask = async () => {
-    if (!form.description) return;
-    setSubmitting(true);
+    // ── TRIGGER LIMPIEZA ROBUSTO ──
+    const parenMatch = (r.room || '').match(/\(([^)]+)\)/);
+    let roomNumber = parenMatch ? parenMatch[1] : null;
+    if (!roomNumber) {
+      const genericMatch = (r.room || '').match(/([A-Z]?\d+)/i);
+      roomNumber = genericMatch ? genericMatch[1] : (r.room || 'General');
+    }
+
+    if (roomNumber) {
+      await fetch('/api/room-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_number: roomNumber,
+          status: 'en_limpieza',
+          updated_by: 'Recepción',
+          checkout_reservation_id: String(r.id),
+          guest_name: r.guest_name,
+        }),
+      });
+    }
+
+    // Crear tarea de limpieza automática
     await fetch('/api/tasks', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, reported_by: staffName, direction: 'staff_to_admin', status: 'pendiente' }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: 'limpieza',
+        room: r.room || 'General',
+        description: `Check-out completado. Habitación ${r.room} lista para limpieza.`,
+        reported_by: 'Recepción',
+        direction: 'staff_to_staff',
+        status: 'pendiente'
+      }),
     });
-    setForm({ ...form, description: '' });
-    setShowForm(false);
-    setSubmitting(false);
+
     fetchData();
+    alert(`Check-out de ${r.guest_name} completado. Habitación ${roomNumber} marcada en limpieza.`);
   };
 
   const updateStock = async (id: string, currentStock: number, change: number) => {
@@ -285,246 +469,419 @@ export default function RecepcionPage() {
     await supabase.from('inventory').update({ stock: currentStock + change, last_updated_by: staffName }).eq('id', id);
   };
 
-  const Card = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ background: 'white', borderRadius: 16, padding: '16px 0', marginBottom: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.03)', border: '1px solid #f4f4f5' }}>{children}</div>
-  );
-  const SectionHead = ({ icon, title, count, color }: any) => (
-    <div style={{ padding: '0 16px 12px', borderBottom: '1px solid #f9f9f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {icon}
-        <h2 style={{ fontSize: 13, fontWeight: 800, color: '#18181b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: 0 }}>{title}</h2>
-      </div>
-      {count > 0 && <span style={{ background: color, color: 'white', fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>{count}</span>}
-    </div>
-  );
+  // Extraer la habitación/unidad para mostrarla elegante
+  const getUnitDisplay = (roomStr: string) => {
+    const match = (roomStr || '').match(/\(([^)]+)\)/);
+    return match ? match[1] : roomStr.split(' ')[0];
+  };
 
   return (
-    <div style={{ paddingBottom: 100, background: '#fafafa', minHeight: '100vh', fontFamily: 'Inter, sans-serif' }}>
-      
-      {/* Header */}
-      <div style={{ background: '#2563eb', padding: '40px 20px 24px', borderRadius: '0 0 24px 24px', marginBottom: 16, boxShadow: '0 4px 20px rgba(37,99,235,0.15)' }}>
-        <p style={{ color: '#bfdbfe', fontSize: 12, fontWeight: 500, margin: '0 0 4px', textTransform: 'capitalize' }}>
-          {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
-        </p>
-        <h1 style={{ color: 'white', fontSize: 24, fontWeight: 800, margin: '0 0 2px' }}>
-          Recepción
-        </h1>
-        <p style={{ color: '#bfdbfe', fontSize: 13, margin: 0 }}>Panel de Operaciones</p>
-      </div>
+    <div className="space-y-6 pb-28 bg-[#fafafa] min-h-screen">
 
-      <div style={{ padding: '0 16px' }}>
-        
-        {/* Main Tabs */}
-        <div style={{ display: 'flex', gap: 8, background: '#e4e4e7', padding: 4, borderRadius: 12, marginBottom: 16 }}>
-          <button onClick={() => setMainTab('recepcion')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800, background: mainTab === 'recepcion' ? 'white' : 'transparent', color: mainTab === 'recepcion' ? '#18181b' : '#71717a', boxShadow: mainTab === 'recepcion' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none', cursor: 'pointer', transition: 'all 0.15s' }}>Check-in / Check-out</button>
-          <button onClick={() => setMainTab('inventario')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 800, background: mainTab === 'inventario' ? 'white' : 'transparent', color: mainTab === 'inventario' ? '#18181b' : '#71717a', boxShadow: mainTab === 'inventario' ? '0 2px 8px rgba(0,0,0,0.08)' : 'none', cursor: 'pointer', transition: 'all 0.15s' }}>Inventario</button>
+      {/* ── HEADER ─────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-[22px] font-bold text-zinc-900 tracking-tight">Recepción</h2>
+          <div className="flex items-center gap-2 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[13px] font-medium text-zinc-500 capitalize">
+              {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
+            </span>
+          </div>
         </div>
-
-        {mainTab === 'recepcion' && (
-          <>
-            {/* Action Buttons */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, marginBottom: 16 }}>
-              <button 
-                onClick={() => {
-                  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
-                  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-                  setRoomInventory([]);
-                  setSelectedReserva({ id: 'walkin', room: '679077', check_in: todayStr, check_out: tomorrowStr, guest_name: '' });
-                  setShowCheckInModal(true);
-                  fetchAvailability(todayStr, tomorrowStr);
-                }}
-                style={{ background: '#18181b', color: 'white', border: 'none', padding: '14px', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-              >
-                <UserPlus size={18} /> Registrar Walk-In
-              </button>
-            </div>
-
-            {/* Llegadas */}
-            <Card>
-              <SectionHead icon={<ArrowDownLeft size={13} color="#2563eb"/>} title="Llegadas Hoy" count={llegadas.length} color="#2563eb"/>
-              {llegadas.length === 0 ? (
-                <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#a1a1aa', margin: 0 }}>No hay llegadas programadas para hoy.</p>
-                </div>
-              ) : (
-                llegadas.map((r,i)=>(
-                  <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', borderBottom: i<llegadas.length-1?'1px solid #f9f9f9':'none' }}>
-                    <div style={{ width:38, height:38, borderRadius:12, background: r.checked_in ? '#dcfce7' : '#eff6ff', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      {r.checked_in ? <CheckCircle2 size={16} color="#16a34a"/> : <BedDouble size={16} color="#2563eb"/>}
-                    </div>
-                    <div style={{ flex:1, minWidth:0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <p style={{ fontSize:15, fontWeight:700, color:'#18181b', margin:0 }}>
-                        {r.guest_name||'Huésped'} {r.checked_in && <span style={{ fontSize: 10, color: '#16a34a', marginLeft: 4, fontWeight: 800 }}>✓</span>}
-                      </p>
-                      <p style={{ fontSize:13, fontWeight:600, color: r.checked_in ? '#16a34a' : '#2563eb', margin:0, background: r.checked_in ? '#dcfce7' : '#eff6ff', padding: '4px 8px', borderRadius: 8 }}>{r.room||'Sin asignar'}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </Card>
-
-            {/* Salidas */}
-            <Card>
-              <SectionHead icon={<ArrowUpRight size={13} color="#d97706"/>} title="Check-outs Hoy" count={checkouts.length} color="#d97706"/>
-              {checkouts.length === 0 ? (
-                <div style={{ padding: '24px 16px', textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#a1a1aa', margin: 0 }}>No hay check-outs pendientes.</p>
-                </div>
-              ) : (
-                checkouts.map((r,i)=>(
-                  <div key={r.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 16px', borderBottom: i<checkouts.length-1?'1px solid #f9f9f9':'none' }}>
-                    <div style={{ width:38, height:38, borderRadius:12, background:'#fffbeb', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                      <CheckCircle2 size={16} color="#d97706"/>
-                    </div>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <p style={{ fontSize:14, fontWeight:700, color:'#18181b', margin:'0 0 2px' }}>{r.room||'Sin asignar'}</p>
-                      <p style={{ fontSize:12, color:'#a1a1aa', margin:0 }}>{r.guest_name||'Huésped'}</p>
-                    </div>
-                    <button onClick={() => processCheckOut(r)} style={{ background: '#d97706', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 10, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      Dar Salida
-                    </button>
-                  </div>
-                ))
-              )}
-            </Card>
-          </>
-        )}
-
-        {/* INVENTARIO */}
-        {mainTab === 'inventario' && (
-          <div style={{ paddingBottom: 20 }}>
-            {['Limpieza', 'Amenidades', 'Ropa de Cama'].map(cat => {
-              const items = inventory.filter(i => i.category === cat);
-              if (items.length === 0) return null;
-              return (
-                <div key={cat} style={{ marginBottom: 16 }}>
-                  <h3 style={{ fontSize: 12, fontWeight: 800, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8, paddingLeft: 4 }}>{cat}</h3>
-                  <div style={{ background: 'white', borderRadius: 16, border: '1px solid #e4e4e7', overflow: 'hidden' }}>
-                    {items.map((item, i) => (
-                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: i < items.length-1 ? '1px solid #f4f4f5' : 'none' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f4f4f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Package size={16} color="#71717a" />
-                          </div>
-                          <div>
-                            <p style={{ fontSize: 14, fontWeight: 700, color: '#18181b', margin: '0 0 2px' }}>{item.item_name}</p>
-                            <p style={{ fontSize: 11, fontWeight: 600, color: item.stock <= (item.min_threshold||5) ? '#ef4444' : '#a1a1aa', margin: 0 }}>
-                              {item.stock} unidades en stock
-                            </p>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f4f4f5', padding: 4, borderRadius: 10 }}>
-                          <button onClick={() => updateStock(item.id, item.stock, -1)} style={{ width: 28, height: 28, borderRadius: 8, background: 'white', border: '1px solid #e4e4e7', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Minus size={14} color="#71717a" /></button>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: '#18181b', width: 24, textAlign: 'center' }}>{item.stock}</span>
-                          <button onClick={() => updateStock(item.id, item.stock, 1)} style={{ width: 28, height: 28, borderRadius: 8, background: 'white', border: '1px solid #e4e4e7', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><Plus size={14} color="#71717a" /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <button
+          onClick={() => {
+            setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+            setShowForm(true);
+          }}
+          className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-md shadow-rose-200 active:scale-95 transition-all cursor-pointer"
+        >
+          <Wrench size={13} strokeWidth={2.5} />
+          <span>Reportar Mtto.</span>
+        </button>
       </div>
 
-      {/* Botón flotante para reportar tareas (igual que staff) */}
-      <button 
-        onClick={() => setShowForm(true)}
-        style={{ position: 'fixed', bottom: 80, right: 20, width: 56, height: 56, borderRadius: 28, background: '#18181b', color: 'white', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 30px rgba(0,0,0,0.3)', cursor: 'pointer', zIndex: 40 }}
-      >
-        <Plus size={24} />
-      </button>
+      {/* ── MAIN TABS ───────────────────────────────────────────────────── */}
+      <div className="bg-zinc-100 p-1 rounded-2xl flex gap-1.5 max-w-sm">
+        <button
+          onClick={() => setMainTab('recepcion')}
+          className={`flex-1 py-2.5 text-[13px] font-bold rounded-xl transition-all ${
+            mainTab === 'recepcion'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-800'
+          }`}
+        >
+          Check-in / Check-out
+        </button>
+        <button
+          onClick={() => setMainTab('inventario')}
+          className={`flex-1 py-2.5 text-[13px] font-bold rounded-xl transition-all ${
+            mainTab === 'inventario'
+              ? 'bg-white text-zinc-900 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-800'
+          }`}
+        >
+          Inventario
+        </button>
+      </div>
 
-      {/* Modal Crear Tarea */}
-      {showForm && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100, backdropFilter: 'blur(4px)' }} onClick={() => setShowForm(false)} />
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: '24px 20px 40px', zIndex: 101, maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#18181b', margin: 0 }}>Crear Reporte</h2>
-              <button onClick={() => setShowForm(false)} style={{ background: '#f4f4f5', border: 'none', width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                <X size={16} color="#71717a" />
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'block' }}>Tipo</label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                  <button onClick={() => setForm(f => ({...f, type:'mantenimiento'}))} style={{ padding:'10px 8px', borderRadius:12, border:`2px solid ${form.type==='mantenimiento'?'#ef4444':'#e4e4e7'}`, background:form.type==='mantenimiento'?'#fef2f2':'#fafafa', fontSize:12, fontWeight:700, color:form.type==='mantenimiento'?'#b91c1c':'#71717a', cursor:'pointer' }}>🔧 Mantenimiento</button>
-                  <button onClick={() => setForm(f => ({...f, type:'limpieza'}))} style={{ padding:'10px 8px', borderRadius:12, border:`2px solid ${form.type==='limpieza'?'#f59e0b':'#e4e4e7'}`, background:form.type==='limpieza'?'#fffbeb':'#fafafa', fontSize:12, fontWeight:700, color:form.type==='limpieza'?'#b45309':'#71717a', cursor:'pointer' }}>✨ Limpieza</button>
-                </div>
-              </div>
+      {mainTab === 'recepcion' && (
+        <div className="space-y-6">
 
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'block' }}>Habitación</label>
-                  <div style={{ position: 'relative' }}>
-                  <select value={form.room} onChange={e => setForm(f => ({...f, room: e.target.value}))} style={{ width: '100%', background: '#fafafa', border: '2px solid #e4e4e7', borderRadius: 12, padding: '12px 14px', fontSize: 16, fontWeight: 600, appearance: 'none', outline: 'none' }}>
-                    <option value="General">Área General</option>
-                    {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'block' }}>Descripción</label>
-                <textarea value={form.description} onChange={e => setForm(f => ({...f, description: e.target.value}))} placeholder="¿Qué sucede?" rows={3} style={{ width: '100%', background: '#fafafa', border: '2px solid #e4e4e7', borderRadius: 12, padding: '12px 14px', fontSize: 16, outline: 'none', resize: 'none', boxSizing: 'border-box' }} />
-              </div>
-
-              <button onClick={sendTask} disabled={!form.description.trim() || submitting} style={{ width: '100%', background: '#18181b', color: 'white', padding: '14px', borderRadius: 14, border: 'none', fontSize: 15, fontWeight: 700, marginTop: 8, cursor: 'pointer', opacity: !form.description.trim() || submitting ? 0.5 : 1 }}>
-                {submitting ? 'Enviando...' : 'Enviar Reporte'}
-              </button>
+          {/* ── BOTONES DE ACCIÓN RÁPIDA ─────────────────────────────────── */}
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => {
+                setRoomInventory([]);
+                setSelectedReserva({ id: 'walkin', room: '679077', check_in: todayStr, check_out: tomorrowStr, guest_name: '' });
+                setShowCheckInModal(true);
+                fetchAvailability(todayStr, tomorrowStr);
+              }}
+              className="bg-zinc-900 hover:bg-black text-white rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-[0.98] shadow-md cursor-pointer"
+            >
+              <UserPlus size={20} strokeWidth={2.5} />
+              <span className="text-[13px] font-bold leading-tight">Registrar Walk-In</span>
+            </button>
+            <div
+              onClick={() => {
+                // Redirigir a walkin con query params
+                setRoomInventory([]);
+                setSelectedReserva({ id: 'walkin', room: '679077', check_in: todayStr, check_out: tomorrowStr, guest_name: '' });
+                setShowCheckInModal(true);
+                fetchAvailability(todayStr, tomorrowStr);
+              }}
+              className="cursor-pointer"
+            >
+              <LiveAvailabilityWidget />
             </div>
           </div>
-        </>
+
+          {/* ── TABLA DE LLEGADAS DE HOY (7 Columnas Requeridas) ────────────────── */}
+          <div className="bg-white border border-zinc-200/80 rounded-[24px] shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Llegadas Hoy</h3>
+              </div>
+              <span className="text-[11px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-100">
+                {llegadas.length} llegadas
+              </span>
+            </div>
+
+            {llegadas.length === 0 ? (
+              <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
+                No hay llegadas programadas para hoy.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50/30">
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Pax</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Adeudo</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {llegadas.map(r => {
+                      const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
+                      const unit = getUnitDisplay(r.room);
+                      const isPending = !r.checked_in;
+                      return (
+                        <tr
+                          key={r.id}
+                          onClick={() => {
+                            if (isPending) {
+                              setSelectedReserva(r);
+                              setShowCheckInModal(true);
+                            }
+                          }}
+                          className={`hover:bg-zinc-50/50 transition-colors ${
+                            isPending ? 'cursor-pointer' : ''
+                          }`}
+                        >
+                          <td className="py-4 px-4">
+                            <span className="inline-flex items-center justify-center font-extrabold text-[12px] bg-zinc-900 text-white rounded-lg px-2.5 py-1 min-w-[36px]">
+                              {unit}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
+                            {r.guest_name}
+                          </td>
+                          <td className="py-4 px-4 text-[12px] text-zinc-500 font-medium">
+                            {r.guest_phone ? (
+                              <a
+                                href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                              >
+                                <Phone size={11} className="text-emerald-500" />
+                                {r.guest_phone}
+                              </a>
+                            ) : (
+                              <span className="text-zinc-300">—</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center text-[12px] font-semibold text-zinc-700">
+                            <span className="inline-flex items-center gap-1">
+                              <Users size={12} className="text-zinc-400" />
+                              {paxTotal}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-center text-[12px] font-semibold text-zinc-700">
+                            <span className="inline-flex items-center gap-1">
+                              <Moon size={12} className="text-zinc-400" />
+                              {r.nights || 1}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 text-right font-bold text-zinc-900 text-[13px]">
+                            ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                          </td>
+                          <td className="py-4 px-4 text-right text-[13px]">
+                            {r.checked_in ? (
+                              <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                $0.00
+                              </span>
+                            ) : (
+                              <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                                ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {r.checked_in ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
+                                <CheckCircle2 size={12} /> En Casa
+                              </span>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedReserva(r);
+                                  setShowCheckInModal(true);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                              >
+                                Check-In
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* ── TABLA DE CHECK-OUTS DE HOY ─────────────────────────────── */}
+          <div className="bg-white border border-zinc-200/80 rounded-[24px] shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Salidas Hoy</h3>
+              </div>
+              <span className="text-[11px] font-bold bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-100">
+                {salidas.length} salidas
+              </span>
+            </div>
+
+            {salidas.length === 0 ? (
+              <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
+                No hay salidas programadas para hoy.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                  <thead>
+                    <tr className="border-b border-zinc-100 bg-zinc-50/30">
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa Total</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Estado</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {salidas.map(r => {
+                      const unit = getUnitDisplay(r.room);
+                      const isPending = !r.checked_out;
+                      return (
+                        <tr key={r.id} className="hover:bg-zinc-50/30 transition-colors">
+                          <td className="py-4 px-4">
+                            <span className="inline-flex items-center justify-center font-extrabold text-[12px] bg-zinc-900 text-white rounded-lg px-2.5 py-1 min-w-[36px]">
+                              {unit}
+                            </span>
+                          </td>
+                          <td className="py-4 px-4 font-semibold text-zinc-950 text-[13px]">
+                            {r.guest_name}
+                          </td>
+                          <td className="py-4 px-4 text-center text-[12px] font-semibold text-zinc-700">
+                            {r.nights || 1}n
+                          </td>
+                          <td className="py-4 px-4 text-right font-bold text-zinc-900 text-[13px]">
+                            ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {r.checked_out ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-xl border border-zinc-200">
+                                Completado
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
+                                <CircleDot size={10} className="animate-pulse" /> Pendiente Out
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {isPending ? (
+                              <button
+                                onClick={() => processCheckOut(r)}
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                              >
+                                Dar Salida
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-zinc-400 font-bold">Listo ✓</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+        </div>
       )}
 
-      {/* Modal Check-In */}
+      {/* ── VISTA INVENTARIO ────────────────────────────────────────────── */}
+      {mainTab === 'inventario' && (
+        <div className="space-y-6">
+          {['Limpieza', 'Amenidades', 'Ropa de Cama'].map(cat => {
+            const items = inventory.filter(i => i.category === cat);
+            if (items.length === 0) return null;
+            return (
+              <div key={cat} className="space-y-2">
+                <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest pl-1">{cat}</h3>
+                <div className="bg-white border border-zinc-200/80 rounded-[20px] overflow-hidden shadow-sm divide-y divide-zinc-100">
+                  {items.map(item => (
+                    <div key={item.id} className="flex items-center justify-between p-4 hover:bg-zinc-50/30 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
+                          <Package size={16} className="text-zinc-500" />
+                        </div>
+                        <div>
+                          <p className="text-[14px] font-bold text-zinc-900 leading-tight">{item.item_name}</p>
+                          <p className={`text-[11px] font-semibold mt-0.5 ${
+                            item.stock <= (item.min_threshold || 5) ? 'text-red-500' : 'text-zinc-400'
+                          }`}>
+                            {item.stock} unidades en stock
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 bg-zinc-100/80 p-1.5 rounded-xl border border-zinc-200/40">
+                        <button
+                          onClick={() => updateStock(item.id, item.stock, -1)}
+                          className="w-7 h-7 rounded-lg bg-white border border-zinc-200/65 flex items-center justify-center hover:bg-zinc-50 active:scale-95 cursor-pointer shadow-sm"
+                        >
+                          <Minus size={12} className="text-zinc-600" />
+                        </button>
+                        <span className="text-[13px] font-bold text-zinc-900 w-6 text-center">{item.stock}</span>
+                        <button
+                          onClick={() => updateStock(item.id, item.stock, 1)}
+                          className="w-7 h-7 rounded-lg bg-white border border-zinc-200/65 flex items-center justify-center hover:bg-zinc-50 active:scale-95 cursor-pointer shadow-sm"
+                        >
+                          <Plus size={12} className="text-zinc-600" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* ── MODAL PROCESO CHECK-IN / WALK-IN ───────────────────────────── */}
       {showCheckInModal && selectedReserva && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, backdropFilter: 'blur(4px)' }} onClick={() => setShowCheckInModal(false)} />
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: '24px 20px 40px', zIndex: 101, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: '#18181b', margin: 0 }}>{selectedReserva.id === 'walkin' ? 'Registrar Walk-In' : 'Proceso de Check-in'}</h2>
-              <button onClick={() => setShowCheckInModal(false)} style={{ background: '#f4f4f5', border: 'none', width: 32, height: 32, borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                <X size={16} color="#71717a" />
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white w-full sm:w-[420px] rounded-t-[32px] sm:rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
+            {/* Header Modal */}
+            <div className="px-6 py-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/30">
+              <div>
+                <h3 className="text-[16px] font-bold text-zinc-950">
+                  {selectedReserva.id === 'walkin' ? 'Registrar Walk-In' : 'Proceso de Check-In'}
+                </h3>
+                {selectedReserva.id !== 'walkin' && (
+                  <p className="text-[11px] font-semibold text-zinc-400 mt-0.5 uppercase tracking-wider">ID: {selectedReserva.id}</p>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setShowCheckInModal(false);
+                  setDniPreview(null);
+                  setDniFile(null);
+                }}
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-colors active:scale-95 cursor-pointer"
+              >
+                <X size={15} strokeWidth={2.5} />
               </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto', paddingBottom: 60 }}>
-              {/* Información Básica */}
+            {/* Contenido Modal */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+              
               {selectedReserva.id === 'walkin' ? (
-                <div style={{ background: '#f4f4f5', borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                // Lógica de Walk-In
+                <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-4">
                   <div>
-                    <p style={{ fontSize: 11, color: '#71717a', fontWeight: 600, margin: '0 0 4px', textTransform: 'uppercase' }}>Nombre del Huésped</p>
-                    <input value={selectedReserva.guest_name} onChange={e => setSelectedReserva({...selectedReserva, guest_name: e.target.value})} placeholder="Ej: Juan Pérez" style={{ width: '100%', background: 'white', border: '1px solid #e4e4e7', borderRadius: 8, padding: '8px 12px', fontSize: 16, outline: 'none' }} />
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Nombre del Huésped</label>
+                    <input
+                      type="text"
+                      value={selectedReserva.guest_name}
+                      onChange={e => setSelectedReserva({ ...selectedReserva, guest_name: e.target.value })}
+                      placeholder="Ej. Carlos Slim"
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                    />
                   </div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ flex: 1 }}>
-                      <p style={{ fontSize: 11, color: '#71717a', fontWeight: 600, margin: '0 0 4px', textTransform: 'uppercase' }}>Salida (Check-out)</p>
-                      <input 
-                        type="date" 
-                        value={selectedReserva.check_out} 
-                        onChange={e => {
-                          const newCheckOut = e.target.value;
-                          setSelectedReserva({...selectedReserva, check_out: newCheckOut, room: '', unit_id: ''});
-                          fetchAvailability(selectedReserva.check_in, newCheckOut);
-                        }} 
-                        style={{ width: '100%', background: 'white', border: '1px solid #e4e4e7', borderRadius: 8, padding: '8px 12px', fontSize: 16, outline: 'none' }} 
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-Out (Fecha de Salida)</label>
+                    <input
+                      type="date"
+                      min={tomorrowStr}
+                      value={selectedReserva.check_out}
+                      onChange={e => {
+                        const newOut = e.target.value;
+                        setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
+                        fetchAvailability(selectedReserva.check_in, newOut);
+                      }}
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                    />
                   </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
+                      Seleccionar Habitación Libre {checkingAvail && '· buscando...'}
+                    </label>
 
-                  <div style={{ marginTop: 4 }}>
-                    <p style={{ fontSize: 11, color: '#71717a', fontWeight: 600, margin: '0 0 8px', textTransform: 'uppercase' }}>Asignación de Unidad {checkingAvail && <span style={{fontWeight:400}}>· verificando...</span>}</p>
-                    
                     {roomInventory.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '220px', overflowY: 'auto', paddingRight: 4 }}>
+                      <div className="space-y-3 max-h-[200px] overflow-y-auto pr-1">
                         {roomInventory.map((roomGroup: any) => (
-                          <div key={roomGroup.roomId}>
-                            <p style={{ fontSize: 12, fontWeight: 700, color: '#18181b', marginBottom: 6 }}>{roomGroup.name}</p>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          <div key={roomGroup.roomId} className="space-y-1">
+                            <p className="text-[11px] font-bold text-zinc-700">{roomGroup.name}</p>
+                            <div className="flex flex-wrap gap-1.5">
                               {roomGroup.units.map((u: any) => {
                                 const isSelected = selectedReserva.room === roomGroup.roomId && selectedReserva.unit_id === u.unitId;
                                 return (
@@ -532,118 +889,302 @@ export default function RecepcionPage() {
                                     key={u.unitId}
                                     disabled={!u.isAvailable}
                                     onClick={() => setSelectedReserva({ ...selectedReserva, room: roomGroup.roomId, unit_id: u.unitId })}
-                                    style={{
-                                      padding: '6px 10px',
-                                      borderRadius: 8,
-                                      fontSize: 12,
-                                      fontWeight: 600,
-                                      border: isSelected ? '2px solid #2563eb' : '1px solid #e4e4e7',
-                                      background: !u.isAvailable ? '#f4f4f5' : isSelected ? '#2563eb' : 'white',
-                                      color: !u.isAvailable ? '#a1a1aa' : isSelected ? 'white' : '#3f3f46',
-                                      cursor: !u.isAvailable ? 'not-allowed' : 'pointer',
-                                      textDecoration: !u.isAvailable ? 'line-through' : 'none',
-                                      transition: 'all 0.2s'
-                                    }}
+                                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                                      !u.isAvailable
+                                        ? 'bg-zinc-100 border-zinc-200 text-zinc-300 line-through cursor-not-allowed'
+                                        : isSelected
+                                        ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm'
+                                        : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
+                                    }`}
                                   >
                                     {u.name}
                                   </button>
-                                )
+                                );
                               })}
                             </div>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div style={{ padding: '12px', background: 'white', border: '1px solid #e4e4e7', borderRadius: 8 }}>
-                        <p style={{ fontSize: 12, color: '#71717a', margin: 0 }}>Selecciona fecha de salida para ver disponibilidad.</p>
+                      <div className="bg-white border border-zinc-200/80 p-3 rounded-xl text-center">
+                        <p className="text-[11px] text-zinc-400 font-medium">Ingresa fechas válidas para buscar disponibilidad.</p>
                       </div>
                     )}
                   </div>
                 </div>
               ) : (
-                <div style={{ background: '#f4f4f5', borderRadius: 16, padding: 16 }}>
-                  <p style={{ fontSize: 12, color: '#71717a', fontWeight: 600, margin: '0 0 4px', textTransform: 'uppercase' }}>Huésped</p>
-                  <p style={{ fontSize: 16, color: '#18181b', fontWeight: 800, margin: '0 0 12px' }}>{selectedReserva.guest_name}</p>
+                // Información Reserva Existente
+                <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Huésped</span>
+                  <p className="text-[16px] font-bold text-zinc-950 leading-tight">{selectedReserva.guest_name}</p>
                   
-                  <div style={{ display: 'flex', gap: 16 }}>
+                  <div className="grid grid-cols-2 gap-4 mt-4 pt-3 border-t border-zinc-200/40">
                     <div>
-                      <p style={{ fontSize: 11, color: '#71717a', fontWeight: 600, margin: '0 0 2px', textTransform: 'uppercase' }}>Habitación</p>
-                      <p style={{ fontSize: 14, color: '#18181b', fontWeight: 700, margin: 0 }}>{selectedReserva.room || 'Sin asignar'}</p>
+                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación</span>
+                      <p className="text-[13px] font-bold text-zinc-900">{selectedReserva.room}</p>
                     </div>
                     <div>
-                      <p style={{ fontSize: 11, color: '#71717a', fontWeight: 600, margin: '0 0 2px', textTransform: 'uppercase' }}>Check-out</p>
-                      <p style={{ fontSize: 14, color: '#18181b', fontWeight: 700, margin: 0 }}>{selectedReserva.check_out}</p>
+                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Salida (Out)</span>
+                      <p className="text-[13px] font-bold text-zinc-900">
+                        {selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}
+                      </p>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* DNI Scanner */}
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 800, color: '#18181b', marginBottom: 8 }}>Identificación (DNI/Pasaporte)</p>
+              <div className="space-y-2">
+                <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Identificación (DNI/Pasaporte)</h4>
                 {!dniPreview ? (
-                  <div 
+                  <div
                     onClick={() => fileRef.current?.click()}
-                    style={{ background: '#fafafa', border: '2px dashed #e4e4e7', borderRadius: 16, height: 100, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', gap: 8 }}
+                    className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
                   >
-                    <Camera size={24} color="#71717a" />
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#71717a' }}>Tomar foto del documento</span>
-                    <input type="file" accept="image/*" capture="environment" ref={fileRef} onChange={handleDniUpload} style={{ display: 'none' }} />
+                    <Camera size={20} className="text-zinc-400" />
+                    <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
+                    <input
+                      type="file" accept="image/*" capture="environment"
+                      ref={fileRef} onChange={handleDniUpload} className="hidden"
+                    />
                   </div>
                 ) : (
-                  <div style={{ position: 'relative' }}>
-                    <img src={dniPreview} alt="DNI Preview" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 16, border: '1px solid #e4e4e7' }} />
-                    <button onClick={() => setDniPreview(null)} style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.5)', border: 'none', width: 28, height: 28, borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                      <X size={14} color="white" />
+                  <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm">
+                    <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
+                    <button
+                      onClick={() => { setDniPreview(null); setDniFile(null); }}
+                      className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
+                    >
+                      <X size={14} />
                     </button>
                   </div>
                 )}
               </div>
 
               {/* Registro de Pago */}
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 800, color: '#18181b', marginBottom: 8 }}>Registro de Pago (Opcional)</p>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <div className="space-y-3 pt-2">
+                <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Registrar Pago (Opcional)</h4>
+                <div className="flex gap-2">
                   {[
                     { id: 'efectivo', label: 'Efectivo', icon: Wallet },
                     { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                    { id: 'transferencia', label: 'Transf.', icon: Send }
+                    { id: 'transferencia', label: 'Transferencia', icon: Send }
                   ].map(m => (
-                    <button 
-                      key={m.id} 
+                    <button
+                      key={m.id}
                       onClick={() => setPaymentMode(m.id as any)}
-                      style={{ flex: 1, padding: '10px 4px', borderRadius: 12, border: `2px solid ${paymentMode === m.id ? '#2563eb' : '#e4e4e7'}`, background: paymentMode === m.id ? '#eff6ff' : '#fafafa', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+                      className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                        paymentMode === m.id
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                          : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
+                      }`}
                     >
-                      <m.icon size={16} color={paymentMode === m.id ? '#2563eb' : '#71717a'} />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: paymentMode === m.id ? '#2563eb' : '#71717a' }}>{m.label}</span>
+                      <m.icon size={15} />
+                      <span className="text-[11px] font-bold">{m.label}</span>
                     </button>
                   ))}
                 </div>
+
                 {paymentMode && (
-                  <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 16, fontWeight: 700, color: '#71717a' }}>$</span>
-                    <input 
-                      type="number" 
-                      value={paymentAmount} 
-                      onChange={e => setPaymentAmount(e.target.value)} 
-                      placeholder="Monto a registrar" 
-                      style={{ width: '100%', background: '#fafafa', border: '2px solid #e4e4e7', borderRadius: 12, padding: '12px 14px 12px 32px', fontSize: 16, fontWeight: 700, outline: 'none', boxSizing: 'border-box' }}
-                    />
+                  <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
+                    {selectedReserva.id === 'walkin' && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Monto a cobrar</span>
+                        <button
+                          type="button"
+                          onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
+                          className="text-[10px] font-extrabold text-blue-600 flex items-center gap-1 bg-none border-none hover:underline cursor-pointer"
+                        >
+                          {isPriceUnlocked ? <Unlock size={11} /> : <Lock size={11} />}
+                          {isPriceUnlocked ? 'BLOQUEAR PRECIO' : 'MODIFICAR PRECIO'}
+                        </button>
+                      </div>
+                    )}
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-base">$</span>
+                      <input
+                        type="number"
+                        value={paymentAmount}
+                        onChange={e => setPaymentAmount(e.target.value)}
+                        placeholder="0.00"
+                        readOnly={selectedReserva.id === 'walkin' && !isPriceUnlocked}
+                        className={`w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-8 pr-4 font-bold text-[15px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 ${
+                          (selectedReserva.id === 'walkin' && !isPriceUnlocked) ? 'bg-zinc-100/60 text-zinc-400 cursor-not-allowed' : ''
+                        }`}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
 
-              <button 
-                onClick={processCheckIn} 
-                disabled={submitting || (!dniPreview && selectedReserva.id !== 'walkin') || (selectedReserva.id === 'walkin' && (!selectedReserva.guest_name || !selectedReserva.unit_id))} 
-                style={{ flexShrink: 0, width: '100%', background: '#2563eb', color: 'white', padding: '16px', borderRadius: 16, border: 'none', fontSize: 15, fontWeight: 800, marginTop: 8, cursor: (selectedReserva.id === 'walkin' && !selectedReserva.unit_id) ? 'not-allowed' : 'pointer', opacity: (submitting || (!dniPreview && selectedReserva.id !== 'walkin') || (selectedReserva.id === 'walkin' && (!selectedReserva.guest_name || !selectedReserva.unit_id))) ? 0.5 : 1 }}
+            </div>
+
+            {/* Acción de Envío */}
+            <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
+              <button
+                onClick={processCheckIn}
+                disabled={
+                  submitting ||
+                  (!dniPreview && selectedReserva.id !== 'walkin') ||
+                  (selectedReserva.id === 'walkin' && (!selectedReserva.guest_name || !selectedReserva.unit_id))
+                }
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[14px] py-3.5 rounded-xl transition-all cursor-pointer shadow-md shadow-blue-600/15 disabled:opacity-40 flex items-center justify-center gap-2"
               >
-                {submitting ? 'Procesando...' : 'Completar Check-In'}
+                {submitting ? 'Registrando...' : 'Completar Check-In'}
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
+
+      {/* Modal PIN */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl space-y-4">
+            <div className="text-center space-y-1.5">
+              <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-2 border border-blue-100">
+                <Lock size={18} />
+              </div>
+              <h3 className="font-bold text-[16px] text-zinc-900">Desbloquear Tarifa</h3>
+              <p className="text-[11px] text-zinc-400 font-medium">Introduce el PIN de administrador para editar la tarifa.</p>
+            </div>
+            <input
+              type="password"
+              placeholder="PIN de 4 dígitos"
+              maxLength={4}
+              value={pinInput}
+              onChange={e => setPinInput(e.target.value)}
+              className="w-full text-center text-3xl font-extrabold border-2 border-zinc-200 rounded-2xl py-2 outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 tracking-widest text-zinc-900"
+            />
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => { setShowPinModal(false); setPinInput(''); }}
+                className="flex-1 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[12px] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleUnlockPrice}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[12px] transition-colors cursor-pointer"
+              >
+                Desbloquear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal Reporte de Mantenimiento desde Recepción */}
+      {showForm && (
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div onClick={() => setShowForm(false)} className="absolute inset-0" />
+          <div className="relative bg-white rounded-t-[32px] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
+            
+            {/* Tirador */}
+            <div className="flex justify-center py-3 flex-shrink-0">
+              <div className="w-10 h-1.5 rounded-full bg-zinc-200" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 pb-4 border-b border-zinc-100 flex-shrink-0">
+              <h3 className="text-lg font-black text-zinc-900 flex items-center gap-2">
+                <Wrench size={18} className="text-rose-600" />
+                Reportar Daño Técnico (Mantenimiento)
+              </h3>
+              <button 
+                onClick={() => setShowForm(false)} 
+                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Contenido Scrollable */}
+            <div className="overflow-y-auto flex-1 p-6 space-y-5">
+              
+              {/* Tipo de Tarea */}
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2.5">Tipo de Incidencia</label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {[
+                    { id: 'limpieza', label: 'Limpieza', icon: Sparkles, bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700' },
+                    { id: 'mantenimiento', label: 'Mtto.', icon: Wrench, bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-700' },
+                    { id: 'otro', label: 'Otro', icon: AlertTriangle, bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' }
+                  ].map((cfg) => {
+                    const Icon = cfg.icon;
+                    const active = form.type === cfg.id;
+                    return (
+                      <button 
+                        key={cfg.id}
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, type: cfg.id }))}
+                        className={`flex flex-col items-center gap-2 py-3 rounded-2xl border-2 transition-all cursor-pointer ${active ? `${cfg.bg} ${cfg.border} ${cfg.text}` : 'border-zinc-100 bg-zinc-50/50 text-zinc-400'}`}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? 'bg-white shadow-sm' : 'bg-zinc-100'}`}>
+                          <Icon size={15} className={active ? cfg.text : 'text-zinc-400'} />
+                        </div>
+                        <span className="text-[11px] font-black">{cfg.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Habitación */}
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Habitación / Ubicación</label>
+                <div className="relative">
+                  <select 
+                    value={form.room} 
+                    onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 pr-10 text-[14px] font-bold text-zinc-900 outline-none appearance-none focus:ring-2 focus:ring-zinc-950/5"
+                  >
+                    {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
+                  </select>
+                  <ChevronDown size={16} className="text-zinc-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+
+              {/* Descripción */}
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Descripción del Daño</label>
+                <textarea 
+                  required
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Detalla qué está fallando..."
+                  rows={3}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 text-[14px] text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-950/5 resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Botón de Envío */}
+              <button 
+                type="button"
+                onClick={async () => {
+                  if (!form.description.trim()) return;
+                  setSubmitting(true);
+                  await fetch('/api/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...form, reported_by: 'Recepción', direction: 'staff_to_admin' }),
+                  });
+                  setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+                  setShowForm(false);
+                  alert('¡Incidencia de mantenimiento reportada al administrador!');
+                  setSubmitting(false);
+                }}
+                disabled={!form.description.trim() || submitting}
+                className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold py-4 rounded-2xl text-[14px] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-98"
+              >
+                <Send size={14} />
+                <span>{submitting ? 'Enviando...' : 'Enviar Incidencia a Mantenimiento'}</span>
+              </button>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

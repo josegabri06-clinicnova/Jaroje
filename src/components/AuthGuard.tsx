@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/lib/auth';
-import { LogOut, Shield, Wrench } from 'lucide-react';
+import { LogOut, Shield, Wrench, Sparkles } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 
 type Role = 'admin' | 'staff' | null;
@@ -23,19 +23,19 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem('jaroje_role') as Role;
     setRole(stored);
 
-    const isPublicRoute = PUBLIC_ROUTES.includes(pathname) || pathname.startsWith('/pre-checkin');
+    const isPublicRoute = PUBLIC_ROUTES.includes(pathname || '');
 
     if (!stored && !isPublicRoute) {
       router.replace('/login');
       return;
     }
 
-    if (stored === 'staff' && !STAFF_ROUTES.some(r => pathname.startsWith(r)) && !isPublicRoute) {
+    if (stored === 'staff' && !STAFF_ROUTES.some(r => (pathname || '').startsWith(r)) && !isPublicRoute) {
       router.replace('/staff');
       return;
     }
 
-    if (stored === 'admin' && STAFF_ONLY_ROUTES.some(r => pathname.startsWith(r))) {
+    if (stored === 'admin' && STAFF_ONLY_ROUTES.some(r => (pathname || '').startsWith(r))) {
       router.replace('/');
       return;
     }
@@ -49,13 +49,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   };
 
   if (!checked) return <div className="fixed inset-0 bg-[#fafafa]" />;
-
-  // Si es una ruta pública de tipo Pre Check-In, no renderizar el header del Admin
-  const isPreCheckin = pathname.startsWith('/pre-checkin');
-
-  if (isPreCheckin) {
-    return <>{children}</>;
-  }
 
   return (
     <>
@@ -77,6 +70,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
               <Wrench size={10} className="text-white" />
               <span className="text-[10px] font-bold text-white tracking-wide uppercase">Staff</span>
             </div>
+          )}
+
+          {/* Copilot */}
+          {role && (
+            <button
+              onClick={() => window.dispatchEvent(new Event('open-copilot'))}
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-100 transition-colors"
+              aria-label="Abrir Copiloto"
+            >
+              <Sparkles size={18} className="text-zinc-500" />
+            </button>
           )}
 
           {/* Campana — solo admin */}

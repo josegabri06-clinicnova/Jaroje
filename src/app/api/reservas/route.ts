@@ -113,7 +113,7 @@ async function getBeds24Token(): Promise<string> {
   const refreshData = await refreshRes.json();
 
   if (!refreshData.token) {
-    throw new Error('Token de Beds24 caducado. Ve a Beds24 > Account > API y genera un nuevo Refresh Token.');
+    throw new Error('TOKEN_EXPIRED');
   }
 
   // Actualizar en memoria para esta instancia del servidor
@@ -220,6 +220,8 @@ export async function GET() {
         nights: nights,
         price_estimate: totalRevenue,
         notes: b.info || b.notes || null,
+        num_adult: b.numAdult ? Number(b.numAdult) : 1,
+        num_child: b.numChild ? Number(b.numChild) : 0,
         rooms: { name: roomData.nombre }
       };
     });
@@ -249,6 +251,8 @@ export async function POST(req: Request) {
         roomId: Number(roomId),
         unitId: Number(unitId),
         roomQty: 1,
+        checkAvailability: true,
+        assignBooking: true,
         arrival: checkIn,
         departure: checkOut,
         firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),

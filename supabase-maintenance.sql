@@ -1,17 +1,29 @@
--- 1. Añadir columnas a la tabla tasks
-ALTER TABLE public.tasks 
-ADD COLUMN IF NOT EXISTS photo_url TEXT,
-ADD COLUMN IF NOT EXISTS resolution_photo_url TEXT;
-
--- 2. Crear el bucket en Storage para las fotos de mantenimiento
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('maintenance_photos', 'maintenance_photos', true)
+-- Crear el bucket 'dni_images' para almacenar las fotos de pasaportes/DNI de manera optimizada
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'dni_images', 
+  'dni_images', 
+  true, 
+  5242880, -- 5MB limit
+  ARRAY['image/png', 'image/jpeg', 'image/webp', 'application/pdf']
+)
 ON CONFLICT (id) DO NOTHING;
 
--- 3. Crear políticas de seguridad para el bucket (Público para leer y subir)
--- Política para seleccionar/leer (Select)
-CREATE POLICY "Maintenance Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'maintenance_photos');
+-- Crear política para permitir que cualquiera pueda ver las imágenes (para el frontend)
+CREATE POLICY "Public Access DNI"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'dni_images' );
 
--- Política para subir/insertar (Insert) - Permitimos a usuarios anónimos subir fotos
-CREATE POLICY "Maintenance Public Upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'maintenance_photos');
+-- Crear política para permitir subidas anónimas (o autenticadas) a dni_images
+CREATE POLICY "Allow public uploads DNI"
+ON storage.objects FOR INSERT
+WITH CHECK ( bucket_id = 'dni_images' );
 
+-- Crear política para permitir actualizar y eliminar imágenes en dni_images
+CREATE POLICY "Allow public updates DNI"
+ON storage.objects FOR UPDATE
+WITH CHECK ( bucket_id = 'dni_images' );
+
+CREATE POLICY "Allow public deletes DNI"
+ON storage.objects FOR DELETE
+USING ( bucket_id = 'dni_images' );
