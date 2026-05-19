@@ -1,4 +1,5 @@
 const fs = require('fs');
+require('dotenv').config({ path: '.env' });
 
 async function run() {
   try {
@@ -19,7 +20,7 @@ async function run() {
     // We already have a BEDS24 connection. Let's just use the beds24 token directly to cancel.
     const refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
       method: 'GET',
-      headers: { 'refreshToken': 'wYXR6Me9ir1D0sOFPjNWPXO8KvyMeH0YKy5R4ull5SvPlMXrmoBcxtFlmehPSiP4jm4tlAdwM9mdfIaZfQ8gvuee0/7NlFa85DG1UiwfTWe4HFO4STIpqA2XG8rzParPnpXNuuWXIqsPZR8iv73tcadfEB4+R74kuw71256tcas=' }
+      headers: { 'refreshToken': process.env.BEDS24_REFRESH_TOKEN }
     });
     const { token } = await refreshRes.json();
     const cancelRes = await fetch('https://api.beds24.com/v2/bookings', {

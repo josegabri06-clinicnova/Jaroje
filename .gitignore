@@ -43,3 +43,6 @@ next-env.d.ts
 # scratch/temporary files
 /scratch/
 
+# large inventory data files
+/inventario_temp.csv
+
