@@ -6,6 +6,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe } from 'lucide-react';
 import Link from 'next/link';
+import EmployeeModal from '@/components/EmployeeModal';
+import { Employee } from '@/lib/auth';
 
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -30,6 +32,19 @@ type FinanceRecord = {
   account_id: string | null;
   date: string;
   accounts?: { name: string };
+  payment_method?: string;
+};
+
+const cleanDescription = (desc: string) => {
+  if (!desc) return '';
+  let cleaned = desc
+    .replace(/\[Reserva B24:\s*\d+\]/gi, '')
+    .replace(/\[Pending Sync:\s*B24\]/gi, '')
+    .replace(/\[Synced:\s*B24\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  cleaned = cleaned.replace(/[-|:\s]+$/, '').trim();
+  return cleaned;
 };
 
 export default function FinanzasPage() {
@@ -38,6 +53,9 @@ export default function FinanzasPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [records, setRecords] = useState<FinanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncingRecordId, setSyncingRecordId] = useState<string | null>(null);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [recordToSync, setRecordToSync] = useState<FinanceRecord | null>(null);
   
   // Filter State
   const [filterType, setFilterType] = useState<'todo' | 'mes' | 'semana' | 'hoy'>('mes');
@@ -83,13 +101,33 @@ export default function FinanzasPage() {
     
     setIsSaving(true);
     const amountNum = Number(formAmount);
+
+    let finalDescription = formDescription;
+    if (editingRecord) {
+      const b24TagsMatch = editingRecord.description?.match(/\[Reserva B24:\s*\d+\]/i);
+      const pendingSyncTag = editingRecord.description?.includes('[Pending Sync: B24]');
+      const syncedTag = editingRecord.description?.includes('[Synced: B24]');
+
+      let tagsStr = '';
+      if (b24TagsMatch) {
+        tagsStr += ` ${b24TagsMatch[0]}`;
+      }
+      if (pendingSyncTag) {
+        tagsStr += ` [Pending Sync: B24]`;
+      } else if (syncedTag) {
+        tagsStr += ` [Synced: B24]`;
+      }
+      
+      finalDescription = `${formDescription}${tagsStr}`.trim();
+    }
+
     const newRecord = {
       type: formType,
       amount: amountNum,
       category: formType === 'ingreso' && formCategory === 'Suministros' ? 'Reserva' : formCategory,
-      description: formDescription,
+      description: finalDescription,
       account_id: formAccountId,
-      payment_method: 'sobre',
+      payment_method: editingRecord?.payment_method || 'sobre',
       date: formDate
     };
 
@@ -206,6 +244,80 @@ export default function FinanzasPage() {
     }
   };
 
+  const handleSyncWithBeds24 = async (record: FinanceRecord, employee: Employee) => {
+    if (syncingRecordId) return;
+    
+    // Parse actualBookId
+    const bookIdMatch = record.description?.match(/\[Reserva B24:\s*(\d+)\]/);
+    const actualBookId = bookIdMatch ? bookIdMatch[1] : null;
+    
+    if (!actualBookId) {
+      alert("No se encontró el ID de reserva de Beds24 en la descripción del registro.");
+      return;
+    }
+
+    setSyncingRecordId(record.id);
+
+    try {
+      const response = await fetch('/api/reservas/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookId: actualBookId,
+          amount: record.amount,
+          paymentMethod: record.payment_method || 'efectivo',
+          employeeNum: employee.employee_num
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Update local database description tag
+        const updatedDesc = record.description
+          .replace('[Pending Sync: B24]', '[Synced: B24]');
+
+        const { error: updateErr } = await supabase
+          .from('finances')
+          .update({ description: updatedDesc })
+          .eq('id', record.id);
+
+        if (updateErr) {
+          console.error("Error al actualizar estado en Supabase:", updateErr);
+          alert("Sincronizado con Beds24 con éxito, pero falló la actualización local en Supabase.");
+        } else {
+          // Log de conciliación manual
+          try {
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: employee.employee_num,
+                employee_name: employee.full_name,
+                department: employee.department,
+                module: 'recepcion',
+                action: 'payment_reconciled',
+                details: `Concilió manualmente pago pendiente a Beds24 de $${record.amount} para reserva B24 ID ${actualBookId} (Registro ID: ${record.id})`
+              })
+            });
+          } catch (logErr) {
+            console.error("Error registrando log de conciliación:", logErr);
+          }
+
+          alert("✅ Sincronización exitosa con Beds24 y conciliación completada localmente.");
+          fetchData();
+        }
+      } else {
+        alert(`❌ Falló la conciliación con Beds24:\n${data.error || 'Error desconocido'}`);
+      }
+    } catch (err: any) {
+      console.error("Error de conexión durante la conciliación:", err);
+      alert(`⚠️ Error de red al conectar con Beds24:\n${err.message || err}`);
+    } finally {
+      setSyncingRecordId(null);
+    }
+  };
+
   const filteredRecords = records.filter(r => {
     if (filterType === 'todo') return true;
     const rDate = new Date(r.date + 'T12:00:00Z'); // Evitar problemas de timezone
@@ -236,7 +348,7 @@ export default function FinanzasPage() {
         `"${r.category}"`,
         r.amount,
         `"${r.accounts?.name || 'Desconocido'}"`,
-        `"${r.description || ''}"`
+        `"${cleanDescription(r.description) || ''}"`
       ].join(","))
     ].join("\n");
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -280,7 +392,7 @@ export default function FinanzasPage() {
           {groupAccounts.map(acc => (
             <div 
               key={acc.id} 
-              onClick={() => { setEditingAccount(acc); setEditBalance(acc.balance.toString()); setEditAccountName(acc.name); }}
+              onClick={() => { setEditingAccount(acc); setQuickAmount(''); setQuickDescription(''); setQuickConcept('Ajuste'); }}
               className="bg-[#fafafa] border border-zinc-200/60 rounded-2xl p-3.5 hover:bg-white hover:border-zinc-300 hover:shadow-sm transition-all cursor-pointer group active:scale-[0.98]"
             >
               <p className="text-[11px] font-bold text-zinc-500 mb-1.5 truncate group-hover:text-zinc-800 transition-colors">{acc.name}</p>
@@ -389,46 +501,82 @@ export default function FinanzasPage() {
             {filteredRecords.length === 0 ? (
               <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay movimientos registrados.</div>
             ) : (
-              filteredRecords.map(record => (
-                <div 
-                  key={record.id} 
-                  onClick={() => {
-                    setEditingRecord(record);
-                    setFormType(record.type);
-                    setFormAmount(record.amount.toString());
-                    setFormCategory(record.category);
-                    setFormDescription(record.description || '');
-                    setFormAccountId(record.account_id || '');
-                    setFormDate(record.date);
-                    setShowMoveModal(true);
-                  }}
-                  className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-3.5">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
-                      record.type === 'ingreso' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
-                    }`}>
-                      {record.type === 'ingreso' ? <ArrowDownLeft size={18} strokeWidth={2.5} /> : <ArrowUpRight size={18} strokeWidth={2.5} />}
+              filteredRecords.map(record => {
+                const isPendingSync = record.description?.includes('[Pending Sync: B24]');
+                const isSynced = record.description?.includes('[Synced: B24]');
+
+                return (
+                  <div 
+                    key={record.id} 
+                    onClick={() => {
+                      setEditingRecord(record);
+                      setFormType(record.type);
+                      setFormAmount(record.amount.toString());
+                      setFormCategory(record.category);
+                      setFormDescription(cleanDescription(record.description || ''));
+                      setFormAccountId(record.account_id || '');
+                      setFormDate(record.date);
+                      setShowMoveModal(true);
+                    }}
+                    className="p-4 flex items-center justify-between hover:bg-zinc-50 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${
+                        record.type === 'ingreso' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+                      }`}>
+                        {record.type === 'ingreso' ? <ArrowDownLeft size={18} strokeWidth={2.5} /> : <ArrowUpRight size={18} strokeWidth={2.5} />}
+                      </div>
+                      <div>
+                        <div className="flex items-center flex-wrap gap-1.5 mb-0.5">
+                          <span className="text-[15px] font-semibold text-zinc-900 leading-tight capitalize">
+                            {record.category}
+                          </span>
+                          {isPendingSync && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-50 text-amber-700 border border-amber-250/60 uppercase tracking-wider animate-pulse">
+                              Pendiente B24
+                            </span>
+                          )}
+                          {isSynced && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-250/60 uppercase tracking-wider">
+                              Sincronizado
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[12px] font-medium text-zinc-500 line-clamp-1 max-w-[200px]">
+                          {record.accounts?.name || 'Desconocido'} • {cleanDescription(record.description)}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="block text-[15px] font-semibold text-zinc-900 leading-tight mb-0.5 capitalize">
-                        {record.category}
-                      </span>
-                      <span className="text-[12px] font-medium text-zinc-500 line-clamp-1 max-w-[160px]">
-                        {record.accounts?.name || 'Desconocido'} • {record.description}
-                      </span>
+                    
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col items-end">
+                        <span className={`text-[15px] font-bold ${record.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-900'}`}>
+                          {record.type === 'ingreso' ? '+' : '-'}MX${record.amount.toLocaleString('es-MX')}
+                        </span>
+                        <span className="text-[11px] text-zinc-400 font-medium">
+                          {format(new Date(record.date + 'T12:00:00Z'), 'd MMM', { locale: es })}
+                        </span>
+                      </div>
+                      
+                      {isPendingSync && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRecordToSync(record);
+                            setShowEmployeeModal(true);
+                          }}
+                          disabled={syncingRecordId === record.id}
+                          className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold text-[10px] uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          {syncingRecordId === record.id ? (
+                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          ) : 'Conciliar'}
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className={`text-[15px] font-bold ${record.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-900'}`}>
-                      {record.type === 'ingreso' ? '+' : '-'}MX${record.amount.toLocaleString('es-MX')}
-                    </span>
-                    <span className="text-[11px] text-zinc-400 font-medium">
-                      {format(new Date(record.date + 'T12:00:00Z'), 'd MMM', { locale: es })}
-                    </span>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -436,32 +584,78 @@ export default function FinanzasPage() {
 
       {/* Modal Registrar Movimiento en Cuenta/Sobre */}
       {editingAccount && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-             <div className="flex justify-between items-center mb-5">
-              <h3 className="text-lg font-bold text-zinc-900 leading-tight">
-                Registrar Movimiento<br/>
-                <span className="text-xs font-semibold text-zinc-500">Sobre: {editingAccount.name} (${editingAccount.balance.toLocaleString('es-MX')})</span>
-              </h3>
-              <button onClick={() => { setEditingAccount(null); setQuickAmount(''); setQuickDescription(''); }} className="p-2 bg-zinc-100 rounded-full text-zinc-500">
-                <X size={18} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col">
+             <div className="flex justify-between items-center mb-4">
+              <div>
+                <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                  Sobre: {editingAccount.name}
+                </h3>
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">{editingAccount.group_type}</span>
+              </div>
+              <button 
+                onClick={() => { 
+                  setEditingAccount(null); 
+                  setQuickAmount(''); 
+                  setQuickDescription(''); 
+                  setQuickConcept('Ajuste');
+                }} 
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 hover:rotate-90 hover:scale-105 active:scale-95 rounded-full text-zinc-500 transition-all duration-300 cursor-pointer"
+              >
+                <X size={16} />
               </button>
             </div>
+
+            {/* MONTO TOTAL EN GRANDE */}
+            <div className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 border border-zinc-200/60 rounded-2xl p-4 text-center mb-4 shadow-sm">
+              <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1">Monto Disponible</p>
+              <p className="text-3xl font-black text-zinc-900 tracking-tight">
+                ${editingAccount.balance.toLocaleString('es-MX')} <span className="text-xs text-zinc-400 font-bold">{editingAccount.currency || 'MXN'}</span>
+              </p>
+            </div>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Monto (MXN)</label>
-                <input 
-                  type="number" step="0.01" required
-                  placeholder="0.00" autoFocus
-                  value={quickAmount} onChange={e => setQuickAmount(e.target.value)}
-                  className="w-full text-2xl font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all text-center placeholder:text-zinc-300"
-                />
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Monto de la Transacción</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-extrabold text-zinc-400 text-sm">$</span>
+                  <input 
+                    type="number" step="0.01" required
+                    placeholder="0.00" autoFocus
+                    value={quickAmount} onChange={e => setQuickAmount(e.target.value)}
+                    className="w-full text-xl font-bold bg-zinc-50 border border-zinc-200 rounded-xl pl-8 pr-4 py-2.5 outline-none focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white transition-all duration-350 text-zinc-900 placeholder:text-zinc-300"
+                  />
+                </div>
+
+                {/* REAL-TIME PREVIEW CALCULATOR */}
+                {quickAmount && !isNaN(Number(quickAmount)) && Number(quickAmount) > 0 && (
+                  <div className="mt-3 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl space-y-2.5 animate-in slide-in-from-top-2 duration-300">
+                    <p className="font-extrabold text-zinc-400 uppercase tracking-widest text-[8px]">Calculadora Proyectada</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-emerald-50/40 hover:bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl transition-all duration-300">
+                        <span className="text-emerald-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Ingreso</span>
+                        <span className="font-black text-[13px] text-emerald-600 tracking-tight block">
+                          ${(editingAccount.balance + Number(quickAmount)).toLocaleString('es-MX')}
+                        </span>
+                        <span className="text-[8px] text-emerald-500/80 font-bold block mt-0.5">+{Number(quickAmount).toLocaleString('es-MX')} MXN</span>
+                      </div>
+                      <div className="bg-rose-50/40 hover:bg-rose-50 border border-rose-100 p-2.5 rounded-xl transition-all duration-300">
+                        <span className="text-rose-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Gasto</span>
+                        <span className="font-black text-[13px] text-rose-600 tracking-tight block">
+                          ${(editingAccount.balance - Number(quickAmount)).toLocaleString('es-MX')}
+                        </span>
+                        <span className="text-[8px] text-rose-500/80 font-bold block mt-0.5">-{Number(quickAmount).toLocaleString('es-MX')} MXN</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
+
               <div>
-                <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Concepto / Categoría</label>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Concepto / Categoría</label>
                 <select 
                   value={quickConcept} onChange={e => setQuickConcept(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none font-bold text-[13px] focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
                 >
                   <option>Ajuste</option>
                   <option>Reserva Directa</option>
@@ -474,28 +668,56 @@ export default function FinanzasPage() {
                   <option>Otros</option>
                 </select>
               </div>
+
               <div>
-                <label className="block text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-1">Descripción (Opcional)</label>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción (Opcional)</label>
                 <input 
                   type="text"
                   placeholder="Comentario sobre el movimiento"
                   value={quickDescription} onChange={e => setQuickDescription(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300"
                 />
               </div>
+
+              {/* RECENT MOVEMENTS IN THIS ENVELOPE */}
+              <div className="pt-1">
+                <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">Últimos movimientos del sobre</p>
+                <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
+                  {records.filter(r => r.account_id === editingAccount.id).length === 0 ? (
+                    <p className="text-[11px] text-zinc-400 font-medium italic text-center py-2 bg-zinc-50/50 rounded-lg">Sin movimientos registrados en este sobre.</p>
+                  ) : (
+                    records
+                      .filter(r => r.account_id === editingAccount.id)
+                      .slice(0, 3)
+                      .map(r => (
+                        <div key={r.id} className="flex justify-between items-center bg-zinc-50 p-2 rounded-xl border border-zinc-100/50 text-[11px] hover:bg-zinc-100/50 transition-colors duration-200">
+                          <div className="truncate pr-2">
+                            <span className="font-bold text-zinc-900 block truncate capitalize">{r.category}</span>
+                            <span className="text-[10px] text-zinc-400 font-medium block truncate">{cleanDescription(r.description) || 'Sin comentario'}</span>
+                          </div>
+                          <span className={`font-extrabold whitespace-nowrap ${r.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-700'}`}>
+                            {r.type === 'ingreso' ? '+' : '-'}MX${r.amount.toLocaleString('es-MX')}
+                          </span>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </div>
+
+              {/* ACCIONES DE COBRO/GASTO CONTABLE */}
               <div className="grid grid-cols-2 gap-3 pt-2">
                 <button 
                   onClick={() => handleQuickMovement('ingreso')}
-                  disabled={isSaving || !quickAmount}
-                  className="py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-colors disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] cursor-pointer"
+                  disabled={isSaving || !quickAmount || isNaN(Number(quickAmount))}
+                  className="py-3 bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_8px_20px_rgba(16,185,129,0.35)] active:scale-[0.96] cursor-pointer"
                 >
                   <ArrowDownLeft size={16} strokeWidth={2.5} />
                   + Ingreso
                 </button>
                 <button 
                   onClick={() => handleQuickMovement('gasto')}
-                  disabled={isSaving || !quickAmount}
-                  className="py-3 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl transition-colors disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] cursor-pointer"
+                  disabled={isSaving || !quickAmount || isNaN(Number(quickAmount))}
+                  className="py-3 bg-rose-600 hover:bg-rose-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(244,63,94,0.25)] hover:shadow-[0_8px_20px_rgba(244,63,94,0.35)] active:scale-[0.96] cursor-pointer"
                 >
                   <ArrowUpRight size={16} strokeWidth={2.5} />
                   - Gasto
@@ -630,6 +852,23 @@ export default function FinanzasPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Firma de Empleado para Autorizar Conciliación */}
+      <EmployeeModal
+        isOpen={showEmployeeModal}
+        onClose={() => {
+          setShowEmployeeModal(false);
+          setRecordToSync(null);
+        }}
+        module="recepcion"
+        title="Autorización de Conciliación"
+        description="Ingresa tu código de recepcionista para sincronizar este cobro con Beds24."
+        onSuccess={(employee) => {
+          if (recordToSync) {
+            handleSyncWithBeds24(recordToSync, employee);
+          }
+        }}
+      />
     </div>
   );
 }

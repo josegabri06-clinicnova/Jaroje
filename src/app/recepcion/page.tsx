@@ -160,6 +160,7 @@ export default function RecepcionPage() {
   const [dniFile, setDniFile] = useState<File | null>(null);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
@@ -218,6 +219,26 @@ export default function RecepcionPage() {
       setPaymentAmount(totalStay.toString());
     }
   }, [selectedReserva?.room, selectedReserva?.check_in, selectedReserva?.check_out, isPriceUnlocked]);
+
+  useEffect(() => {
+    if (!paymentMode) {
+      setSelectedAccountId('');
+      return;
+    }
+    // Filtrar sobres/cuentas compatibles
+    const compatible = accounts.filter(acc => {
+      if (paymentMode === 'efectivo') return acc.group_type === 'EFECTIVO';
+      if (paymentMode === 'tarjeta') return acc.group_type === 'BANCOS';
+      if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+      return false;
+    });
+    // Auto-seleccionar la primera compatible
+    if (compatible.length > 0) {
+      setSelectedAccountId(compatible[0].id);
+    } else {
+      setSelectedAccountId('');
+    }
+  }, [paymentMode, accounts]);
 
   const handleUnlockPrice = () => {
     if (pinInput === '1234') {
@@ -309,6 +330,7 @@ export default function RecepcionPage() {
 
     const emp = getActiveEmployee('recepcion');
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
+    let actualBookId = selectedReserva.id;
 
     // Si es walkin, crear en Beds24 primero
     if (selectedReserva.id === 'walkin') {
@@ -336,6 +358,8 @@ export default function RecepcionPage() {
         const beds24AssignedId = (Array.isArray(b24Array) && b24Array[0]?.new?.id)
           ? String(b24Array[0].new.id)
           : (resData.data && resData.data.id ? String(resData.data.id) : `b24-${Date.now()}`);
+
+        actualBookId = beds24AssignedId;
 
         const baseRoomName = BEDS24_ROOMS.find(r => r.id === selectedReserva.room)?.name || selectedReserva.room;
         let finalRoomName = baseRoomName;
@@ -452,17 +476,65 @@ export default function RecepcionPage() {
 
     // Registrar pago si corresponde
     if (paymentMode && paymentAmount) {
-      await supabase.from('finances').insert({
+      const amountNum = Number(paymentAmount);
+      const baseDesc = `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName}) [Reserva B24: ${actualBookId}]`;
+
+      // 1. Insertar transacción local en Supabase con tag de pendiente
+      const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
         type: 'ingreso',
-        amount: Number(paymentAmount),
+        amount: amountNum,
         category: 'Reserva Directa',
-        description: `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName})`,
+        description: `${baseDesc} [Pending Sync: B24]`,
         payment_method: paymentMode,
+        account_id: selectedAccountId || null,
         date: todayStr
-      });
+      }).select();
+
+      const insertedRecordId = insertedRows?.[0]?.id;
+
+      if (selectedAccountId) {
+        const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+        if (matchedAcc) {
+          const newBalance = matchedAcc.balance + amountNum;
+          await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+        }
+      }
+
+      // 2. Sincronizar pago con Beds24 en tiempo real
+      let syncedSuccess = false;
+      try {
+        const b24PayRes = await fetch('/api/reservas/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookId: actualBookId,
+            amount: amountNum,
+            paymentMethod: paymentMode,
+            employeeNum: emp?.employee_num || null
+          })
+        });
+        const payData = await b24PayRes.json();
+        if (b24PayRes.ok && payData.success) {
+          syncedSuccess = true;
+        } else {
+          console.error("Fallo de sincronización Beds24 de pago:", payData.error || 'Error desconocido');
+          alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar el pago.\nDetalle: ${payData.error || 'Error desconocido'}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+        }
+      } catch (payErr: any) {
+        console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
+        alert(`⚠️ Error de Red / Conexión Beds24:\nEl cobro local se registró correctamente en Supabase, pero falló el envío a Beds24 debido a problemas de red.\nDetalle: ${payErr.message || payErr}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+      }
+
+      // 3. Si fue exitoso, actualizar tag a sincronizado
+      if (syncedSuccess && insertedRecordId) {
+        await supabase.from('finances').update({
+          description: `${baseDesc} [Synced: B24]`
+        }).eq('id', insertedRecordId);
+      }
 
       // Log de cobro
       if (emp) {
+        const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
         await fetch('/api/employee-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -473,7 +545,7 @@ export default function RecepcionPage() {
             module: 'recepcion',
             action: 'payment_received',
             room: selectedReserva.room,
-            details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room}`
+            details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName})`
           })
         });
       }
@@ -485,6 +557,7 @@ export default function RecepcionPage() {
     setDniFile(null);
     setPaymentMode(null);
     setPaymentAmount('');
+    setSelectedAccountId('');
     setSubmitting(false);
     fetchData();
   };
@@ -1146,6 +1219,33 @@ export default function RecepcionPage() {
                           (selectedReserva.id === 'walkin' && !isPriceUnlocked) ? 'bg-zinc-100/60 text-zinc-400 cursor-not-allowed' : ''
                         }`}
                       />
+                    </div>
+
+                    {/* Selector de cuenta/sobre */}
+                    <div className="space-y-1.5 pt-1">
+                      <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                        ¿A qué sobre va el dinero?
+                      </label>
+                      <select
+                        value={selectedAccountId}
+                        onChange={e => setSelectedAccountId(e.target.value)}
+                        required
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 text-[13px] font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 cursor-pointer animate-in slide-in-from-top-1 duration-200"
+                      >
+                        <option value="" disabled>Selecciona un sobre...</option>
+                        {accounts
+                          .filter(acc => {
+                            if (paymentMode === 'efectivo') return acc.group_type === 'EFECTIVO';
+                            if (paymentMode === 'tarjeta') return acc.group_type === 'BANCOS';
+                            if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                            return true;
+                          })
+                          .map(acc => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.name} (${acc.balance.toLocaleString('es-MX')})
+                            </option>
+                          ))}
+                      </select>
                     </div>
                   </div>
                 )}
