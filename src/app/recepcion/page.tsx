@@ -6,11 +6,13 @@ import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
-  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot
+  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
+import { getActiveEmployee, clearActiveEmployee, Employee } from '@/lib/auth';
+import EmployeeModal from '@/components/EmployeeModal';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -121,6 +123,35 @@ export default function RecepcionPage() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
+
+  // Auditoría de Empleados
+  const [activeEmployee, setActiveEmployeeState] = useState<Employee | null>(null);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'checkin' | 'checkout' | 'mantenimiento';
+    payload?: any;
+    callback: (...args: any[]) => void;
+  } | null>(null);
+
+  // Inicializar Empleado Activo
+  useEffect(() => {
+    setActiveEmployeeState(getActiveEmployee('recepcion'));
+  }, []);
+
+  // Interceptor de firma de empleado
+  const runWithSignature = (
+    type: 'checkin' | 'checkout' | 'mantenimiento',
+    callback: (...args: any[]) => void,
+    payload?: any
+  ) => {
+    const emp = getActiveEmployee('recepcion');
+    if (!emp) {
+      setPendingAction({ type, payload, callback });
+      setShowEmployeeModal(true);
+    } else {
+      callback(payload);
+    }
+  };
 
   // Modal Check-In / Walk-In
   const [showCheckInModal, setShowCheckInModal] = useState(false);
@@ -276,6 +307,9 @@ export default function RecepcionPage() {
     if (!selectedReserva) return;
     setSubmitting(true);
 
+    const emp = getActiveEmployee('recepcion');
+    const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
+
     // Si es walkin, crear en Beds24 primero
     if (selectedReserva.id === 'walkin') {
       try {
@@ -332,7 +366,7 @@ export default function RecepcionPage() {
           check_in_date: todayStr,
           check_out_date: selectedReserva.check_out || todayStr,
           status: 'checked_in',
-          checked_in_by: 'Recepcion',
+          checked_in_by: operatorName,
           dni_image: finalDniUrl || null
         }, { onConflict: 'reservation_id' });
 
@@ -347,6 +381,23 @@ export default function RecepcionPage() {
           checked_in: true,
           dni_image: finalDniUrl || undefined
         }]);
+
+        // Registrar log en Supabase
+        if (emp) {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'recepcion',
+              action: 'walk_in',
+              room: roomNameHuman,
+              details: `Registró Walk-In de ${selectedReserva.guest_name || 'Huésped'}`
+            })
+          });
+        }
 
       } catch (err: any) {
         alert('Fallo de conexión al enviar reserva a Beds24: ' + err.message);
@@ -373,13 +424,30 @@ export default function RecepcionPage() {
         check_in_date: selectedReserva.check_in,
         check_out_date: selectedReserva.check_out,
         status: 'checked_in',
-        checked_in_by: 'Recepcion',
+        checked_in_by: operatorName,
         dni_image: finalDniUrl || null
       }, { onConflict: 'reservation_id' });
 
       if (upsertErr) console.error("Supabase Checkin Error:", upsertErr);
 
       setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined } : r));
+
+      // Registrar log en Supabase
+      if (emp) {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'recepcion',
+            action: 'check_in',
+            room: selectedReserva.room,
+            details: `Registró Check-In de ${selectedReserva.guest_name || 'Huésped'}`
+          })
+        });
+      }
     }
 
     // Registrar pago si corresponde
@@ -388,10 +456,27 @@ export default function RecepcionPage() {
         type: 'ingreso',
         amount: Number(paymentAmount),
         category: 'Reserva Directa',
-        description: `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room}`,
+        description: `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName})`,
         payment_method: paymentMode,
         date: todayStr
       });
+
+      // Log de cobro
+      if (emp) {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'recepcion',
+            action: 'payment_received',
+            room: selectedReserva.room,
+            details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room}`
+          })
+        });
+      }
     }
 
     setShowCheckInModal(false);
@@ -408,6 +493,9 @@ export default function RecepcionPage() {
     // Marcar como checked_out localmente
     setReservas(prev => prev.map(res => res.id === r.id ? { ...res, checked_out: true } : res));
 
+    const emp = getActiveEmployee('recepcion');
+    const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
+
     const { error } = await supabase.from('checkins').upsert({
       reservation_id: String(r.id),
       guest_name: r.guest_name,
@@ -415,7 +503,7 @@ export default function RecepcionPage() {
       check_in_date: r.check_in,
       check_out_date: r.check_out,
       status: 'checked_out',
-      checked_in_by: 'Recepcion'
+      checked_in_by: operatorName
     }, { onConflict: 'reservation_id' });
 
     if (error) {
@@ -438,7 +526,7 @@ export default function RecepcionPage() {
         body: JSON.stringify({
           room_number: roomNumber,
           status: 'en_limpieza',
-          updated_by: 'Recepción',
+          updated_by: operatorName,
           checkout_reservation_id: String(r.id),
           guest_name: r.guest_name,
         }),
@@ -453,11 +541,28 @@ export default function RecepcionPage() {
         type: 'limpieza',
         room: r.room || 'General',
         description: `Check-out completado. Habitación ${r.room} lista para limpieza.`,
-        reported_by: 'Recepción',
+        reported_by: operatorName,
         direction: 'staff_to_staff',
         status: 'pendiente'
       }),
     });
+
+    // Registrar log en Supabase
+    if (emp) {
+      await fetch('/api/employee-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_num: emp.employee_num,
+          employee_name: emp.full_name,
+          department: emp.department,
+          module: 'recepcion',
+          action: 'check_out',
+          room: r.room,
+          details: `Procesó Check-Out de ${r.guest_name || 'Huésped'}. Habitación ${roomNumber} marcada en limpieza.`
+        })
+      });
+    }
 
     fetchData();
     alert(`Check-out de ${r.guest_name} completado. Habitación ${roomNumber} marcada en limpieza.`);
@@ -480,10 +585,39 @@ export default function RecepcionPage() {
 
       {/* ── HEADER ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-[22px] font-bold text-zinc-900 tracking-tight">Recepción</h2>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <h2 className="text-[22px] font-bold text-zinc-900 tracking-tight">Recepción</h2>
+            
+            {/* Header Badge de Empleado Activo */}
+            {activeEmployee ? (
+              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 rounded-full py-1 px-3 shadow-sm transition-all duration-300 hover:bg-emerald-100/50">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[11px] font-bold text-emerald-800 tracking-tight">
+                  👤 {activeEmployee.full_name.split(' ')[0]} ({activeEmployee.employee_num})
+                </span>
+                <button
+                  onClick={() => {
+                    clearActiveEmployee('recepcion');
+                    setActiveEmployeeState(null);
+                  }}
+                  className="text-emerald-500 hover:text-emerald-700 font-extrabold text-[10px] ml-1.5 pl-1.5 border-l border-emerald-200 transition-colors cursor-pointer"
+                  title="Cerrar turno de recepcionista"
+                >
+                  Cambiar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowEmployeeModal(true)}
+                className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-extrabold tracking-wider uppercase py-1 px-2.5 rounded-full hover:bg-amber-100 hover:border-amber-300 transition-all cursor-pointer animate-pulse shadow-sm shadow-amber-100"
+              >
+                <span>👤 Firmar Turno</span>
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-1.5 h-1.5 rounded-full bg-zinc-300" />
             <span className="text-[13px] font-medium text-zinc-500 capitalize">
               {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })}
             </span>
@@ -745,7 +879,7 @@ export default function RecepcionPage() {
                           <td className="py-4 px-4 text-center">
                             {isPending ? (
                               <button
-                                onClick={() => processCheckOut(r)}
+                                onClick={() => runWithSignature('checkout', (reserva) => processCheckOut(reserva), r)}
                                 className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
                               >
                                 Dar Salida
@@ -1022,7 +1156,7 @@ export default function RecepcionPage() {
             {/* Acción de Envío */}
             <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
               <button
-                onClick={processCheckIn}
+                onClick={() => runWithSignature('checkin', () => processCheckIn())}
                 disabled={
                   submitting ||
                   (!dniPreview && selectedReserva.id !== 'walkin') ||
@@ -1160,18 +1294,45 @@ export default function RecepcionPage() {
               {/* Botón de Envío */}
               <button 
                 type="button"
-                onClick={async () => {
+                onClick={() => {
                   if (!form.description.trim()) return;
-                  setSubmitting(true);
-                  await fetch('/api/tasks', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...form, reported_by: 'Recepción', direction: 'staff_to_admin' }),
+                  runWithSignature('mantenimiento', async () => {
+                    setSubmitting(true);
+                    const emp = getActiveEmployee('recepcion');
+                    const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepción';
+                    
+                    await fetch('/api/tasks', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin' }),
+                    });
+
+                    // Registrar log de auditoría
+                    if (emp) {
+                      try {
+                        await fetch('/api/employee-logs', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            employee_num: emp.employee_num,
+                            employee_name: emp.full_name,
+                            department: emp.department,
+                            module: 'recepcion',
+                            action: 'report_maintenance',
+                            room: form.room,
+                            details: `Reportó daño técnico en Habitación ${form.room}: ${form.description}`
+                          })
+                        });
+                      } catch (e) {
+                        console.error('Error registrando log de mantenimiento:', e);
+                      }
+                    }
+
+                    setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+                    setShowForm(false);
+                    alert('¡Incidencia de mantenimiento reportada al administrador!');
+                    setSubmitting(false);
                   });
-                  setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
-                  setShowForm(false);
-                  alert('¡Incidencia de mantenimiento reportada al administrador!');
-                  setSubmitting(false);
                 }}
                 disabled={!form.description.trim() || submitting}
                 className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold py-4 rounded-2xl text-[14px] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-98"
@@ -1185,6 +1346,24 @@ export default function RecepcionPage() {
         </div>
       )}
 
+      {/* Modal táctil de autenticación de empleado */}
+      <EmployeeModal
+        isOpen={showEmployeeModal}
+        onClose={() => {
+          setShowEmployeeModal(false);
+          setPendingAction(null);
+        }}
+        module="recepcion"
+        onSuccess={(employee) => {
+          setActiveEmployeeState(employee);
+          if (pendingAction) {
+            pendingAction.callback(pendingAction.payload);
+            setPendingAction(null);
+          }
+        }}
+      />
+
     </div>
   );
 }
+

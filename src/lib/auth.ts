@@ -153,3 +153,75 @@ export function validatePin(pin: string): Role {
   if (pin === (getRecepcionPin()))           return 'recepcion';
   return null;
 }
+
+// ─── Sistema de Seguimiento de Empleados (Auditoría de 3 Dígitos) ─────────────
+
+export interface Employee {
+  employee_num: string;
+  full_name: string;
+  department: 'recepcion' | 'mantenimiento' | 'limpieza';
+}
+
+// Nómina oficial aprobada como fallback estático ultra-rápido (Zero Latency)
+export const OFFICIAL_EMPLOYEES: Employee[] = [
+  // Recepción (7 Empleados)
+  { employee_num: '101', full_name: 'Sofía Alarcón', department: 'recepcion' },
+  { employee_num: '103', full_name: 'Carlos Méndez', department: 'recepcion' },
+  { employee_num: '106', full_name: 'Valeria Espinoza', department: 'recepcion' },
+  { employee_num: '108', full_name: 'Alejandro Ruiz', department: 'recepcion' },
+  { employee_num: '110', full_name: 'Mariana Ortiz', department: 'recepcion' },
+  { employee_num: '112', full_name: 'Diana Benítez', department: 'recepcion' },
+  { employee_num: '202', full_name: 'Roberto Salazar', department: 'recepcion' },
+
+  // Mantenimiento (3 Empleados)
+  { employee_num: '101', full_name: 'Juan Carlos Peña', department: 'mantenimiento' },
+  { employee_num: '111', full_name: 'Eduardo Gómez', department: 'mantenimiento' },
+  { employee_num: '202', full_name: 'Roberto Salazar', department: 'mantenimiento' },
+
+  // Limpieza (6 Empleadas)
+  { employee_num: '104', full_name: 'María Elena Flores', department: 'limpieza' },
+  { employee_num: '105', full_name: 'Juana Martínez', department: 'limpieza' },
+  { employee_num: '106', full_name: 'Guadalupe Gómez', department: 'limpieza' },
+  { employee_num: '107', full_name: 'Teresa Ramos', department: 'limpieza' },
+  { employee_num: '108', full_name: 'Silvia Paredes', department: 'limpieza' },
+  { employee_num: '109', full_name: 'Francisca Ruiz', department: 'limpieza' }
+];
+
+// Obtener el empleado activo para un módulo específico
+export function getActiveEmployee(module: 'recepcion' | 'limpieza' | 'mantenimiento'): Employee | null {
+  if (typeof window === 'undefined') return null;
+  const num = localStorage.getItem(`jaroje_active_emp_num_${module}`);
+  const name = localStorage.getItem(`jaroje_active_emp_name_${module}`);
+  if (!num || !name) return null;
+  return {
+    employee_num: num,
+    full_name: name,
+    department: module
+  };
+}
+
+// Establecer el empleado activo para un módulo específico
+export function setActiveEmployee(employee: Employee | null, module: 'recepcion' | 'limpieza' | 'mantenimiento'): void {
+  if (typeof window === 'undefined') return;
+  if (!employee) {
+    localStorage.removeItem(`jaroje_active_emp_num_${module}`);
+    localStorage.removeItem(`jaroje_active_emp_name_${module}`);
+  } else {
+    localStorage.setItem(`jaroje_active_emp_num_${module}`, employee.employee_num);
+    localStorage.setItem(`jaroje_active_emp_name_${module}`, employee.full_name);
+  }
+}
+
+// Limpiar el empleado activo para un módulo específico
+export function clearActiveEmployee(module: 'recepcion' | 'limpieza' | 'mantenimiento'): void {
+  setActiveEmployee(null, module);
+}
+
+// Validar localmente si un número de empleado existe y pertenece al departamento
+export function validateEmployeeNum(num: string, department: 'recepcion' | 'mantenimiento' | 'limpieza'): Employee | null {
+  const match = OFFICIAL_EMPLOYEES.find(
+    emp => emp.employee_num === num && emp.department === department
+  );
+  return match || null;
+}
+

@@ -10,6 +10,8 @@ import {
   RefreshCw, ShieldAlert
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { getActiveEmployee, clearActiveEmployee, Employee } from '@/lib/auth';
+import EmployeeModal from '@/components/EmployeeModal';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -115,6 +117,37 @@ export default function StaffPage() {
   const isRecepcionOrAdmin = role === 'reception' || role === 'admin';
   const canModifyStatus = isLimpieza || role === 'reception'; // Solo personal de limpieza y recepción modifican limpieza, Admin lee
 
+  const currentDept = isMantenimiento ? 'mantenimiento' : 'limpieza';
+
+  // Auditoría y Seguimiento de Empleados
+  const [activeEmployee, setActiveEmployeeState] = useState<Employee | null>(null);
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'room_status' | 'resolve_task' | 'report_task';
+    payload?: any;
+    callback: (...args: any[]) => void;
+  } | null>(null);
+
+  // Inicializar Empleado Activo según el rol
+  useEffect(() => {
+    setActiveEmployeeState(getActiveEmployee(currentDept));
+  }, [role, isMantenimiento, currentDept]);
+
+  // Interceptor de firma de empleado
+  const runWithSignature = (
+    type: 'room_status' | 'resolve_task' | 'report_task',
+    callback: (...args: any[]) => void,
+    payload?: any
+  ) => {
+    const emp = getActiveEmployee(currentDept);
+    if (!emp) {
+      setPendingAction({ type, payload, callback });
+      setShowEmployeeModal(true);
+    } else {
+      callback(payload);
+    }
+  };
+
   const [form, setForm] = useState({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -190,12 +223,40 @@ export default function StaffPage() {
   const historial  = roleFilteredTasks.filter(t => t.status === 'resuelta');
 
   const updateTaskStatus = async (id: string, status: string) => {
+    const emp = getActiveEmployee('mantenimiento');
+    const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
+
     setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
     await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_status', id, status }),
+      body: JSON.stringify({ action: 'update_status', id, status, operator: operatorName }),
     });
+
+    // Registrar log de auditoría
+    if (emp) {
+      try {
+        const targetTask = tasks.find(tk => tk.id === id);
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'mantenimiento',
+            action: status === 'resuelta' ? 'resolve_task' : 'start_task',
+            room: targetTask?.room || 'General',
+            details: status === 'resuelta' 
+              ? `Marcó como RESUELTA la tarea técnica en Habitación ${targetTask?.room || 'General'}: ${targetTask?.description || ''}`
+              : `Inició proceso ('En Proceso') de tarea técnica en Habitación ${targetTask?.room || 'General'}: ${targetTask?.description || ''}`
+          })
+        });
+      } catch (e) {
+        console.error('Error registrando log de tarea técnica:', e);
+      }
+    }
+
     fetchData();
   };
 
@@ -206,6 +267,9 @@ export default function StaffPage() {
   };
 
   const changeRoomStatus = async (roomNumber: string, newStatus: 'disponible' | 'en_limpieza' | 'limpia') => {
+    const emp = getActiveEmployee('limpieza');
+    const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
+
     // Si cambia a limpia, crear también una tarea resuelta en /api/tasks para mantener el registro
     if (newStatus === 'limpia') {
       const tempTask: Task = {
@@ -214,7 +278,7 @@ export default function StaffPage() {
         room: roomNumber,
         description: 'Habitación limpia y lista para check-in (Tablero Staff).',
         status: 'resuelta',
-        reported_by: staffName,
+        reported_by: operatorName,
         direction: 'staff_to_admin',
         created_at: new Date().toISOString()
       };
@@ -226,8 +290,8 @@ export default function StaffPage() {
         body: JSON.stringify({
           type: 'limpieza',
           room: roomNumber,
-          description: `Habitación limpia y lista para check-in · Reportado por ${staffName}`,
-          reported_by: staffName,
+          description: `Habitación limpia y lista para check-in · Reportado por ${operatorName}`,
+          reported_by: operatorName,
           direction: 'staff_to_admin',
           status: 'resuelta'
         }),
@@ -241,7 +305,7 @@ export default function StaffPage() {
       body: JSON.stringify({
         room_number: roomNumber,
         status: newStatus,
-        updated_by: staffName
+        updated_by: operatorName
       }),
     });
     
@@ -249,6 +313,27 @@ export default function StaffPage() {
     if (json.success) {
       setSuccessMsg(`Habitación ${roomNumber} marcada como ${newStatus}`);
       setTimeout(() => setSuccessMsg(''), 3000);
+    }
+
+    // Registrar log de auditoría
+    if (emp) {
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'limpieza',
+            action: 'change_room_status',
+            room: roomNumber,
+            details: `Cambió el estado de Habitación ${roomNumber} a '${newStatus}'`
+          })
+        });
+      } catch (e) {
+        console.error('Error registrando log de cambio de estado de cuarto:', e);
+      }
     }
     
     setShowStatusModal(false);
@@ -276,11 +361,37 @@ export default function StaffPage() {
   const submit = async () => {
     if (!form.description.trim()) return;
     setSubmitting(true);
+
+    const emp = getActiveEmployee(currentDept);
+    const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
+
     await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, reported_by: staffName, direction: 'staff_to_admin', image_base64: imagePreview }),
+      body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin', image_base64: imagePreview }),
     });
+
+    // Registrar log de auditoría
+    if (emp) {
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: emp.department,
+            action: 'report_maintenance',
+            room: form.room,
+            details: `Reportó daño técnico/incidencia en Habitación ${form.room}: ${form.description}`
+          })
+        });
+      } catch (e) {
+        console.error('Error registrando log de reporte mtto:', e);
+      }
+    }
+
     setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
     setImagePreview(null);
     setShowForm(false);
@@ -308,16 +419,42 @@ export default function StaffPage() {
       {/* Header Fijo Premium */}
       <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-zinc-200/50 px-6 py-4 flex items-center justify-between">
         <div>
-          <h2 className="text-[20px] font-black text-zinc-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
-            {isMantenimiento ? 'Mtto. Técnico' : 'Personal Operativo'}
+          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <h2 className="text-[20px] font-black text-zinc-900 tracking-tight leading-none">
+              {isMantenimiento ? 'Mtto. Técnico' : 'Personal Operativo'}
+            </h2>
             <span className="text-[11px] font-black tracking-widest uppercase bg-zinc-900 text-white px-2 py-0.5 rounded-md scale-90">
               {role === 'staff_limpieza' ? 'Limpieza' : role === 'staff_mantenimiento' ? 'Mtto' : role}
             </span>
-          </h2>
+            
+            {/* Badge de Empleado Firmado */}
+            {activeEmployee ? (
+              <span className="text-[10px] font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-100 rounded-full py-0.5 px-2 flex items-center gap-1 select-none animate-in fade-in duration-200">
+                👤 {activeEmployee.full_name.split(' ')[0]} ({activeEmployee.employee_num})
+                <button
+                  onClick={() => {
+                    clearActiveEmployee(currentDept);
+                    setActiveEmployeeState(null);
+                  }}
+                  className="text-emerald-500 hover:text-emerald-700 font-extrabold text-[9px] ml-1 pl-1 border-l border-emerald-200 cursor-pointer"
+                  title="Cambiar empleado"
+                >
+                  Cambiar
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowEmployeeModal(true)}
+                className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-extrabold tracking-wider uppercase py-0.5 px-2 rounded-full hover:bg-amber-100 hover:border-amber-300 transition-all cursor-pointer animate-pulse"
+              >
+                <span>Firmar Turno</span>
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <p className="text-[12px] font-semibold text-zinc-500 capitalize">
-              {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })} · {staffName}
+              {format(new Date(), "EEEE, d 'de' MMMM", { locale: es })} · {activeEmployee ? activeEmployee.full_name : staffName}
             </p>
           </div>
         </div>
@@ -439,7 +576,7 @@ export default function StaffPage() {
                             </span>
                           ) : (
                             <button
-                              onClick={() => changeRoomStatus(r.room, 'limpia')}
+                              onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: r.room, status: 'limpia' })}
                               className="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-black tracking-wide uppercase px-3 py-2 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
                             >
                               Marcar Lista
@@ -512,13 +649,13 @@ export default function StaffPage() {
 
                             <div className="flex gap-2 pt-1">
                               <button 
-                                onClick={() => updateTaskStatus(t.id, 'en_proceso')}
+                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
                                 className={`flex-1 py-2 rounded-xl text-[11px] font-black border transition-all cursor-pointer ${t.status === 'en_proceso' ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-zinc-200 text-zinc-500'}`}
                               >
                                 En Proceso
                               </button>
                               <button 
-                                onClick={() => updateTaskStatus(t.id, 'resuelta')}
+                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'resuelta')}
                                 className="flex-1 py-2 rounded-xl text-[11px] font-black bg-emerald-600 text-white hover:bg-emerald-500 transition-all cursor-pointer"
                               >
                                 ✓ Resolver
@@ -842,7 +979,7 @@ export default function StaffPage() {
               {/* Botón de Envío */}
               <button 
                 type="button"
-                onClick={submit}
+                onClick={() => runWithSignature('report_task', () => submit())}
                 disabled={!form.description.trim() || submitting}
                 className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold py-4 rounded-2xl text-[14px] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-98"
               >
@@ -884,7 +1021,7 @@ export default function StaffPage() {
               ].map((opt) => (
                 <button
                   key={opt.id}
-                  onClick={() => changeRoomStatus(selectedRoom, opt.id as any)}
+                  onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: opt.id as any })}
                   className={`w-full text-left p-4 border-2 rounded-2xl flex flex-col justify-center transition-all cursor-pointer active:scale-[0.99] ${opt.color}`}
                 >
                   <span className="text-[14px] font-black leading-tight">{opt.title}</span>
@@ -896,6 +1033,23 @@ export default function StaffPage() {
           </div>
         </div>
       )}
+
+      {/* Modal táctil de autenticación de empleado */}
+      <EmployeeModal
+        isOpen={showEmployeeModal}
+        onClose={() => {
+          setShowEmployeeModal(false);
+          setPendingAction(null);
+        }}
+        module={currentDept}
+        onSuccess={(employee) => {
+          setActiveEmployeeState(employee);
+          if (pendingAction) {
+            pendingAction.callback(pendingAction.payload);
+            setPendingAction(null);
+          }
+        }}
+      />
 
     </div>
   );
