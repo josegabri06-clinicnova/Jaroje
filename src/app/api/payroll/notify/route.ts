@@ -1,5 +1,29 @@
 import { NextResponse } from 'next/server';
 
+function getCompactNotes(text: string): string {
+  if (!text) return "N/A";
+  
+  // Cortar en el primer día de la semana detectado para excluir la bitácora de asistencia en WhatsApp
+  const lines = text.split('\n');
+  const dayNames = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
+  const cleanLines = [];
+  
+  for (const line of lines) {
+    const lower = line.trim().toLowerCase();
+    const startsWithDay = dayNames.some(day => lower.startsWith(day));
+    if (startsWithDay) {
+      break;
+    }
+    cleanLines.push(line);
+  }
+  
+  const compact = cleanLines.join('\n').trim();
+  if (compact.length > 1000) {
+    return compact.substring(0, 990) + '... (Ver desglose completo en la App)';
+  }
+  return compact || "Sin desglose detallado.";
+}
+
 export async function POST(req: Request) {
   try {
     const { phone, employeeName, amount, period, type, document_url, notes } = await req.json();
@@ -77,7 +101,7 @@ export async function POST(req: Request) {
                 {
                   type: "text",
                   parameter_name: "excel",
-                  text: notes ? notes.trim() : "N/A"
+                  text: getCompactNotes(notes)
                 }
               ]
             }

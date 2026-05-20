@@ -172,6 +172,41 @@ export default function EquipoPage() {
       if (parsed.period) setPeriod(parsed.period);
     }
   };
+  
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const handleRetryWhatsapp = async (record: PayrollRecord) => {
+    setRetryingId(record.id);
+    try {
+      const waRes = await fetch('/api/payroll/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          phone: record.employee_phone, 
+          employeeName: record.employee_name, 
+          amount: record.amount.toString(), 
+          period: record.period, 
+          type: record.type, 
+          document_url: record.document_url,
+          notes: record.notes
+        })
+      });
+      
+      if (waRes.ok) {
+        await supabase.from('payroll').update({ whatsapp_sent: true }).eq('id', record.id);
+        alert("¡WhatsApp reenviado con éxito!");
+        fetchRecords();
+      } else {
+        const errData = await waRes.json();
+        alert(`Fallo al reenviar WhatsApp: ${errData.error || 'Error de API'}`);
+      }
+    } catch (err: any) {
+      console.error("Error reenviando WA", err);
+      alert(`Error al conectar con la API de WhatsApp: ${err.message || err}`);
+    } finally {
+      setRetryingId(null);
+    }
+  };
 
   const fetchRecords = async () => {
     setIsLoading(true);
@@ -261,9 +296,13 @@ export default function EquipoPage() {
         
         if (waRes.ok) {
           await supabase.from('payroll').update({ whatsapp_sent: true }).eq('id', inserted.id);
+        } else {
+          const errData = await waRes.json();
+          alert(`Guardado en base de datos, pero falló WhatsApp: ${errData.error || 'Error de API'}`);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error enviando WA", err);
+        alert(`Error al intentar conectar con la API de WhatsApp: ${err.message || err}`);
       }
     }
 
@@ -373,9 +412,23 @@ export default function EquipoPage() {
                       <CheckCircle2 size={12} /> WhatsApp Enviado
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
-                      <AlertCircle size={12} /> Sin notificar
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
+                        <AlertCircle size={12} /> Sin notificar
+                      </span>
+                      <button
+                        onClick={() => handleRetryWhatsapp(record)}
+                        disabled={retryingId === record.id}
+                        className="text-[11px] font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 px-2 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                      >
+                        {retryingId === record.id ? (
+                          <div className="w-3 h-3 border-2 border-amber-700 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <Send size={10} />
+                        )}
+                        Reintentar
+                      </button>
+                    </div>
                   )}
                   {record.document_url && (
                     <a href={record.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md transition-colors ml-1">
