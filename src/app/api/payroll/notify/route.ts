@@ -122,11 +122,12 @@ export async function POST(req: Request) {
                   parameter_name: "monto",
                   text: Number(amount).toLocaleString('es-MX')
                 },
-                {
+                // Solo añadir el quinto parámetro 'excel' si NO hay documento adjunto (plantilla nominas_jaroje)
+                ...(!document_url ? [{
                   type: "text",
                   parameter_name: "excel",
                   text: getCompactNotes(notes)
-                }
+                }] : [])
               ]
             }
           ]
