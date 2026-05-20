@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
   try {
-    const { phone, employeeName, amount, period, type, document_url } = await req.json();
+    const { phone, employeeName, amount, period, type, document_url, notes } = await req.json();
 
     if (!phone || !employeeName || !amount) {
       return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 });
@@ -73,6 +73,11 @@ export async function POST(req: Request) {
                   type: "text",
                   parameter_name: "monto",
                   text: Number(amount).toLocaleString('es-MX')
+                },
+                {
+                  type: "text",
+                  parameter_name: "excel",
+                  text: notes ? notes.trim() : "N/A"
                 }
               ]
             }

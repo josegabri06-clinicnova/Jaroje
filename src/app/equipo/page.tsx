@@ -248,7 +248,15 @@ export default function EquipoPage() {
         const waRes = await fetch('/api/payroll/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, employeeName: name, amount, period, type, document_url })
+          body: JSON.stringify({ 
+            phone, 
+            employeeName: name, 
+            amount, 
+            period, 
+            type, 
+            document_url,
+            notes: inserted.notes
+          })
         });
         
         if (waRes.ok) {
