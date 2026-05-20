@@ -93,6 +93,19 @@ export default function FinanzasPage() {
 
   useEffect(() => {
     fetchData();
+    
+    // Abrir automáticamente el modal si viene desde el botón FAB del más
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('action') === 'new_movement') {
+        setEditingRecord(null);
+        setFormType('gasto');
+        setFormAmount('');
+        setFormDescription('');
+        setFormDate(new Date().toISOString().split('T')[0]);
+        setShowMoveModal(true);
+      }
+    }
   }, []);
 
   const handleSaveMovement = async (e: React.FormEvent) => {

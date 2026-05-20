@@ -61,6 +61,14 @@ export default function MantenimientoPage() {
 
   useEffect(() => {
     fetchTasks();
+    
+    // Abrir automáticamente el modal si viene desde el botón FAB (+)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('action') === 'new_task') {
+        openModal();
+      }
+    }
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {

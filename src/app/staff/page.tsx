@@ -445,9 +445,9 @@ export default function StaffPage() {
             ) : (
               <button
                 onClick={() => setShowEmployeeModal(true)}
-                className="inline-flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-black text-[10px] font-bold tracking-wider uppercase py-1.5 px-3.5 rounded-full hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer shadow-sm shadow-zinc-200 hover:shadow-md duration-150"
+                className="inline-flex items-center gap-1.5 bg-white text-zinc-700 hover:text-zinc-950 border border-zinc-200 hover:border-zinc-300 text-[11px] font-bold py-1.5 px-3.5 rounded-xl hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-sm hover:shadow duration-150 select-none"
               >
-                <UserPlus size={11} strokeWidth={2.5} />
+                <UserPlus size={13} strokeWidth={2.2} className="text-emerald-500" />
                 <span>Firmar Turno</span>
               </button>
             )}

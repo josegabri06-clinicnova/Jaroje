@@ -224,6 +224,14 @@ export default function EquipoPage() {
 
   useEffect(() => {
     fetchRecords();
+    
+    // Abrir automáticamente el modal de nómina si viene del botón FAB (+)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('action') === 'pay_payroll') {
+        setShowModal(true);
+      }
+    }
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
