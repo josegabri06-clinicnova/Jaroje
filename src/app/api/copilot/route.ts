@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
+import { getBeds24Bookings } from "@/lib/beds24";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
@@ -20,39 +21,65 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     const messages: { role: string; content: string }[] = body.messages || [];
-    const role = body.role || req.headers.get("x-user-role") || "recepcion";
-    const isAdmin = role === "admin";
+    let role = body.role || req.headers.get("x-user-role") || "recepcion";
+    
+    // Obtener PIN de Administrador enviado por la cabecera o el cuerpo
+    const adminPinHeader = req.headers.get("x-admin-pin") || body.pin || null;
+
+    let isAdmin = false;
+
+    // VALIDACIÓN HERMÉTICA DE SEGURIDAD EN EL SERVIDOR (OPCIÓN A)
+    if (role === "admin") {
+      try {
+        const { data: pinSetting } = await supabase
+          .from("settings")
+          .select("value")
+          .eq("key", "pin_admin")
+          .single();
+        
+        const dbAdminPin = pinSetting?.value || "1234"; // fallback por defecto si está vacío
+        
+        if (adminPinHeader && adminPinHeader === dbAdminPin) {
+          isAdmin = true;
+        } else {
+          console.warn("Jaroje AI Copilot: Acceso Admin denegado. PIN incorrecto o ausente.");
+          role = "recepcion"; // Degradación forzada por seguridad
+          isAdmin = false;
+        }
+      } catch (dbErr) {
+        console.error("Error validando PIN de Admin en base de datos, degradando a recepcion:", dbErr);
+        role = "recepcion";
+        isAdmin = false;
+      }
+    }
 
     // Fetch context data — Beds24 is the SOURCE OF TRUTH for reservations
     let contextData = "";
     const todayStr = new Date().toISOString().split('T')[0];
 
     try {
-      // --- 1. BEDS24 RESERVATIONS (source of truth) ---
-      const beds24Res = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://jaroje-app.vercel.app'}/api/reservas`, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-      if (beds24Res.ok) {
-        const beds24Json = await beds24Res.json();
-        const allReservas = beds24Json.data || [];
+      // --- 1. BEDS24 RESERVATIONS (Llamada interna local, cero loopback HTTP) ---
+      const allReservas = await getBeds24Bookings();
 
-        const active = allReservas.filter((r: any) => r.check_in <= todayStr && r.check_out > todayStr);
-        const llegadasHoy = allReservas.filter((r: any) => r.check_in === todayStr);
-        const salidasHoy = allReservas.filter((r: any) => r.check_out === todayStr);
-        const proximas = allReservas.filter((r: any) => r.check_in > todayStr).slice(0, 10);
+      const active = allReservas.filter((r: any) => r.check_in <= todayStr && r.check_out > todayStr);
+      const llegadasHoy = allReservas.filter((r: any) => r.check_in === todayStr);
+      const salidasHoy = allReservas.filter((r: any) => r.check_out === todayStr);
+      const proximas = allReservas.filter((r: any) => r.check_in > todayStr).slice(0, 10);
 
-        contextData += `\n=== FECHA DE HOY: ${todayStr} ===\n`;
-        contextData += `\n[HUÉSPEDES EN CASA AHORA] (${active.length} reservas activas):\n${JSON.stringify(active.map((r: any) => ({
-          huesped: r.guest_name, habitacion: r.room_name, check_in: r.check_in, check_out: r.check_out, canal: r.channel, telefono: r.guest_phone || 'no disponible', noches: r.nights, tarifa_estimada: r.price_estimate
-        })), null, 2)}\n`;
-        contextData += `\n[LLEGADAS HOY] (${llegadasHoy.length}):\n${JSON.stringify(llegadasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name, canal: r.channel })), null, 2)}\n`;
-        contextData += `\n[SALIDAS HOY] (${salidasHoy.length}):\n${JSON.stringify(salidasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name })), null, 2)}\n`;
-        contextData += `\n[PRÓXIMAS LLEGADAS] (siguientes 10):\n${JSON.stringify(proximas.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name, check_in: r.check_in, check_out: r.check_out, canal: r.channel, noches: r.nights })), null, 2)}\n`;
-        contextData += `\n[TOTAL RESERVAS EN SISTEMA]: ${allReservas.length}\n`;
-      } else {
-        contextData += `\n[AVISO]: No se pudo conectar con Beds24 para obtener reservas en tiempo real.\n`;
-      }
+      contextData += `\n=== FECHA DE HOY: ${todayStr} ===\n`;
+      contextData += `\n[HUÉSPEDES EN CASA AHORA] (${active.length} reservas activas):\n${JSON.stringify(active.map((r: any) => ({
+        huesped: r.guest_name, habitacion: r.room_name, check_in: r.check_in, check_out: r.check_out, canal: r.channel, telefono: r.guest_phone || 'no disponible', noches: r.nights, tarifa_estimada: r.price_estimate
+      })), null, 2)}\n`;
+      contextData += `\n[LLEGADAS HOY] (${llegadasHoy.length}):\n${JSON.stringify(llegadasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name, canal: r.channel })), null, 2)}\n`;
+      contextData += `\n[SALIDAS HOY] (${salidasHoy.length}):\n${JSON.stringify(salidasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name })), null, 2)}\n`;
+      contextData += `\n[PRÓXIMAS LLEGADAS] (siguientes 10):\n${JSON.stringify(proximas.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name, check_in: r.check_in, check_out: r.check_out, canal: r.channel, noches: r.nights })), null, 2)}\n`;
+      contextData += `\n[TOTAL RESERVAS EN SISTEMA]: ${allReservas.length}\n`;
+    } catch (bedsErr) {
+      console.error("Copilot Beds24 fetch error locally:", bedsErr);
+      contextData += `\n[AVISO]: No se pudo conectar con Beds24 para obtener reservas en tiempo real.\n`;
+    }
 
+    try {
       // --- 2. SUPABASE CHECK-INS (tracks reception processing status) ---
       const { data: checkins } = await supabase
         .from("checkins")
@@ -65,6 +92,7 @@ export async function POST(req: Request) {
         contextData += `\n[CHECK-OUTS PROCESADOS HOY] (${checkedOut.length}):\n${JSON.stringify(checkedOut.map((c: any) => ({ huesped: c.guest_name, habitacion: c.room })), null, 2)}\n`;
       }
 
+      // ACCESO FINANCIERO PROTEGIDO SÓLO PARA ADMIN VALIDADO
       if (isAdmin) {
         const { data: finances } = await supabase
           .from("finances")
@@ -124,7 +152,6 @@ Reglas ESTRICTAS:
       stream: true,
     });
 
-    // Stream the response in the format expected by useChat (Vercel AI SDK)
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
       async start(controller) {
@@ -132,13 +159,11 @@ Reglas ESTRICTAS:
           for await (const chunk of stream) {
             const delta = chunk.choices[0]?.delta?.content;
             if (delta) {
-              // Vercel AI SDK data stream format: "0:\"text\"\n"
               controller.enqueue(
                 encoder.encode(`0:${JSON.stringify(delta)}\n`)
               );
             }
           }
-          // Send finish signal
           controller.enqueue(
             encoder.encode(
               `d:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n`

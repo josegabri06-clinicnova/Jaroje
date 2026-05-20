@@ -67,6 +67,9 @@ export default function LoginPage() {
             setTimeout(() => { setPin(''); setShake(false); setLoading(false); }, 600);
           } else {
             setRole(mode as any);
+            if (typeof window !== 'undefined') {
+              sessionStorage.setItem('jaroje_session_pin', next);
+            }
             if (mode === 'admin') router.replace('/');
             else if (mode === 'recepcion') router.replace('/recepcion');
             else router.replace('/staff');
