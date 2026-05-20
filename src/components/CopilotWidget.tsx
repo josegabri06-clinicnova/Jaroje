@@ -16,13 +16,26 @@ export default function CopilotWidget() {
   const [pinError, setPinError] = useState(false);
   const [validatingPin, setValidatingPin] = useState(false);
 
-  useEffect(() => {
-    const activeRole = localStorage.getItem('jaroje_role');
-    setRole(activeRole);
+  // Función para forzar la sincronización del rol y el PIN desde el almacenamiento del navegador
+  const syncCredentials = () => {
     if (typeof window !== 'undefined') {
-      setSessionPin(sessionStorage.getItem('jaroje_session_pin') || '');
+      const activeRole = localStorage.getItem('jaroje_role');
+      const activePin = sessionStorage.getItem('jaroje_session_pin') || '';
+      setRole(activeRole);
+      setSessionPin(activePin);
     }
+  };
+
+  useEffect(() => {
+    syncCredentials();
   }, []);
+
+  // Sincronizar credenciales cada vez que el widget se abra
+  useEffect(() => {
+    if (isOpen) {
+      syncCredentials();
+    }
+  }, [isOpen]);
 
   // Watch for panel-open class on body (set by calendar sheet and other modals)
   useEffect(() => {
@@ -49,9 +62,12 @@ export default function CopilotWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Listen for custom event to open
+  // Listen for custom event to open (forces fresh credential sync)
   useEffect(() => {
-    const handleOpen = () => setIsOpen(true);
+    const handleOpen = () => {
+      syncCredentials();
+      setIsOpen(true);
+    };
     window.addEventListener('open-copilot', handleOpen);
     return () => window.removeEventListener('open-copilot', handleOpen);
   }, []);
