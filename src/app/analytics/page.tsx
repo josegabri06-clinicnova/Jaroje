@@ -92,6 +92,9 @@ export default function AnalyticsPage() {
   // ── Calcular métricas en tiempo real ───────────────────────────────────────
   const totalNoches = reservas.reduce((s, r) => s + (r.nights || 0), 0);
   const revenueTotal = reservas.reduce((s, r) => s + (r.price_estimate || 0), 0);
+  
+  // ADR (Average Daily Rate) es estrictamente un KPI de habitación (Room revenue / Nights)
+  // por ende se calcula únicamente sobre el revenueTotal bruto de camas de Beds24.
   const adr = totalNoches > 0 ? Math.round(revenueTotal / totalNoches) : 0;
   const ocupacion = Math.min(100, Math.round((totalNoches / 30) * 100));
 
@@ -100,8 +103,16 @@ export default function AnalyticsPage() {
     .filter(f => f.type === 'gasto')
     .reduce((s, f) => s + (Number(f.amount) || 0), 0);
 
-  // Utilidad Neta (Net Profit)
-  const utilidadNeta = revenueTotal - totalGastos;
+  // Ingresos manuales reales desde Supabase (Tours, mini-bar, late checkouts, depósitos, etc.)
+  const ingresosManuales = finanzas
+    .filter(f => f.type === 'ingreso')
+    .reduce((s, f) => s + (Number(f.amount) || 0), 0);
+
+  // Ingresos Consolidados Totales
+  const ingresosConsolidados = revenueTotal + ingresosManuales;
+
+  // Utilidad Neta (Net Profit) Consolidada
+  const utilidadNeta = ingresosConsolidados - totalGastos;
 
   // Canal breakdown (Beds24)
   const channelMap: Record<string, { nights: number; revenue: number }> = {};
@@ -121,13 +132,22 @@ export default function AnalyticsPage() {
     }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  // Reservas agrupadas por mes (Beds24)
+  // Ingresos consolidados agrupados por mes (Beds24 + Supabase type === 'ingreso')
   const monthMap: Record<string, number> = {};
   reservas.forEach(r => {
     if (!r.check_in) return;
     const m = r.check_in.substring(0, 7); // YYYY-MM
     if (!monthMap[m]) monthMap[m] = 0;
     monthMap[m] += r.price_estimate || 0;
+  });
+
+  finanzas.forEach(f => {
+    if (!f.date) return;
+    const m = f.date.substring(0, 7); // YYYY-MM
+    if (!monthMap[m]) monthMap[m] = 0;
+    if (f.type === 'ingreso') {
+      monthMap[m] += Number(f.amount) || 0;
+    }
   });
 
   // Egresos agrupados por mes (Supabase)
@@ -260,7 +280,7 @@ export default function AnalyticsPage() {
           <p className="text-3xl font-extrabold tracking-tight">MX${utilidadNeta.toLocaleString('es-MX')}</p>
         )}
         <div className="flex items-center justify-between text-[11px] text-indigo-300 font-medium mt-3 border-t border-indigo-500/20 pt-2.5">
-          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Ingreso: MX${revenueTotal.toLocaleString('es-MX')}</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Ingreso: MX${ingresosConsolidados.toLocaleString('es-MX')}</span>
           <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Egreso: MX${totalGastos.toLocaleString('es-MX')}</span>
         </div>
       </div>
@@ -274,10 +294,12 @@ export default function AnalyticsPage() {
               <TrendingUp size={14} className="text-emerald-500" />
             </div>
             {isLoading ? <Skeleton /> : (
-              <p className="text-xl font-bold text-zinc-900 tracking-tight">MX${revenueTotal.toLocaleString('es-MX')}</p>
+              <p className="text-xl font-bold text-zinc-900 tracking-tight">MX${ingresosConsolidados.toLocaleString('es-MX')}</p>
             )}
           </div>
-          <p className="text-[10px] font-medium text-zinc-400 mt-2">Beds24 bruto</p>
+          <p className="text-[10px] font-medium text-zinc-400 mt-2">
+            Beds24: MX${revenueTotal.toLocaleString('es-MX')} + Caja: MX${ingresosManuales.toLocaleString('es-MX')}
+          </p>
         </div>
 
         <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between">

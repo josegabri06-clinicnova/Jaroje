@@ -3,15 +3,19 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/lib/auth';
-import { LogOut, Shield, Wrench, Sparkles } from 'lucide-react';
+import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 
-type Role = 'admin' | 'staff' | null;
+type Role = 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento' | null;
 
-const ADMIN_ROUTES = ['/', '/reservas', '/calendario', '/analytics', '/bot', '/historial', '/precios', '/ajustes', '/nueva'];
-const STAFF_ROUTES = ['/staff', '/calendario'];
-const STAFF_ONLY_ROUTES = ['/staff'];
 const PUBLIC_ROUTES = ['/login'];
+
+const PERMITTED_ROUTES: Record<string, string[]> = {
+  admin: ['/'], // Admin has universal access
+  recepcion: ['/recepcion', '/calendario', '/reservas', '/precios', '/nueva'],
+  staff_limpieza: ['/staff', '/calendario'],
+  staff_mantenimiento: ['/staff', '/calendario'],
+};
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
@@ -25,18 +29,39 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const isPublicRoute = PUBLIC_ROUTES.includes(pathname || '');
 
-    if (!stored && !isPublicRoute) {
-      router.replace('/login');
+    if (!stored) {
+      if (!isPublicRoute) {
+        router.replace('/login');
+      } else {
+        setChecked(true);
+      }
       return;
     }
 
-    if (stored === 'staff' && !STAFF_ROUTES.some(r => (pathname || '').startsWith(r)) && !isPublicRoute) {
-      router.replace('/staff');
+    // Si está autenticado e intenta ir a /login, redirigir a su panel por defecto
+    if (isPublicRoute) {
+      if (stored === 'admin') router.replace('/');
+      else if (stored === 'recepcion') router.replace('/recepcion');
+      else router.replace('/staff');
       return;
     }
 
-    if (stored === 'admin' && STAFF_ONLY_ROUTES.some(r => (pathname || '').startsWith(r))) {
-      router.replace('/');
+    // Validar acceso a la ruta según el rol
+    if (stored === 'admin') {
+      setChecked(true);
+      return;
+    }
+
+    const allowed = PERMITTED_ROUTES[stored] || [];
+    const isAllowed = allowed.some(prefix => (pathname || '').startsWith(prefix));
+
+    if (!isAllowed) {
+      console.warn(`Acceso denegado a ${pathname} para el rol ${stored}. Redirigiendo...`);
+      if (stored === 'recepcion') {
+        router.replace('/recepcion');
+      } else {
+        router.replace('/staff');
+      }
       return;
     }
 
@@ -65,10 +90,22 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
               <span className="text-[10px] font-bold text-white tracking-wide uppercase">Admin</span>
             </div>
           )}
-          {role === 'staff' && (
+          {role === 'recepcion' && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-600 border border-blue-700">
-              <Wrench size={10} className="text-white" />
-              <span className="text-[10px] font-bold text-white tracking-wide uppercase">Staff</span>
+              <KeyRound size={10} className="text-white" />
+              <span className="text-[10px] font-bold text-white tracking-wide uppercase">Recepción</span>
+            </div>
+          )}
+          {role === 'staff_limpieza' && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500 border border-amber-600">
+              <Sparkles size={10} className="text-white" />
+              <span className="text-[10px] font-bold text-white tracking-wide uppercase">Limpieza</span>
+            </div>
+          )}
+          {role === 'staff_mantenimiento' && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-600 border border-rose-700">
+              <Hammer size={10} className="text-white" />
+              <span className="text-[10px] font-bold text-white tracking-wide uppercase">Mantenimiento</span>
             </div>
           )}
 
@@ -102,3 +139,4 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     </>
   );
 }
+

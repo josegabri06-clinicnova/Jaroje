@@ -6,9 +6,9 @@ import {
   Hotel, Shield, ChevronRight, 
   Star, Key, X, Check, Eye, EyeOff, LogOut
 } from 'lucide-react';
-import { getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, saveAdminPin, saveStaffLimpiezaPin, saveStaffMantenimientoPin, logout } from '@/lib/auth';
+import { getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, saveAdminPin, saveStaffLimpiezaPin, saveStaffMantenimientoPin, saveRecepcionPin, logout } from '@/lib/auth';
 
-type PinTarget = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | null;
+type PinTarget = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion' | null;
 
 export default function AjustesPage() {
   const router = useRouter();
@@ -32,13 +32,22 @@ export default function AjustesPage() {
   };
 
   const savePinChange = () => {
-    const currentCorrect = pinModal === 'admin' ? getAdminPin() : pinModal === 'staff_limpieza' ? getStaffLimpiezaPin() : getStaffMantenimientoPin();
+    const currentCorrect = 
+      pinModal === 'admin' 
+        ? getAdminPin() 
+        : pinModal === 'recepcion'
+        ? getRecepcionPin()
+        : pinModal === 'staff_limpieza' 
+        ? getStaffLimpiezaPin() 
+        : getStaffMantenimientoPin();
+
     if (currentPin !== currentCorrect) { setPinError('El PIN actual no es correcto.'); return; }
     if (newPin.length < 4)             { setPinError('El PIN nuevo debe tener al menos 4 dígitos.'); return; }
     if (!/^\d+$/.test(newPin))         { setPinError('El PIN solo puede contener números.'); return; }
     if (newPin !== confirmPin)         { setPinError('Los PINs nuevos no coinciden.'); return; }
     
     if (pinModal === 'admin') saveAdminPin(newPin);
+    else if (pinModal === 'recepcion') saveRecepcionPin(newPin);
     else if (pinModal === 'staff_limpieza') saveStaffLimpiezaPin(newPin);
     else saveStaffMantenimientoPin(newPin);
     setPinSuccess('✅ PIN actualizado correctamente.');
@@ -109,6 +118,7 @@ export default function AjustesPage() {
       <SectionHeader icon={<Shield size={15} strokeWidth={2.5} />} title="Seguridad y Acceso" />
       <Card>
         <Row label="Cambiar PIN Administrador" value="••••" onPress={() => openPinModal('admin')} />
+        <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
         <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
         <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
       </Card>
@@ -136,7 +146,7 @@ export default function AjustesPage() {
               <div className="flex items-center gap-2">
                 <Key size={16} className="text-zinc-600"/>
                 <h3 className="font-bold text-zinc-900 text-base">
-                  PIN {pinModal === 'admin' ? 'Administrador' : pinModal === 'staff_limpieza' ? 'Limpieza' : 'Mantenimiento'}
+                  PIN {pinModal === 'admin' ? 'Administrador' : pinModal === 'recepcion' ? 'Recepción' : pinModal === 'staff_limpieza' ? 'Limpieza' : 'Mantenimiento'}
                 </h3>
               </div>
               <button onClick={() => setPinModal(null)} className="p-2 rounded-xl hover:bg-zinc-100 transition-colors">

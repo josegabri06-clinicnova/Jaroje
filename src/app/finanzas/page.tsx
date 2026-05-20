@@ -4,10 +4,10 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
-import { Employee } from '@/lib/auth';
+import { Employee, validatePinAsync } from '@/lib/auth';
 
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -48,6 +48,64 @@ const cleanDescription = (desc: string) => {
 };
 
 export default function FinanzasPage() {
+  // PIN Locking System (Frente de seguridad hermético)
+  const [pinLocked, setPinLocked] = useState(true);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState(false);
+  const [validatingPin, setValidatingPin] = useState(false);
+
+  useEffect(() => {
+    const checkPin = async () => {
+      const activePin = sessionStorage.getItem('jaroje_session_pin') || '';
+      if (activePin) {
+        const isValid = await validatePinAsync(activePin, 'admin');
+        if (isValid) {
+          setPinLocked(false);
+          return;
+        }
+      }
+      setPinLocked(true);
+    };
+    checkPin();
+  }, []);
+
+  useEffect(() => {
+    if (pinInput.length === 4) {
+      const validate = async () => {
+        setValidatingPin(true);
+        setPinError(false);
+        try {
+          const isValid = await validatePinAsync(pinInput, 'admin');
+          if (isValid) {
+            sessionStorage.setItem('jaroje_session_pin', pinInput);
+            setPinLocked(false);
+            // Sincronizar el widget del Copiloto enviando evento de apertura fresco
+            window.dispatchEvent(new Event('open-copilot'));
+          } else {
+            setPinError(true);
+            setPinInput('');
+          }
+        } catch (e) {
+          setPinError(true);
+          setPinInput('');
+        } finally {
+          setValidatingPin(false);
+        }
+      };
+      validate();
+    }
+  }, [pinInput]);
+
+  const handleDigitPress = (d: string) => {
+    if (d === '⌫') {
+      setPinInput(p => p.slice(0, -1));
+    } else if (d !== '') {
+      if (pinInput.length < 4) {
+        setPinInput(p => p + d);
+      }
+    }
+  };
+
   const [activeTab, setActiveTab] = useState<'libro' | 'registro'>('libro');
   
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -416,6 +474,76 @@ export default function FinanzasPage() {
       </div>
     );
   };
+
+  if (pinLocked) {
+    return (
+      <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-zinc-950 text-white text-center p-6 select-none">
+        {/* Ambient background glow */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-zinc-800 rounded-full blur-[120px] opacity-40 pointer-events-none" />
+
+        <div className="w-16 h-16 bg-white/10 rounded-3xl flex items-center justify-center mb-4 border border-white/10 relative z-10 shadow-inner">
+          <Lock size={28} className="text-white animate-pulse" />
+        </div>
+        
+        <h2 className="text-xl font-bold tracking-tight text-white mb-2 relative z-10">
+          Caja de Seguridad Bloqueada
+        </h2>
+        <p className="text-[13px] text-zinc-400 leading-relaxed max-w-[300px] mb-8 relative z-10">
+          Esta vista contiene balances, sobres físicos de efectivo e historial financiero del hotel. Introduce el PIN de administrador para desbloquear.
+        </p>
+
+        {/* PIN Indicators */}
+        <div className="flex gap-5 mb-8 relative z-10">
+          {[0, 1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className={`w-4 h-4 rounded-full border-2 transition-all duration-150 ${
+                i < pinInput.length
+                  ? pinError
+                    ? "bg-red-500 border-red-500 scale-110"
+                    : "bg-white border-white scale-110"
+                  : "border-zinc-700 bg-transparent"
+              }`}
+            />
+          ))}
+        </div>
+
+        {/* Pinpad tactile */}
+        <div className="grid grid-cols-3 gap-3 w-full max-w-[280px] mb-6 relative z-10">
+          {['1','2','3','4','5','6','7','8','9','','0','⌫'].map((d, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => handleDigitPress(d)}
+              disabled={validatingPin}
+              className={`h-14 rounded-2xl font-bold text-lg transition-all active:scale-90 flex items-center justify-center ${
+                d === ''
+                  ? 'pointer-events-none opacity-0'
+                  : d === '⌫'
+                  ? 'bg-transparent text-zinc-500 hover:text-zinc-350'
+                  : 'bg-white/5 border border-white/10 text-white hover:bg-white/10 shadow-sm'
+              }`}
+            >
+              {d}
+            </button>
+          ))}
+        </div>
+
+        {pinError && (
+          <p className="text-[12px] text-red-400 font-bold mb-4 flex items-center gap-1.5 animate-bounce">
+            ⚠️ PIN incorrecto. Reinténtalo.
+          </p>
+        )}
+
+        <Link 
+          href="/"
+          className="text-[13px] font-bold text-zinc-400 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-xl border border-white/5"
+        >
+          Volver al Inicio
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 flex flex-col min-h-screen bg-[#fafafa] pb-24">
