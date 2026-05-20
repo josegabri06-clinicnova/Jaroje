@@ -79,8 +79,8 @@ export default function FinanzasPage() {
           if (isValid) {
             sessionStorage.setItem('jaroje_session_pin', pinInput);
             setPinLocked(false);
-            // Sincronizar el widget del Copiloto enviando evento de apertura fresco
-            window.dispatchEvent(new Event('open-copilot'));
+            // Sincronizar el widget del Copiloto en silencio sin forzar apertura
+            window.dispatchEvent(new Event('sync-copilot'));
           } else {
             setPinError(true);
             setPinInput('');

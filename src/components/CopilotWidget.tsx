@@ -75,8 +75,15 @@ export default function CopilotWidget() {
       syncCredentials();
       setIsOpen(true);
     };
+    const handleSync = () => {
+      syncCredentials();
+    };
     window.addEventListener('open-copilot', handleOpen);
-    return () => window.removeEventListener('open-copilot', handleOpen);
+    window.addEventListener('sync-copilot', handleSync);
+    return () => {
+      window.removeEventListener('open-copilot', handleOpen);
+      window.removeEventListener('sync-copilot', handleSync);
+    };
   }, []);
 
   // Auto-close when a panel opens
