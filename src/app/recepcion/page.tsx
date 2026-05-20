@@ -683,9 +683,10 @@ export default function RecepcionPage() {
             ) : (
               <button
                 onClick={() => setShowEmployeeModal(true)}
-                className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] font-extrabold tracking-wider uppercase py-1 px-2.5 rounded-full hover:bg-amber-100 hover:border-amber-300 transition-all cursor-pointer animate-pulse shadow-sm shadow-amber-100"
+                className="inline-flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-black text-[10px] font-bold tracking-wider uppercase py-1.5 px-3.5 rounded-full hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer shadow-sm shadow-zinc-200 hover:shadow-md duration-150"
               >
-                <span>👤 Firmar Turno</span>
+                <UserPlus size={11} strokeWidth={2.5} />
+                <span>Firmar Turno</span>
               </button>
             )}
           </div>

@@ -7,7 +7,7 @@ import {
   CheckCircle2, AlertTriangle, Wrench, Sparkles, BedDouble,
   ArrowDownLeft, Clock, Plus, X, Send,
   ChevronDown, CheckCheck, Camera, Bell, Package, Minus,
-  RefreshCw, ShieldAlert
+  RefreshCw, ShieldAlert, UserPlus
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, clearActiveEmployee, Employee } from '@/lib/auth';
@@ -445,8 +445,9 @@ export default function StaffPage() {
             ) : (
               <button
                 onClick={() => setShowEmployeeModal(true)}
-                className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 text-[9px] font-extrabold tracking-wider uppercase py-0.5 px-2 rounded-full hover:bg-amber-100 hover:border-amber-300 transition-all cursor-pointer animate-pulse"
+                className="inline-flex items-center gap-1.5 bg-zinc-900 text-white hover:bg-black text-[10px] font-bold tracking-wider uppercase py-1.5 px-3.5 rounded-full hover:scale-[1.03] active:scale-[0.97] transition-all cursor-pointer shadow-sm shadow-zinc-200 hover:shadow-md duration-150"
               >
+                <UserPlus size={11} strokeWidth={2.5} />
                 <span>Firmar Turno</span>
               </button>
             )}
