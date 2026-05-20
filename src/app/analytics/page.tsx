@@ -1,23 +1,38 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { TrendingUp, TrendingDown, BarChart3, DollarSign, BedDouble, RefreshCw, Moon, Users, AlertCircle, Download, ExternalLink, Copy, Check } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, DollarSign, BedDouble, RefreshCw, Moon, Users, AlertCircle, Download, Copy, Check } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 export default function AnalyticsPage() {
   const [reservas, setReservas] = useState<any[]>([]);
+  const [finanzas, setFinanzas] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [tokenError, setTokenError] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const fetchReservas = async () => {
+  const fetchData = async () => {
     setIsLoading(true);
     setTokenError(false);
     try {
+      // 1. Fetch de reservas desde Beds24
       const res = await fetch('/api/reservas');
       const json = await res.json();
-      if (json.error === 'TOKEN_EXPIRED') { setTokenError(true); return; }
-      if (json.success && json.data) setReservas(json.data);
+      if (json.error === 'TOKEN_EXPIRED') { 
+        setTokenError(true); 
+      } else if (json.success && json.data) {
+        setReservas(json.data);
+      }
+
+      // 2. Fetch de movimientos financieros desde Supabase
+      const { data: finData, error: finErr } = await supabase
+        .from('finances')
+        .select('*');
+      
+      if (!finErr && finData) {
+        setFinanzas(finData);
+      }
     } catch (e) {
       console.error("Error en analytics", e);
     } finally {
@@ -63,7 +78,6 @@ export default function AnalyticsPage() {
     }
   };
 
-
   const copyJSONUrl = () => {
     const url = `${window.location.origin}/api/export?format=json`;
     navigator.clipboard.writeText(url);
@@ -71,15 +85,25 @@ export default function AnalyticsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  useEffect(() => { fetchReservas(); }, []);
+  useEffect(() => { 
+    fetchData(); 
+  }, []);
 
-  // ── Calcular métricas reales ──────────────────────────────────────────────
+  // ── Calcular métricas en tiempo real ───────────────────────────────────────
   const totalNoches = reservas.reduce((s, r) => s + (r.nights || 0), 0);
   const revenueTotal = reservas.reduce((s, r) => s + (r.price_estimate || 0), 0);
   const adr = totalNoches > 0 ? Math.round(revenueTotal / totalNoches) : 0;
   const ocupacion = Math.min(100, Math.round((totalNoches / 30) * 100));
 
-  // Canal breakdown
+  // Egresos reales desde Supabase
+  const totalGastos = finanzas
+    .filter(f => f.type === 'gasto')
+    .reduce((s, f) => s + (Number(f.amount) || 0), 0);
+
+  // Utilidad Neta (Net Profit)
+  const utilidadNeta = revenueTotal - totalGastos;
+
+  // Canal breakdown (Beds24)
   const channelMap: Record<string, { nights: number; revenue: number }> = {};
   reservas.forEach(r => {
     const ch = r.channel || 'Directo';
@@ -97,7 +121,7 @@ export default function AnalyticsPage() {
     }))
     .sort((a, b) => b.revenue - a.revenue);
 
-  // Reservas por mes para la gráfica
+  // Reservas agrupadas por mes (Beds24)
   const monthMap: Record<string, number> = {};
   reservas.forEach(r => {
     if (!r.check_in) return;
@@ -105,14 +129,40 @@ export default function AnalyticsPage() {
     if (!monthMap[m]) monthMap[m] = 0;
     monthMap[m] += r.price_estimate || 0;
   });
-  const monthData = Object.entries(monthMap)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6)
-    .map(([month, revenue]) => ({
-      label: new Date(month + '-01').toLocaleDateString('es-MX', { month: 'short' }),
-      revenue
-    }));
-  const maxRevenue = Math.max(...monthData.map(m => m.revenue), 1);
+
+  // Egresos agrupados por mes (Supabase)
+  const expenseMonthMap: Record<string, number> = {};
+  finanzas.forEach(f => {
+    if (!f.date) return;
+    const m = f.date.substring(0, 7); // YYYY-MM
+    if (!expenseMonthMap[m]) expenseMonthMap[m] = 0;
+    if (f.type === 'gasto') {
+      expenseMonthMap[m] += Number(f.amount) || 0;
+    }
+  });
+
+  // Consolidación de últimos 6 meses
+  const allMonths = Array.from(new Set([
+    ...Object.keys(monthMap),
+    ...Object.keys(expenseMonthMap)
+  ])).sort().slice(-6);
+
+  const monthlyComparison = allMonths.map(m => {
+    const revenue = monthMap[m] || 0;
+    const expense = expenseMonthMap[m] || 0;
+    const profit = revenue - expense;
+    return {
+      label: new Date(m + '-02').toLocaleDateString('es-MX', { month: 'short' }),
+      revenue,
+      expense,
+      profit
+    };
+  });
+
+  const maxVal = Math.max(
+    ...monthlyComparison.map(m => Math.max(m.revenue, m.expense)),
+    1
+  );
 
   const Skeleton = () => <div className="h-8 bg-zinc-100 rounded-lg animate-pulse w-20" />;
 
@@ -123,10 +173,10 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Analytics</h2>
-          <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Datos reales de Beds24</p>
+          <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Métricas reales integradas · Beds24 + Supabase</p>
         </div>
         <button
-          onClick={fetchReservas}
+          onClick={fetchData}
           disabled={isLoading}
           className={`w-9 h-9 flex items-center justify-center text-zinc-500 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-xl shadow-sm transition-all ${isLoading ? 'opacity-50' : 'active:scale-95'}`}
         >
@@ -142,8 +192,8 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* ── PANEL DE EXPORTACIÓN ────────────────────────────────────────────── */}
-      <div className="bg-zinc-900 rounded-2xl p-5 space-y-4">
+      {/* Panel de exportación */}
+      <div className="bg-zinc-900 rounded-2xl p-5 space-y-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
         <div className="flex items-start justify-between">
           <div>
             <p className="text-[13px] font-bold text-white">Exportar datos</p>
@@ -152,9 +202,7 @@ export default function AnalyticsPage() {
           <span className="text-[10px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full tracking-wider">LIVE</span>
         </div>
 
-        {/* Botones de Exportación Directa */}
         <div className="grid grid-cols-2 gap-3">
-          {/* CSV */}
           <button
             onClick={exportCSV}
             disabled={exportLoading || isLoading}
@@ -165,7 +213,6 @@ export default function AnalyticsPage() {
             <p className="text-[10px] text-zinc-400 font-normal">Excel / Spreadsheets</p>
           </button>
 
-          {/* SQL */}
           <button
             onClick={exportSQL}
             disabled={exportLoading || isLoading}
@@ -177,8 +224,6 @@ export default function AnalyticsPage() {
           </button>
         </div>
 
-
-        {/* Power Query Live URL */}
         <div className="bg-white/5 border border-white/8 rounded-xl p-3.5">
           <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Conexión en vivo (Power Query → From Web)</p>
           <div className="flex items-center gap-2">
@@ -194,22 +239,58 @@ export default function AnalyticsPage() {
             </button>
           </div>
           <p className="text-[11px] text-zinc-500 mt-2 leading-relaxed">
-            En Excel: <span className="text-zinc-400 font-medium">Datos → Obtener datos → Desde la web</span> → pega la URL completa de tu servidor.
+            En Excel: <span className="text-zinc-400 font-medium">Datos → Obtener datos → Desde la web</span> → pega la URL completa.
           </p>
+        </div>
+      </div>
+
+      {/* Utilidad Neta Highlights */}
+      <div className="bg-gradient-to-br from-indigo-950 via-indigo-900 to-indigo-850 text-white p-5 rounded-3xl shadow-[0_6px_20px_rgba(55,48,163,0.15)] flex flex-col gap-1.5 relative overflow-hidden">
+        <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl" />
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-bold text-indigo-200 uppercase tracking-widest">Utilidad Neta (Net Profit)</span>
+          <span className={`flex items-center gap-0.5 text-[11px] font-bold px-2 py-0.5 rounded-full ${utilidadNeta >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}`}>
+            {utilidadNeta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+            {utilidadNeta >= 0 ? 'Positivo' : 'Déficit'}
+          </span>
+        </div>
+        {isLoading ? (
+          <div className="h-10 bg-white/10 rounded-lg animate-pulse w-48 mt-1" />
+        ) : (
+          <p className="text-3xl font-extrabold tracking-tight">MX${utilidadNeta.toLocaleString('es-MX')}</p>
+        )}
+        <div className="flex items-center justify-between text-[11px] text-indigo-300 font-medium mt-3 border-t border-indigo-500/20 pt-2.5">
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Ingreso: MX${revenueTotal.toLocaleString('es-MX')}</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> Egreso: MX${totalGastos.toLocaleString('es-MX')}</span>
         </div>
       </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Revenue</span>
-            <TrendingUp size={14} className="text-emerald-500" />
+        <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Ingresos</span>
+              <TrendingUp size={14} className="text-emerald-500" />
+            </div>
+            {isLoading ? <Skeleton /> : (
+              <p className="text-xl font-bold text-zinc-900 tracking-tight">MX${revenueTotal.toLocaleString('es-MX')}</p>
+            )}
           </div>
-          {isLoading ? <Skeleton /> : (
-            <p className="text-2xl font-bold text-zinc-900 tracking-tighter">MX${revenueTotal.toLocaleString('es-MX')}</p>
-          )}
-          <p className="text-[11px] font-medium text-zinc-400 mt-1.5">estimado total</p>
+          <p className="text-[10px] font-medium text-zinc-400 mt-2">Beds24 bruto</p>
+        </div>
+
+        <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Egresos</span>
+              <TrendingDown size={14} className="text-rose-500" />
+            </div>
+            {isLoading ? <Skeleton /> : (
+              <p className="text-xl font-bold text-zinc-900 tracking-tight">MX${totalGastos.toLocaleString('es-MX')}</p>
+            )}
+          </div>
+          <p className="text-[10px] font-medium text-zinc-400 mt-2">Caja Supabase</p>
         </div>
 
         <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
@@ -218,7 +299,7 @@ export default function AnalyticsPage() {
             <BedDouble size={14} className="text-zinc-400" />
           </div>
           {isLoading ? <Skeleton /> : (
-            <p className="text-2xl font-bold text-zinc-900 tracking-tighter">{ocupacion}%</p>
+            <p className="text-xl font-bold text-zinc-900 tracking-tight">{ocupacion}%</p>
           )}
           <div className="mt-2 w-full h-1 bg-zinc-100 rounded-full overflow-hidden">
             <div className="h-full bg-zinc-900 rounded-full transition-all duration-700" style={{ width: `${ocupacion}%` }} />
@@ -231,38 +312,75 @@ export default function AnalyticsPage() {
             <DollarSign size={14} className="text-zinc-400" />
           </div>
           {isLoading ? <Skeleton /> : (
-            <p className="text-2xl font-bold text-zinc-900 tracking-tighter">MX${adr}</p>
+            <p className="text-xl font-bold text-zinc-900 tracking-tight">MX${adr}</p>
           )}
-          <p className="text-[11px] font-medium text-zinc-400 mt-1.5">precio medio/noche</p>
+          <p className="text-[10px] font-medium text-zinc-400 mt-1.5">precio medio/noche</p>
         </div>
 
-        <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+        <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] col-span-2">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Reservas</span>
+            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest">Estadísticas de Estancia</span>
             <Users size={14} className="text-zinc-400" />
           </div>
-          {isLoading ? <Skeleton /> : (
-            <p className="text-2xl font-bold text-zinc-900 tracking-tighter">{reservas.length}</p>
-          )}
-          <p className="text-[11px] font-medium text-zinc-400 mt-1.5 flex items-center gap-1">
-            <Moon size={9} /> {totalNoches} noches totales
-          </p>
+          <div className="flex items-baseline justify-between">
+            {isLoading ? <Skeleton /> : (
+              <p className="text-xl font-bold text-zinc-900 tracking-tight">{reservas.length} Reservas</p>
+            )}
+            <p className="text-[11px] font-medium text-zinc-500 flex items-center gap-1">
+              <Moon size={10} /> {totalNoches} noches totales operadas
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Revenue por Mes */}
-      {monthData.length > 0 && (
+      {/* Gráfico Comparativo: Ingresos vs Egresos */}
+      {monthlyComparison.length > 0 && (
         <div className="bg-white border border-zinc-200/80 p-5 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
-          <h3 className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-5">Revenue por Mes</h3>
-          <div className="flex items-end gap-2 h-28">
-            {monthData.map((m, i) => (
-              <div key={m.label} className="flex-1 flex flex-col items-center gap-1.5">
-                <div className="w-full flex flex-col justify-end" style={{ height: '80px' }}>
-                  <div
-                    className={`w-full rounded-lg transition-all ${i === monthData.length - 1 ? 'bg-zinc-900' : 'bg-zinc-200'}`}
-                    style={{ height: `${Math.max(4, (m.revenue / maxRevenue) * 80)}px` }}
-                  />
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest">Ingresos vs Egresos</h3>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-800">
+                <span className="w-2 h-2 bg-zinc-900 rounded-full" /> Ingresos
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
+                <span className="w-2 h-2 bg-rose-500 rounded-full" /> Egresos
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-end gap-3 h-36 pt-2">
+            {monthlyComparison.map((m) => (
+              <div key={m.label} className="flex-1 flex flex-col items-center gap-2">
+                <div className="w-full flex justify-center items-end gap-1 h-24">
+                  {/* Barra Ingresos */}
+                  <div className="w-3.5 flex flex-col justify-end h-full">
+                    <div 
+                      className="w-full bg-zinc-900 rounded-t-sm hover:opacity-85 transition-all cursor-pointer relative group"
+                      style={{ height: `${Math.max(2, (m.revenue / maxVal) * 96)}px` }}
+                    >
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-zinc-950 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                        MX${m.revenue.toLocaleString('es-MX')}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Barra Egresos */}
+                  <div className="w-3.5 flex flex-col justify-end h-full">
+                    <div 
+                      className="w-full bg-rose-500 rounded-t-sm hover:opacity-85 transition-all cursor-pointer relative group"
+                      style={{ height: `${Math.max(2, (m.expense / maxVal) * 96)}px` }}
+                    >
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-zinc-950 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                        MX${m.expense.toLocaleString('es-MX')}
+                      </div>
+                    </div>
+                  </div>
                 </div>
+                
+                {/* Balance tag */}
+                <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${m.profit >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                  {m.profit >= 0 ? '+' : ''}{Math.round(m.profit / 1000)}k
+                </div>
+                
                 <span className="text-[10px] font-semibold text-zinc-400">{m.label}</span>
               </div>
             ))}
@@ -273,7 +391,7 @@ export default function AnalyticsPage() {
       {/* Canal Breakdown */}
       {channelData.length > 0 ? (
         <div className="bg-white border border-zinc-200/80 p-5 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
-          <h3 className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-5">Por Canal</h3>
+          <h3 className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-5">Por Canal (Beds24)</h3>
           <div className="space-y-4">
             {channelData.map(ch => (
               <div key={ch.name} className="flex items-center gap-3">

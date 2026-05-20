@@ -62,3 +62,25 @@ export async function POST(req: Request) {
     });
   }
 }
+
+// GET — Obtener logs de auditoría de empleado en Supabase
+export async function GET() {
+  try {
+    const { data, error } = await supabase
+      .from('employee_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (error) {
+      console.error('API Employee Logs GET Error:', error.message);
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch (err: any) {
+    console.error('API Employee Logs GET Exception:', err.message);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
