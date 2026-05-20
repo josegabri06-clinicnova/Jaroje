@@ -194,7 +194,8 @@ export default function EquipoPage() {
       
       if (waRes.ok) {
         await supabase.from('payroll').update({ whatsapp_sent: true }).eq('id', record.id);
-        alert("¡WhatsApp reenviado con éxito!");
+        alert("¡WhatsApp enviado con éxito!");
+        setSelectedRecordForDetails(prev => prev && prev.id === record.id ? { ...prev, whatsapp_sent: true } : prev);
         fetchRecords();
       } else {
         const errData = await waRes.json();
@@ -207,6 +208,7 @@ export default function EquipoPage() {
       setRetryingId(null);
     }
   };
+
 
   const fetchRecords = async () => {
     setIsLoading(true);
@@ -817,23 +819,44 @@ export default function EquipoPage() {
               )}
 
               {/* Footer Modal */}
-              <div className="pt-4 border-t border-zinc-100 flex gap-3">
-                {selectedRecordForDetails.document_url && (
-                  <a 
-                    href={selectedRecordForDetails.document_url}
-                    target="_blank" rel="noopener noreferrer"
-                    className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-center transition-colors text-[13px] flex items-center justify-center gap-1.5"
+              <div className="pt-4 border-t border-zinc-100 flex flex-col gap-2.5">
+                <div className="flex gap-3">
+                  {selectedRecordForDetails.document_url && (
+                    <a 
+                      href={selectedRecordForDetails.document_url}
+                      target="_blank" rel="noopener noreferrer"
+                      className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-center transition-colors text-[13px] flex items-center justify-center gap-1.5"
+                    >
+                      <Paperclip size={14} /> Ver Comprobante
+                    </a>
+                  )}
+                  
+                  <button 
+                    onClick={() => handleRetryWhatsapp(selectedRecordForDetails)}
+                    disabled={retryingId === selectedRecordForDetails.id}
+                    className={`flex-1 py-3 font-bold rounded-xl transition-colors text-[13px] flex items-center justify-center gap-1.5 border cursor-pointer ${
+                      selectedRecordForDetails.whatsapp_sent
+                        ? "bg-zinc-50 border-zinc-200 hover:bg-zinc-100 text-zinc-700"
+                        : "bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-800 animate-pulse"
+                    }`}
                   >
-                    <Paperclip size={14} /> Ver Comprobante
-                  </a>
-                )}
+                    {retryingId === selectedRecordForDetails.id ? (
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      selectedRecordForDetails.whatsapp_sent ? <Send size={14} className="text-zinc-500" /> : <Send size={14} />
+                    )}
+                    {selectedRecordForDetails.whatsapp_sent ? "Reenviar WhatsApp" : "Notificar WhatsApp"}
+                  </button>
+                </div>
+                
                 <button 
                   onClick={() => setSelectedRecordForDetails(null)}
-                  className="flex-1 py-3 bg-zinc-950 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors text-[13px]"
+                  className="w-full py-3 bg-zinc-950 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors text-[13px] cursor-pointer"
                 >
                   Entendido
                 </button>
               </div>
+
 
             </div>
           </div>

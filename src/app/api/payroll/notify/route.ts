@@ -6,23 +6,47 @@ function getCompactNotes(text: string): string {
   // Cortar en el primer día de la semana detectado para excluir la bitácora de asistencia en WhatsApp
   const lines = text.split('\n');
   const dayNames = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
-  const cleanLines = [];
+  const cleanLines: string[] = [];
   
   for (const line of lines) {
-    const lower = line.trim().toLowerCase();
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    const lower = trimmed.toLowerCase();
     const startsWithDay = dayNames.some(day => lower.startsWith(day));
     if (startsWithDay) {
       break;
     }
-    cleanLines.push(line);
+    
+    // Limpiar cada línea quitando asteriscos, puntos suspensivos y normalizando espacios
+    const cleanLine = trimmed
+      .replace(/\*/g, '')
+      .replace(/\.{2,}/g, ':')
+      .replace(/…+/g, ':')
+      .replace(/\s+/g, ' ')
+      .trim();
+      
+    if (cleanLine) {
+      cleanLines.push(cleanLine);
+    }
   }
   
-  const compact = cleanLines.join('\n').trim();
+  // Unir todas las líneas limpias con el separador premium " 🔸 "
+  let compact = cleanLines.join(' 🔸 ');
+  
+  // Reemplazar saltos de línea, tabuladores y múltiples espacios por un solo espacio (exigencia de Meta Graph API)
+  compact = compact
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+    
   if (compact.length > 1000) {
     return compact.substring(0, 990) + '... (Ver desglose completo en la App)';
   }
+  
   return compact || "Sin desglose detallado.";
 }
+
 
 export async function POST(req: Request) {
   try {
