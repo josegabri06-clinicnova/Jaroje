@@ -410,6 +410,58 @@ export default function AnalyticsPage() {
         </div>
       )}
 
+      {/* Gráfico de Beneficio Neto */}
+      {monthlyComparison.length > 0 && (
+        <div className="bg-white border border-zinc-200/80 p-5 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest">Beneficio Neto Mensual</h3>
+              <p className="text-[10px] text-zinc-400 font-medium mt-0.5">Ingresos Consolidados - Egresos Totales</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-800">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full" /> Ganancia
+              </span>
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-500">
+                <span className="w-2 h-2 bg-rose-500 rounded-full" /> Pérdida
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-end gap-3 h-36 pt-2">
+            {monthlyComparison.map((m) => {
+              const maxProfitVal = Math.max(
+                ...monthlyComparison.map(x => Math.abs(x.profit)),
+                1
+              );
+              const barHeight = Math.max(2, (Math.abs(m.profit) / maxProfitVal) * 96);
+              
+              return (
+                <div key={m.label} className="flex-1 flex flex-col items-center gap-2">
+                  <div className="w-full flex justify-center items-end h-24">
+                    <div 
+                      className={`w-5 ${m.profit >= 0 ? 'bg-emerald-500/90 hover:bg-emerald-500' : 'bg-rose-500/90 hover:bg-rose-500'} rounded-t-md transition-all cursor-pointer relative group`}
+                      style={{ height: `${barHeight}px` }}
+                    >
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-zinc-950 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
+                        {m.profit >= 0 ? '+' : '-'}MX${Math.abs(m.profit).toLocaleString('es-MX')}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Balance text */}
+                  <span className={`text-[10px] font-extrabold ${m.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {m.profit >= 0 ? '+' : '-'}${Math.abs(Math.round(m.profit / 1000))}k
+                  </span>
+                  
+                  <span className="text-[10px] font-semibold text-zinc-400">{m.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Canal Breakdown */}
       {channelData.length > 0 ? (
         <div className="bg-white border border-zinc-200/80 p-5 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)]">

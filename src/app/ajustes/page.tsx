@@ -50,6 +50,12 @@ export default function AjustesPage() {
     else if (pinModal === 'recepcion') saveRecepcionPin(newPin);
     else if (pinModal === 'staff_limpieza') saveStaffLimpiezaPin(newPin);
     else saveStaffMantenimientoPin(newPin);
+
+    // Disparar sincronización silenciosa del Copiloto en caliente
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('sync-copilot'));
+    }
+
     setPinSuccess('✅ PIN actualizado correctamente.');
     setPinError('');
     setTimeout(() => { setPinModal(null); setPinSuccess(''); }, 1500);
