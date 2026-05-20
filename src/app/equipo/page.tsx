@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip } from 'lucide-react';
+import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X } from 'lucide-react';
 import Link from 'next/link';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -24,20 +24,154 @@ type PayrollRecord = {
   whatsapp_sent: boolean;
 };
 
+function parseAttendanceLogs(text: string) {
+  if (!text) return [];
+  const lines = text.split('\n');
+  const dayNames = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
+  const logs: { day: string; date: string; entry: string; exit: string }[] = [];
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+    const matchedDay = dayNames.find(day => lower.startsWith(day));
+    
+    if (matchedDay) {
+      const dateMatch = trimmed.match(/\d{1,2}\/[a-zA-Zúíáéó\d]+/);
+      const timeMatches = trimmed.match(/(\d{1,2}:\d{2}\s*(?:am|pm|AM|PM))/g);
+      
+      if (dateMatch && timeMatches) {
+        logs.push({
+          day: matchedDay.charAt(0).toUpperCase() + matchedDay.slice(1),
+          date: dateMatch[0],
+          entry: timeMatches[0] || '—',
+          exit: timeMatches[1] || '—'
+        });
+      }
+    }
+  }
+  return logs;
+}
+
+function parseExcelPayroll(text: string) {
+  if (!text) return null;
+  
+  const nameMatch = text.match(/\*([^*]+)\*/);
+  const employeeName = nameMatch ? nameMatch[1].trim() : '';
+
+  const digitsMatch = text.replace(/\s+/g, '').match(/(\d{13})/);
+  let employeePhone = '';
+  let employeePin = '';
+  if (digitsMatch) {
+    employeePhone = '52' + digitsMatch[1].slice(0, 10);
+    employeePin = digitsMatch[1].slice(10);
+  } else {
+    const tenDigits = text.replace(/\s+/g, '').match(/(\d{10})/);
+    if (tenDigits) {
+      employeePhone = '52' + tenDigits[1];
+    }
+  }
+
+  const amountMatch = text.match(/TOTAL\s+A\s+DEPOSITAR\s*……?\s*\$?\s*([\d,]+)/i) || 
+                      text.match(/TOTAL\s+A\s+DEPOSITAR[^\d]*([\d,]+)/i);
+  const amount = amountMatch ? Number(amountMatch[1].replace(/,/g, '')) : 0;
+
+  const periodMatch = text.match(/^([\d]{1,2}\s+de\s+[a-zA-ZáéíóúÁÉÍÓÚ]+\s+de\s+\d{4})/i) ||
+                      text.match(/([\d]{1,2}\s+de\s+[a-zA-ZáéíóúÁÉÍÓÚ]+\s+de\s+\d{4})/i);
+  let period = periodMatch ? periodMatch[1].trim() : '';
+  
+  if (!period) {
+    period = '1ra Quincena ' + format(new Date(), 'MMM', { locale: es });
+  }
+
+  return {
+    employeeName,
+    employeePhone,
+    employeePin,
+    amount,
+    period
+  };
+}
+
+function parseNotesForReceipt(text: string) {
+  if (!text) return null;
+
+  const getAmount = (regex: RegExp) => {
+    const match = text.match(regex);
+    return match ? Number(match[1].replace(/,/g, '')) : 0;
+  };
+
+  const baseSalary = getAmount(/NOMINA\s+QUINCENAL[^\d]*([\d,]+)/i);
+  const daysWorked = getAmount(/DIAS\s+LAB\+VAC[^\d]*([\d,]+)/i);
+  const retardos = getAmount(/RETARDOS[^\d]*([\d,]+)/i);
+  const penalizacionPuntualidad = getAmount(/PENALIZACION\s+PUNTUALIDAD[^\d]*([\d,]+)/i);
+  const diaFestivo = getAmount(/DIA\s+FESTIVO[^\$]*\$?\s*([\d,]+)/i);
+  const bonoApoyoExtras = getAmount(/(?:BONO\s+APOYO|EXTRAS)[^\$]*\$?\s*([\d,]+)/i);
+
+  const integratedNomina = getAmount(/NOMINA\s+INTEGRADA[^\d]*([\d,]+)/i);
+  const pagoPrestamos = getAmount(/PAGO\s+PRESTAMOS[^\d]*([\d,]+)/i);
+  const adelantoNomina = getAmount(/ADELANTO\s+NOMINA[^\d]*([\d,]+)/i);
+  const ahorroQuincenal = getAmount(/AHORRO\s+QUINCENAL[^\d]*([\d,]+)/i);
+  const totalDeposit = getAmount(/TOTAL\s+A\s+DEPOSITAR[^\d]*([\d,]+)/i);
+
+  const prestamosRemainingMatch = text.match(/RESTAMOS\s+X\s+PAGAR[^\d]*([\d,]+)\s+de\s+\[?([\d,]+)\]?/i);
+  const prestamosRemaining = prestamosRemainingMatch ? Number(prestamosRemainingMatch[1].replace(/,/g, '')) : 0;
+  const prestamosTotal = prestamosRemainingMatch ? Number(prestamosRemainingMatch[2].replace(/,/g, '')) : 0;
+
+  const ahorroAcumulado = getAmount(/AHORRO\s+ACUMULADO[^\d]*([\d,]+)/i);
+  const vacacionesRemaining = getAmount(/VACACIONES\s+X\s+TOMAR[^\d]*([\d,]+)/i);
+
+  const attendanceLogs = parseAttendanceLogs(text);
+
+  return {
+    baseSalary,
+    daysWorked,
+    retardos,
+    penalizacionPuntualidad,
+    diaFestivo,
+    bonoApoyoExtras,
+    integratedNomina,
+    pagoPrestamos,
+    adelantoNomina,
+    ahorroQuincenal,
+    totalDeposit,
+    prestamosRemaining,
+    prestamosTotal,
+    ahorroAcumulado,
+    vacacionesRemaining,
+    attendanceLogs
+  };
+}
+
 export default function EquipoPage() {
   const [records, setRecords] = useState<PayrollRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   
   // Form State
+  const [activeFormTab, setActiveFormTab] = useState<'excel' | 'manual'>('excel');
+  const [rawText, setRawText] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('34'); // Default prefijo España, ajustar según cliente
+  const [phone, setPhone] = useState('52'); // Prefijo México por defecto
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'nomina' | 'anticipo' | 'bono'>('nomina');
   const [period, setPeriod] = useState('1ra Quincena ' + format(new Date(), 'MMM', { locale: es }));
   const [file, setFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sendWhatsapp, setSendWhatsapp] = useState(true);
+  
+  // Details Modal State
+  const [selectedRecordForDetails, setSelectedRecordForDetails] = useState<PayrollRecord | null>(null);
+
+  const handleExcelPaste = (val: string) => {
+    setRawText(val);
+    const parsed = parseExcelPayroll(val);
+    if (parsed) {
+      if (parsed.employeeName) setName(parsed.employeeName);
+      if (parsed.employeePhone) setPhone(parsed.employeePhone);
+      if (parsed.amount) setAmount(parsed.amount.toString());
+      if (parsed.period) setPeriod(parsed.period);
+    }
+  };
 
   const fetchRecords = async () => {
     setIsLoading(true);
@@ -90,6 +224,7 @@ export default function EquipoPage() {
       amount: Number(amount),
       type,
       period,
+      notes: activeFormTab === 'excel' ? rawText : '',
       document_url,
       whatsapp_sent: false
     };
@@ -127,6 +262,7 @@ export default function EquipoPage() {
     setShowModal(false);
     setAmount('');
     setName('');
+    setRawText('');
     setFile(null);
     fetchRecords();
     setIsSaving(false);
@@ -223,20 +359,28 @@ export default function EquipoPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-100/50">
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-100/50 flex-wrap">
                   {record.whatsapp_sent ? (
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
                       <CheckCircle2 size={12} /> WhatsApp Enviado
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded-md">
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
                       <AlertCircle size={12} /> Sin notificar
                     </span>
                   )}
                   {record.document_url && (
-                    <a href={record.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-md transition-colors ml-1">
+                    <a href={record.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md transition-colors ml-1">
                       <Paperclip size={12} /> Ver adjunto
                     </a>
+                  )}
+                  {record.notes && (
+                    <button 
+                      onClick={() => setSelectedRecordForDetails(record)}
+                      className="flex items-center gap-1 text-[11px] font-bold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                    >
+                      <Receipt size={12} /> Ver Desglose
+                    </button>
                   )}
                   <span className="text-[11px] text-zinc-400 ml-auto">{format(new Date(record.created_at), 'd MMM', { locale: es })}</span>
                 </div>
@@ -250,96 +394,173 @@ export default function EquipoPage() {
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 overflow-y-auto max-h-[90vh]">
-            <h3 className="text-xl font-bold text-zinc-900 mb-6">Registrar Pago</h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-zinc-900">Registrar Pago</h3>
+              <button 
+                type="button"
+                onClick={() => setShowModal(false)}
+                className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-505 flex items-center justify-center hover:bg-zinc-200 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Selector de Pestañas */}
+            <div className="flex bg-zinc-100 p-1 rounded-xl mb-4">
+              <button
+                type="button"
+                onClick={() => setActiveFormTab('excel')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeFormTab === 'excel' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-505 hover:text-zinc-800'
+                }`}
+              >
+                Smart Paste (Excel)
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveFormTab('manual')}
+                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${
+                  activeFormTab === 'manual' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-505 hover:text-zinc-800'
+                }`}
+              >
+                Ingreso Manual
+              </button>
+            </div>
             
             <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Empleado</label>
-                <input 
-                  type="text" required
-                  value={name} onChange={e => setName(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10"
-                  placeholder="Nombre completo"
-                />
-              </div>
+              {activeFormTab === 'excel' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Pegar Nómina de Excel</label>
+                    <textarea
+                      rows={5}
+                      value={rawText}
+                      onChange={e => handleExcelPaste(e.target.value)}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-mono"
+                      placeholder="Pega aquí el texto que copiaste del Excel del cliente..."
+                    />
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
+                  {rawText && (
+                    <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-2">
+                      <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block">Previsualización Inteligente</span>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-[13px]">
+                        <div>
+                          <span className="text-zinc-400 font-medium block text-[11px]">Empleado</span>
+                          <span className="font-bold text-zinc-800 truncate block">{name || 'No detectado'}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400 font-medium block text-[11px]">Neto a Depositar</span>
+                          <span className="font-bold text-emerald-600 block">{amount ? `MX$${Number(amount).toLocaleString('es-MX')}` : 'No detectado'}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400 font-medium block text-[11px]">Teléfono (WhatsApp)</span>
+                          <span className="font-bold text-zinc-800 block truncate">{phone || 'No detectado'}</span>
+                        </div>
+                        <div>
+                          <span className="text-zinc-400 font-medium block text-[11px]">Periodo</span>
+                          <span className="font-bold text-zinc-800 block truncate">{period || 'No detectado'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Formulario Editable de Revisión */}
+              <div className="space-y-4 border-t border-zinc-100 pt-4">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">
+                  {activeFormTab === 'excel' ? 'Revisión y Ajustes' : 'Datos del Pago'}
+                </span>
+                
                 <div>
-                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Monto (MX$)</label>
+                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Empleado</label>
                   <input 
-                    type="number" required
-                    value={amount} onChange={e => setAmount(e.target.value)}
-                    className="w-full font-bold bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10"
-                    placeholder="0"
+                    type="text" required
+                    value={name} onChange={e => setName(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10"
+                    placeholder="Nombre completo"
                   />
                 </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Tipo</label>
-                  <select 
-                    value={type} onChange={e => setType(e.target.value as any)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10"
-                  >
-                    <option value="nomina">Nómina</option>
-                    <option value="anticipo">Anticipo</option>
-                    <option value="bono">Bono</option>
-                  </select>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Monto (MX$)</label>
+                    <input 
+                      type="number" required
+                      value={amount} onChange={e => setAmount(e.target.value)}
+                      className="w-full font-bold bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Tipo</label>
+                    <select 
+                      value={type} onChange={e => setType(e.target.value as any)}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10"
+                    >
+                      <option value="nomina">Nómina</option>
+                      <option value="anticipo">Anticipo</option>
+                      <option value="bono">Bono</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Periodo</label>
-                <input 
-                  type="text" required
-                  value={period} onChange={e => setPeriod(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] focus:ring-2 focus:ring-zinc-900/10"
-                />
-              </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Periodo</label>
+                  <input 
+                    type="text" required
+                    value={period} onChange={e => setPeriod(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] focus:ring-2 focus:ring-zinc-900/10"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Teléfono (Para WhatsApp)</label>
-                <input 
-                  type="tel" required
-                  value={phone} onChange={e => setPhone(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10"
-                  placeholder="34600112233"
-                />
-              </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Teléfono (Para WhatsApp)</label>
+                  <input 
+                    type="tel" required
+                    value={phone} onChange={e => setPhone(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10"
+                    placeholder="529581003298"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Comprobante (Opcional)</label>
-                <input 
-                  type="file"
-                  onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[13px] file:font-semibold file:bg-zinc-900 file:text-white hover:file:bg-zinc-800"
-                  accept="image/*,.pdf"
-                />
-              </div>
+                <div>
+                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Comprobante (Opcional)</label>
+                  <input 
+                    type="file"
+                    onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[13px] file:font-semibold file:bg-zinc-900 file:text-white hover:file:bg-zinc-800 cursor-pointer"
+                    accept="image/*,.pdf"
+                  />
+                </div>
 
-              <div className="flex items-center gap-3 bg-zinc-50 p-3 rounded-xl border border-zinc-200">
-                <input 
-                  type="checkbox" 
-                  id="wa"
-                  checked={sendWhatsapp} onChange={e => setSendWhatsapp(e.target.checked)}
-                  className="w-5 h-5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
-                />
-                <label htmlFor="wa" className="flex-1 text-[13px] font-medium text-zinc-700 cursor-pointer flex items-center gap-2">
-                  <Send size={14} className="text-emerald-500" />
-                  Enviar comprobante por WhatsApp
-                </label>
+                <div className="flex items-center gap-3 bg-zinc-50 p-3 rounded-xl border border-zinc-200">
+                  <input 
+                    type="checkbox" 
+                    id="wa"
+                    checked={sendWhatsapp} onChange={e => setSendWhatsapp(e.target.checked)}
+                    className="w-5 h-5 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <label htmlFor="wa" className="flex-1 text-[13px] font-medium text-zinc-700 cursor-pointer flex items-center gap-2">
+                    <Send size={14} className="text-emerald-500" />
+                    Enviar comprobante por WhatsApp
+                  </label>
+                </div>
               </div>
 
               <div className="flex gap-3 pt-4">
                 <button 
                   type="button" 
                   onClick={() => setShowModal(false)}
-                  className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-colors"
+                  className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-colors cursor-pointer text-[14px]"
                 >
                   Cancelar
                 </button>
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-1 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors disabled:opacity-50"
+                  className="flex-1 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-lg text-[14px]"
                 >
                   {isSaving ? 'Guardando...' : 'Registrar Pago'}
                 </button>
@@ -348,6 +569,215 @@ export default function EquipoPage() {
           </div>
         </div>
       )}
+
+      {/* MODAL DETALLE DE RECIBO DIGITAL PREMIUM */}
+      {selectedRecordForDetails && (() => {
+        const details = parseNotesForReceipt(selectedRecordForDetails.notes);
+        if (!details) return null;
+        
+        return (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-lg rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 overflow-y-auto max-h-[90vh] space-y-6">
+              
+              {/* Header Modal */}
+              <div className="flex items-center justify-between pb-4 border-b border-zinc-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-zinc-900 text-white flex items-center justify-center shadow-md">
+                    <Receipt size={22} strokeWidth={2.2} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-zinc-955 leading-tight">Recibo Digital</h3>
+                    <span className="text-[12px] font-medium text-zinc-505">{selectedRecordForDetails.period}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setSelectedRecordForDetails(null)}
+                  className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-505 flex items-center justify-center hover:bg-zinc-200 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Empleado e Info */}
+              <div className="flex items-center justify-between bg-zinc-50 p-4 rounded-2xl border border-zinc-200/60">
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Empleado</span>
+                  <span className="text-[16px] font-bold text-zinc-900">{selectedRecordForDetails.employee_name}</span>
+                  <span className="text-[12px] font-medium text-zinc-505 mt-0.5">Tel: +{selectedRecordForDetails.employee_phone}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block">Tipo</span>
+                  <span className="text-[12px] font-bold uppercase bg-zinc-900 text-white px-2.5 py-0.5 rounded mt-1 inline-block">
+                    {selectedRecordForDetails.type}
+                  </span>
+                </div>
+              </div>
+
+              {/* Box de Depósito Neto */}
+              <div className="bg-emerald-50 border border-emerald-100 p-5 rounded-3xl text-center shadow-[0_4px_12px_rgba(16,185,129,0.05)]">
+                <span className="text-[12px] font-semibold text-emerald-600 uppercase tracking-widest block mb-1">Total a Depositar</span>
+                <div className="flex items-baseline justify-center gap-1">
+                  <span className="text-xl font-medium text-emerald-500">MX$</span>
+                  <span className="text-3xl font-extrabold text-emerald-700 tracking-tighter">
+                    {selectedRecordForDetails.amount.toLocaleString('es-MX')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Desglose de Ingresos y Egresos */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Columna Ingresos */}
+                <div className="space-y-3">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-100 pb-1">Ingresos (+)</span>
+                  <div className="space-y-2 text-[13px]">
+                    <div className="flex justify-between font-medium">
+                      <span className="text-zinc-505">Sueldo Base:</span>
+                      <span className="text-zinc-900 font-bold">MX${details.baseSalary.toLocaleString('es-MX')}</span>
+                    </div>
+                    {details.diaFestivo > 0 && (
+                      <div className="flex justify-between font-medium text-emerald-600">
+                        <span>Festivo:</span>
+                        <span className="font-bold">+${details.diaFestivo.toLocaleString('es-MX')}</span>
+                      </div>
+                    )}
+                    {details.bonoApoyoExtras > 0 && (
+                      <div className="flex justify-between font-medium text-emerald-600">
+                        <span>Bonos/Extras:</span>
+                        <span className="font-bold">+${details.bonoApoyoExtras.toLocaleString('es-MX')}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-bold border-t border-dashed border-zinc-200 pt-2 text-[14px]">
+                      <span className="text-zinc-800">Total Integrado:</span>
+                      <span className="text-zinc-955">MX${details.integratedNomina.toLocaleString('es-MX')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Columna Egresos */}
+                <div className="space-y-3">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-100 pb-1">Egresos (-)</span>
+                  <div className="space-y-2 text-[13px]">
+                    {details.pagoPrestamos > 0 && (
+                      <div className="flex justify-between font-medium text-rose-600">
+                        <span>Pago Préstamo:</span>
+                        <span className="font-bold">-${details.pagoPrestamos.toLocaleString('es-MX')}</span>
+                      </div>
+                    )}
+                    {details.adelantoNomina > 0 && (
+                      <div className="flex justify-between font-medium text-rose-600">
+                        <span>Adelanto:</span>
+                        <span className="font-bold">-${details.adelantoNomina.toLocaleString('es-MX')}</span>
+                      </div>
+                    )}
+                    {details.ahorroQuincenal > 0 && (
+                      <div className="flex justify-between font-medium text-amber-600">
+                        <span>Ahorro:</span>
+                        <span className="font-bold">-${details.ahorroQuincenal.toLocaleString('es-MX')}</span>
+                      </div>
+                    )}
+                    {(details.pagoPrestamos === 0 && details.adelantoNomina === 0 && details.ahorroQuincenal === 0) && (
+                      <div className="text-zinc-400 italic text-center py-2 text-[12px]">Sin deducciones</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cuentas de Control (Préstamos, Ahorro, Vacaciones) */}
+              <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-4">
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block">Saldos & Control Quincenal</span>
+                
+                <div className="space-y-3">
+                  {/* Préstamo Pendiente */}
+                  {details.prestamosTotal > 0 && (
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[12px] font-bold">
+                        <span className="text-zinc-600">Préstamo por Pagar:</span>
+                        <span className="text-zinc-900">MX${details.prestamosRemaining.toLocaleString('es-MX')} de MX${details.prestamosTotal.toLocaleString('es-MX')}</span>
+                      </div>
+                      <div className="w-full bg-zinc-200 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-zinc-900 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(0, Math.min(100, (1 - (details.prestamosRemaining / details.prestamosTotal)) * 100))}%` }}
+                        />
+                      </div>
+                      <span className="text-[10px] text-zinc-400 font-semibold block text-right">
+                        {((1 - (details.prestamosRemaining / details.prestamosTotal)) * 100).toFixed(0)}% Liquidado
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    {/* Ahorro Acumulado */}
+                    <div className="bg-white border border-zinc-200 p-3 rounded-xl flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                        <PiggyBank size={18} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-400 font-bold block uppercase">Alcancía</span>
+                        <span className="text-[14px] font-extrabold text-zinc-800">MX${details.ahorroAcumulado.toLocaleString('es-MX')}</span>
+                      </div>
+                    </div>
+
+                    {/* Vacaciones */}
+                    <div className="bg-white border border-zinc-200 p-3 rounded-xl flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                        <Calendar size={18} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-zinc-400 font-bold block uppercase">Vacaciones</span>
+                        <span className="text-[14px] font-extrabold text-zinc-800">{details.vacacionesRemaining} Días</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bitácora de Asistencia */}
+              {details.attendanceLogs.length > 0 && (
+                <div className="space-y-3">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block">Bitácora de Asistencia ({details.attendanceLogs.length} Días)</span>
+                  <div className="border border-zinc-200/80 rounded-2xl overflow-hidden max-h-48 overflow-y-auto divide-y divide-zinc-100">
+                    {details.attendanceLogs.map((log, index) => (
+                      <div key={index} className="flex justify-between items-center p-3 text-[13px] hover:bg-zinc-50 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-zinc-800">{log.day}</span>
+                          <span className="text-zinc-400 font-semibold bg-zinc-100 px-2 py-0.5 rounded text-[11px]">{log.date}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-zinc-500 font-medium">
+                          <Clock size={12} className="text-zinc-400" />
+                          <span>{log.entry}</span>
+                          <span className="text-zinc-300">—</span>
+                          <span>{log.exit}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Footer Modal */}
+              <div className="pt-4 border-t border-zinc-100 flex gap-3">
+                {selectedRecordForDetails.document_url && (
+                  <a 
+                    href={selectedRecordForDetails.document_url}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-center transition-colors text-[13px] flex items-center justify-center gap-1.5"
+                  >
+                    <Paperclip size={14} /> Ver Comprobante
+                  </a>
+                )}
+                <button 
+                  onClick={() => setSelectedRecordForDetails(null)}
+                  className="flex-1 py-3 bg-zinc-950 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors text-[13px]"
+                >
+                  Entendido
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
