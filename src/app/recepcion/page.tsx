@@ -72,7 +72,7 @@ const PRICES: Record<string, Record<string, number>> = {
 };
 
 function getSeason(dateStr: string): string {
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T12:00:00');
   const month = d.getMonth() + 1;
   const day = d.getDate();
   if (month === 12 && day >= 20) return 'alta';
@@ -80,6 +80,20 @@ function getSeason(dateStr: string): string {
   if (month === 3 || month === 4) return 'media_alta';
   if (month === 7 || month === 8) return 'media';
   return 'baja';
+}
+
+function getLocalDateStr(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getNextDayStr(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return getLocalDateStr(d);
 }
 
 async function compressImage(file: File): Promise<string> {
@@ -118,8 +132,8 @@ export default function RecepcionPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
-  const todayStr = new Date().toISOString().split('T')[0];
-  const tomorrowStr = addDays(new Date(), 1).toISOString().split('T')[0];
+  const todayStr = getLocalDateStr();
+  const tomorrowStr = getNextDayStr(todayStr);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -186,7 +200,7 @@ export default function RecepcionPage() {
     if (isWalkin) {
       const targetRoom = walkinRoom || '679077';
       const targetDate = walkinDate || todayStr;
-      const nextDay = addDays(new Date(targetDate), 1).toISOString().split('T')[0];
+      const nextDay = getNextDayStr(targetDate);
       setRoomInventory([]);
       setSelectedReserva({
         id: 'walkin',
@@ -1065,19 +1079,39 @@ export default function RecepcionPage() {
                       className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-Out (Fecha de Salida)</label>
-                    <input
-                      type="date"
-                      min={tomorrowStr}
-                      value={selectedReserva.check_out}
-                      onChange={e => {
-                        const newOut = e.target.value;
-                        setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
-                        fetchAvailability(selectedReserva.check_in, newOut);
-                      }}
-                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-In (Entrada)</label>
+                      <input
+                        type="date"
+                        min={todayStr}
+                        value={selectedReserva.check_in}
+                        onChange={e => {
+                          const newIn = e.target.value;
+                          let newOut = selectedReserva.check_out;
+                          if (selectedReserva.check_out && selectedReserva.check_out <= newIn) {
+                            newOut = getNextDayStr(newIn);
+                          }
+                          setSelectedReserva({ ...selectedReserva, check_in: newIn, check_out: newOut, room: '', unit_id: '' });
+                          fetchAvailability(newIn, newOut);
+                        }}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-Out (Salida)</label>
+                      <input
+                        type="date"
+                        min={selectedReserva.check_in ? getNextDayStr(selectedReserva.check_in) : tomorrowStr}
+                        value={selectedReserva.check_out}
+                        onChange={e => {
+                          const newOut = e.target.value;
+                          setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
+                          fetchAvailability(selectedReserva.check_in, newOut);
+                        }}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                      />
+                    </div>
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">

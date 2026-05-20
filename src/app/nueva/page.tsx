@@ -27,11 +27,25 @@ function getSeason(dateStr: string): string {
   return 'baja';
 }
 
+function getLocalDateStr(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getNextDayStr(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + 1);
+  return getLocalDateStr(d);
+}
+
 export default function VercelActionForm() {
   const router = useRouter();
   const [mode, setMode] = useState<'reserva' | 'bloqueo'>('reserva');
   const [loading, setLoading] = useState(false);
-  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const todayStr = useMemo(() => getLocalDateStr(), []);
   
   const [form, setForm] = useState({
     roomId: '',
@@ -212,7 +226,12 @@ export default function VercelActionForm() {
               className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkIn}
               onChange={e => {
-                setForm({...form, checkIn: e.target.value, roomId: '', unitId: ''});
+                const newCheckIn = e.target.value;
+                let newCheckOut = form.checkOut;
+                if (form.checkOut && form.checkOut <= newCheckIn) {
+                  newCheckOut = getNextDayStr(newCheckIn);
+                }
+                setForm({...form, checkIn: newCheckIn, checkOut: newCheckOut, roomId: '', unitId: ''});
               }}
             />
           </div>
@@ -221,7 +240,7 @@ export default function VercelActionForm() {
             <input 
               type="date" 
               required
-              min={form.checkIn || todayStr}
+              min={form.checkIn ? getNextDayStr(form.checkIn) : getNextDayStr(todayStr)}
               className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkOut}
               onChange={e => {
