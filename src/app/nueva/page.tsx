@@ -45,7 +45,12 @@ export default function VercelActionForm() {
   const router = useRouter();
   const [mode, setMode] = useState<'reserva' | 'bloqueo'>('reserva');
   const [loading, setLoading] = useState(false);
-  const todayStr = useMemo(() => getLocalDateStr(), []);
+  
+  const [todayStr, setTodayStr] = useState('');
+
+  useEffect(() => {
+    setTodayStr(getLocalDateStr());
+  }, []);
   
   const [form, setForm] = useState({
     roomId: '',
@@ -220,13 +225,17 @@ export default function VercelActionForm() {
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Check-In</label>
             <input 
+              key={todayStr ? `checkin-${todayStr}` : 'checkin-loading'}
               type="date" 
               required
               min={todayStr}
               className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkIn}
               onChange={e => {
-                const newCheckIn = e.target.value;
+                let newCheckIn = e.target.value;
+                if (newCheckIn && newCheckIn < todayStr) {
+                  newCheckIn = todayStr;
+                }
                 let newCheckOut = form.checkOut;
                 if (form.checkOut && form.checkOut <= newCheckIn) {
                   newCheckOut = getNextDayStr(newCheckIn);
@@ -238,13 +247,19 @@ export default function VercelActionForm() {
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Check-Out</label>
             <input 
+              key={form.checkIn ? `checkout-${form.checkIn}` : `checkout-loading-${todayStr}`}
               type="date" 
               required
               min={form.checkIn ? getNextDayStr(form.checkIn) : getNextDayStr(todayStr)}
               className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkOut}
               onChange={e => {
-                setForm({...form, checkOut: e.target.value, roomId: '', unitId: ''});
+                let newCheckOut = e.target.value;
+                const minCheckOut = form.checkIn ? getNextDayStr(form.checkIn) : getNextDayStr(todayStr);
+                if (newCheckOut && newCheckOut < minCheckOut) {
+                  newCheckOut = minCheckOut;
+                }
+                setForm({...form, checkOut: newCheckOut, roomId: '', unitId: ''});
               }}
             />
           </div>

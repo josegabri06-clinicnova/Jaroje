@@ -132,8 +132,14 @@ export default function RecepcionPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
-  const todayStr = getLocalDateStr();
-  const tomorrowStr = getNextDayStr(todayStr);
+  const [todayStr, setTodayStr] = useState('');
+  const [tomorrowStr, setTomorrowStr] = useState('');
+
+  useEffect(() => {
+    const today = getLocalDateStr();
+    setTodayStr(today);
+    setTomorrowStr(getNextDayStr(today));
+  }, []);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -191,6 +197,8 @@ export default function RecepcionPage() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (!todayStr) return; // Esperar a que todayStr se inicialice en el cliente
+    
     // Interceptar URL para Walk-in desde el Calendario o Widget
     const isWalkin = searchParams.get('walkin');
     const walkinRoom = searchParams.get('room');
@@ -216,7 +224,7 @@ export default function RecepcionPage() {
       // Limpiar URL
       router.replace('/recepcion');
     }
-  }, [searchParams]);
+  }, [searchParams, todayStr]);
 
   useEffect(() => {
     if (selectedReserva?.id === 'walkin' && selectedReserva.room && selectedReserva.check_in && selectedReserva.check_out && !isPriceUnlocked) {
@@ -1083,11 +1091,15 @@ export default function RecepcionPage() {
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-In (Entrada)</label>
                       <input
+                        key={todayStr ? `walkin-in-${todayStr}` : 'walkin-in-loading'}
                         type="date"
                         min={todayStr}
                         value={selectedReserva.check_in}
                         onChange={e => {
-                          const newIn = e.target.value;
+                          let newIn = e.target.value;
+                          if (newIn && newIn < todayStr) {
+                            newIn = todayStr;
+                          }
                           let newOut = selectedReserva.check_out;
                           if (selectedReserva.check_out && selectedReserva.check_out <= newIn) {
                             newOut = getNextDayStr(newIn);
@@ -1101,11 +1113,16 @@ export default function RecepcionPage() {
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-Out (Salida)</label>
                       <input
+                        key={selectedReserva.check_in ? `walkin-out-${selectedReserva.check_in}` : `walkin-out-loading-${tomorrowStr}`}
                         type="date"
                         min={selectedReserva.check_in ? getNextDayStr(selectedReserva.check_in) : tomorrowStr}
                         value={selectedReserva.check_out}
                         onChange={e => {
-                          const newOut = e.target.value;
+                          let newOut = e.target.value;
+                          const minOut = selectedReserva.check_in ? getNextDayStr(selectedReserva.check_in) : tomorrowStr;
+                          if (newOut && newOut < minOut) {
+                            newOut = minOut;
+                          }
                           setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
                           fetchAvailability(selectedReserva.check_in, newOut);
                         }}
