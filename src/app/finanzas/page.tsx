@@ -333,13 +333,44 @@ export default function FinanzasPage() {
     }
   };
 
+  const downloadBackupCSV = () => {
+    if (records.length === 0) return;
+    const headers = ["Fecha", "Tipo", "Categoría", "Monto", "Sobre", "Descripción"];
+    const csvContent = [
+      headers.join(","),
+      ...records.map(r => [
+        format(new Date(r.date), 'dd/MM/yyyy'),
+        r.type,
+        `"${r.category}"`,
+        r.amount,
+        `"${r.accounts?.name || 'Desconocido'}"`,
+        `"${cleanDescription(r.description) || ''}"`
+      ].join(","))
+    ].join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `RESPALDO_FINANZAS_PRE_RESET_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleResetFinances = async () => {
     if (resetConfirmText !== 'RESET') {
       alert("Por favor, escribe RESET en mayúsculas para confirmar.");
       return;
     }
+    
     setIsResetting(true);
     try {
+      // 1. Descargar respaldo automático si existen registros
+      if (records.length > 0) {
+        downloadBackupCSV();
+      }
+
+      // 2. Ejecutar la limpieza en backend
       const response = await fetch('/api/finances/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -351,7 +382,7 @@ export default function FinanzasPage() {
       });
       const data = await response.json();
       if (response.ok && data.success) {
-        alert("✅ " + data.message);
+        alert("✅ " + data.message + "\n\nSe ha descargado automáticamente un archivo CSV con el respaldo del historial anterior en tu dispositivo para seguridad.");
         setShowResetModal(false);
         setResetConfirmText('');
         fetchData(); // Refresca los saldos y el historial a cero
