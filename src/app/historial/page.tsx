@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Clock, BedDouble, Lock, MessageCircle, AlertTriangle, CheckCircle2, ArrowDownLeft, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { 
+  Clock, BedDouble, Lock, MessageCircle, AlertTriangle, 
+  CheckCircle2, ArrowDownLeft, ArrowUpRight, RefreshCw,
+  Wallet, Wrench, UserCheck
+} from 'lucide-react';
 
-type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot';
+type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot' | 'finanzas' | 'tarea' | 'sesion';
 
 interface HistoryEvent {
   id: string;
@@ -14,36 +18,31 @@ interface HistoryEvent {
   date: string;
 }
 
-const MOCK_HISTORY: HistoryEvent[] = [
-  { id: 'm1', type: 'conflict', title: 'Conflicto de Canal Detectado', desc: 'Penthouse Jaroje · Airbnb vs Directo · Solucionado', time: '09:14', date: 'Hoy' },
-  { id: 'm2', type: 'checkin', title: 'Check-In Registrado', desc: 'Carlos Méndez · Penthouse Jaroje · Directo', time: '14:30', date: 'Hoy' },
-  { id: 'm3', type: 'bot', title: 'Reserva vía WhatsApp Bot', desc: 'María López confirmó reserva para 25-28 Abril · $260', time: '11:02', date: 'Hoy' },
-  { id: 'm4', type: 'block', title: 'Bloqueo de Fechas Aplicado', desc: 'Condominio 1 Hab · 28 Abril · Mantenimiento AC', time: '10:45', date: 'Ayer' },
-  { id: 'm5', type: 'checkout', title: 'Check-Out Completado', desc: 'Marta Ruiz · Condominio 2 Hab · Booking', time: '11:00', date: 'Ayer' },
-  { id: 'm6', type: 'booking', title: 'Nueva Reserva Manual', desc: 'Pedro Sánchez · Estudio Jaroje · Directo · $195', time: '16:22', date: 'Ayer' },
-  { id: 'm7', type: 'checkin', title: 'Check-In Registrado', desc: 'Marta Ruiz · Condominio 2 Hab · Booking', time: '15:10', date: '21 Abril' },
-  { id: 'm8', type: 'bot', title: 'Consulta resuelta por Bot', desc: 'Consulta de disponibilidad de Estudio · Respondida en 3s', time: '09:00', date: '21 Abril' },
-];
-
 const iconByType = (type: EventType) => {
   switch(type) {
     case 'checkin': return <ArrowDownLeft size={15} strokeWidth={2.5} className="text-emerald-600" />;
-    case 'checkout': return <ArrowUpRight size={15} strokeWidth={2.5} className="text-zinc-600" />;
-    case 'booking': return <BedDouble size={15} strokeWidth={2.5} className="text-zinc-900" />;
+    case 'checkout': return <ArrowUpRight size={15} strokeWidth={2.5} className="text-zinc-650" />;
+    case 'booking': return <BedDouble size={15} strokeWidth={2.5} className="text-indigo-600" />;
     case 'block': return <Lock size={15} strokeWidth={2.5} className="text-rose-600" />;
     case 'conflict': return <AlertTriangle size={15} strokeWidth={2.5} className="text-amber-600" />;
     case 'bot': return <MessageCircle size={15} strokeWidth={2.5} className="text-blue-600" />;
+    case 'finanzas': return <Wallet size={15} strokeWidth={2.5} className="text-emerald-650" />;
+    case 'tarea': return <Wrench size={15} strokeWidth={2.5} className="text-amber-700" />;
+    case 'sesion': return <UserCheck size={15} strokeWidth={2.5} className="text-cyan-600" />;
   }
 };
 
 const bgByType = (type: EventType) => {
   switch(type) {
-    case 'checkin': return 'bg-emerald-50 border-emerald-100';
-    case 'checkout': return 'bg-zinc-100 border-zinc-200';
-    case 'booking': return 'bg-zinc-100 border-zinc-200';
+    case 'checkin': return 'bg-emerald-50 border-emerald-100/80';
+    case 'checkout': return 'bg-zinc-50 border-zinc-150';
+    case 'booking': return 'bg-indigo-50 border-indigo-100';
     case 'block': return 'bg-rose-50 border-rose-100';
     case 'conflict': return 'bg-amber-50 border-amber-100';
     case 'bot': return 'bg-blue-50 border-blue-100';
+    case 'finanzas': return 'bg-emerald-50 border-emerald-100/80';
+    case 'tarea': return 'bg-amber-50 border-amber-100';
+    case 'sesion': return 'bg-cyan-50 border-cyan-100';
   }
 };
 
@@ -57,18 +56,30 @@ export default function HistorialPage() {
       const res = await fetch('/api/employee-logs');
       const json = await res.json();
       
-      if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+      if (json.success && Array.isArray(json.data)) {
         // Mapear logs reales a la estructura de eventos
         const mapped = json.data.map((log: any) => {
           const actionLower = (log.action || '').toLowerCase();
           const moduleLower = (log.module || '').toLowerCase();
           
           let type: EventType = 'booking';
-          if (actionLower.includes('checkin') || actionLower.includes('check-in') || actionLower.includes('firmar')) type = 'checkin';
-          else if (actionLower.includes('checkout') || actionLower.includes('check-out') || actionLower.includes('cerrar')) type = 'checkout';
-          else if (actionLower.includes('bloqueo') || actionLower.includes('block')) type = 'block';
-          else if (actionLower.includes('bot') || moduleLower.includes('bot') || moduleLower.includes('webhook')) type = 'bot';
-          else if (actionLower.includes('conflicto') || actionLower.includes('canal') || actionLower.includes('error')) type = 'conflict';
+          if (actionLower.includes('checkin') || actionLower.includes('check-in')) {
+            type = 'checkin';
+          } else if (actionLower.includes('checkout') || actionLower.includes('check-out')) {
+            type = 'checkout';
+          } else if (actionLower.includes('finan') || actionLower.includes('movimiento') || actionLower.includes('transac') || actionLower.includes('pago') || actionLower.includes('nomina')) {
+            type = 'finanzas';
+          } else if (actionLower.includes('incidencia') || actionLower.includes('limpieza') || actionLower.includes('mantenimiento') || actionLower.includes('tarea')) {
+            type = 'tarea';
+          } else if (actionLower.includes('sesion') || actionLower.includes('turno') || actionLower.includes('firma')) {
+            type = 'sesion';
+          } else if (actionLower.includes('bloqueo') || actionLower.includes('block')) {
+            type = 'block';
+          } else if (actionLower.includes('bot') || moduleLower.includes('bot') || moduleLower.includes('webhook')) {
+            type = 'bot';
+          } else if (actionLower.includes('conflicto') || actionLower.includes('canal') || actionLower.includes('error')) {
+            type = 'conflict';
+          }
           
           // Formatear Fecha y Hora
           const d = new Date(log.created_at);
@@ -85,9 +96,22 @@ export default function HistorialPage() {
           
           const timeStr = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
           
-          let title = log.action;
+          // Título amigable de la acción
+          let rawAction = log.action;
+          // Reemplazar snake_case o términos técnicos por títulos elegantes
+          const friendlyActions: Record<string, string> = {
+            'inicio_sesion_turno': 'Inicio de Turno',
+            'check_in': 'Check-In Procesado',
+            'check_out': 'Check-Out Procesado',
+            'movimiento_financiero': 'Movimiento de Caja',
+            'incidencia_mantenimiento': 'Problema Reportado',
+            'cambio_estado_incidencia': 'Tarea Actualizada',
+          };
+          const friendlyTitle = friendlyActions[rawAction] || rawAction.replace(/_/g, ' ');
+
+          let title = friendlyTitle;
           if (log.employee_name) {
-            title = `${log.action} · ${log.employee_name}`;
+            title = `${friendlyTitle} · ${log.employee_name}`;
           }
           
           let desc = log.details || `${log.department || 'Sistema'} · Módulo: ${log.module}`;
@@ -105,19 +129,13 @@ export default function HistorialPage() {
           };
         });
 
-        // Combinar datos reales primero, y rellenar con mocks para que se vea completo si hay pocos datos
-        if (mapped.length < 5) {
-          setEvents([...mapped, ...MOCK_HISTORY.slice(0, 8 - mapped.length)]);
-        } else {
-          setEvents(mapped);
-        }
+        setEvents(mapped);
       } else {
-        // Fallback completo a MOCK_HISTORY
-        setEvents(MOCK_HISTORY);
+        setEvents([]);
       }
     } catch (e) {
       console.error("Error fetching logs", e);
-      setEvents(MOCK_HISTORY);
+      setEvents([]);
     } finally {
       setIsLoading(false);
     }
@@ -141,7 +159,7 @@ export default function HistorialPage() {
         <div>
           <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Historial</h2>
           <p className="text-[13px] font-medium text-zinc-500 mt-1">
-            {isLoading ? 'Cargando auditoría...' : 'Registro completo de actividad en tiempo real'}
+            {isLoading ? 'Cargando auditoría...' : 'Registro de actividad real en tiempo real'}
           </p>
         </div>
         <button
@@ -171,6 +189,25 @@ export default function HistorialPage() {
               </div>
             </div>
           ))}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="bg-white border border-zinc-200/80 rounded-3xl p-8 text-center shadow-sm max-w-sm mx-auto my-12 flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-2xl bg-zinc-50 border border-zinc-150 flex items-center justify-center text-zinc-400">
+            <Clock size={32} strokeWidth={1.5} className="animate-pulse" />
+          </div>
+          <div className="space-y-1">
+            <h4 className="text-[15px] font-bold text-zinc-950">Historial de Operaciones Vacío</h4>
+            <p className="text-[12px] text-zinc-500 leading-relaxed">
+              No hay actividades registradas en el hotel todavía. Los movimientos de caja, firmas de turno, check-ins y check-outs reales aparecerán aquí al instante.
+            </p>
+          </div>
+          <button
+            onClick={fetchLogs}
+            className="inline-flex items-center gap-2 bg-zinc-950 text-white text-[12px] font-bold py-2.5 px-4.5 rounded-xl hover:bg-black transition-all active:scale-95 shadow-sm"
+          >
+            <RefreshCw size={13} />
+            <span>Actualizar Historial</span>
+          </button>
         </div>
       ) : (
         Object.entries(groupedByDate).map(([date, items]) => (
