@@ -10,6 +10,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { format, addDays, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { createClient } from '@supabase/supabase-js';
+
+// Inicializar Supabase cliente
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -18,6 +24,7 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [tokenError, setTokenError] = useState(false);
   const [hoy, setHoy] = useState('');
+  const [financeBalance, setFinanceBalance] = useState(0);
 
   const fetchAll = async () => {
     setIsLoading(true);
@@ -39,6 +46,13 @@ export default function AdminDashboard() {
         );
       }
       if (convJson.success) setConversations(convJson.data || []);
+
+      // Obtener el balance general real de finanzas (sobres y cuentas)
+      const accRes = await supabase.from('accounts').select('balance');
+      if (!accRes.error && accRes.data) {
+        const total = accRes.data.reduce((sum: number, acc: any) => sum + (acc.balance || 0), 0);
+        setFinanceBalance(total);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -334,7 +348,7 @@ export default function AdminDashboard() {
             <Wallet size={20} className="text-zinc-700" />
             <div>
               <p className="text-[14px] font-semibold text-zinc-900">Finanzas</p>
-              <p className="text-[11px] text-emerald-500 mt-0.5">MX${totalRevenue.toLocaleString()}</p>
+              <p className="text-[11px] text-emerald-500 mt-0.5">MX${financeBalance.toLocaleString('es-MX')}</p>
             </div>
           </Link>
           <Link href="/equipo" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
