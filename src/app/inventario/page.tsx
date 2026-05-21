@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Package, Search, Plus, Minus, AlertTriangle, Edit2, Trash2, X } from 'lucide-react';
+import { getActiveEmployee } from '@/lib/auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -57,15 +58,50 @@ export default function InventarioPage() {
     // Optimistic UI update
     setItems(prev => prev.map(item => item.id === id ? { ...item, stock: item.stock + change } : item));
 
+    let empName = 'Administrador';
+    let empNum = '999';
+    let empDept = 'Administración';
+    
+    const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
+      .map(dept => getActiveEmployee(dept as any))
+      .find(emp => emp !== null);
+      
+    if (activeEmp) {
+      empName = activeEmp.full_name;
+      empNum = activeEmp.employee_num;
+      empDept = activeEmp.department;
+    }
+
     const { error } = await supabase
       .from('inventory')
-      .update({ stock: currentStock + change, last_updated_by: 'Admin' })
+      .update({ stock: currentStock + change, last_updated_by: empName })
       .eq('id', id);
 
     if (error) {
       console.error(error);
       alert("Error al actualizar inventario");
       fetchInventory(); // Revert
+    } else {
+      // Registrar log de auditoría real
+      const targetItem = items.find(i => i.id === id);
+      if (targetItem) {
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: empNum,
+              employee_name: empName,
+              department: empDept,
+              module: 'inventario',
+              action: 'ajuste_stock',
+              details: `Ajustó stock de ${targetItem.item_name} (${targetItem.category}): ${currentStock} ➔ ${currentStock + change} (Cambio: ${change > 0 ? '+' : ''}${change})`
+            })
+          });
+        } catch (logErr) {
+          console.error("Error al registrar log de stock en Supabase:", logErr);
+        }
+      }
     }
     setUpdatingId(null);
   };
@@ -73,12 +109,27 @@ export default function InventarioPage() {
   const handleAddItem = async () => {
     if (!formName.trim()) return;
     setIsSubmitting(true);
+    
+    let empName = 'Administrador';
+    let empNum = '999';
+    let empDept = 'Administración';
+    
+    const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
+      .map(dept => getActiveEmployee(dept as any))
+      .find(emp => emp !== null);
+      
+    if (activeEmp) {
+      empName = activeEmp.full_name;
+      empNum = activeEmp.employee_num;
+      empDept = activeEmp.department;
+    }
+
     const newItem = {
       item_name: formName.trim(),
       category: formCategory,
       stock: parseInt(formStock) || 0,
       min_stock: parseInt(formMinStock) || 0,
-      last_updated_by: 'Admin'
+      last_updated_by: empName
     };
     
     const { error } = await supabase.from('inventory').insert([newItem]);
@@ -87,6 +138,23 @@ export default function InventarioPage() {
     if (error) {
       alert("Error al añadir artículo");
     } else {
+      // Registrar log de auditoría real
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: empNum,
+            employee_name: empName,
+            department: empDept,
+            module: 'inventario',
+            action: 'nuevo_articulo',
+            details: `Creó nuevo artículo de almacén: ${newItem.item_name} | Stock inicial: ${newItem.stock} (Min: ${newItem.min_stock})`
+          })
+        });
+      } catch (logErr) {
+        console.error("Error al registrar log de nuevo artículo en Supabase:", logErr);
+      }
       setIsAdding(false);
       fetchInventory();
     }
@@ -95,12 +163,27 @@ export default function InventarioPage() {
   const handleUpdateItem = async () => {
     if (!editingItem || !formName.trim()) return;
     setIsSubmitting(true);
+    
+    let empName = 'Administrador';
+    let empNum = '999';
+    let empDept = 'Administración';
+    
+    const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
+      .map(dept => getActiveEmployee(dept as any))
+      .find(emp => emp !== null);
+      
+    if (activeEmp) {
+      empName = activeEmp.full_name;
+      empNum = activeEmp.employee_num;
+      empDept = activeEmp.department;
+    }
+
     const updated = {
       item_name: formName.trim(),
       category: formCategory,
       stock: parseInt(formStock) || 0,
       min_stock: parseInt(formMinStock) || 0,
-      last_updated_by: 'Admin'
+      last_updated_by: empName
     };
 
     const { error } = await supabase.from('inventory').update(updated).eq('id', editingItem.id);
@@ -109,6 +192,23 @@ export default function InventarioPage() {
     if (error) {
       alert("Error al actualizar artículo");
     } else {
+      // Registrar log de auditoría real
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: empNum,
+            employee_name: empName,
+            department: empDept,
+            module: 'inventario',
+            action: 'actualizacion_articulo',
+            details: `Modificó parámetros de ${editingItem.item_name} ➔ ${updated.item_name} | Stock: ${updated.stock} | Categoría: ${updated.category}`
+          })
+        });
+      } catch (logErr) {
+        console.error("Error al registrar log de edición en Supabase:", logErr);
+      }
       setEditingItem(null);
       fetchInventory();
     }
@@ -117,12 +217,48 @@ export default function InventarioPage() {
   const handleDeleteItem = async (id: string) => {
     if (!confirm("¿Seguro que quieres eliminar este artículo?")) return;
     setIsSubmitting(true);
+    
+    let empName = 'Administrador';
+    let empNum = '999';
+    let empDept = 'Administración';
+    
+    const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
+      .map(dept => getActiveEmployee(dept as any))
+      .find(emp => emp !== null);
+      
+    if (activeEmp) {
+      empName = activeEmp.full_name;
+      empNum = activeEmp.employee_num;
+      empDept = activeEmp.department;
+    }
+
+    const targetItem = items.find(i => i.id === id);
+
     const { error } = await supabase.from('inventory').delete().eq('id', id);
     setIsSubmitting(false);
     
     if (error) {
       alert("Error al eliminar artículo");
     } else {
+      // Registrar log de auditoría real
+      if (targetItem) {
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: empNum,
+              employee_name: empName,
+              department: empDept,
+              module: 'inventario',
+              action: 'eliminar_articulo',
+              details: `Eliminó artículo de almacén permanentemente: ${targetItem.item_name} (${targetItem.category})`
+            })
+          });
+        } catch (logErr) {
+          console.error("Error al registrar log de borrado en Supabase:", logErr);
+        }
+      }
       setEditingItem(null);
       fetchInventory();
     }

@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import { 
   Clock, BedDouble, Lock, MessageCircle, AlertTriangle, 
   CheckCircle2, ArrowDownLeft, ArrowUpRight, RefreshCw,
-  Wallet, Wrench, UserCheck
+  Wallet, Wrench, UserCheck, Package
 } from 'lucide-react';
 
-type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot' | 'finanzas' | 'tarea' | 'sesion';
+type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot' | 'finanzas' | 'tarea' | 'sesion' | 'inventario';
 
 interface HistoryEvent {
   id: string;
@@ -29,6 +29,7 @@ const iconByType = (type: EventType) => {
     case 'finanzas': return <Wallet size={15} strokeWidth={2.5} className="text-emerald-650" />;
     case 'tarea': return <Wrench size={15} strokeWidth={2.5} className="text-amber-700" />;
     case 'sesion': return <UserCheck size={15} strokeWidth={2.5} className="text-cyan-600" />;
+    case 'inventario': return <Package size={15} strokeWidth={2.5} className="text-violet-650" />;
   }
 };
 
@@ -43,6 +44,7 @@ const bgByType = (type: EventType) => {
     case 'finanzas': return 'bg-emerald-50 border-emerald-100/80';
     case 'tarea': return 'bg-amber-50 border-amber-100';
     case 'sesion': return 'bg-cyan-50 border-cyan-100';
+    case 'inventario': return 'bg-violet-50 border-violet-100/80';
   }
 };
 
@@ -73,6 +75,8 @@ export default function HistorialPage() {
             type = 'tarea';
           } else if (actionLower.includes('sesion') || actionLower.includes('turno') || actionLower.includes('firma')) {
             type = 'sesion';
+          } else if (moduleLower.includes('inventario') || actionLower.includes('stock') || actionLower.includes('articulo') || actionLower.includes('almacen')) {
+            type = 'inventario';
           } else if (actionLower.includes('bloqueo') || actionLower.includes('block')) {
             type = 'block';
           } else if (actionLower.includes('bot') || moduleLower.includes('bot') || moduleLower.includes('webhook')) {
@@ -106,6 +110,10 @@ export default function HistorialPage() {
             'movimiento_financiero': 'Movimiento de Caja',
             'incidencia_mantenimiento': 'Problema Reportado',
             'cambio_estado_incidencia': 'Tarea Actualizada',
+            'ajuste_stock': 'Ajuste de Almacén',
+            'nuevo_articulo': 'Artículo Creado',
+            'actualizacion_articulo': 'Parámetros Actualizados',
+            'eliminar_articulo': 'Artículo Eliminado',
           };
           const friendlyTitle = friendlyActions[rawAction] || rawAction.replace(/_/g, ' ');
 
