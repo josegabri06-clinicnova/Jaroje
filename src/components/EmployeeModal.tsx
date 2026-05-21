@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Employee, OFFICIAL_EMPLOYEES, validateEmployeeNum, setActiveEmployee } from '@/lib/auth';
+import { Employee, OFFICIAL_EMPLOYEES, validateEmployeeNum, setActiveEmployee, getActiveEmployee } from '@/lib/auth';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -24,6 +24,7 @@ export default function EmployeeModal({
   const [isWiggling, setIsWiggling] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [successEmployee, setSuccessEmployee] = useState<Employee | null>(null);
+  const [hasActiveSession, setHasActiveSession] = useState<boolean>(true);
 
   // Filtrar los empleados oficiales permitidos en este departamento para mostrar como sugerencia sutil
   const departmentEmployees = OFFICIAL_EMPLOYEES.filter(emp => emp.department === module);
@@ -41,8 +42,12 @@ export default function EmployeeModal({
       setErrorMessage('');
       setIsWiggling(false);
       setSuccessEmployee(null);
+      
+      // Comprobar si ya existe una sesión activa para este módulo
+      const currentActive = getActiveEmployee(module);
+      setHasActiveSession(!!currentActive);
     }
-  }, [isOpen]);
+  }, [isOpen, module]);
 
   const handleKeyPress = (num: string) => {
     if (successEmployee || isWiggling) return;
@@ -138,14 +143,16 @@ export default function EmployeeModal({
 
       <div className="w-full max-w-md bg-white border border-gray-100 rounded-3xl shadow-2xl p-6 relative mx-4 overflow-hidden">
         {/* Botón de cerrar */}
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-50"
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
+        {hasActiveSession && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-50"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
 
         {/* Encabezado */}
         <div className="text-center mt-2 mb-6">
