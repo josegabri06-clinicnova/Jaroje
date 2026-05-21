@@ -29,3 +29,11 @@ body {
   60% { transform: translateX(-6px); }
   80% { transform: translateX(6px); }
 }
+
+/* Prevenir zoom automático e inestabilidad de layout en Android e iOS */
+@media (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+

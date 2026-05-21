@@ -166,6 +166,15 @@ export default function FinanzasPage() {
     }
   }, []);
 
+  const resolvePaymentMethod = (accountId: string) => {
+    const acc = accounts.find(a => a.id === accountId);
+    if (!acc) return 'transferencia';
+    if (acc.group_type === 'EFECTIVO' || acc.name.toUpperCase().includes('EFECTIVO')) {
+      return 'efectivo';
+    }
+    return 'transferencia';
+  };
+
   const handleSaveMovement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formAmount || isNaN(Number(formAmount)) || !formAccountId) return alert("Rellena todos los campos");
@@ -192,13 +201,15 @@ export default function FinanzasPage() {
       finalDescription = `${formDescription}${tagsStr}`.trim();
     }
 
+    const resolvedPaymentMethod = resolvePaymentMethod(formAccountId);
+
     const newRecord = {
       type: formType,
       amount: amountNum,
       category: formType === 'ingreso' && formCategory === 'Suministros' ? 'Reserva' : formCategory,
       description: finalDescription,
       account_id: formAccountId,
-      payment_method: editingRecord?.payment_method || 'sobre',
+      payment_method: resolvedPaymentMethod,
       date: formDate
     };
 
@@ -274,13 +285,15 @@ export default function FinanzasPage() {
     setIsSaving(true);
     const amountNum = Number(quickAmount);
     
+    const resolvedPaymentMethod = resolvePaymentMethod(editingAccount.id);
+
     const newRecord = {
       type: type,
       amount: amountNum,
       category: quickConcept,
       description: quickDescription || `Ajuste de ${type === 'ingreso' ? 'ingreso' : 'gasto'}`,
       account_id: editingAccount.id,
-      payment_method: 'sobre',
+      payment_method: resolvedPaymentMethod,
       date: new Date().toISOString().split('T')[0]
     };
     

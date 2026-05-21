@@ -187,12 +187,30 @@ export const OFFICIAL_EMPLOYEES: Employee[] = [
   { employee_num: '109', full_name: 'Francisca Ruiz', department: 'limpieza' }
 ];
 
-// Obtener el empleado activo para un módulo específico
+// Obtener el empleado activo para un módulo específico (con vencimiento absoluto de 1 hora)
 export function getActiveEmployee(module: 'recepcion' | 'limpieza' | 'mantenimiento'): Employee | null {
   if (typeof window === 'undefined') return null;
   const num = localStorage.getItem(`jaroje_active_emp_num_${module}`);
   const name = localStorage.getItem(`jaroje_active_emp_name_${module}`);
+  const timeStr = localStorage.getItem(`jaroje_active_emp_time_${module}`);
+  
   if (!num || !name) return null;
+  
+  const now = Date.now();
+  if (timeStr) {
+    const lastActive = parseInt(timeStr, 10);
+    if (now - lastActive > 3600000) { // 1 hora = 3,600,000 ms
+      // Expirado, limpiar localmente
+      localStorage.removeItem(`jaroje_active_emp_num_${module}`);
+      localStorage.removeItem(`jaroje_active_emp_name_${module}`);
+      localStorage.removeItem(`jaroje_active_emp_time_${module}`);
+      return null;
+    }
+  }
+  
+  // Renovar la ventana de actividad (sliding window)
+  localStorage.setItem(`jaroje_active_emp_time_${module}`, now.toString());
+  
   return {
     employee_num: num,
     full_name: name,
@@ -206,9 +224,11 @@ export function setActiveEmployee(employee: Employee | null, module: 'recepcion'
   if (!employee) {
     localStorage.removeItem(`jaroje_active_emp_num_${module}`);
     localStorage.removeItem(`jaroje_active_emp_name_${module}`);
+    localStorage.removeItem(`jaroje_active_emp_time_${module}`);
   } else {
     localStorage.setItem(`jaroje_active_emp_num_${module}`, employee.employee_num);
     localStorage.setItem(`jaroje_active_emp_name_${module}`, employee.full_name);
+    localStorage.setItem(`jaroje_active_emp_time_${module}`, Date.now().toString());
   }
 }
 

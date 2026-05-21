@@ -551,11 +551,29 @@ export default function ReservasList() {
                     </div>
                   </div>
 
-                  <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pt-3 border-t border-zinc-100">Registrar Pago de MX${selectedRes.price_estimate}</p>
+                  {/* Adeudo por Pagar */}
+                  <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm mb-4 animate-in fade-in duration-300">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest block">
+                        Adeudo por Pagar
+                      </span>
+                      <p className="text-[11px] text-amber-600 font-medium">
+                        Monto total a cobrar por la estancia.
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[20px] font-black text-amber-700">
+                        ${(selectedRes.price_estimate || 0).toLocaleString('es-MX')} MXN
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pt-3 border-t border-zinc-100">Registrar Pago</p>
                   <div className="grid grid-cols-3 gap-2 mb-4">
                     {['efectivo', 'tarjeta', 'transferencia'].map(m => (
                       <button 
                         key={m}
+                        type="button"
                         onClick={() => { setPaymentMethod(m); setPaymentReference(''); }}
                         className={`py-2 px-2 text-[12px] font-semibold rounded-lg capitalize border ${paymentMethod === m ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}
                       >
@@ -566,22 +584,30 @@ export default function ReservasList() {
 
                   <div className="mb-4">
                     <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                      {paymentMethod === 'efectivo' ? 'Número/Nombre de Sobre' : 
-                       paymentMethod === 'tarjeta' ? 'Número de Terminal (Datáfono)' : 
+                      {paymentMethod === 'efectivo' ? 'Sobre de Efectivo' : 
+                       paymentMethod === 'tarjeta' ? 'Cuenta de Cobro con Tarjeta' : 
                        'Cuenta de Depósito'}
                     </label>
                     <select
                       required
                       value={paymentReference}
                       onChange={e => setPaymentReference(e.target.value)}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900"
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900 cursor-pointer"
                     >
                       <option value="" disabled>Selecciona una opción</option>
                       {accounts
                         .filter(a => {
-                          if (paymentMethod === 'efectivo') return a.group_type === 'EFECTIVO';
-                          if (paymentMethod === 'tarjeta') return a.group_type === 'BANCOS' && a.name.toLowerCase().includes('terminal');
-                          return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
+                          const name = a.name.trim().toUpperCase();
+                          if (paymentMethod === 'efectivo') {
+                            return name === 'EFECTIVO';
+                          }
+                          if (paymentMethod === 'tarjeta') {
+                            return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                          }
+                          if (paymentMethod === 'transferencia') {
+                            return ['BANAMEX', 'BBVA', 'SANTANDER', 'IBC ROL (DLL)', 'WISE', 'REVOLUT'].includes(name);
+                          }
+                          return false;
                         })
                         .map(a => (
                           <option key={a.id} value={a.id}>{a.name}</option>

@@ -50,7 +50,7 @@ const ROOM_MAP = [
     roomId: '679087', 
     name: 'Condominio 1R',
     units: [
-      { unitId: '1', name: '401' }
+      { unitId: '1', name: '402' }
     ]
   },
   { 
@@ -82,7 +82,7 @@ const ROOM_MAP = [
     roomId: '679093', 
     name: 'Casa de Lujo',
     units: [
-      { unitId: '1', name: '402' }
+      { unitId: '1', name: '401' }
     ]
   }
 ];

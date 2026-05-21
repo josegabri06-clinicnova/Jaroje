@@ -130,7 +130,11 @@ export default function StaffPage() {
 
   // Inicializar Empleado Activo según el rol
   useEffect(() => {
-    setActiveEmployeeState(getActiveEmployee(currentDept));
+    const emp = getActiveEmployee(currentDept);
+    setActiveEmployeeState(emp);
+    if (!emp) {
+      setShowEmployeeModal(true);
+    }
   }, [role, isMantenimiento, currentDept]);
 
   // Interceptor de firma de empleado

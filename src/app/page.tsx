@@ -156,7 +156,7 @@ export default function AdminDashboard() {
               return (
                 <div
                   key={c.id}
-                  onClick={() => router.push('/bot')}
+                  onClick={() => router.push(`/bot?chatId=${c.id}`)}
                   className={`border rounded-2xl p-4 flex items-center gap-3 cursor-pointer active:scale-[0.99] transition-all ${urgency.bg}`}
                 >
                   <div className="relative shrink-0">

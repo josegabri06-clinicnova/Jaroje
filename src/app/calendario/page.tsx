@@ -11,8 +11,8 @@ const ROOM_GROUPS = [
   { label: 'Estándar', color: '#6366f1', bg: '#eef2ff', rooms: ['301','302','303','304','305','306'] },
   { label: 'Condo 2R', color: '#0ea5e9', bg: '#f0f9ff', rooms: ['201','202','203','204','205','206'] },
   { label: 'Condo 3R', color: '#f59e0b', bg: '#fffbeb', rooms: ['101','102','103','104','105','106','107'] },
-  { label: 'Condo 1R', color: '#10b981', bg: '#f0fdf4', rooms: ['401'] },
-  { label: 'Casa Lujo', color: '#ec4899', bg: '#fdf4ff', rooms: ['402'] },
+  { label: 'Condo 1R', color: '#10b981', bg: '#f0fdf4', rooms: ['402'] },
+  { label: 'Casa Lujo', color: '#ec4899', bg: '#fdf4ff', rooms: ['401'] },
 ];
 
 const ALL_ROOMS = ROOM_GROUPS.flatMap(g => g.rooms);
@@ -21,7 +21,7 @@ const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
   '301': { roomId: '679077', unitId: '1' }, '302': { roomId: '679077', unitId: '2' },
   '303': { roomId: '679077', unitId: '3' }, '304': { roomId: '679077', unitId: '4' },
   '305': { roomId: '679077', unitId: '5' }, '306': { roomId: '679077', unitId: '6' },
-  '401': { roomId: '679087', unitId: '1' },
+  '401': { roomId: '679093', unitId: '1' },
   '201': { roomId: '679091', unitId: '1' }, '202': { roomId: '679091', unitId: '2' },
   '203': { roomId: '679091', unitId: '3' }, '204': { roomId: '679091', unitId: '4' },
   '205': { roomId: '679091', unitId: '5' }, '206': { roomId: '679091', unitId: '6' },
@@ -29,7 +29,7 @@ const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
   '103': { roomId: '679092', unitId: '3' }, '104': { roomId: '679092', unitId: '4' },
   '105': { roomId: '679092', unitId: '5' }, '106': { roomId: '679092', unitId: '6' },
   '107': { roomId: '679092', unitId: '7' },
-  '402': { roomId: '679093', unitId: '1' },
+  '402': { roomId: '679087', unitId: '1' },
 };
 
 const COLS = 10; // days to show

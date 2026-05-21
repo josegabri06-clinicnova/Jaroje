@@ -127,6 +127,16 @@ export default function BotPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const chatId = params.get('chatId');
+      if (chatId) {
+        setActiveConvId(chatId);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     fetchConversations();
     // 4 segundos: suficientemente rápido para parecer tiempo real
     const interval = setInterval(fetchConversations, 4000);

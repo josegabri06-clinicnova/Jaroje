@@ -152,10 +152,10 @@ export async function getBeds24Bookings(): Promise<any[]> {
 
   const ROOM_MAP = [
     { roomId: '679077', units: [{ unitId: '1', name: '301' }, { unitId: '2', name: '302' }, { unitId: '3', name: '303' }, { unitId: '4', name: '304' }, { unitId: '5', name: '305' }, { unitId: '6', name: '306' }] },
-    { roomId: '679087', units: [{ unitId: '1', name: '401' }] },
+    { roomId: '679087', units: [{ unitId: '1', name: '402' }] },
     { roomId: '679091', units: [{ unitId: '1', name: '201' }, { unitId: '2', name: '202' }, { unitId: '3', name: '203' }, { unitId: '4', name: '204' }, { unitId: '5', name: '205' }, { unitId: '6', name: '206' }] },
     { roomId: '679092', units: [{ unitId: '1', name: '101' }, { unitId: '2', name: '102' }, { unitId: '3', name: '103' }, { unitId: '4', name: '104' }, { unitId: '5', name: '105' }, { unitId: '6', name: '106' }, { unitId: '7', name: '107' }] },
-    { roomId: '679093', units: [{ unitId: '1', name: '402' }] }
+    { roomId: '679093', units: [{ unitId: '1', name: '401' }] }
   ];
 
   const unitMap: Record<string, Record<string, string>> = {};

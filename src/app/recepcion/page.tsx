@@ -156,7 +156,11 @@ export default function RecepcionPage() {
 
   // Inicializar Empleado Activo
   useEffect(() => {
-    setActiveEmployeeState(getActiveEmployee('recepcion'));
+    const emp = getActiveEmployee('recepcion');
+    setActiveEmployeeState(emp);
+    if (!emp) {
+      setShowEmployeeModal(true);
+    }
   }, []);
 
   // Interceptor de firma de empleado
@@ -248,11 +252,18 @@ export default function RecepcionPage() {
       setSelectedAccountId('');
       return;
     }
-    // Filtrar sobres/cuentas compatibles
+    // Filtrar sobres/cuentas compatibles según reglas estrictas del cliente
     const compatible = accounts.filter(acc => {
-      if (paymentMode === 'efectivo') return acc.group_type === 'EFECTIVO';
-      if (paymentMode === 'tarjeta') return acc.group_type === 'BANCOS';
-      if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+      const name = acc.name.trim().toUpperCase();
+      if (paymentMode === 'efectivo') {
+        return name === 'EFECTIVO';
+      }
+      if (paymentMode === 'tarjeta') {
+        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+      }
+      if (paymentMode === 'transferencia') {
+        return ['BANAMEX', 'BBVA', 'SANTANDER', 'IBC ROL (DLL)', 'WISE', 'REVOLUT'].includes(name);
+      }
       return false;
     });
     // Auto-seleccionar la primera compatible
@@ -1315,6 +1326,26 @@ export default function RecepcionPage() {
                 )}
               </div>
 
+              {/* Adeudo por Pagar */}
+              <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+                <div className="space-y-0.5">
+                  <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest block">
+                    Adeudo por Pagar
+                  </span>
+                  <p className="text-[11px] text-amber-600 font-medium">
+                    Monto total a cobrar por la estancia.
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[20px] font-black text-amber-700">
+                    ${selectedReserva.id === 'walkin'
+                      ? parseFloat(paymentAmount || '0').toLocaleString('es-MX')
+                      : (selectedReserva.price_estimate || 0).toLocaleString('es-MX')
+                    } MXN
+                  </span>
+                </div>
+              </div>
+
               {/* Registro de Pago */}
               <div className="space-y-3 pt-2">
                 <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Registrar Pago (Opcional)</h4>
@@ -1382,14 +1413,21 @@ export default function RecepcionPage() {
                         <option value="" disabled>Selecciona un sobre...</option>
                         {accounts
                           .filter(acc => {
-                            if (paymentMode === 'efectivo') return acc.group_type === 'EFECTIVO';
-                            if (paymentMode === 'tarjeta') return acc.group_type === 'BANCOS';
-                            if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                            return true;
+                            const name = acc.name.trim().toUpperCase();
+                            if (paymentMode === 'efectivo') {
+                              return name === 'EFECTIVO';
+                            }
+                            if (paymentMode === 'tarjeta') {
+                              return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                            }
+                            if (paymentMode === 'transferencia') {
+                              return ['BANAMEX', 'BBVA', 'SANTANDER', 'IBC ROL (DLL)', 'WISE', 'REVOLUT'].includes(name);
+                            }
+                            return false;
                           })
                           .map(acc => (
                             <option key={acc.id} value={acc.id}>
-                              {acc.name} (${acc.balance.toLocaleString('es-MX')})
+                              {acc.name}
                             </option>
                           ))}
                       </select>
