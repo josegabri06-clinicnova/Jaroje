@@ -559,15 +559,41 @@ export default function StaffPage() {
                   <div className="divide-y divide-zinc-100">
                     {salidas.map((r) => {
                       const cleaned = isRoomClean(r.room || '');
+                      
+                      // Extraer número de habitación de forma robusta
+                      const m = (r.room || '').match(/(\d{3})/);
+                      const roomNum = m ? m[1] : (r.room || '');
+                      const dbStatus = roomStatuses.find(rs => rs.room_number === roomNum);
+                      const currentStatus = dbStatus?.status || 'disponible';
+                      const checkoutDone = currentStatus === 'en_limpieza';
+
                       return (
                         <div key={r.id} className="p-4 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${cleaned ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                              cleaned 
+                                ? 'bg-emerald-50 text-emerald-600' 
+                                : checkoutDone 
+                                  ? 'bg-emerald-50 border border-emerald-100 text-emerald-600 animate-pulse' 
+                                  : 'bg-amber-50 text-amber-600'
+                            }`}>
                               {cleaned ? <CheckCircle2 size={18} /> : <Sparkles size={18} />}
                             </div>
                             <div className="min-w-0">
                               <p className="text-[14px] font-bold text-zinc-900 leading-tight">Hab. {r.room || 'Sin asignar'}</p>
-                              <p className="text-[12px] font-semibold text-zinc-400 mt-0.5">{cleaned ? 'Habitación Lista para Check-in' : 'Preparación Requerida por Salida'}</p>
+                              {cleaned ? (
+                                <p className="text-[12px] font-semibold text-emerald-600 mt-0.5">✓ Habitación Lista para Check-in</p>
+                              ) : checkoutDone ? (
+                                <p className="text-[12px] font-extrabold text-emerald-600 mt-0.5 flex items-center gap-1 animate-pulse">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                  Salida Confirmada · Vacía (Entrar ya)
+                                </p>
+                              ) : (
+                                <p className="text-[12px] font-bold text-rose-500 mt-0.5 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                                  Ocupada · Esperando entrega de llaves
+                                </p>
+                              )}
                             </div>
                           </div>
                           
@@ -577,8 +603,24 @@ export default function StaffPage() {
                             </span>
                           ) : (
                             <button
-                              onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: r.room, status: 'limpia' })}
-                              className="bg-amber-600 hover:bg-amber-500 text-white text-[11px] font-black tracking-wide uppercase px-3 py-2 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                              onClick={() => {
+                                if (!checkoutDone) {
+                                  const force = window.confirm(
+                                    `⚠️ ATENCIÓN DE SEGURIDAD OPERATIVA:\n\nEl huésped de la Habitación ${roomNum} no ha entregado llaves formalmente en Recepción.\n\n¿Confirmas que la habitación ya está físicamente vacía y deseas forzar la firma de limpieza?`
+                                  );
+                                  if (!force) return;
+                                }
+                                runWithSignature(
+                                  'room_status', 
+                                  (payload) => changeRoomStatus(payload.room, payload.status), 
+                                  { room: r.room, status: 'limpia' }
+                                );
+                              }}
+                              className={`text-white text-[11px] font-black tracking-wide uppercase px-3 py-2 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95 ${
+                                checkoutDone 
+                                  ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-100' 
+                                  : 'bg-zinc-400 hover:bg-zinc-500 shadow-zinc-100 opacity-80'
+                              }`}
                             >
                               Marcar Lista
                             </button>
