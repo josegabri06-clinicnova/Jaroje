@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync } from '@/lib/auth';
@@ -635,6 +635,14 @@ export default function FinanzasPage() {
           <p className="text-[13px] font-medium text-zinc-500">Control de Flujo de Efectivo</p>
         </div>
         <div className="flex gap-2">
+          <button 
+            onClick={fetchData} 
+            disabled={isLoading}
+            className="w-10 h-10 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-all"
+            title="Actualizar datos"
+          >
+            <RefreshCw size={16} strokeWidth={2.5} className={isLoading ? "animate-spin text-zinc-500" : "text-zinc-750"} />
+          </button>
           {activeTab === 'registro' && (
             <button onClick={exportToCSV} className="w-10 h-10 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform">
               <Download size={18} strokeWidth={2.5} />
