@@ -365,12 +365,7 @@ export default function FinanzasPage() {
     
     setIsResetting(true);
     try {
-      // 1. Descargar respaldo automático si existen registros
-      if (records.length > 0) {
-        downloadBackupCSV();
-      }
-
-      // 2. Ejecutar la limpieza en backend
+      // 1. Ejecutar la limpieza en backend primero
       const response = await fetch('/api/finances/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -382,6 +377,10 @@ export default function FinanzasPage() {
       });
       const data = await response.json();
       if (response.ok && data.success) {
+        // 2. Descargar respaldo automático después de la respuesta exitosa
+        if (records.length > 0) {
+          downloadBackupCSV();
+        }
         alert("✅ " + data.message + "\n\nSe ha descargado automáticamente un archivo CSV con el respaldo del historial anterior en tu dispositivo para seguridad.");
         setShowResetModal(false);
         setResetConfirmText('');
