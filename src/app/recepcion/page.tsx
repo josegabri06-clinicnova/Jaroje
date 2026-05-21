@@ -130,6 +130,7 @@ export default function RecepcionPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [cleanToast, setCleanToast] = useState<{ room: string; by: string } | null>(null);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
   const [todayStr, setTodayStr] = useState('');
@@ -329,10 +330,80 @@ export default function RecepcionPage() {
     }
   };
 
+  // Sintetizador de AudioContext nativo para sonido de notificación premium
+  const playPremiumNotificationSound = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const now = ctx.currentTime;
+      
+      // Nota 1 (C5)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(523.25, now);
+      osc1.frequency.exponentialRampToValueAtTime(659.25, now + 0.12);
+      gain1.gain.setValueAtTime(0.12, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      
+      // Nota 2 (E5) con ligero retraso
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(659.25, now + 0.08);
+      osc2.frequency.exponentialRampToValueAtTime(783.99, now + 0.22);
+      gain2.gain.setValueAtTime(0.08, now + 0.08);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.45);
+    } catch (e) {
+      console.warn('AudioContext no soportado o bloqueado por el navegador:', e);
+    }
+  };
+
+  // Temporizador para auto-ocultar la notificación toast en recepción
+  useEffect(() => {
+    if (cleanToast) {
+      const timer = setTimeout(() => setCleanToast(null), 6000);
+      return () => clearTimeout(timer);
+    }
+  }, [cleanToast]);
+
   useEffect(() => {
     fetchData();
     const iv = setInterval(fetchData, 15000);
-    return () => clearInterval(iv);
+
+    // Suscripción Realtime en Supabase para cambios de estado de cuartos
+    const channel = supabase
+      .channel('room_status_changes_recepcion')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'room_status' },
+        (payload) => {
+          console.log('Cambio en room_status en tiempo real (Recepción):', payload);
+          const updated = payload.new as any;
+          if (updated && (updated.status === 'limpia' || updated.status === 'disponible')) {
+            setCleanToast({
+              room: updated.room_number,
+              by: updated.updated_by || 'Personal'
+            });
+            playPremiumNotificationSound();
+            fetchData(); // Sincronizar datos de inmediato sin recargar
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(iv);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const llegadas = reservas.filter(r => r.check_in === todayStr);
@@ -677,6 +748,30 @@ export default function RecepcionPage() {
 
   return (
     <div className="space-y-6 pb-28 bg-[#fafafa] min-h-screen">
+
+      {/* Floating Realtime Clean Notification Toast */}
+      {cleanToast && (
+        <div className="fixed top-6 right-6 z-[9999] animate-in fade-in slide-in-from-top-4 duration-300 max-w-sm w-full bg-zinc-950 text-white rounded-2xl shadow-2xl border border-zinc-800 p-4 flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+            <Sparkles size={20} className="animate-pulse" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between">
+              <p className="text-[14px] font-black text-white">Habitación Limpia</p>
+              <button onClick={() => setCleanToast(null)} className="text-zinc-500 hover:text-zinc-300 transition-colors">
+                <X size={14} strokeWidth={2.5} />
+              </button>
+            </div>
+            <p className="text-[12px] text-zinc-300 mt-1 leading-relaxed">
+              La **Habitación {cleanToast.room}** ha sido marcada como limpia y está **lista para check-in inmediato**.
+            </p>
+            <div className="flex items-center gap-1.5 mt-2 text-[10px] font-black text-emerald-400 uppercase tracking-wider">
+              <CheckCircle2 size={11} />
+              <span>Por {cleanToast.by}</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── HEADER ─────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">

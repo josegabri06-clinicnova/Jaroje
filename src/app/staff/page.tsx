@@ -298,20 +298,21 @@ export default function StaffPage() {
       });
     }
 
-    // Guardar en la tabla room_status de Supabase
+    // Guardar en la tabla room_status de Supabase (las marcadas como 'limpia' pasan automáticamente a 'disponible')
+    const statusToSave = newStatus === 'limpia' ? 'disponible' : newStatus;
     const res = await fetch('/api/room-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         room_number: roomNumber,
-        status: newStatus,
+        status: statusToSave,
         updated_by: operatorName
       }),
     });
     
     const json = await res.json();
     if (json.success) {
-      setSuccessMsg(`Habitación ${roomNumber} marcada como ${newStatus}`);
+      setSuccessMsg(`Habitación ${roomNumber} marcada como ${statusToSave}`);
       setTimeout(() => setSuccessMsg(''), 3000);
     }
 
