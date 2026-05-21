@@ -27,13 +27,19 @@ export default function EmployeeModal({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [successEmployee, setSuccessEmployee] = useState<Employee | null>(null);
   const [hasActiveSession, setHasActiveSession] = useState<boolean>(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
-  // Redirigir al inicio o cerrar el modal localmente
+  // Redirigir al inicio o cerrar el modal localmente, o cerrar sesión del rol para cambiar a admin
   const handleClose = () => {
     if (hasActiveSession) {
       onClose();
     } else {
-      router.push('/');
+      if (userRole === 'admin') {
+        router.push('/');
+      } else {
+        localStorage.removeItem('jaroje_role'); // logout del rol PWA actual
+        router.push('/login');
+      }
     }
   };
 
@@ -48,6 +54,9 @@ export default function EmployeeModal({
   }[module];
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setUserRole(localStorage.getItem('jaroje_role'));
+    }
     if (isOpen) {
       setPin('');
       setErrorMessage('');
@@ -157,10 +166,12 @@ export default function EmployeeModal({
         <button
           onClick={handleClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-50 flex items-center gap-1"
-          title={hasActiveSession ? "Cerrar" : "Volver al Inicio"}
+          title={hasActiveSession ? "Cerrar" : (userRole === 'admin' ? "Volver al Inicio" : "Salir / Cambiar Rol")}
         >
           {!hasActiveSession && (
-            <span className="text-[11px] font-bold text-gray-400 mr-1">Volver al Inicio</span>
+            <span className="text-[11px] font-bold text-gray-400 mr-1">
+              {userRole === 'admin' ? 'Volver al Inicio' : 'Salir / Cambiar Rol'}
+            </span>
           )}
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
