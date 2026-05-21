@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync } from '@/lib/auth';
@@ -134,6 +134,11 @@ export default function FinanzasPage() {
   const [quickAmount, setQuickAmount] = useState('');
   const [quickConcept, setQuickConcept] = useState('Ajuste');
   const [quickDescription, setQuickDescription] = useState('');
+
+  // States for absolute resetting of finances
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -325,6 +330,39 @@ export default function FinanzasPage() {
       fetchData();
     } else {
       alert("Error al actualizar el saldo del sobre");
+    }
+  };
+
+  const handleResetFinances = async () => {
+    if (resetConfirmText !== 'RESET') {
+      alert("Por favor, escribe RESET en mayúsculas para confirmar.");
+      return;
+    }
+    setIsResetting(true);
+    try {
+      const response = await fetch('/api/finances/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          confirm_text: 'RESET',
+          employee_num: '999',
+          employee_name: 'Administrador Principal'
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert("✅ " + data.message);
+        setShowResetModal(false);
+        setResetConfirmText('');
+        fetchData(); // Refresca los saldos y el historial a cero
+      } else {
+        alert("❌ Error: " + (data.error || "Ocurrió un error inesperado."));
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("⚠️ Error de red al intentar restablecer las finanzas: " + err.message);
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -627,6 +665,32 @@ export default function FinanzasPage() {
               </div>
               <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/10">
                 <Wallet size={26} className="text-white" strokeWidth={2.5} />
+              </div>
+            </div>
+          </div>
+
+          {/* Mantenimiento Contable */}
+          <div className="bg-rose-50/30 border border-rose-200/50 rounded-[32px] p-6 shadow-sm mt-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center shrink-0 border border-rose-100">
+                <Trash2 className="text-rose-600" size={22} strokeWidth={2.5} />
+              </div>
+              <div className="flex-1 space-y-1">
+                <h4 className="text-[15px] font-bold text-zinc-900">Mantenimiento Contable</h4>
+                <p className="text-[12px] text-zinc-500 leading-relaxed">
+                  Limpia por completo el historial de movimientos y restablece el saldo de todos los sobres y cuentas a <span className="font-bold text-rose-600">MX$0</span>. Esta acción es definitiva y no afectará a las reservas ni al inventario físico.
+                </p>
+                <div className="pt-3">
+                  <button
+                    onClick={() => {
+                      setResetConfirmText('');
+                      setShowResetModal(true);
+                    }}
+                    className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-95 text-white font-extrabold text-[12px] uppercase tracking-wider rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                  >
+                    Restablecer Finanzas a Cero
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1003,6 +1067,85 @@ export default function FinanzasPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Premium de Restablecimiento Contable (Reset) */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-zinc-950/70 backdrop-blur-md p-4 transition-all duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-red-100 animate-in zoom-in-95 duration-300 flex flex-col relative overflow-hidden text-zinc-900">
+            {/* Warning outline top decorator */}
+            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-red-500 to-rose-600" />
+            
+            <div className="flex justify-between items-start mb-4">
+              <div className="w-12 h-12 bg-red-50 rounded-2xl flex items-center justify-center border border-red-100 shrink-0">
+                <Lock size={22} className="text-red-600" />
+              </div>
+              <button 
+                onClick={() => { 
+                  setShowResetModal(false); 
+                  setResetConfirmText(''); 
+                }} 
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 hover:rotate-90 hover:scale-105 active:scale-95 rounded-full text-zinc-500 transition-all duration-300 cursor-pointer animate-none"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-lg font-black text-zinc-900 tracking-tight leading-tight">
+                Confirmación de Borrado Permanente
+              </h3>
+              <p className="text-[12px] text-zinc-500 leading-relaxed">
+                Estás a punto de vaciar **todo el historial del Libro Contable** y restablecer el saldo de todos los sobres físicos a **$0 MXN**. 
+              </p>
+              
+              <div className="bg-red-50/50 border border-red-150 rounded-2xl p-3 text-[11px] text-red-700 leading-relaxed font-medium">
+                ⚠️ **Esta acción es irreversible**. Se registrará un log de auditoría permanente de tu usuario. Las reservas de huéspedes y el inventario no serán alterados.
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">
+                  Escribe "RESET" para confirmar la acción
+                </label>
+                <input 
+                  type="text"
+                  placeholder="RESET"
+                  autoFocus
+                  value={resetConfirmText}
+                  onChange={e => setResetConfirmText(e.target.value)}
+                  className="w-full text-center font-black tracking-widest text-lg bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 outline-none focus:ring-4 focus:ring-red-500/10 focus:border-red-500 focus:bg-white transition-all text-zinc-900 placeholder:text-zinc-300"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button 
+                  onClick={() => {
+                    setShowResetModal(false);
+                    setResetConfirmText('');
+                  }}
+                  disabled={isResetting}
+                  className="py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleResetFinances}
+                  disabled={isResetting || resetConfirmText !== 'RESET'}
+                  className="py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(220,38,38,0.25)] hover:shadow-[0_8px_20px_rgba(220,38,38,0.35)] active:scale-[0.96] cursor-pointer"
+                >
+                  {isResetting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Trash2 size={16} strokeWidth={2.5} />
+                      Borrar Todo
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
