@@ -149,17 +149,6 @@ export default function CopilotWidget() {
 
   return (
     <>
-      {/* Floating Button — hidden when any bottom sheet is open */}
-      {!panelOpen && (
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="fixed bottom-6 right-6 w-12 h-12 bg-zinc-900 hover:bg-black text-white rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 active:scale-95 z-40 animate-bounce"
-          style={{ animationDuration: '3s' }}
-        >
-          {isOpen ? <X size={20} /> : <Sparkles size={20} />}
-        </button>
-      )}
-
       {/* Chat Window */}
       <div
         className={`fixed bottom-6 right-6 w-[380px] max-w-[calc(100vw-48px)] h-[600px] max-h-[calc(100vh-48px)] bg-white rounded-3xl shadow-[0_12px_40px_rgba(0,0,0,0.12)] border border-zinc-200/80 flex flex-col overflow-hidden transition-all duration-300 origin-bottom-right z-50 ${
