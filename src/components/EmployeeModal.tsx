@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Employee, OFFICIAL_EMPLOYEES, validateEmployeeNum, setActiveEmployee, getActiveEmployee } from '@/lib/auth';
 
 interface EmployeeModalProps {
@@ -20,11 +21,21 @@ export default function EmployeeModal({
   title,
   description
 }: EmployeeModalProps) {
+  const router = useRouter();
   const [pin, setPin] = useState<string>('');
   const [isWiggling, setIsWiggling] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [successEmployee, setSuccessEmployee] = useState<Employee | null>(null);
   const [hasActiveSession, setHasActiveSession] = useState<boolean>(true);
+
+  // Redirigir al inicio o cerrar el modal localmente
+  const handleClose = () => {
+    if (hasActiveSession) {
+      onClose();
+    } else {
+      router.push('/');
+    }
+  };
 
   // Filtrar los empleados oficiales permitidos en este departamento para mostrar como sugerencia sutil
   const departmentEmployees = OFFICIAL_EMPLOYEES.filter(emp => emp.department === module);
@@ -143,16 +154,18 @@ export default function EmployeeModal({
 
       <div className="w-full max-w-md bg-white border border-gray-100 rounded-3xl shadow-2xl p-6 relative mx-4 overflow-hidden">
         {/* Botón de cerrar */}
-        {hasActiveSession && (
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-50"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+        <button
+          onClick={handleClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-50 flex items-center gap-1"
+          title={hasActiveSession ? "Cerrar" : "Volver al Inicio"}
+        >
+          {!hasActiveSession && (
+            <span className="text-[11px] font-bold text-gray-400 mr-1">Volver al Inicio</span>
+          )}
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
 
         {/* Encabezado */}
         <div className="text-center mt-2 mb-6">
