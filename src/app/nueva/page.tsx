@@ -145,6 +145,7 @@ export default function VercelActionForm() {
         checkOut: form.checkOut,
         guestName: form.guestName,
         isBlock,
+        price: isBlock ? 0 : Number(form.price),
       };
 
       const bgRes = await fetch('/api/reservas', {

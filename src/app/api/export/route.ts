@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getBeds24Token } from '@/lib/beds24';
+
+export const dynamic = 'force-dynamic';
 
 // ─── EXPORT API ────────────────────────────────────────────────────────────
 // Este endpoint devuelve los datos de reservas en el formato óptimo para:
@@ -73,10 +76,18 @@ function getRoomMetadata(roomId: string | null | undefined, roomName: string | n
 }
 
 async function fetchBeds24Bookings() {
-  const BEDS24_TOKEN = process.env.BEDS24_TEMP_TOKEN;
-  if (!BEDS24_TOKEN) throw new Error('Falta BEDS24_TEMP_TOKEN');
+  const BEDS24_TOKEN = await getBeds24Token();
 
-  const res = await fetch('https://api.beds24.com/v2/bookings', {
+  const today = new Date();
+  const fromDate = new Date(today);
+  fromDate.setDate(today.getDate() - 180);
+  const arrivalFrom = fromDate.toISOString().split('T')[0];
+
+  const toDate = new Date(today);
+  toDate.setDate(today.getDate() + 540);
+  const arrivalTo = toDate.toISOString().split('T')[0];
+
+  const res = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=1000`, {
     headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
     cache: 'no-store'
   });
@@ -129,11 +140,14 @@ function mapBooking(b: any) {
   const displayRoomName = unitName ? `${roomData.nombre} (${unitName})` : roomData.nombre;
   
   // Precio por noche dinámico: si API da precio, lo usamos. Si no, calculamos.
+  const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
   let pricePerNight = b.price ? (Number(b.price) / nights) : null;
-  if (!pricePerNight || pricePerNight <= 0) {
+  if (!isOTA && (!pricePerNight || pricePerNight <= 0)) {
     pricePerNight = getRealPrice(String(b.roomId), b.arrival, rawSource);
+  } else if (isOTA && !pricePerNight) {
+    pricePerNight = 0;
   }
-  pricePerNight = Math.round(pricePerNight);
+  pricePerNight = Math.round(pricePerNight ?? 0);
   const totalRevenue = Math.round(pricePerNight * nights);
 
   return {
@@ -170,7 +184,9 @@ export async function GET(req: Request) {
     const format = searchParams.get('format') ?? 'json'; // 'json' | 'csv'
 
     const raw      = await fetchBeds24Bookings();
-    const bookings = raw.map(mapBooking);
+    const bookings = raw
+      .filter((b: any) => String(b.status) !== '0' && b.status !== 'cancelled')
+      .map(mapBooking);
 
     // ── JSON (para Power Query "From Web" o SQL directo) ──────────────────
     if (format === 'json') {

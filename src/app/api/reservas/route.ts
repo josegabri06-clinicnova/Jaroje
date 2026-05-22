@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
 
+export const dynamic = 'force-dynamic';
+
 // GET: Obtener todas las reservas activas procesadas desde Beds24
 export async function GET() {
   try {
@@ -22,7 +24,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { roomId, unitId, checkIn, checkOut, guestName, isBlock = false } = body;
+    const { roomId, unitId, checkIn, checkOut, guestName, isBlock = false, price } = body;
 
     if (!roomId || !unitId || !checkIn || !checkOut) {
       return NextResponse.json({ error: 'Faltan parámetros: roomId, unitId, checkIn, checkOut' }, { status: 400 });
@@ -42,7 +44,8 @@ export async function POST(req: Request) {
         arrival: checkIn,
         departure: checkOut,
         firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
-        status: "confirmed"
+        status: "confirmed",
+        ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {})
       }])
     });
 

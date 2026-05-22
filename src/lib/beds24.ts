@@ -126,18 +126,20 @@ export async function getBeds24Token(): Promise<string> {
 export async function getBeds24Bookings(): Promise<any[]> {
   const BEDS24_TOKEN = await getBeds24Token();
 
-  const [beds24Response, propsResponse] = await Promise.all([
-    fetch('https://api.beds24.com/v2/bookings', {
-      method: 'GET',
-      headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      cache: 'no-store'
-    }),
-    fetch('https://api.beds24.com/v2/properties', {
-      method: 'GET',
-      headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      cache: 'no-store'
-    })
-  ]);
+  const today = new Date();
+  const fromDate = new Date(today);
+  fromDate.setDate(today.getDate() - 180);
+  const arrivalFrom = fromDate.toISOString().split('T')[0];
+
+  const toDate = new Date(today);
+  toDate.setDate(today.getDate() + 540);
+  const arrivalTo = toDate.toISOString().split('T')[0];
+
+  const beds24Response = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=1000`, {
+    method: 'GET',
+    headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+    cache: 'no-store'
+  });
 
   if (beds24Response.status === 401 || beds24Response.status === 403) {
     throw new Error('TOKEN_EXPIRED');
@@ -167,7 +169,7 @@ export async function getBeds24Bookings(): Promise<any[]> {
   });
 
   return bookingsArray
-    .filter((b: any) => b.status !== 'cancelled' && b.status !== '0')
+    .filter((b: any) => String(b.status) !== '0' && b.status !== 'cancelled')
     .map((b: any) => {
       const arrivalDate = b.arrival ? new Date(b.arrival) : null;
       const departureDate = b.departure ? new Date(b.departure) : null;
@@ -184,12 +186,16 @@ export async function getBeds24Bookings(): Promise<any[]> {
       else if (rawSource.includes('whatsapp') || rawSource.includes('n8n')) channel = 'WhatsApp Bot';
       else if (rawSource.includes('beds24')) channel = 'Beds24';
 
+      const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
+
       const roomData = getRoomMetadata(b.roomId, b.roomName);
       let pricePerNight = b.price ? (Number(b.price) / nights) : null;
-      if (!pricePerNight || pricePerNight <= 0) {
+      if (!isOTA && (!pricePerNight || pricePerNight <= 0)) {
         pricePerNight = getRealPrice(String(b.roomId), b.arrival, rawSource);
+      } else if (isOTA && !pricePerNight) {
+        pricePerNight = 0;
       }
-      pricePerNight = Math.round(pricePerNight);
+      pricePerNight = Math.round(pricePerNight ?? 0);
       const totalRevenue = pricePerNight * nights;
 
       const unitName = (unitMap[b.roomId] && b.unitId) ? unitMap[b.roomId][b.unitId] : null;

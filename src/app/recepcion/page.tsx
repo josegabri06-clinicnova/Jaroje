@@ -448,7 +448,8 @@ export default function RecepcionPage() {
             checkIn: todayStr,
             checkOut: selectedReserva.check_out || todayStr,
             guestName: selectedReserva.guest_name || 'Walk-In',
-            isBlock: false
+            isBlock: false,
+            price: Number(paymentAmount || 0)
           })
         });
         const resData = await bgRes.json();

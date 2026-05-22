@@ -1,37 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getBeds24Token } from '@/lib/beds24';
 
-async function getBeds24Token(): Promise<string> {
-  const tempToken = process.env.BEDS24_TEMP_TOKEN;
-  const refreshToken = process.env.BEDS24_REFRESH_TOKEN;
-
-  if (!refreshToken) throw new Error('Falta BEDS24_REFRESH_TOKEN en .env');
-
-  if (tempToken) {
-    const probe = await fetch('https://api.beds24.com/v2/bookings?limit=1', {
-      headers: { 'token': tempToken },
-      cache: 'no-store'
-    });
-    if (probe.ok || probe.status === 404) return tempToken;
-  }
-
-  const refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
-    method: 'GET',
-    headers: { 'refreshToken': refreshToken },
-    cache: 'no-store'
-  });
-  const refreshData = await refreshRes.json();
-
-  if (!refreshData.token) {
-    throw new Error('TOKEN_EXPIRED');
-  }
-
-  process.env.BEDS24_TEMP_TOKEN = refreshData.token;
-  if (refreshData.refreshToken) {
-    process.env.BEDS24_REFRESH_TOKEN = refreshData.refreshToken;
-  }
-
-  return refreshData.token;
-}
+export const dynamic = 'force-dynamic';
 
 const ROOM_MAP = [
   { 
@@ -99,7 +69,16 @@ export async function GET(req: Request) {
 
     const BEDS24_TOKEN = await getBeds24Token();
 
-    const bookingsRes = await fetch('https://api.beds24.com/v2/bookings', {
+    const today = new Date();
+    const fromDate = new Date(today);
+    fromDate.setDate(today.getDate() - 180);
+    const arrivalFrom = fromDate.toISOString().split('T')[0];
+
+    const toDate = new Date(today);
+    toDate.setDate(today.getDate() + 540);
+    const arrivalTo = toDate.toISOString().split('T')[0];
+
+    const bookingsRes = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=1000`, {
       method: 'GET',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
       cache: 'no-store'
@@ -115,7 +94,7 @@ export async function GET(req: Request) {
     const bookings = bookingsData.data && Array.isArray(bookingsData.data) ? bookingsData.data : [];
     
     bookings.forEach((b: any) => {
-      if (b.status !== 'cancelled' && b.status !== '0') {
+      if (String(b.status) !== '0' && b.status !== 'cancelled') {
         const bIn = new Date(b.arrival);
         const bOut = new Date(b.departure);
         
