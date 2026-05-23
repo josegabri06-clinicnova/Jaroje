@@ -75,7 +75,29 @@ export default function FinanzasPage() {
  
   // Filtro de Cuenta en Registro
   const [filterAccountId, setFilterAccountId] = useState('todo');
-  const [sortBy, setSortBy] = useState<'oficial' | 'nombre' | 'saldo'>('oficial');
+
+  const OFFICIAL_ORDER = [
+    'EFE PEND',
+    'EFE HUX',
+    'EFE TRC',
+    'EFE USD',
+    'HSBC FISCAL',
+    'MERCADO PAGO',
+    'BANAMEX',
+    'SANTANDER',
+    'BBVA RICKY',
+    'INV. ROL',
+    'INV LAU',
+    'BOOKING',
+    'WISE',
+    'REVOLUT',
+    'BBVA €',
+    'IBC ROL',
+    'IBC LAU',
+    'IBC ROLY'
+  ];
+
+  
  
   // Evaluador de expresiones matemáticas seguro
   const evaluateMath = (expr: string): number => {
@@ -130,6 +152,8 @@ export default function FinanzasPage() {
     fetchRates();
   }, []);
 
+  
+
   useEffect(() => {
     if (pinInput.length === 4) {
       const validate = async () => {
@@ -171,6 +195,47 @@ export default function FinanzasPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [records, setRecords] = useState<FinanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const [accountsOrder, setAccountsOrder] = useState<string[]>([]);
+  const [reorderMode, setReorderMode] = useState(false);
+
+  // Cargar el orden de cuentas guardado en el arranque o usar el oficial
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('jaroje_accounts_order');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setAccountsOrder(parsed.map(x => String(x).trim().toUpperCase()));
+            return;
+          }
+        } catch (e) {
+          console.warn("Error parsing saved accounts order:", e);
+        }
+      }
+      setAccountsOrder(OFFICIAL_ORDER.map(x => x.trim().toUpperCase()));
+    }
+  }, []);
+
+  // Auto-sincronizar el orden de cuentas cuando Supabase cargue nuevas cuentas
+  useEffect(() => {
+    if (accounts.length > 0 && accountsOrder.length > 0) {
+      const activeNames = accounts.map(a => a.name.trim().toUpperCase());
+      const currentOrdered = accountsOrder.filter(name => activeNames.includes(name));
+      const missing = activeNames.filter(name => !currentOrdered.includes(name));
+      
+      if (missing.length > 0) {
+        const merged = [...currentOrdered, ...missing];
+        setAccountsOrder(merged);
+        localStorage.setItem('jaroje_accounts_order', JSON.stringify(merged));
+      } else if (currentOrdered.length !== accountsOrder.length) {
+        setAccountsOrder(currentOrdered);
+        localStorage.setItem('jaroje_accounts_order', JSON.stringify(currentOrdered));
+      }
+    }
+  }, [accounts, accountsOrder]);
+
   const [syncingRecordId, setSyncingRecordId] = useState<string | null>(null);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [recordToSync, setRecordToSync] = useState<FinanceRecord | null>(null);
@@ -736,91 +801,36 @@ export default function FinanzasPage() {
 
   const sortAccounts = (accs: any[]) => {
     return [...accs].sort((a, b) => {
-      if (sortBy === 'nombre') {
-        return a.name.localeCompare(b.name);
-      }
-      if (sortBy === 'saldo') {
-        return convertToMXN(b.balance, b.currency) - convertToMXN(a.balance, a.currency);
-      }
-      const OFFICIAL_ORDER = [
-        'EFE PEND',
-        'EFE HUX',
-        'EFE TRC',
-        'EFE USD',
-        'BANAMEX',
-        'MERCADO PAGO',
-        'BBVA RICKY',
-        'HSBC FISCAL',
-        'SANTANDER',
-        'INV. ROL',
-        'INV LAU',
-        'BOOKING',
-        'WISE',
-        'REVOLUT',
-        'BBVA €',
-        'IBC ROL',
-        'IBC LAU',
-        'IBC ROLY'
-      ];
-      const idxA = OFFICIAL_ORDER.indexOf(a.name.trim().toUpperCase());
-      const idxB = OFFICIAL_ORDER.indexOf(b.name.trim().toUpperCase());
+      const nameA = a.name.trim().toUpperCase();
+      const nameB = b.name.trim().toUpperCase();
+      const idxA = accountsOrder.indexOf(nameA);
+      const idxB = accountsOrder.indexOf(nameB);
       if (idxA !== -1 && idxB !== -1) return idxA - idxB;
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
-      return a.name.localeCompare(b.name);
+      return nameA.localeCompare(nameB);
     });
   };
 
-  // Group Accounts
-  const getGroup = (type: string) => sortAccounts(accounts.filter(a => a.group_type === type));
-  const sumGroup = (type: string) => getGroup(type).reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
-  const totalGeneral = accounts.reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
+  const moveAccount = (accName: string, direction: 'up' | 'down') => {
+    const nameUpper = accName.trim().toUpperCase();
+    const updated = [...accountsOrder];
+    const index = updated.indexOf(nameUpper);
+    if (index === -1) return;
 
-  const renderGroup = (title: string, type: string, colorClass: string, bgClass: string, Icon: any) => {
-    const groupAccounts = getGroup(type);
-    if (groupAccounts.length === 0) return null;
-    const total = sumGroup(type);
+    const targetIndex = index + (direction === 'up' ? -1 : 1);
+    if (targetIndex < 0 || targetIndex >= updated.length) return;
 
-    return (
-      <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] mb-4">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${bgClass} ${colorClass}`}>
-              <Icon size={20} strokeWidth={2.5} />
-            </div>
-            <h3 className="text-[16px] font-bold text-zinc-900 tracking-tight">{title}</h3>
-          </div>
-          <div className="text-right">
-            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-0.5">Total</p>
-            <p className={`text-[17px] font-black ${colorClass}`}>${total.toLocaleString('es-MX')}</p>
-          </div>
-        </div>
+    // Swap
+    const temp = updated[index];
+    updated[index] = updated[targetIndex];
+    updated[targetIndex] = temp;
 
-        {/* Accounts Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {groupAccounts.map(acc => (
-            <div 
-              key={acc.id} 
-              onClick={() => { setEditingAccount(acc); setQuickAmount(''); setQuickDescription(''); setQuickConcept('Ajuste'); }}
-              className="bg-[#fafafa] border border-zinc-200/60 rounded-2xl p-3.5 hover:bg-white hover:border-zinc-300 hover:shadow-sm transition-all cursor-pointer group active:scale-[0.98]"
-            >
-              <p className="text-[11px] font-bold text-zinc-500 mb-1.5 truncate group-hover:text-zinc-800 transition-colors">{acc.name}</p>
-              <div className="flex items-baseline justify-between gap-1">
-                <p className="text-[16px] font-black text-zinc-900 leading-none">${acc.balance.toLocaleString('es-MX')}</p>
-                <span className="text-[9px] text-zinc-400 font-extrabold uppercase">{acc.currency}</span>
-              </div>
-              {acc.currency !== 'MXN' && (
-                <p className="text-[10px] font-semibold text-zinc-400/80 leading-none mt-1.5 pt-0.5 border-t border-dashed border-zinc-250/20">
-                  ≈ ${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })} MXN
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
+    setAccountsOrder(updated);
+    localStorage.setItem('jaroje_accounts_order', JSON.stringify(updated));
   };
+
+  const totalGeneral = accounts.reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
 
   if (pinLocked) {
     return (
@@ -901,17 +911,17 @@ export default function FinanzasPage() {
           <p className="text-[13px] font-medium text-zinc-500">Control de Flujo de Efectivo</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Ordenamiento de cuentas */}
-          <select 
-            value={sortBy} 
-            onChange={e => setSortBy(e.target.value as any)}
-            className="h-10 px-3 bg-white border border-zinc-200 text-zinc-700 rounded-full text-xs font-bold shadow-sm outline-none cursor-pointer focus:border-zinc-400 focus:ring-1 focus:ring-zinc-900/5 transition-all"
-            title="Ordenar cuentas"
+          <button 
+            onClick={() => setReorderMode(!reorderMode)}
+            className={`h-10 px-4 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95 transition-all text-xs font-bold border ${
+              reorderMode
+                ? 'bg-emerald-600 border-emerald-600 text-white'
+                : 'bg-white border-zinc-200 text-zinc-700'
+            }`}
+            title="Reordenar cuentas manualmente"
           >
-            <option value="oficial">Orden Oficial</option>
-            <option value="nombre">Orden Alfabético</option>
-            <option value="saldo">Orden por Saldo</option>
-          </select>
+            <span>{reorderMode ? '✓ Guardar Orden' : '⇄ Acomodar Cuentas'}</span>
+          </button>
 
           <button 
             onClick={() => {
@@ -989,13 +999,8 @@ export default function FinanzasPage() {
       ) : activeTab === 'libro' ? (
         // VISTA LIBRO CONTABLE (Modern SaaS)
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {renderGroup('Efectivo', 'EFECTIVO', 'text-emerald-600', 'bg-emerald-50', Wallet)}
-          {renderGroup('Bancos', 'BANCOS', 'text-blue-600', 'bg-blue-50', Landmark)}
-          {renderGroup('Cuentas x Cobrar', 'CUENTAS X COBRAR', 'text-amber-600', 'bg-amber-50', Landmark)}
-          {renderGroup('Ahorros', 'AHORROS', 'text-indigo-600', 'bg-indigo-50', PiggyBank)}
-          {renderGroup('Extranjero', 'EXTRANJERO', 'text-violet-600', 'bg-violet-50', Globe)}
-          
-          <div className="bg-zinc-900 text-white rounded-[32px] p-6 shadow-2xl relative overflow-hidden mt-2">
+          {/* Total General Consolidado al tope */}
+          <div className="bg-zinc-900 text-white rounded-[32px] p-6 shadow-2xl relative overflow-hidden">
             <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
             <div className="flex items-center justify-between relative z-10">
               <div>
@@ -1009,6 +1014,120 @@ export default function FinanzasPage() {
               <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/10">
                 <Wallet size={26} className="text-white" strokeWidth={2.5} />
               </div>
+            </div>
+          </div>
+
+          {/* Cuadrícula Unificada de Cuentas */}
+          <div className="bg-white border border-zinc-200/85 rounded-[32px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-zinc-50 border border-zinc-200/60 text-zinc-800">
+                  <Landmark size={20} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-[16px] font-extrabold text-zinc-950 tracking-tight">Cuentas Contables</h3>
+                  <p className="text-[9px] text-zinc-400 font-extrabold uppercase tracking-widest mt-0.5">Libro de Cuentas Activas</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5">
+              {sortAccounts(accounts).map((acc, index, arr) => {
+                let groupBadge = '';
+                let badgeColor = '';
+                switch(acc.group_type) {
+                  case 'EFECTIVO':
+                    groupBadge = 'Efectivo';
+                    badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-150/40';
+                    break;
+                  case 'BANCOS':
+                    groupBadge = 'Bancos';
+                    badgeColor = 'bg-blue-50 text-blue-700 border-blue-150/40';
+                    break;
+                  case 'AHORROS':
+                    groupBadge = 'Ahorros';
+                    badgeColor = 'bg-purple-50 text-purple-700 border-purple-150/40';
+                    break;
+                  case 'EXTRANJERO':
+                    groupBadge = 'Extranjero';
+                    badgeColor = 'bg-violet-50 text-violet-700 border-violet-150/40';
+                    break;
+                  case 'CUENTAS X COBRAR':
+                    groupBadge = 'Cuentas x Cobrar';
+                    badgeColor = 'bg-amber-50 text-amber-700 border-amber-150/40';
+                    break;
+                  default:
+                    groupBadge = acc.group_type;
+                    badgeColor = 'bg-zinc-50 text-zinc-700 border-zinc-150';
+                }
+
+                return (
+                  <div 
+                    key={acc.id} 
+                    className={`border rounded-2xl p-4 transition-all relative flex flex-col justify-between min-h-[125px] ${
+                      reorderMode
+                        ? 'border-emerald-300 ring-2 ring-emerald-500/5 bg-white shadow-sm'
+                        : 'border-zinc-200/70 bg-[#fafafa] hover:bg-white hover:border-zinc-350 hover:shadow-sm'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="truncate flex-1">
+                        <p className="text-[12px] font-extrabold text-zinc-950 truncate leading-snug">{acc.name}</p>
+                        <span className={`inline-block text-[8px] font-extrabold px-1.5 py-0.5 rounded-md border mt-1 select-none tracking-wide uppercase ${badgeColor}`}>
+                          {groupBadge}
+                        </span>
+                      </div>
+                      {reorderMode && (
+                        <div className="flex gap-0.5 shrink-0 select-none">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={(e) => { e.stopPropagation(); moveAccount(acc.name, 'up'); }}
+                            className="w-6 h-6 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-zinc-100 rounded-md flex items-center justify-center text-[10px] font-black text-zinc-700 cursor-pointer border border-zinc-250/60 active:scale-90 transition-transform"
+                            title="Subir / Mover Izquierda"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === arr.length - 1}
+                            onClick={(e) => { e.stopPropagation(); moveAccount(acc.name, 'down'); }}
+                            className="w-6 h-6 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-zinc-100 rounded-md flex items-center justify-center text-[10px] font-black text-zinc-700 cursor-pointer border border-zinc-250/60 active:scale-90 transition-transform"
+                            title="Bajar / Mover Derecha"
+                          >
+                            ↓
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div 
+                      onClick={() => {
+                        if (!reorderMode) {
+                          setEditingAccount(acc);
+                          setQuickAmount('');
+                          setQuickDescription('');
+                          setQuickConcept('Ajuste');
+                        }
+                      }}
+                      className={`mt-4 ${!reorderMode ? 'cursor-pointer' : 'select-none'}`}
+                    >
+                      <div className="flex items-baseline gap-0.5">
+                        <span className="text-[10px] text-zinc-400 font-bold">$</span>
+                        <p className="text-[17px] font-black text-zinc-950 tracking-tight leading-none">
+                          {acc.balance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <span className="text-[9px] text-zinc-450 font-extrabold uppercase ml-0.5">{acc.currency}</span>
+                      </div>
+                      {acc.currency !== 'MXN' && (
+                        <p className="text-[9.5px] font-bold text-zinc-400/90 leading-none mt-2 pt-1 border-t border-dashed border-zinc-200">
+                          ≈ ${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })} MXN
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
