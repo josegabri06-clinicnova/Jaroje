@@ -850,27 +850,24 @@ export default function FinanzasPage() {
     const targetIndex = index + (direction === 'up' ? -1 : 1);
     if (targetIndex < 0 || targetIndex >= sorted.length) return;
 
-    const currentAcc = sorted[index];
-    const targetAcc = sorted[targetIndex];
+    // Reordenar el arreglo localmente
+    const newSorted = [...sorted];
+    const [movedItem] = newSorted.splice(index, 1);
+    newSorted.splice(targetIndex, 0, movedItem);
 
-    // Intercambiar sort_index
-    const currentIdxValue = currentAcc.sort_index !== undefined && currentAcc.sort_index !== null ? currentAcc.sort_index : index;
-    const targetIdxValue = targetAcc.sort_index !== undefined && targetAcc.sort_index !== null ? targetAcc.sort_index : targetIndex;
-
-    // Actualizar localmente para feedback inmediato en UI
+    // Asignar a cada elemento su índice secuencial
     const updatedAccounts = accounts.map(a => {
-      if (a.id === currentAcc.id) return { ...a, sort_index: targetIdxValue };
-      if (a.id === targetAcc.id) return { ...a, sort_index: currentIdxValue };
-      return a;
+      const newIdx = newSorted.findIndex(item => item.id === a.id);
+      return { ...a, sort_index: newIdx };
     });
     setAccounts(updatedAccounts);
 
-    // Actualizar en Supabase en segundo plano
+    // Actualizar en Supabase en segundo plano todos los que cambiaron su índice
     try {
-      await Promise.all([
-        supabase.from('accounts').update({ sort_index: targetIdxValue }).eq('id', currentAcc.id),
-        supabase.from('accounts').update({ sort_index: currentIdxValue }).eq('id', targetAcc.id)
-      ]);
+      const promises = updatedAccounts.map(a => 
+        supabase.from('accounts').update({ sort_index: a.sort_index }).eq('id', a.id)
+      );
+      await Promise.all(promises);
     } catch (e) {
       console.error("Error al guardar el nuevo orden en Supabase:", e);
     }
