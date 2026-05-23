@@ -259,7 +259,7 @@ export default function FinanzasPage() {
   const [editingRecord, setEditingRecord] = useState<FinanceRecord | null>(null);
   const [formType, setFormType] = useState<'ingreso' | 'gasto'>('gasto');
   const [formAmount, setFormAmount] = useState('');
-  const [formCategory, setFormCategory] = useState('Suministros');
+  const [formCategory, setFormCategory] = useState('Proveedores');
   const [formDescription, setFormDescription] = useState('');
   const [formAccountId, setFormAccountId] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
@@ -299,6 +299,7 @@ export default function FinanzasPage() {
       if (params.get('action') === 'new_movement') {
         setEditingRecord(null);
         setFormType('gasto');
+        setFormCategory('Proveedores');
         setFormAmount('');
         setFormDescription('');
         setFormDate(new Date().toISOString().split('T')[0]);
@@ -1009,6 +1010,7 @@ export default function FinanzasPage() {
             onClick={() => {
               setEditingRecord(null);
               setFormType('gasto');
+              setFormCategory('Proveedores');
               setFormAmount('');
               setFormDescription('');
               setFormDate(new Date().toISOString().split('T')[0]);
@@ -1505,14 +1507,20 @@ export default function FinanzasPage() {
               <div className="flex bg-zinc-100 p-1 rounded-xl">
                 <button
                   type="button"
-                  onClick={() => setFormType('gasto')}
+                  onClick={() => {
+                    setFormType('gasto');
+                    if (!editingRecord) setFormCategory('Proveedores');
+                  }}
                   className={`flex-1 py-2 text-[14px] font-bold rounded-lg transition-all ${formType === 'gasto' ? 'bg-white text-rose-600 shadow-sm' : 'text-zinc-500'}`}
                 >
                   Salida (Gasto)
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormType('ingreso')}
+                  onClick={() => {
+                    setFormType('ingreso');
+                    if (!editingRecord) setFormCategory('Reserva Directa');
+                  }}
                   className={`flex-1 py-2 text-[14px] font-bold rounded-lg transition-all ${formType === 'ingreso' ? 'bg-white text-emerald-600 shadow-sm' : 'text-zinc-500'}`}
                 >
                   Entrada (Ingreso)
@@ -1554,24 +1562,33 @@ export default function FinanzasPage() {
                 <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Concepto / Categoría</label>
                 <select 
                   value={formCategory} onChange={e => setFormCategory(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-medium text-base focus:ring-2 focus:ring-zinc-900/10"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-medium text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 font-bold"
                 >
                   {formType === 'gasto' ? (
                     <>
-                      <option>Suministros</option>
-                      <option>Limpieza</option>
-                      <option>Mantenimiento</option>
-                      <option>Servicios (Luz, Agua)</option>
-                      <option>Nómina</option>
+                      <option>Proveedores</option>
+                      <option>Nomina Fiscal</option>
+                      <option>Nomina No Fiscal</option>
+                      <option>Préstamos</option>
                       <option>Impuestos</option>
-                      <option>Transferencia a otra Cuenta</option>
+                      <option>Servicios (Luz, Agua, Internet, etc)</option>
+                      <option>Suministros</option>
+                      <option>Mantenimiento</option>
+                      <option>Comisiones</option>
+                      <option>Personal</option>
+                      <option>Tarjeta de Crédito</option>
+                      <option>Transferencia</option>
                       <option>Otros</option>
                     </>
                   ) : (
                     <>
                       <option>Reserva Directa</option>
-                      <option>Venta Extra</option>
-                      <option>Transferencia de otra Cuenta</option>
+                      <option>Walk In</option>
+                      <option>Ingreso Extra</option>
+                      <option>Booking</option>
+                      <option>Airbnb</option>
+                      <option>Ajuste</option>
+                      <option>Transferencia</option>
                       <option>Otros</option>
                     </>
                   )}
