@@ -1,19 +1,19 @@
 "use client";
-
+ 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync } from '@/lib/auth';
-
+ 
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
-
+ 
 type Account = {
   id: string;
   name: string;
@@ -21,7 +21,7 @@ type Account = {
   balance: number;
   currency: string;
 };
-
+ 
 type FinanceRecord = {
   id: string;
   created_at: string;
@@ -34,7 +34,7 @@ type FinanceRecord = {
   accounts?: { name: string };
   payment_method?: string;
 };
-
+ 
 const cleanDescription = (desc: string) => {
   if (!desc) return '';
   let cleaned = desc
@@ -46,24 +46,24 @@ const cleanDescription = (desc: string) => {
   cleaned = cleaned.replace(/[-|:\s]+$/, '').trim();
   return cleaned;
 };
-
+ 
 export default function FinanzasPage() {
   // PIN Locking System (Removido por solicitud del cliente: entrada directa)
   const [pinLocked, setPinLocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [validatingPin, setValidatingPin] = useState(false);
-
+ 
   // Tipos de cambio dinámicos (Google/ExchangeRate-API)
   const [rates, setRates] = useState<Record<string, number>>({ USD: 17.50, EUR: 18.80, MXN: 1.0 });
-
-  // Transferencias entre sobres
+ 
+  // Transferencias entre cuentas
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferFromId, setTransferFromId] = useState('');
   const [transferToId, setTransferToId] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
   const [transferDescription, setTransferDescription] = useState('');
-
+ 
   // Gestionar cuentas (Agregar y Quitar)
   const [showManageAccountsModal, setShowManageAccountsModal] = useState(false);
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
@@ -72,10 +72,11 @@ export default function FinanzasPage() {
   const [accBalance, setAccBalance] = useState('');
   const [accCurrency, setAccCurrency] = useState('MXN');
   const [isSavingAcc, setIsSavingAcc] = useState(false);
-
+ 
   // Filtro de Cuenta en Registro
   const [filterAccountId, setFilterAccountId] = useState('todo');
-
+  const [sortBy, setSortBy] = useState<'oficial' | 'nombre' | 'saldo'>('oficial');
+ 
   // Evaluador de expresiones matemáticas seguro
   const evaluateMath = (expr: string): number => {
     if (!expr) return 0;
@@ -397,21 +398,21 @@ export default function FinanzasPage() {
       setQuickConcept('Ajuste');
       fetchData();
     } else {
-      alert("Error al actualizar el saldo del sobre");
+      alert("Error al actualizar el saldo de la cuenta");
     }
   };
 
-  // Lógica de Transferencias Atómicas entre Cuentas/Sobres
+  // Lógica de Transferencias Atómicas entre Cuentas
   const handleTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     const evaluatedAmount = evaluateMath(transferAmount);
     if (!transferFromId || !transferToId || evaluatedAmount <= 0) {
-      alert("Por favor selecciona los sobres y un monto válido");
+      alert("Por favor selecciona las cuentas y un monto válido");
       return;
     }
 
     if (transferFromId === transferToId) {
-      alert("No puedes transferir al mismo sobre");
+      alert("No puedes transferir a la misma cuenta");
       return;
     }
 
@@ -488,7 +489,7 @@ export default function FinanzasPage() {
   // Lógica para Agregar Cuentas/Sobres
   const handleAddAccount = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accName) return alert("Por favor ingresa un nombre para el sobre");
+    if (!accName) return alert("Por favor ingresa un nombre para la cuenta");
 
     setIsSavingAcc(true);
     const balanceNum = Number(accBalance) || 0;
@@ -512,7 +513,7 @@ export default function FinanzasPage() {
             type: 'ingreso',
             amount: balanceNum,
             category: 'Ajuste',
-            description: 'Saldo inicial de apertura del sobre',
+            description: 'Saldo inicial de apertura de la cuenta',
             account_id: newAcc.id,
             payment_method: 'efectivo',
             date: new Date().toISOString().split('T')[0]
@@ -520,7 +521,7 @@ export default function FinanzasPage() {
         }
       }
 
-      alert("✅ Sobre creado con éxito.");
+      alert("✅ Cuenta creada con éxito.");
       setShowAddAccountModal(false);
       setAccName('');
       setAccBalance('');
@@ -528,23 +529,23 @@ export default function FinanzasPage() {
       fetchData();
     } catch (err: any) {
       console.error(err);
-      alert("❌ Error al crear el sobre: " + err.message);
+      alert("❌ Error al crear la cuenta: " + err.message);
     } finally {
       setIsSavingAcc(false);
     }
   };
 
-  // Lógica para Eliminar Cuentas/Sobres de Forma Segura (Preservando Integridad)
+  // Lógica para Eliminar Cuentas de Forma Segura (Preservando Integridad)
   const handleDeleteAccount = async (accountId: string) => {
     const acc = accounts.find(a => a.id === accountId);
     if (!acc) return;
 
     if (acc.balance !== 0) {
-      if (!confirm(`⚠️ Este sobre tiene un saldo activo de $${acc.balance.toLocaleString('es-MX')} ${acc.currency}. Si lo eliminas, perderás este saldo en el total general. ¿Deseas continuar?`)) {
+      if (!confirm(`⚠️ Esta cuenta tiene un saldo activo de $${acc.balance.toLocaleString('es-MX')} ${acc.currency}. Si la eliminas, perderás este saldo en el total general. ¿Deseas continuar?`)) {
         return;
       }
     } else {
-      if (!confirm(`¿Seguro que deseas eliminar el sobre "${acc.name}"?`)) {
+      if (!confirm(`¿Seguro que deseas eliminar la cuenta "${acc.name}"?`)) {
         return;
       }
     }
@@ -557,17 +558,17 @@ export default function FinanzasPage() {
       const { error } = await supabase.from('accounts').delete().eq('id', accountId);
       if (error) throw error;
 
-      alert("✅ Sobre eliminado con éxito.");
+      alert("✅ Cuenta eliminada con éxito.");
       fetchData();
     } catch (err: any) {
       console.error(err);
-      alert("❌ Error al eliminar el sobre: " + err.message);
+      alert("❌ Error al eliminar la cuenta: " + err.message);
     }
   };
 
   const downloadBackupCSV = () => {
     if (records.length === 0) return;
-    const headers = ["Fecha", "Tipo", "Categoría", "Monto", "Sobre", "Descripción"];
+    const headers = ["Fecha", "Tipo", "Categoría", "Monto", "Cuenta", "Descripción"];
     const csvContent = [
       headers.join(","),
       ...records.map(r => [
@@ -730,32 +731,48 @@ export default function FinanzasPage() {
 
   const exportToCSV = () => {
     if (filteredRecords.length === 0) return alert("No hay datos para exportar.");
-    const headers = ["Fecha", "Tipo", "Categoría", "Monto", "Sobre", "Descripción"];
-    const csvContent = [
-      headers.join(","),
-      ...filteredRecords.map(r => [
-        format(new Date(r.date), 'dd/MM/yyyy'),
-        r.type,
-        `"${r.category}"`,
-        r.amount,
-        `"${r.accounts?.name || 'Desconocido'}"`,
-        `"${cleanDescription(r.description) || ''}"`
-      ].join(","))
-    ].join("\n");
-    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Finanzas_Jaroje_${format(new Date(), 'yyyy-MM-dd')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    window.location.href = `/api/finances/export?time=${filterType}&account=${filterAccountId}`;
+  };
+
+  const sortAccounts = (accs: any[]) => {
+    return [...accs].sort((a, b) => {
+      if (sortBy === 'nombre') {
+        return a.name.localeCompare(b.name);
+      }
+      if (sortBy === 'saldo') {
+        return convertToMXN(b.balance, b.currency) - convertToMXN(a.balance, a.currency);
+      }
+      const OFFICIAL_ORDER = [
+        'EFE PEND',
+        'EFE HUX',
+        'EFE TRC',
+        'EFE USD',
+        'BANAMEX',
+        'MERCADO PAGO',
+        'BBVA RICKY',
+        'HSBC FISCAL',
+        'SANTANDER',
+        'INV. ROL',
+        'INV LAU',
+        'BOOKING',
+        'WISE',
+        'REVOLUT',
+        'BBVA €',
+        'IBC ROL',
+        'IBC LAU',
+        'IBC ROLY'
+      ];
+      const idxA = OFFICIAL_ORDER.indexOf(a.name.trim().toUpperCase());
+      const idxB = OFFICIAL_ORDER.indexOf(b.name.trim().toUpperCase());
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.name.localeCompare(b.name);
+    });
   };
 
   // Group Accounts
-  const getGroup = (type: string) => accounts
-    .filter(a => a.group_type === type)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const getGroup = (type: string) => sortAccounts(accounts.filter(a => a.group_type === type));
   const sumGroup = (type: string) => getGroup(type).reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
   const totalGeneral = accounts.reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
 
@@ -793,6 +810,11 @@ export default function FinanzasPage() {
                 <p className="text-[16px] font-black text-zinc-900 leading-none">${acc.balance.toLocaleString('es-MX')}</p>
                 <span className="text-[9px] text-zinc-400 font-extrabold uppercase">{acc.currency}</span>
               </div>
+              {acc.currency !== 'MXN' && (
+                <p className="text-[10px] font-semibold text-zinc-400/80 leading-none mt-1.5 pt-0.5 border-t border-dashed border-zinc-250/20">
+                  ≈ ${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })} MXN
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -814,7 +836,7 @@ export default function FinanzasPage() {
           Caja de Seguridad Bloqueada
         </h2>
         <p className="text-[13px] text-zinc-400 leading-relaxed max-w-[300px] mb-8 relative z-10">
-          Esta vista contiene balances, sobres físicos de efectivo e historial financiero del hotel. Introduce el PIN de administrador para desbloquear.
+          Esta vista contiene balances, cuentas contables e historial financiero del hotel. Introduce el PIN de administrador para desbloquear.
         </p>
 
         {/* PIN Indicators */}
@@ -875,10 +897,22 @@ export default function FinanzasPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div>
-          <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Sobres Mensuales</h2>
+          <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Cuentas Contables</h2>
           <p className="text-[13px] font-medium text-zinc-500">Control de Flujo de Efectivo</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Ordenamiento de cuentas */}
+          <select 
+            value={sortBy} 
+            onChange={e => setSortBy(e.target.value as any)}
+            className="h-10 px-3 bg-white border border-zinc-200 text-zinc-700 rounded-full text-xs font-bold shadow-sm outline-none cursor-pointer focus:border-zinc-400 focus:ring-1 focus:ring-zinc-900/5 transition-all"
+            title="Ordenar cuentas"
+          >
+            <option value="oficial">Orden Oficial</option>
+            <option value="nombre">Orden Alfabético</option>
+            <option value="saldo">Orden por Saldo</option>
+          </select>
+
           <button 
             onClick={() => {
               setTransferFromId('');
@@ -888,19 +922,19 @@ export default function FinanzasPage() {
               setShowTransferModal(true);
             }}
             className="h-10 px-4 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95 transition-all text-xs font-bold"
-            title="Transferir entre sobres"
+            title="Transferir entre cuentas"
           >
-            <RefreshCw size={14} className="text-zinc-650 animate-none" />
+            <ArrowLeftRight size={14} className="text-zinc-650" />
             <span className="hidden sm:inline">Transferir</span>
           </button>
 
           <button 
             onClick={() => setShowManageAccountsModal(true)}
             className="h-10 px-4 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95 transition-all text-xs font-bold"
-            title="Gestionar Sobres"
+            title="Gestionar Cuentas"
           >
             <PiggyBank size={14} className="text-zinc-650" />
-            <span className="hidden sm:inline">Gestionar Sobres</span>
+            <span className="hidden sm:inline">Gestionar Cuentas</span>
           </button>
 
           <button 
@@ -987,7 +1021,7 @@ export default function FinanzasPage() {
               <div className="flex-1 space-y-1">
                 <h4 className="text-[15px] font-bold text-zinc-900">Mantenimiento Contable</h4>
                 <p className="text-[12px] text-zinc-500 leading-relaxed">
-                  Limpia por completo el historial de movimientos y restablece el saldo de todos los sobres y cuentas a <span className="font-bold text-rose-600">MX$0</span>. Esta acción es definitiva y no afectará a las reservas ni al inventario físico.
+                  Limpia por completo el historial de movimientos y restablece el saldo de todas las cuentas a <span className="font-bold text-rose-600">MX$0</span>. Esta acción es definitiva y no afectará a las reservas ni al inventario físico.
                 </p>
                 <div className="pt-3">
                   <button
@@ -1031,8 +1065,8 @@ export default function FinanzasPage() {
                 onChange={e => setFilterAccountId(e.target.value)}
                 className="w-full bg-transparent border-none text-[12px] font-bold text-zinc-700 py-1.5 px-2 outline-none cursor-pointer"
               >
-                <option value="todo">Todos los Sobres</option>
-                {accounts.sort((a,b) => a.name.localeCompare(b.name)).map(acc => (
+                <option value="todo">Todas las Cuentas</option>
+                {sortAccounts(accounts).map(acc => (
                   <option key={acc.id} value={acc.id}>{acc.name} ({acc.currency})</option>
                 ))}
               </select>
@@ -1124,14 +1158,14 @@ export default function FinanzasPage() {
         </div>
       )}
 
-      {/* Modal Registrar Movimiento en Cuenta/Sobre */}
+      {/* Modal Registrar Movimiento en Cuenta */}
       {editingAccount && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
           <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col">
              <div className="flex justify-between items-center mb-4">
               <div>
                 <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
-                  Sobre: {editingAccount.name}
+                  Cuenta: {editingAccount.name}
                 </h3>
                 <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">{editingAccount.group_type}</span>
               </div>
@@ -1223,18 +1257,18 @@ export default function FinanzasPage() {
                       <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción (Opcional)</label>
                       <input 
                         type="text"
-                        placeholder="Comentario sobre el movimiento"
+                        placeholder="Comentario del movimiento"
                         value={quickDescription} onChange={e => setQuickDescription(e.target.value)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300"
                       />
                     </div>
 
-                    {/* RECENT MOVEMENTS IN THIS ENVELOPE */}
+                    {/* RECENT MOVEMENTS IN THIS ACCOUNT */}
                     <div className="pt-1">
-                      <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">Últimos movimientos del sobre</p>
+                      <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">Últimos movimientos de la cuenta</p>
                       <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
                         {records.filter(r => r.account_id === editingAccount.id).length === 0 ? (
-                          <p className="text-[11px] text-zinc-400 font-medium italic text-center py-2 bg-zinc-50/50 rounded-lg">Sin movimientos registrados en este sobre.</p>
+                          <p className="text-[11px] text-zinc-400 font-medium italic text-center py-2 bg-zinc-50/50 rounded-lg">Sin movimientos registrados en esta cuenta.</p>
                         ) : (
                           records
                             .filter(r => r.account_id === editingAccount.id)
@@ -1329,14 +1363,14 @@ export default function FinanzasPage() {
               </div>
 
               <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">¿De/Para qué Sobre?</label>
+                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">¿De/Para qué Cuenta?</label>
                 <select 
                   required
                   value={formAccountId} onChange={e => setFormAccountId(e.target.value)}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-bold text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
                 >
-                  <option value="" disabled>Selecciona un Sobre...</option>
-                  {accounts.map(acc => (
+                  <option value="" disabled>Selecciona una Cuenta...</option>
+                  {sortAccounts(accounts).map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.name} ({acc.group_type})</option>
                   ))}
                 </select>
@@ -1356,14 +1390,14 @@ export default function FinanzasPage() {
                       <option>Servicios (Luz, Agua)</option>
                       <option>Nómina</option>
                       <option>Impuestos</option>
-                      <option>Transferencia a otro Sobre</option>
+                      <option>Transferencia a otra Cuenta</option>
                       <option>Otros</option>
                     </>
                   ) : (
                     <>
                       <option>Reserva Directa</option>
                       <option>Venta Extra</option>
-                      <option>Transferencia de otro Sobre</option>
+                      <option>Transferencia de otra Cuenta</option>
                       <option>Otros</option>
                     </>
                   )}
@@ -1382,11 +1416,17 @@ export default function FinanzasPage() {
 
               <div>
                 <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Fecha</label>
-                <input 
-                  type="date" required
-                  value={formDate} onChange={e => setFormDate(e.target.value)}
-                  className="w-full text-base font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all"
-                />
+                {editingRecord ? (
+                  <input 
+                    type="date" required
+                    value={formDate} onChange={e => setFormDate(e.target.value)}
+                    className="w-full text-base font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 transition-all text-zinc-900"
+                  />
+                ) : (
+                  <div className="w-full text-base font-bold bg-zinc-100 border border-zinc-200 rounded-2xl px-4 py-3 text-zinc-500 select-none">
+                    {format(new Date(), 'dd/MM/yyyy')} (Fijo en el día del registro)
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex gap-2">
@@ -1440,7 +1480,7 @@ export default function FinanzasPage() {
                 Confirmación de Borrado Permanente
               </h3>
               <p className="text-[12px] text-zinc-500 leading-relaxed">
-                Estás a punto de vaciar **todo el historial del Libro Contable** y restablecer el saldo de todos los sobres físicos a **$0 MXN**. 
+                Estás a punto de vaciar **todo el historial del Libro Contable** y restablecer el saldo de todas las cuentas contables a **$0 MXN**. 
               </p>
               
               <div className="bg-red-50/50 border border-red-150 rounded-2xl p-3 text-[11px] text-red-700 leading-relaxed font-medium">
@@ -1509,18 +1549,18 @@ export default function FinanzasPage() {
         }}
       />
 
-      {/* Modal Premium de Transferencias entre Sobres */}
+      {/* Modal Premium de Transferencias entre Cuentas */}
       {showTransferModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
           <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-5">
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
-                  <RefreshCw size={18} strokeWidth={2.5} className="text-zinc-850 animate-none" />
+                  <ArrowLeftRight size={18} className="text-zinc-850" />
                 </div>
                 <div>
                   <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
-                    Traspaso entre Sobres
+                    Traspaso entre Cuentas
                   </h3>
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Movimiento Contable Interno</span>
                 </div>
@@ -1535,7 +1575,7 @@ export default function FinanzasPage() {
 
             <form onSubmit={handleTransfer} className="space-y-4">
               <div>
-                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Sobre de Origen (Deducir)</label>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Cuenta de Origen (Deducir)</label>
                 <select 
                   required
                   value={transferFromId}
@@ -1543,14 +1583,14 @@ export default function FinanzasPage() {
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
                 >
                   <option value="">Selecciona origen...</option>
-                  {accounts.map(acc => (
+                  {sortAccounts(accounts).map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.name} (${acc.balance.toLocaleString('es-MX')} {acc.currency})</option>
                   ))}
                 </select>
               </div>
 
               <div>
-                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Sobre de Destino (Acreditar)</label>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Cuenta de Destino (Acreditar)</label>
                 <select 
                   required
                   value={transferToId}
@@ -1558,7 +1598,7 @@ export default function FinanzasPage() {
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
                 >
                   <option value="">Selecciona destino...</option>
-                  {accounts.map(acc => (
+                  {sortAccounts(accounts).map(acc => (
                     <option key={acc.id} value={acc.id}>{acc.name} (${acc.balance.toLocaleString('es-MX')} {acc.currency})</option>
                   ))}
                 </select>
@@ -1648,7 +1688,7 @@ export default function FinanzasPage() {
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      <RefreshCw size={14} />
+                      <ArrowLeftRight size={14} />
                       Traspasar
                     </>
                   )}
@@ -1659,7 +1699,7 @@ export default function FinanzasPage() {
         </div>
       )}
 
-      {/* Modal Premium de Gestión de Sobres */}
+      {/* Modal Premium de Gestión de Cuentas */}
       {showManageAccountsModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
           <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
@@ -1670,7 +1710,7 @@ export default function FinanzasPage() {
                 </div>
                 <div>
                   <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
-                    Administrar Sobres
+                    Administrar Cuentas
                   </h3>
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Carteras y Cuentas Activas</span>
                 </div>
@@ -1685,7 +1725,7 @@ export default function FinanzasPage() {
 
             {/* List of Envelopes */}
             <div className="flex-1 overflow-y-auto pr-1 space-y-2 mb-4">
-              {accounts.sort((a,b) => a.name.localeCompare(b.name)).map(acc => (
+              {sortAccounts(accounts).map(acc => (
                 <div key={acc.id} className="flex justify-between items-center bg-zinc-50 hover:bg-zinc-100/50 p-3 rounded-2xl border border-zinc-200/55 transition-all duration-200">
                   <div>
                     <span className="font-extrabold text-zinc-900 text-[13px] block leading-tight">{acc.name}</span>
@@ -1696,7 +1736,7 @@ export default function FinanzasPage() {
                     <button 
                       onClick={() => handleDeleteAccount(acc.id)}
                       className="p-2 hover:bg-rose-50 text-zinc-400 hover:text-rose-600 rounded-xl transition-all cursor-pointer"
-                      title="Eliminar sobre"
+                      title="Eliminar cuenta"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -1723,14 +1763,14 @@ export default function FinanzasPage() {
                 className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Plus size={14} />
-                Nuevo Sobre
+                Nueva Cuenta
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal Premium para Crear Cuentas/Sobres */}
+      {/* Modal Premium para Crear Cuentas */}
       {showAddAccountModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
           <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col">
@@ -1741,7 +1781,7 @@ export default function FinanzasPage() {
                 </div>
                 <div>
                   <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
-                    Nuevo Sobre
+                    Nueva Cuenta
                   </h3>
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Crear Caja o Cuenta</span>
                 </div>
@@ -1756,7 +1796,7 @@ export default function FinanzasPage() {
 
             <form onSubmit={handleAddAccount} className="space-y-4">
               <div>
-                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Nombre del Sobre</label>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Nombre de la Cuenta</label>
                 <input 
                   type="text" required
                   placeholder="Ej. Caja Recepción, Dólares..."
