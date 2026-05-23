@@ -951,7 +951,7 @@ export default function FinanzasPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div>
-          <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Cuentas Contables</h2>
+          <h2 className="text-[22px] font-extrabold text-zinc-950 tracking-tight uppercase">FINANZAS</h2>
           <p className="text-[13px] font-medium text-zinc-500">Control de Flujo de Efectivo</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
