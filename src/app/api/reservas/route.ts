@@ -61,3 +61,45 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+// DELETE: Cancelar reserva en Beds24 y liberar checkins en Supabase
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Falta el parámetro id de la reserva' }, { status: 400 });
+    }
+
+    const BEDS24_TOKEN = await getBeds24Token();
+
+    // 1. Cancelar en Beds24
+    const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+      method: 'POST',
+      headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+      body: JSON.stringify([{
+        id: Number(id),
+        status: "cancelled"
+      }])
+    });
+
+    if (!beds24Response.ok) {
+      const errText = await beds24Response.text();
+      throw new Error(`Beds24 rechazó la cancelación: ${errText}`);
+    }
+
+    // 2. Liberar registro de checkin local en Supabase si existía
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    await supabase.from('checkins').delete().eq('reservation_id', id.toString());
+
+    const dataB24 = await beds24Response.json();
+    return NextResponse.json({ success: true, message: "Reserva cancelada en Beds24 y liberada localmente.", data: dataB24 });
+
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

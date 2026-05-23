@@ -191,6 +191,33 @@ export default function ReservasList() {
     }
   };
 
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  const handleCancelReserva = async () => {
+    if (!selectedRes) return;
+    const confirmCancel = confirm(`⚠️ ¿Estás seguro de que deseas cancelar permanentemente la reserva de ${selectedRes.guest_name}?\n\nEsta acción eliminará el check-in local y sincronizará la cancelación en Beds24 de inmediato.`);
+    if (!confirmCancel) return;
+
+    setCancelLoading(true);
+    try {
+      const res = await fetch(`/api/reservas?id=${selectedRes.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Error al cancelar la reserva');
+
+      alert('✅ Reserva cancelada con éxito en Beds24 y liberada en la App.');
+      setSelectedRes(null);
+      fetchReservas(); // Refrescar el listado
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al cancelar reserva:\n\n${err.message}`);
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
   const exportCSV = async () => {
     setExportLoading(true);
     try {
@@ -636,6 +663,24 @@ export default function ReservasList() {
                 </button>
               )}
               
+              {/* Cancelar Reserva Button */}
+              {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
+                <button 
+                  onClick={handleCancelReserva}
+                  disabled={cancelLoading}
+                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[13.5px] py-3.5 rounded-xl transition-all active:scale-[0.98] border border-rose-200 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                >
+                  {cancelLoading ? (
+                    <div className="w-4 h-4 border-2 border-rose-600/30 border-t-rose-600 rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <AlertCircle size={15} />
+                      Cancelar Reserva en Beds24
+                    </>
+                  )}
+                </button>
+              )}
+
               <button 
                 onClick={() => {
                   window.open(`https://beds24.com/control2.php?pagetype=autoBooking&id=${selectedRes.id}`, '_blank');
