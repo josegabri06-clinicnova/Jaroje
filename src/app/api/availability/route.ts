@@ -75,7 +75,7 @@ export async function GET(req: Request) {
     const arrivalFrom = fromDate.toISOString().split('T')[0];
 
     const toDate = new Date(today);
-    toDate.setDate(today.getDate() + 540);
+    toDate.setDate(today.getDate() + 1000);
     const arrivalTo = toDate.toISOString().split('T')[0];
 
     const bookingsRes = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=1000`, {
