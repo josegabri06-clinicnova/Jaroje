@@ -11,25 +11,25 @@ export const dynamic = 'force-dynamic';
 
 // ─── TARIFAS REALES JAROJE (MXN) ──────────────────────────────────────────────
 const JAROJE_PRICES: Record<string, Record<string, number>> = {
-  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 }, // Habitación Estándar
-  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 }, // Condominio 1R
-  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 }, // Condominio 2R
-  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 }, // Condominio 3R
-  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 }, // Casa de Lujo
+  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 }, // Habitación DOBLE - 2 camas dobles
+  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 }, // Apartamento Premier de 1 dormitorio
+  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 }, // Apartamento Premier de 2 dormitorios
+  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 }, // Apartamento Premier de 3 dormitorios
+  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 }, // Casa Vacacional de 3 dormitorios
 };
 
 const JAROJE_CATALOG: Record<string, any> = {
-  '679077': { nombre: 'Habitación Estándar', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '679087': { nombre: 'Condominio 1R', capacidad: 4, camas: '1 King o 2 Matrimoniales', amenities: 'Cocina equipada, Terraza, Alberca, Jardín, WiFi, AC', categoria: 'Condominio' },
-  '679091': { nombre: 'Condominio 2R', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '679092': { nombre: 'Condominio 3R', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '679093': { nombre: 'Casa de Lujo', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
+  '679077': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '679087': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '1 King o 2 Matrimoniales', amenities: 'Cocina equipada, Terraza, Alberca, Jardín, WiFi, AC', categoria: 'Condominio' },
+  '679091': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '679092': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '679093': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
   // Fallbacks
-  'default_1': { nombre: 'Habitación Estándar', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
-  'default_2': { nombre: 'Condominio 1R', capacidad: 4, camas: '2 Matrimoniales', amenities: 'Cocina, WiFi, AC', categoria: 'Condominio' },
-  'default_3': { nombre: 'Condominio 2R', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, 2 Baños', categoria: 'Condominio' },
-  'default_4': { nombre: 'Condominio 3R', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, 3 Baños', categoria: 'Condominio' },
-  'default_5': { nombre: 'Casa de Lujo', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, Premium', categoria: 'Casa' },
+  'default_1': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
+  'default_2': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '2 Matrimoniales', amenities: 'Cocina, WiFi, AC', categoria: 'Condominio' },
+  'default_3': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, 2 Baños', categoria: 'Condominio' },
+  'default_4': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, 3 Baños', categoria: 'Condominio' },
+  'default_5': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, Premium', categoria: 'Casa' },
 };
 
 function getSeason(dateStr: string | null | undefined): 'baja' | 'media' | 'media_alta' | 'alta' {

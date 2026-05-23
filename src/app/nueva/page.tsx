@@ -222,15 +222,15 @@ export default function VercelActionForm() {
       <form onSubmit={handleSubmit} className="bg-white border border-zinc-200/80 p-5 rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.03)] space-y-5">
         
         {/* Fechas (Primero, para poder cargar disponibilidad) */}
-        <div className="grid grid-cols-2 gap-3.5">
-          <div className="space-y-1.5">
+        <div className="flex gap-3.5 w-full">
+          <div className="flex-1 min-w-0 space-y-1.5">
             <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Check-In</label>
             <input 
               key={todayStr ? `checkin-${todayStr}` : 'checkin-loading'}
               type="date" 
               required
               min={todayStr}
-              className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
+              className="w-full min-w-0 max-w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl px-2.5 py-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkIn}
               onChange={e => {
                 let newCheckIn = e.target.value;
@@ -245,14 +245,14 @@ export default function VercelActionForm() {
               }}
             />
           </div>
-          <div className="space-y-1.5">
+          <div className="flex-1 min-w-0 space-y-1.5">
             <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Check-Out</label>
             <input 
               key={form.checkIn ? `checkout-${form.checkIn}` : `checkout-loading-${todayStr}`}
               type="date" 
               required
               min={form.checkIn ? getNextDayStr(form.checkIn) : getNextDayStr(todayStr)}
-              className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
+              className="w-full min-w-0 max-w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl px-2.5 py-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={form.checkOut}
               onChange={e => {
                 let newCheckOut = e.target.value;

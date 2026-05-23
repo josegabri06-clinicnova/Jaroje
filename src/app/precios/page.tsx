@@ -5,11 +5,11 @@ import { Calculator, Calendar, Tag, ChevronDown, TrendingUp, Zap } from 'lucide-
 
 // ─── DATOS DE TARIFAS REALES ──────────────────────────────────────────────────
 const ROOMS = [
-  { id: '679077', name: 'Habitación Estándar', icon: '🛏️', capacity: 2 },
-  { id: '679087', name: 'Condominio 1R',        icon: '🏠', capacity: 4 },
-  { id: '679091', name: 'Condominio 2R',        icon: '🏡', capacity: 6 },
-  { id: '679092', name: 'Condominio 3R',        icon: '🏘️', capacity: 8 },
-  { id: '679093', name: 'Casa de Lujo',         icon: '💎', capacity: 12 },
+  { id: '679077', name: 'Habitación DOBLE - 2 camas dobles', icon: '🛏️', capacity: 2 },
+  { id: '679087', name: 'Apartamento Premier de 1 dormitorio', icon: '🏠', capacity: 4 },
+  { id: '679091', name: 'Apartamento Premier de 2 dormitorios', icon: '🏡', capacity: 6 },
+  { id: '679092', name: 'Apartamento Premier de 3 dormitorios', icon: '🏘️', capacity: 8 },
+  { id: '679093', name: 'Casa Vacacional de 3 dormitorios', icon: '💎', capacity: 12 },
 ];
 
 const PRICES: Record<string, Record<string, number>> = {

@@ -56,11 +56,11 @@ const ROOMS = [
 ];
 
 const BEDS24_ROOMS = [
-  { id: '679077', name: 'Habitación Estándar' },
-  { id: '679087', name: 'Condominio 1R' },
-  { id: '679091', name: 'Condominio 2R' },
-  { id: '679092', name: 'Condominio 3R' },
-  { id: '679093', name: 'Casa de Lujo' }
+  { id: '679077', name: 'Habitación DOBLE - 2 camas dobles' },
+  { id: '679087', name: 'Apartamento Premier de 1 dormitorio' },
+  { id: '679091', name: 'Apartamento Premier de 2 dormitorios' },
+  { id: '679092', name: 'Apartamento Premier de 3 dormitorios' },
+  { id: '679093', name: 'Casa Vacacional de 3 dormitorios' }
 ];
 
 const PRICES: Record<string, Record<string, number>> = {

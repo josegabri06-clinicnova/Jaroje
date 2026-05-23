@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 const ROOM_MAP = [
   { 
     roomId: '679077', 
-    name: 'Habitación Estándar',
+    name: 'Habitación DOBLE - 2 camas dobles',
     units: [
       { unitId: '1', name: '301' },
       { unitId: '2', name: '302' },
@@ -18,14 +18,14 @@ const ROOM_MAP = [
   },
   { 
     roomId: '679087', 
-    name: 'Condominio 1R',
+    name: 'Apartamento Premier de 1 dormitorio',
     units: [
       { unitId: '1', name: '402' }
     ]
   },
   { 
     roomId: '679091', 
-    name: 'Condominio 2R',
+    name: 'Apartamento Premier de 2 dormitorios',
     units: [
       { unitId: '1', name: '201' },
       { unitId: '2', name: '202' },
@@ -37,7 +37,7 @@ const ROOM_MAP = [
   },
   { 
     roomId: '679092', 
-    name: 'Condominio 3R',
+    name: 'Apartamento Premier de 3 dormitorios',
     units: [
       { unitId: '1', name: '101' },
       { unitId: '2', name: '102' },
@@ -50,7 +50,7 @@ const ROOM_MAP = [
   },
   { 
     roomId: '679093', 
-    name: 'Casa de Lujo',
+    name: 'Casa Vacacional de 3 dormitorios',
     units: [
       { unitId: '1', name: '401' }
     ]
