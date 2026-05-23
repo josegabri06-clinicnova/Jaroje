@@ -48,11 +48,47 @@ const cleanDescription = (desc: string) => {
 };
 
 export default function FinanzasPage() {
-  // PIN Locking System (Frente de seguridad hermético)
-  const [pinLocked, setPinLocked] = useState(true);
+  // PIN Locking System (Removido por solicitud del cliente: entrada directa)
+  const [pinLocked, setPinLocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
   const [validatingPin, setValidatingPin] = useState(false);
+
+  // Tipos de cambio dinámicos (Google/ExchangeRate-API)
+  const [rates, setRates] = useState<Record<string, number>>({ USD: 17.50, EUR: 18.80, MXN: 1.0 });
+
+  // Transferencias entre sobres
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferFromId, setTransferFromId] = useState('');
+  const [transferToId, setTransferToId] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferDescription, setTransferDescription] = useState('');
+
+  // Gestionar cuentas (Agregar y Quitar)
+  const [showManageAccountsModal, setShowManageAccountsModal] = useState(false);
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  const [accName, setAccName] = useState('');
+  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR'>('EFECTIVO');
+  const [accBalance, setAccBalance] = useState('');
+  const [accCurrency, setAccCurrency] = useState('MXN');
+  const [isSavingAcc, setIsSavingAcc] = useState(false);
+
+  // Filtro de Cuenta en Registro
+  const [filterAccountId, setFilterAccountId] = useState('todo');
+
+  // Evaluador de expresiones matemáticas seguro
+  const evaluateMath = (expr: string): number => {
+    if (!expr) return 0;
+    let cleaned = expr.replace(/^=/, '').replace(/[^\d+\-*/.()]/g, '');
+    if (!cleaned) return 0;
+    try {
+      const fn = new Function(`return (${cleaned})`);
+      const result = fn();
+      return isNaN(result) || !isFinite(result) ? 0 : result;
+    } catch (e) {
+      return 0;
+    }
+  };
 
   useEffect(() => {
     const checkPin = async () => {
@@ -64,9 +100,33 @@ export default function FinanzasPage() {
           return;
         }
       }
-      setPinLocked(true);
+      setPinLocked(false); // Mantener abierto de inmediato
     };
     checkPin();
+  }, []);
+
+  // Fetching de tipos de cambio dinámicos en vivo
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const res = await fetch('https://open.er-api.com/v6/latest/USD');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.rates && data.rates.MXN) {
+            const mxnRate = data.rates.MXN;
+            setRates({
+              USD: mxnRate,
+              EUR: mxnRate / (data.rates.EUR || 1),
+              MXN: 1.0
+            });
+            console.log("Tipos de cambio cargados en vivo:", { USD: mxnRate, EUR: mxnRate / (data.rates.EUR || 1) });
+          }
+        }
+      } catch (err) {
+        console.warn("Fallo al jalar tipo de cambio de API, usando fallbacks:", err);
+      }
+    };
+    fetchRates();
   }, []);
 
   useEffect(() => {
@@ -79,7 +139,6 @@ export default function FinanzasPage() {
           if (isValid) {
             sessionStorage.setItem('jaroje_session_pin', pinInput);
             setPinLocked(false);
-            // Sincronizar el widget del Copiloto en silencio sin forzar apertura
             window.dispatchEvent(new Event('sync-copilot'));
           } else {
             setPinError(true);
@@ -144,7 +203,7 @@ export default function FinanzasPage() {
     setIsLoading(true);
     
     const [accRes, recRes] = await Promise.all([
-      supabase.from('accounts').select('*').order('created_at', { ascending: true }),
+      supabase.from('accounts').select('*').order('name', { ascending: true }),
       supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false })
     ]);
     
@@ -171,6 +230,12 @@ export default function FinanzasPage() {
     }
   }, []);
 
+  const convertToMXN = (balance: number, currency: string) => {
+    const curr = (currency || 'MXN').toUpperCase();
+    const rate = rates[curr] || 1.0;
+    return balance * rate;
+  };
+
   const resolvePaymentMethod = (accountId: string) => {
     const acc = accounts.find(a => a.id === accountId);
     if (!acc) return 'transferencia';
@@ -182,10 +247,13 @@ export default function FinanzasPage() {
 
   const handleSaveMovement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formAmount || isNaN(Number(formAmount)) || !formAccountId) return alert("Rellena todos los campos");
+    const evaluatedAmount = evaluateMath(formAmount);
+    if (!formAmount || evaluatedAmount <= 0 || !formAccountId) {
+      alert("Por favor ingresa un monto válido (número o expresión como 500+250)");
+      return;
+    }
     
     setIsSaving(true);
-    const amountNum = Number(formAmount);
 
     let finalDescription = formDescription;
     if (editingRecord) {
@@ -210,7 +278,7 @@ export default function FinanzasPage() {
 
     const newRecord = {
       type: formType,
-      amount: amountNum,
+      amount: evaluatedAmount,
       category: formType === 'ingreso' && formCategory === 'Suministros' ? 'Reserva' : formCategory,
       description: finalDescription,
       account_id: formAccountId,
@@ -236,7 +304,7 @@ export default function FinanzasPage() {
       if (!updateErr) {
         const newAcc = accounts.find(a => a.id === formAccountId);
         if (newAcc) {
-          const applyChange = formType === 'ingreso' ? amountNum : -amountNum;
+          const applyChange = formType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
           await supabase.from('accounts').update({ balance: newAcc.balance + applyChange }).eq('id', newAcc.id);
         }
       }
@@ -247,7 +315,7 @@ export default function FinanzasPage() {
       if (!insertErr) {
         const account = accounts.find(a => a.id === formAccountId);
         if (account) {
-          const balanceChange = formType === 'ingreso' ? amountNum : -amountNum;
+          const balanceChange = formType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
           await supabase.from('accounts').update({ balance: account.balance + balanceChange }).eq('id', account.id);
         }
       }
@@ -282,19 +350,19 @@ export default function FinanzasPage() {
   };
 
   const handleQuickMovement = async (type: 'ingreso' | 'gasto') => {
-    if (!editingAccount || !quickAmount || isNaN(Number(quickAmount))) {
-      alert("Por favor ingresa un monto válido");
+    const evaluatedAmount = evaluateMath(quickAmount);
+    if (!editingAccount || !quickAmount || evaluatedAmount <= 0) {
+      alert("Por favor ingresa un monto válido (número o expresión como 500+250)");
       return;
     }
     
     setIsSaving(true);
-    const amountNum = Number(quickAmount);
     
     const resolvedPaymentMethod = resolvePaymentMethod(editingAccount.id);
 
     const newRecord = {
       type: type,
-      amount: amountNum,
+      amount: evaluatedAmount,
       category: quickConcept,
       description: quickDescription || `Ajuste de ${type === 'ingreso' ? 'ingreso' : 'gasto'}`,
       account_id: editingAccount.id,
@@ -313,7 +381,7 @@ export default function FinanzasPage() {
     }
     
     // 2. Update account balance
-    const balanceChange = type === 'ingreso' ? amountNum : -amountNum;
+    const balanceChange = type === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
     const newBalance = editingAccount.balance + balanceChange;
     
     const { error: updateErr } = await supabase.from('accounts').update({ 
@@ -330,6 +398,170 @@ export default function FinanzasPage() {
       fetchData();
     } else {
       alert("Error al actualizar el saldo del sobre");
+    }
+  };
+
+  // Lógica de Transferencias Atómicas entre Cuentas/Sobres
+  const handleTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const evaluatedAmount = evaluateMath(transferAmount);
+    if (!transferFromId || !transferToId || evaluatedAmount <= 0) {
+      alert("Por favor selecciona los sobres y un monto válido");
+      return;
+    }
+
+    if (transferFromId === transferToId) {
+      alert("No puedes transferir al mismo sobre");
+      return;
+    }
+
+    const fromAcc = accounts.find(a => a.id === transferFromId);
+    const toAcc = accounts.find(a => a.id === transferToId);
+    if (!fromAcc || !toAcc) return;
+
+    // Conversión de divisas si transfieren entre monedas distintas (ej. USD a MXN)
+    const convertedFromAmount = evaluatedAmount;
+    // Si la moneda origen es distinta a la destino, realizamos la conversión contable
+    let convertedToAmount = evaluatedAmount;
+    if (fromAcc.currency !== toAcc.currency) {
+      // Convertir de origen a MXN, luego de MXN a destino
+      const amountInMXN = convertToMXN(evaluatedAmount, fromAcc.currency);
+      const destRate = toAcc.currency === 'USD' ? rates.USD : toAcc.currency === 'EUR' ? rates.EUR : 1.0;
+      convertedToAmount = amountInMXN / destRate;
+    }
+
+    setIsSaving(true);
+
+    try {
+      // 1. Registro de gasto en sobre origen
+      const recordGasto = {
+        type: 'gasto',
+        amount: convertedFromAmount,
+        category: 'Traspaso',
+        description: `Traspaso enviado a ${toAcc.name} (${toAcc.currency}). ${transferDescription}`.trim(),
+        account_id: transferFromId,
+        payment_method: resolvePaymentMethod(transferFromId),
+        date: new Date().toISOString().split('T')[0]
+      };
+
+      // 2. Registro de ingreso en sobre destino
+      const recordIngreso = {
+        type: 'ingreso',
+        amount: convertedToAmount,
+        category: 'Traspaso',
+        description: `Traspaso recibido desde ${fromAcc.name} (${fromAcc.currency}). ${transferDescription}`.trim(),
+        account_id: transferToId,
+        payment_method: resolvePaymentMethod(transferToId),
+        date: new Date().toISOString().split('T')[0]
+      };
+
+      const [gastoRes, ingresoRes] = await Promise.all([
+        supabase.from('finances').insert([recordGasto]),
+        supabase.from('finances').insert([recordIngreso])
+      ]);
+
+      if (gastoRes.error || ingresoRes.error) {
+        throw new Error(gastoRes.error?.message || ingresoRes.error?.message || "Error al registrar movimientos de traspaso");
+      }
+
+      // 3. Actualizar balances de ambas cuentas en Supabase
+      await Promise.all([
+        supabase.from('accounts').update({ balance: fromAcc.balance - convertedFromAmount }).eq('id', fromAcc.id),
+        supabase.from('accounts').update({ balance: toAcc.balance + convertedToAmount }).eq('id', toAcc.id)
+      ]);
+
+      alert("✅ Transferencia completada con éxito.");
+      setShowTransferModal(false);
+      setTransferFromId('');
+      setTransferToId('');
+      setTransferAmount('');
+      setTransferDescription('');
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert("❌ Error al procesar la transferencia: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Lógica para Agregar Cuentas/Sobres
+  const handleAddAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accName) return alert("Por favor ingresa un nombre para el sobre");
+
+    setIsSavingAcc(true);
+    const balanceNum = Number(accBalance) || 0;
+
+    try {
+      const { error } = await supabase.from('accounts').insert([{
+        name: accName,
+        group_type: accGroupType,
+        balance: balanceNum,
+        currency: accCurrency
+      }]);
+
+      if (error) throw error;
+
+      // Si se abre con balance inicial, registrar movimiento contable de ajuste de ingreso
+      if (balanceNum > 0) {
+        // Encontrar la cuenta creada
+        const { data: newAcc } = await supabase.from('accounts').select('id').eq('name', accName).single();
+        if (newAcc) {
+          await supabase.from('finances').insert([{
+            type: 'ingreso',
+            amount: balanceNum,
+            category: 'Ajuste',
+            description: 'Saldo inicial de apertura del sobre',
+            account_id: newAcc.id,
+            payment_method: 'efectivo',
+            date: new Date().toISOString().split('T')[0]
+          }]);
+        }
+      }
+
+      alert("✅ Sobre creado con éxito.");
+      setShowAddAccountModal(false);
+      setAccName('');
+      setAccBalance('');
+      setAccCurrency('MXN');
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert("❌ Error al crear el sobre: " + err.message);
+    } finally {
+      setIsSavingAcc(false);
+    }
+  };
+
+  // Lógica para Eliminar Cuentas/Sobres de Forma Segura (Preservando Integridad)
+  const handleDeleteAccount = async (accountId: string) => {
+    const acc = accounts.find(a => a.id === accountId);
+    if (!acc) return;
+
+    if (acc.balance !== 0) {
+      if (!confirm(`⚠️ Este sobre tiene un saldo activo de $${acc.balance.toLocaleString('es-MX')} ${acc.currency}. Si lo eliminas, perderás este saldo en el total general. ¿Deseas continuar?`)) {
+        return;
+      }
+    } else {
+      if (!confirm(`¿Seguro que deseas eliminar el sobre "${acc.name}"?`)) {
+        return;
+      }
+    }
+
+    try {
+      // 1. Poner en nulo el id de cuenta de los movimientos para mantener reportes globales sin FK error
+      await supabase.from('finances').update({ account_id: null }).eq('account_id', accountId);
+
+      // 2. Eliminar la cuenta
+      const { error } = await supabase.from('accounts').delete().eq('id', accountId);
+      if (error) throw error;
+
+      alert("✅ Sobre eliminado con éxito.");
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert("❌ Error al eliminar el sobre: " + err.message);
     }
   };
 
@@ -471,22 +703,29 @@ export default function FinanzasPage() {
   };
 
   const filteredRecords = records.filter(r => {
-    if (filterType === 'todo') return true;
-    const rDate = new Date(r.date + 'T12:00:00Z'); // Evitar problemas de timezone
-    const today = new Date();
-    
-    if (filterType === 'hoy') {
-      return rDate.toDateString() === today.toDateString();
+    // 1. Filtrar por tiempo (hoy, semana, mes, todo)
+    let matchTime = true;
+    if (filterType !== 'todo') {
+      const rDate = new Date(r.date + 'T12:00:00Z'); // Evitar problemas de timezone
+      const today = new Date();
+      if (filterType === 'hoy') {
+        matchTime = rDate.toDateString() === today.toDateString();
+      } else if (filterType === 'semana') {
+        const lastWeek = new Date(today);
+        lastWeek.setDate(lastWeek.getDate() - 7);
+        matchTime = rDate >= lastWeek;
+      } else if (filterType === 'mes') {
+        matchTime = rDate.getMonth() === today.getMonth() && rDate.getFullYear() === today.getFullYear();
+      }
     }
-    if (filterType === 'semana') {
-      const lastWeek = new Date(today);
-      lastWeek.setDate(lastWeek.getDate() - 7);
-      return rDate >= lastWeek;
+
+    // 2. Filtrar por cuenta específica
+    let matchAccount = true;
+    if (filterAccountId !== 'todo') {
+      matchAccount = r.account_id === filterAccountId;
     }
-    if (filterType === 'mes') {
-      return rDate.getMonth() === today.getMonth() && rDate.getFullYear() === today.getFullYear();
-    }
-    return true;
+
+    return matchTime && matchAccount;
   });
 
   const exportToCSV = () => {
@@ -514,9 +753,11 @@ export default function FinanzasPage() {
   };
 
   // Group Accounts
-  const getGroup = (type: string) => accounts.filter(a => a.group_type === type);
-  const sumGroup = (type: string) => getGroup(type).reduce((acc, curr) => acc + curr.balance, 0);
-  const totalGeneral = accounts.reduce((acc, curr) => acc + curr.balance, 0);
+  const getGroup = (type: string) => accounts
+    .filter(a => a.group_type === type)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const sumGroup = (type: string) => getGroup(type).reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
+  const totalGeneral = accounts.reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
 
   const renderGroup = (title: string, type: string, colorClass: string, bgClass: string, Icon: any) => {
     const groupAccounts = getGroup(type);
@@ -548,7 +789,10 @@ export default function FinanzasPage() {
               className="bg-[#fafafa] border border-zinc-200/60 rounded-2xl p-3.5 hover:bg-white hover:border-zinc-300 hover:shadow-sm transition-all cursor-pointer group active:scale-[0.98]"
             >
               <p className="text-[11px] font-bold text-zinc-500 mb-1.5 truncate group-hover:text-zinc-800 transition-colors">{acc.name}</p>
-              <p className="text-[16px] font-black text-zinc-900 leading-none">${acc.balance.toLocaleString('es-MX')}</p>
+              <div className="flex items-baseline justify-between gap-1">
+                <p className="text-[16px] font-black text-zinc-900 leading-none">${acc.balance.toLocaleString('es-MX')}</p>
+                <span className="text-[9px] text-zinc-400 font-extrabold uppercase">{acc.currency}</span>
+              </div>
             </div>
           ))}
         </div>
@@ -634,7 +878,31 @@ export default function FinanzasPage() {
           <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Sobres Mensuales</h2>
           <p className="text-[13px] font-medium text-zinc-500">Control de Flujo de Efectivo</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button 
+            onClick={() => {
+              setTransferFromId('');
+              setTransferToId('');
+              setTransferAmount('');
+              setTransferDescription('');
+              setShowTransferModal(true);
+            }}
+            className="h-10 px-4 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95 transition-all text-xs font-bold"
+            title="Transferir entre sobres"
+          >
+            <RefreshCw size={14} className="text-zinc-650 animate-none" />
+            <span className="hidden sm:inline">Transferir</span>
+          </button>
+
+          <button 
+            onClick={() => setShowManageAccountsModal(true)}
+            className="h-10 px-4 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95 transition-all text-xs font-bold"
+            title="Gestionar Sobres"
+          >
+            <PiggyBank size={14} className="text-zinc-650" />
+            <span className="hidden sm:inline">Gestionar Sobres</span>
+          </button>
+
           <button 
             onClick={fetchData} 
             disabled={isLoading}
@@ -643,11 +911,13 @@ export default function FinanzasPage() {
           >
             <RefreshCw size={16} strokeWidth={2.5} className={isLoading ? "animate-spin text-zinc-500" : "text-zinc-750"} />
           </button>
+          
           {activeTab === 'registro' && (
             <button onClick={exportToCSV} className="w-10 h-10 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform">
               <Download size={18} strokeWidth={2.5} />
             </button>
           )}
+          
           <button 
             onClick={() => {
               setEditingRecord(null);
@@ -695,10 +965,11 @@ export default function FinanzasPage() {
             <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Total General</p>
-                <div className="flex items-baseline gap-1">
+                <p className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Total General Consolidado (MXN)</p>
+                <div className="flex items-baseline gap-1.5">
                   <span className="text-xl text-zinc-400 font-bold">$</span>
                   <p className="text-4xl font-black tracking-tighter">{totalGeneral.toLocaleString('es-MX')}</p>
+                  <span className="text-xs text-zinc-450 font-bold tracking-wider">MXN</span>
                 </div>
               </div>
               <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/10">
@@ -736,21 +1007,36 @@ export default function FinanzasPage() {
       ) : (
         // VISTA REGISTRO (Movimientos)
         <div className="space-y-4">
-          <div className="flex bg-white border border-zinc-200 p-1 rounded-xl shadow-sm">
-            {[
-              { id: 'todo', label: 'Todo' },
-              { id: 'mes', label: 'Mes' },
-              { id: 'semana', label: 'Semana' },
-              { id: 'hoy', label: 'Hoy' },
-            ].map(f => (
-              <button 
-                key={f.id}
-                onClick={() => setFilterType(f.id as any)}
-                className={`flex-1 py-1.5 text-[12px] font-bold rounded-lg transition-all ${filterType === f.id ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex-1 flex bg-white border border-zinc-200 p-1 rounded-xl shadow-sm">
+              {[
+                { id: 'todo', label: 'Todo' },
+                { id: 'mes', label: 'Mes' },
+                { id: 'semana', label: 'Semana' },
+                { id: 'hoy', label: 'Hoy' },
+              ].map(f => (
+                <button 
+                  key={f.id}
+                  onClick={() => setFilterType(f.id as any)}
+                  className={`flex-1 py-1.5 text-[12px] font-bold rounded-lg transition-all ${filterType === f.id ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-500'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            
+            <div className="sm:w-56 bg-white border border-zinc-200 p-1 rounded-xl shadow-sm flex items-center">
+              <select
+                value={filterAccountId}
+                onChange={e => setFilterAccountId(e.target.value)}
+                className="w-full bg-transparent border-none text-[12px] font-bold text-zinc-700 py-1.5 px-2 outline-none cursor-pointer"
               >
-                {f.label}
-              </button>
-            ))}
+                <option value="todo">Todos los Sobres</option>
+                {accounts.sort((a,b) => a.name.localeCompare(b.name)).map(acc => (
+                  <option key={acc.id} value={acc.id}>{acc.name} ({acc.currency})</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col divide-y divide-zinc-100 overflow-hidden">
@@ -871,114 +1157,125 @@ export default function FinanzasPage() {
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Monto de la Transacción</label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-extrabold text-zinc-400 text-sm">$</span>
-                  <input 
-                    type="number" step="0.01" required
-                    placeholder="0.00" autoFocus
-                    value={quickAmount} onChange={e => setQuickAmount(e.target.value)}
-                    className="w-full text-xl font-bold bg-zinc-50 border border-zinc-200 rounded-xl pl-8 pr-4 py-2.5 outline-none focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white transition-all duration-350 text-zinc-900 placeholder:text-zinc-300"
-                  />
-                </div>
-
-                {/* REAL-TIME PREVIEW CALCULATOR */}
-                {quickAmount && !isNaN(Number(quickAmount)) && Number(quickAmount) > 0 && (
-                  <div className="mt-3 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl space-y-2.5 animate-in slide-in-from-top-2 duration-300">
-                    <p className="font-extrabold text-zinc-400 uppercase tracking-widest text-[8px]">Calculadora Proyectada</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="bg-emerald-50/40 hover:bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl transition-all duration-300">
-                        <span className="text-emerald-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Ingreso</span>
-                        <span className="font-black text-[13px] text-emerald-600 tracking-tight block">
-                          ${(editingAccount.balance + Number(quickAmount)).toLocaleString('es-MX')}
-                        </span>
-                        <span className="text-[8px] text-emerald-500/80 font-bold block mt-0.5">+{Number(quickAmount).toLocaleString('es-MX')} MXN</span>
+              {(() => {
+                const evalQuick = evaluateMath(quickAmount);
+                return (
+                  <>
+                    <div>
+                      <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Monto de la Transacción</label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-extrabold text-zinc-400 text-sm">$</span>
+                        <input 
+                          type="text" required
+                          placeholder="0.00 o fórmula (ej. =500-120)" autoFocus
+                          value={quickAmount} onChange={e => setQuickAmount(e.target.value)}
+                          className="w-full text-xl font-bold bg-zinc-50 border border-zinc-200 rounded-xl pl-8 pr-4 py-2.5 outline-none focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white transition-all duration-350 text-zinc-900 placeholder:text-zinc-300"
+                        />
                       </div>
-                      <div className="bg-rose-50/40 hover:bg-rose-50 border border-rose-100 p-2.5 rounded-xl transition-all duration-300">
-                        <span className="text-rose-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Gasto</span>
-                        <span className="font-black text-[13px] text-rose-600 tracking-tight block">
-                          ${(editingAccount.balance - Number(quickAmount)).toLocaleString('es-MX')}
-                        </span>
-                        <span className="text-[8px] text-rose-500/80 font-bold block mt-0.5">-{Number(quickAmount).toLocaleString('es-MX')} MXN</span>
+
+                      {/* REAL-TIME PREVIEW CALCULATOR */}
+                      {quickAmount && evalQuick > 0 && (
+                        <div className="mt-3 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl space-y-2.5 animate-in slide-in-from-top-2 duration-300">
+                          <p className="font-extrabold text-zinc-400 uppercase tracking-widest text-[8px]">Calculadora Proyectada</p>
+                          <div className="bg-zinc-100/50 p-2 rounded-xl text-center border border-zinc-200/40">
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase">Resultado Evaluado: </span>
+                            <span className="font-black text-[12px] text-zinc-800">${evalQuick.toLocaleString('es-MX')} {editingAccount.currency}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-emerald-50/40 hover:bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl transition-all duration-300">
+                              <span className="text-emerald-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Ingreso</span>
+                              <span className="font-black text-[13px] text-emerald-600 tracking-tight block">
+                                ${(editingAccount.balance + evalQuick).toLocaleString('es-MX')}
+                              </span>
+                              <span className="text-[8px] text-emerald-500/80 font-bold block mt-0.5">+{evalQuick.toLocaleString('es-MX')} {editingAccount.currency}</span>
+                            </div>
+                            <div className="bg-rose-50/40 hover:bg-rose-50 border border-rose-100 p-2.5 rounded-xl transition-all duration-300">
+                              <span className="text-rose-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Gasto</span>
+                              <span className="font-black text-[13px] text-rose-600 tracking-tight block">
+                                ${(editingAccount.balance - evalQuick).toLocaleString('es-MX')}
+                              </span>
+                              <span className="text-[8px] text-rose-500/80 font-bold block mt-0.5">-{evalQuick.toLocaleString('es-MX')} {editingAccount.currency}</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Concepto / Categoría</label>
+                      <select 
+                        value={quickConcept} onChange={e => setQuickConcept(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
+                      >
+                        <option>Ajuste</option>
+                        <option>Reserva Directa</option>
+                        <option>Venta Extra</option>
+                        <option>Suministros</option>
+                        <option>Limpieza</option>
+                        <option>Mantenimiento</option>
+                        <option>Servicios (Luz, Agua)</option>
+                        <option>Nómina</option>
+                        <option>Otros</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción (Opcional)</label>
+                      <input 
+                        type="text"
+                        placeholder="Comentario sobre el movimiento"
+                        value={quickDescription} onChange={e => setQuickDescription(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300"
+                      />
+                    </div>
+
+                    {/* RECENT MOVEMENTS IN THIS ENVELOPE */}
+                    <div className="pt-1">
+                      <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">Últimos movimientos del sobre</p>
+                      <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
+                        {records.filter(r => r.account_id === editingAccount.id).length === 0 ? (
+                          <p className="text-[11px] text-zinc-400 font-medium italic text-center py-2 bg-zinc-50/50 rounded-lg">Sin movimientos registrados en este sobre.</p>
+                        ) : (
+                          records
+                            .filter(r => r.account_id === editingAccount.id)
+                            .slice(0, 3)
+                            .map(r => (
+                              <div key={r.id} className="flex justify-between items-center bg-zinc-50 p-2 rounded-xl border border-zinc-100/50 text-[11px] hover:bg-zinc-100/50 transition-colors duration-200">
+                                <div className="truncate pr-2">
+                                  <span className="font-bold text-zinc-900 block truncate capitalize">{r.category}</span>
+                                  <span className="text-[10px] text-zinc-400 font-medium block truncate">{cleanDescription(r.description) || 'Sin comentario'}</span>
+                                </div>
+                                <span className={`font-extrabold whitespace-nowrap ${r.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-700'}`}>
+                                  {r.type === 'ingreso' ? '+' : '-'}MX${r.amount.toLocaleString('es-MX')}
+                                </span>
+                              </div>
+                            ))
+                        )}
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
 
-              <div>
-                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Concepto / Categoría</label>
-                <select 
-                  value={quickConcept} onChange={e => setQuickConcept(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
-                >
-                  <option>Ajuste</option>
-                  <option>Reserva Directa</option>
-                  <option>Venta Extra</option>
-                  <option>Suministros</option>
-                  <option>Limpieza</option>
-                  <option>Mantenimiento</option>
-                  <option>Servicios (Luz, Agua)</option>
-                  <option>Nómina</option>
-                  <option>Otros</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción (Opcional)</label>
-                <input 
-                  type="text"
-                  placeholder="Comentario sobre el movimiento"
-                  value={quickDescription} onChange={e => setQuickDescription(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300"
-                />
-              </div>
-
-              {/* RECENT MOVEMENTS IN THIS ENVELOPE */}
-              <div className="pt-1">
-                <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">Últimos movimientos del sobre</p>
-                <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
-                  {records.filter(r => r.account_id === editingAccount.id).length === 0 ? (
-                    <p className="text-[11px] text-zinc-400 font-medium italic text-center py-2 bg-zinc-50/50 rounded-lg">Sin movimientos registrados en este sobre.</p>
-                  ) : (
-                    records
-                      .filter(r => r.account_id === editingAccount.id)
-                      .slice(0, 3)
-                      .map(r => (
-                        <div key={r.id} className="flex justify-between items-center bg-zinc-50 p-2 rounded-xl border border-zinc-100/50 text-[11px] hover:bg-zinc-100/50 transition-colors duration-200">
-                          <div className="truncate pr-2">
-                            <span className="font-bold text-zinc-900 block truncate capitalize">{r.category}</span>
-                            <span className="text-[10px] text-zinc-400 font-medium block truncate">{cleanDescription(r.description) || 'Sin comentario'}</span>
-                          </div>
-                          <span className={`font-extrabold whitespace-nowrap ${r.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-700'}`}>
-                            {r.type === 'ingreso' ? '+' : '-'}MX${r.amount.toLocaleString('es-MX')}
-                          </span>
-                        </div>
-                      ))
-                  )}
-                </div>
-              </div>
-
-              {/* ACCIONES DE COBRO/GASTO CONTABLE */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button 
-                  onClick={() => handleQuickMovement('ingreso')}
-                  disabled={isSaving || !quickAmount || isNaN(Number(quickAmount))}
-                  className="py-3 bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_8px_20px_rgba(16,185,129,0.35)] active:scale-[0.96] cursor-pointer"
-                >
-                  <ArrowDownLeft size={16} strokeWidth={2.5} />
-                  + Ingreso
-                </button>
-                <button 
-                  onClick={() => handleQuickMovement('gasto')}
-                  disabled={isSaving || !quickAmount || isNaN(Number(quickAmount))}
-                  className="py-3 bg-rose-600 hover:bg-rose-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(244,63,94,0.25)] hover:shadow-[0_8px_20px_rgba(244,63,94,0.35)] active:scale-[0.96] cursor-pointer"
-                >
-                  <ArrowUpRight size={16} strokeWidth={2.5} />
-                  - Gasto
-                </button>
-              </div>
+                    {/* ACCIONES DE COBRO/GASTO CONTABLE */}
+                    <div className="grid grid-cols-2 gap-3 pt-2">
+                      <button 
+                        onClick={() => handleQuickMovement('ingreso')}
+                        disabled={isSaving || !quickAmount || evalQuick <= 0}
+                        className="py-3 bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_8px_20px_rgba(16,185,129,0.35)] active:scale-[0.96] cursor-pointer"
+                      >
+                        <ArrowDownLeft size={16} strokeWidth={2.5} />
+                        + Ingreso
+                      </button>
+                      <button 
+                        onClick={() => handleQuickMovement('gasto')}
+                        disabled={isSaving || !quickAmount || evalQuick <= 0}
+                        className="py-3 bg-rose-600 hover:bg-rose-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(244,63,94,0.25)] hover:shadow-[0_8px_20px_rgba(244,63,94,0.35)] active:scale-[0.96] cursor-pointer"
+                      >
+                        <ArrowUpRight size={16} strokeWidth={2.5} />
+                        - Gasto
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1017,11 +1314,18 @@ export default function FinanzasPage() {
               <div>
                 <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Monto</label>
                 <input 
-                  type="number" step="0.01" required
+                  type="text" required
                   value={formAmount} onChange={e => setFormAmount(e.target.value)}
-                  className="w-full text-3xl font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all placeholder:text-zinc-300 text-base"
-                  placeholder="0.00"
+                  className="w-full text-3xl font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all placeholder:text-zinc-300 text-base font-bold"
+                  placeholder="0.00 o =250000-256000"
                 />
+                {/* REAL-TIME PREVIEW FOR FORM AMOUNT */}
+                {formAmount && evaluateMath(formAmount) > 0 && (
+                  <div className="mt-2 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl animate-in slide-in-from-top-2 duration-300 flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase">Total Evaluado:</span>
+                    <span className="font-extrabold text-[14px] text-zinc-800">${evaluateMath(formAmount).toLocaleString('es-MX')} MXN</span>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1204,6 +1508,331 @@ export default function FinanzasPage() {
           }
         }}
       />
+
+      {/* Modal Premium de Transferencias entre Sobres */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-5">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
+                  <RefreshCw size={18} strokeWidth={2.5} className="text-zinc-850 animate-none" />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                    Traspaso entre Sobres
+                  </h3>
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Movimiento Contable Interno</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowTransferModal(false)}
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleTransfer} className="space-y-4">
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Sobre de Origen (Deducir)</label>
+                <select 
+                  required
+                  value={transferFromId}
+                  onChange={e => setTransferFromId(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
+                >
+                  <option value="">Selecciona origen...</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} (${acc.balance.toLocaleString('es-MX')} {acc.currency})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Sobre de Destino (Acreditar)</label>
+                <select 
+                  required
+                  value={transferToId}
+                  onChange={e => setTransferToId(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
+                >
+                  <option value="">Selecciona destino...</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} (${acc.balance.toLocaleString('es-MX')} {acc.currency})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Monto del Traspaso</label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-extrabold text-zinc-400 text-sm">$</span>
+                  <input 
+                    type="text" required
+                    placeholder="0.00 o expresión (ej. =5000+1200)"
+                    value={transferAmount}
+                    onChange={e => setTransferAmount(e.target.value)}
+                    className="w-full text-lg font-bold bg-zinc-50 border border-zinc-200 rounded-xl pl-8 pr-4 py-2.5 outline-none focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white transition-all duration-350 text-zinc-900 placeholder:text-zinc-300"
+                  />
+                </div>
+
+                {/* Math preview & currency conversion preview */}
+                {(() => {
+                  const evalAmt = evaluateMath(transferAmount);
+                  if (evalAmt <= 0) return null;
+                  const fromAcc = accounts.find(a => a.id === transferFromId);
+                  const toAcc = accounts.find(a => a.id === transferToId);
+                  
+                  let conversionInfo = null;
+                  if (fromAcc && toAcc && fromAcc.currency !== toAcc.currency) {
+                    const amountInMXN = convertToMXN(evalAmt, fromAcc.currency);
+                    const destRate = toAcc.currency === 'USD' ? rates.USD : toAcc.currency === 'EUR' ? rates.EUR : 1.0;
+                    const convertedToAmount = amountInMXN / destRate;
+                    
+                    conversionInfo = (
+                      <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-xl space-y-1 mt-2.5">
+                        <span className="text-indigo-850 font-extrabold text-[8px] uppercase tracking-wider block">Conversión Multidivisa en Vivo</span>
+                        <div className="flex justify-between items-center text-[11px] font-bold text-indigo-900">
+                          <span>Envía desde {fromAcc.name}:</span>
+                          <span>${evalAmt.toLocaleString('es-MX')} {fromAcc.currency}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[11px] font-bold text-indigo-900">
+                          <span>Recibe en {toAcc.name}:</span>
+                          <span className="text-[12px] font-black text-indigo-655">${convertedToAmount.toLocaleString('es-MX')} {toAcc.currency}</span>
+                        </div>
+                        <p className="text-[8px] text-indigo-400 font-semibold leading-tight pt-1">
+                          Tasa de cambio del día: 1 USD = {rates.USD.toFixed(4)} MXN | 1 EUR = {rates.EUR.toFixed(4)} MXN
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="mt-3 space-y-2 animate-in slide-in-from-top-2 duration-300">
+                      <div className="bg-zinc-100/50 p-2 rounded-xl text-center border border-zinc-200/40">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase">Monto Evaluado: </span>
+                        <span className="font-extrabold text-[12px] text-zinc-800">${evalAmt.toLocaleString('es-MX')} {fromAcc?.currency || ''}</span>
+                      </div>
+                      {conversionInfo}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción o Comentario (Opcional)</label>
+                <input 
+                  type="text"
+                  placeholder="Ej. Reubicación de efectivo, fondeo..."
+                  value={transferDescription}
+                  onChange={e => setTransferDescription(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowTransferModal(false)}
+                  className="flex-1 py-3 bg-zinc-150 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSaving || !transferFromId || !transferToId || evaluateMath(transferAmount) <= 0}
+                  className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] disabled:opacity-45 shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isSaving ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <RefreshCw size={14} />
+                      Traspasar
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Premium de Gestión de Sobres */}
+      {showManageAccountsModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-5 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
+                  <PiggyBank size={18} strokeWidth={2.5} className="text-zinc-850" />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                    Administrar Sobres
+                  </h3>
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Carteras y Cuentas Activas</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowManageAccountsModal(false)}
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* List of Envelopes */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 mb-4">
+              {accounts.sort((a,b) => a.name.localeCompare(b.name)).map(acc => (
+                <div key={acc.id} className="flex justify-between items-center bg-zinc-50 hover:bg-zinc-100/50 p-3 rounded-2xl border border-zinc-200/55 transition-all duration-200">
+                  <div>
+                    <span className="font-extrabold text-zinc-900 text-[13px] block leading-tight">{acc.name}</span>
+                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mt-0.5">{acc.group_type}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-black text-[13px] text-zinc-800">${acc.balance.toLocaleString('es-MX')} <span className="text-[9px] text-zinc-400 font-bold">{acc.currency}</span></span>
+                    <button 
+                      onClick={() => handleDeleteAccount(acc.id)}
+                      className="p-2 hover:bg-rose-50 text-zinc-400 hover:text-rose-600 rounded-xl transition-all cursor-pointer"
+                      title="Eliminar sobre"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 flex gap-3 shrink-0">
+              <button 
+                onClick={() => setShowManageAccountsModal(false)}
+                className="flex-1 py-3 bg-zinc-150 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+              >
+                Cerrar
+              </button>
+              <button 
+                onClick={() => {
+                  setAccName('');
+                  setAccBalance('');
+                  setAccGroupType('EFECTIVO');
+                  setAccCurrency('MXN');
+                  setShowAddAccountModal(true);
+                }}
+                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Plus size={14} />
+                Nuevo Sobre
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Premium para Crear Cuentas/Sobres */}
+      {showAddAccountModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col">
+            <div className="flex justify-between items-center mb-5">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
+                  <Plus size={18} strokeWidth={2.5} className="text-zinc-850" />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                    Nuevo Sobre
+                  </h3>
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Crear Caja o Cuenta</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowAddAccountModal(false)}
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddAccount} className="space-y-4">
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Nombre del Sobre</label>
+                <input 
+                  type="text" required
+                  placeholder="Ej. Caja Recepción, Dólares..."
+                  value={accName}
+                  onChange={e => setAccName(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Grupo Contable</label>
+                <select 
+                  value={accGroupType}
+                  onChange={e => setAccGroupType(e.target.value as any)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
+                >
+                  <option value="EFECTIVO">EFECTIVO (Cajas físicas)</option>
+                  <option value="BANCOS">BANCOS (Cuentas corrientes)</option>
+                  <option value="AHORROS">AHORROS (Fondos guardados)</option>
+                  <option value="EXTRANJERO">EXTRANJERO (DLL/EUR)</option>
+                  <option value="CUENTAS X COBRAR">CUENTAS X COBRAR</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Saldo Inicial</label>
+                  <input 
+                    type="number" step="0.01"
+                    placeholder="0.00"
+                    value={accBalance}
+                    onChange={e => setAccBalance(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Moneda (Divisa)</label>
+                  <select 
+                    value={accCurrency}
+                    onChange={e => setAccCurrency(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
+                  >
+                    <option value="MXN">MXN (Pesos)</option>
+                    <option value="USD">USD (Dólares)</option>
+                    <option value="EUR">EUR (Euros)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowAddAccountModal(false)}
+                  className="flex-1 py-3 bg-zinc-150 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+                >
+                  Atrás
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSavingAcc || !accName}
+                  className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] disabled:opacity-45 shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isSavingAcc ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Plus size={14} />
+                      Crear
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
