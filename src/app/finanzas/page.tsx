@@ -198,10 +198,20 @@ export default function FinanzasPage() {
 
   const [accountsOrder, setAccountsOrder] = useState<string[]>([]);
   const [reorderMode, setReorderMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Cargar el orden de cuentas guardado en el arranque o usar el oficial
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const version = localStorage.getItem('jaroje_accounts_order_version');
+      if (version !== 'v3') {
+        // Force reset to the new official order once
+        localStorage.setItem('jaroje_accounts_order_version', 'v3');
+        localStorage.setItem('jaroje_accounts_order', JSON.stringify(OFFICIAL_ORDER.map(x => x.trim().toUpperCase())));
+        setAccountsOrder(OFFICIAL_ORDER.map(x => x.trim().toUpperCase()));
+        return;
+      }
+
       const saved = localStorage.getItem('jaroje_accounts_order');
       if (saved) {
         try {
@@ -791,12 +801,31 @@ export default function FinanzasPage() {
       matchAccount = r.account_id === filterAccountId;
     }
 
-    return matchTime && matchAccount;
+    // 3. Filtrar por búsqueda de texto
+    let matchSearch = true;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      const desc = String(r.description || '').toLowerCase();
+      const cat = String(r.category || '').toLowerCase();
+      const amt = String(r.amount || '');
+      const accountName = String(r.accounts?.name || '').toLowerCase();
+      const dateStr = String(r.date || '');
+      const typeStr = String(r.type || '').toLowerCase();
+
+      matchSearch = desc.includes(query) || 
+                    cat.includes(query) || 
+                    amt.includes(query) || 
+                    accountName.includes(query) ||
+                    dateStr.includes(query) ||
+                    typeStr.includes(query);
+    }
+
+    return matchTime && matchAccount && matchSearch;
   });
 
   const exportToCSV = () => {
     if (filteredRecords.length === 0) return alert("No hay datos para exportar.");
-    window.location.href = `/api/finances/export?time=${filterType}&account=${filterAccountId}`;
+    window.location.href = `/api/finances/export?time=${filterType}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
   };
 
   const sortAccounts = (accs: any[]) => {
@@ -1190,6 +1219,18 @@ export default function FinanzasPage() {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Barra de Búsqueda Premium */}
+          <div className="relative">
+            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+            <input 
+              type="text"
+              placeholder="Buscar movimiento por concepto, descripción o monto..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-[12px] font-bold text-zinc-700 outline-none shadow-sm focus:border-zinc-400 focus:ring-1 focus:ring-zinc-950/5 placeholder:text-zinc-400 transition-all"
+            />
           </div>
 
           <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col divide-y divide-zinc-100 overflow-hidden">

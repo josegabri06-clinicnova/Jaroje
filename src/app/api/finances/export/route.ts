@@ -9,6 +9,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const timeFilter = searchParams.get('time') || 'todo'; // 'hoy' | 'semana' | 'mes' | 'todo'
     const accountFilter = searchParams.get('account') || 'todo';
+    const searchFilter = searchParams.get('search') || '';
 
     // 1. Obtener los movimientos del libro contable (finances)
     let query = supabase
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
     const { data: records, error } = await query;
     if (error) throw error;
 
-    // 2. Filtrar los movimientos por rango de tiempo y por cuenta
+    // 2. Filtrar los movimientos por rango de tiempo, por cuenta y por búsqueda de texto
     const today = new Date();
     const filtered = (records || []).filter(r => {
       // Filtrar por tiempo
@@ -44,7 +45,26 @@ export async function GET(req: Request) {
         matchAccount = r.account_id === accountFilter;
       }
 
-      return matchTime && matchAccount;
+      // Filtrar por búsqueda de texto
+      let matchSearch = true;
+      if (searchFilter.trim()) {
+        const query = searchFilter.toLowerCase().trim();
+        const desc = String(r.description || '').toLowerCase();
+        const cat = String(r.category || '').toLowerCase();
+        const amt = String(r.amount || '');
+        const accountName = String(r.accounts?.name || '').toLowerCase();
+        const dateStr = String(r.date || '');
+        const typeStr = String(r.type || '').toLowerCase();
+
+        matchSearch = desc.includes(query) || 
+                      cat.includes(query) || 
+                      amt.includes(query) || 
+                      accountName.includes(query) ||
+                      dateStr.includes(query) ||
+                      typeStr.includes(query);
+      }
+
+      return matchTime && matchAccount && matchSearch;
     });
 
     if (filtered.length === 0) {
