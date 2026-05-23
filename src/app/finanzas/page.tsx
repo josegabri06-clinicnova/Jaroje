@@ -20,6 +20,7 @@ type Account = {
   group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR';
   balance: number;
   currency: string;
+  sort_index?: number;
 };
  
 type FinanceRecord = {
@@ -830,33 +831,49 @@ export default function FinanzasPage() {
 
   const sortAccounts = (accs: any[]) => {
     return [...accs].sort((a, b) => {
+      const sortA = a.sort_index !== undefined && a.sort_index !== null ? a.sort_index : 999;
+      const sortB = b.sort_index !== undefined && b.sort_index !== null ? b.sort_index : 999;
+      if (sortA !== sortB) return sortA - sortB;
+      
       const nameA = a.name.trim().toUpperCase();
       const nameB = b.name.trim().toUpperCase();
-      const idxA = accountsOrder.indexOf(nameA);
-      const idxB = accountsOrder.indexOf(nameB);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
       return nameA.localeCompare(nameB);
     });
   };
 
-  const moveAccount = (accName: string, direction: 'up' | 'down') => {
-    const nameUpper = accName.trim().toUpperCase();
-    const updated = [...accountsOrder];
-    const index = updated.indexOf(nameUpper);
+  const moveAccount = async (accName: string, direction: 'up' | 'down') => {
+    // 1. Obtener la lista ordenada actual
+    const sorted = sortAccounts(accounts);
+    const index = sorted.findIndex(a => a.name.trim().toUpperCase() === accName.trim().toUpperCase());
     if (index === -1) return;
 
     const targetIndex = index + (direction === 'up' ? -1 : 1);
-    if (targetIndex < 0 || targetIndex >= updated.length) return;
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
 
-    // Swap
-    const temp = updated[index];
-    updated[index] = updated[targetIndex];
-    updated[targetIndex] = temp;
+    const currentAcc = sorted[index];
+    const targetAcc = sorted[targetIndex];
 
-    setAccountsOrder(updated);
-    localStorage.setItem('jaroje_accounts_order', JSON.stringify(updated));
+    // Intercambiar sort_index
+    const currentIdxValue = currentAcc.sort_index !== undefined && currentAcc.sort_index !== null ? currentAcc.sort_index : index;
+    const targetIdxValue = targetAcc.sort_index !== undefined && targetAcc.sort_index !== null ? targetAcc.sort_index : targetIndex;
+
+    // Actualizar localmente para feedback inmediato en UI
+    const updatedAccounts = accounts.map(a => {
+      if (a.id === currentAcc.id) return { ...a, sort_index: targetIdxValue };
+      if (a.id === targetAcc.id) return { ...a, sort_index: currentIdxValue };
+      return a;
+    });
+    setAccounts(updatedAccounts);
+
+    // Actualizar en Supabase en segundo plano
+    try {
+      await Promise.all([
+        supabase.from('accounts').update({ sort_index: targetIdxValue }).eq('id', currentAcc.id),
+        supabase.from('accounts').update({ sort_index: currentIdxValue }).eq('id', targetAcc.id)
+      ]);
+    } catch (e) {
+      console.error("Error al guardar el nuevo orden en Supabase:", e);
+    }
   };
 
   const totalGeneral = accounts.reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
