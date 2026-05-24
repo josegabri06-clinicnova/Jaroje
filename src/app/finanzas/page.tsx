@@ -808,6 +808,20 @@ export default function FinanzasPage() {
     setShowExportChoiceModal(true);
   };
 
+  const executeDownloadFinanceReport = () => {
+    setShowExportChoiceModal(false);
+    const url = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
+    
+    // Force opening in external browser window/tab to prevent PWA container lock-out
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.setAttribute('download', `Finanzas_Jaroje_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const executeShareFinanceReport = async () => {
     const url = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
     
@@ -1692,9 +1706,9 @@ export default function FinanzasPage() {
       {showExportChoiceModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300 animate-in fade-in">
           <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col text-zinc-900">
-            <div className="flex justify-between items-center mb-5 shrink-0">
+            <div className="flex justify-between items-center mb-4 shrink-0">
               <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
+                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-950 border border-zinc-200">
                   <Download size={18} strokeWidth={2.5} className="text-zinc-850" />
                 </div>
                 <div>
@@ -1706,26 +1720,26 @@ export default function FinanzasPage() {
               </div>
               <button 
                 onClick={() => setShowExportChoiceModal(false)}
-                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all cursor-pointer"
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-505 transition-all cursor-pointer"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <button
                 onClick={() => {
                   setShowExportChoiceModal(false);
                   setShowPreviewReportModal(true);
                 }}
-                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
               >
                 <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <Eye size={18} strokeWidth={2.5} />
                 </div>
                 <div>
-                  <span className="font-extrabold text-zinc-900 text-[13px] block">Abrir Reporte</span>
-                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Ver datos en Excel directamente en el navegador</span>
+                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Visualizar en Pantalla</span>
+                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Ver datos de movimientos directamente aquí</span>
                 </div>
               </button>
 
@@ -1734,21 +1748,39 @@ export default function FinanzasPage() {
                   setShowExportChoiceModal(false);
                   executeShareFinanceReport();
                 }}
-                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-10 h-10 bg-purple-50 text-purple-650 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <Share2 size={18} strokeWidth={2.5} />
                 </div>
                 <div>
-                  <span className="font-extrabold text-zinc-900 text-[13px] block">Mandar / Compartir</span>
-                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp, correo o guardar en archivos</span>
+                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Compartir / Mandar</span>
+                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp o guardar en Archivos</span>
+                </div>
+              </button>
+
+              <button
+                onClick={executeDownloadFinanceReport}
+                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
+              >
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  <Download size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar Archivo</span>
+                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Descargar y guardar Excel (abre Safari externo)</span>
                 </div>
               </button>
             </div>
 
+            {/* PWA / iOS Safe Tip badge */}
+            <div className="mt-3.5 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl text-[9px] text-zinc-450 leading-relaxed font-bold">
+              💡 **Tip de Pantalla Completa (PWA)**: Si usas la app en pantalla completa, la opción **Visualizar** o **Compartir** te mantendrá siempre en la app. Si eliges **Descargar**, se abrirá en tu navegador externo para que puedas deslizar de regreso fácilmente.
+            </div>
+
             <button
               onClick={() => setShowExportChoiceModal(false)}
-              className="w-full mt-5 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+              className="w-full mt-4 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
             >
               Cancelar
             </button>
