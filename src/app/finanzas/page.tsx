@@ -17,7 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 type Account = {
   id: string;
   name: string;
-  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR';
+  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR';
   balance: number;
   currency: string;
   sort_index?: number;
@@ -67,7 +67,7 @@ export default function FinanzasPage() {
  
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
   const [accName, setAccName] = useState('');
-  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR'>('EFECTIVO');
+  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR'>('EFECTIVO');
   const [accBalance, setAccBalance] = useState('');
   const [accCurrency, setAccCurrency] = useState('MXN');
   const [isSavingAcc, setIsSavingAcc] = useState(false);
@@ -100,6 +100,15 @@ export default function FinanzasPage() {
     'IBC LAU',
     'IBC ROLY'
   ];
+
+  const financeGroups = [
+    { type: 'EFECTIVO', title: 'Efectivo', icon: Wallet, color: 'text-emerald-600', bg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
+    { type: 'BANCOS', title: 'Bancos', icon: Landmark, color: 'text-blue-600', bg: 'bg-blue-50', iconColor: 'text-blue-600' },
+    { type: 'CUENTAS X COBRAR', title: 'Cuentas x Cobrar', icon: Globe, color: 'text-amber-600', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
+    { type: 'CUENTAS X PAGAR', title: 'Cuentas x Pagar', icon: ArrowLeftRight, color: 'text-rose-600', bg: 'bg-rose-50', iconColor: 'text-rose-600' },
+    { type: 'AHORROS', title: 'Ahorros', icon: PiggyBank, color: 'text-purple-600', bg: 'bg-purple-50', iconColor: 'text-purple-600' },
+    { type: 'EXTRANJERO', title: 'Extranjero', icon: Globe, color: 'text-violet-600', bg: 'bg-violet-50', iconColor: 'text-violet-600' }
+  ] as const;
 
   
  
@@ -1085,87 +1094,68 @@ export default function FinanzasPage() {
             </div>
           </div>
 
-          {/* Cuadrícula Unificada de Cuentas */}
-          <div className="bg-white border border-zinc-200/85 rounded-[32px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
-            <div className="flex items-center justify-between mb-5">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-zinc-50 border border-zinc-200/60 text-zinc-800">
-                  <Landmark size={20} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <h3 className="text-[16px] font-extrabold text-zinc-950 tracking-tight">Cuentas Contables</h3>
-                  <p className="text-[9px] text-zinc-400 font-extrabold uppercase tracking-widest mt-0.5">Libro de Cuentas Activas</p>
-                </div>
-              </div>
-            </div>
+          {/* Cuadrículas Agrupadas de Cuentas Contables */}
+          {financeGroups.map(group => {
+            const groupAccounts = sortAccounts(accounts).filter(a => a.group_type === group.type);
+            if (groupAccounts.length === 0) return null;
+            const total = groupAccounts.reduce((sum, curr) => sum + convertToMXN(curr.balance, curr.currency), 0);
+            const IconComponent = group.icon;
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5">
-              {sortAccounts(accounts).map((acc) => {
-                let groupBadge = '';
-                let badgeColor = '';
-                switch(acc.group_type) {
-                  case 'EFECTIVO':
-                    groupBadge = 'Efectivo';
-                    badgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-150/40';
-                    break;
-                  case 'BANCOS':
-                    groupBadge = 'Bancos';
-                    badgeColor = 'bg-blue-50 text-blue-700 border-blue-150/40';
-                    break;
-                  case 'AHORROS':
-                    groupBadge = 'Ahorros';
-                    badgeColor = 'bg-purple-50 text-purple-700 border-purple-150/40';
-                    break;
-                  case 'EXTRANJERO':
-                    groupBadge = 'Extranjero';
-                    badgeColor = 'bg-violet-50 text-violet-700 border-violet-150/40';
-                    break;
-                  case 'CUENTAS X COBRAR':
-                    groupBadge = 'Cuentas x Cobrar';
-                    badgeColor = 'bg-amber-50 text-amber-700 border-amber-150/40';
-                    break;
-                  default:
-                    groupBadge = acc.group_type;
-                    badgeColor = 'bg-zinc-50 text-zinc-700 border-zinc-150';
-                }
-
-                return (
-                  <div 
-                    key={acc.id} 
-                    onClick={() => {
-                      setFilterAccountId(acc.id);
-                      setActiveTab('registro');
-                    }}
-                    className="border rounded-2xl p-4 transition-all relative flex flex-col justify-between min-h-[125px] border-zinc-200/70 bg-[#fafafa] hover:bg-white hover:border-zinc-350 hover:shadow-sm cursor-pointer active:scale-[0.98]"
-                  >
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="truncate flex-1">
-                        <p className="text-[12px] font-extrabold text-zinc-950 truncate leading-snug">{acc.name}</p>
-                        <span className={`inline-block text-[8px] font-extrabold px-1.5 py-0.5 rounded-md border mt-1 select-none tracking-wide uppercase ${badgeColor}`}>
-                          {groupBadge}
-                        </span>
-                      </div>
+            return (
+              <div key={group.type} className="bg-white border border-zinc-200/85 rounded-[32px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-5 select-none">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${group.bg} ${group.iconColor}`}>
+                      <IconComponent size={20} strokeWidth={2.5} />
                     </div>
-                    
-                    <div className="mt-4">
-                      <div className="flex items-baseline gap-0.5">
-                        <span className="text-[10px] text-zinc-400 font-bold">$</span>
-                        <p className="text-[17px] font-black text-zinc-950 tracking-tight leading-none">
-                          {acc.balance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </p>
-                        <span className="text-[9px] text-zinc-450 font-extrabold uppercase ml-0.5">{acc.currency}</span>
-                      </div>
-                      {acc.currency !== 'MXN' && (
-                        <p className="text-[9.5px] font-bold text-zinc-400/90 leading-none mt-2 pt-1 border-t border-dashed border-zinc-200">
-                          ≈ ${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })} MXN
-                        </p>
-                      )}
+                    <div>
+                      <h3 className="text-[16px] font-extrabold text-zinc-950 tracking-tight">{group.title}</h3>
+                      <p className="text-[9px] text-zinc-400 font-extrabold uppercase tracking-widest mt-0.5">Grupo Contable</p>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-0.5">TOTAL</p>
+                    <p className={`text-[17px] font-black tracking-tight ${group.color}`}>
+                      ${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Grid of Accounts (3 columns) */}
+                <div className="grid grid-cols-3 gap-x-2 gap-y-3.5">
+                  {groupAccounts.map(acc => (
+                    <div 
+                      key={acc.id} 
+                      onClick={() => {
+                        setFilterAccountId(acc.id);
+                        setActiveTab('registro');
+                      }}
+                      className="bg-[#fafafa] border border-zinc-200/50 rounded-2xl p-3.5 hover:bg-white hover:border-zinc-350 hover:shadow-sm transition-all cursor-pointer group active:scale-[0.98] flex flex-col justify-between min-h-[90px]"
+                    >
+                      <span className="text-[10px] font-extrabold text-zinc-450 uppercase tracking-wide truncate mb-1.5 block group-hover:text-zinc-700 transition-colors">
+                        {acc.name}
+                      </span>
+                      <div className="flex flex-col">
+                        <div className="flex items-baseline gap-0.5 min-w-0">
+                          <span className="text-[10px] text-zinc-400 font-bold">$</span>
+                          <span className="text-[15px] font-black text-zinc-900 tracking-tight leading-none truncate">
+                            {acc.balance.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          </span>
+                          <span className="text-[8px] text-zinc-450 font-extrabold uppercase ml-0.5">{acc.currency}</span>
+                        </div>
+                        {acc.currency !== 'MXN' && (
+                          <span className="text-[9px] font-bold text-zinc-400/90 leading-none mt-1.5 pt-1 border-t border-dashed border-zinc-250 truncate">
+                            ≈${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
 
           {/* Mantenimiento Contable */}
           <div className="bg-rose-50/30 border border-rose-200/50 rounded-[32px] p-6 shadow-sm mt-4">
@@ -2021,6 +2011,7 @@ export default function FinanzasPage() {
                   <option value="AHORROS">AHORROS (Fondos guardados)</option>
                   <option value="EXTRANJERO">EXTRANJERO (DLL/EUR)</option>
                   <option value="CUENTAS X COBRAR">CUENTAS X COBRAR</option>
+                  <option value="CUENTAS X PAGAR">CUENTAS X PAGAR</option>
                 </select>
               </div>
 
