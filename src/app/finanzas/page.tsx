@@ -1247,31 +1247,33 @@ export default function FinanzasPage() {
               ))}
             </div>
             
-            <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
-              <div className="bg-white border border-zinc-200 p-1 rounded-xl shadow-sm flex items-center gap-1.5 px-2">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Desde</span>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={e => setStartDate(e.target.value)}
-                  className="bg-transparent border-none text-[12px] font-bold text-zinc-700 outline-none cursor-pointer p-0.5"
-                />
-              </div>
-              <div className="bg-white border border-zinc-200 p-1 rounded-xl shadow-sm flex items-center gap-1.5 px-2">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Hasta</span>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={e => setEndDate(e.target.value)}
-                  className="bg-transparent border-none text-[12px] font-bold text-zinc-700 outline-none cursor-pointer p-0.5"
-                />
+            <div className="flex flex-col gap-2 w-full sm:flex-row sm:items-center sm:w-auto">
+              <div className="flex flex-row gap-2 w-full">
+                <div className="flex-1 bg-white border border-zinc-200 p-1.5 rounded-xl shadow-sm flex items-center justify-between gap-1.5 px-2.5">
+                  <span className="text-[10px] font-extrabold text-zinc-450 uppercase tracking-wider select-none">Desde</span>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={e => setStartDate(e.target.value)}
+                    className="bg-transparent border-none text-[11px] font-bold text-zinc-700 outline-none cursor-pointer p-0.5 min-w-0 flex-1 text-right"
+                  />
+                </div>
+                <div className="flex-1 bg-white border border-zinc-200 p-1.5 rounded-xl shadow-sm flex items-center justify-between gap-1.5 px-2.5">
+                  <span className="text-[10px] font-extrabold text-zinc-455 uppercase tracking-wider select-none">Hasta</span>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={e => setEndDate(e.target.value)}
+                    className="bg-transparent border-none text-[11px] font-bold text-zinc-700 outline-none cursor-pointer p-0.5 min-w-0 flex-1 text-right"
+                  />
+                </div>
               </div>
               {(startDate || endDate) && (
                 <button
                   onClick={() => { setStartDate(''); setEndDate(''); }}
-                  className="text-[10px] font-black text-rose-500 hover:text-rose-600 px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors"
+                  className="w-full sm:w-auto text-[10px] font-black text-rose-500 hover:text-rose-600 px-2.5 py-2 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors text-center shrink-0"
                 >
-                  LIMPIAR
+                  LIMPIAR FILTRO
                 </button>
               )}
             </div>
