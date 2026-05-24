@@ -8,7 +8,8 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const timeFilter = searchParams.get('time') || 'todo'; // 'hoy' | 'semana' | 'mes' | 'todo'
-    const accountFilter = searchParams.get('account') || 'todo';
+    const startDate = searchParams.get('startDate') || '';
+    const endDate = searchParams.get('endDate') || '';
     const searchFilter = searchParams.get('search') || '';
 
     // 1. Obtener los movimientos del libro contable (finances)
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
     const { data: records, error } = await query;
     if (error) throw error;
 
-    // 2. Filtrar los movimientos por rango de tiempo, por cuenta y por búsqueda de texto
+    // 2. Filtrar los movimientos por rango de tiempo, por rango de fechas y por búsqueda de texto
     const today = new Date();
     const filtered = (records || []).filter(r => {
       // Filtrar por tiempo
@@ -39,10 +40,13 @@ export async function GET(req: Request) {
         }
       }
 
-      // Filtrar por cuenta específica
-      let matchAccount = true;
-      if (accountFilter !== 'todo') {
-        matchAccount = r.account_id === accountFilter;
+      // Filtrar por rango de fechas específico
+      let matchDateRange = true;
+      if (startDate) {
+        matchDateRange = matchDateRange && (r.date >= startDate);
+      }
+      if (endDate) {
+        matchDateRange = matchDateRange && (r.date <= endDate);
       }
 
       // Filtrar por búsqueda de texto
@@ -64,7 +68,7 @@ export async function GET(req: Request) {
                       typeStr.includes(query);
       }
 
-      return matchTime && matchAccount && matchSearch;
+      return matchTime && matchDateRange && matchSearch;
     });
 
     if (filtered.length === 0) {

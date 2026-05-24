@@ -65,8 +65,6 @@ export default function FinanzasPage() {
   const [transferAmount, setTransferAmount] = useState('');
   const [transferDescription, setTransferDescription] = useState('');
  
-  // Gestionar cuentas (Agregar y Quitar)
-  const [showManageAccountsModal, setShowManageAccountsModal] = useState(false);
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
   const [accName, setAccName] = useState('');
   const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR'>('EFECTIVO');
@@ -74,8 +72,9 @@ export default function FinanzasPage() {
   const [accCurrency, setAccCurrency] = useState('MXN');
   const [isSavingAcc, setIsSavingAcc] = useState(false);
  
-  // Filtro de Cuenta en Registro
-  const [filterAccountId, setFilterAccountId] = useState('todo');
+  // Filtros de rango de fechas en Registro
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const OFFICIAL_ORDER = [
     'EFE PEND',
@@ -797,10 +796,13 @@ export default function FinanzasPage() {
       }
     }
 
-    // 2. Filtrar por cuenta específica
-    let matchAccount = true;
-    if (filterAccountId !== 'todo') {
-      matchAccount = r.account_id === filterAccountId;
+    // 2. Filtrar por rango de fechas
+    let matchDateRange = true;
+    if (startDate) {
+      matchDateRange = matchDateRange && (r.date >= startDate);
+    }
+    if (endDate) {
+      matchDateRange = matchDateRange && (r.date <= endDate);
     }
 
     // 3. Filtrar por búsqueda de texto
@@ -822,12 +824,12 @@ export default function FinanzasPage() {
                     typeStr.includes(query);
     }
 
-    return matchTime && matchAccount && matchSearch;
+    return matchTime && matchDateRange && matchSearch;
   });
 
   const exportToCSV = () => {
     if (filteredRecords.length === 0) return alert("No hay datos para exportar.");
-    window.location.href = `/api/finances/export?time=${filterType}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
+    window.location.href = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&search=${encodeURIComponent(searchQuery)}`;
   };
 
   const sortAccounts = (accs: any[]) => {
@@ -983,15 +985,6 @@ export default function FinanzasPage() {
           </button>
 
           <button 
-            onClick={() => setShowManageAccountsModal(true)}
-            className="h-10 px-4 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95 transition-all text-xs font-bold"
-            title="Gestionar Cuentas"
-          >
-            <PiggyBank size={14} className="text-zinc-650" />
-            <span className="hidden sm:inline">Gestionar Cuentas</span>
-          </button>
-
-          <button 
             onClick={fetchData} 
             disabled={isLoading}
             className="w-10 h-10 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-all"
@@ -1142,6 +1135,19 @@ export default function FinanzasPage() {
                           >
                             ↓
                           </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`¿Estás seguro de que deseas eliminar la cuenta "${acc.name}"?\nEsta acción es irreversible.`)) {
+                                handleDeleteAccount(acc.id);
+                              }
+                            }}
+                            className="w-6 h-6 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md flex items-center justify-center text-rose-600 cursor-pointer active:scale-90 transition-transform ml-1"
+                            title="Eliminar Cuenta"
+                          >
+                            <Trash2 size={11} strokeWidth={2.5} />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1173,6 +1179,23 @@ export default function FinanzasPage() {
                   </div>
                 );
               })}
+              {reorderMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccName('');
+                    setAccBalance('');
+                    setAccGroupType('EFECTIVO');
+                    setAccCurrency('MXN');
+                    setShowAddAccountModal(true);
+                  }}
+                  className="border-2 border-dashed border-zinc-250 hover:border-emerald-500 hover:bg-emerald-50/10 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[125px] text-zinc-500 hover:text-emerald-600 transition-all cursor-pointer group active:scale-95"
+                >
+                  <Plus size={20} strokeWidth={2.5} className="text-zinc-400 group-hover:text-emerald-500 mb-1" />
+                  <span className="text-[12px] font-black tracking-tight leading-tight">Añadir Cuenta</span>
+                  <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">Crear Nueva Cartera</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -1223,17 +1246,33 @@ export default function FinanzasPage() {
               ))}
             </div>
             
-            <div className="sm:w-56 bg-white border border-zinc-200 p-1 rounded-xl shadow-sm flex items-center">
-              <select
-                value={filterAccountId}
-                onChange={e => setFilterAccountId(e.target.value)}
-                className="w-full bg-transparent border-none text-[12px] font-bold text-zinc-700 py-1.5 px-2 outline-none cursor-pointer"
-              >
-                <option value="todo">Todas las Cuentas</option>
-                {sortAccounts(accounts).map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.name} ({acc.currency})</option>
-                ))}
-              </select>
+            <div className="flex flex-col sm:flex-row items-center gap-2 w-full sm:w-auto">
+              <div className="bg-white border border-zinc-200 p-1 rounded-xl shadow-sm flex items-center gap-1.5 px-2">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Desde</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="bg-transparent border-none text-[12px] font-bold text-zinc-700 outline-none cursor-pointer p-0.5"
+                />
+              </div>
+              <div className="bg-white border border-zinc-200 p-1 rounded-xl shadow-sm flex items-center gap-1.5 px-2">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Hasta</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  className="bg-transparent border-none text-[12px] font-bold text-zinc-700 outline-none cursor-pointer p-0.5"
+                />
+              </div>
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => { setStartDate(''); setEndDate(''); }}
+                  className="text-[10px] font-black text-rose-500 hover:text-rose-600 px-2.5 py-1.5 rounded-lg bg-rose-50 border border-rose-100 hover:bg-rose-100 transition-colors"
+                >
+                  LIMPIAR
+                </button>
+              )}
             </div>
           </div>
 
@@ -1890,76 +1929,7 @@ export default function FinanzasPage() {
         </div>
       )}
 
-      {/* Modal Premium de Gestión de Cuentas */}
-      {showManageAccountsModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
-          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center mb-5 shrink-0">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
-                  <PiggyBank size={18} strokeWidth={2.5} className="text-zinc-850" />
-                </div>
-                <div>
-                  <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
-                    Administrar Cuentas
-                  </h3>
-                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Carteras y Cuentas Activas</span>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowManageAccountsModal(false)}
-                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
 
-            {/* List of Envelopes */}
-            <div className="flex-1 overflow-y-auto pr-1 space-y-2 mb-4">
-              {sortAccounts(accounts).map(acc => (
-                <div key={acc.id} className="flex justify-between items-center bg-zinc-50 hover:bg-zinc-100/50 p-3 rounded-2xl border border-zinc-200/55 transition-all duration-200">
-                  <div>
-                    <span className="font-extrabold text-zinc-900 text-[13px] block leading-tight">{acc.name}</span>
-                    <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mt-0.5">{acc.group_type}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-black text-[13px] text-zinc-800">${acc.balance.toLocaleString('es-MX')} <span className="text-[9px] text-zinc-400 font-bold">{acc.currency}</span></span>
-                    <button 
-                      onClick={() => handleDeleteAccount(acc.id)}
-                      className="p-2 hover:bg-rose-50 text-zinc-400 hover:text-rose-600 rounded-xl transition-all cursor-pointer"
-                      title="Eliminar cuenta"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="pt-2 flex gap-3 shrink-0">
-              <button 
-                onClick={() => setShowManageAccountsModal(false)}
-                className="flex-1 py-3 bg-zinc-150 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
-              >
-                Cerrar
-              </button>
-              <button 
-                onClick={() => {
-                  setAccName('');
-                  setAccBalance('');
-                  setAccGroupType('EFECTIVO');
-                  setAccCurrency('MXN');
-                  setShowAddAccountModal(true);
-                }}
-                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Plus size={14} />
-                Nueva Cuenta
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modal Premium para Crear Cuentas */}
       {showAddAccountModal && (
