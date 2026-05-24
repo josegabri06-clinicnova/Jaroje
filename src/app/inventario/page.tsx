@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Package, Search, Plus, Minus, AlertTriangle, Edit2, Trash2, X, History, Settings, Download, ArrowUp, ArrowDown } from 'lucide-react';
+import { Package, Search, Plus, Minus, AlertTriangle, Edit2, Trash2, X, History, Settings, Download, ArrowUp, ArrowDown, Eye, Share2 } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -38,6 +38,7 @@ export default function InventarioPage() {
   const [onlyLowStock, setOnlyLowStock] = useState(false);
   const [categoriesOrder, setCategoriesOrder] = useState<string[]>([]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showExportChoiceModal, setShowExportChoiceModal] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -262,10 +263,13 @@ export default function InventarioPage() {
     return isMobile || isStandalone;
   };
 
-  const exportInventoryToCSV = async () => {
+  const exportInventoryToCSV = () => {
     if (filteredItems.length === 0) return alert("No hay datos para exportar.");
+    setShowExportChoiceModal(true);
+  };
+
+  const executeShareInventoryReport = async () => {
     const url = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
-    
     try {
       const response = await fetch(url);
       if (!response.ok) throw new Error("Error al obtener los datos");
@@ -753,6 +757,75 @@ export default function InventarioPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Opciones de Exportación */}
+      {showExportChoiceModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col text-zinc-900">
+            <div className="flex justify-between items-center mb-5 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
+                  <Download size={18} strokeWidth={2.5} className="text-zinc-850" />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                    Exportar Inventario
+                  </h3>
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Escoge una opción</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowExportChoiceModal(false)}
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowExportChoiceModal(false);
+                  const url = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
+                  window.open(url, '_blank');
+                }}
+                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+              >
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  <Eye size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-zinc-900 text-[13px] block">Abrir Reporte</span>
+                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Ver datos en Excel directamente en el navegador</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowExportChoiceModal(false);
+                  executeShareInventoryReport();
+                }}
+                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+              >
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  <Share2 size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-zinc-900 text-[13px] block">Mandar / Compartir</span>
+                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp, correo o guardar en archivos</span>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowExportChoiceModal(false)}
+              className="w-full mt-5 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       )}

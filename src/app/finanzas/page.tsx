@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, SlidersHorizontal, ArrowDown, ArrowUp } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, ArrowUp, Eye, Share2 } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync } from '@/lib/auth';
@@ -77,6 +77,7 @@ export default function FinanzasPage() {
   const [endDate, setEndDate] = useState('');
   const [filterAccountId, setFilterAccountId] = useState<string>('todo');
   const [showAccountOrderModal, setShowAccountOrderModal] = useState(false);
+  const [showExportChoiceModal, setShowExportChoiceModal] = useState(false);
   const [renamingAccount, setRenamingAccount] = useState<string | null>(null);
   const [renamingNewName, setRenamingNewName] = useState('');
 
@@ -801,8 +802,12 @@ export default function FinanzasPage() {
     return isMobile || isStandalone;
   };
 
-  const exportToCSV = async () => {
+  const exportToCSV = () => {
     if (filteredRecords.length === 0) return alert("No hay datos para exportar.");
+    setShowExportChoiceModal(true);
+  };
+
+  const executeShareFinanceReport = async () => {
     const url = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
     
     try {
@@ -1005,7 +1010,7 @@ export default function FinanzasPage() {
             className="w-10 h-10 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-all"
             title="Acomodar y Administrar Cuentas"
           >
-            <SlidersHorizontal size={16} strokeWidth={2.5} className="text-zinc-700" />
+            <Settings size={16} strokeWidth={2.5} className="text-zinc-700" />
           </button>
 
           <button 
@@ -1122,8 +1127,8 @@ export default function FinanzasPage() {
                   </div>
                 </div>
 
-                {/* Grid of Accounts (3 columns) */}
-                <div className="grid grid-cols-3 gap-x-2 gap-y-3.5">
+                {/* Grid of Accounts (2 columns on mobile, 3 columns on tablet/desktop) */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3.5 gap-y-3.5">
                   {groupAccounts.map(acc => (
                     <div 
                       key={acc.id} 
@@ -1682,6 +1687,75 @@ export default function FinanzasPage() {
         }}
       />
 
+      {/* Modal de Opciones de Exportación */}
+      {showExportChoiceModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300 animate-in fade-in">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col text-zinc-900">
+            <div className="flex justify-between items-center mb-5 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-zinc-100 rounded-xl flex items-center justify-center text-zinc-900 border border-zinc-200">
+                  <Download size={18} strokeWidth={2.5} className="text-zinc-850" />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                    Exportar Reporte
+                  </h3>
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Escoge una opción</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowExportChoiceModal(false)}
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setShowExportChoiceModal(false);
+                  const url = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
+                  window.open(url, '_blank');
+                }}
+                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+              >
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  <Eye size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-zinc-900 text-[13px] block">Abrir Reporte</span>
+                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Ver datos en Excel directamente en el navegador</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowExportChoiceModal(false);
+                  executeShareFinanceReport();
+                }}
+                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+              >
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  <Share2 size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-zinc-900 text-[13px] block">Mandar / Compartir</span>
+                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp, correo o guardar en archivos</span>
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowExportChoiceModal(false)}
+              className="w-full mt-5 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modal Premium de Transferencias entre Cuentas */}
       {showTransferModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
@@ -2010,8 +2084,8 @@ export default function FinanzasPage() {
                   <option value="BANCOS">BANCOS (Cuentas corrientes)</option>
                   <option value="AHORROS">AHORROS (Fondos guardados)</option>
                   <option value="EXTRANJERO">EXTRANJERO (DLL/EUR)</option>
-                  <option value="CUENTAS X COBRAR">CUENTAS X COBRAR</option>
-                  <option value="CUENTAS X PAGAR">CUENTAS X PAGAR</option>
+                  <option value="CUENTAS X COBRAR">CUENTAS X COBRAR (Saldos a favor / Booking)</option>
+                  <option value="CUENTAS X PAGAR">CUENTAS X PAGAR (Obligaciones a pagar / Proveedores)</option>
                 </select>
               </div>
 
