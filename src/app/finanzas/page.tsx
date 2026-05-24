@@ -1125,7 +1125,6 @@ export default function FinanzasPage() {
           {/* Cuadrículas Agrupadas de Cuentas Contables */}
           {financeGroups.map(group => {
             const groupAccounts = sortAccounts(accounts).filter(a => a.group_type === group.type);
-            if (groupAccounts.length === 0) return null;
             const total = groupAccounts.reduce((sum, curr) => sum + convertToMXN(curr.balance, curr.currency), 0);
             const IconComponent = group.icon;
 
@@ -1152,34 +1151,50 @@ export default function FinanzasPage() {
 
                 {/* Grid of Accounts (2 columns on mobile, 3 columns on tablet/desktop) */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3.5 gap-y-3.5">
-                  {groupAccounts.map(acc => (
+                  {groupAccounts.length === 0 ? (
                     <div 
-                      key={acc.id} 
                       onClick={() => {
-                        setFilterAccountId(acc.id);
-                        setActiveTab('registro');
+                        setAccGroupType(group.type);
+                        setShowAddAccountModal(true);
                       }}
-                      className="bg-[#fafafa] border border-zinc-200/50 rounded-2xl p-3.5 hover:bg-white hover:border-zinc-350 hover:shadow-sm transition-all cursor-pointer group active:scale-[0.98] flex flex-col justify-between min-h-[90px]"
+                      className="bg-zinc-50/50 border border-dashed border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/80 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[90px] text-center hover:shadow-sm transition-all cursor-pointer group active:scale-[0.98] col-span-2 sm:col-span-3 select-none"
                     >
-                      <span className="text-[10px] font-extrabold text-zinc-450 uppercase tracking-wide truncate mb-1.5 block group-hover:text-zinc-700 transition-colors">
-                        {acc.name}
+                      <Plus size={16} className="text-zinc-450 group-hover:text-zinc-700 transition-colors mb-1.5 animate-pulse" />
+                      <span className="text-[10px] font-extrabold text-zinc-450 group-hover:text-zinc-750 transition-colors uppercase tracking-wider leading-none">
+                        Añadir Cuenta
                       </span>
-                      <div className="flex flex-col">
-                        <div className="flex items-baseline gap-0.5 min-w-0">
-                          <span className="text-[10px] text-zinc-400 font-bold">$</span>
-                          <span className="text-[15px] font-black text-zinc-900 tracking-tight leading-none truncate">
-                            {acc.balance.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                          </span>
-                          <span className="text-[8px] text-zinc-450 font-extrabold uppercase ml-0.5">{acc.currency}</span>
-                        </div>
-                        {acc.currency !== 'MXN' && (
-                          <span className="text-[9px] font-bold text-zinc-400/90 leading-none mt-1.5 pt-1 border-t border-dashed border-zinc-250 truncate">
-                            ≈${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })}
-                          </span>
-                        )}
-                      </div>
+                      <span className="text-[8px] text-zinc-400 mt-1 font-bold">Crea tu primera cuenta en {group.title}</span>
                     </div>
-                  ))}
+                  ) : (
+                    groupAccounts.map(acc => (
+                      <div 
+                        key={acc.id} 
+                        onClick={() => {
+                          setFilterAccountId(acc.id);
+                          setActiveTab('registro');
+                        }}
+                        className="bg-[#fafafa] border border-zinc-200/50 rounded-2xl p-3.5 hover:bg-white hover:border-zinc-350 hover:shadow-sm transition-all cursor-pointer group active:scale-[0.98] flex flex-col justify-between min-h-[90px]"
+                      >
+                        <span className="text-[10px] font-extrabold text-zinc-455 uppercase tracking-wide truncate mb-1.5 block group-hover:text-zinc-750 transition-colors">
+                          {acc.name}
+                        </span>
+                        <div className="flex flex-col">
+                          <div className="flex items-baseline gap-0.5 min-w-0">
+                            <span className="text-[10px] text-zinc-400 font-bold">$</span>
+                            <span className="text-[15px] font-black text-zinc-900 tracking-tight leading-none truncate">
+                              {acc.balance.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-[8px] text-zinc-450 font-extrabold uppercase ml-0.5">{acc.currency}</span>
+                          </div>
+                          {acc.currency !== 'MXN' && (
+                            <span className="text-[9px] font-bold text-zinc-400/90 leading-none mt-1.5 pt-1 border-t border-dashed border-zinc-250 truncate">
+                              ≈${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             );
@@ -1751,34 +1766,36 @@ export default function FinanzasPage() {
                 </div>
               </button>
 
-              <button
-                onClick={() => {
-                  setShowExportChoiceModal(false);
-                  executeShareFinanceReport();
-                }}
-                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
-              >
-                <div className="w-10 h-10 bg-purple-50 text-purple-650 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <Share2 size={18} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Compartir / Mandar</span>
-                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp o guardar en Archivos</span>
-                </div>
-              </button>
-
-              <button
-                onClick={executeDownloadFinanceReport}
-                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
-              >
-                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <Download size={18} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar Archivo</span>
-                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Descargar y guardar Excel (abre Safari externo)</span>
-                </div>
-              </button>
+              {isMobileOrPWA() ? (
+                <button
+                  onClick={() => {
+                    setShowExportChoiceModal(false);
+                    executeShareFinanceReport();
+                  }}
+                  className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
+                >
+                  <div className="w-10 h-10 bg-emerald-50 text-emerald-650 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <Download size={18} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar o Compartir</span>
+                    <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Guardar en Archivos o mandar por WhatsApp</span>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  onClick={executeDownloadFinanceReport}
+                  className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
+                >
+                  <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <Download size={18} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar Archivo</span>
+                    <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Descargar y guardar Excel directamente</span>
+                  </div>
+                </button>
+              )}
             </div>
 
             {/* PWA / iOS Safe Tip badge */}

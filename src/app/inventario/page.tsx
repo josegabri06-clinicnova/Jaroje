@@ -825,34 +825,36 @@ export default function InventarioPage() {
                 </div>
               </button>
 
-              <button
-                onClick={() => {
-                  setShowExportChoiceModal(false);
-                  executeShareInventoryReport();
-                }}
-                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
-              >
-                <div className="w-10 h-10 bg-purple-50 text-purple-650 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <Share2 size={18} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Compartir / Mandar</span>
-                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp o guardar en Archivos</span>
-                </div>
-              </button>
-
-              <button
-                onClick={executeDownloadInventoryReport}
-                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
-              >
-                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
-                  <Download size={18} strokeWidth={2.5} />
-                </div>
-                <div>
-                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar Archivo</span>
-                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Descargar y guardar Excel directamente</span>
-                </div>
-              </button>
+              {isMobileOrPWA() ? (
+                <button
+                  onClick={() => {
+                    setShowExportChoiceModal(false);
+                    executeShareInventoryReport();
+                  }}
+                  className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
+                >
+                  <div className="w-10 h-10 bg-emerald-50 text-emerald-650 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <Download size={18} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar o Compartir</span>
+                    <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Guardar en Archivos o mandar por WhatsApp</span>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  onClick={executeDownloadInventoryReport}
+                  className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
+                >
+                  <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                    <Download size={18} strokeWidth={2.5} />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar Archivo</span>
+                    <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Descargar y guardar Excel directamente</span>
+                  </div>
+                </button>
+              )}
             </div>
 
             {/* PWA / iOS Safe Tip badge */}
