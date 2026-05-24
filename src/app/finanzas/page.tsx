@@ -784,16 +784,28 @@ export default function FinanzasPage() {
     return matchTime && matchDateRange && matchSearch && matchAccount;
   });
 
+  const isMobileOrPWA = () => {
+    if (typeof window === 'undefined') return false;
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isMobile = /android|iphone|ipad|ipod/i.test(userAgent);
+    const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+    return isMobile || isStandalone;
+  };
+
   const exportToCSV = () => {
     if (filteredRecords.length === 0) return alert("No hay datos para exportar.");
     const url = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'finanzas.csv');
-    link.setAttribute('target', '_blank');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    if (isMobileOrPWA()) {
+      window.open(url, '_blank');
+    } else {
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'finanzas.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const sortAccounts = (accs: any[]) => {

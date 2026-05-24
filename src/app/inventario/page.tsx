@@ -254,16 +254,28 @@ export default function InventarioPage() {
     await updateStock(item.id, item.stock, change);
   };
 
+  const isMobileOrPWA = () => {
+    if (typeof window === 'undefined') return false;
+    const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+    const isMobile = /android|iphone|ipad|ipod/i.test(userAgent);
+    const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+    return isMobile || isStandalone;
+  };
+
   const exportInventoryToCSV = () => {
     if (filteredItems.length === 0) return alert("No hay datos para exportar.");
     const url = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', 'inventario.csv');
-    link.setAttribute('target', '_blank');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    if (isMobileOrPWA()) {
+      window.open(url, '_blank');
+    } else {
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'inventario.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const updateStock = async (id: string, currentStock: number, change: number) => {
