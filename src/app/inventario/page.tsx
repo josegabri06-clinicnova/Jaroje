@@ -152,6 +152,47 @@ export default function InventarioPage() {
     localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
   };
 
+  const handleDeleteCategory = async (catName: string) => {
+    if (confirm(`¿Estás seguro de que deseas eliminar la categoría "${catName}"?\nTodos los artículos de esta categoría pasarán a "Otros".`)) {
+      setIsSubmitting(true);
+      const { error } = await supabase
+        .from('inventory')
+        .update({ category: 'Otros' })
+        .eq('category', catName);
+        
+      if (error) {
+        console.error(error);
+        alert("Error al actualizar artículos en Supabase");
+      } else {
+        const updated = categoriesOrder.filter(cat => cat !== catName);
+        if (!updated.includes('Otros')) {
+          updated.push('Otros');
+        }
+        setCategoriesOrder(updated);
+        localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
+        
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: '999',
+              employee_name: 'Administrador',
+              department: 'Administración',
+              module: 'inventario',
+              action: 'eliminar_categoria',
+              details: `Eliminó la categoría de inventario "${catName}" y movilizó sus artículos a "Otros"`
+            })
+          });
+        } catch (e) {}
+        
+        fetchInventory();
+        alert("Categoría eliminada con éxito.");
+      }
+      setIsSubmitting(false);
+    }
+  };
+
   const handleRenameCategory = async (oldName: string, newName: string) => {
     const cleanNew = newName.trim();
     if (!cleanNew || cleanNew === oldName) return;
@@ -215,7 +256,13 @@ export default function InventarioPage() {
 
   const exportInventoryToCSV = () => {
     if (filteredItems.length === 0) return alert("No hay datos para exportar.");
-    window.location.href = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
+    const url = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'inventario.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const updateStock = async (id: string, currentStock: number, change: number) => {
@@ -778,16 +825,25 @@ export default function InventarioPage() {
                       <ArrowDown size={12} strokeWidth={2.5} />
                     </button>
                     {renamingCategory !== cat && (
-                      <button
-                        onClick={() => {
-                          setRenamingCategory(cat);
-                          setRenamingNewName(cat);
-                        }}
-                        className="p-1.5 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 rounded-lg transition-all cursor-pointer"
-                        title="Renombrar categoría"
-                      >
-                        <Edit2 size={12} />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            setRenamingCategory(cat);
+                            setRenamingNewName(cat);
+                          }}
+                          className="p-1.5 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 rounded-lg transition-all cursor-pointer"
+                          title="Renombrar categoría"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCategory(cat)}
+                          className="p-1.5 hover:bg-rose-50 text-zinc-400 hover:text-rose-600 rounded-lg transition-all cursor-pointer"
+                          title="Eliminar categoría"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>

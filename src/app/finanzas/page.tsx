@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, SlidersHorizontal, ArrowDown, ArrowUp } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync } from '@/lib/auth';
@@ -75,6 +75,10 @@ export default function FinanzasPage() {
   // Filtros de rango de fechas en Registro
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [filterAccountId, setFilterAccountId] = useState<string>('todo');
+  const [showAccountOrderModal, setShowAccountOrderModal] = useState(false);
+  const [renamingAccount, setRenamingAccount] = useState<string | null>(null);
+  const [renamingNewName, setRenamingNewName] = useState('');
 
   const OFFICIAL_ORDER = [
     'EFE PEND',
@@ -197,7 +201,6 @@ export default function FinanzasPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const [accountsOrder, setAccountsOrder] = useState<string[]>([]);
-  const [reorderMode, setReorderMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Cargar el orden de cuentas guardado en el arranque o usar el oficial
@@ -264,11 +267,7 @@ export default function FinanzasPage() {
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Modal Quick Transact Account State
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null);
-  const [quickAmount, setQuickAmount] = useState('');
-  const [quickConcept, setQuickConcept] = useState('Ajuste');
-  const [quickDescription, setQuickDescription] = useState('');
+
 
   // States for absolute resetting of finances
   const [showResetModal, setShowResetModal] = useState(false);
@@ -322,8 +321,7 @@ export default function FinanzasPage() {
     return 'transferencia';
   };
 
-  const handleSaveMovement = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executeSaveMovement = async (selectedType: 'ingreso' | 'gasto') => {
     const evaluatedAmount = evaluateMath(formAmount);
     if (!formAmount || evaluatedAmount <= 0 || !formAccountId) {
       alert("Por favor ingresa un monto válido (número o expresión como 500+250)");
@@ -354,9 +352,9 @@ export default function FinanzasPage() {
     const resolvedPaymentMethod = resolvePaymentMethod(formAccountId);
 
     const newRecord = {
-      type: formType,
+      type: selectedType,
       amount: evaluatedAmount,
-      category: formType === 'ingreso' && formCategory === 'Suministros' ? 'Reserva' : formCategory,
+      category: selectedType === 'ingreso' && formCategory === 'Suministros' ? 'Reserva' : formCategory,
       description: finalDescription,
       account_id: formAccountId,
       payment_method: resolvedPaymentMethod,
@@ -370,7 +368,7 @@ export default function FinanzasPage() {
         if (oldAcc) {
           const revertChange = editingRecord.type === 'ingreso' ? -editingRecord.amount : editingRecord.amount;
           await supabase.from('accounts').update({ balance: oldAcc.balance + revertChange }).eq('id', oldAcc.id);
-          oldAcc.balance += revertChange; // Update local temporarily
+          oldAcc.balance += revertChange;
         }
       }
       
@@ -381,7 +379,7 @@ export default function FinanzasPage() {
       if (!updateErr) {
         const newAcc = accounts.find(a => a.id === formAccountId);
         if (newAcc) {
-          const applyChange = formType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
+          const applyChange = selectedType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
           await supabase.from('accounts').update({ balance: newAcc.balance + applyChange }).eq('id', newAcc.id);
         }
       }
@@ -392,7 +390,7 @@ export default function FinanzasPage() {
       if (!insertErr) {
         const account = accounts.find(a => a.id === formAccountId);
         if (account) {
-          const balanceChange = formType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
+          const balanceChange = selectedType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
           await supabase.from('accounts').update({ balance: account.balance + balanceChange }).eq('id', account.id);
         }
       }
@@ -402,6 +400,11 @@ export default function FinanzasPage() {
     setEditingRecord(null);
     fetchData();
     setIsSaving(false);
+  };
+
+  const handleSaveMovement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await executeSaveMovement(formType);
   };
 
   const handleDeleteMovement = async () => {
@@ -424,58 +427,6 @@ export default function FinanzasPage() {
     setEditingRecord(null);
     fetchData();
     setIsSaving(false);
-  };
-
-  const handleQuickMovement = async (type: 'ingreso' | 'gasto') => {
-    const evaluatedAmount = evaluateMath(quickAmount);
-    if (!editingAccount || !quickAmount || evaluatedAmount <= 0) {
-      alert("Por favor ingresa un monto válido (número o expresión como 500+250)");
-      return;
-    }
-    
-    setIsSaving(true);
-    
-    const resolvedPaymentMethod = resolvePaymentMethod(editingAccount.id);
-
-    const newRecord = {
-      type: type,
-      amount: evaluatedAmount,
-      category: quickConcept,
-      description: quickDescription || `Ajuste de ${type === 'ingreso' ? 'ingreso' : 'gasto'}`,
-      account_id: editingAccount.id,
-      payment_method: resolvedPaymentMethod,
-      date: new Date().toISOString().split('T')[0]
-    };
-    
-    // 1. Insert financial record
-    const { error: insertErr } = await supabase.from('finances').insert([newRecord]);
-    
-    if (insertErr) {
-      console.error(insertErr);
-      alert("Error al registrar el movimiento en Supabase");
-      setIsSaving(false);
-      return;
-    }
-    
-    // 2. Update account balance
-    const balanceChange = type === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
-    const newBalance = editingAccount.balance + balanceChange;
-    
-    const { error: updateErr } = await supabase.from('accounts').update({ 
-      balance: newBalance 
-    }).eq('id', editingAccount.id);
-    
-    setIsSaving(false);
-    
-    if (!updateErr) {
-      setEditingAccount(null);
-      setQuickAmount('');
-      setQuickDescription('');
-      setQuickConcept('Ajuste');
-      fetchData();
-    } else {
-      alert("Error al actualizar el saldo de la cuenta");
-    }
   };
 
   // Lógica de Transferencias Atómicas entre Cuentas
@@ -824,12 +775,24 @@ export default function FinanzasPage() {
                     typeStr.includes(query);
     }
 
-    return matchTime && matchDateRange && matchSearch;
+    // 4. Filtrar por cuenta seleccionada
+    let matchAccount = true;
+    if (filterAccountId && filterAccountId !== 'todo') {
+      matchAccount = r.account_id === filterAccountId;
+    }
+
+    return matchTime && matchDateRange && matchSearch && matchAccount;
   });
 
   const exportToCSV = () => {
     if (filteredRecords.length === 0) return alert("No hay datos para exportar.");
-    window.location.href = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&search=${encodeURIComponent(searchQuery)}`;
+    const url = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'finanzas.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const sortAccounts = (accs: any[]) => {
@@ -873,6 +836,45 @@ export default function FinanzasPage() {
       await Promise.all(promises);
     } catch (e) {
       console.error("Error al guardar el nuevo orden en Supabase:", e);
+    }
+  };
+
+  const handleRenameAccount = async (accId: string, currentName: string) => {
+    const clean = renamingNewName.trim();
+    if (!clean) return alert("El nombre no puede estar vacío.");
+    
+    const duplicate = accounts.find(a => a.id !== accId && a.name.trim().toUpperCase() === clean.toUpperCase());
+    if (duplicate) return alert(`Ya existe una cuenta con el nombre "${clean}".`);
+    
+    setIsSavingAcc(true);
+    const { error } = await supabase
+      .from('accounts')
+      .update({ name: clean })
+      .eq('id', accId);
+      
+    setIsSavingAcc(false);
+    if (error) {
+      console.error(error);
+      alert("Error al renombrar cuenta en Supabase");
+    } else {
+      setAccounts(accounts.map(a => a.id === accId ? { ...a, name: clean } : a));
+      setRenamingAccount(null);
+      setRenamingNewName('');
+      
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: '999',
+            employee_name: 'Administrador',
+            module: 'finanzas',
+            action: `Renombrar cuenta: "${currentName}" a "${clean}"`
+          })
+        });
+      } catch (err) {
+        console.error("Error al registrar auditoría:", err);
+      }
     }
   };
 
@@ -958,15 +960,11 @@ export default function FinanzasPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button 
-            onClick={() => setReorderMode(!reorderMode)}
-            className={`h-10 px-4 rounded-full flex items-center gap-1.5 shadow-sm active:scale-95 transition-all text-xs font-bold border ${
-              reorderMode
-                ? 'bg-emerald-600 border-emerald-600 text-white'
-                : 'bg-white border-zinc-200 text-zinc-700'
-            }`}
-            title="Reordenar cuentas manualmente"
+            onClick={() => setShowAccountOrderModal(true)}
+            className="w-10 h-10 bg-white border border-zinc-200 text-zinc-700 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-all"
+            title="Acomodar y Administrar Cuentas"
           >
-            <span>{reorderMode ? '✓ Guardar Orden' : '⇄ Acomodar Cuentas'}</span>
+            <SlidersHorizontal size={16} strokeWidth={2.5} className="text-zinc-700" />
           </button>
 
           <button 
@@ -1070,7 +1068,7 @@ export default function FinanzasPage() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3.5">
-              {sortAccounts(accounts).map((acc, index, arr) => {
+              {sortAccounts(accounts).map((acc) => {
                 let groupBadge = '';
                 let badgeColor = '';
                 switch(acc.group_type) {
@@ -1102,11 +1100,11 @@ export default function FinanzasPage() {
                 return (
                   <div 
                     key={acc.id} 
-                    className={`border rounded-2xl p-4 transition-all relative flex flex-col justify-between min-h-[125px] ${
-                      reorderMode
-                        ? 'border-emerald-300 ring-2 ring-emerald-500/5 bg-white shadow-sm'
-                        : 'border-zinc-200/70 bg-[#fafafa] hover:bg-white hover:border-zinc-350 hover:shadow-sm'
-                    }`}
+                    onClick={() => {
+                      setFilterAccountId(acc.id);
+                      setActiveTab('registro');
+                    }}
+                    className="border rounded-2xl p-4 transition-all relative flex flex-col justify-between min-h-[125px] border-zinc-200/70 bg-[#fafafa] hover:bg-white hover:border-zinc-350 hover:shadow-sm cursor-pointer active:scale-[0.98]"
                   >
                     <div className="flex justify-between items-start gap-2">
                       <div className="truncate flex-1">
@@ -1115,54 +1113,9 @@ export default function FinanzasPage() {
                           {groupBadge}
                         </span>
                       </div>
-                      {reorderMode && (
-                        <div className="flex gap-0.5 shrink-0 select-none">
-                          <button
-                            type="button"
-                            disabled={index === 0}
-                            onClick={(e) => { e.stopPropagation(); moveAccount(acc.name, 'up'); }}
-                            className="w-6 h-6 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-zinc-100 rounded-md flex items-center justify-center text-[10px] font-black text-zinc-700 cursor-pointer border border-zinc-250/60 active:scale-90 transition-transform"
-                            title="Subir / Mover Izquierda"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            disabled={index === arr.length - 1}
-                            onClick={(e) => { e.stopPropagation(); moveAccount(acc.name, 'down'); }}
-                            className="w-6 h-6 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 disabled:hover:bg-zinc-100 rounded-md flex items-center justify-center text-[10px] font-black text-zinc-700 cursor-pointer border border-zinc-250/60 active:scale-90 transition-transform"
-                            title="Bajar / Mover Derecha"
-                          >
-                            ↓
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (confirm(`¿Estás seguro de que deseas eliminar la cuenta "${acc.name}"?\nEsta acción es irreversible.`)) {
-                                handleDeleteAccount(acc.id);
-                              }
-                            }}
-                            className="w-6 h-6 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md flex items-center justify-center text-rose-600 cursor-pointer active:scale-90 transition-transform ml-1"
-                            title="Eliminar Cuenta"
-                          >
-                            <Trash2 size={11} strokeWidth={2.5} />
-                          </button>
-                        </div>
-                      )}
                     </div>
                     
-                    <div 
-                      onClick={() => {
-                        if (!reorderMode) {
-                          setEditingAccount(acc);
-                          setQuickAmount('');
-                          setQuickDescription('');
-                          setQuickConcept('Ajuste');
-                        }
-                      }}
-                      className={`mt-4 ${!reorderMode ? 'cursor-pointer' : 'select-none'}`}
-                    >
+                    <div className="mt-4">
                       <div className="flex items-baseline gap-0.5">
                         <span className="text-[10px] text-zinc-400 font-bold">$</span>
                         <p className="text-[17px] font-black text-zinc-950 tracking-tight leading-none">
@@ -1179,23 +1132,6 @@ export default function FinanzasPage() {
                   </div>
                 );
               })}
-              {reorderMode && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAccName('');
-                    setAccBalance('');
-                    setAccGroupType('EFECTIVO');
-                    setAccCurrency('MXN');
-                    setShowAddAccountModal(true);
-                  }}
-                  className="border-2 border-dashed border-zinc-250 hover:border-emerald-500 hover:bg-emerald-50/10 rounded-2xl p-4 flex flex-col items-center justify-center min-h-[125px] text-zinc-500 hover:text-emerald-600 transition-all cursor-pointer group active:scale-95"
-                >
-                  <Plus size={20} strokeWidth={2.5} className="text-zinc-400 group-hover:text-emerald-500 mb-1" />
-                  <span className="text-[12px] font-black tracking-tight leading-tight">Añadir Cuenta</span>
-                  <span className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest mt-0.5">Crear Nueva Cartera</span>
-                </button>
-              )}
             </div>
           </div>
 
@@ -1288,6 +1224,22 @@ export default function FinanzasPage() {
             />
           </div>
 
+          {filterAccountId && filterAccountId !== 'todo' && (
+            <div className="flex items-center gap-1.5 px-0.5 animate-in slide-in-from-top-1.5 duration-200">
+              <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest">Filtro Activo:</span>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-950 text-white rounded-full text-[10px] font-extrabold shadow-sm">
+                <span>Cuenta: {accounts.find(a => a.id === filterAccountId)?.name || 'Cargando...'}</span>
+                <button 
+                  onClick={() => setFilterAccountId('todo')}
+                  className="hover:text-rose-400 p-0.5 rounded-full hover:bg-white/10 transition-colors cursor-pointer select-none"
+                  title="Limpiar filtro"
+                >
+                  <X size={10} strokeWidth={3} />
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col divide-y divide-zinc-100 overflow-hidden">
             {filteredRecords.length === 0 ? (
               <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay movimientos registrados.</div>
@@ -1372,176 +1324,52 @@ export default function FinanzasPage() {
           </div>
         </div>
       )}
-
-      {/* Modal Registrar Movimiento en Cuenta */}
-      {editingAccount && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
-          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.2)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col">
-             <div className="flex justify-between items-center mb-4">
-              <div>
-                <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
-                  Cuenta: {editingAccount.name}
-                </h3>
-                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">{editingAccount.group_type}</span>
-              </div>
-              <button 
-                onClick={() => { 
-                  setEditingAccount(null); 
-                  setQuickAmount(''); 
-                  setQuickDescription(''); 
-                  setQuickConcept('Ajuste');
-                }} 
-                className="p-2 bg-zinc-100 hover:bg-zinc-200 hover:rotate-90 hover:scale-105 active:scale-95 rounded-full text-zinc-500 transition-all duration-300 cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* MONTO TOTAL EN GRANDE */}
-            <div className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 border border-zinc-200/60 rounded-2xl p-4 text-center mb-4 shadow-sm">
-              <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1">Monto Disponible</p>
-              <p className="text-3xl font-black text-zinc-900 tracking-tight">
-                ${editingAccount.balance.toLocaleString('es-MX')} <span className="text-xs text-zinc-400 font-bold">{editingAccount.currency || 'MXN'}</span>
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {(() => {
-                const evalQuick = evaluateMath(quickAmount);
-                return (
-                  <>
-                    <div>
-                      <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Monto de la Transacción</label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-extrabold text-zinc-400 text-sm">$</span>
-                        <input 
-                          type="text" required
-                          placeholder="0.00 o fórmula (ej. =500-120)" autoFocus
-                          value={quickAmount} onChange={e => setQuickAmount(e.target.value)}
-                          className="w-full text-xl font-bold bg-zinc-50 border border-zinc-200 rounded-xl pl-8 pr-4 py-2.5 outline-none focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white transition-all duration-350 text-zinc-900 placeholder:text-zinc-300"
-                        />
-                      </div>
-
-                      {/* REAL-TIME PREVIEW CALCULATOR */}
-                      {quickAmount && evalQuick > 0 && (
-                        <div className="mt-3 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl space-y-2.5 animate-in slide-in-from-top-2 duration-300">
-                          <p className="font-extrabold text-zinc-400 uppercase tracking-widest text-[8px]">Calculadora Proyectada</p>
-                          <div className="bg-zinc-100/50 p-2 rounded-xl text-center border border-zinc-200/40">
-                            <span className="text-[9px] font-bold text-zinc-400 uppercase">Resultado Evaluado: </span>
-                            <span className="font-black text-[12px] text-zinc-800">${evalQuick.toLocaleString('es-MX')} {editingAccount.currency}</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-emerald-50/40 hover:bg-emerald-50 border border-emerald-100 p-2.5 rounded-xl transition-all duration-300">
-                              <span className="text-emerald-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Ingreso</span>
-                              <span className="font-black text-[13px] text-emerald-600 tracking-tight block">
-                                ${(editingAccount.balance + evalQuick).toLocaleString('es-MX')}
-                              </span>
-                              <span className="text-[8px] text-emerald-500/80 font-bold block mt-0.5">+{evalQuick.toLocaleString('es-MX')} {editingAccount.currency}</span>
-                            </div>
-                            <div className="bg-rose-50/40 hover:bg-rose-50 border border-rose-100 p-2.5 rounded-xl transition-all duration-300">
-                              <span className="text-rose-800 font-extrabold text-[9px] uppercase tracking-wider block mb-1">Si es Gasto</span>
-                              <span className="font-black text-[13px] text-rose-600 tracking-tight block">
-                                ${(editingAccount.balance - evalQuick).toLocaleString('es-MX')}
-                              </span>
-                              <span className="text-[8px] text-rose-500/80 font-bold block mt-0.5">-{evalQuick.toLocaleString('es-MX')} {editingAccount.currency}</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Concepto / Categoría</label>
-                      <select 
-                        value={quickConcept} onChange={e => setQuickConcept(e.target.value)}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
-                      >
-                        <option>Ajuste</option>
-                        <option>Reserva Directa</option>
-                        <option>Venta Extra</option>
-                        <option>Suministros</option>
-                        <option>Limpieza</option>
-                        <option>Mantenimiento</option>
-                        <option>Servicios (Luz, Agua)</option>
-                        <option>Nómina</option>
-                        <option>Otros</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción (Opcional)</label>
-                      <input 
-                        type="text"
-                        placeholder="Comentario del movimiento"
-                        value={quickDescription} onChange={e => setQuickDescription(e.target.value)}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300"
-                      />
-                    </div>
-
-                    {/* RECENT MOVEMENTS IN THIS ACCOUNT */}
-                    <div className="pt-1">
-                      <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2">Últimos movimientos de la cuenta</p>
-                      <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
-                        {records.filter(r => r.account_id === editingAccount.id).length === 0 ? (
-                          <p className="text-[11px] text-zinc-400 font-medium italic text-center py-2 bg-zinc-50/50 rounded-lg">Sin movimientos registrados en esta cuenta.</p>
-                        ) : (
-                          records
-                            .filter(r => r.account_id === editingAccount.id)
-                            .slice(0, 3)
-                            .map(r => (
-                              <div key={r.id} className="flex justify-between items-center bg-zinc-50 p-2 rounded-xl border border-zinc-100/50 text-[11px] hover:bg-zinc-100/50 transition-colors duration-200">
-                                <div className="truncate pr-2">
-                                  <span className="font-bold text-zinc-900 block truncate capitalize">{r.category}</span>
-                                  <span className="text-[10px] text-zinc-400 font-medium block truncate">{cleanDescription(r.description) || 'Sin comentario'}</span>
-                                </div>
-                                <span className={`font-extrabold whitespace-nowrap ${r.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-700'}`}>
-                                  {r.type === 'ingreso' ? '+' : '-'}MX${r.amount.toLocaleString('es-MX')}
-                                </span>
-                              </div>
-                            ))
-                        )}
-                      </div>
-                    </div>
-
-                    {/* ACCIONES DE COBRO/GASTO CONTABLE */}
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <button 
-                        onClick={() => handleQuickMovement('ingreso')}
-                        disabled={isSaving || !quickAmount || evalQuick <= 0}
-                        className="py-3 bg-emerald-600 hover:bg-emerald-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(16,185,129,0.25)] hover:shadow-[0_8px_20px_rgba(16,185,129,0.35)] active:scale-[0.96] cursor-pointer"
-                      >
-                        <ArrowDownLeft size={16} strokeWidth={2.5} />
-                        + Ingreso
-                      </button>
-                      <button 
-                        onClick={() => handleQuickMovement('gasto')}
-                        disabled={isSaving || !quickAmount || evalQuick <= 0}
-                        className="py-3 bg-rose-600 hover:bg-rose-700 hover:-translate-y-0.5 text-white font-bold rounded-xl transition-all duration-300 disabled:opacity-40 text-[13px] flex items-center justify-center gap-1.5 shadow-[0_4px_12px_rgba(244,63,94,0.25)] hover:shadow-[0_8px_20px_rgba(244,63,94,0.35)] active:scale-[0.96] cursor-pointer"
-                      >
-                        <ArrowUpRight size={16} strokeWidth={2.5} />
-                        - Gasto
-                      </button>
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modal Nuevo Movimiento */}
       {showMoveModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto pb-8">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="text-xl font-bold text-zinc-900">Registrar Movimiento</h3>
-              <button onClick={() => setShowMoveModal(false)} className="p-2 bg-zinc-100 rounded-full text-zinc-500">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto pb-8 flex flex-col">
+            <div className="flex justify-between items-center mb-5 shrink-0">
+              <h3 className="text-xl font-bold text-zinc-900">
+                {editingRecord ? 'Editar Movimiento' : 'Registrar Movimiento'}
+              </h3>
+              <button onClick={() => setShowMoveModal(false)} className="p-2 bg-zinc-100 rounded-full text-zinc-500 cursor-pointer">
                 <X size={18} />
               </button>
             </div>
             
             <form onSubmit={handleSaveMovement} className="space-y-5">
+              {/* 1. SELECCIONAR CUENTA (MANDATORIO) */}
+              <div>
+                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">¿De/Para qué Cuenta?</label>
+                <select 
+                  required
+                  value={formAccountId} onChange={e => setFormAccountId(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-bold text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 cursor-pointer"
+                >
+                  <option value="" disabled>Selecciona una Cuenta...</option>
+                  {sortAccounts(accounts).map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.group_type})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* DETALLES DE CUENTA DINÁMICOS */}
+              {(() => {
+                const selectedAcc = accounts.find(a => a.id === formAccountId);
+                if (!selectedAcc) return null;
+                return (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    {/* MONTO DISPONIBLE CARD */}
+                    <div className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 border border-zinc-200/60 rounded-2xl p-4 text-center shadow-sm">
+                      <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1">Monto Disponible en Cuenta</p>
+                      <p className="text-3xl font-black text-zinc-900 tracking-tight">
+                        ${selectedAcc.balance.toLocaleString('es-MX')} <span className="text-xs text-zinc-400 font-bold">{selectedAcc.currency || 'MXN'}</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Tabs Tipo */}
               <div className="flex bg-zinc-100 p-1 rounded-xl">
                 <button
@@ -1566,42 +1394,61 @@ export default function FinanzasPage() {
                 </button>
               </div>
 
+              {/* MONTO DE LA TRANSACCIÓN */}
               <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Monto</label>
+                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Monto de la Transacción</label>
                 <input 
                   type="text" required
                   value={formAmount} onChange={e => setFormAmount(e.target.value)}
-                  className="w-full text-3xl font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all placeholder:text-zinc-300 text-base font-bold"
-                  placeholder="0.00 o =250000-256000"
+                  className="w-full text-3xl font-bold bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all placeholder:text-zinc-300 text-base font-bold text-zinc-900"
+                  placeholder="0.00 o =2500-150"
                 />
-                {/* REAL-TIME PREVIEW FOR FORM AMOUNT */}
-                {formAmount && evaluateMath(formAmount) > 0 && (
-                  <div className="mt-2 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl animate-in slide-in-from-top-2 duration-300 flex items-center justify-between">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase">Total Evaluado:</span>
-                    <span className="font-extrabold text-[14px] text-zinc-800">${evaluateMath(formAmount).toLocaleString('es-MX')} MXN</span>
-                  </div>
-                )}
+                
+                {/* REAL-TIME PREVIEW FOR FORM AMOUNT & CALCULATOR */}
+                {(() => {
+                  const evalAmount = evaluateMath(formAmount);
+                  const selectedAcc = accounts.find(a => a.id === formAccountId);
+                  if (formAmount && evalAmount > 0 && selectedAcc) {
+                    return (
+                      <div className="mt-3 p-3.5 bg-zinc-50 border border-zinc-200 rounded-2xl space-y-2 animate-in slide-in-from-top-2 duration-300">
+                        <p className="font-extrabold text-zinc-455 uppercase tracking-widest text-[8px]">Calculadora Proyectada</p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase">Monto Evaluado:</span>
+                          <span className="font-black text-[13px] text-zinc-800">${evalAmount.toLocaleString('es-MX')} {selectedAcc.currency}</span>
+                        </div>
+                        <div className={`p-2.5 rounded-xl border text-center ${
+                          formType === 'ingreso' 
+                            ? 'bg-emerald-50/40 border-emerald-100' 
+                            : 'bg-rose-50/40 border-rose-100'
+                        }`}>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">Nuevo Balance Estimado</span>
+                          <span className={`font-black text-[15px] tracking-tight block ${
+                            formType === 'ingreso' ? 'text-emerald-600' : 'text-rose-600'
+                          }`}>
+                            ${(formType === 'ingreso' 
+                              ? selectedAcc.balance + evalAmount 
+                              : selectedAcc.balance - evalAmount
+                            ).toLocaleString('es-MX', { minimumFractionDigits: 2 })} {selectedAcc.currency}
+                          </span>
+                          <span className={`text-[8.5px] font-bold block mt-0.5 ${
+                            formType === 'ingreso' ? 'text-emerald-500/80' : 'text-rose-500/80'
+                          }`}>
+                            {formType === 'ingreso' ? '+' : '-'}${evalAmount.toLocaleString('es-MX')} {selectedAcc.currency}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
 
+              {/* CONCEPTO / CATEGORÍA */}
               <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">¿De/Para qué Cuenta?</label>
-                <select 
-                  required
-                  value={formAccountId} onChange={e => setFormAccountId(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-bold text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
-                >
-                  <option value="" disabled>Selecciona una Cuenta...</option>
-                  {sortAccounts(accounts).map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.group_type})</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Concepto / Categoría</label>
+                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Concepto / Categoría</label>
                 <select 
                   value={formCategory} onChange={e => setFormCategory(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-medium text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 font-bold"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-bold text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 cursor-pointer"
                 >
                   {formType === 'gasto' ? (
                     <>
@@ -1634,18 +1481,20 @@ export default function FinanzasPage() {
                 </select>
               </div>
 
+              {/* DESCRIPCIÓN */}
               <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Descripción (Opcional)</label>
+                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción (Opcional)</label>
                 <input 
                   type="text"
                   value={formDescription} onChange={e => setFormDescription(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-base focus:ring-2 focus:ring-zinc-900/10"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 font-bold"
                   placeholder="Ej. Traspaso, Pago a proveedor..."
                 />
               </div>
 
+              {/* FECHA */}
               <div>
-                <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Fecha</label>
+                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Fecha</label>
                 {editingRecord ? (
                   <input 
                     type="date" required
@@ -1659,13 +1508,45 @@ export default function FinanzasPage() {
                 )}
               </div>
 
+              {/* ÚLTIMOS MOVIMIENTOS DINÁMICOS DE LA CUENTA */}
+              {(() => {
+                const selectedAcc = accounts.find(a => a.id === formAccountId);
+                if (!selectedAcc) return null;
+                const accRecords = records.filter(r => r.account_id === selectedAcc.id);
+                return (
+                  <div className="pt-2 animate-in fade-in duration-300">
+                    <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-2.5">Últimos movimientos de la cuenta</p>
+                    <div className="space-y-1.5 max-h-[110px] overflow-y-auto pr-1">
+                      {accRecords.length === 0 ? (
+                        <p className="text-[11px] text-zinc-400 font-medium italic text-center py-2 bg-zinc-50/50 rounded-lg">Sin movimientos registrados en esta cuenta.</p>
+                      ) : (
+                        accRecords
+                          .slice(0, 3)
+                          .map(r => (
+                            <div key={r.id} className="flex justify-between items-center bg-zinc-50 p-2.5 rounded-xl border border-zinc-100/50 text-[11px] hover:bg-zinc-100/50 transition-colors duration-200">
+                              <div className="truncate pr-2">
+                                <span className="font-bold text-zinc-900 block truncate capitalize">{r.category}</span>
+                                <span className="text-[10px] text-zinc-450 font-medium block truncate">{cleanDescription(r.description) || 'Sin comentario'}</span>
+                              </div>
+                              <span className={`font-extrabold whitespace-nowrap ${r.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-700'}`}>
+                                {r.type === 'ingreso' ? '+' : '-'}MX${r.amount.toLocaleString('es-MX')}
+                              </span>
+                            </div>
+                          ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* GUARDAR Y ACCIONES */}
               <div className="pt-2 flex gap-2">
                 {editingRecord && (
                   <button 
                     type="button" 
                     onClick={handleDeleteMovement}
                     disabled={isSaving}
-                    className="w-14 shrink-0 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center rounded-xl transition-colors disabled:opacity-50 border border-rose-200"
+                    className="w-14 shrink-0 bg-rose-50 text-rose-600 hover:bg-rose-100 flex items-center justify-center rounded-xl transition-colors disabled:opacity-50 border border-rose-200 cursor-pointer"
                   >
                     <X size={20} strokeWidth={2.5} />
                   </button>
@@ -1673,7 +1554,7 @@ export default function FinanzasPage() {
                 <button 
                   type="submit" 
                   disabled={isSaving}
-                  className="flex-1 py-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors disabled:opacity-50 shadow-lg text-[15px]"
+                  className="flex-1 py-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors disabled:opacity-50 shadow-lg text-[15px] cursor-pointer flex items-center justify-center"
                 >
                   {isSaving ? 'Guardando...' : (editingRecord ? 'Actualizar Movimiento' : 'Guardar Movimiento')}
                 </button>
@@ -1929,7 +1810,136 @@ export default function FinanzasPage() {
         </div>
       )}
 
+      {/* Modal Acomodar Cuentas (Estilo Inventario) */}
+      {showAccountOrderModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/60 backdrop-blur-md p-4 transition-all duration-300">
+          <div className="bg-white w-full max-w-sm rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+              <div>
+                <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                  Acomodar Cuentas
+                </h3>
+                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">Organiza, Renombra o Elimina</span>
+              </div>
+              <button 
+                onClick={() => setShowAccountOrderModal(false)}
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 hover:rotate-90 hover:scale-105 active:scale-95 rounded-full text-zinc-500 transition-all duration-300 cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
 
+            {/* LISTA DE CUENTAS */}
+            <div className="space-y-2 overflow-y-auto pr-1 flex-1 py-1">
+              {sortAccounts(accounts).map((acc, index, arr) => (
+                <div 
+                  key={acc.id}
+                  className="flex items-center justify-between bg-zinc-50 border border-zinc-200/60 p-3 rounded-2xl hover:bg-white transition-all duration-300"
+                >
+                  <div className="truncate flex-1 pr-2">
+                    {renamingAccount === acc.id ? (
+                      <div className="flex items-center gap-1.5 w-full">
+                        <input
+                          type="text"
+                          value={renamingNewName}
+                          onChange={(e) => setRenamingNewName(e.target.value)}
+                          className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-2.5 py-1 text-[12px] font-bold outline-none focus:bg-white focus:border-zinc-900 text-zinc-900"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameAccount(acc.id, acc.name);
+                            if (e.key === 'Escape') setRenamingAccount(null);
+                          }}
+                        />
+                        <button 
+                          onClick={() => handleRenameAccount(acc.id, acc.name)}
+                          className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          Sí
+                        </button>
+                        <button 
+                          onClick={() => setRenamingAccount(null)}
+                          className="px-2 py-1 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="font-extrabold text-zinc-900 text-[13px] block truncate leading-tight select-none">
+                          {acc.name}
+                        </span>
+                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-wider block mt-0.5">{acc.group_type}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 select-none">
+                    <button
+                      disabled={index === 0}
+                      onClick={() => moveAccount(acc.name, 'up')}
+                      className="p-1.5 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 rounded-lg text-zinc-650 cursor-pointer active:scale-90 transition-transform"
+                      title="Mover arriba"
+                    >
+                      <ArrowUp size={12} strokeWidth={2.5} />
+                    </button>
+                    <button
+                      disabled={index === arr.length - 1}
+                      onClick={() => moveAccount(acc.name, 'down')}
+                      className="p-1.5 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 rounded-lg text-zinc-650 cursor-pointer active:scale-90 transition-transform"
+                      title="Mover abajo"
+                    >
+                      <ArrowDown size={12} strokeWidth={2.5} />
+                    </button>
+                    {renamingAccount !== acc.id && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setRenamingAccount(acc.id);
+                            setRenamingNewName(acc.name);
+                          }}
+                          className="p-1.5 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 rounded-lg transition-all cursor-pointer"
+                          title="Renombrar Cuenta"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAccount(acc.id)}
+                          className="p-1.5 hover:bg-rose-50 text-zinc-400 hover:text-rose-600 rounded-lg transition-all cursor-pointer"
+                          title="Eliminar Cuenta"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* BOTÓN CREAR NUEVA CUENTA */}
+            <div className="pt-3 border-t border-zinc-100 shrink-0 space-y-2">
+              <button 
+                onClick={() => {
+                  setAccName('');
+                  setAccBalance('');
+                  setAccGroupType('EFECTIVO');
+                  setAccCurrency('MXN');
+                  setShowAddAccountModal(true);
+                }}
+                className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold border border-zinc-250/60 rounded-xl transition-all duration-300 text-[12px] active:scale-[0.96] cursor-pointer text-center flex items-center justify-center gap-1.5"
+              >
+                <Plus size={14} strokeWidth={2.5} />
+                Agregar Nueva Cuenta
+              </button>
+              <button 
+                onClick={() => setShowAccountOrderModal(false)}
+                className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Premium para Crear Cuentas */}
       {showAddAccountModal && (

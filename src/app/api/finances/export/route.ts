@@ -11,6 +11,7 @@ export async function GET(req: Request) {
     const startDate = searchParams.get('startDate') || '';
     const endDate = searchParams.get('endDate') || '';
     const searchFilter = searchParams.get('search') || '';
+    const accountFilter = searchParams.get('account') || 'todo';
 
     // 1. Obtener los movimientos del libro contable (finances)
     let query = supabase
@@ -68,7 +69,13 @@ export async function GET(req: Request) {
                       typeStr.includes(query);
       }
 
-      return matchTime && matchDateRange && matchSearch;
+      // Filtrar por cuenta
+      let matchAccount = true;
+      if (accountFilter && accountFilter !== 'todo') {
+        matchAccount = r.account_id === accountFilter;
+      }
+
+      return matchTime && matchDateRange && matchSearch && matchAccount;
     });
 
     if (filtered.length === 0) {
