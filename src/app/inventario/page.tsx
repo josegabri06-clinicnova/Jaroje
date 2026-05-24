@@ -260,6 +260,7 @@ export default function InventarioPage() {
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', 'inventario.csv');
+    link.setAttribute('target', '_blank');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

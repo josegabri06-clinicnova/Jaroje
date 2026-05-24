@@ -790,6 +790,7 @@ export default function FinanzasPage() {
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', 'finanzas.csv');
+    link.setAttribute('target', '_blank');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
