@@ -39,6 +39,7 @@ export default function InventarioPage() {
   const [categoriesOrder, setCategoriesOrder] = useState<string[]>([]);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showExportChoiceModal, setShowExportChoiceModal] = useState(false);
+  const [showPreviewReportModal, setShowPreviewReportModal] = useState(false);
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [logs, setLogs] = useState<any[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
@@ -789,8 +790,7 @@ export default function InventarioPage() {
               <button
                 onClick={() => {
                   setShowExportChoiceModal(false);
-                  const url = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
-                  window.open(url, '_blank');
+                  setShowPreviewReportModal(true);
                 }}
                 className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
               >
@@ -826,6 +826,103 @@ export default function InventarioPage() {
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Vista Previa del Inventario */}
+      {showPreviewReportModal && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-zinc-950/70 backdrop-blur-md p-4 transition-all duration-300 animate-in fade-in">
+          <div className="bg-white w-full max-w-xl rounded-[32px] p-6 shadow-[0_24px_50px_-12px_rgba(0,0,0,0.25)] border border-zinc-150 animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center mb-4 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100">
+                  <Eye size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <h3 className="text-[17px] font-black text-zinc-900 tracking-tight leading-tight">
+                    Visualizador de Almacén
+                  </h3>
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block mt-0.5">
+                    {filteredItems.length} artículos encontrados
+                  </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPreviewReportModal(false)}
+                className="p-2 bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-505 transition-all cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* CONTENIDO DE LA TABLA SCROLLABLE */}
+            <div className="flex-1 overflow-auto border border-zinc-200/60 rounded-2xl bg-zinc-50/50">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-zinc-100 border-b border-zinc-200 text-[10px] font-extrabold text-zinc-450 uppercase tracking-wider sticky top-0 z-10">
+                    <th className="p-3">Artículo</th>
+                    <th className="p-3">Categoría</th>
+                    <th className="p-3 text-right">Stock</th>
+                    <th className="p-3 text-right">Mínimo</th>
+                    <th className="p-3 text-center">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-150 text-[11px] font-medium text-zinc-700">
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-zinc-400 italic">No hay artículos para mostrar.</td>
+                    </tr>
+                  ) : (
+                    filteredItems.map(item => {
+                      const isLowStock = item.stock <= item.min_stock;
+                      return (
+                        <tr key={item.id} className="hover:bg-zinc-100/50 transition-colors">
+                          <td className="p-3 whitespace-nowrap font-black text-zinc-900">{item.item_name}</td>
+                          <td className="p-3 whitespace-nowrap font-bold text-zinc-505 capitalize">{item.category}</td>
+                          <td className={`p-3 whitespace-nowrap text-right font-black text-[12px] ${
+                            isLowStock ? 'text-rose-600' : 'text-zinc-800'
+                          }`}>
+                            {item.stock}
+                          </td>
+                          <td className="p-3 whitespace-nowrap text-right font-bold text-zinc-400">
+                            {item.min_stock}
+                          </td>
+                          <td className="p-3 whitespace-nowrap text-center">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-extrabold border uppercase tracking-wider ${
+                              isLowStock 
+                                ? 'bg-rose-50 text-rose-700 border-rose-250/30' 
+                                : 'bg-emerald-50 text-emerald-700 border-emerald-250/30'
+                            }`}>
+                              {isLowStock ? 'Bajo Stock' : 'Normal'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 pt-3 border-t border-zinc-150 shrink-0 flex gap-3">
+              <button
+                onClick={() => {
+                  setShowPreviewReportModal(false);
+                  executeShareInventoryReport();
+                }}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Share2 size={14} />
+                Compartir Reporte
+              </button>
+              <button
+                onClick={() => setShowPreviewReportModal(false)}
+                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}
