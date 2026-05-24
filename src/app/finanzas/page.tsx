@@ -810,6 +810,14 @@ export default function FinanzasPage() {
 
   const executeDownloadFinanceReport = () => {
     setShowExportChoiceModal(false);
+    
+    // Si es móvil o modo PWA standalone, delegamos al Web Share API para abrir el modal nativo "Guardar en Archivos"
+    // Esto evita que iOS PWA navegue dentro del contenedor y secuestre la pantalla con una vista de archivo estática.
+    if (isMobileOrPWA()) {
+      executeShareFinanceReport();
+      return;
+    }
+
     const url = `/api/finances/export?time=${filterType}&startDate=${startDate}&endDate=${endDate}&account=${filterAccountId}&search=${encodeURIComponent(searchQuery)}`;
     
     // Force opening in external browser window/tab to prevent PWA container lock-out
@@ -1775,7 +1783,7 @@ export default function FinanzasPage() {
 
             {/* PWA / iOS Safe Tip badge */}
             <div className="mt-3.5 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl text-[9px] text-zinc-450 leading-relaxed font-bold">
-              💡 **Tip de Pantalla Completa (PWA)**: Si usas la app en pantalla completa, la opción **Visualizar** o **Compartir** te mantendrá siempre en la app. Si eliges **Descargar**, se abrirá en tu navegador externo para que puedas deslizar de regreso fácilmente.
+              💡 **Tip de Pantalla Completa (PWA)**: Para tu comodidad en móvil y PWA, la opción **Descargar** utiliza el sistema de guardado nativo para que puedas seleccionar **"Guardar en Archivos"** sin salir de la aplicación ni bloquear la pantalla.
             </div>
 
             <button

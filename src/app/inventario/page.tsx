@@ -302,6 +302,28 @@ export default function InventarioPage() {
     }
   };
 
+  const executeDownloadInventoryReport = () => {
+    setShowExportChoiceModal(false);
+    
+    // Si es móvil o modo PWA standalone, delegamos al Web Share API para abrir el modal nativo "Guardar en Archivos"
+    // Esto evita que iOS PWA navegue dentro del contenedor y secuestre la pantalla con una vista de archivo estática.
+    if (isMobileOrPWA()) {
+      executeShareInventoryReport();
+      return;
+    }
+
+    const url = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
+    
+    // Force opening in external browser window/tab to prevent PWA container lock-out
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.setAttribute('download', `Inventario_Jaroje_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const updateStock = async (id: string, currentStock: number, change: number) => {
     if (currentStock + change < 0) return;
     setUpdatingId(id);
@@ -786,20 +808,20 @@ export default function InventarioPage() {
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <button
                 onClick={() => {
                   setShowExportChoiceModal(false);
                   setShowPreviewReportModal(true);
                 }}
-                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
               >
                 <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <Eye size={18} strokeWidth={2.5} />
                 </div>
                 <div>
-                  <span className="font-extrabold text-zinc-900 text-[13px] block">Abrir Reporte</span>
-                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Ver datos en Excel directamente en el navegador</span>
+                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Visualizar en Pantalla</span>
+                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Ver almacén actual directamente aquí</span>
                 </div>
               </button>
 
@@ -808,21 +830,39 @@ export default function InventarioPage() {
                   setShowExportChoiceModal(false);
                   executeShareInventoryReport();
                 }}
-                className="w-full p-4 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-4 text-left group cursor-pointer"
+                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
               >
-                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                <div className="w-10 h-10 bg-purple-50 text-purple-650 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
                   <Share2 size={18} strokeWidth={2.5} />
                 </div>
                 <div>
-                  <span className="font-extrabold text-zinc-900 text-[13px] block">Mandar / Compartir</span>
-                  <span className="text-[10px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp, correo o guardar en archivos</span>
+                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Compartir / Mandar</span>
+                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Enviar por WhatsApp o guardar en Archivos</span>
+                </div>
+              </button>
+
+              <button
+                onClick={executeDownloadInventoryReport}
+                className="w-full p-3.5 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200 hover:border-zinc-300 rounded-2xl transition-all active:scale-[0.98] flex items-center gap-3.5 text-left group cursor-pointer"
+              >
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                  <Download size={18} strokeWidth={2.5} />
+                </div>
+                <div>
+                  <span className="font-extrabold text-zinc-900 text-[12.5px] block leading-tight">Descargar Archivo</span>
+                  <span className="text-[9.5px] text-zinc-400 font-bold block mt-0.5">Descargar y guardar Excel directamente</span>
                 </div>
               </button>
             </div>
 
+            {/* PWA / iOS Safe Tip badge */}
+            <div className="mt-3.5 p-3 bg-zinc-50 border border-zinc-150 rounded-2xl text-[9px] text-zinc-450 leading-relaxed font-bold">
+              💡 **Tip de Pantalla Completa (PWA)**: Para tu comodidad en móvil y PWA, la opción **Descargar** utiliza el sistema de guardado nativo para que puedas seleccionar **"Guardar en Archivos"** sin salir de la aplicación ni bloquear la pantalla.
+            </div>
+
             <button
               onClick={() => setShowExportChoiceModal(false)}
-              className="w-full mt-5 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+              className="w-full mt-4 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
             >
               Cancelar
             </button>
