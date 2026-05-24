@@ -180,15 +180,6 @@ export default function LoginPage() {
               </div>
             </button>
           ))}
-
-          {/* Enlace de emergencia */}
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="flex items-center gap-2 text-zinc-400 text-xs hover:text-zinc-600 transition-colors mt-2"
-          >
-            <RotateCcw size={12} />
-            ¿Olvidaste tu PIN? Restablecer todos
-          </button>
         </div>
       )}
 
