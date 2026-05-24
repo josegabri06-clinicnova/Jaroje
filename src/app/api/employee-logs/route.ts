@@ -64,11 +64,20 @@ export async function POST(req: Request) {
 }
 
 // GET — Obtener logs de auditoría de empleado en Supabase
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const { data, error } = await supabase
+    const { searchParams } = new URL(req.url);
+    const moduleParam = searchParams.get('module') || '';
+
+    let query = supabase
       .from('employee_logs')
-      .select('*')
+      .select('*');
+
+    if (moduleParam) {
+      query = query.eq('module', moduleParam);
+    }
+
+    const { data, error } = await query
       .order('created_at', { ascending: false })
       .limit(100);
 

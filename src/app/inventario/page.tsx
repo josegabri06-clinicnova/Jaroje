@@ -99,20 +99,22 @@ export default function InventarioPage() {
     }
   }, [items, categoriesOrder]);
 
-  // Fetch audit logs when the modal is opened
   const fetchLogs = async () => {
     setIsLoadingLogs(true);
-    const { data, error } = await supabase
-      .from('employee_logs')
-      .select('*')
-      .eq('module', 'inventario')
-      .order('created_at', { ascending: false })
-      .limit(50);
-      
-    if (error) {
-      console.error("Error fetching inventory audit logs:", error);
-    } else {
-      setLogs(data || []);
+    try {
+      const res = await fetch('/api/employee-logs?module=inventario');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          setLogs(json.data || []);
+        } else {
+          console.error("Error fetching logs:", json.error);
+        }
+      } else {
+        console.error("Failed to fetch logs API:", res.statusText);
+      }
+    } catch (err) {
+      console.error("Error fetching inventory audit logs:", err);
     }
     setIsLoadingLogs(false);
   };
