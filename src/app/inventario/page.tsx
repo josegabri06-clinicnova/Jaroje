@@ -262,19 +262,38 @@ export default function InventarioPage() {
     return isMobile || isStandalone;
   };
 
-  const exportInventoryToCSV = () => {
+  const exportInventoryToCSV = async () => {
     if (filteredItems.length === 0) return alert("No hay datos para exportar.");
     const url = `/api/inventory/export?search=${encodeURIComponent(searchTerm)}&onlyLowStock=${onlyLowStock}`;
     
-    if (isMobileOrPWA()) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Error al obtener los datos");
+      const csvText = await response.text();
+      
+      const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+      const filename = `Inventario_Jaroje_${new Date().toISOString().split('T')[0]}.csv`;
+      const file = new File([blob], filename, { type: 'text/csv' });
+      
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Reporte de Inventario',
+          text: 'Reporte de inventario exportado desde StaySync'
+        });
+      } else {
+        const blobUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(blobUrl);
+      }
+    } catch (err) {
+      console.error(err);
       window.open(url, '_blank');
-    } else {
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'inventario.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     }
   };
 
