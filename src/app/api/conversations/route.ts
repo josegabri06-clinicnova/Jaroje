@@ -56,7 +56,7 @@ export async function POST(req: Request) {
           to: cleanPhone,
           type: 'template',
           template: {
-            name: 'presentacion_cliente_jaroje',
+            name: 'presentacion_cliente_jaroje_2',
             language: { code: 'es_MX' },
             components: [
               {
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
       }
 
       // Redactar el texto del mensaje enviado para guardarlo localmente
-      const templateText = `Hola ${guestName || 'Cliente'}, gracias por elegir Jaroje Condominios. Es un placer para nosotros que se haya alojado en nuestros condominios, para cualquier consulta o duda no dude en escribirnos por este chat y será atendido lo antes posible. Esperamos que la estancia sea de su agrado. Un saludo`;
+      const templateText = `¡Hola, ${guestName || 'Cliente'}! 🌴\n\nTe damos la más cálida bienvenida a Jaroje Condominios. Es un placer tenerte con nosotros y ser parte de tu estancia.\n\nAquí tienes información útil para iniciar tu estancia:\n• Wi-Fi: Red "Jaroje_Guest" (Sin contraseña).\n• Servicios: Piscina, terraza y estacionamiento incluidos.\n\nCualquier duda o solicitud especial, escríbenos directamente aquí. ¡Disfruta tu estancia!`;
 
       // Buscar si ya existe una conversación con este teléfono
       const { data: existing } = await supabase
