@@ -206,6 +206,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, human_mode: body.human_mode });
     }
 
+    // ── MODO: Toggle Archivar/Desarchivar ──────────────────────────────────────
+    if (body.action === 'toggle_archive') {
+      const { error } = await supabase
+        .from('conversations')
+        .update({ archived: body.archived })
+        .eq('id', body.conversationId);
+
+      if (error) {
+        return NextResponse.json({ success: false, error: error.message }, { status: 404 });
+      }
+      return NextResponse.json({ success: true, archived: body.archived });
+    }
+
     // ── MODO: Recibir mensaje desde n8n ───────────────────────────────────────
     const phone     = (body.guest_phone || 'desconocido').replace(/\D/g, '');
     const timestamp = body.timestamp   || new Date().toISOString();

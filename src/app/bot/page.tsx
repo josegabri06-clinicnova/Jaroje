@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X } from 'lucide-react';
+import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X, Archive } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -21,6 +21,7 @@ type Conversation = {
   resolved:        boolean;
   human_mode:      boolean;
   messages:        Message[];
+  archived?:       boolean;
 };
 
 // ── Helper: icono y color para cada tipo de mensaje ──────────────────────────
@@ -44,6 +45,7 @@ export default function BotPage() {
   const [replyText, setReplyText]           = useState('');
   const [sending, setSending]               = useState(false);
   const [sendError, setSendError]           = useState<string | null>(null);
+  const [activeTab, setActiveTab]           = useState<'active' | 'archived'>('active');
   
   // Estados para iniciar nuevo chat con plantilla Meta
   const [showNewChatModal, setShowNewChatModal] = useState(false);
@@ -128,6 +130,29 @@ export default function BotPage() {
     } catch (e) {
       console.error("Error deleting conversation", e);
       alert("Error de conexión al intentar eliminar.");
+    }
+  };
+
+  const toggleArchive = async (conv: Conversation) => {
+    const newArchived = !conv.archived;
+    try {
+      const res = await fetch('/api/conversations', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ action: 'toggle_archive', conversationId: conv.id, archived: newArchived }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        if (newArchived && activeConvId === conv.id) {
+          setActiveConvId(null);
+        }
+        fetchConversations();
+      } else {
+        alert("Error al archivar: " + (json.error || "Error desconocido"));
+      }
+    } catch (e) {
+      console.error("Error toggling archive", e);
+      alert("Error de conexión al intentar archivar.");
     }
   };
 
@@ -261,6 +286,18 @@ export default function BotPage() {
               ? <><ToggleRight size={13} /> Tú</>
               : <><ToggleLeft  size={13} /> Bot</>
             }
+          </button>
+
+          <button
+            onClick={() => toggleArchive(activeConv)}
+            className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+              activeConv.archived
+                ? 'text-indigo-600 bg-indigo-50 hover:bg-indigo-100'
+                : 'text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100'
+            }`}
+            title={activeConv.archived ? "Desarchivar conversación" : "Archivar conversación"}
+          >
+            <Archive size={16} strokeWidth={2.5} />
           </button>
 
           <button
@@ -431,26 +468,56 @@ export default function BotPage() {
         ))}
       </div>
 
+      {/* Selector de Pestañas: Activas / Archivadas */}
+      <div className="flex bg-zinc-100 p-1 rounded-2xl border border-zinc-200/50 shadow-inner">
+        <button
+          onClick={() => setActiveTab('active')}
+          className={`flex-1 py-2.5 text-center text-[12px] font-black rounded-xl transition-all ${
+            activeTab === 'active'
+              ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/30'
+              : 'text-zinc-400 hover:text-zinc-700'
+          }`}
+        >
+          Activas ({conversations.filter(c => !c.archived).length})
+        </button>
+        <button
+          onClick={() => setActiveTab('archived')}
+          className={`flex-1 py-2.5 text-center text-[12px] font-black rounded-xl transition-all ${
+            activeTab === 'archived'
+              ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/30'
+              : 'text-zinc-400 hover:text-zinc-700'
+          }`}
+        >
+          Archivadas ({conversations.filter(c => c.archived).length})
+        </button>
+      </div>
+
       {/* Estado vacío */}
-      {!isLoading && conversations.length === 0 && (
+      {!isLoading && conversations.filter(conv => activeTab === 'archived' ? !!conv.archived : !conv.archived).length === 0 && (
         <div className="bg-white border border-zinc-200/60 rounded-2xl p-6 space-y-4">
           <div className="flex items-start gap-3">
             <div className="w-9 h-9 bg-zinc-900 rounded-xl flex items-center justify-center shrink-0">
-              <MessageCircle size={16} className="text-white" />
+              {activeTab === 'archived' ? <Archive size={16} className="text-white" /> : <MessageCircle size={16} className="text-white" />}
             </div>
             <div>
-              <p className="text-[14px] font-semibold text-zinc-900">Bandeja vacía</p>
+              <p className="text-[14px] font-semibold text-zinc-900">
+                {activeTab === 'archived' ? 'No hay conversaciones archivadas' : 'Bandeja vacía'}
+              </p>
               <p className="text-[12px] text-zinc-500 mt-0.5 leading-relaxed">
-                Las conversaciones de WhatsApp aparecerán aquí en tiempo real cuando alguien escriba al número del hotel.
+                {activeTab === 'archived'
+                  ? 'Aquí aparecerán los chats que hayas decidido guardar y archivar para mantener tu bandeja principal limpia.'
+                  : 'Las conversaciones de WhatsApp aparecerán aquí en tiempo real cuando alguien escriba al número del hotel.'}
               </p>
             </div>
           </div>
-          <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 space-y-2">
-            <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Endpoint de n8n</p>
-            <code className="block text-[11px] text-zinc-700 font-mono bg-white border border-zinc-200 rounded-lg px-3 py-2 break-all">
-              POST https://jaroje-app.vercel.app/api/conversations
-            </code>
-          </div>
+          {activeTab === 'active' && (
+            <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-4 space-y-2">
+              <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Endpoint de n8n</p>
+              <code className="block text-[11px] text-zinc-700 font-mono bg-white border border-zinc-200 rounded-lg px-3 py-2 break-all">
+                POST https://jaroje-app.vercel.app/api/conversations
+              </code>
+            </div>
+          )}
         </div>
       )}
 
@@ -466,7 +533,9 @@ export default function BotPage() {
       {/* Lista de conversaciones */}
       {!isLoading && conversations.length > 0 && (
         <div className="space-y-2">
-          {conversations.map(conv => {
+          {conversations
+            .filter(conv => activeTab === 'archived' ? !!conv.archived : !conv.archived)
+            .map(conv => {
             const lastMsg = conv.messages[conv.messages.length - 1];
             const preview = lastMsg?.role_guest || lastMsg?.role_bot || lastMsg?.role_manager || '—';
             return (
@@ -508,6 +577,22 @@ export default function BotPage() {
                       {conv.resolved ? '✓ OK' : 'Activa'}
                     </span>
                   </div>
+
+                  {/* Archive button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleArchive(conv);
+                    }}
+                    className={`w-8 h-8 flex items-center justify-center rounded-xl border border-transparent transition-all active:scale-95 ${
+                      conv.archived
+                        ? 'text-indigo-650 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-100'
+                        : 'text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 hover:border-zinc-200'
+                    }`}
+                    title={conv.archived ? "Desarchivar" : "Archivar"}
+                  >
+                    <Archive size={14} />
+                  </button>
 
                   <button
                     onClick={(e) => {
