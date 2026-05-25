@@ -60,17 +60,6 @@ export async function POST(req: Request) {
             language: { code: 'es_MX' },
             components: [
               {
-                type: 'header',
-                parameters: [
-                  {
-                    type: 'image',
-                    image: {
-                      link: process.env.WHATSAPP_TEMPLATE_IMAGE_URL || 'https://upload.wikimedia.org/wikipedia/commons/e/e0/Palace_pool.jpg'
-                    }
-                  }
-                ]
-              },
-              {
                 type: 'body',
                 parameters: [
                   {
