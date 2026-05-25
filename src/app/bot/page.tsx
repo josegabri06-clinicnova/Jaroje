@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight } from 'lucide-react';
+import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -44,7 +44,48 @@ export default function BotPage() {
   const [replyText, setReplyText]           = useState('');
   const [sending, setSending]               = useState(false);
   const [sendError, setSendError]           = useState<string | null>(null);
+  
+  // Estados para iniciar nuevo chat con plantilla Meta
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const [newChatName, setNewChatName]           = useState('');
+  const [newChatPhone, setNewChatPhone]         = useState('');
+  const [isStartingChat, setIsStartingChat]     = useState(false);
+  const [newChatError, setNewChatError]         = useState<string | null>(null);
+
   const messagesEndRef                      = useRef<HTMLDivElement>(null);
+
+  const startNewChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newChatPhone.trim() || !newChatName.trim()) return;
+    setIsStartingChat(true);
+    setNewChatError(null);
+    try {
+      const res = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'start_new_chat',
+          guestName: newChatName.trim(),
+          guestPhone: newChatPhone.trim()
+        })
+      });
+      const json = await res.json();
+      if (!json.success) {
+        throw new Error(json.error?.error?.message || json.error?.message || 'Error al iniciar chat');
+      }
+      setNewChatName('');
+      setNewChatPhone('');
+      setShowNewChatModal(false);
+      await fetchConversations();
+      if (json.conversationId) {
+        setActiveConvId(json.conversationId);
+      }
+    } catch (err: any) {
+      setNewChatError(err.message);
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
   // Offset del teclado virtual (visualViewport API — funciona en iOS Safari y Android)
   const [keyboardOffset, setKeyboardOffset] = useState(0);
 
@@ -327,6 +368,13 @@ export default function BotPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNewChatModal(true)}
+            className="h-9 px-3.5 flex items-center justify-center gap-1.5 bg-zinc-900 hover:bg-black text-white text-[12px] font-bold rounded-xl shadow-sm active:scale-95 transition-all"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            <span>Nuevo Chat</span>
+          </button>
           {conversations.length > 0 && (
             <button onClick={clearAll} className="w-9 h-9 flex items-center justify-center text-zinc-400 hover:text-red-500 bg-white border border-zinc-200 rounded-xl shadow-sm transition-all active:scale-95">
               <Trash2 size={15} />
@@ -435,6 +483,72 @@ export default function BotPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Modal de Nuevo Chat con Plantilla */}
+      {showNewChatModal && (
+        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-black text-zinc-900">Iniciar Nuevo Chat</h3>
+              <button 
+                onClick={() => { setShowNewChatModal(false); setNewChatError(null); }}
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
+              >
+                <X size={16} strokeWidth={3} />
+              </button>
+            </div>
+
+            <form onSubmit={startNewChat} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Nombre del Huésped</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. Juan Pérez"
+                  value={newChatName}
+                  onChange={e => setNewChatName(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] font-medium focus:ring-2 focus:ring-zinc-900/10 placeholder-zinc-400 transition-all text-zinc-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Número de WhatsApp (con lada)</label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="Ej. +52181828384"
+                  value={newChatPhone}
+                  onChange={e => setNewChatPhone(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] font-medium focus:ring-2 focus:ring-zinc-900/10 placeholder-zinc-400 transition-all text-zinc-900 font-mono"
+                />
+              </div>
+
+              {/* Vista previa de la Plantilla de Meta */}
+              <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-2">
+                <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest block">Vista Previa (Plantilla Oficial Meta)</span>
+                <p className="text-[12px] text-zinc-650 leading-relaxed font-medium">
+                  Hola <strong className="text-emerald-700 font-black">{newChatName || '{{cliente}}'}</strong>, gracias por elegir <strong className="font-bold">Jaroje Condominios</strong>. Es un placer para nosotros que se haya alojado en nuestros condominios, para cualquier consulta o duda no dude en escribirnos por este chat y será atendido lo antes posible. Esperamos que la estancia sea de su agrado. Un saludo.
+                </p>
+                <span className="text-[9px] text-zinc-400 block italic">Se enviará la plantilla aprobada "presentacion_cliente_jaroje".</span>
+              </div>
+
+              {newChatError && (
+                <div className="text-[11px] text-red-650 bg-red-50 border border-red-100 rounded-xl p-3 font-semibold">
+                  ⚠️ {newChatError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isStartingChat || !newChatName || !newChatPhone}
+                className="w-full py-4 bg-zinc-900 hover:bg-black text-white font-bold text-[14px] rounded-xl transition-all active:scale-[0.98] disabled:opacity-40 shadow-lg flex items-center justify-center gap-1.5"
+              >
+                {isStartingChat ? 'Enviando plantilla...' : 'Enviar Plantilla e Iniciar Chat'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

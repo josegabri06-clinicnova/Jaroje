@@ -24,6 +24,105 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    // ── MODO: Iniciar nuevo chat con plantilla ──────────────────────────────────
+    if (body.action === 'start_new_chat') {
+      const { guestName, guestPhone } = body;
+      const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
+      const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
+
+      if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
+        return NextResponse.json({
+          success: false,
+          error: 'Faltan WHATSAPP_TOKEN y WHATSAPP_PHONE_ID en las variables de entorno.'
+        }, { status: 500 });
+      }
+
+      const cleanPhone = guestPhone.replace(/\D/g, '');
+
+      // Enviar plantilla de WhatsApp
+      const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: cleanPhone,
+          type: 'template',
+          template: {
+            name: 'presentacion_cliente_jaroje',
+            language: { code: 'es_MX' },
+            components: [
+              {
+                type: 'body',
+                parameters: [
+                  {
+                    type: 'text',
+                    text: guestName || 'Cliente'
+                  }
+                ]
+              }
+            ]
+          }
+        }),
+      });
+
+      if (!waRes.ok) {
+        const errBody = await waRes.json();
+        return NextResponse.json({ success: false, error: errBody }, { status: 502 });
+      }
+
+      // Redactar el texto del mensaje enviado para guardarlo localmente
+      const templateText = `Hola ${guestName || 'Cliente'}, gracias por elegir Jaroje Condominios. Es un placer para nosotros que se haya alojado en nuestros condominios, para cualquier consulta o duda no dude en escribirnos por este chat y será atendido lo antes posible. Esperamos que la estancia sea de su agrado. Un saludo`;
+
+      // Buscar si ya existe una conversación con este teléfono
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('guest_phone', guestPhone)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const newMsg = {
+        role_manager: templateText,
+        role_guest:   null,
+        role_bot:     null,
+        timestamp:    new Date().toISOString(),
+      };
+
+      let newConvId = '';
+      if (existing) {
+        newConvId = existing.id;
+        const newMessages = [...(existing.messages || []), newMsg];
+        await supabase
+          .from('conversations')
+          .update({ 
+            messages: newMessages, 
+            timestamp: new Date().toISOString(),
+            human_mode: true, // Forzar gerente activo al iniciar
+            resolved: false
+          })
+          .eq('id', existing.id);
+      } else {
+        newConvId = `wa_${Date.now()}`;
+        await supabase
+          .from('conversations')
+          .insert({
+            id: newConvId,
+            guest_name: guestName || guestPhone,
+            guest_phone: guestPhone,
+            timestamp: new Date().toISOString(),
+            booking_created: false,
+            resolved: false,
+            human_mode: true,
+            messages: [newMsg],
+          });
+      }
+
+      return NextResponse.json({ success: true, conversationId: newConvId, message: 'Plantilla enviada correctamente.' });
+    }
 
     // ── MODO: Respuesta manual del gerente ────────────────────────────────────
     if (body.action === 'send_manual_reply') {
