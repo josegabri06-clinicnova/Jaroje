@@ -37,7 +37,11 @@ export async function POST(req: Request) {
         }, { status: 500 });
       }
 
-      const cleanPhone = guestPhone.replace(/\D/g, '');
+      let cleanPhone = guestPhone.replace(/\D/g, '');
+      // Si el número tiene exactamente 10 dígitos (estándar de México), autocompletar lada internacional '52'
+      if (cleanPhone.length === 10) {
+        cleanPhone = '52' + cleanPhone;
+      }
 
       // Enviar plantilla de WhatsApp
       const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
