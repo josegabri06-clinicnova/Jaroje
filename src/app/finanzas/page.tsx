@@ -579,7 +579,7 @@ export default function FinanzasPage() {
     if (!acc) return;
 
     if (acc.balance !== 0) {
-      if (!confirm(`⚠️ Esta cuenta tiene un saldo activo de $${acc.balance.toLocaleString('es-MX')} ${acc.currency}. Si la eliminas, perderás este saldo en el total general. ¿Deseas continuar?`)) {
+      if (!confirm(`⚠️ Esta cuenta tiene un saldo activo de $${Math.round(acc.balance).toLocaleString('es-MX')} ${acc.currency}. Si la eliminas, perderás este saldo en el total general. ¿Deseas continuar?`)) {
         return;
       }
     } else {
@@ -1112,7 +1112,7 @@ export default function FinanzasPage() {
                 <p className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Total General Consolidado (MXN)</p>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-xl text-zinc-400 font-bold">$</span>
-                  <p className="text-4xl font-black tracking-tighter">{totalGeneral.toLocaleString('es-MX')}</p>
+                  <p className="text-4xl font-black tracking-tighter">{Math.round(totalGeneral).toLocaleString('es-MX')}</p>
                   <span className="text-xs text-zinc-450 font-bold tracking-wider">MXN</span>
                 </div>
               </div>
@@ -1144,7 +1144,7 @@ export default function FinanzasPage() {
                   <div className="text-right">
                     <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-0.5">TOTAL</p>
                     <p className={`text-[17px] font-black tracking-tight ${group.color}`}>
-                      ${total.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${Math.round(total).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                   </div>
                 </div>
@@ -1182,13 +1182,13 @@ export default function FinanzasPage() {
                           <div className="flex items-baseline gap-0.5 min-w-0">
                             <span className="text-[10px] text-zinc-400 font-bold">$</span>
                             <span className="text-[15px] font-black text-zinc-900 tracking-tight leading-none truncate">
-                              {acc.balance.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                              {Math.round(acc.balance).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
                             <span className="text-[8px] text-zinc-450 font-extrabold uppercase ml-0.5">{acc.currency}</span>
                           </div>
                           {acc.currency !== 'MXN' && (
                             <span className="text-[9px] font-bold text-zinc-400/90 leading-none mt-1.5 pt-1 border-t border-dashed border-zinc-250 truncate">
-                              ≈${convertToMXN(acc.balance, acc.currency).toLocaleString('es-MX', { maximumFractionDigits: 0 })}
+                              ≈${Math.round(convertToMXN(acc.balance, acc.currency)).toLocaleString('es-MX', { maximumFractionDigits: 0 })}
                             </span>
                           )}
                         </div>
@@ -1361,7 +1361,7 @@ export default function FinanzasPage() {
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col items-end">
                         <span className={`text-[15px] font-bold ${record.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-900'}`}>
-                          {record.type === 'ingreso' ? '+' : '-'}MX${record.amount.toLocaleString('es-MX')}
+                          {record.type === 'ingreso' ? '+' : '-'}MX${Math.round(record.amount).toLocaleString('es-MX')}
                         </span>
                         <span className="text-[11px] text-zinc-400 font-medium">
                           {format(new Date(record.date + 'T12:00:00Z'), 'd MMM', { locale: es })}
@@ -1430,7 +1430,7 @@ export default function FinanzasPage() {
                     <div className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 border border-zinc-200/60 rounded-2xl p-4 text-center shadow-sm">
                       <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1">Monto Disponible en Cuenta</p>
                       <p className="text-3xl font-black text-zinc-900 tracking-tight">
-                        ${selectedAcc.balance.toLocaleString('es-MX')} <span className="text-xs text-zinc-400 font-bold">{selectedAcc.currency || 'MXN'}</span>
+                        ${Math.round(selectedAcc.balance).toLocaleString('es-MX')} <span className="text-xs text-zinc-400 font-bold">{selectedAcc.currency || 'MXN'}</span>
                       </p>
                     </div>
                   </div>
@@ -1481,7 +1481,7 @@ export default function FinanzasPage() {
                         <p className="font-extrabold text-zinc-455 uppercase tracking-widest text-[8px]">Calculadora Proyectada</p>
                         <div className="flex items-center justify-between">
                           <span className="text-[10px] font-bold text-zinc-400 uppercase">Monto Evaluado:</span>
-                          <span className="font-black text-[13px] text-zinc-800">${evalAmount.toLocaleString('es-MX')} {selectedAcc.currency}</span>
+                          <span className="font-black text-[13px] text-zinc-800">${Math.round(evalAmount).toLocaleString('es-MX')} {selectedAcc.currency}</span>
                         </div>
                         <div className={`p-2.5 rounded-xl border text-center ${
                           formType === 'ingreso' 
@@ -1492,15 +1492,15 @@ export default function FinanzasPage() {
                           <span className={`font-black text-[15px] tracking-tight block ${
                             formType === 'ingreso' ? 'text-emerald-600' : 'text-rose-600'
                           }`}>
-                            ${(formType === 'ingreso' 
+                            ${Math.round(formType === 'ingreso' 
                               ? selectedAcc.balance + evalAmount 
                               : selectedAcc.balance - evalAmount
-                            ).toLocaleString('es-MX', { minimumFractionDigits: 2 })} {selectedAcc.currency}
+                            ).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {selectedAcc.currency}
                           </span>
                           <span className={`text-[8.5px] font-bold block mt-0.5 ${
                             formType === 'ingreso' ? 'text-emerald-500/80' : 'text-rose-500/80'
                           }`}>
-                            {formType === 'ingreso' ? '+' : '-'}${evalAmount.toLocaleString('es-MX')} {selectedAcc.currency}
+                            {formType === 'ingreso' ? '+' : '-'}${Math.round(evalAmount).toLocaleString('es-MX')} {selectedAcc.currency}
                           </span>
                         </div>
                       </div>
@@ -1596,7 +1596,7 @@ export default function FinanzasPage() {
                                 <span className="text-[10px] text-zinc-450 font-medium block truncate">{cleanDescription(r.description) || 'Sin comentario'}</span>
                               </div>
                               <span className={`font-extrabold whitespace-nowrap ${r.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-700'}`}>
-                                {r.type === 'ingreso' ? '+' : '-'}MX${r.amount.toLocaleString('es-MX')}
+                                {r.type === 'ingreso' ? '+' : '-'}MX${Math.round(r.amount).toLocaleString('es-MX')}
                               </span>
                             </div>
                           ))
@@ -1878,7 +1878,7 @@ export default function FinanzasPage() {
                         <td className={`p-3 whitespace-nowrap text-right font-black ${
                           r.type === 'ingreso' ? 'text-emerald-600' : 'text-zinc-800'
                         }`}>
-                          {r.type === 'ingreso' ? '+' : '-'}MX${r.amount.toLocaleString('es-MX')}
+                          {r.type === 'ingreso' ? '+' : '-'}MX${Math.round(r.amount).toLocaleString('es-MX')}
                         </td>
                         <td className="p-3 whitespace-nowrap font-bold text-zinc-650">
                           {r.accounts?.name || 'N/A'}
@@ -1950,7 +1950,7 @@ export default function FinanzasPage() {
                 >
                   <option value="">Selecciona origen...</option>
                   {sortAccounts(accounts).map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} (${acc.balance.toLocaleString('es-MX')} {acc.currency})</option>
+                    <option key={acc.id} value={acc.id}>{acc.name} (${Math.round(acc.balance).toLocaleString('es-MX')} {acc.currency})</option>
                   ))}
                 </select>
               </div>
@@ -1965,7 +1965,7 @@ export default function FinanzasPage() {
                 >
                   <option value="">Selecciona destino...</option>
                   {sortAccounts(accounts).map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} (${acc.balance.toLocaleString('es-MX')} {acc.currency})</option>
+                    <option key={acc.id} value={acc.id}>{acc.name} (${Math.round(acc.balance).toLocaleString('es-MX')} {acc.currency})</option>
                   ))}
                 </select>
               </div>
@@ -2001,11 +2001,11 @@ export default function FinanzasPage() {
                         <span className="text-indigo-850 font-extrabold text-[8px] uppercase tracking-wider block">Conversión Multidivisa en Vivo</span>
                         <div className="flex justify-between items-center text-[11px] font-bold text-indigo-900">
                           <span>Envía desde {fromAcc.name}:</span>
-                          <span>${evalAmt.toLocaleString('es-MX')} {fromAcc.currency}</span>
+                          <span>${Math.round(evalAmt).toLocaleString('es-MX')} {fromAcc.currency}</span>
                         </div>
                         <div className="flex justify-between items-center text-[11px] font-bold text-indigo-900">
                           <span>Recibe en {toAcc.name}:</span>
-                          <span className="text-[12px] font-black text-indigo-655">${convertedToAmount.toLocaleString('es-MX')} {toAcc.currency}</span>
+                          <span className="text-[12px] font-black text-indigo-655">${Math.round(convertedToAmount).toLocaleString('es-MX')} {toAcc.currency}</span>
                         </div>
                         <p className="text-[8px] text-indigo-400 font-semibold leading-tight pt-1">
                           Tasa de cambio del día: 1 USD = {rates.USD.toFixed(4)} MXN | 1 EUR = {rates.EUR.toFixed(4)} MXN
@@ -2018,7 +2018,7 @@ export default function FinanzasPage() {
                     <div className="mt-3 space-y-2 animate-in slide-in-from-top-2 duration-300">
                       <div className="bg-zinc-100/50 p-2 rounded-xl text-center border border-zinc-200/40">
                         <span className="text-[9px] font-bold text-zinc-400 uppercase">Monto Evaluado: </span>
-                        <span className="font-extrabold text-[12px] text-zinc-800">${evalAmt.toLocaleString('es-MX')} {fromAcc?.currency || ''}</span>
+                        <span className="font-extrabold text-[12px] text-zinc-800">${Math.round(evalAmt).toLocaleString('es-MX')} {fromAcc?.currency || ''}</span>
                       </div>
                       {conversionInfo}
                     </div>
