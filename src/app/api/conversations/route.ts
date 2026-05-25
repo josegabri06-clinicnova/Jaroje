@@ -65,7 +65,7 @@ export async function POST(req: Request) {
                   {
                     type: 'image',
                     image: {
-                      link: process.env.WHATSAPP_TEMPLATE_IMAGE_URL || 'https://cdn.pixabay.com/photo/2016/11/18/16/04/swimming-pool-1835520_1280.jpg'
+                      link: process.env.WHATSAPP_TEMPLATE_IMAGE_URL || 'https://upload.wikimedia.org/wikipedia/commons/e/e0/Palace_pool.jpg'
                     }
                   }
                 ]
