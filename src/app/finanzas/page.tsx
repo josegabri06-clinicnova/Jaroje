@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, ArrowUp, Eye, Share2 } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, ArrowUp, Eye, Share2, ArrowLeft, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync } from '@/lib/auth';
@@ -81,7 +81,7 @@ export default function FinanzasPage() {
   const [showPreviewReportModal, setShowPreviewReportModal] = useState(false);
   const [renamingAccount, setRenamingAccount] = useState<string | null>(null);
   const [renamingNewName, setRenamingNewName] = useState('');
-
+ 
   const OFFICIAL_ORDER = [
     'EFE PEND',
     'EFE HUX',
@@ -102,14 +102,13 @@ export default function FinanzasPage() {
     'IBC LAU',
     'IBC ROLY'
   ];
-
+ 
   const financeGroups = [
     { type: 'EFECTIVO', title: 'Efectivo', icon: Wallet, color: 'text-emerald-600', bg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
     { type: 'BANCOS', title: 'Bancos', icon: Landmark, color: 'text-blue-600', bg: 'bg-blue-50', iconColor: 'text-blue-600' },
-    { type: 'CUENTAS X COBRAR', title: 'Cuentas x Cobrar', icon: Globe, color: 'text-amber-600', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
-    { type: 'CUENTAS X PAGAR', title: 'Cuentas x Pagar', icon: ArrowLeftRight, color: 'text-rose-600', bg: 'bg-rose-50', iconColor: 'text-rose-600' },
+    { type: 'CUENTAS X COBRAR', title: 'Cuentas x Cobrar', icon: ArrowLeft, color: 'text-amber-600', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
+    { type: 'CUENTAS X PAGAR', title: 'Cuentas x Pagar', icon: ArrowRight, color: 'text-rose-600', bg: 'bg-rose-50', iconColor: 'text-rose-600' },
     { type: 'AHORROS', title: 'Ahorros', icon: PiggyBank, color: 'text-purple-600', bg: 'bg-purple-50', iconColor: 'text-purple-600' },
-    { type: 'EXTRANJERO', title: 'Extranjero', icon: Globe, color: 'text-violet-600', bg: 'bg-violet-50', iconColor: 'text-violet-600' }
   ] as const;
 
   

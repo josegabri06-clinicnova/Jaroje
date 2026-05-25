@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, BedDouble, Sparkles, BarChart3,
   MessageCircle, TrendingUp, RefreshCw, AlertCircle, Users, Moon,
-  Wallet, Package, Plus, Lock, XCircle, History, Phone, Clock, CheckCircle2
+  Wallet, Package, Plus, Lock, XCircle, History, Phone, Clock, CheckCircle2, Wrench
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -21,6 +21,8 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [reservas, setReservas] = useState<any[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
+  const [roomStatuses, setRoomStatuses] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [tokenError, setTokenError] = useState(false);
   const [hoy, setHoy] = useState('');
@@ -30,22 +32,40 @@ export default function AdminDashboard() {
     setIsLoading(true);
     setTokenError(false);
     try {
-      const [resRes, convRes] = await Promise.all([
-        fetch('/api/reservas'),
-        fetch('/api/conversations'),
+      const [resRes, convRes, roomsRes, tasksRes] = await Promise.all([
+        fetch('/api/reservas').catch(() => null),
+        fetch('/api/conversations').catch(() => null),
+        fetch('/api/room-status').catch(() => null),
+        fetch('/api/tasks').catch(() => null),
       ]);
-      const resJson = await resRes.json();
-      const convJson = await convRes.json();
 
-      if (resJson.error === 'TOKEN_EXPIRED') { setTokenError(true); }
-      else if (resJson.success) {
-        setReservas(
-          resJson.data.sort((a: any, b: any) =>
-            new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
-          )
-        );
+      if (resRes) {
+        const resJson = await resRes.json();
+        if (resJson.error === 'TOKEN_EXPIRED') {
+          setTokenError(true);
+        } else if (resJson.success) {
+          setReservas(
+            resJson.data.sort((a: any, b: any) =>
+              new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
+            )
+          );
+        }
       }
-      if (convJson.success) setConversations(convJson.data || []);
+
+      if (convRes) {
+        const convJson = await convRes.json();
+        if (convJson.success) setConversations(convJson.data || []);
+      }
+
+      if (roomsRes) {
+        const roomsJson = await roomsRes.json();
+        if (roomsJson.success) setRoomStatuses(roomsJson.data || []);
+      }
+
+      if (tasksRes) {
+        const tasksJson = await tasksRes.json();
+        if (tasksJson.success) setTasks(tasksJson.data || []);
+      }
 
       // Obtener el balance general real de finanzas (sobres y cuentas)
       const accRes = await supabase.from('accounts').select('balance');
@@ -63,9 +83,18 @@ export default function AdminDashboard() {
   useEffect(() => {
     setHoy(format(new Date(), "EEEE, d MMM", { locale: es }));
     fetchAll();
-    const interval = setInterval(() => fetch('/api/conversations').then(r => r.json()).then(j => {
-      if (j.success) setConversations(j.data || []);
-    }), 15000);
+    const interval = setInterval(() => {
+      fetch('/api/conversations').then(r => r.json()).then(j => {
+        if (j.success) setConversations(j.data || []);
+      });
+      // Poll tasks and rooms too to keep live metrics accurate
+      fetch('/api/tasks').then(r => r.json()).then(j => {
+        if (j.success) setTasks(j.data || []);
+      });
+      fetch('/api/room-status').then(r => r.json()).then(j => {
+        if (j.success) setRoomStatuses(j.data || []);
+      });
+    }, 15000);
     return () => clearInterval(interval);
   }, []);
 
@@ -141,7 +170,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── 1. WHATSAPP INBOX — PRIMERA PRIORIDAD ─────────────────────── */}
+      {/* ── 1. WHATSAPP INBOX ────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
@@ -165,7 +194,7 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <div className="space-y-2">
-            {chatsConUrgencia.slice(0, 4).map(c => {
+            {chatsConUrgencia.slice(0, 3).map(c => {
               const urgency = getUrgencyColor(c.minutesSince);
               return (
                 <div
@@ -195,74 +224,16 @@ export default function AdminDashboard() {
                 </div>
               );
             })}
-            {chatsConUrgencia.length > 4 && (
+            {chatsConUrgencia.length > 3 && (
               <Link href="/bot" className="block text-center text-[12px] font-bold text-blue-600 py-2">
-                +{chatsConUrgencia.length - 4} conversaciones más →
+                +{chatsConUrgencia.length - 3} conversaciones más →
               </Link>
             )}
           </div>
         )}
       </div>
 
-      {/* ── 2. CHECK-INS DE HOY — 4 columnas ─────────────────────────── */}
-      {(llegadasHoy.length > 0 || salidasHoy.length > 0) && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Movimientos de Hoy</h3>
-            <div className="flex gap-2">
-              {llegadasHoy.length > 0 && (
-                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
-                  {llegadasHoy.length} llegan
-                </span>
-              )}
-              {salidasHoy.length > 0 && (
-                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
-                  {salidasHoy.length} salen
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
-            {/* Table header */}
-            <div className="grid grid-cols-4 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Unidad</span>
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Nombre</span>
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Teléfono</span>
-              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide text-right">Adeudo</span>
-            </div>
-            {/* Rows */}
-            {[...llegadasHoy.map(r => ({ ...r, tipo: 'llegada' })), ...salidasHoy.map(r => ({ ...r, tipo: 'salida' }))].map(r => {
-              // Extract room number from room_name
-              const unitMatch = (r.room_name || '').match(/\((\d+)\)/);
-              const unit = unitMatch ? unitMatch[1] : (r.room_name || '—').split(' ')[0];
-              return (
-                <div
-                  key={`${r.id}-${r.tipo}`}
-                  onClick={() => router.push(`/reservas?id=${r.id}`)}
-                  className="grid grid-cols-4 px-4 py-3 border-b border-zinc-100 last:border-b-0 items-center cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${r.tipo === 'llegada' ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                    <span className="text-[13px] font-bold text-zinc-900">{unit}</span>
-                  </div>
-                  <span className="text-[12px] font-semibold text-zinc-800 truncate pr-1">{r.guest_name?.split(' ')[0]}</span>
-                  <span className="text-[11px] font-medium text-zinc-500 truncate">
-                    {r.guest_phone
-                      ? <span className="flex items-center gap-1"><Phone size={9} />{r.guest_phone}</span>
-                      : <span className="text-zinc-300">—</span>}
-                  </span>
-                  <span className="text-[12px] font-bold text-emerald-600 text-right">
-                    {r.price_estimate ? `$${r.price_estimate.toLocaleString()}` : '—'}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── 3. BOTONES DE ACCIÓN DIRECTA ──────────────────────────────── */}
+      {/* ── 2. ACCIONES RÁPIDAS ───────────────────────────────────────── */}
       <div>
         <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Acciones Rápidas</h3>
         <div className="grid grid-cols-3 gap-2">
@@ -276,19 +247,265 @@ export default function AdminDashboard() {
             <Lock size={20} className="text-zinc-700" strokeWidth={2.5} />
             <span className="text-[12px] font-bold text-zinc-800 leading-tight">Aplicar Bloqueo</span>
           </Link>
-          <button
-            onClick={() => alert('Cancelación: busca la reserva en el listado y pulsa Cancelar.')}
-            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-zinc-50 active:scale-[0.97] transition-all shadow-sm">
-            <XCircle size={20} className="text-red-500" strokeWidth={2.5} />
-            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Cancelar Reserva</span>
-          </button>
+          <Link href="/mantenimiento?action=new_task"
+            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-rose-50/50 active:scale-[0.97] transition-all shadow-sm group">
+            <Wrench size={20} className="text-rose-500 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
+            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Reportar MTTO</span>
+          </Link>
         </div>
       </div>
 
-      {/* ── 4. PRÓXIMAS LLEGADAS ───────────────────────────────────────── */}
+      {/* ── 3. HERRAMIENTAS ───────────────────────────────────────────── */}
+      <div>
+        <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Herramientas</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {/* FINANZAS */}
+          <Link href="/finanzas" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <Wallet size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">FINANZAS</p>
+              <p className="text-[11px] font-bold text-emerald-600 mt-0.5">MX${Math.round(financeBalance).toLocaleString('es-MX')}</p>
+            </div>
+          </Link>
+          {/* NOMINAS */}
+          <Link href="/equipo" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <Users size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">NOMINAS</p>
+              <p className="text-[11px] font-medium text-blue-500 mt-0.5">Gestión de Turnos</p>
+            </div>
+          </Link>
+          {/* INVENTARIO */}
+          <Link href="/inventario" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <Package size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">INVENTARIO</p>
+              <p className="text-[11px] font-medium text-amber-500 mt-0.5">Stock de Consumibles</p>
+            </div>
+          </Link>
+          {/* ANALYTICS */}
+          <Link href="/analytics" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <BarChart3 size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">ANALYTICS</p>
+              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Revenue · Métricas</p>
+            </div>
+          </Link>
+          {/* PRECIO DINÁMICO */}
+          <Link href="/precios" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <TrendingUp size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">PRECIO DINÁMICO</p>
+              <p className="text-[11px] font-bold text-emerald-500 mt-0.5">Algoritmo Activo</p>
+            </div>
+          </Link>
+          {/* HISTORIAL */}
+          <Link href="/historial" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <History size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">HISTORIAL</p>
+              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Registro Auditoría</p>
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* ── 4. LLEGADAS HOY ───────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Próximas Llegadas</h3>
+          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+            <ArrowDownLeft size={13} className="text-emerald-500" />
+            Llegadas Hoy
+          </h3>
+          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
+            {llegadasHoy.length} llegan
+          </span>
+        </div>
+
+        <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
+          {isLoading ? (
+            <div className="p-8 flex justify-center">
+              <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
+            </div>
+          ) : llegadasHoy.length === 0 ? (
+            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay llegadas programadas para hoy.</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-4 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Unidad</span>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Nombre</span>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Canal</span>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide text-right">Adeudo</span>
+              </div>
+              <div className="divide-y divide-zinc-100">
+                {llegadasHoy.map(r => {
+                  const unitMatch = (r.room_name || '').match(/\((\d+)\)/);
+                  const unit = unitMatch ? unitMatch[1] : (r.room_name || '—').split(' ')[0];
+                  return (
+                    <div
+                      key={r.id}
+                      onClick={() => router.push(`/reservas?id=${r.id}`)}
+                      className="grid grid-cols-4 px-4 py-3 items-center cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
+                        <span className="text-[13px] font-bold text-zinc-900">{unit}</span>
+                      </div>
+                      <span className="text-[12px] font-semibold text-zinc-800 truncate pr-1">{r.guest_name?.split(' ')[0] || '—'}</span>
+                      <span className="text-[11px] font-medium text-zinc-500 truncate">{r.channel || 'Directo'}</span>
+                      <span className="text-[12px] font-bold text-emerald-600 text-right">
+                        {r.price_estimate ? `$${Math.round(r.price_estimate).toLocaleString()}` : '—'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── 5. SALIDAS HOY ────────────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+            <ArrowUpRight size={13} className="text-amber-500" />
+            Salidas Hoy
+          </h3>
+          <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
+            {salidasHoy.length} salen
+          </span>
+        </div>
+
+        <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
+          {isLoading ? (
+            <div className="p-8 flex justify-center">
+              <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
+            </div>
+          ) : salidasHoy.length === 0 ? (
+            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay salidas programadas para hoy.</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-4 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Unidad</span>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Nombre</span>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Canal</span>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide text-right">Contacto</span>
+              </div>
+              <div className="divide-y divide-zinc-100">
+                {salidasHoy.map(r => {
+                  const unitMatch = (r.room_name || '').match(/\((\d+)\)/);
+                  const unit = unitMatch ? unitMatch[1] : (r.room_name || '—').split(' ')[0];
+                  return (
+                    <div
+                      key={r.id}
+                      onClick={() => router.push(`/reservas?id=${r.id}`)}
+                      className="grid grid-cols-4 px-4 py-3 items-center cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-400" />
+                        <span className="text-[13px] font-bold text-zinc-900">{unit}</span>
+                      </div>
+                      <span className="text-[12px] font-semibold text-zinc-800 truncate pr-1">{r.guest_name?.split(' ')[0] || '—'}</span>
+                      <span className="text-[11px] font-medium text-zinc-500 truncate">{r.channel || 'Directo'}</span>
+                      <div className="text-right">
+                        {r.guest_phone ? (
+                          <a
+                            href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-600 text-[10px] font-bold shadow-sm transition-all active:scale-95"
+                          >
+                            <MessageCircle size={10} className="fill-emerald-50 text-emerald-600" />
+                            <span>WhatsApp</span>
+                          </a>
+                        ) : (
+                          <span className="text-[11px] text-zinc-300 font-semibold">—</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── 6. HABITACIONES DISPONIBLES / LIMPIAS ──────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+            <BedDouble size={13} className="text-blue-500" />
+            Habitaciones Disponibles / Limpias
+          </h3>
+          <Link href="/recepcion" className="text-[11px] font-bold text-blue-600 hover:underline">Ir a Recepción →</Link>
+        </div>
+
+        <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm p-4 space-y-4">
+          {/* Conteo por estados */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center">
+              <span className="text-[16px] font-bold text-emerald-700">
+                {roomStatuses.filter(r => r.status === 'disponible').length}
+              </span>
+              <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Disponibles</p>
+            </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center">
+              <span className="text-[16px] font-bold text-blue-700">
+                {roomStatuses.filter(r => r.status === 'limpia').length}
+              </span>
+              <p className="text-[9px] font-bold text-blue-600 uppercase tracking-wider">Limpias</p>
+            </div>
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center">
+              <span className="text-[16px] font-bold text-amber-700">
+                {roomStatuses.filter(r => r.status === 'en_limpieza').length}
+              </span>
+              <p className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">En Limpieza</p>
+            </div>
+          </div>
+
+          {/* Mini Grid visual */}
+          {roomStatuses.length === 0 ? (
+            <div className="text-center py-2 text-[11px] text-zinc-400 font-medium">Cargando estado físico...</div>
+          ) : (
+            <div className="grid grid-cols-6 gap-1.5 pt-1">
+              {roomStatuses
+                .sort((a, b) => String(a.room_number).localeCompare(String(b.room_number), undefined, {numeric: true}))
+                .map(room => {
+                  let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                  if (room.status === 'disponible') {
+                    colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100';
+                  } else if (room.status === 'limpia') {
+                    colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100';
+                  } else if (room.status === 'en_limpieza') {
+                    colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100';
+                  }
+                  return (
+                    <div
+                      key={room.id}
+                      onClick={() => router.push('/recepcion')}
+                      className={`aspect-square rounded-xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-105 active:scale-95 transition-all text-center ${colorClasses}`}
+                    >
+                      <span className="text-[11px] font-bold tracking-tight leading-none">{room.room_number}</span>
+                      <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${
+                        room.status === 'disponible' ? 'bg-emerald-200' :
+                        room.status === 'limpia' ? 'bg-blue-200' :
+                        room.status === 'en_limpieza' ? 'bg-amber-200' : 'bg-zinc-300'
+                      }`} />
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 7. PRÓXIMAS RESERVAS ──────────────────────────────────────── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Próximas Reservas</h3>
           <span className="text-[11px] font-semibold bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md">{reservas.length} total</span>
         </div>
         <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
@@ -333,51 +550,34 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── 5. HERRAMIENTAS ───────────────────────────────────────────── */}
+      {/* ── 8. MTTO (REPORTES NUEVOS / COMPLETADOS HOY) ────────────────── */}
       <div>
-        <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Herramientas</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <Link href="/analytics" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <BarChart3 size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-semibold text-zinc-900">Analytics</p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">Revenue · Ocupación</p>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+            <Wrench size={13} className="text-rose-500" />
+            Mantenimiento (MTTO)
+          </h3>
+          <Link href="/mantenimiento" className="text-[11px] font-bold text-blue-600 hover:underline">Ver Tareas →</Link>
+        </div>
+
+        <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm p-4 flex gap-4 items-center justify-between">
+          <div className="flex-1 grid grid-cols-2 divide-x divide-zinc-100">
+            <div className="text-center pr-2 flex flex-col items-center justify-center">
+              <span className="text-[20px] font-black text-rose-600">
+                {tasks.filter(t => t.status === 'pendiente').length}
+              </span>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Reportes Activos</p>
             </div>
-          </Link>
-          <Link href="/finanzas" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <Wallet size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-semibold text-zinc-900">Finanzas</p>
-              <p className="text-[11px] text-emerald-500 mt-0.5">MX${financeBalance.toLocaleString('es-MX')}</p>
+            <div className="text-center pl-2 flex flex-col items-center justify-center">
+              <span className="text-[20px] font-black text-emerald-600">
+                {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === todayStr).length}
+              </span>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Completados Hoy</p>
             </div>
-          </Link>
-          <Link href="/equipo" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <Users size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-semibold text-zinc-900">Equipo</p>
-              <p className="text-[11px] text-blue-500 mt-0.5">Nóminas</p>
-            </div>
-          </Link>
-          <Link href="/inventario" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <Package size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-semibold text-zinc-900">Inventario</p>
-              <p className="text-[11px] text-amber-500 mt-0.5">Stock</p>
-            </div>
-          </Link>
-          <Link href="/historial" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <History size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-semibold text-zinc-900">Historial</p>
-              <p className="text-[11px] text-zinc-400 mt-0.5">{reservas.length} registros</p>
-            </div>
-          </Link>
-          <Link href="/precios" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <TrendingUp size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-semibold text-zinc-900">Precio Dinámico</p>
-              <p className="text-[11px] text-emerald-500 mt-0.5">Automático activo</p>
-            </div>
+          </div>
+          <Link href="/mantenimiento?action=new_task" className="px-4 py-3 shrink-0 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12px] shadow-md shadow-rose-100 flex items-center gap-1.5 transition-all active:scale-95">
+            <Plus size={14} strokeWidth={2.5} />
+            <span>Reportar Mtto</span>
           </Link>
         </div>
       </div>
