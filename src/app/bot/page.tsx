@@ -112,6 +112,25 @@ export default function BotPage() {
     fetchConversations();
   };
 
+  const deleteConversation = async (convId: string, guestName: string) => {
+    if (!confirm(`¿Seguro que deseas eliminar la conversación con ${guestName}?`)) return;
+    try {
+      const res = await fetch(`/api/conversations?id=${convId}`, { method: 'DELETE' });
+      const json = await res.json();
+      if (json.success) {
+        if (activeConvId === convId) {
+          setActiveConvId(null);
+        }
+        fetchConversations();
+      } else {
+        alert("Error al eliminar: " + (json.error || "Error desconocido"));
+      }
+    } catch (e) {
+      console.error("Error deleting conversation", e);
+      alert("Error de conexión al intentar eliminar.");
+    }
+  };
+
   const toggleHumanMode = async (conv: Conversation) => {
     const newMode = !conv.human_mode;
     await fetch('/api/conversations', {
@@ -242,6 +261,14 @@ export default function BotPage() {
               ? <><ToggleRight size={13} /> Tú</>
               : <><ToggleLeft  size={13} /> Bot</>
             }
+          </button>
+
+          <button
+            onClick={() => deleteConversation(activeConv.id, activeConv.guest_name)}
+            className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+            title="Eliminar conversación"
+          >
+            <Trash2 size={16} strokeWidth={2.5} />
           </button>
 
           <a
@@ -469,16 +496,29 @@ export default function BotPage() {
                   <p className="text-[12px] font-medium text-zinc-400 truncate">{preview}</p>
                 </div>
 
-                {/* Badges */}
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  {conv.booking_created && (
-                    <span className="text-[9px] font-bold bg-zinc-900 text-white px-1.5 py-0.5 rounded tracking-wider">RESERVA</span>
-                  )}
-                  <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
-                    conv.resolved ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
-                  }`}>
-                    {conv.resolved ? '✓ OK' : 'Activa'}
-                  </span>
+                {/* Badges & Delete */}
+                <div className="flex items-center gap-2.5 shrink-0">
+                  <div className="flex flex-col items-end gap-1.5">
+                    {conv.booking_created && (
+                      <span className="text-[9px] font-bold bg-zinc-900 text-white px-1.5 py-0.5 rounded tracking-wider">RESERVA</span>
+                    )}
+                    <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                      conv.resolved ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+                    }`}>
+                      {conv.resolved ? '✓ OK' : 'Activa'}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(conv.id, conv.guest_name);
+                    }}
+                    className="w-8 h-8 flex items-center justify-center text-zinc-400 hover:text-red-500 hover:bg-red-50 rounded-xl border border-transparent hover:border-red-100 transition-all active:scale-95"
+                    title="Eliminar chat"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             );

@@ -282,11 +282,22 @@ export async function POST(req: Request) {
   }
 }
 
-// ── DELETE: Limpiar todas las conversaciones ──────────────────────────────────
-export async function DELETE() {
-  const { error } = await supabase.from('conversations').delete().neq('id', '');
-  if (error) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+// ── DELETE: Limpiar todas o una conversación específica ───────────────────────
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (id) {
+      const { error } = await supabase.from('conversations').delete().eq('id', id);
+      if (error) throw error;
+      return NextResponse.json({ success: true, message: 'Conversación eliminada.' });
+    } else {
+      const { error } = await supabase.from('conversations').delete().neq('id', '');
+      if (error) throw error;
+      return NextResponse.json({ success: true, message: 'Todas las conversaciones eliminadas.' });
+    }
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
-  return NextResponse.json({ success: true, message: 'Conversaciones eliminadas.' });
 }
