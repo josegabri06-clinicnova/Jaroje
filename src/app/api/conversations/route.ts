@@ -203,7 +203,7 @@ export async function POST(req: Request) {
     }
 
     // ── MODO: Recibir mensaje desde n8n ───────────────────────────────────────
-    const phone     = body.guest_phone || 'desconocido';
+    const phone     = (body.guest_phone || 'desconocido').replace(/\D/g, '');
     const timestamp = body.timestamp   || new Date().toISOString();
 
     // Buscar conversación activa del mismo teléfono en las últimas 3 horas
