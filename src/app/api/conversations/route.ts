@@ -234,9 +234,41 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
+    // ── Interceptar si el cliente hizo clic en el botón de "Hablar con Administrador" ──
+    let forceHuman = existing ? existing.human_mode : false;
+    let finalBotResponse = body.bot_response || null;
+
+    if (body.message_from_guest && body.message_from_guest.toLowerCase().includes('administrador')) {
+      forceHuman = true;
+      finalBotResponse = "Entendido. He pausado el asistente virtual. En un momento, un agente de nuestra recepción continuará la conversación contigo por este medio.";
+
+      // Enviar respuesta automática de pausa a WhatsApp
+      const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
+      const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
+      if (WHATSAPP_TOKEN && WHATSAPP_PHONE_ID) {
+        try {
+          await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: phone,
+              type: 'text',
+              text: { body: finalBotResponse },
+            }),
+          });
+        } catch (e) {
+          console.error("Error sending automatic bot pause message to WhatsApp:", e);
+        }
+      }
+    }
+
     const newMessage = {
       role_guest:   body.message_from_guest || null,
-      role_bot:     body.bot_response       || null,
+      role_bot:     finalBotResponse,
       role_manager: null,
       timestamp,
     };
@@ -244,13 +276,6 @@ export async function POST(req: Request) {
     if (existing) {
       // Actualizar conversación existente
       const updatedMessages = [...(existing.messages || []), newMessage];
-      
-      // Interceptar si el cliente hizo clic en el botón de "Hablar con Administrador"
-      let forceHuman = existing.human_mode;
-      if (body.message_from_guest && body.message_from_guest.toLowerCase().includes('administrador')) {
-        forceHuman = true;
-      }
-
       const { error: updateErr } = await supabase
         .from('conversations')
         .update({
@@ -268,11 +293,6 @@ export async function POST(req: Request) {
       }
     } else {
       // Crear nueva conversación
-      let forceHuman = false;
-      if (body.message_from_guest && body.message_from_guest.toLowerCase().includes('administrador')) {
-        forceHuman = true;
-      }
-
       const { error: insertErr } = await supabase
         .from('conversations')
         .insert({
@@ -281,7 +301,7 @@ export async function POST(req: Request) {
           guest_phone:     phone,
           timestamp,
           booking_created: body.booking_created || false,
-          resolved:        body.resolved        || false,
+          resolved:        body.resolved        ?? false,
           human_mode:      forceHuman,
           messages:        [newMessage],
         });
