@@ -654,9 +654,14 @@ export default function BotPage() {
               <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 space-y-2">
                 <span className="text-[10px] font-black text-emerald-700 uppercase tracking-widest block">Vista Previa (Plantilla Oficial Meta)</span>
                 <p className="text-[12px] text-zinc-650 leading-relaxed font-medium">
-                  Hola <strong className="text-emerald-700 font-black">{newChatName || '{{cliente}}'}</strong>, gracias por elegir <strong className="font-bold">Jaroje Condominios</strong>. Es un placer para nosotros que se haya alojado en nuestros condominios, para cualquier consulta o duda no dude en escribirnos por este chat y será atendido lo antes posible. Esperamos que la estancia sea de su agrado. Un saludo.
+                  ¡Hola, <strong className="text-emerald-700 font-black">{newChatName || '{{cliente}}'}</strong>! 🌴<br /><br />
+                  Te damos la más cálida bienvenida a <strong>Jaroje Condominios</strong>. Es un placer tenerte con nosotros y ser parte de tu estancia.<br /><br />
+                  Aquí tienes información útil para iniciar tu estancia:<br />
+                  • Wi-Fi: Red "Jaroje_Guest" (Sin contraseña).<br />
+                  • Servicios: Piscina, terraza y estacionamiento incluidos.<br /><br />
+                  Cualquier duda o solicitud especial, escríbenos directamente aquí. ¡Disfruta tu estancia!
                 </p>
-                <span className="text-[9px] text-zinc-400 block italic">Se enviará la plantilla aprobada "presentacion_cliente_jaroje".</span>
+                <span className="text-[9px] text-zinc-400 block italic">Se enviará la plantilla multimedia "presentacion_cliente_jaroje_2" con foto y botones interactivos.</span>
               </div>
 
               {newChatError && (

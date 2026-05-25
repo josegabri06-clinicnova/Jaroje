@@ -60,6 +60,17 @@ export async function POST(req: Request) {
             language: { code: 'es_MX' },
             components: [
               {
+                type: 'header',
+                parameters: [
+                  {
+                    type: 'image',
+                    image: {
+                      link: process.env.WHATSAPP_TEMPLATE_IMAGE_URL || 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?q=80&w=1200&auto=format&fit=crop'
+                    }
+                  }
+                ]
+              },
+              {
                 type: 'body',
                 parameters: [
                   {
