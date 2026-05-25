@@ -244,6 +244,13 @@ export async function POST(req: Request) {
     if (existing) {
       // Actualizar conversación existente
       const updatedMessages = [...(existing.messages || []), newMessage];
+      
+      // Interceptar si el cliente hizo clic en el botón de "Hablar con Administrador"
+      let forceHuman = existing.human_mode;
+      if (body.message_from_guest && body.message_from_guest.toLowerCase().includes('administrador')) {
+        forceHuman = true;
+      }
+
       const { error: updateErr } = await supabase
         .from('conversations')
         .update({
@@ -251,6 +258,7 @@ export async function POST(req: Request) {
           timestamp,
           booking_created: body.booking_created ?? existing.booking_created,
           resolved:        body.resolved        ?? existing.resolved,
+          human_mode:      forceHuman,
         })
         .eq('id', existing.id);
 
@@ -260,6 +268,11 @@ export async function POST(req: Request) {
       }
     } else {
       // Crear nueva conversación
+      let forceHuman = false;
+      if (body.message_from_guest && body.message_from_guest.toLowerCase().includes('administrador')) {
+        forceHuman = true;
+      }
+
       const { error: insertErr } = await supabase
         .from('conversations')
         .insert({
@@ -269,7 +282,7 @@ export async function POST(req: Request) {
           timestamp,
           booking_created: body.booking_created || false,
           resolved:        body.resolved        || false,
-          human_mode:      false,
+          human_mode:      forceHuman,
           messages:        [newMessage],
         });
 
