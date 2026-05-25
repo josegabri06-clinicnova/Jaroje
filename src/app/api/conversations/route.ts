@@ -75,10 +75,15 @@ export async function POST(req: Request) {
             timestamp:    new Date().toISOString(),
           },
         ];
-        await supabase
+        const { error: replyErr } = await supabase
           .from('conversations')
           .update({ messages: newMessages, timestamp: new Date().toISOString() })
           .eq('id', conversationId);
+
+        if (replyErr) {
+          console.error("Supabase error updating manual reply:", replyErr);
+          return NextResponse.json({ success: false, error: replyErr.message, details: replyErr }, { status: 500 });
+        }
       }
 
       return NextResponse.json({ success: true, message: 'Mensaje enviado correctamente.' });
@@ -122,7 +127,7 @@ export async function POST(req: Request) {
     if (existing) {
       // Actualizar conversación existente
       const updatedMessages = [...(existing.messages || []), newMessage];
-      await supabase
+      const { error: updateErr } = await supabase
         .from('conversations')
         .update({
           messages:        updatedMessages,
@@ -131,9 +136,14 @@ export async function POST(req: Request) {
           resolved:        body.resolved        ?? existing.resolved,
         })
         .eq('id', existing.id);
+
+      if (updateErr) {
+        console.error("Supabase error updating conversation:", updateErr);
+        return NextResponse.json({ success: false, error: updateErr.message, details: updateErr }, { status: 500 });
+      }
     } else {
       // Crear nueva conversación
-      await supabase
+      const { error: insertErr } = await supabase
         .from('conversations')
         .insert({
           id:              `wa_${Date.now()}`,
@@ -145,6 +155,11 @@ export async function POST(req: Request) {
           human_mode:      false,
           messages:        [newMessage],
         });
+
+      if (insertErr) {
+        console.error("Supabase error inserting new conversation:", insertErr);
+        return NextResponse.json({ success: false, error: insertErr.message, details: insertErr }, { status: 500 });
+      }
     }
 
     // Contar total
