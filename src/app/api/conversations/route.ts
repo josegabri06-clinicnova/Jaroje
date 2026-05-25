@@ -48,6 +48,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
+          recipient_type: 'individual',
           to: cleanPhone,
           type: 'template',
           template: {
