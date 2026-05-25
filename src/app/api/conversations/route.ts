@@ -81,7 +81,7 @@ export async function POST(req: Request) {
       const { data: existing } = await supabase
         .from('conversations')
         .select('*')
-        .eq('guest_phone', guestPhone)
+        .eq('guest_phone', cleanPhone)
         .order('timestamp', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -112,8 +112,8 @@ export async function POST(req: Request) {
           .from('conversations')
           .insert({
             id: newConvId,
-            guest_name: guestName || guestPhone,
-            guest_phone: guestPhone,
+            guest_name: guestName || cleanPhone,
+            guest_phone: cleanPhone,
             timestamp: new Date().toISOString(),
             booking_created: false,
             resolved: false,
