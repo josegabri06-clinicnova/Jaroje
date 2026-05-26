@@ -12,48 +12,22 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const TABS = ['Todas', 'Hoy', 'Próximas', 'WhatsApp Bot', 'Airbnb', 'Booking.com'];
 
-const ACCESSIBILITY_ROOMS = [
+const PHYSICAL_ROOM_GROUPS = [
   {
-    category: 'Condo 3R (Grandes - Planta Baja / 1er / 2do Piso)',
-    options: [
-      { value: '101', label: '101 - Planta Baja (Accesible 🦽)' },
-      { value: '102', label: '102 - Planta Baja (Accesible 🦽)' },
-      { value: '103', label: '103 - 1er Piso (Escaleras 🪜)' },
-      { value: '104', label: '104 - 1er Piso (Escaleras 🪜)' },
-      { value: '105', label: '105 - 2do Piso (Escaleras 🪜)' },
-      { value: '106', label: '106 - 2do Piso (Escaleras 🪜)' },
-      { value: '107', label: '107 - 2do Piso (Escaleras 🪜)' },
-    ]
+    category: 'Apartamentos Premier de 3 Recámaras',
+    rooms: ['101', '102', '103', '104', '105', '106', '107']
   },
   {
-    category: 'Condo 2R (Piso 2)',
-    options: [
-      { value: '201', label: '201 - 2do Piso (Escaleras 🪜)' },
-      { value: '202', label: '202 - 2do Piso (Escaleras 🪜)' },
-      { value: '203', label: '203 - 2do Piso (Escaleras 🪜)' },
-      { value: '204', label: '204 - 2do Piso (Escaleras 🪜)' },
-      { value: '205', label: '205 - 2do Piso (Escaleras 🪜)' },
-      { value: '206', label: '206 - 2do Piso (Escaleras 🪜)' },
-    ]
+    category: 'Apartamentos Premier de 2 Recámaras',
+    rooms: ['201', '202', '203', '204', '205', '206']
   },
   {
-    category: 'Habitación DOBLE (Piso 3)',
-    options: [
-      { value: '301', label: '301 - 3er Piso (Escaleras 🪜)' },
-      { value: '302', label: '302 - 3er Piso (Escaleras 🪜)' },
-      { value: '303', label: '303 - 3er Piso (Escaleras 🪜)' },
-      { value: '304', label: '304 - 3er Piso (Escaleras 🪜)' },
-      { value: '305', label: '305 - 3er Piso (Escaleras 🪜)' },
-      { value: '306', label: '306 - 3er Piso (Escaleras 🪜)' },
-    ]
+    category: 'Habitaciones Dobles',
+    rooms: ['301', '302', '303', '304', '305', '306']
   },
   {
-    category: 'Otros (Planta Baja y Pisos 4 y 5)',
-    options: [
-      { value: '401', label: '401 - Casa de Lujo - Planta Baja (Accesible 🦽)' },
-      { value: '402', label: '402 - Condo 1R - 4to Piso (Escaleras 🪜)' },
-      { value: '500', label: '500 - Habitación 500 - 5to Piso (Escaleras 🪜)' },
-    ]
+    category: 'Otras Unidades',
+    rooms: ['401', '402', '500']
   }
 ];
 
@@ -99,6 +73,8 @@ export default function ReservasList() {
   const [isReassigning, setIsReassigning] = useState(false);
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
+  const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
 
   useEffect(() => {
     if (selectedRes) {
@@ -107,8 +83,36 @@ export default function ReservasList() {
     } else {
       setIsReassigning(false);
       setTargetRoomName('');
+      setAvailableRooms({});
     }
   }, [selectedRes]);
+
+  // Consultar disponibilidad real de habitaciones en las fechas de la reserva
+  useEffect(() => {
+    if (isReassigning && selectedRes?.check_in && selectedRes?.check_out) {
+      const fetchAvailability = async () => {
+        setLoadingAvailability(true);
+        try {
+          const res = await fetch(`/api/availability?checkIn=${selectedRes.check_in}&checkOut=${selectedRes.check_out}`);
+          const json = await res.json();
+          if (json.success && json.inventory) {
+            const availMap: Record<string, boolean> = {};
+            json.inventory.forEach((cat: any) => {
+              cat.units.forEach((u: any) => {
+                availMap[String(u.name)] = u.isAvailable;
+              });
+            });
+            setAvailableRooms(availMap);
+          }
+        } catch (err) {
+          console.error("Error al obtener disponibilidad para reasignar:", err);
+        } finally {
+          setLoadingAvailability(false);
+        }
+      };
+      fetchAvailability();
+    }
+  }, [isReassigning, selectedRes]);
 
   const handleReassignRoom = async () => {
     if (!selectedRes || !targetRoomName) return;
@@ -603,19 +607,32 @@ export default function ReservasList() {
                   <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200">
                     <div>
                       <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5">
-                        Seleccionar Nueva Habitación (Ubicación / Accesibilidad)
+                        Seleccionar Nueva Habitación (Filtro de Disponibilidad)
                       </label>
                       <select
                         value={targetRoomName}
                         onChange={e => setTargetRoomName(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm"
+                        disabled={loadingAvailability}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
                       >
-                        <option value="" disabled>Selecciona una habitación física...</option>
-                        {ACCESSIBILITY_ROOMS.map(group => (
+                        <option value="" disabled>
+                          {loadingAvailability ? '⏳ Analizando ocupación en tiempo real...' : 'Selecciona una habitación física...'}
+                        </option>
+                        {PHYSICAL_ROOM_GROUPS.map(group => (
                           <optgroup key={group.category} label={group.category}>
-                            {group.options.map(opt => (
-                              <option key={opt.value} value={opt.value}>{opt.label}</option>
-                            ))}
+                            {group.rooms.map(room => {
+                              const isAvail = availableRooms[room] !== false; // por defecto disponible si no ha cargado
+                              const isCurrent = (selectedRes.room_name || '').includes(room);
+                              return (
+                                <option 
+                                  key={room} 
+                                  value={room} 
+                                  disabled={!isAvail || isCurrent}
+                                >
+                                  {room} {isCurrent ? '(Actual)' : isAvail ? '· Disponible ✅' : '· OCUPADA ❌'}
+                                </option>
+                              );
+                            })}
                           </optgroup>
                         ))}
                       </select>
