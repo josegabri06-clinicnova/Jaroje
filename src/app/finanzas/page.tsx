@@ -7,7 +7,7 @@ import { es } from 'date-fns/locale';
 import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, ArrowUp, Eye, Share2, ArrowLeft, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
-import { Employee, validatePinAsync } from '@/lib/auth';
+import { Employee, validatePinAsync, getActiveEmployee } from '@/lib/auth';
  
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -392,6 +392,26 @@ export default function FinanzasPage() {
           const applyChange = selectedType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
           await supabase.from('accounts').update({ balance: newAcc.balance + applyChange }).eq('id', newAcc.id);
         }
+
+        // Registrar auditoría de actualización
+        try {
+          const activeEmp = getActiveEmployee('recepcion');
+          const matchedAcc = accounts.find(a => a.id === formAccountId)?.name || 'Desconocido';
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: activeEmp?.employee_num || '999',
+              employee_name: activeEmp?.full_name || 'Administrador',
+              department: activeEmp?.department || 'recepcion',
+              module: 'finanzas',
+              action: 'movimiento_financiero',
+              details: `Actualizó movimiento contable (ID: ${editingRecord.id}): ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`
+            })
+          });
+        } catch (logErr) {
+          console.error("Error registrando log de actualización:", logErr);
+        }
       }
     } else {
       // 1. Insert Record
@@ -402,6 +422,26 @@ export default function FinanzasPage() {
         if (account) {
           const balanceChange = selectedType === 'ingreso' ? evaluatedAmount : -evaluatedAmount;
           await supabase.from('accounts').update({ balance: account.balance + balanceChange }).eq('id', account.id);
+        }
+
+        // Registrar auditoría de creación
+        try {
+          const activeEmp = getActiveEmployee('recepcion');
+          const matchedAcc = accounts.find(a => a.id === formAccountId)?.name || 'Desconocido';
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: activeEmp?.employee_num || '999',
+              employee_name: activeEmp?.full_name || 'Administrador',
+              department: activeEmp?.department || 'recepcion',
+              module: 'finanzas',
+              action: 'movimiento_financiero',
+              details: `Creó nuevo movimiento contable: ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`
+            })
+          });
+        } catch (logErr) {
+          console.error("Error registrando log de creación:", logErr);
         }
       }
     }
@@ -425,11 +465,33 @@ export default function FinanzasPage() {
     const { error } = await supabase.from('finances').delete().eq('id', editingRecord.id);
     
     // 2. Revert Balance
-    if (!error && editingRecord.account_id) {
-      const acc = accounts.find(a => a.id === editingRecord.account_id);
-      if (acc) {
-        const revertChange = editingRecord.type === 'ingreso' ? -editingRecord.amount : editingRecord.amount;
-        await supabase.from('accounts').update({ balance: acc.balance + revertChange }).eq('id', acc.id);
+    if (!error) {
+      if (editingRecord.account_id) {
+        const acc = accounts.find(a => a.id === editingRecord.account_id);
+        if (acc) {
+          const revertChange = editingRecord.type === 'ingreso' ? -editingRecord.amount : editingRecord.amount;
+          await supabase.from('accounts').update({ balance: acc.balance + revertChange }).eq('id', acc.id);
+        }
+      }
+
+      // Registrar auditoría de eliminación
+      try {
+        const activeEmp = getActiveEmployee('recepcion');
+        const matchedAcc = accounts.find(a => a.id === editingRecord.account_id)?.name || 'Desconocido';
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: activeEmp?.employee_num || '999',
+            employee_name: activeEmp?.full_name || 'Administrador',
+            department: activeEmp?.department || 'recepcion',
+            module: 'finanzas',
+            action: 'movimiento_financiero',
+            details: `Eliminó movimiento contable (ID: ${editingRecord.id}): ${editingRecord.type === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${editingRecord.amount} en cuenta ${matchedAcc} (${editingRecord.category || 'Sin categoría'})`
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de eliminación:", logErr);
       }
     }
     
@@ -507,6 +569,25 @@ export default function FinanzasPage() {
         supabase.from('accounts').update({ balance: fromAcc.balance - convertedFromAmount }).eq('id', fromAcc.id),
         supabase.from('accounts').update({ balance: toAcc.balance + convertedToAmount }).eq('id', toAcc.id)
       ]);
+
+      // Registrar auditoría de transferencia
+      try {
+        const activeEmp = getActiveEmployee('recepcion');
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: activeEmp?.employee_num || '999',
+            employee_name: activeEmp?.full_name || 'Administrador',
+            department: activeEmp?.department || 'recepcion',
+            module: 'finanzas',
+            action: 'movimiento_financiero',
+            details: `Realizó un traspaso de $${convertedFromAmount} ${fromAcc.currency} desde ${fromAcc.name} a ${toAcc.name} (Monto recibido: $${convertedToAmount} ${toAcc.currency})`
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de transferencia:", logErr);
+      }
 
       alert("✅ Transferencia completada con éxito.");
       setShowTransferModal(false);
