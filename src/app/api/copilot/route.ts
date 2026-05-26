@@ -64,16 +64,32 @@ export async function POST(req: Request) {
       const active = allReservas.filter((r: any) => r.check_in <= todayStr && r.check_out > todayStr);
       const llegadasHoy = allReservas.filter((r: any) => r.check_in === todayStr);
       const salidasHoy = allReservas.filter((r: any) => r.check_out === todayStr);
-      const proximas = allReservas.filter((r: any) => r.check_in > todayStr).slice(0, 10);
+      
+      // Ordenación cronológica ascendente para facilitar búsqueda a la IA
+      const sortedReservas = [...allReservas].sort((a: any, b: any) => 
+        new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
+      );
 
-      contextData += `\n=== FECHA DE HOY: ${todayStr} ===\n`;
-      contextData += `\n[HUÉSPEDES EN CASA AHORA] (${active.length} reservas activas):\n${JSON.stringify(active.map((r: any) => ({
+      contextData += `\n=== FECHA DE HOY (SISTEMA): ${todayStr} ===\n`;
+      contextData += `\n[RESUMEN OPERATIVO DE HOY]:\n`;
+      contextData += `- Huéspedes actualmente Hospedados ("En Casa"): ${active.length} reservas\n`;
+      contextData += `- Llegadas programadas hoy: ${llegadasHoy.length} reservas\n`;
+      contextData += `- Salidas programadas hoy: ${salidasHoy.length} reservas\n`;
+      contextData += `- Total general de reservas activas en catálogo: ${allReservas.length}\n`;
+
+      contextData += `\n[HUÉSPEDES EN CASA AHORA (DETALLE)]:\n${JSON.stringify(active.map((r: any) => ({
         huesped: r.guest_name, habitacion: r.room_name, check_in: r.check_in, check_out: r.check_out, canal: r.channel, telefono: r.guest_phone || 'no disponible', noches: r.nights, tarifa_estimada: r.price_estimate
       })), null, 2)}\n`;
-      contextData += `\n[LLEGADAS HOY] (${llegadasHoy.length}):\n${JSON.stringify(llegadasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name, canal: r.channel })), null, 2)}\n`;
-      contextData += `\n[SALIDAS HOY] (${salidasHoy.length}):\n${JSON.stringify(salidasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name })), null, 2)}\n`;
-      contextData += `\n[PRÓXIMAS LLEGADAS] (siguientes 10):\n${JSON.stringify(proximas.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name, check_in: r.check_in, check_out: r.check_out, canal: r.channel, noches: r.nights })), null, 2)}\n`;
-      contextData += `\n[TOTAL RESERVAS EN SISTEMA]: ${allReservas.length}\n`;
+
+      contextData += `\n[LLEGADAS DE HOY (DETALLE)]:\n${JSON.stringify(llegadasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name, canal: r.channel })), null, 2)}\n`;
+
+      contextData += `\n[SALIDAS DE HOY (DETALLE)]:\n${JSON.stringify(salidasHoy.map((r: any) => ({ huesped: r.guest_name, habitacion: r.room_name })), null, 2)}\n`;
+
+      contextData += `\n[LISTADO GENERAL Y COMPLETO DE TODAS LAS RESERVAS REGISTRADAS (FUENTE DE VERDAD COGNITIVA)]:\n`;
+      contextData += sortedReservas.map((r: any) => 
+        `ID: ${r.id} | Huesped: ${r.guest_name} | Habitación: ${r.room_name} | Check-in: ${r.check_in} | Check-out: ${r.check_out} | Canal: ${r.channel} | Noches: ${r.nights} | Tarifa Est: MX$${r.price_estimate} | Tel: ${r.guest_phone || 'No disp.'} | Email: ${r.guest_email || 'No disp.'} | Status: ${r.status}`
+      ).join('\n') + '\n';
+      
     } catch (bedsErr) {
       console.error("Copilot Beds24 fetch error locally:", bedsErr);
       contextData += `\n[AVISO]: No se pudo conectar con Beds24 para obtener reservas en tiempo real.\n`;
