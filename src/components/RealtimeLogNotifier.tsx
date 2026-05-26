@@ -21,6 +21,32 @@ export default function RealtimeLogNotifier() {
   const router = useRouter();
 
   useEffect(() => {
+    // Desbloquear Web Audio API ante la primera interacción del usuario en la pantalla
+    const unlockAudio = () => {
+      try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContext) {
+          const ctx = new AudioContext();
+          if (ctx.state === 'suspended') {
+            ctx.resume();
+          }
+        }
+      } catch (e) {
+        console.warn("Audio unlock failed", e);
+      }
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
+    return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+    };
+  }, []);
+
+  useEffect(() => {
     // 1. Suscribirse a inserciones en la tabla employee_logs en tiempo real
     const channel = supabase
       .channel('realtime-logs')
