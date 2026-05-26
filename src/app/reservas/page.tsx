@@ -180,7 +180,7 @@ export default function ReservasList() {
           is_checked_out: checkinMap[String(r.id)]?.status === 'checked_out',
           document_url: checkinMap[String(r.id)]?.document_url
         })).sort((a: any, b: any) => 
-          new Date(b.check_in).getTime() - new Date(a.check_in).getTime()
+          new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
         );
         setReservas(sorted);
       }

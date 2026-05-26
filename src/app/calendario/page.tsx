@@ -23,7 +23,7 @@ const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
   '303': { roomId: '685533', unitId: '1' }, '304': { roomId: '685534', unitId: '1' },
   '305': { roomId: '685535', unitId: '1' }, '306': { roomId: '685536', unitId: '1' },
   // --- Condo 2R (Apartamento Premier 201-206) ---
-  '201': { roomId: '685312', unitId: '1' }, '202': { roomId: '685313', unitId: '1' },
+  '201': { roomId: '685312', unitId: '1' }, '202': { roomId: '685318', unitId: '1' },
   '203': { roomId: '685314', unitId: '1' }, '204': { roomId: '685315', unitId: '1' },
   '205': { roomId: '685316', unitId: '1' }, '206': { roomId: '685317', unitId: '1' },
   // --- Condo 3R (Apartamento Premier 101-107) ---

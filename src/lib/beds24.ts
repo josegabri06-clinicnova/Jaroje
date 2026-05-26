@@ -19,7 +19,7 @@ export const JAROJE_PRICES: Record<string, Record<string, number>> = {
   // --- Apartamento Premier de 2 dormitorios (Antigua y nuevas 201-206) ---
   '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
   '685312': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '685313': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '685318': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
   '685314': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
   '685315': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
   '685316': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
@@ -60,7 +60,7 @@ export const JAROJE_CATALOG: Record<string, any> = {
   // --- Apartamento Premier de 2 dormitorios (Antigua y nuevas 201-206) ---
   '679091': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
   '685312': { nombre: 'Apartamento Premier 201', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '685313': { nombre: 'Apartamento Premier 202', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685318': { nombre: 'Apartamento Premier 202', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
   '685314': { nombre: 'Apartamento Premier 203', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
   '685315': { nombre: 'Apartamento Premier 204', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
   '685316': { nombre: 'Apartamento Premier 205', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
@@ -98,7 +98,7 @@ export function getUnitName(roomId: string | null | undefined, unitId: string | 
     // 101 - 107
     '685321': '101', '685322': '102', '685323': '103', '685324': '104', '685325': '105', '685326': '106', '685327': '107',
     // 201 - 206
-    '685312': '201', '685313': '202', '685314': '203', '685315': '204', '685316': '205', '685317': '206',
+    '685312': '201', '685318': '202', '685314': '203', '685315': '204', '685316': '205', '685317': '206',
     // 301 - 306
     '685531': '301', '685532': '302', '685533': '303', '685534': '304', '685535': '305', '685536': '306',
     // 401 & 402 & 500
@@ -139,7 +139,7 @@ export function getParentMapping(roomId: string | null | undefined, unitId: stri
 
     // --- 201 a 206 -> Padre: 679091 ---
     '685312': { roomId: '679091', unitId: '1' },
-    '685313': { roomId: '679091', unitId: '2' },
+    '685318': { roomId: '679091', unitId: '2' },
     '685314': { roomId: '679091', unitId: '3' },
     '685315': { roomId: '679091', unitId: '4' },
     '685316': { roomId: '679091', unitId: '5' },
