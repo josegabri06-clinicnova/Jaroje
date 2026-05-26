@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     // Central de Alertas Críticas (Out-of-App Push Alerter vía WhatsApp Administrador)
     // Se ejecuta de manera asíncrona (fire-and-forget) para no penalizar la latencia del cliente
     const adminPhone = process.env.ADMIN_NOTIFICATION_PHONE;
-    const isCriticalAction = ['report_maintenance', 'human_mode_activated', 'reset_contable'].includes(action);
+    const isCriticalAction = ['report_maintenance', 'human_mode_activated', 'reset_contable', 'movimiento_financiero'].includes(action);
 
     if (adminPhone && isCriticalAction) {
       const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
@@ -73,6 +73,11 @@ export async function POST(req: Request) {
           text = `🔥 *staySync: Alerta de Sistema*\n\n` +
                  `Se ejecutó un restablecimiento contable total por ${employee_name}.\n` +
                  `📝 *Detalles:* ${details}`;
+        } else if (action === 'movimiento_financiero') {
+          text = `💰 *staySync: Movimiento Financiero*\n\n` +
+                 `Se registró una transacción en el libro de Finanzas.\n` +
+                 `👤 *Operado por:* ${employee_name} (${employee_num})\n` +
+                 `📝 *Detalles:* ${details || 'Sin detalles'}`;
         }
 
         if (text) {
