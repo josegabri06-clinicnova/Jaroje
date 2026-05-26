@@ -18,18 +18,23 @@ const ROOM_GROUPS = [
 const ALL_ROOMS = ROOM_GROUPS.flatMap(g => g.rooms);
 
 const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
-  '301': { roomId: '679077', unitId: '1' }, '302': { roomId: '679077', unitId: '2' },
-  '303': { roomId: '679077', unitId: '3' }, '304': { roomId: '679077', unitId: '4' },
-  '305': { roomId: '679077', unitId: '5' }, '306': { roomId: '679077', unitId: '6' },
-  '401': { roomId: '679093', unitId: '1' },
-  '201': { roomId: '679091', unitId: '1' }, '202': { roomId: '679091', unitId: '2' },
-  '203': { roomId: '679091', unitId: '3' }, '204': { roomId: '679091', unitId: '4' },
-  '205': { roomId: '679091', unitId: '5' }, '206': { roomId: '679091', unitId: '6' },
-  '101': { roomId: '679092', unitId: '1' }, '102': { roomId: '679092', unitId: '2' },
-  '103': { roomId: '679092', unitId: '3' }, '104': { roomId: '679092', unitId: '4' },
-  '105': { roomId: '679092', unitId: '5' }, '106': { roomId: '679092', unitId: '6' },
-  '107': { roomId: '679092', unitId: '7' },
+  // --- Estándar (Doble 301-306) ---
+  '301': { roomId: '685531', unitId: '1' }, '302': { roomId: '685532', unitId: '1' },
+  '303': { roomId: '685533', unitId: '1' }, '304': { roomId: '685534', unitId: '1' },
+  '305': { roomId: '685535', unitId: '1' }, '306': { roomId: '685536', unitId: '1' },
+  // --- Condo 2R (Apartamento Premier 201-206) ---
+  '201': { roomId: '685312', unitId: '1' }, '202': { roomId: '685313', unitId: '1' },
+  '203': { roomId: '685314', unitId: '1' }, '204': { roomId: '685315', unitId: '1' },
+  '205': { roomId: '685316', unitId: '1' }, '206': { roomId: '685317', unitId: '1' },
+  // --- Condo 3R (Apartamento Premier 101-107) ---
+  '101': { roomId: '685321', unitId: '1' }, '102': { roomId: '685322', unitId: '1' },
+  '103': { roomId: '685323', unitId: '1' }, '104': { roomId: '685324', unitId: '1' },
+  '105': { roomId: '685325', unitId: '1' }, '106': { roomId: '685326', unitId: '1' },
+  '107': { roomId: '685327', unitId: '1' },
+  // --- Condo 1R (Apartamento Premier 402) ---
   '402': { roomId: '679087', unitId: '1' },
+  // --- Casa Lujo (Casa Vacacional 401) ---
+  '401': { roomId: '679008', unitId: '1' },
 };
 
 const COLS = 10; // days to show

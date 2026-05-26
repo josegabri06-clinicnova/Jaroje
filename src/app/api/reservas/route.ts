@@ -30,14 +30,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan parámetros: roomId, unitId, checkIn, checkOut' }, { status: 400 });
     }
 
+    // Mapeo inverso contable: Traduce de Padre + Unidad Virtual a ID de Habitación Específica en Beds24
+    // Esto asegura que la App siga funcionando con las interfaces de selección actuales pero registrando
+    // en los nuevos Room IDs específicos que tiene Beds24 para evitar conflictos en OTA channels.
+    let finalRoomId = Number(roomId);
+    let finalUnitId = Number(unitId);
+
+    const parentToChild: Record<string, Record<string, number>> = {
+      '679077': { '1': 685531, '2': 685532, '3': 685533, '4': 685534, '5': 685535, '6': 685536 }, // Dobles 301-306
+      '679091': { '1': 685312, '2': 685313, '3': 685314, '4': 685315, '5': 685316, '6': 685317 }, // Premier 201-206
+      '679092': { '1': 685321, '2': 685322, '3': 685323, '4': 685324, '5': 685325, '6': 685326, '7': 685327 }, // Premier 101-107
+      '679093': { '1': 679008 } // Casa Vacacional
+    };
+
+    const parentRoomKey = String(roomId);
+    const unitKey = String(unitId);
+
+    if (parentToChild[parentRoomKey] && parentToChild[parentRoomKey][unitKey]) {
+      finalRoomId = parentToChild[parentRoomKey][unitKey];
+      finalUnitId = 1; // Las habitaciones específicas son independientes en Beds24 (se registran en unit 1)
+    }
+
     const BEDS24_TOKEN = await getBeds24Token();
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify([{
-        roomId: Number(roomId),
-        unitId: Number(unitId),
+        roomId: finalRoomId,
+        unitId: finalUnitId,
         roomQty: 1,
         checkAvailability: true,
         assignBooking: true,

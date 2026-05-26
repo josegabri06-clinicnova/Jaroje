@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token } from '@/lib/beds24';
+import { getBeds24Token, getParentMapping } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -101,8 +101,9 @@ export async function GET(req: Request) {
         // Hay solapamiento si la entrada de la reserva es ANTES de que el nuevo cliente salga,
         // Y la salida de la reserva es DESPUÉS de que el nuevo cliente entre.
         if (bIn < reqOut && bOut > reqIn) {
-          if (b.roomId && b.unitId) {
-            occupiedUnits.add(`${b.roomId}_${b.unitId}`);
+          if (b.roomId) {
+            const parent = getParentMapping(b.roomId, b.unitId);
+            occupiedUnits.add(`${parent.roomId}_${parent.unitId}`);
           }
         }
       }

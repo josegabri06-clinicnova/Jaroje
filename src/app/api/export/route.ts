@@ -1,79 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token } from '@/lib/beds24';
-
-export const dynamic = 'force-dynamic';
-
-// ─── EXPORT API ────────────────────────────────────────────────────────────
-// Este endpoint devuelve los datos de reservas en el formato óptimo para:
-// - Power Query (GET /api/export?format=json)
-// - CSV descargable (GET /api/export?format=csv)
-// - Excel compatible (GET /api/export?format=csv con cabeceras limpias)
-
-// ─── TARIFAS REALES JAROJE (MXN) ──────────────────────────────────────────────
-const JAROJE_PRICES: Record<string, Record<string, number>> = {
-  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 }, // Habitación DOBLE - 2 camas dobles
-  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 }, // Apartamento Premier de 1 dormitorio
-  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 }, // Apartamento Premier de 2 dormitorios
-  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 }, // Apartamento Premier de 3 dormitorios
-  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 }, // Casa Vacacional de 3 dormitorios
-};
-
-const JAROJE_CATALOG: Record<string, any> = {
-  '679077': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '679087': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '1 King o 2 Matrimoniales', amenities: 'Cocina equipada, Terraza, Alberca, Jardín, WiFi, AC', categoria: 'Condominio' },
-  '679091': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '679092': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '679093': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
-  // Fallbacks
-  'default_1': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
-  'default_2': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '2 Matrimoniales', amenities: 'Cocina, WiFi, AC', categoria: 'Condominio' },
-  'default_3': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, 2 Baños', categoria: 'Condominio' },
-  'default_4': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, 3 Baños', categoria: 'Condominio' },
-  'default_5': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, Premium', categoria: 'Casa' },
-};
-
-function getSeason(dateStr: string | null | undefined): 'baja' | 'media' | 'media_alta' | 'alta' {
-  if (!dateStr) return 'media';
-  const d = new Date(dateStr);
-  const month = d.getMonth() + 1;
-  const day = d.getDate();
-  if ((month === 12 && day >= 20) || (month === 1 && day <= 6)) return 'alta';
-  if (month === 4 && day <= 14) return 'alta';
-  if (month === 7 || month === 8) return 'media_alta';
-  if (month === 11 && day >= 1 && day <= 5) return 'media_alta';
-  if (month === 12 && day < 20) return 'media_alta';
-  if (month === 2 || month === 3 || month === 10 || month === 11) return 'media';
-  if (month === 1 && day > 6) return 'media';
-  return 'baja';
-}
-
-function getChannelMultiplier(referer: string): number {
-  const r = (referer || '').toLowerCase();
-  if (r.includes('booking')) return 1.10;
-  if (r.includes('airbnb')) return 1.25;
-  return 1.0;
-}
-
-function getRealPrice(roomId: string | null | undefined, dateStr: string | null | undefined, referer: string): number {
-  const id = String(roomId || '');
-  const prices = JAROJE_PRICES[id];
-  if (!prices) return 2000;
-  const season = getSeason(dateStr);
-  const base = prices[season];
-  const multiplier = getChannelMultiplier(referer);
-  return Math.round(base * multiplier);
-}
-
-function getRoomMetadata(roomId: string | null | undefined, roomName: string | null | undefined) {
-  const id = String(roomId || '');
-  if (JAROJE_CATALOG[id]) return JAROJE_CATALOG[id];
-  const lowerName = (roomName || '').toLowerCase();
-  if (lowerName.includes('estándar') || lowerName.includes('estandar') || lowerName.includes('standard')) return JAROJE_CATALOG['default_1'];
-  if (lowerName.includes('3') && lowerName.includes('rec')) return JAROJE_CATALOG['default_4'];
-  if (lowerName.includes('2') && lowerName.includes('rec')) return JAROJE_CATALOG['default_3'];
-  if (lowerName.includes('casa') || lowerName.includes('lujo')) return JAROJE_CATALOG['default_5'];
-  return JAROJE_CATALOG['default_2'];
-}
+import { getBeds24Token, getUnitName, getRealPrice, getRoomMetadata } from '@/lib/beds24';
 
 async function fetchBeds24Bookings() {
   const BEDS24_TOKEN = await getBeds24Token();
@@ -101,22 +27,6 @@ async function fetchBeds24Bookings() {
   return data.data && Array.isArray(data.data) ? data.data : [];
 }
 
-const ROOM_MAP = [
-  { roomId: '679077', units: [{ unitId: '1', name: '301' }, { unitId: '2', name: '302' }, { unitId: '3', name: '303' }, { unitId: '4', name: '304' }, { unitId: '5', name: '305' }, { unitId: '6', name: '306' }] },
-  { roomId: '679087', units: [{ unitId: '1', name: '402' }] },
-  { roomId: '679091', units: [{ unitId: '1', name: '201' }, { unitId: '2', name: '202' }, { unitId: '3', name: '203' }, { unitId: '4', name: '204' }, { unitId: '5', name: '205' }, { unitId: '6', name: '206' }] },
-  { roomId: '679092', units: [{ unitId: '1', name: '101' }, { unitId: '2', name: '102' }, { unitId: '3', name: '103' }, { unitId: '4', name: '104' }, { unitId: '5', name: '105' }, { unitId: '6', name: '106' }, { unitId: '7', name: '107' }] },
-  { roomId: '679093', units: [{ unitId: '1', name: '401' }] }
-];
-
-const unitMap: Record<string, Record<string, string>> = {};
-ROOM_MAP.forEach(r => {
-  unitMap[r.roomId] = {};
-  r.units.forEach(u => {
-    unitMap[r.roomId][u.unitId] = u.name;
-  });
-});
-
 function mapBooking(b: any) {
   const arrival   = b.arrival   ? new Date(b.arrival)   : null;
   const departure = b.departure ? new Date(b.departure) : null;
@@ -136,8 +46,10 @@ function mapBooking(b: any) {
 
   // ── Calcular Metadata Condominios Jaroje ──
   const roomData = getRoomMetadata(b.roomId, b.roomName);
-  const unitName = (unitMap[b.roomId] && b.unitId) ? unitMap[b.roomId][b.unitId] : null;
-  const displayRoomName = unitName ? `${roomData.nombre} (${unitName})` : roomData.nombre;
+  const unitName = getUnitName(b.roomId, b.unitId);
+  const displayRoomName = unitName 
+    ? (roomData.nombre.includes(unitName) ? roomData.nombre : `${roomData.nombre} (${unitName})`)
+    : roomData.nombre;
   
   // Precio por noche dinámico: si API da precio, lo usamos. Si no, calculamos.
   const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);

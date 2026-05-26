@@ -4,21 +4,83 @@
 
 // Precios BASE por noche (sin impuestos) · Impuesto: 16% IVA + 3% estatal = 19%
 export const JAROJE_PRICES: Record<string, Record<string, number>> = {
-  // roomId de Beds24 -> { season -> base_price_mxn }
-  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 }, // Habitación DOBLE - 2 camas dobles
-  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 }, // Apartamento Premier de 1 dormitorio
-  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 }, // Apartamento Premier de 2 dormitorios
-  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 }, // Apartamento Premier de 3 dormitorios
-  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 }, // Casa Vacacional de 3 dormitorios
+  // --- Habitación DOBLE (Antigua y nuevas 301-306) ---
+  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '685531': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '685532': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '685533': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '685534': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '685535': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '685536': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+
+  // --- Apartamento Premier de 1 dormitorio (402) ---
+  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 },
+
+  // --- Apartamento Premier de 2 dormitorios (Antigua y nuevas 201-206) ---
+  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '685312': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '685313': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '685314': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '685315': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '685316': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '685317': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+
+  // --- Apartamento Premier de 3 dormitorios (Antigua y nuevas 101-107) ---
+  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '685321': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '685322': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '685323': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '685324': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '685325': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '685326': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '685327': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+
+  // --- Casa Vacacional (Antigua 679093 y nueva 679008) ---
+  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 },
+  '679008': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 },
+
+  // --- Habitación 500 ---
+  '685542': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
 };
 
 // Nombres canónicos por roomId para el catálogo de display
 export const JAROJE_CATALOG: Record<string, any> = {
+  // --- Habitación DOBLE (Antigua y nuevas 301-306) ---
   '679077': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685531': { nombre: 'Habitación DOBLE 301', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685532': { nombre: 'Habitación DOBLE 302', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685533': { nombre: 'Habitación DOBLE 303', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685534': { nombre: 'Habitación DOBLE 304', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685535': { nombre: 'Habitación DOBLE 305', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685536': { nombre: 'Habitación DOBLE 306', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+
+  // --- Apartamento Premier de 1 dormitorio (402) ---
   '679087': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '1 King o 2 Matrimoniales', amenities: 'Cocina equipada, Terraza, Alberca, Jardín, WiFi, AC', categoria: 'Condominio' },
+
+  // --- Apartamento Premier de 2 dormitorios (Antigua y nuevas 201-206) ---
   '679091': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685312': { nombre: 'Apartamento Premier 201', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685313': { nombre: 'Apartamento Premier 202', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685314': { nombre: 'Apartamento Premier 203', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685315': { nombre: 'Apartamento Premier 204', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685316': { nombre: 'Apartamento Premier 205', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685317': { nombre: 'Apartamento Premier 206', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+
+  // --- Apartamento Premier de 3 dormitorios (Antigua y nuevas 101-107) ---
   '679092': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685321': { nombre: 'Apartamento Premier 101', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685322': { nombre: 'Apartamento Premier 102', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685323': { nombre: 'Apartamento Premier 103', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685324': { nombre: 'Apartamento Premier 104', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685325': { nombre: 'Apartamento Premier 105', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685326': { nombre: 'Apartamento Premier 106', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685327': { nombre: 'Apartamento Premier 107', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+
+  // --- Casa Vacacional y Habitación 500 ---
   '679093': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
+  '679008': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
+  '685542': { nombre: 'Habitación 500', capacidad: 2, camas: '1 Cama King', amenities: 'WiFi, AC, Vista Premium', categoria: 'Estándar' },
+
   // Fallbacks genéricos
   'default_1': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
   'default_2': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '2 Matrimoniales', amenities: 'Cocina, WiFi, AC', categoria: 'Condominio' },
@@ -26,6 +88,80 @@ export const JAROJE_CATALOG: Record<string, any> = {
   'default_4': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, 3 Baños', categoria: 'Condominio' },
   'default_5': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, Premium', categoria: 'Casa' },
 };
+
+// Resolver el número físico de habitación/unidad (ej. "101", "302") según el roomId de Beds24
+export function getUnitName(roomId: string | null | undefined, unitId: string | null | undefined): string | null {
+  const id = String(roomId || '');
+  const uId = String(unitId || '');
+
+  const specificRooms: Record<string, string> = {
+    // 101 - 107
+    '685321': '101', '685322': '102', '685323': '103', '685324': '104', '685325': '105', '685326': '106', '685327': '107',
+    // 201 - 206
+    '685312': '201', '685313': '202', '685314': '203', '685315': '204', '685316': '205', '685317': '206',
+    // 301 - 306
+    '685531': '301', '685532': '302', '685533': '303', '685534': '304', '685535': '305', '685536': '306',
+    // 401 & 402 & 500
+    '679093': '401', '679008': '401', // Casa Vacacional
+    '679087': '402',                  // Apartamento Premier de 1 dormitorio
+    '685542': '500',                  // Habitación 500
+  };
+
+  if (specificRooms[id]) return specificRooms[id];
+
+  // Fallback a los mapeos antiguos por unidades virtuales
+  const oldUnitMap: Record<string, Record<string, string>> = {
+    '679077': { '1': '301', '2': '302', '3': '303', '4': '304', '5': '305', '6': '306' },
+    '679087': { '1': '402' },
+    '679091': { '1': '201', '2': '202', '3': '203', '4': '204', '5': '205', '6': '206' },
+    '679092': { '1': '101', '2': '102', '3': '103', '4': '104', '5': '105', '6': '106', '7': '107' },
+    '679093': { '1': '401' }
+  };
+
+  return oldUnitMap[id]?.[uId] || null;
+}
+
+// Mapear los nuevos Room IDs específicos de Beds24 a sus equivalentes antiguos (padre + unidad virtual)
+// Esto evita romper la lógica de ocupación y disponibilidad que utiliza el panel de recepción
+export function getParentMapping(roomId: string | null | undefined, unitId: string | null | undefined): { roomId: string, unitId: string } {
+  const id = String(roomId || '');
+  const uId = String(unitId || '1');
+
+  const childToParent: Record<string, { roomId: string, unitId: string }> = {
+    // --- 101 a 107 -> Padre: 679092 ---
+    '685321': { roomId: '679092', unitId: '1' },
+    '685322': { roomId: '679092', unitId: '2' },
+    '685323': { roomId: '679092', unitId: '3' },
+    '685324': { roomId: '679092', unitId: '4' },
+    '685325': { roomId: '679092', unitId: '5' },
+    '685326': { roomId: '679092', unitId: '6' },
+    '685327': { roomId: '679092', unitId: '7' },
+
+    // --- 201 a 206 -> Padre: 679091 ---
+    '685312': { roomId: '679091', unitId: '1' },
+    '685313': { roomId: '679091', unitId: '2' },
+    '685314': { roomId: '679091', unitId: '3' },
+    '685315': { roomId: '679091', unitId: '4' },
+    '685316': { roomId: '679091', unitId: '5' },
+    '685317': { roomId: '679091', unitId: '6' },
+
+    // --- 301 a 306 -> Padre: 679077 ---
+    '685531': { roomId: '679077', unitId: '1' },
+    '685532': { roomId: '679077', unitId: '2' },
+    '685533': { roomId: '679077', unitId: '3' },
+    '685534': { roomId: '679077', unitId: '4' },
+    '685535': { roomId: '679077', unitId: '5' },
+    '685536': { roomId: '679077', unitId: '6' },
+
+    // --- 401 -> Padre: 679093 ---
+    '679008': { roomId: '679093', unitId: '1' },
+
+    // --- 402 -> Padre: 679087 ---
+    '679087': { roomId: '679087', unitId: '1' },
+  };
+
+  return childToParent[id] || { roomId: id, unitId: uId };
+}
 
 // Detección de temporada (Huatulco/México)
 export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' | 'media_alta' | 'alta' {
@@ -198,8 +334,10 @@ export async function getBeds24Bookings(): Promise<any[]> {
       pricePerNight = Math.round(pricePerNight ?? 0);
       const totalRevenue = pricePerNight * nights;
 
-      const unitName = (unitMap[b.roomId] && b.unitId) ? unitMap[b.roomId][b.unitId] : null;
-      const displayRoomName = unitName ? `${roomData.nombre} (${unitName})` : roomData.nombre;
+      const unitName = getUnitName(b.roomId, b.unitId);
+      const displayRoomName = unitName 
+        ? (roomData.nombre.includes(unitName) ? roomData.nombre : `${roomData.nombre} (${unitName})`)
+        : roomData.nombre;
 
       return {
         id: b.id || Math.random().toString(),
