@@ -12,6 +12,51 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const TABS = ['Todas', 'Hoy', 'Próximas', 'WhatsApp Bot', 'Airbnb', 'Booking.com'];
 
+const ACCESSIBILITY_ROOMS = [
+  {
+    category: 'Condo 3R (Grandes - Planta Baja / 1er / 2do Piso)',
+    options: [
+      { value: '101', label: '101 - Planta Baja (Accesible 🦽)' },
+      { value: '102', label: '102 - Planta Baja (Accesible 🦽)' },
+      { value: '103', label: '103 - 1er Piso (Escaleras 🪜)' },
+      { value: '104', label: '104 - 1er Piso (Escaleras 🪜)' },
+      { value: '105', label: '105 - 2do Piso (Escaleras 🪜)' },
+      { value: '106', label: '106 - 2do Piso (Escaleras 🪜)' },
+      { value: '107', label: '107 - 2do Piso (Escaleras 🪜)' },
+    ]
+  },
+  {
+    category: 'Condo 2R (Piso 2)',
+    options: [
+      { value: '201', label: '201 - 2do Piso (Escaleras 🪜)' },
+      { value: '202', label: '202 - 2do Piso (Escaleras 🪜)' },
+      { value: '203', label: '203 - 2do Piso (Escaleras 🪜)' },
+      { value: '204', label: '204 - 2do Piso (Escaleras 🪜)' },
+      { value: '205', label: '205 - 2do Piso (Escaleras 🪜)' },
+      { value: '206', label: '206 - 2do Piso (Escaleras 🪜)' },
+    ]
+  },
+  {
+    category: 'Habitación DOBLE (Piso 3)',
+    options: [
+      { value: '301', label: '301 - 3er Piso (Escaleras 🪜)' },
+      { value: '302', label: '302 - 3er Piso (Escaleras 🪜)' },
+      { value: '303', label: '303 - 3er Piso (Escaleras 🪜)' },
+      { value: '304', label: '304 - 3er Piso (Escaleras 🪜)' },
+      { value: '305', label: '305 - 3er Piso (Escaleras 🪜)' },
+      { value: '306', label: '306 - 3er Piso (Escaleras 🪜)' },
+    ]
+  },
+  {
+    category: 'Otros (Planta Baja y Pisos 4 y 5)',
+    options: [
+      { value: '401', label: '401 - Casa de Lujo - Planta Baja (Accesible 🦽)' },
+      { value: '402', label: '402 - Condo 1R - 4to Piso (Escaleras 🪜)' },
+      { value: '500', label: '500 - Habitación 500 - 5to Piso (Escaleras 🪜)' },
+    ]
+  }
+];
+
 function StatusBadge({ status, isCheckedIn, isCheckedOut }: { status: string, isCheckedIn?: boolean, isCheckedOut?: boolean }) {
   if (isCheckedOut) return (
     <span className="flex items-center gap-1 text-[11px] font-semibold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200">
@@ -51,12 +96,57 @@ export default function ReservasList() {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
 
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [targetRoomName, setTargetRoomName] = useState('');
+  const [reassignLoading, setReassignLoading] = useState(false);
+
   useEffect(() => {
     if (selectedRes) {
       setShowPaymentFlow(false);
       setIsCheckedIn(selectedRes.is_checked_in || false);
+    } else {
+      setIsReassigning(false);
+      setTargetRoomName('');
     }
   }, [selectedRes]);
+
+  const handleReassignRoom = async () => {
+    if (!selectedRes || !targetRoomName) return;
+    
+    const confirmChange = confirm(`⚠️ ¿Estás seguro de que deseas reasignar la reserva de ${selectedRes.guest_name} a la habitación ${targetRoomName}?\n\nEsto actualizará la asignación en Beds24 y sincronizará la habitación en tu registro local de Supabase.`);
+    if (!confirmChange) return;
+
+    setReassignLoading(true);
+    try {
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedRes.id,
+          roomName: targetRoomName
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
+
+      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
+      setIsReassigning(false);
+      setTargetRoomName('');
+      
+      // Actualizar estado local reactivo al vuelo para evitar tiempos de espera
+      const updatedRoomName = data.room_name || `Habitación ${targetRoomName}`;
+      setSelectedRes((prev: any) => ({ ...prev, room_name: updatedRoomName }));
+      setReservas(prev => prev.map(r => r.id === selectedRes.id ? { ...r, room_name: updatedRoomName } : r));
+      
+      fetchReservas(); // Sincronización en segundo plano de seguridad
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al reasignar habitación:\n\n${err.message}`);
+    } finally {
+      setReassignLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined' && reservas.length > 0) {
@@ -497,16 +587,69 @@ export default function ReservasList() {
 
               {/* Bloque: Habitación */}
               <div>
-                <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Habitación Asignada</h5>
-                <div className="bg-white border border-zinc-200 p-4 rounded-2xl flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#E5BD69]/10 flex items-center justify-center shrink-0">
-                    <BedDouble size={18} className="text-[#663311]" />
-                  </div>
-                  <div>
-                    <p className="text-[15px] font-semibold text-zinc-900">{selectedRes.room_name}</p>
-                    <p className="text-[12px] font-medium text-zinc-500 mt-0.5">Property ID: {selectedRes.room_id}</p>
-                  </div>
+                <div className="flex justify-between items-center mb-2">
+                  <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Habitación Asignada</h5>
+                  {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
+                    <button
+                      onClick={() => setIsReassigning(!isReassigning)}
+                      className="text-[11px] font-extrabold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 transition-colors cursor-pointer"
+                    >
+                      {isReassigning ? 'Cancelar' : 'Reasignar 🔀'}
+                    </button>
+                  )}
                 </div>
+                
+                {isReassigning ? (
+                  <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200">
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5">
+                        Seleccionar Nueva Habitación (Ubicación / Accesibilidad)
+                      </label>
+                      <select
+                        value={targetRoomName}
+                        onChange={e => setTargetRoomName(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm"
+                      >
+                        <option value="" disabled>Selecciona una habitación física...</option>
+                        {ACCESSIBILITY_ROOMS.map(group => (
+                          <optgroup key={group.category} label={group.category}>
+                            {group.options.map(opt => (
+                              <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { setIsReassigning(false); setTargetRoomName(''); }}
+                        className="flex-1 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 text-[12px] font-bold rounded-xl transition-all cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={handleReassignRoom}
+                        disabled={reassignLoading || !targetRoomName}
+                        className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/10 cursor-pointer"
+                      >
+                        {reassignLoading ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : 'Confirmar'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white border border-zinc-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
+                    <div className="w-10 h-10 rounded-xl bg-[#E5BD69]/10 flex items-center justify-center shrink-0">
+                      <BedDouble size={18} className="text-[#663311]" />
+                    </div>
+                    <div>
+                      <p className="text-[15px] font-semibold text-zinc-900">{selectedRes.room_name}</p>
+                      <p className="text-[12px] font-medium text-zinc-500 mt-0.5">Property ID: {selectedRes.room_id}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Bloque: Timeline */}

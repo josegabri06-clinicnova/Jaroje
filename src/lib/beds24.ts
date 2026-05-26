@@ -121,6 +121,36 @@ export function getUnitName(roomId: string | null | undefined, unitId: string | 
   return oldUnitMap[id]?.[uId] || null;
 }
 
+// Obtener el ID de Beds24 a partir de un número de habitación física (ej. "101" -> roomId: 685321)
+export function getBeds24RoomIdAndUnit(physicalRoomName: string | null | undefined): { roomId: string, unitId: string } | null {
+  const name = String(physicalRoomName || '').trim();
+  const map: Record<string, { roomId: string, unitId: string }> = {
+    '101': { roomId: '685321', unitId: '1' },
+    '102': { roomId: '685322', unitId: '1' },
+    '103': { roomId: '685323', unitId: '1' },
+    '104': { roomId: '685324', unitId: '1' },
+    '105': { roomId: '685325', unitId: '1' },
+    '106': { roomId: '685326', unitId: '1' },
+    '107': { roomId: '685327', unitId: '1' },
+    '201': { roomId: '685312', unitId: '1' },
+    '202': { roomId: '685318', unitId: '1' },
+    '203': { roomId: '685314', unitId: '1' },
+    '204': { roomId: '685315', unitId: '1' },
+    '205': { roomId: '685316', unitId: '1' },
+    '206': { roomId: '685317', unitId: '1' },
+    '301': { roomId: '685531', unitId: '1' },
+    '302': { roomId: '685532', unitId: '1' },
+    '303': { roomId: '685533', unitId: '1' },
+    '304': { roomId: '685534', unitId: '1' },
+    '305': { roomId: '685535', unitId: '1' },
+    '306': { roomId: '685536', unitId: '1' },
+    '401': { roomId: '679008', unitId: '1' },
+    '402': { roomId: '679087', unitId: '1' },
+    '500': { roomId: '685542', unitId: '1' },
+  };
+  return map[name] || null;
+}
+
 // Mapear los nuevos Room IDs específicos de Beds24 a sus equivalentes antiguos (padre + unidad virtual)
 // Esto evita romper la lógica de ocupación y disponibilidad que utiliza el panel de recepción
 export function getParentMapping(roomId: string | null | undefined, unitId: string | null | undefined): { roomId: string, unitId: string } {
