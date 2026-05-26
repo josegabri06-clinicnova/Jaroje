@@ -96,19 +96,53 @@ export default function AnalyticsPage() {
   // ADR (Average Daily Rate) es estrictamente un KPI de habitación (Room revenue / Nights)
   // por ende se calcula únicamente sobre el revenueTotal bruto de camas de Beds24.
   const adr = totalNoches > 0 ? Math.round(revenueTotal / totalNoches) : 0;
-  const ocupacion = Math.min(100, Math.round((totalNoches / 30) * 100));
+  
+  // Cálculo científico de Ocupación del Mes Actual (22 habitaciones físicas)
+  const ocupacion = (() => {
+    const currentMonthStart = new Date();
+    currentMonthStart.setDate(1);
+    currentMonthStart.setHours(0, 0, 0, 0);
+
+    const currentMonthEnd = new Date(currentMonthStart);
+    currentMonthEnd.setMonth(currentMonthEnd.getMonth() + 1);
+    currentMonthEnd.setDate(0); // Último día del mes actual
+    currentMonthEnd.setHours(23, 59, 59, 999);
+
+    const daysInMonth = currentMonthEnd.getDate();
+    const totalPossibleRoomNights = 22 * daysInMonth; // 22 habitaciones físicas operativas
+
+    let occupiedNightsInCurrentMonth = 0;
+    reservas.forEach(r => {
+      if (!r.check_in || !r.check_out) return;
+      const rIn = new Date(r.check_in);
+      const rOut = new Date(r.check_out);
+      
+      // Evaluar solapamiento con el mes actual
+      if (rIn < currentMonthEnd && rOut > currentMonthStart) {
+        const overlapStart = new Date(Math.max(rIn.getTime(), currentMonthStart.getTime()));
+        const overlapEnd = new Date(Math.min(rOut.getTime(), currentMonthEnd.getTime()));
+        const diff = (overlapEnd.getTime() - overlapStart.getTime()) / 86400000;
+        occupiedNightsInCurrentMonth += Math.max(0, Math.round(diff));
+      }
+    });
+
+    return totalPossibleRoomNights > 0 
+      ? Math.min(100, Math.round((occupiedNightsInCurrentMonth / totalPossibleRoomNights) * 100))
+      : 0;
+  })();
 
   // Egresos reales desde Supabase
   const totalGastos = finanzas
     .filter(f => f.type === 'gasto')
     .reduce((s, f) => s + (Number(f.amount) || 0), 0);
 
-  // Ingresos manuales reales desde Supabase (Tours, mini-bar, late checkouts, depósitos, etc.)
+  // Ingresos manuales reales desde Supabase (Tours, mini-bar, late checkouts, depósitos extra, etc.)
+  // Excluimos la categoría 'Alojamiento' para evitar duplicidad, ya que el hospedaje ya está registrado en Beds24 (revenueTotal)
   const ingresosManuales = finanzas
-    .filter(f => f.type === 'ingreso')
+    .filter(f => f.type === 'ingreso' && f.category !== 'Alojamiento')
     .reduce((s, f) => s + (Number(f.amount) || 0), 0);
 
-  // Ingresos Consolidados Totales
+  // Ingresos Consolidados Totales (Camas reales de Beds24 + Ingresos extra/tours manuales)
   const ingresosConsolidados = revenueTotal + ingresosManuales;
 
   // Utilidad Neta (Net Profit) Consolidada
@@ -145,7 +179,8 @@ export default function AnalyticsPage() {
     if (!f.date) return;
     const m = f.date.substring(0, 7); // YYYY-MM
     if (!monthMap[m]) monthMap[m] = 0;
-    if (f.type === 'ingreso') {
+    // Excluir Alojamiento para evitar duplicar el revenue total de Beds24 en las gráficas mensuales
+    if (f.type === 'ingreso' && f.category !== 'Alojamiento') {
       monthMap[m] += Number(f.amount) || 0;
     }
   });
