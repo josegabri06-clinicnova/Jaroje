@@ -48,6 +48,53 @@ export async function POST(req: Request) {
       });
     }
 
+    // Central de Alertas Críticas (Out-of-App Push Alerter vía WhatsApp Administrador)
+    // Se ejecuta de manera asíncrona (fire-and-forget) para no penalizar la latencia del cliente
+    const adminPhone = process.env.ADMIN_NOTIFICATION_PHONE;
+    const isCriticalAction = ['report_maintenance', 'human_mode_activated', 'reset_contable'].includes(action);
+
+    if (adminPhone && isCriticalAction) {
+      const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
+      const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
+
+      if (WHATSAPP_TOKEN && WHATSAPP_PHONE_ID) {
+        let text = '';
+        if (action === 'report_maintenance') {
+          text = `🔴 *staySync: Reporte de Daño Técnico*\n\n` +
+                 `🛠 *Habitación:* ${room || 'General'}\n` +
+                 `👤 *Reportado por:* ${employee_name} (${employee_num})\n` +
+                 `📝 *Detalles:* ${details || 'Sin detalles'}`;
+        } else if (action === 'human_mode_activated') {
+          text = `⚠️ *staySync: Ayuda Requerida*\n\n` +
+                 `Un huésped solicita hablar con el administrador. El bot inteligente ha sido pausado.\n` +
+                 `👤 *Huésped:* ${employee_name}\n` +
+                 `📝 *Detalles:* ${details || 'Sin detalles'}`;
+        } else if (action === 'reset_contable') {
+          text = `🔥 *staySync: Alerta de Sistema*\n\n` +
+                 `Se ejecutó un restablecimiento contable total por ${employee_name}.\n` +
+                 `📝 *Detalles:* ${details}`;
+        }
+
+        if (text) {
+          fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: adminPhone.replace(/\D/g, '').trim(),
+              type: 'text',
+              text: { body: text },
+            }),
+          }).catch(fetchErr => {
+            console.error("Error dispatching admin critical alert to WhatsApp:", fetchErr);
+          });
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
       source: 'database',

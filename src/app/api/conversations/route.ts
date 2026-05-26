@@ -242,6 +242,23 @@ export async function POST(req: Request) {
       forceHuman = true;
       finalBotResponse = "Entendido. He pausado el asistente virtual. En un momento, un agente de nuestra recepción continuará la conversación contigo por este medio.";
 
+      // Registrar log de auditoría en employee_logs para timbrar en la recepción en tiempo real
+      try {
+        await supabase
+          .from('employee_logs')
+          .insert([{
+            employee_num: 'wa-guest',
+            employee_name: (existing?.guest_name || body.guest_name || phone).slice(0, 50),
+            department: 'recepcion',
+            module: 'recepcion',
+            action: 'human_mode_activated',
+            details: `Huésped solicitó hablar con el administrador. Asistente IA pausado. Teléfono: ${phone}`,
+            created_at: new Date().toISOString()
+          }]);
+      } catch (logErr) {
+        console.error("Error logging human_mode_activated event:", logErr);
+      }
+
       // Enviar respuesta automática de pausa a WhatsApp
       const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
       const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;

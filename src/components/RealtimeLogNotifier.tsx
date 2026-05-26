@@ -68,6 +68,8 @@ export default function RealtimeLogNotifier() {
             'check_out': 'Check-Out Procesado',
             'movimiento_financiero': 'Movimiento Financiero',
             'incidencia_mantenimiento': 'Incidencia Reportada',
+            'report_maintenance': 'Daño Técnico Reportado 🛠',
+            'human_mode_activated': 'Ayuda Requerida ⚠️',
             'cambio_estado_incidencia': 'Tarea Actualizada',
             'ajuste_stock': 'Ajuste de Stock',
             'nuevo_articulo': 'Artículo Creado',
