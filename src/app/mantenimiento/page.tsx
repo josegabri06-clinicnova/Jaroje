@@ -11,6 +11,8 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+import { getActiveEmployee } from '@/lib/auth';
+
 interface Task {
   id: string;
   type: string;
@@ -61,6 +63,38 @@ export default function MantenimientoPage() {
   const [resolveComments, setResolveComments] = useState('');
   const [resolvePhotoFile, setResolvePhotoFile] = useState<File | null>(null);
 
+  // Read-only Details Drawer State
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Task | null>(null);
+
+  const openDetailsModal = (task: Task) => {
+    setSelectedTaskForDetails(task);
+    setShowDetailsModal(true);
+  };
+
+  const logAudit = async (action: string, room: string, details: string) => {
+    try {
+      const activeEmp = getActiveEmployee('mantenimiento');
+      const payload = {
+        employee_num: activeEmp?.employee_num || '000',
+        employee_name: activeEmp?.full_name || 'Admin',
+        department: 'mantenimiento',
+        module: 'mantenimiento',
+        action,
+        room: room || 'General',
+        details
+      };
+      
+      await fetch('/api/employee-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.error("Error logging maintenance audit event:", e);
+    }
+  };
+
   const fetchTasks = async () => {
     setIsLoading(true);
     try {
@@ -88,12 +122,24 @@ export default function MantenimientoPage() {
   const handleUpdateStatus = async (taskId: string, newStatus: string) => {
     setIsLoading(true);
     try {
+      const taskToUpdate = tasks.find(t => t.id === taskId);
+      const oldStatus = taskToUpdate ? taskToUpdate.status : 'desconocido';
+      const roomName = taskToUpdate ? taskToUpdate.room : 'General';
+      const description = taskToUpdate ? taskToUpdate.description : '';
+
       const { error } = await supabase
         .from('tasks')
         .update({ status: newStatus })
         .eq('id', taskId);
       
       if (error) throw error;
+
+      await logAudit(
+        'cambio_estado_tarea', 
+        roomName, 
+        `Cambio de estado: ${oldStatus} -> ${newStatus}. Descripción: ${description}`
+      );
+
       fetchTasks();
     } catch (e) {
       console.error(e);
@@ -152,6 +198,12 @@ export default function MantenimientoPage() {
 
       if (error) throw error;
 
+      await logAudit(
+        'resolucion_mantenimiento', 
+        resolvingTask.room, 
+        `Incidencia resuelta. Comentarios de cierre: ${resolveComments.trim()}`
+      );
+
       setShowResolutionModal(false);
       fetchTasks();
     } catch(e) {
@@ -204,8 +256,18 @@ export default function MantenimientoPage() {
 
     if (editingTask) {
       await supabase.from('tasks').update(payload).eq('id', editingTask.id);
+      await logAudit(
+        'actualizacion_tarea', 
+        payload.room, 
+        `Tarea actualizada por el administrador. Nuevo estado: ${payload.status}. Descripción: ${payload.description}`
+      );
     } else {
       await supabase.from('tasks').insert([payload]);
+      await logAudit(
+        'report_maintenance', 
+        payload.room, 
+        `Nueva tarea creada en ${payload.room}: ${payload.description}`
+      );
     }
 
     setShowModal(false);
@@ -217,6 +279,11 @@ export default function MantenimientoPage() {
     if (!editingTask || !confirm("¿Seguro que deseas eliminar esta tarea?")) return;
     setIsSaving(true);
     await supabase.from('tasks').delete().eq('id', editingTask.id);
+    await logAudit(
+      'eliminacion_tarea', 
+      editingTask.room, 
+      `Tarea eliminada por el administrador. Descripción original: ${editingTask.description}`
+    );
     setShowModal(false);
     fetchTasks();
     setIsSaving(false);
@@ -341,17 +408,7 @@ export default function MantenimientoPage() {
           )}
         </div>
 
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="bg-white border border-zinc-200 text-zinc-700 rounded-2xl px-4 py-2.5 outline-none text-[13px] font-bold shadow-sm focus:ring-2 focus:ring-zinc-900/5 focus:border-zinc-300 transition-all cursor-pointer"
-        >
-          <option value="todos">Todos los Tipos</option>
-          <option value="aviso">Avisos</option>
-          <option value="mantenimiento">Mtto.</option>
-          <option value="limpieza">Limpieza</option>
-          <option value="otro">Otros</option>
-        </select>
+        {/* Tipo de tarea simplificado: Todos los reportes son para Mantenimiento */}
       </div>
 
       {/* List */}
@@ -367,7 +424,13 @@ export default function MantenimientoPage() {
             return (
               <div 
                 key={task.id} 
-                onClick={() => openModal(task)}
+                onClick={() => {
+                  if (filterStatus === 'resuelta') {
+                    openModal(task);
+                  } else {
+                    openDetailsModal(task);
+                  }
+                }}
                 className="p-4 flex flex-col gap-3 hover:bg-zinc-50 transition-colors cursor-pointer group"
               >
                 <div className="flex gap-4">
@@ -472,7 +535,7 @@ export default function MantenimientoPage() {
 
               {!editingTask && (
                 <div>
-                  <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Opcional)</label>
+                  <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Tomar foto o elegir de fototeca - Opcional)</label>
                   <input 
                     type="file"
                     accept="image/*"
@@ -491,7 +554,38 @@ export default function MantenimientoPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
+              {editingTask ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Ubicación</label>
+                    <select 
+                      value={formRoom} onChange={e => setFormRoom(e.target.value)}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                    >
+                      {ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Estado</label>
+                    <select 
+                      value={formStatus} onChange={e => {
+                        if (e.target.value === 'resuelta') {
+                          setShowModal(false);
+                          handleOpenResolutionModal(editingTask);
+                        } else {
+                          setFormStatus(e.target.value);
+                        }
+                      }}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                    >
+                      <option value="nuevo">Nuevo</option>
+                      <option value="pendiente">Pendiente</option>
+                      <option value="en_proceso">En Proceso</option>
+                      <option value="resuelta">Resuelta</option>
+                    </select>
+                  </div>
+                </div>
+              ) : (
                 <div>
                   <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Ubicación</label>
                   <select 
@@ -501,33 +595,9 @@ export default function MantenimientoPage() {
                     {ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Estado</label>
-                  <select 
-                    value={formStatus} onChange={e => {
-                      if (e.target.value === 'resuelta') {
-                        if (editingTask) {
-                          setShowModal(false);
-                          handleOpenResolutionModal(editingTask);
-                        } else {
-                          alert("Para registrar una tarea como resuelta, primero créala en estado Nuevo/Pendiente/En Proceso y luego ciérrala con su evidencia correspondiente.");
-                          setFormStatus('nuevo');
-                        }
-                      } else {
-                        setFormStatus(e.target.value);
-                      }
-                    }}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                  >
-                    <option value="nuevo">Nuevo</option>
-                    <option value="pendiente">Pendiente</option>
-                    <option value="en_proceso">En Proceso</option>
-                    <option value="resuelta">Resuelta</option>
-                  </select>
-                </div>
-              </div>
+              )}
 
-              {formStatus === 'resuelta' && (
+              {editingTask && formStatus === 'resuelta' && (
                 <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl animate-in fade-in slide-in-from-top-2">
                   <label className="block text-[12px] font-bold text-emerald-700 uppercase tracking-wider mb-2">Foto de Resolución (Opcional)</label>
                   {editingTask?.resolution_photo_url ? (
@@ -544,31 +614,6 @@ export default function MantenimientoPage() {
                   <p className="text-[11px] text-emerald-600 mt-2 font-medium">Puedes adjuntar una foto como evidencia del cierre (opcional).</p>
                 </div>
               )}
-
-              <div>
-                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Tipo de Tarea</label>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { id: 'aviso', label: 'Aviso', icon: Bell, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
-                    { id: 'mantenimiento', label: 'Mtto.', icon: Wrench, color: 'text-rose-600', bg: 'bg-rose-50', border: 'border-rose-200' },
-                    { id: 'limpieza', label: 'Limp.', icon: Sparkles, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-                    { id: 'otro', label: 'Otro', icon: AlertTriangle, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' }
-                  ].map(t => {
-                    const Icon = t.icon;
-                    const isActive = formType === t.id;
-                    return (
-                      <button
-                        key={t.id} type="button"
-                        onClick={() => setFormType(t.id)}
-                        className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-xl border-2 transition-all ${isActive ? `${t.bg} ${t.border} ${t.color}` : 'border-zinc-100 bg-white text-zinc-400'}`}
-                      >
-                        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                        <span className="text-[11px] font-bold">{t.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
 
               <div className="pt-4 flex gap-2">
                 {editingTask && (
@@ -663,6 +708,138 @@ export default function MantenimientoPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Read-Only Details Task Sheet Modal */}
+      {showDetailsModal && selectedTaskForDetails && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowDetailsModal(false)}>
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto border border-zinc-100 space-y-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-100">
+              <h3 className="text-lg font-bold text-zinc-900">Detalles de la Tarea</h3>
+              <button 
+                onClick={() => setShowDetailsModal(false)} 
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
+              >
+                <X size={16} strokeWidth={3} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Ubicación y Estado */}
+              <div className="flex justify-between items-center bg-zinc-50 p-4 rounded-2xl border border-zinc-200/50">
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Ubicación</span>
+                  <span className="text-[15px] font-extrabold text-zinc-800">{selectedTaskForDetails.room}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Estado Actual</span>
+                  <span className={`text-[11px] font-bold uppercase px-2.5 py-1 rounded mt-1 inline-block ${
+                    selectedTaskForDetails.status === 'nuevo' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                    selectedTaskForDetails.status === 'pendiente' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
+                    selectedTaskForDetails.status === 'en_proceso' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
+                    'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                  }`}>
+                    {selectedTaskForDetails.status === 'nuevo' ? 'Nuevo Reporte' :
+                     selectedTaskForDetails.status === 'pendiente' ? 'Pendiente' :
+                     selectedTaskForDetails.status === 'en_proceso' ? 'En Proceso' : 'Resuelto'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Descripción */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Descripción del Daño</span>
+                <p className="text-[14px] text-zinc-850 font-medium whitespace-pre-line bg-zinc-50/50 p-4 border border-zinc-200/40 rounded-2xl leading-relaxed text-zinc-800">
+                  {selectedTaskForDetails.description}
+                </p>
+              </div>
+
+              {/* Información de Registro */}
+              <div className="grid grid-cols-2 gap-4 text-[12px] border-t border-zinc-100 pt-4">
+                <div>
+                  <span className="text-zinc-450 font-semibold block text-[10px] uppercase">Reportado por</span>
+                  <span className="font-bold text-zinc-700">{selectedTaskForDetails.reported_by}</span>
+                </div>
+                <div>
+                  <span className="text-zinc-450 font-semibold block text-[10px] uppercase">Fecha de reporte</span>
+                  <span className="font-bold text-zinc-700">
+                    {format(new Date(selectedTaskForDetails.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Foto si existe */}
+              {selectedTaskForDetails.photo_url && (
+                <div className="space-y-2 pt-2">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Evidencia Fotográfica</span>
+                  <a href={selectedTaskForDetails.photo_url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-zinc-200 hover:opacity-95 transition-opacity">
+                    <img 
+                      src={selectedTaskForDetails.photo_url} 
+                      alt="Evidencia inicial" 
+                      className="w-full h-48 object-cover"
+                    />
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Botones de acción del flujo estrictos */}
+            <div className="pt-4 border-t border-zinc-100 flex flex-col gap-2">
+              {selectedTaskForDetails.status === 'nuevo' && (
+                <button
+                  onClick={async () => {
+                    await handleUpdateStatus(selectedTaskForDetails.id, 'pendiente');
+                    setShowDetailsModal(false);
+                  }}
+                  className="w-full py-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all shadow-lg text-[14px] flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>Revisar y Validar Tarea ✓</span>
+                </button>
+              )}
+
+              {selectedTaskForDetails.status === 'pendiente' && (
+                <button
+                  onClick={async () => {
+                    await handleUpdateStatus(selectedTaskForDetails.id, 'en_proceso');
+                    setShowDetailsModal(false);
+                  }}
+                  className="w-full py-4 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-all shadow-lg text-[14px] flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>Iniciar Trabajo Activo ⚡</span>
+                </button>
+              )}
+
+              {selectedTaskForDetails.status === 'en_proceso' && (
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={async () => {
+                      await handleUpdateStatus(selectedTaskForDetails.id, 'pendiente');
+                      setShowDetailsModal(false);
+                    }}
+                    className="flex-1 py-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all border border-zinc-200 text-[14px] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Pausar / Regresar ↩</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      handleOpenResolutionModal(selectedTaskForDetails);
+                    }}
+                    className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-[14px] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Terminar y Cerrar ✅</span>
+                  </button>
+                </div>
+              )}
+
+              <button
+                onClick={() => setShowDetailsModal(false)}
+                className="w-full py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-500 font-bold rounded-xl transition-colors text-[13px] cursor-pointer"
+              >
+                Volver a la Lista
+              </button>
+            </div>
           </div>
         </div>
       )}
