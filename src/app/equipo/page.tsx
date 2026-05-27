@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X } from 'lucide-react';
+import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -224,6 +224,46 @@ export default function EquipoPage() {
     if (error) console.error("Error fetching payroll:", error);
     else setRecords(data || []);
     setIsLoading(false);
+  };
+
+  const handleDeleteRecord = async (id: string, employeeName: string, amount: number, period: string) => {
+    const confirm = window.confirm(`¿Estás seguro de que deseas eliminar el registro de nómina de ${employeeName} por MX$${amount.toLocaleString('es-MX')} (${period})?\n\nEsta acción eliminará también el registro contable asociado en Finanzas y devolverá el saldo a la cuenta.`);
+    if (!confirm) return;
+
+    try {
+      // 1. Buscar si hay una transacción en 'finances' para esta nómina para revertirla
+      const financeDesc = `Nómina ${period} - Empleado: ${employeeName}`;
+      const { data: finRecords } = await supabase
+        .from('finances')
+        .select('*')
+        .eq('description', financeDesc)
+        .eq('category', 'Nóminas');
+
+      if (finRecords && finRecords.length > 0) {
+        for (const fin of finRecords) {
+          // Revertir el balance en la cuenta
+          if (fin.account_id) {
+            const { data: acc } = await supabase.from('accounts').select('balance').eq('id', fin.account_id).single();
+            if (acc) {
+              await supabase.from('accounts').update({ balance: acc.balance + fin.amount }).eq('id', fin.account_id);
+            }
+          }
+          // Eliminar transacción en finanzas
+          await supabase.from('finances').delete().eq('id', fin.id);
+        }
+      }
+
+      // 2. Eliminar el registro en payroll
+      const { error } = await supabase.from('payroll').delete().eq('id', id);
+      if (error) throw error;
+
+      alert("Registro de nómina eliminado y saldo contable restaurado con éxito.");
+      fetchRecords();
+      setSelectedRecordForDetails(null);
+    } catch (err) {
+      console.error(err);
+      alert("Error al eliminar el registro.");
+    }
   };
 
   const fetchAccounts = async () => {
@@ -493,6 +533,14 @@ export default function EquipoPage() {
                       <Receipt size={12} /> Ver Desglose
                     </button>
                   )}
+                  <button 
+                    onClick={() => handleDeleteRecord(record.id, record.employee_name, record.amount, record.period)}
+                    className="flex items-center gap-1 text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-1 border border-rose-100/50"
+                    title="Eliminar Nómina"
+                  >
+                    <Trash2 size={12} />
+                    <span>Eliminar</span>
+                  </button>
                   <span className="text-[11px] text-zinc-400 ml-auto">{format(new Date(record.created_at), 'd MMM', { locale: es })}</span>
                 </div>
               </div>
@@ -910,6 +958,14 @@ export default function EquipoPage() {
                   </button>
                 </div>
                 
+                <button
+                  onClick={() => handleDeleteRecord(selectedRecordForDetails.id, selectedRecordForDetails.employee_name, selectedRecordForDetails.amount, selectedRecordForDetails.period)}
+                  className="w-full py-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-xl transition-colors text-[13px] flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Trash2 size={14} />
+                  <span>Eliminar Nómina del Sistema</span>
+                </button>
+
                 <button 
                   onClick={() => setSelectedRecordForDetails(null)}
                   className="w-full py-3 bg-zinc-950 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors text-[13px] cursor-pointer"
