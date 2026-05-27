@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Employee, OFFICIAL_EMPLOYEES, validateEmployeeNum, setActiveEmployee, getActiveEmployee } from '@/lib/auth';
+import { Employee, getOfficialEmployees, syncEmployeesFromServer, validateEmployeeNum, setActiveEmployee, getActiveEmployee } from '@/lib/auth';
 
 interface EmployeeModalProps {
   isOpen: boolean;
@@ -43,8 +43,10 @@ export default function EmployeeModal({
     }
   };
 
-  // Filtrar los empleados oficiales permitidos en este departamento para mostrar como sugerencia sutil
-  const departmentEmployees = OFFICIAL_EMPLOYEES.filter(emp => emp.department === module);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  // Filtrar los empleados permitidos en este departamento
+  const departmentEmployees = employees.filter(emp => emp.department === module);
 
   // Módulo en lenguaje natural elegante
   const moduleLabel = {
@@ -54,6 +56,9 @@ export default function EmployeeModal({
   }[module];
 
   useEffect(() => {
+    // Cargar empleados de forma local instantánea (desde cache/localStorage o fallback)
+    setEmployees(getOfficialEmployees());
+
     if (typeof window !== 'undefined') {
       setUserRole(localStorage.getItem('jaroje_role'));
     }
@@ -66,6 +71,11 @@ export default function EmployeeModal({
       // Comprobar si ya existe una sesión activa para este módulo
       const currentActive = getActiveEmployee(module);
       setHasActiveSession(!!currentActive);
+
+      // Sincronizar en segundo plano desde el servidor
+      syncEmployeesFromServer().then((updatedList) => {
+        setEmployees(updatedList);
+      });
     }
   }, [isOpen, module]);
 

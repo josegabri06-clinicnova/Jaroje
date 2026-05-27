@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X, Trash2 } from 'lucide-react';
 import Link from 'next/link';
+import { getRole, getAdminPin } from '@/lib/auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -166,6 +167,12 @@ export default function EquipoPage() {
   // Details Modal State
   const [selectedRecordForDetails, setSelectedRecordForDetails] = useState<PayrollRecord | null>(null);
 
+  // Google Sheets sync state
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [syncedEmployees, setSyncedEmployees] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncSettings, setShowSyncSettings] = useState(false);
+
   const handleExcelPaste = (val: string) => {
     setRawText(val);
     const parsed = parseExcelPayroll(val);
@@ -213,6 +220,70 @@ export default function EquipoPage() {
     }
   };
 
+
+  const fetchSyncConfig = async () => {
+    try {
+      const { data: urlData } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'google_sheet_nominas_url')
+        .maybeSingle();
+      if (urlData) {
+        setSheetUrl(urlData.value);
+      }
+
+      const { data: empData } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'official_employees')
+        .maybeSingle();
+      if (empData && empData.value) {
+        setSyncedEmployees(JSON.parse(empData.value));
+      }
+    } catch (err) {
+      console.error("Error cargando configuración de sincronización:", err);
+    }
+  };
+
+  const handleSyncGoogleSheets = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sheetUrl.trim()) return alert("Por favor ingresa un enlace de Google Sheets válido.");
+    
+    setIsSyncing(true);
+    try {
+      const role = getRole() || 'admin';
+      const pin = getAdminPin();
+
+      const res = await fetch('/api/payroll/sync', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-user-role': role,
+          'x-admin-pin': pin
+        },
+        body: JSON.stringify({ sheetUrl })
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`¡Sincronización exitosa! Se importaron ${data.count} empleados de forma correcta.`);
+        if (data.employees) {
+          setSyncedEmployees(data.employees);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('jaroje_official_employees', JSON.stringify(data.employees));
+          }
+        }
+        setShowSyncSettings(false);
+      } else {
+        alert(`Error al sincronizar: ${data.error || 'Error desconocido'}`);
+      }
+    } catch (err: any) {
+      console.error("Error sincronizando:", err);
+      alert(`Error de red o servidor: ${err.message || err}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const fetchRecords = async () => {
     setIsLoading(true);
@@ -276,6 +347,7 @@ export default function EquipoPage() {
   useEffect(() => {
     fetchRecords();
     fetchAccounts();
+    fetchSyncConfig();
     
     // Abrir automáticamente el modal de nómina si viene del botón FAB (+)
     if (typeof window !== 'undefined') {
@@ -464,13 +536,80 @@ export default function EquipoPage() {
             <Users size={20} strokeWidth={2.5} />
           </div>
           <div>
-            <p className="text-[12px] font-semibold text-zinc-500 uppercase tracking-widest">Total Pagado (Mes)</p>
+            <p className="text-[12px] font-semibold text-zinc-550 uppercase tracking-widest">Total Pagado (Mes)</p>
             <div className="flex items-baseline gap-1">
               <span className="text-lg text-zinc-400 font-medium">MX$</span>
               <p className="text-2xl font-bold tracking-tighter text-zinc-900">{totalMes.toLocaleString('es-MX')}</p>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Sincronización con Google Sheets Card */}
+      <div className="bg-white border border-zinc-200/80 p-5 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2M9 17H7v-2h2v2zm0-4H7v-2h2v2zm0-4H7V7h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2zm4 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/>
+              </svg>
+            </div>
+            <div>
+              <h4 className="text-[14px] font-bold text-zinc-800">Sincronización con Google Sheets</h4>
+              <p className="text-[12px] text-zinc-550 font-medium">Mantén la lista de empleados actualizada sin dependencias de Cloud.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSyncSettings(!showSyncSettings)}
+            className="text-[12px] font-bold text-zinc-650 hover:text-zinc-900 bg-zinc-50 border border-zinc-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+          >
+            {showSyncSettings ? 'Ocultar' : 'Configurar'}
+          </button>
+        </div>
+
+        {(showSyncSettings || syncedEmployees.length > 0) && (
+          <div className="pt-2 border-t border-zinc-100 space-y-4">
+            {showSyncSettings && (
+              <form onSubmit={handleSyncGoogleSheets} className="flex flex-col sm:flex-row gap-2">
+                <input
+                  type="url"
+                  value={sheetUrl}
+                  onChange={e => setSheetUrl(e.target.value)}
+                  placeholder="Enlace para compartir de Google Sheets..."
+                  className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-sans text-zinc-800"
+                  required
+                />
+                <button
+                  type="submit"
+                  disabled={isSyncing}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl px-5 py-3 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                >
+                  {isSyncing ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Sincronizando...</span>
+                    </>
+                  ) : (
+                    <span>Sincronizar ahora</span>
+                  )}
+                </button>
+              </form>
+            )}
+
+            {syncedEmployees.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-zinc-50/50 border border-zinc-200/50 p-3 rounded-xl text-[12px]">
+                <div className="flex items-center gap-1.5 text-zinc-650 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{syncedEmployees.length} empleados activos vinculados desde la nube</span>
+                </div>
+                <div className="text-[11px] font-medium text-zinc-400">
+                  {sheetUrl ? "Conexión activa con Google Sheets" : "Fallback local activo"}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Historial de Pagos */}
@@ -636,10 +775,26 @@ export default function EquipoPage() {
                   <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Empleado</label>
                   <input 
                     type="text" required
-                    value={name} onChange={e => setName(e.target.value)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10"
-                    placeholder="Nombre completo"
+                    list="employee-names"
+                    value={name} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      setName(val);
+                      const found = syncedEmployees.find(emp => emp.full_name.toLowerCase().trim() === val.toLowerCase().trim());
+                      if (found && found.phone) {
+                        setPhone(found.phone);
+                      }
+                    }}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10 text-zinc-800"
+                    placeholder="Escribe el nombre del empleado..."
                   />
+                  <datalist id="employee-names">
+                    {syncedEmployees.map((emp, i) => (
+                      <option key={`${emp.employee_num}-${i}`} value={emp.full_name}>
+                        {emp.department.toUpperCase()} — No. {emp.employee_num}
+                      </option>
+                    ))}
+                  </datalist>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">

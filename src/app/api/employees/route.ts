@@ -7,28 +7,38 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// GET — Obtener lista de empleados desde Supabase (con fallback estático robusto)
+// GET — Obtener lista de empleados desde Supabase settings (con fallback estático robusto)
 export async function GET() {
   try {
     const { data, error } = await supabase
-      .from('employees')
-      .select('*')
-      .order('employee_num');
+      .from('settings')
+      .select('value')
+      .eq('key', 'official_employees')
+      .maybeSingle();
 
     if (error) {
-      console.warn('API Employees: Tabla "employees" no disponible o error de consulta. Usando fallback estático.', error.message);
+      console.warn('API Employees: Error de consulta en "settings". Usando fallback estático.', error.message);
       return NextResponse.json({ success: true, source: 'fallback', data: OFFICIAL_EMPLOYEES });
     }
 
-    // Si la tabla está vacía, insertar los empleados iniciales o usar fallback
-    if (!data || data.length === 0) {
-      console.log('API Employees: Tabla vacía, sirviendo fallback oficial.');
+    if (!data || !data.value) {
+      console.log('API Employees: settings.official_employees no configurado. Sirviendo fallback oficial.');
       return NextResponse.json({ success: true, source: 'fallback', data: OFFICIAL_EMPLOYEES });
     }
 
-    return NextResponse.json({ success: true, source: 'database', data });
+    try {
+      const employees = JSON.parse(data.value);
+      if (Array.isArray(employees) && employees.length > 0) {
+        return NextResponse.json({ success: true, source: 'database', data: employees });
+      }
+    } catch (e) {
+      console.error('Error parseando official_employees:', e);
+    }
+
+    return NextResponse.json({ success: true, source: 'fallback', data: OFFICIAL_EMPLOYEES });
   } catch (err: any) {
     console.error('API Employees: Error inesperado en backend:', err.message);
     return NextResponse.json({ success: true, source: 'fallback', data: OFFICIAL_EMPLOYEES });
   }
 }
+

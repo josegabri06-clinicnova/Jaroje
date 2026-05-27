@@ -240,11 +240,47 @@ export function clearActiveEmployee(module: 'recepcion' | 'limpieza' | 'mantenim
   setActiveEmployee(null, module);
 }
 
+// Obtener lista completa de empleados (prioriza localStorage sincronizado, con fallback oficial)
+export function getOfficialEmployees(): Employee[] {
+  if (typeof window === 'undefined') return OFFICIAL_EMPLOYEES;
+  try {
+    const stored = localStorage.getItem('jaroje_official_employees');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Error parseando jaroje_official_employees de localStorage:', e);
+  }
+  return OFFICIAL_EMPLOYEES;
+}
+
+// Sincronizar empleados del servidor a localStorage en segundo plano
+export async function syncEmployeesFromServer(): Promise<Employee[]> {
+  try {
+    const res = await fetch('/api/employees', { cache: 'no-store' });
+    if (res.ok) {
+      const body = await res.json();
+      if (body.success && Array.isArray(body.data)) {
+        localStorage.setItem('jaroje_official_employees', JSON.stringify(body.data));
+        return body.data;
+      }
+    }
+  } catch (e) {
+    console.warn('No se pudo sincronizar empleados desde el servidor:', e);
+  }
+  return getOfficialEmployees();
+}
+
 // Validar localmente si un número de empleado existe y pertenece al departamento
 export function validateEmployeeNum(num: string, department: 'recepcion' | 'mantenimiento' | 'limpieza'): Employee | null {
-  const match = OFFICIAL_EMPLOYEES.find(
+  const list = getOfficialEmployees();
+  const match = list.find(
     emp => emp.employee_num === num && emp.department === department
   );
   return match || null;
 }
+
 
