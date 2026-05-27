@@ -512,8 +512,6 @@ export default function HistorialPage() {
             {[
               { id: 'todos', label: 'Todos' },
               { id: 'hoy', label: 'Hoy' },
-              { id: 'ayer', label: 'Ayer' },
-              { id: 'semana', label: 'Últimos 7 días' },
               { id: 'personalizado', label: 'Personalizado' }
             ].map(pill => (
               <button
@@ -553,37 +551,6 @@ export default function HistorialPage() {
               </div>
             </div>
           )}
-        </div>
-
-        {/* Selector de Módulo */}
-        <div className="space-y-2">
-          <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-            <SlidersHorizontal size={12} />
-            Filtrar por Módulo
-          </span>
-          <div className="flex flex-wrap gap-1.5">
-            {[
-              { id: 'todos', label: 'Todos los Conceptos' },
-              { id: 'finanzas', label: 'Finanzas' },
-              { id: 'recepcion', label: 'Recepción' },
-              { id: 'mantenimiento', label: 'Mantenimiento' },
-              { id: 'limpieza', label: 'Limpieza' },
-              { id: 'inventario', label: 'Inventario' },
-              { id: 'bot', label: 'WhatsApp Bot' }
-            ].map(mod => (
-              <button
-                key={mod.id}
-                onClick={() => setModuleFilter(mod.id)}
-                className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
-                  moduleFilter === mod.id 
-                    ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
-                    : 'bg-zinc-50 border-zinc-200 text-zinc-650 hover:bg-zinc-100'
-                }`}
-              >
-                {mod.label}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Toggles de Agrupación */}
