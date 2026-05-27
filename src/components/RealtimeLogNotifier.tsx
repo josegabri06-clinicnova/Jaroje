@@ -14,6 +14,7 @@ interface ActiveNotification {
   title: string;
   desc: string;
   module: string;
+  destinationUrl?: string;
 }
 
 export default function RealtimeLogNotifier() {
@@ -48,7 +49,7 @@ export default function RealtimeLogNotifier() {
 
   useEffect(() => {
     // 1. Suscribirse a inserciones en la tabla employee_logs en tiempo real
-    const channel = supabase
+    const channelLogs = supabase
       .channel('realtime-logs')
       .on(
         'postgres_changes',
@@ -86,14 +87,54 @@ export default function RealtimeLogNotifier() {
             id: String(newLog.id),
             title: friendlyTitle,
             desc: `${employeeName} en ${moduleName.toUpperCase()}`,
-            module: moduleName
+            module: moduleName,
+            destinationUrl: '/historial'
           });
         }
       )
       .subscribe();
 
+    // 2. Suscribirse a actualizaciones en la tabla conversations en tiempo real (WhatsApp de huéspedes)
+    const channelConversations = supabase
+      .channel('realtime-conversations')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'conversations' },
+        (payload) => {
+          console.log('Cambio detectado en conversaciones en tiempo real:', payload);
+          const newConv = payload.new as any;
+          if (!newConv || !newConv.messages) return;
+
+          const lastMsg = newConv.messages[newConv.messages.length - 1];
+          if (lastMsg && lastMsg.role_guest) {
+            // Verificar que sea un mensaje nuevo y reciente (dentro de los últimos 15 segundos)
+            const msgTime = new Date(lastMsg.timestamp).getTime();
+            const now = Date.now();
+            if (now - msgTime < 15000) {
+              console.log('¡Nuevo mensaje de WhatsApp de huésped detectado!', lastMsg);
+              
+              // Reproducir el sonido sintético premium
+              playPremiumChime();
+
+              // Activar notificación toast
+              setNotification({
+                id: `wa_${newConv.id}_${msgTime}`,
+                title: `Mensaje de ${newConv.guest_name || 'Huésped'} 💬`,
+                desc: lastMsg.role_guest.length > 60 
+                  ? lastMsg.role_guest.slice(0, 60) + '...' 
+                  : lastMsg.role_guest,
+                module: 'whatsapp',
+                destinationUrl: '/bot'
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(channelLogs);
+      supabase.removeChannel(channelConversations);
     };
   }, []);
 
@@ -163,11 +204,11 @@ export default function RealtimeLogNotifier() {
         <button
           onClick={() => {
             setNotification(null);
-            router.push('/historial');
+            router.push(notification.destinationUrl || '/historial');
           }}
           className="h-8 px-3 bg-white text-zinc-950 hover:bg-zinc-100 rounded-xl text-[10px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] cursor-pointer"
         >
-          <span>Auditar</span>
+          <span>{notification.module === 'whatsapp' ? 'Responder' : 'Auditar'}</span>
           <ArrowRight size={10} strokeWidth={2.5} />
         </button>
         <button

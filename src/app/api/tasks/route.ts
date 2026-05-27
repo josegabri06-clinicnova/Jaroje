@@ -59,7 +59,7 @@ export async function POST(req: Request) {
       type:          body.type          || 'otro',
       room:          body.room          || 'General',
       description:   body.description   || '',
-      status:        'pendiente',
+      status:        body.status        || 'nuevo',
       reported_by:   body.reported_by   || 'Staff',
       direction:     body.direction     || 'staff_to_admin',
       read_by_admin: body.direction === 'admin_to_staff',
