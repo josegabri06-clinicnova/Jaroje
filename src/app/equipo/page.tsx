@@ -147,6 +147,10 @@ export default function EquipoPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   
+  // Finance integration state
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  
   // Form State
   const [activeFormTab, setActiveFormTab] = useState<'excel' | 'manual'>('excel');
   const [rawText, setRawText] = useState('');
@@ -222,8 +226,16 @@ export default function EquipoPage() {
     setIsLoading(false);
   };
 
+  const fetchAccounts = async () => {
+    const { data } = await supabase.from('accounts').select('*').order('name', { ascending: true });
+    if (data) {
+      setAccounts(data);
+    }
+  };
+
   useEffect(() => {
     fetchRecords();
+    fetchAccounts();
     
     // Abrir automáticamente el modal de nómina si viene del botón FAB (+)
     if (typeof window !== 'undefined') {
@@ -285,6 +297,34 @@ export default function EquipoPage() {
       alert("Error al guardar en base de datos");
       setIsSaving(false);
       return;
+    }
+
+    // 2b. Registrar egreso en FINANZAS si se seleccionó una cuenta
+    if (selectedAccountId && inserted) {
+      try {
+        const financeRecord = {
+          type: 'egreso',
+          amount: Number(amount),
+          category: 'Nóminas',
+          description: `Nómina ${period} - Empleado: ${name}`,
+          account_id: selectedAccountId,
+          payment_method: 'Transferencia',
+          date: new Date().toISOString().split('T')[0]
+        };
+
+        const { error: finError } = await supabase.from('finances').insert([financeRecord]);
+        if (!finError) {
+          // Obtener saldo actual de la cuenta para restar el egreso
+          const { data: acc } = await supabase.from('accounts').select('balance').eq('id', selectedAccountId).single();
+          if (acc) {
+            await supabase.from('accounts').update({ balance: acc.balance - Number(amount) }).eq('id', selectedAccountId);
+          }
+        } else {
+          console.error("Error al registrar en finanzas:", finError);
+        }
+      } catch (finErr) {
+        console.error("Error en flujo de registro financiero:", finErr);
+      }
     }
 
     // 3. Enviar WhatsApp (Opcional)
@@ -577,13 +617,26 @@ export default function EquipoPage() {
                   </div>
                 </div>
 
-                <div>
+                 <div>
                   <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Periodo</label>
                   <input 
                     type="text" required
                     value={period} onChange={e => setPeriod(e.target.value)}
                     className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] focus:ring-2 focus:ring-zinc-900/10"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Cuenta Financiera (Para Finanzas)</label>
+                  <select 
+                    value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10"
+                  >
+                    <option value="">-- No registrar en Finanzas --</option>
+                    {accounts.map(acc => (
+                      <option key={acc.id} value={acc.id}>{acc.name} (Saldo: MX${acc.balance.toLocaleString('es-MX')})</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
