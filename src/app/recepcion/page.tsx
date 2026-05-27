@@ -201,6 +201,19 @@ export default function RecepcionPage() {
 
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Lock body scroll and hide BottomNav when any modal is open
+  useEffect(() => {
+    const isAnyModalOpen = showCheckInModal || showForm || showEmployeeModal || showPinModal;
+    if (isAnyModalOpen) {
+      document.body.classList.add('overflow-hidden', 'panel-open');
+    } else {
+      document.body.classList.remove('overflow-hidden', 'panel-open');
+    }
+    return () => {
+      document.body.classList.remove('overflow-hidden', 'panel-open');
+    };
+  }, [showCheckInModal, showForm, showEmployeeModal, showPinModal]);
+
   useEffect(() => {
     if (!todayStr) return; // Esperar a que todayStr se inicialice en el cliente
     
@@ -1155,7 +1168,7 @@ export default function RecepcionPage() {
 
       {/* ── MODAL PROCESO CHECK-IN / WALK-IN ───────────────────────────── */}
       {showCheckInModal && selectedReserva && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
           <div className="bg-white w-full sm:w-[420px] rounded-t-[32px] sm:rounded-[32px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom duration-300">
             {/* Header Modal */}
             <div className="px-6 py-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/30">
