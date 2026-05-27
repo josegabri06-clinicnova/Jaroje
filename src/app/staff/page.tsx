@@ -43,6 +43,9 @@ interface Task {
   direction: string;
   created_at: string;
   image_base64?: string;
+  photo_url?: string | null;
+  resolution_photo_url?: string | null;
+  resolved_at?: string | null;
 }
 
 interface RoomStatus {
@@ -97,7 +100,11 @@ export default function StaffPage() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
   const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping' | 'inventario'>('tareas');
-  const [taskTab, setTaskTab] = useState<'activas' | 'historial'>('activas');
+  const [taskTab, setTaskTab] = useState<'nuevos' | 'pendientes' | 'en_proceso' | 'resueltos'>('nuevos');
+  const [showResolveModal, setShowResolveModal] = useState(false);
+  const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
+  const [resolveComments, setResolveComments] = useState('');
+  const [resolvePhotoFile, setResolvePhotoFile] = useState<File | null>(null);
   
   // Modales
   const [showForm, setShowForm] = useState(false);
@@ -223,8 +230,95 @@ export default function StaffPage() {
     return true;
   });
 
-  const activas   = roleFilteredTasks.filter(t => t.status !== 'resuelta');
-  const historial  = roleFilteredTasks.filter(t => t.status === 'resuelta');
+  const nuevos      = roleFilteredTasks.filter(t => t.status === 'nuevo');
+  const pendientes  = roleFilteredTasks.filter(t => t.status === 'pendiente');
+  const enProceso   = roleFilteredTasks.filter(t => t.status === 'en_proceso');
+  const resueltos   = roleFilteredTasks.filter(t => t.status === 'resuelta');
+
+  const handleOpenResolveModal = (task: Task) => {
+    setResolvingTask(task);
+    setResolveComments('');
+    setResolvePhotoFile(null);
+    setShowResolveModal(true);
+  };
+
+  const handleResolveSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resolveComments.trim()) {
+      alert("Por favor ingresa los comentarios de resolución.");
+      return;
+    }
+    if (!resolvingTask) return;
+    
+    setSubmitting(true);
+    let finalResPhotoUrl = null;
+
+    try {
+      const emp = getActiveEmployee('mantenimiento');
+      const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
+
+      // Subir foto de resolución si existe (Opcional)
+      if (resolvePhotoFile) {
+        const fileExt = resolvePhotoFile.name.split('.').pop();
+        const fileName = `resolucion_${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('maintenance_photos').upload(fileName, resolvePhotoFile);
+        if (!uploadError) {
+          const { data } = supabase.storage.from('maintenance_photos').getPublicUrl(fileName);
+          finalResPhotoUrl = data.publicUrl;
+        } else {
+          console.error("Upload resolution photo error:", uploadError);
+        }
+      }
+
+      // Concatenar comentarios de resolución a la descripción original de la tarea
+      const formattedComments = `\n\n🛠️ Cierre: ${resolveComments.trim()}`;
+      const newDescription = resolvingTask.description + formattedComments;
+
+      const payload = {
+        status: 'resuelta',
+        description: newDescription,
+        resolved_at: new Date().toISOString(),
+        resolution_photo_url: finalResPhotoUrl
+      };
+
+      const { error } = await supabase
+        .from('tasks')
+        .update(payload)
+        .eq('id', resolvingTask.id);
+
+      if (error) throw error;
+
+      // Registrar log de auditoría
+      if (emp) {
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'mantenimiento',
+              action: 'resolve_task',
+              room: resolvingTask.room || 'General',
+              details: `Marcó como RESUELTA la tarea técnica en Habitación ${resolvingTask.room || 'General'}: ${resolvingTask.description || ''} - Cierre: ${resolveComments.trim()}`
+            })
+          });
+        } catch (logErr) {
+          console.error('Error logging resolve_task:', logErr);
+        }
+      }
+
+      setShowResolveModal(false);
+      fetchData();
+      setSuccessMsg('¡Incidencia resuelta y cerrada!');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch(e) {
+      console.error(e);
+      alert('Error al resolver la tarea.');
+    }
+    setSubmitting(false);
+  };
 
   const updateTaskStatus = async (id: string, status: string) => {
     const emp = getActiveEmployee('mantenimiento');
@@ -648,34 +742,46 @@ export default function StaffPage() {
                   </div>
                 </div>
 
-                <div className="p-3 bg-zinc-50 border-b border-zinc-100 flex gap-2">
+                <div className="p-2 bg-zinc-50 border-b border-zinc-100 grid grid-cols-4 gap-1">
                   <button 
-                    onClick={() => setTaskTab('activas')} 
-                    className={`flex-1 py-2 text-[11px] font-black rounded-lg transition-all ${taskTab === 'activas' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+                    onClick={() => setTaskTab('nuevos')} 
+                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'nuevos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
                   >
-                    Activas ({activas.length})
+                    NUEVOS ({nuevos.length})
                   </button>
                   <button 
-                    onClick={() => setTaskTab('historial')} 
-                    className={`flex-1 py-2 text-[11px] font-black rounded-lg transition-all ${taskTab === 'historial' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+                    onClick={() => setTaskTab('pendientes')} 
+                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'pendientes' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
                   >
-                    Historial ({historial.length})
+                    PENDIENTES ({pendientes.length})
+                  </button>
+                  <button 
+                    onClick={() => setTaskTab('en_proceso')} 
+                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'en_proceso' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+                  >
+                    EN PROCESO ({enProceso.length})
+                  </button>
+                  <button 
+                    onClick={() => setTaskTab('resueltos')} 
+                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'resueltos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+                  >
+                    RESUELTOS ({resueltos.length})
                   </button>
                 </div>
 
-                {taskTab === 'activas' ? (
-                  activas.length === 0 ? (
+                {taskTab === 'nuevos' && (
+                  nuevos.length === 0 ? (
                     <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
                       <CheckCircle2 size={24} className="text-emerald-500" />
-                      <p className="text-[12px] font-semibold text-zinc-400">Sin incidencias técnicas activas</p>
+                      <p className="text-[12px] font-semibold text-zinc-400">Sin nuevos reportes</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-zinc-100">
-                      {activas.map((t) => {
+                      {nuevos.map((t) => {
                         const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
                         const Icon = cfg.icon;
                         return (
-                          <div key={t.id} className="p-4 space-y-3">
+                          <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
@@ -687,7 +793,101 @@ export default function StaffPage() {
                               <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
                             </div>
 
-                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1">{t.description}</p>
+                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line">{t.description}</p>
+
+                            {t.image_base64 && (
+                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
+                                <img src={t.image_base64} alt="Evidencia" className="w-full max-h-48 object-cover" />
+                              </div>
+                            )}
+
+                            <div className="pt-1">
+                              <button 
+                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                                className="w-full py-3 bg-zinc-900 text-white rounded-xl text-[11px] font-extrabold hover:bg-zinc-800 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
+                              >
+                                MARCAR COMO REVISADO ✓
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+
+                {taskTab === 'pendientes' && (
+                  pendientes.length === 0 ? (
+                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                      <Clock size={24} className="text-zinc-300" />
+                      <p className="text-[12px] font-semibold text-zinc-400">Sin reportes pendientes</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-zinc-100">
+                      {pendientes.map((t) => {
+                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                        const Icon = cfg.icon;
+                        return (
+                          <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                                  <Icon size={14} className={cfg.text} />
+                                </div>
+                                <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
+                                <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
+                              </div>
+                              <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                            </div>
+
+                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line">{t.description}</p>
+
+                            {t.image_base64 && (
+                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
+                                <img src={t.image_base64} alt="Evidencia" className="w-full max-h-48 object-cover" />
+                              </div>
+                            )}
+
+                            <div className="pt-1">
+                              <button 
+                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
+                                className="w-full py-3 bg-amber-500 text-white rounded-xl text-[11px] font-extrabold hover:bg-amber-600 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
+                              >
+                                INICIAR TRABAJO ⚡
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+
+                {taskTab === 'en_proceso' && (
+                  enProceso.length === 0 ? (
+                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                      <Clock size={24} className="text-zinc-300" />
+                      <p className="text-[12px] font-semibold text-zinc-400">Sin trabajos en proceso</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-zinc-100">
+                      {enProceso.map((t) => {
+                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                        const Icon = cfg.icon;
+                        return (
+                          <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                                  <Icon size={14} className={cfg.text} />
+                                </div>
+                                <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
+                                <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
+                              </div>
+                              <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                            </div>
+
+                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line">{t.description}</p>
 
                             {t.image_base64 && (
                               <div className="rounded-2xl overflow-hidden border border-zinc-200">
@@ -697,16 +897,16 @@ export default function StaffPage() {
 
                             <div className="flex gap-2 pt-1">
                               <button 
-                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
-                                className={`flex-1 py-2 rounded-xl text-[11px] font-black border transition-all cursor-pointer ${t.status === 'en_proceso' ? 'bg-blue-50 border-blue-300 text-blue-600' : 'bg-white border-zinc-200 text-zinc-500'}`}
+                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                                className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-zinc-100 border border-zinc-200 text-zinc-500 hover:bg-zinc-200 active:scale-[0.96] transition-all cursor-pointer text-center"
                               >
-                                En Proceso
+                                Regresar ↩
                               </button>
                               <button 
-                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'resuelta')}
-                                className="flex-1 py-2 rounded-xl text-[11px] font-black bg-emerald-600 text-white hover:bg-emerald-500 transition-all cursor-pointer"
+                                onClick={() => handleOpenResolveModal(t)}
+                                className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
                               >
-                                ✓ Resolver
+                                ✓ Terminar
                               </button>
                             </div>
                           </div>
@@ -714,31 +914,40 @@ export default function StaffPage() {
                       })}
                     </div>
                   )
-                ) : (
-                  historial.length === 0 ? (
+                )}
+
+                {taskTab === 'resueltos' && (
+                  resueltos.length === 0 ? (
                     <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
                       <Clock size={24} className="text-zinc-300" />
                       <p className="text-[12px] font-semibold text-zinc-400">Historial vacío</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-zinc-100 bg-zinc-50/50">
-                      {historial.map((t) => {
+                      {resueltos.map((t) => {
                         const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
                         const Icon = cfg.icon;
                         return (
-                          <div key={t.id} className="p-4 space-y-2 opacity-85">
+                          <div key={t.id} className="p-4 space-y-2 opacity-85 animate-in fade-in duration-155">
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
                                 <div className="w-6 h-6 rounded-lg bg-zinc-200 flex items-center justify-center shrink-0">
-                                  <Icon size={12} className="text-zinc-600" />
+                                  <Icon size={12} className="text-zinc-650" />
                                 </div>
                                 <span className="text-[12px] font-bold text-zinc-650">{cfg.label}</span>
                                 <span className="text-[11px] font-bold text-zinc-400 bg-white px-2 py-0.5 rounded-md border border-zinc-150">Hab. {t.room}</span>
                               </div>
                               <span className="text-[10px] font-semibold text-zinc-400">{elapsed(t.created_at)}</span>
                             </div>
-                            <p className="text-[12px] text-zinc-400 italic pl-1">{t.description}</p>
-                            <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600 pl-1">
+                            <p className="text-[13px] text-zinc-650 pl-1 whitespace-pre-line leading-relaxed">{t.description}</p>
+                            
+                            {t.resolution_photo_url && (
+                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
+                                <img src={t.resolution_photo_url} alt="Evidencia de Resolución" className="w-full max-h-48 object-cover" />
+                              </div>
+                            )}
+
+                            <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600 pl-1 pt-1">
                               <CheckCheck size={14} />
                               <span>Resuelto por {t.reported_by}</span>
                             </div>
@@ -1078,6 +1287,80 @@ export default function StaffPage() {
               ))}
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Modal táctil de finalización obligatoria (Cierre de MTTO) */}
+      {showResolveModal && resolvingTask && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl space-y-5 animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto border-t border-zinc-150">
+            <div className="flex justify-between items-center pb-2">
+              <h3 className="text-lg font-black text-zinc-955 flex items-center gap-2">
+                <CheckCircle2 className="text-emerald-600" size={22} />
+                Finalizar Incidencia
+              </h3>
+              <button 
+                onClick={() => setShowResolveModal(false)} 
+                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-150 text-[13px] leading-relaxed text-zinc-700">
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Tarea original</p>
+              <p className="font-semibold whitespace-pre-line">{resolvingTask.description}</p>
+              <p className="text-[11px] font-black text-zinc-500 mt-2 bg-white px-2 py-0.5 rounded border border-zinc-200 inline-block">
+                Habitación: {resolvingTask.room}
+              </p>
+            </div>
+
+            <form onSubmit={handleResolveSubmit} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                  Detalles de la Resolución <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  value={resolveComments}
+                  onChange={e => setResolveComments(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[14px] font-medium text-zinc-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                  placeholder="Describe exactamente qué se reparó o solucionó..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                  Evidencia Fotográfica (Opcional)
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[12px] file:mr-4 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[11px] file:font-black file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer border-dashed border-2 border-zinc-200"
+                />
+                <p className="text-[10px] text-zinc-400 mt-1 font-medium">Puedes tomar o seleccionar una foto del trabajo terminado.</p>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowResolveModal(false)}
+                  className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all border border-zinc-200 text-[13px]"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition-all disabled:opacity-50 shadow-md text-[13px] flex items-center justify-center gap-1.5"
+                >
+                  {submitting ? 'Guardando...' : 'Cerrar Incidencia'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
