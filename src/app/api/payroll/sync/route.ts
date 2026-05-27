@@ -163,3 +163,49 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+
+// GET — Obtener en tiempo real los datos y celdas calculadas del Google Sheet en vivo
+export async function GET(req: Request) {
+  try {
+    // 1. Obtener la URL configurada en los ajustes de Supabase
+    const { data: urlSetting, error: urlError } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'google_sheet_nominas_url')
+      .maybeSingle();
+
+    if (urlError) {
+      console.error('Error al consultar URL en Supabase settings:', urlError.message);
+      return NextResponse.json({ success: false, error: urlError.message }, { status: 500 });
+    }
+
+    const sheetUrl = urlSetting?.value;
+    if (!sheetUrl || !sheetUrl.trim()) {
+      return NextResponse.json({ success: false, error: 'Google Sheet no configurado aún en los ajustes.' }, { status: 404 });
+    }
+
+    // 2. Extraer ID de la hoja de cálculo
+    const match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    const sheetId = match ? match[1] : sheetUrl.trim();
+
+    // 3. Descargar CSV directo
+    const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
+    const res = await fetch(csvUrl, { cache: 'no-store' });
+
+    if (!res.ok) {
+      throw new Error('No se pudo descargar la hoja de cálculo. Verifica que esté compartida en modo Lector (Cualquier persona con el enlace).');
+    }
+
+    const csvText = await res.text();
+    const rows = parseCSV(csvText);
+
+    return NextResponse.json({ 
+      success: true, 
+      rows 
+    });
+
+  } catch (error: any) {
+    console.error('Error al obtener datos calculados del Google Sheet:', error.message);
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

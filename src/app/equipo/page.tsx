@@ -172,6 +172,9 @@ export default function EquipoPage() {
   const [syncedEmployees, setSyncedEmployees] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncSettings, setShowSyncSettings] = useState(false);
+  const [sheetRows, setSheetRows] = useState<any[]>([]);
+  const [isLoadingSheetRows, setIsLoadingSheetRows] = useState(false);
+  const [loadedFromSheet, setLoadedFromSheet] = useState(false);
 
   const handleExcelPaste = (val: string) => {
     setRawText(val);
@@ -221,6 +224,21 @@ export default function EquipoPage() {
   };
 
 
+  const fetchLiveSheetRows = async () => {
+    setIsLoadingSheetRows(true);
+    try {
+      const res = await fetch('/api/payroll/sync');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.rows)) {
+        setSheetRows(data.rows);
+      }
+    } catch (err) {
+      console.error("Error al cargar celdas en vivo del Google Sheet:", err);
+    } finally {
+      setIsLoadingSheetRows(false);
+    }
+  };
+
   const fetchSyncConfig = async () => {
     try {
       const { data: urlData } = await supabase
@@ -230,6 +248,7 @@ export default function EquipoPage() {
         .maybeSingle();
       if (urlData) {
         setSheetUrl(urlData.value);
+        fetchLiveSheetRows();
       }
 
       const { data: empData } = await supabase
@@ -393,7 +412,7 @@ export default function EquipoPage() {
       amount: Number(amount),
       type,
       period,
-      notes: activeFormTab === 'excel' ? rawText : '',
+      notes: rawText || '',
       document_url,
       whatsapp_sent: false
     };
@@ -473,6 +492,7 @@ export default function EquipoPage() {
     setName('');
     setRawText('');
     setFile(null);
+    setLoadedFromSheet(false);
     fetchRecords();
     setIsSaving(false);
   };
@@ -696,7 +716,14 @@ export default function EquipoPage() {
               <h3 className="text-xl font-bold text-zinc-900">Registrar Pago</h3>
               <button 
                 type="button"
-                onClick={() => setShowModal(false)}
+                onClick={() => {
+                  setShowModal(false);
+                  setAmount('');
+                  setName('');
+                  setRawText('');
+                  setFile(null);
+                  setLoadedFromSheet(false);
+                }}
                 className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-505 flex items-center justify-center hover:bg-zinc-200 transition-colors"
               >
                 <X size={16} />
@@ -780,14 +807,68 @@ export default function EquipoPage() {
                     onChange={e => {
                       const val = e.target.value;
                       setName(val);
+                      
+                      // 1. Autocompletado tradicional básico
                       const found = syncedEmployees.find(emp => emp.full_name.toLowerCase().trim() === val.toLowerCase().trim());
                       if (found && found.phone) {
                         setPhone(found.phone);
+                      }
+                      
+                      // 2. Importación Inteligente de Celdas desde Google Sheets
+                      if (val) {
+                        const sheetMatch = sheetRows.find(row => (row['nombre'] || '').toLowerCase().trim() === val.toLowerCase().trim());
+                        if (sheetMatch) {
+                          // Extraer y limpiar Whatsapp
+                          const rawPhone = sheetMatch['whatsapp'] || sheetMatch['telefono'] || sheetMatch['teléfono'] || '';
+                          const cleanPhone = rawPhone.replace(/\D/g, '');
+                          if (cleanPhone) setPhone(cleanPhone.startsWith('52') ? cleanPhone : '52' + cleanPhone);
+
+                          // Extraer y limpiar monto (= TOTAL A DEPOSITAR)
+                          const rawAmount = sheetMatch['= total a depositar'] || sheetMatch['total a depositar'] || '';
+                          const cleanAmount = rawAmount.replace(/[^\d.]/g, '');
+                          if (cleanAmount) setAmount(cleanAmount);
+
+                          // Construir desglose automático premium
+                          const concepts: string[] = [];
+                          const addConcept = (label: string, colName: string) => {
+                            const valStr = sheetMatch[colName];
+                            if (valStr && valStr !== '$0' && valStr !== '$0.00' && valStr !== '0' && valStr !== '$ 0' && valStr !== '$ -' && valStr.trim() !== '') {
+                              concepts.push(`${label}: ${valStr.trim()}`);
+                            }
+                          };
+                          
+                          addConcept('NÓMINA BASE', 'nomina quincenal');
+                          addConcept('DÍAS TRAB', 'dias lab+vac');
+                          addConcept('RETARDOS', 'retardos');
+                          addConcept('PENALIZACIÓN PUNTUALIDAD', 'penalizacion puntualidad');
+                          addConcept('EXTRAS', '+ extras');
+                          addConcept('INTEGRADA', '= nomina integrada');
+                          addConcept('PAGO PRÉSTAMO', '- pago prestamos');
+                          addConcept('ADELANTO', '- adelanto nomina');
+                          addConcept('AHORRO QNA', '- ahorro quincenal');
+                          addConcept('PRÉSTAMO RESTANTE', 'prestamos x pagar');
+                          addConcept('AHORRO ACUMULADO', 'ahorro acumulado');
+                          addConcept('VACACIONES POR TOMAR', 'vacaciones x tomar');
+
+                          const generatedBreakdown = concepts.join(' 🔸 ');
+                          setRawText(generatedBreakdown);
+                          setLoadedFromSheet(true);
+                        } else {
+                          setLoadedFromSheet(false);
+                        }
+                      } else {
+                        setLoadedFromSheet(false);
                       }
                     }}
                     className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10 text-zinc-800"
                     placeholder="Escribe el nombre del empleado..."
                   />
+                  {loadedFromSheet && (
+                    <div className="mt-2 text-[11px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-in slide-in-from-top-1 duration-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>✨ Datos y Desglose cargados en vivo desde Google Sheets</span>
+                    </div>
+                  )}
                   <datalist id="employee-names">
                     {syncedEmployees.map((emp, i) => (
                       <option key={`${emp.employee_num}-${i}`} value={emp.full_name}>
@@ -852,6 +933,15 @@ export default function EquipoPage() {
                   />
                 </div>
 
+                {rawText && (
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-2">
+                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block">Desglose de Conceptos (WhatsApp)</span>
+                    <p className="text-[12px] font-bold text-zinc-700 leading-normal whitespace-pre-wrap font-mono bg-white p-3 border border-zinc-200/50 rounded-xl">
+                      {rawText.replace(/ 🔸 /g, '\n')}
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Comprobante (Opcional)</label>
                   <input 
@@ -879,7 +969,14 @@ export default function EquipoPage() {
               <div className="flex gap-3 pt-4">
                 <button 
                   type="button" 
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setAmount('');
+                    setName('');
+                    setRawText('');
+                    setFile(null);
+                    setLoadedFromSheet(false);
+                  }}
                   className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-colors cursor-pointer text-[14px]"
                 >
                   Cancelar
