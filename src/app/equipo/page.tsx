@@ -175,6 +175,7 @@ export default function EquipoPage() {
   const [sheetRows, setSheetRows] = useState<any[]>([]);
   const [isLoadingSheetRows, setIsLoadingSheetRows] = useState(false);
   const [loadedFromSheet, setLoadedFromSheet] = useState(false);
+  const [sheetSyncError, setSheetSyncError] = useState(false);
 
   const handleExcelPaste = (val: string) => {
     setRawText(val);
@@ -226,14 +227,19 @@ export default function EquipoPage() {
 
   const fetchLiveSheetRows = async () => {
     setIsLoadingSheetRows(true);
+    setSheetSyncError(false);
     try {
       const res = await fetch('/api/payroll/sync');
+      if (!res.ok) throw new Error("Fallo de red");
       const data = await res.json();
       if (data.success && Array.isArray(data.rows)) {
         setSheetRows(data.rows);
+      } else {
+        throw new Error(data.error || "Fallo de parsing");
       }
     } catch (err) {
       console.error("Error al cargar celdas en vivo del Google Sheet:", err);
+      setSheetSyncError(true);
     } finally {
       setIsLoadingSheetRows(false);
     }
@@ -729,6 +735,16 @@ export default function EquipoPage() {
                 <X size={16} />
               </button>
             </div>
+
+            {sheetSyncError && (
+              <div className="bg-amber-50 border border-amber-200/50 p-3 rounded-2xl mb-4 flex items-start gap-2.5 animate-in fade-in duration-200">
+                <AlertCircle size={16} className="text-amber-600 mt-0.5 shrink-0" strokeWidth={2.5} />
+                <div>
+                  <p className="text-[12px] font-bold text-amber-900 leading-tight">Sin conexión con Google Sheets</p>
+                  <p className="text-[10px] text-amber-700 font-medium mt-0.5">Operando en modo local. Puedes registrar pagos de forma manual, pero las celdas calculadas no se pre-cargarán.</p>
+                </div>
+              </div>
+            )}
 
             {/* Selector de Pestañas */}
             <div className="flex bg-zinc-100 p-1 rounded-xl mb-4">
