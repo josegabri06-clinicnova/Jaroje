@@ -1261,13 +1261,13 @@ export default function FinanzasPage() {
                         <div className="flex flex-col">
                           <div className="flex items-baseline gap-0.5 min-w-0">
                             <span className="text-[10px] text-zinc-400 font-bold">$</span>
-                            <span className="text-[15px] font-black text-zinc-900 tracking-tight leading-none truncate">
+                            <span className="text-[15px] font-black text-zinc-900 tracking-tight leading-none">
                               {Math.round(acc.balance).toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                             </span>
-                            <span className="text-[8px] text-zinc-450 font-extrabold uppercase ml-0.5">{acc.currency}</span>
+                            <span className="text-[8px] text-zinc-455 font-extrabold uppercase ml-0.5">{acc.currency}</span>
                           </div>
                           {acc.currency !== 'MXN' && (
-                            <span className="text-[9px] font-bold text-zinc-400/90 leading-none mt-1.5 pt-1 border-t border-dashed border-zinc-250 truncate">
+                            <span className="text-[9px] font-bold text-zinc-400/90 leading-none mt-1.5 pt-1 border-t border-dashed border-zinc-250">
                               ≈${Math.round(convertToMXN(acc.balance, acc.currency)).toLocaleString('es-MX', { maximumFractionDigits: 0 })}
                             </span>
                           )}
