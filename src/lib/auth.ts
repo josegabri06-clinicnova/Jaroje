@@ -172,11 +172,13 @@ export const OFFICIAL_EMPLOYEES: Employee[] = [
   { employee_num: '110', full_name: 'Mariana Ortiz', department: 'recepcion' },
   { employee_num: '112', full_name: 'Diana Benítez', department: 'recepcion' },
   { employee_num: '202', full_name: 'Roberto Salazar', department: 'recepcion' },
+  { employee_num: '999', full_name: 'Recepcionista Demo', department: 'recepcion' },
 
   // Mantenimiento (3 Empleados)
   { employee_num: '101', full_name: 'Juan Carlos Peña', department: 'mantenimiento' },
   { employee_num: '111', full_name: 'Eduardo Gómez', department: 'mantenimiento' },
   { employee_num: '202', full_name: 'Roberto Salazar', department: 'mantenimiento' },
+  { employee_num: '999', full_name: 'Mantenimiento Demo', department: 'mantenimiento' },
 
   // Limpieza (6 Empleadas)
   { employee_num: '104', full_name: 'María Elena Flores', department: 'limpieza' },
@@ -184,7 +186,8 @@ export const OFFICIAL_EMPLOYEES: Employee[] = [
   { employee_num: '106', full_name: 'Guadalupe Gómez', department: 'limpieza' },
   { employee_num: '107', full_name: 'Teresa Ramos', department: 'limpieza' },
   { employee_num: '108', full_name: 'Silvia Paredes', department: 'limpieza' },
-  { employee_num: '109', full_name: 'Francisca Ruiz', department: 'limpieza' }
+  { employee_num: '109', full_name: 'Francisca Ruiz', department: 'limpieza' },
+  { employee_num: '999', full_name: 'Limpieza Demo', department: 'limpieza' }
 ];
 
 // Obtener el empleado activo para un módulo específico (con vencimiento absoluto de 1 hora)
