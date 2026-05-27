@@ -88,7 +88,7 @@ export default function RealtimeLogNotifier() {
             title: friendlyTitle,
             desc: `${employeeName} en ${moduleName.toUpperCase()}`,
             module: moduleName,
-            destinationUrl: '/historial'
+            destinationUrl: `/historial?id=${newLog.id}`
           });
         }
       )

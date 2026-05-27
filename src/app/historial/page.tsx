@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 // Inicializar cliente de Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -172,6 +174,33 @@ export default function HistorialPage() {
   const [toastLog, setToastLog] = useState<any>(null);
   const toastTimeoutRef = useRef<any>(null);
 
+  // Event Details Modal State
+  const [selectedEventForModal, setSelectedEventForModal] = useState<HistoryEvent | null>(null);
+  const [showEventModal, setShowEventModal] = useState(false);
+
+  const openEventDetails = (ev: HistoryEvent) => {
+    setSelectedEventForModal(ev);
+    setShowEventModal(true);
+  };
+
+  // Deep-linking: Auto-abrir modal si hay ?id= en la URL
+  useEffect(() => {
+    if (events.length > 0 && typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const targetId = params.get('id');
+      if (targetId) {
+        const found = events.find(e => String(e.id) === String(targetId));
+        if (found) {
+          setSelectedEventForModal(found);
+          setShowEventModal(true);
+          // Limpiar la URL de forma elegante
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, '', newUrl);
+        }
+      }
+    }
+  }, [events]);
+
   // Sincronizar filtros a sessionStorage
   useEffect(() => {
     sessionStorage.setItem('jaroje_hist_search', searchQuery);
@@ -305,18 +334,8 @@ export default function HistorialPage() {
             return updated;
           });
 
-          // Disparar chime de audio si es incidencia de mantenimiento o alerta crítica
-          const actionLower = (newLog.action || '').toLowerCase();
-          const moduleLower = (newLog.module || '').toLowerCase();
-          if (
-            actionLower.includes('incidencia') || 
-            actionLower.includes('mantenimiento') || 
-            moduleLower === 'mantenimiento' ||
-            actionLower.includes('error') || 
-            actionLower.includes('conflicto')
-          ) {
-            playIncidentSound();
-          }
+          // Disparar chime de audio ante cualquier nuevo evento en el historial
+          playIncidentSound();
 
           // Mostrar Banner Toast Flotante Premium
           setToastLog(newLog);
@@ -341,16 +360,8 @@ export default function HistorialPage() {
               const newItems = json.data.filter((x: any) => !existingIds.has(String(x.id)));
               
               if (newItems.length > 0) {
-                // Tocar sonido si alguno de los nuevos es mantenimiento
-                const hasIncident = newItems.some((log: any) => {
-                  const act = (log.action || '').toLowerCase();
-                  const mod = (log.module || '').toLowerCase();
-                  return act.includes('incidencia') || act.includes('mantenimiento') || mod === 'mantenimiento';
-                });
-                
-                if (hasIncident) {
-                  playIncidentSound();
-                }
+                // Tocar sonido ante cualquier nuevo evento
+                playIncidentSound();
 
                 // Mostrar toast del más nuevo
                 setToastLog(newItems[0]);
@@ -636,10 +647,8 @@ export default function HistorialPage() {
                   return (
                     <div
                       key={ev.id}
-                      onClick={() => targetLink && router.push(targetLink)}
-                      className={`flex items-center gap-3.5 px-4 py-3.5 hover:bg-zinc-50/50 transition-colors group ${
-                        targetLink ? 'cursor-pointer' : ''
-                      }`}
+                      onClick={() => openEventDetails(ev)}
+                      className="flex items-center gap-3.5 px-4 py-3.5 hover:bg-zinc-50/50 transition-colors group cursor-pointer"
                     >
                       <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${bgByType(ev.type)}`}>
                         {iconByType(ev.type)}
@@ -647,19 +656,15 @@ export default function HistorialPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-[14px] font-semibold text-zinc-900 leading-tight truncate">{ev.title}</p>
-                          {targetLink && (
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100 shrink-0">
-                              Ver origen
-                            </span>
-                          )}
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded-md border border-zinc-200 shrink-0">
+                            Detalles
+                          </span>
                         </div>
                         <p className="text-[12px] font-medium text-zinc-500 mt-1 truncate">{ev.desc}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 ml-2">
                         <span className="text-[11px] font-semibold text-zinc-400">{ev.time}</span>
-                        {targetLink && (
-                          <ChevronRight size={14} className="text-zinc-350 group-hover:translate-x-0.5 transition-transform" />
-                        )}
+                        <ChevronRight size={14} className="text-zinc-300 group-hover:translate-x-0.5 transition-transform" />
                       </div>
                     </div>
                   );
@@ -682,10 +687,8 @@ export default function HistorialPage() {
                   return (
                     <div
                       key={ev.id}
-                      onClick={() => targetLink && router.push(targetLink)}
-                      className={`flex items-center gap-3.5 px-4 py-3.5 hover:bg-zinc-50/50 transition-colors group ${
-                        targetLink ? 'cursor-pointer' : ''
-                      }`}
+                      onClick={() => openEventDetails(ev)}
+                      className="flex items-center gap-3.5 px-4 py-3.5 hover:bg-zinc-50/50 transition-colors group cursor-pointer"
                     >
                       <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${bgByType(ev.type)}`}>
                         {iconByType(ev.type)}
@@ -693,11 +696,9 @@ export default function HistorialPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <p className="text-[14px] font-semibold text-zinc-900 leading-tight truncate">{ev.title}</p>
-                          {targetLink && (
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100 shrink-0">
-                              Ver origen
-                            </span>
-                          )}
+                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded-md border border-zinc-200 shrink-0">
+                            Detalles
+                          </span>
                         </div>
                         <p className="text-[12px] font-medium text-zinc-500 mt-1 truncate">{ev.desc}</p>
                       </div>
@@ -757,6 +758,108 @@ export default function HistorialPage() {
         </div>
       )}
 
+      {/* Premium Event Details Modal */}
+      {showEventModal && selectedEventForModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setShowEventModal(false)}>
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto border border-zinc-100 space-y-6" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-100">
+              <h3 className="text-lg font-bold text-zinc-900">Detalle de Registro</h3>
+              <button 
+                onClick={() => setShowEventModal(false)} 
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
+              >
+                <X size={16} strokeWidth={3} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Encabezado con Icono */}
+              <div className="flex items-center gap-3 bg-zinc-50 p-4 rounded-2xl border border-zinc-200/50">
+                <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${bgByType(selectedEventForModal.type)}`}>
+                  {iconByType(selectedEventForModal.type)}
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Concepto</span>
+                  <span className="text-[14px] font-extrabold text-zinc-800 leading-tight">
+                    {selectedEventForModal.title.split(' · ')[0]}
+                  </span>
+                </div>
+              </div>
+
+              {/* Detalles principales */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Detalle de Actividad</span>
+                <p className="text-[13px] text-zinc-800 font-medium whitespace-pre-line bg-zinc-50/50 p-4 border border-zinc-200/40 rounded-2xl leading-relaxed">
+                  {selectedEventForModal.desc}
+                </p>
+              </div>
+
+              {/* Grid de Metadatos del Empleado y Sistema */}
+              <div className="bg-zinc-50/30 border border-zinc-100 p-4 rounded-2xl space-y-3.5 text-[12px]">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-100 pb-1.5">Firma y Auditoría</span>
+                
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3 font-medium">
+                  <div>
+                    <span className="text-zinc-400 block text-[10px] uppercase">Operador</span>
+                    <span className="font-bold text-zinc-800">{selectedEventForModal.employee_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px] uppercase">No. Empleado</span>
+                    <span className="font-bold text-zinc-800">{selectedEventForModal.rawLog.employee_num || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px] uppercase">Departamento</span>
+                    <span className="font-bold text-zinc-800 uppercase">{selectedEventForModal.rawLog.department || 'SISTEMA'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px] uppercase">Módulo</span>
+                    <span className="font-bold text-zinc-800 uppercase">{selectedEventForModal.module}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px] uppercase">Ubicación</span>
+                    <span className="font-bold text-zinc-800">{selectedEventForModal.room || 'General'}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 block text-[10px] uppercase">Acción Interna</span>
+                    <span className="font-bold text-zinc-600 font-mono text-[10px]">{selectedEventForModal.rawLog.action}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timestamp */}
+              <div className="flex justify-between items-center text-[11px] text-zinc-400 font-semibold px-1">
+                <span>Registro del Servidor</span>
+                <span>
+                  {format(new Date(selectedEventForModal.rawLog.created_at), 'dd/MM/yyyy HH:mm:ss', { locale: es })}
+                </span>
+              </div>
+            </div>
+
+            {/* Acciones */}
+            <div className="pt-4 border-t border-zinc-100 flex flex-col gap-2">
+              {resolveDeepLink(selectedEventForModal.rawLog) && (
+                <button
+                  onClick={() => {
+                    const link = resolveDeepLink(selectedEventForModal.rawLog);
+                    if (link) router.push(link);
+                    setShowEventModal(false);
+                  }}
+                  className="w-full py-4 bg-zinc-950 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all shadow-lg text-[14px] flex items-center justify-center gap-1.5 cursor-pointer animate-pulse"
+                >
+                  <span>Ir a la Sección Relacionada ↗</span>
+                </button>
+              )}
+              
+              <button
+                onClick={() => setShowEventModal(false)}
+                className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-500 font-bold rounded-xl transition-colors text-[13px] cursor-pointer"
+              >
+                Cerrar Detalle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
