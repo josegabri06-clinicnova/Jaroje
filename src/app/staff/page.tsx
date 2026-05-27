@@ -626,6 +626,7 @@ export default function StaffPage() {
                   onClick={() => {
                     clearActiveEmployee(currentDept);
                     setActiveEmployeeState(null);
+                    setShowEmployeeModal(true);
                   }}
                   className="text-emerald-500 hover:text-emerald-700 font-extrabold text-[9px] ml-1 pl-1 border-l border-emerald-200 cursor-pointer"
                   title="Cambiar empleado"
@@ -1534,8 +1535,19 @@ export default function StaffPage() {
       <EmployeeModal
         isOpen={showEmployeeModal}
         onClose={() => {
-          setShowEmployeeModal(false);
-          setPendingAction(null);
+          const emp = getActiveEmployee(currentDept);
+          if (!emp) {
+            const currentRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
+            if (currentRole === 'admin') {
+              window.location.href = '/';
+            } else {
+              localStorage.removeItem('jaroje_role');
+              window.location.href = '/login';
+            }
+          } else {
+            setShowEmployeeModal(false);
+            setPendingAction(null);
+          }
         }}
         module={currentDept}
         onSuccess={(employee) => {

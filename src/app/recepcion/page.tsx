@@ -802,6 +802,7 @@ export default function RecepcionPage() {
                   onClick={() => {
                     clearActiveEmployee('recepcion');
                     setActiveEmployeeState(null);
+                    setShowEmployeeModal(true);
                   }}
                   className="text-emerald-500 hover:text-emerald-700 font-extrabold text-[10px] ml-1.5 pl-1.5 border-l border-emerald-200 transition-colors cursor-pointer"
                   title="Cerrar turno de recepcionista"
@@ -1636,8 +1637,19 @@ export default function RecepcionPage() {
       <EmployeeModal
         isOpen={showEmployeeModal}
         onClose={() => {
-          setShowEmployeeModal(false);
-          setPendingAction(null);
+          const emp = getActiveEmployee('recepcion');
+          if (!emp) {
+            const currentRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
+            if (currentRole === 'admin') {
+              router.push('/');
+            } else {
+              localStorage.removeItem('jaroje_role');
+              router.push('/login');
+            }
+          } else {
+            setShowEmployeeModal(false);
+            setPendingAction(null);
+          }
         }}
         module="recepcion"
         onSuccess={(employee) => {
