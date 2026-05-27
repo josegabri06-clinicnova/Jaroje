@@ -110,7 +110,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
           )}
 
           {/* Copilot */}
-          {role && (
+          {role && role !== 'staff_mantenimiento' && role !== 'staff_limpieza' && (
             <button
               onClick={() => window.dispatchEvent(new Event('open-copilot'))}
               className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-100 transition-colors"

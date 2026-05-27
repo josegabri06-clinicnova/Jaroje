@@ -114,6 +114,7 @@ export default function StaffPage() {
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   
   const staffName = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_staff_name') || 'Personal') : 'Personal';
@@ -125,6 +126,84 @@ export default function StaffPage() {
   const canModifyStatus = isLimpieza || role === 'reception'; // Solo personal de limpieza y recepción modifican limpieza, Admin lee
 
   const currentDept = isMantenimiento ? 'mantenimiento' : 'limpieza';
+
+  const getTaskImages = (t: Task) => {
+    const list: string[] = [];
+    if (t.photo_url && t.photo_url !== 'null' && t.photo_url.trim() !== '') {
+      list.push(t.photo_url);
+    }
+    if (t.image_base64 && t.image_base64 !== 'null' && t.image_base64.trim() !== '') {
+      const val = t.image_base64.trim();
+      if (val.startsWith('[') && val.endsWith(']')) {
+        try {
+          const parsed = JSON.parse(val);
+          if (Array.isArray(parsed)) {
+            list.push(...parsed);
+          } else {
+            list.push(val);
+          }
+        } catch (e) {
+          list.push(val);
+        }
+      } else {
+        list.push(val);
+      }
+    }
+    return list;
+  };
+
+  const [activeIndices, setActiveIndices] = useState<Record<string, number>>({});
+
+  const handleScroll = (taskId: string, e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const scrollLeft = container.scrollLeft;
+    const width = container.clientWidth;
+    if (width > 0) {
+      const newIndex = Math.round(scrollLeft / width);
+      setActiveIndices(prev => {
+        if (prev[taskId] === newIndex) return prev;
+        return { ...prev, [taskId]: newIndex };
+      });
+    }
+  };
+
+  const renderTaskImagesCarousel = (t: Task) => {
+    const images = getTaskImages(t);
+    if (images.length === 0) return null;
+    const currentIndex = activeIndices[t.id] ?? 0;
+    
+    return (
+      <div className="relative mt-2">
+        <style dangerouslySetInnerHTML={{__html: `
+          .no-scrollbar::-webkit-scrollbar {
+            display: none !important;
+          }
+        `}} />
+        <div 
+          onScroll={(e) => handleScroll(t.id, e)}
+          className="flex overflow-x-auto snap-x snap-mandatory gap-2 rounded-2xl border border-zinc-200 shadow-sm scroll-smooth no-scrollbar"
+          style={{ 
+            scrollbarWidth: 'none', 
+            msOverflowStyle: 'none',
+            WebkitOverflowScrolling: 'touch'
+          }}
+        >
+          {images.map((img, idx) => (
+            <div key={idx} className="shrink-0 w-full aspect-video snap-center relative bg-zinc-100 flex items-center justify-center">
+              <a href={img} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="w-full h-full">
+                <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover select-none" />
+              </a>
+              {images.length > 1 && (
+                <span className="absolute bottom-2.5 right-2.5 bg-black/60 text-white text-[10px] font-black px-2.5 py-1 rounded-lg select-none tracking-wider z-10">
+                  {currentIndex + 1} / {images.length}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // Auditoría y Seguimiento de Empleados
   const [activeEmployee, setActiveEmployeeState] = useState<Employee | null>(null);
@@ -162,15 +241,18 @@ export default function StaffPage() {
   const [form, setForm] = useState({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Lock body on modal open
+  // Lock body on modal open and hide bottom navigation bar
   useEffect(() => {
-    if (showForm || showStatusModal) {
-      document.body.classList.add('overflow-hidden');
+    const isAnyModalOpen = showForm || showStatusModal || showResolveModal || showEmployeeModal;
+    if (isAnyModalOpen) {
+      document.body.classList.add('overflow-hidden', 'panel-open');
     } else {
-      document.body.classList.remove('overflow-hidden');
+      document.body.classList.remove('overflow-hidden', 'panel-open');
     }
-    return () => { document.body.classList.remove('overflow-hidden'); };
-  }, [showForm, showStatusModal]);
+    return () => { 
+      document.body.classList.remove('overflow-hidden', 'panel-open'); 
+    };
+  }, [showForm, showStatusModal, showResolveModal, showEmployeeModal]);
 
   const fetchData = async () => {
     try {
@@ -451,10 +533,17 @@ export default function StaffPage() {
   };
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const b64 = await compressImage(file);
-    setImagePreview(b64);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const previews: string[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const b64 = await compressImage(files[i]);
+      previews.push(b64);
+    }
+    setImagePreviews(prev => [...prev, ...previews]);
+    if (previews.length > 0) {
+      setImagePreview(previews[0]);
+    }
   };
 
   const submit = async () => {
@@ -463,11 +552,12 @@ export default function StaffPage() {
 
     const emp = getActiveEmployee(currentDept);
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
+    const finalImagePayload = imagePreviews.length > 0 ? JSON.stringify(imagePreviews) : imagePreview;
 
     await fetch('/api/tasks', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin', image_base64: imagePreview }),
+      body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin', image_base64: finalImagePayload }),
     });
 
     // Registrar log de auditoría
@@ -493,6 +583,7 @@ export default function StaffPage() {
 
     setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
     setImagePreview(null);
+    setImagePreviews([]);
     setShowForm(false);
     setSuccessMsg('¡Reporte enviado con éxito!');
     fetchData();
@@ -503,6 +594,7 @@ export default function StaffPage() {
   const openMaintenanceReport = () => {
     setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
     setImagePreview(null);
+    setImagePreviews([]);
     setShowForm(true);
   };
 
@@ -780,6 +872,9 @@ export default function StaffPage() {
                       {nuevos.map((t) => {
                         const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
                         const Icon = cfg.icon;
+                        const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+                        
                         return (
                           <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
                             <div className="flex items-center justify-between gap-2">
@@ -793,13 +888,15 @@ export default function StaffPage() {
                               <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
                             </div>
 
-                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line">{t.description}</p>
+                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
 
-                            {t.image_base64 && (
-                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
-                                <img src={t.image_base64} alt="Evidencia" className="w-full max-h-48 object-cover" />
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                              <span>•</span>
+                              <span>{dateStr}</span>
+                            </div>
+
+                            {renderTaskImagesCarousel(t)}
 
                             <div className="pt-1">
                               <button 
@@ -827,6 +924,9 @@ export default function StaffPage() {
                       {pendientes.map((t) => {
                         const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
                         const Icon = cfg.icon;
+                        const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+
                         return (
                           <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
                             <div className="flex items-center justify-between gap-2">
@@ -840,13 +940,15 @@ export default function StaffPage() {
                               <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
                             </div>
 
-                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line">{t.description}</p>
+                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
 
-                            {t.image_base64 && (
-                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
-                                <img src={t.image_base64} alt="Evidencia" className="w-full max-h-48 object-cover" />
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                              <span>•</span>
+                              <span>{dateStr}</span>
+                            </div>
+
+                            {renderTaskImagesCarousel(t)}
 
                             <div className="pt-1">
                               <button 
@@ -874,6 +976,9 @@ export default function StaffPage() {
                       {enProceso.map((t) => {
                         const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
                         const Icon = cfg.icon;
+                        const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+
                         return (
                           <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
                             <div className="flex items-center justify-between gap-2">
@@ -887,13 +992,15 @@ export default function StaffPage() {
                               <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
                             </div>
 
-                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line">{t.description}</p>
+                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
 
-                            {t.image_base64 && (
-                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
-                                <img src={t.image_base64} alt="Evidencia" className="w-full max-h-48 object-cover" />
-                              </div>
-                            )}
+                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                              <span>•</span>
+                              <span>{dateStr}</span>
+                            </div>
+
+                            {renderTaskImagesCarousel(t)}
 
                             <div className="flex gap-2 pt-1">
                               <button 
@@ -927,6 +1034,10 @@ export default function StaffPage() {
                       {resueltos.map((t) => {
                         const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
                         const Icon = cfg.icon;
+                        const originalImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+                        const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+
                         return (
                           <div key={t.id} className="p-4 space-y-2 opacity-85 animate-in fade-in duration-155">
                             <div className="flex items-center justify-between gap-2">
@@ -939,17 +1050,37 @@ export default function StaffPage() {
                               </div>
                               <span className="text-[10px] font-semibold text-zinc-400">{elapsed(t.created_at)}</span>
                             </div>
-                            <p className="text-[13px] text-zinc-650 pl-1 whitespace-pre-line leading-relaxed">{t.description}</p>
+                            <p className="text-[13px] text-zinc-650 pl-1 whitespace-pre-line leading-relaxed font-medium">{t.description}</p>
                             
+                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                              <span>•</span>
+                              <span>{dateStr}</span>
+                            </div>
+
+                            {/* Mostrar foto original si existe */}
+                            {getTaskImages(t).length > 0 && (
+                              <div className="space-y-1 pl-1">
+                                <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Foto Reportada</span>
+                                {renderTaskImagesCarousel(t)}
+                              </div>
+                            )}
+                            
+                            {/* Mostrar foto de resolución si existe */}
                             {t.resolution_photo_url && (
-                              <div className="rounded-2xl overflow-hidden border border-zinc-200">
-                                <img src={t.resolution_photo_url} alt="Evidencia de Resolución" className="w-full max-h-48 object-cover" />
+                              <div className="space-y-1 pl-1">
+                                <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Evidencia de Cierre</span>
+                                <div className="rounded-2xl overflow-hidden border border-zinc-200">
+                                  <a href={t.resolution_photo_url} target="_blank" rel="noreferrer">
+                                    <img src={t.resolution_photo_url} alt="Evidencia de Resolución" className="w-full max-h-40 object-cover" />
+                                  </a>
+                                </div>
                               </div>
                             )}
 
                             <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600 pl-1 pt-1">
                               <CheckCheck size={14} />
-                              <span>Resuelto por {t.reported_by}</span>
+                              <span>Cerrado en: {resolvedStr}</span>
                             </div>
                           </div>
                         );
@@ -1199,36 +1330,56 @@ export default function StaffPage() {
                 />
               </div>
 
-              {/* Foto Evidencia */}
+              {/* Foto Evidencia (Múltiple) */}
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Foto de la Falla (Opcional)</label>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Foto de la Falla (Opcional - Múltiple)</label>
                 <input 
                   ref={fileRef}
                   type="file"
                   accept="image/*"
                   capture="environment"
+                  multiple
                   onChange={handleImage}
                   className="hidden"
                 />
-                {imagePreview ? (
-                  <div className="relative rounded-2xl overflow-hidden border border-zinc-200">
-                    <img src={imagePreview} alt="Evidencia" className="w-full h-40 object-cover" />
+                {imagePreviews.length > 0 ? (
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-2">
+                      {imagePreviews.map((img, idx) => (
+                        <div key={idx} className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-square">
+                          <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setImagePreviews(prev => prev.filter((_, i) => i !== idx));
+                              if (idx === 0) {
+                                setImagePreview(imagePreviews[1] || null);
+                              }
+                            }}
+                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                     <button 
                       type="button"
-                      onClick={() => setImagePreview(null)}
-                      className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80"
+                      onClick={() => fileRef.current?.click()}
+                      className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
                     >
-                      <X size={12} />
+                      <Camera size={13} strokeWidth={2.5} />
+                      <span>Agregar más fotos</span>
                     </button>
                   </div>
                 ) : (
                   <button 
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="w-full border-2 border-dashed border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 rounded-2xl py-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-zinc-500 transition-colors"
+                    className="w-full border-2 border-dashed border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 rounded-2xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-zinc-500 hover:text-zinc-700 transition-colors"
                   >
-                    <Camera size={20} className="text-zinc-450" />
-                    <span className="text-[12px] font-bold">Tomar foto o subir de galería</span>
+                    <Camera size={24} className="text-zinc-450" />
+                    <span className="text-[12px] font-bold">Tomar fotos o subir de galería</span>
                   </button>
                 )}
               </div>
@@ -1293,9 +1444,9 @@ export default function StaffPage() {
 
       {/* Modal táctil de finalización obligatoria (Cierre de MTTO) */}
       {showResolveModal && resolvingTask && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-t-[32px] sm:rounded-[32px] p-6 shadow-2xl space-y-5 animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto border-t border-zinc-150">
-            <div className="flex justify-between items-center pb-2">
+        <div className="fixed inset-0 z-[9999] bg-zinc-950/40 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-5 shadow-2xl space-y-4 animate-in slide-in-from-bottom-8 duration-300 max-h-[82vh] overflow-y-auto border border-zinc-150 flex flex-col">
+            <div className="flex justify-between items-center pb-1">
               <h3 className="text-lg font-black text-zinc-955 flex items-center gap-2">
                 <CheckCircle2 className="text-emerald-600" size={22} />
                 Finalizar Incidencia
@@ -1308,54 +1459,68 @@ export default function StaffPage() {
               </button>
             </div>
 
-            <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-150 text-[13px] leading-relaxed text-zinc-700">
-              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Tarea original</p>
-              <p className="font-semibold whitespace-pre-line">{resolvingTask.description}</p>
-              <p className="text-[11px] font-black text-zinc-500 mt-2 bg-white px-2 py-0.5 rounded border border-zinc-200 inline-block">
-                Habitación: {resolvingTask.room}
-              </p>
+            {/* Tarea Original Card */}
+            <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-150 text-[13px] leading-relaxed text-zinc-700 space-y-2">
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-none">Tarea original</p>
+              <p className="font-bold text-zinc-900 whitespace-pre-line leading-relaxed">{resolvingTask.description}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-black text-zinc-600 bg-white px-2 py-0.5 rounded border border-zinc-200">
+                  Habitación: {resolvingTask.room}
+                </span>
+                <span className="text-[11px] font-black text-zinc-600 bg-white px-2 py-0.5 rounded border border-zinc-200">
+                  De: {resolvingTask.reported_by || 'Admin'}
+                </span>
+              </div>
+              
+              {/* Mostrar fotos reportadas en el modal de resolución */}
+              {getTaskImages(resolvingTask).length > 0 && (
+                <div className="space-y-1 mt-2">
+                  <p className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block leading-none">Foto original</p>
+                  {renderTaskImagesCarousel(resolvingTask)}
+                </div>
+              )}
             </div>
 
-            <form onSubmit={handleResolveSubmit} className="space-y-4">
+            <form onSubmit={handleResolveSubmit} className="space-y-4 flex-1">
               <div>
-                <label className="block text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                <label className="block text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">
                   Detalles de la Resolución <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   required
-                  rows={3}
+                  rows={2}
                   value={resolveComments}
                   onChange={e => setResolveComments(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[14px] font-medium text-zinc-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[14px] font-semibold text-zinc-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none shadow-sm focus:bg-white transition-all leading-relaxed"
                   placeholder="Describe exactamente qué se reparó o solucionó..."
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-2">
+                <label className="block text-[11px] font-black text-zinc-500 uppercase tracking-widest mb-1.5">
                   Evidencia Fotográfica (Opcional)
                 </label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[12px] file:mr-4 file:py-1.5 file:px-3 file:rounded-full file:border-0 file:text-[11px] file:font-black file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer border-dashed border-2 border-zinc-200"
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 outline-none text-[12px] file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer"
                 />
                 <p className="text-[10px] text-zinc-400 mt-1 font-medium">Puedes tomar o seleccionar una foto del trabajo terminado.</p>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex gap-2 pt-2 pb-1">
                 <button
                   type="button"
                   onClick={() => setShowResolveModal(false)}
-                  className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all border border-zinc-200 text-[13px]"
+                  className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all border border-zinc-200 text-[13px] active:scale-95"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition-all disabled:opacity-50 shadow-md text-[13px] flex items-center justify-center gap-1.5"
+                  className="flex-1 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl transition-all disabled:opacity-50 shadow-md text-[13px] flex items-center justify-center gap-1.5 active:scale-95"
                 >
                   {submitting ? 'Guardando...' : 'Cerrar Incidencia'}
                 </button>
