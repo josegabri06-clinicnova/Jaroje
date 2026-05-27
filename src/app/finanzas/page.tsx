@@ -106,10 +106,10 @@ export default function FinanzasPage() {
   const financeGroups = [
     { type: 'EFECTIVO', title: 'Efectivo', icon: Wallet, color: 'text-emerald-600', bg: 'bg-emerald-50', iconColor: 'text-emerald-600' },
     { type: 'BANCOS', title: 'Bancos', icon: Landmark, color: 'text-blue-600', bg: 'bg-blue-50', iconColor: 'text-blue-600' },
-    { type: 'EXTRANJERO', title: 'Extranjero', icon: Globe, color: 'text-indigo-600', bg: 'bg-indigo-50', iconColor: 'text-indigo-600' },
     { type: 'CUENTAS X COBRAR', title: 'Cuentas x Cobrar', icon: ArrowLeft, color: 'text-amber-600', bg: 'bg-amber-50', iconColor: 'text-amber-600' },
     { type: 'CUENTAS X PAGAR', title: 'Cuentas x Pagar', icon: ArrowRight, color: 'text-rose-600', bg: 'bg-rose-50', iconColor: 'text-rose-600' },
     { type: 'AHORROS', title: 'Ahorros', icon: PiggyBank, color: 'text-purple-600', bg: 'bg-purple-50', iconColor: 'text-purple-600' },
+    { type: 'EXTRANJERO', title: 'Extranjero', icon: Globe, color: 'text-indigo-600', bg: 'bg-indigo-50', iconColor: 'text-indigo-600' },
   ] as const;
 
   
