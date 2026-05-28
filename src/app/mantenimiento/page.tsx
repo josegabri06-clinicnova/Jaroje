@@ -137,7 +137,16 @@ export default function MantenimientoPage() {
       await logAudit(
         'cambio_estado_tarea', 
         roomName, 
-        `Cambio de estado: ${oldStatus} -> ${newStatus}. Descripción: ${description}`
+        JSON.stringify({
+          text: `Cambio de estado: ${oldStatus} -> ${newStatus}. Descripción: ${description}`,
+          mantenimiento: {
+            taskId,
+            room: roomName,
+            description,
+            status: newStatus,
+            oldStatus
+          }
+        })
       );
 
       fetchTasks();
@@ -201,7 +210,18 @@ export default function MantenimientoPage() {
       await logAudit(
         'resolucion_mantenimiento', 
         resolvingTask.room, 
-        `Incidencia resuelta. Comentarios de cierre: ${resolveComments.trim()}`
+        JSON.stringify({
+          text: `Incidencia resuelta. Comentarios de cierre: ${resolveComments.trim()}`,
+          mantenimiento: {
+            taskId: resolvingTask.id,
+            room: resolvingTask.room,
+            description: resolvingTask.description,
+            status: 'resuelta',
+            resolutionComments: resolveComments.trim(),
+            photo_url: resolvingTask.photo_url,
+            resolution_photo_url: finalResPhotoUrl
+          }
+        })
       );
 
       setShowResolutionModal(false);
@@ -259,14 +279,35 @@ export default function MantenimientoPage() {
       await logAudit(
         'actualizacion_tarea', 
         payload.room, 
-        `Tarea actualizada por el administrador. Nuevo estado: ${payload.status}. Descripción: ${payload.description}`
+        JSON.stringify({
+          text: `Tarea actualizada por el administrador. Nuevo estado: ${payload.status}. Descripción: ${payload.description}`,
+          mantenimiento: {
+            taskId: editingTask.id,
+            room: payload.room,
+            description: payload.description,
+            status: payload.status,
+            type: payload.type,
+            reported_by: payload.reported_by
+          }
+        })
       );
     } else {
-      await supabase.from('tasks').insert([payload]);
+      const { data: insertData } = await supabase.from('tasks').insert([payload]).select();
+      const insertedId = insertData?.[0]?.id || '';
       await logAudit(
         'report_maintenance', 
         payload.room, 
-        `Nueva tarea creada en ${payload.room}: ${payload.description}`
+        JSON.stringify({
+          text: `Nueva tarea creada en ${payload.room}: ${payload.description}`,
+          mantenimiento: {
+            taskId: insertedId,
+            room: payload.room,
+            description: payload.description,
+            status: payload.status,
+            type: payload.type,
+            reported_by: payload.reported_by
+          }
+        })
       );
     }
 
@@ -282,7 +323,15 @@ export default function MantenimientoPage() {
     await logAudit(
       'eliminacion_tarea', 
       editingTask.room, 
-      `Tarea eliminada por el administrador. Descripción original: ${editingTask.description}`
+      JSON.stringify({
+        text: `Tarea eliminada por el administrador. Descripción original: ${editingTask.description}`,
+        mantenimiento: {
+          taskId: editingTask.id,
+          room: editingTask.room,
+          description: editingTask.description,
+          status: 'eliminada'
+        }
+      })
     );
     setShowModal(false);
     fetchTasks();

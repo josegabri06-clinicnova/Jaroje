@@ -45,6 +45,33 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Registrar log de auditoría 360 automatizado
+    try {
+      await supabase.from('employee_logs').insert([{
+        employee_num: '000',
+        employee_name: 'Beds24 Sync',
+        department: 'recepcion',
+        module: 'recepcion',
+        action: 'reserva_creada_webhook',
+        room: guestName || 'Desconocido',
+        details: JSON.stringify({
+          text: `Entró nueva reserva OTA (${source || 'Beds24'}) de ${guestName || 'Huésped'} para fechas ${checkIn} a ${checkOut} (Beds24 ID: ${bookingId})`,
+          reserva: {
+            guestName: guestName || 'Desconocido',
+            roomId: roomId,
+            bookingId: bookingId,
+            checkIn: checkIn,
+            checkOut: checkOut,
+            channel: source || 'Beds24 Webhook',
+            isOTA: true
+          }
+        }),
+        created_at: new Date().toISOString()
+      }]);
+    } catch (logErr) {
+      console.error("Error al registrar log de webhook Beds24:", logErr);
+    }
+
     return NextResponse.json({ success: true, message: "Fechas bloqueadas en Jaroje App." });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

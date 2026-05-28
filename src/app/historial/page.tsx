@@ -32,6 +32,105 @@ interface HistoryEvent {
   details: string;
   room?: string;
   rawLog: any; // Log crudo para resolución de links
+  parsed?: any; // Objeto parseado si es JSON
+}
+
+function parseLogDetails(detailsStr: string | null | undefined): { text: string; parsed: any } {
+  if (!detailsStr) return { text: '', parsed: null };
+  const trimmed = detailsStr.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const obj = JSON.parse(trimmed);
+      return {
+        text: obj.text || detailsStr,
+        parsed: obj
+      };
+    } catch (e) {
+      // Fallback
+    }
+  }
+  
+  // Heurística de fallback con expresiones regulares para registros antiguos
+  const lowerDetails = detailsStr.toLowerCase();
+  if (lowerDetails.includes('movimiento contable') || lowerDetails.includes('traspaso') || lowerDetails.includes('pago')) {
+    const isIngreso = lowerDetails.includes('ingreso') || lowerDetails.includes('recibió pago') || lowerDetails.includes('recibido');
+    const isGasto = lowerDetails.includes('gasto') || lowerDetails.includes('enviado');
+    const isTraspaso = lowerDetails.includes('traspaso');
+    
+    let type = isIngreso ? 'ingreso' : isGasto ? 'gasto' : isTraspaso ? 'traspaso' : 'gasto';
+    
+    // Extraer monto
+    const amountMatch = detailsStr.match(/\$(\d+(?:\.\d+)?)/);
+    const amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
+    
+    // Extraer cuenta
+    let account = 'General';
+    const accMatch = detailsStr.match(/(?:cuenta|desde|sobre)\s+([A-Za-záéíóúüñ0-9\s]+?)(?:\s+\(|,|\.|\s+a\s+|$)/i);
+    if (accMatch) account = accMatch[1].trim();
+    
+    // Extraer categoría
+    let category = 'Ajuste';
+    const catMatch = detailsStr.match(/\(([A-Za-záéíóúüñ\s]+)\)/);
+    if (catMatch) category = catMatch[1].trim();
+    
+    return {
+      text: detailsStr,
+      parsed: {
+        finance: {
+          type,
+          amount,
+          account,
+          category,
+          description: detailsStr
+        }
+      }
+    };
+  }
+  
+  if (lowerDetails.includes('tarea') || lowerDetails.includes('incidencia') || lowerDetails.includes('daño técnico')) {
+    const isResuelta = lowerDetails.includes('resuelta') || lowerDetails.includes('resolución') || lowerDetails.includes('resuel');
+    const isEnProceso = lowerDetails.includes('proceso') || lowerDetails.includes('inició');
+    const isPendiente = lowerDetails.includes('pendiente');
+    
+    let status = isResuelta ? 'resuelta' : isEnProceso ? 'en_proceso' : isPendiente ? 'pendiente' : 'nuevo';
+    
+    // Extraer comentarios de cierre
+    let comments = '';
+    const commentsMatch = detailsStr.match(/(?:cierre|comentarios de cierre:)\s*(.+)/i);
+    if (commentsMatch) comments = commentsMatch[1].trim();
+    
+    return {
+      text: detailsStr,
+      parsed: {
+        mantenimiento: {
+          status,
+          resolutionComments: comments,
+          description: detailsStr
+        }
+      }
+    };
+  }
+
+  if (lowerDetails.includes('walk-in') || lowerDetails.includes('check-in') || lowerDetails.includes('check-out') || lowerDetails.includes('reserva')) {
+    const isCheckIn = lowerDetails.includes('check-in') || lowerDetails.includes('checkin');
+    const isCheckOut = lowerDetails.includes('check-out') || lowerDetails.includes('checkout');
+    const isWalkIn = lowerDetails.includes('walk-in');
+    
+    return {
+      text: detailsStr,
+      parsed: {
+        reserva: {
+          guestName: detailsStr.replace(/Registró (?:Walk-In|Check-In|Check-Out) de\s*/i, '').trim(),
+          isCheckIn,
+          isCheckOut,
+          isWalkIn,
+          channel: isWalkIn ? 'Recepción' : 'Directo'
+        }
+      }
+    };
+  }
+  
+  return { text: detailsStr, parsed: null };
 }
 
 // Configuración visual por tipo
@@ -183,6 +282,278 @@ export default function HistorialPage() {
     setShowEventModal(true);
   };
 
+  const renderEventCard = (ev: HistoryEvent, showDate: boolean = false) => {
+    const parsed = ev.parsed;
+    
+    // ─── 1. DISEÑO PREMIUM DE TARJETA DE FINANZAS ────────────────────────────
+    if (parsed?.finance) {
+      const fin = parsed.finance;
+      const isIngreso = fin.type === 'ingreso';
+      const isTraspaso = fin.type === 'traspaso';
+      const isReconciled = fin.type === 'reconciled';
+      
+      let bgCircle = 'bg-rose-50 text-rose-600 border-rose-100';
+      let IconComponent = <ArrowUpRight size={18} strokeWidth={2.5} />;
+      let amountColor = 'text-zinc-900';
+      let prefix = '-';
+      
+      if (isIngreso) {
+        bgCircle = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+        IconComponent = <ArrowDownLeft size={18} strokeWidth={2.5} />;
+        amountColor = 'text-emerald-600';
+        prefix = '+';
+      } else if (isTraspaso) {
+        bgCircle = 'bg-indigo-50 text-indigo-600 border-indigo-100';
+        IconComponent = <RefreshCw size={16} strokeWidth={2.5} className="animate-spin duration-[10s]" />;
+        amountColor = 'text-indigo-600';
+        prefix = '';
+      } else if (isReconciled) {
+        bgCircle = 'bg-amber-50 text-amber-600 border-amber-100';
+        IconComponent = <CheckCircle2 size={16} strokeWidth={2.5} />;
+        amountColor = 'text-amber-600';
+        prefix = '';
+      }
+
+      const rawDetailsText = typeof fin.description === 'string' ? fin.description : ev.desc;
+      // Remueve tags como [Synced: B24] o [Pending Sync: B24]
+      const cleanDetailsText = rawDetailsText.replace(/\[Synced:\s*B24\]/gi, '').replace(/\[Pending\s*Sync:\s*B24\]/gi, '').trim();
+
+      return (
+        <div
+          key={ev.id}
+          onClick={() => openEventDetails(ev)}
+          className="p-4 flex flex-col gap-3 hover:bg-zinc-50/80 transition-colors cursor-pointer group"
+        >
+          <div className="flex items-center justify-between gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${bgCircle}`}>
+                {IconComponent}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center flex-wrap gap-1.5 mb-0.5">
+                  <span className="text-[14px] font-bold text-zinc-900 leading-tight capitalize truncate">
+                    {fin.category || (isTraspaso ? 'Traspaso de Fondos' : isReconciled ? 'Conciliación Beds24' : 'Finanzas')}
+                  </span>
+                  <span className="text-[10px] font-black uppercase bg-zinc-100 text-zinc-500 border border-zinc-200 px-1.5 py-0.5 rounded">
+                    {fin.account || 'Caja'}
+                  </span>
+                </div>
+                <p className="text-[12px] font-medium text-zinc-500 line-clamp-1 leading-normal">
+                  {cleanDetailsText}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-end shrink-0 ml-2">
+              <span className={`text-[15px] font-black tracking-tight ${amountColor}`}>
+                {prefix}MX${Math.round(fin.amount || 0).toLocaleString('es-MX')}
+              </span>
+              <span className="text-[10px] font-semibold text-zinc-400 mt-0.5">
+                {ev.time} {showDate && `• ${ev.date}`}
+              </span>
+            </div>
+          </div>
+
+          {/* Footer/Firma de la tarjeta */}
+          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold border-t border-zinc-100/50 pt-2">
+            <span className="flex items-center gap-1">
+              👤 Firma: <span className="text-zinc-650 capitalize">{ev.employee_name}</span>
+            </span>
+            <span className="text-[9px] text-zinc-300 font-black tracking-wider uppercase">FINANZAS</span>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── 2. DISEÑO PREMIUM DE TARJETA DE MANTENIMIENTO ───────────────────────
+    if (parsed?.mantenimiento) {
+      const mtto = parsed.mantenimiento;
+      const isResuelta = mtto.status === 'resuelta';
+      const isEnProceso = mtto.status === 'en_proceso';
+      const isPendiente = mtto.status === 'pendiente';
+      const isEliminada = mtto.status === 'eliminada';
+      
+      let statusPill = 'bg-purple-50 text-purple-600 border-purple-100';
+      let statusLabel = 'Nuevo';
+      
+      if (isResuelta) {
+        statusPill = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+        statusLabel = 'Resuelta ✓';
+      } else if (isEnProceso) {
+        statusPill = 'bg-blue-50 text-blue-600 border-blue-100';
+        statusLabel = 'En Proceso ⚡';
+      } else if (isPendiente) {
+        statusPill = 'bg-amber-50 text-amber-600 border-amber-100';
+        statusLabel = 'Pendiente';
+      } else if (isEliminada) {
+        statusPill = 'bg-rose-50 text-rose-600 border-rose-100';
+        statusLabel = 'Eliminada ✕';
+      }
+
+      return (
+        <div
+          key={ev.id}
+          onClick={() => openEventDetails(ev)}
+          className="p-4 flex flex-col gap-3.5 hover:bg-zinc-50/80 transition-colors cursor-pointer group"
+        >
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 flex items-center justify-center shrink-0">
+              <Wrench size={18} strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${statusPill}`}>
+                    {statusLabel}
+                  </span>
+                  <span className="text-[10px] font-black uppercase bg-zinc-100 text-zinc-655 border border-zinc-200 px-2 py-0.5 rounded-md">
+                    Hab: {mtto.room || ev.room || 'Gral'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-semibold text-zinc-400">
+                  {ev.time} {showDate && `• ${ev.date}`}
+                </span>
+              </div>
+              
+              <p className="text-[13px] font-bold text-zinc-900 whitespace-pre-line leading-tight">
+                {mtto.description || ev.desc}
+              </p>
+              
+              {/* Comentarios de resolución destacados si existen */}
+              {mtto.resolutionComments && (
+                <div className="mt-2 bg-emerald-50/40 border border-emerald-100/50 p-2.5 rounded-xl text-[11px] font-semibold text-emerald-800 leading-snug flex items-start gap-1">
+                  <span className="shrink-0">🛠️</span>
+                  <span><strong>Cierre:</strong> {mtto.resolutionComments}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer/Firma de la tarjeta */}
+          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold border-t border-zinc-100/50 pt-2">
+            <span className="flex items-center gap-1">
+              👤 Operador: <span className="text-zinc-650 capitalize">{ev.employee_name}</span>
+            </span>
+            <div className="flex gap-1.5 items-center">
+              {mtto.photo_url && (
+                <span className="text-[9px] font-bold text-blue-650">📷 Foto</span>
+              )}
+              {mtto.resolution_photo_url && (
+                <span className="text-[9px] font-bold text-emerald-650">✅ Evidencia</span>
+              )}
+              <span className="text-[9px] text-zinc-300 font-black tracking-wider uppercase ml-1">MANTENIMIENTO</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── 3. DISEÑO PREMIUM DE TARJETA DE RESERVAS ────────────────────────────
+    if (parsed?.reserva) {
+      const res = parsed.reserva;
+      const isBlock = res.isBlock;
+      
+      let sourceBg = 'bg-zinc-100 text-zinc-800 border-zinc-200';
+      if (res.channel === 'Airbnb') {
+        sourceBg = 'bg-rose-50 text-rose-600 border-rose-100';
+      } else if (res.channel === 'Booking.com') {
+        sourceBg = 'bg-blue-50 text-blue-600 border-blue-100';
+      } else if (res.channel === 'WhatsApp' || res.channel === 'WhatsApp Bot') {
+        sourceBg = 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      }
+
+      return (
+        <div
+          key={ev.id}
+          onClick={() => openEventDetails(ev)}
+          className="p-4 flex flex-col gap-3 hover:bg-zinc-50/80 transition-colors cursor-pointer group"
+        >
+          <div className="flex items-start justify-between gap-3.5">
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${isBlock ? 'bg-rose-50 border-rose-100 text-rose-600' : 'bg-indigo-50 border-indigo-100 text-indigo-600'}`}>
+                <BedDouble size={18} strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center flex-wrap gap-1.5 mb-0.5">
+                  <span className="text-[14px] font-bold text-zinc-900 leading-tight truncate">
+                    {res.guestName}
+                  </span>
+                  {!isBlock && (
+                    <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${sourceBg}`}>
+                      {res.channel}
+                    </span>
+                  )}
+                  {isBlock && (
+                    <span className="text-[9px] font-black uppercase bg-rose-100 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded">
+                      Bloqueo Físico
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mt-0.5">
+                  📅 {format(new Date(res.checkIn + 'T12:00:00Z'), 'dd MMM', { locale: es })} — {format(new Date(res.checkOut + 'T12:00:00Z'), 'dd MMM', { locale: es })}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-end shrink-0 ml-2">
+              {!isBlock && res.price > 0 ? (
+                <span className="text-[14px] font-black text-indigo-650">
+                  MX${Math.round(res.price).toLocaleString('es-MX')}
+                </span>
+              ) : (
+                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">
+                  —
+                </span>
+              )}
+              <span className="text-[10px] font-semibold text-zinc-400 mt-0.5">
+                {ev.time} {showDate && `• ${ev.date}`}
+              </span>
+            </div>
+          </div>
+
+          {/* Footer/Firma de la tarjeta */}
+          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-bold border-t border-zinc-100/50 pt-2">
+            <span className="flex items-center gap-1">
+              👤 Operador: <span className="text-zinc-650 capitalize">{ev.employee_name}</span>
+            </span>
+            <span className="text-[9px] text-zinc-300 font-black tracking-wider uppercase">RECEPCIÓN</span>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── 4. RENDER DE FILA DE FALLBACK (Estilo base original limpio) ─────────
+    return (
+      <div
+        key={ev.id}
+        onClick={() => openEventDetails(ev)}
+        className="flex items-center gap-3.5 px-4 py-3.5 hover:bg-zinc-50/50 transition-colors group cursor-pointer"
+      >
+        <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${bgByType(ev.type)}`}>
+          {iconByType(ev.type)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="text-[14px] font-semibold text-zinc-900 leading-tight truncate">{ev.title}</p>
+            <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded-md border border-zinc-200 shrink-0">
+              Detalles
+            </span>
+          </div>
+          <p className="text-[12px] font-medium text-zinc-500 mt-1 truncate">{ev.desc}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          <div className="flex flex-col items-end">
+            <span className="text-[11px] font-semibold text-zinc-400">{ev.time}</span>
+            {showDate && (
+              <span className="text-[9px] font-bold text-zinc-400 mt-0.5 capitalize">{ev.date}</span>
+            )}
+          </div>
+          <ChevronRight size={14} className="text-zinc-300 group-hover:translate-x-0.5 transition-transform" />
+        </div>
+      </div>
+    );
+  };
+
   // Deep-linking: Auto-abrir modal si hay ?id= en la URL
   useEffect(() => {
     if (events.length > 0 && typeof window !== 'undefined') {
@@ -265,6 +636,11 @@ export default function HistorialPage() {
         'nuevo_articulo': 'Artículo Creado',
         'actualizacion_articulo': 'Parámetros Actualizados',
         'eliminar_articulo': 'Artículo Eliminado',
+        'reserva_creada': 'Nueva Reserva Manual 📅',
+        'bloqueo_habitacion': 'Bloqueo Físico de Unidad 🔒',
+        'reserva_cancelada': 'Reserva Cancelada ✕',
+        'reasignacion_habitacion': 'Habitación Reasignada 🔁',
+        'reserva_creada_webhook': 'Nueva Reserva Recibida 📥',
       };
       const friendlyTitle = friendlyActions[rawAction] || rawAction.replace(/_/g, ' ');
 
@@ -273,8 +649,10 @@ export default function HistorialPage() {
         title = `${friendlyTitle} · ${log.employee_name}`;
       }
       
-      let desc = log.details || `${log.department || 'Sistema'} · Módulo: ${log.module}`;
-      if (log.room) {
+      const parsedInfo = parseLogDetails(log.details);
+      
+      let desc = parsedInfo.text || `${log.department || 'Sistema'} · Módulo: ${log.module}`;
+      if (log.room && !desc.toLowerCase().includes('habitación') && !desc.toLowerCase().includes('habitacion')) {
         desc = `Habitación ${log.room} · ${desc}`;
       }
       
@@ -290,7 +668,8 @@ export default function HistorialPage() {
         employee_name: log.employee_name || 'Sistema',
         details: log.details || '',
         room: log.room || undefined,
-        rawLog: log
+        rawLog: log,
+        parsed: parsedInfo.parsed
       };
     });
   };
@@ -642,33 +1021,7 @@ export default function HistorialPage() {
                 <Clock size={11} /> {date}
               </h3>
               <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] overflow-hidden divide-y divide-zinc-100">
-                {items.map(ev => {
-                  const targetLink = resolveDeepLink(ev.rawLog);
-                  return (
-                    <div
-                      key={ev.id}
-                      onClick={() => openEventDetails(ev)}
-                      className="flex items-center gap-3.5 px-4 py-3.5 hover:bg-zinc-50/50 transition-colors group cursor-pointer"
-                    >
-                      <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${bgByType(ev.type)}`}>
-                        {iconByType(ev.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[14px] font-semibold text-zinc-900 leading-tight truncate">{ev.title}</p>
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded-md border border-zinc-200 shrink-0">
-                            Detalles
-                          </span>
-                        </div>
-                        <p className="text-[12px] font-medium text-zinc-500 mt-1 truncate">{ev.desc}</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        <span className="text-[11px] font-semibold text-zinc-400">{ev.time}</span>
-                        <ChevronRight size={14} className="text-zinc-300 group-hover:translate-x-0.5 transition-transform" />
-                      </div>
-                    </div>
-                  );
-                })}
+                {items.map(ev => renderEventCard(ev, false))}
               </div>
             </div>
           ))
@@ -682,33 +1035,7 @@ export default function HistorialPage() {
                 </span>
               </h3>
               <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.02)] overflow-hidden divide-y divide-zinc-100">
-                {items.map(ev => {
-                  const targetLink = resolveDeepLink(ev.rawLog);
-                  return (
-                    <div
-                      key={ev.id}
-                      onClick={() => openEventDetails(ev)}
-                      className="flex items-center gap-3.5 px-4 py-3.5 hover:bg-zinc-50/50 transition-colors group cursor-pointer"
-                    >
-                      <div className={`w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0 border ${bgByType(ev.type)}`}>
-                        {iconByType(ev.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-[14px] font-semibold text-zinc-900 leading-tight truncate">{ev.title}</p>
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded-md border border-zinc-200 shrink-0">
-                            Detalles
-                          </span>
-                        </div>
-                        <p className="text-[12px] font-medium text-zinc-500 mt-1 truncate">{ev.desc}</p>
-                      </div>
-                      <div className="flex flex-col items-end shrink-0 ml-2">
-                        <span className="text-[11px] font-semibold text-zinc-400">{ev.time}</span>
-                        <span className="text-[9px] font-bold text-zinc-400 mt-0.5 capitalize">{ev.date}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {items.map(ev => renderEventCard(ev, true))}
               </div>
             </div>
           ))

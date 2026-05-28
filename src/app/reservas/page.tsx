@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Search, RefreshCw, User, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud } from 'lucide-react';
+import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
@@ -135,6 +136,39 @@ export default function ReservasList() {
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
       alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
+
+      // Registrar log de reasignación
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'reasignacion_habitacion',
+            room: targetRoomName,
+            details: JSON.stringify({
+              text: `Reasignó la habitación de la reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}) desde ${selectedRes.room_name || 'Sin asignar'} a la Habitación ${targetRoomName}`,
+              reasignacion: {
+                bookingId: selectedRes.id,
+                guestName: selectedRes.guest_name,
+                fromRoom: selectedRes.room_name || 'Sin asignar',
+                toRoom: targetRoomName
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de reasignación:", logErr);
+      }
+
       setIsReassigning(false);
       setTargetRoomName('');
       
@@ -302,6 +336,38 @@ export default function ReservasList() {
       if (!res.ok) throw new Error(data.error || 'Error al cancelar la reserva');
 
       alert('✅ Reserva cancelada con éxito en Beds24 y liberada en la App.');
+
+      // Registrar log de cancelación
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'reserva_cancelada',
+            room: selectedRes.room_name || 'General',
+            details: JSON.stringify({
+              text: `Canceló permanentemente la reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'}`,
+              cancelacion: {
+                bookingId: selectedRes.id,
+                guestName: selectedRes.guest_name,
+                room: selectedRes.room_name || 'General'
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de cancelación:", logErr);
+      }
+
       setSelectedRes(null);
       fetchReservas(); // Refrescar el listado
     } catch (err: any) {

@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, CheckCircle2, Lock, Unlock } from 'lucide-react';
+import { getActiveEmployee } from '@/lib/auth';
+import { getUnitName, getRoomMetadata } from '@/lib/beds24';
 
 const PRICES: Record<string, Record<string, number>> = {
   '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
@@ -163,6 +165,51 @@ export default function VercelActionForm() {
       alert(mode === 'reserva' 
         ? '¡Éxito! Reserva conectada hacia Beds24 y confirmada en la unidad seleccionada.' 
         : '¡Éxito! Bloqueo aplicado en la unidad seleccionada.');
+
+      // Registrar auditoría rica 360
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        const unitNum = getUnitName(form.roomId, form.unitId) || form.unitId;
+        const roomMeta = getRoomMetadata(form.roomId, null);
+        const roomDisplayName = roomMeta ? `${roomMeta.nombre} (${unitNum})` : `Habitación ${unitNum}`;
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: isBlock ? 'bloqueo_habitacion' : 'reserva_creada',
+            room: unitNum,
+            details: JSON.stringify({
+              text: isBlock 
+                ? `Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}. Motivo: ${form.guestName || 'Mantenimiento'}`
+                : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${form.price} vía ${form.channel}`,
+              reserva: {
+                guestName: form.guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
+                roomId: form.roomId,
+                unitId: form.unitId,
+                roomName: roomDisplayName,
+                checkIn: form.checkIn,
+                checkOut: form.checkOut,
+                price: isBlock ? 0 : Number(form.price),
+                channel: form.channel,
+                isBlock
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de reserva/bloqueo:", logErr);
+      }
       
       router.push('/reservas');
     } catch (err: any) {

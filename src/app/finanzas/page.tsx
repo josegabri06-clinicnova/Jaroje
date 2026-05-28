@@ -407,7 +407,17 @@ export default function FinanzasPage() {
               department: activeEmp?.department || 'recepcion',
               module: 'finanzas',
               action: 'movimiento_financiero',
-              details: `Actualizó movimiento contable (ID: ${editingRecord.id}): ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`
+              details: JSON.stringify({
+                text: `Actualizó movimiento contable (ID: ${editingRecord.id}): ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`,
+                finance: {
+                  type: selectedType,
+                  amount: evaluatedAmount,
+                  category: newRecord.category,
+                  account: matchedAcc,
+                  description: newRecord.description,
+                  id: editingRecord.id
+                }
+              })
             })
           });
         } catch (logErr) {
@@ -438,7 +448,16 @@ export default function FinanzasPage() {
               department: activeEmp?.department || 'recepcion',
               module: 'finanzas',
               action: 'movimiento_financiero',
-              details: `Creó nuevo movimiento contable: ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`
+              details: JSON.stringify({
+                text: `Creó nuevo movimiento contable: ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`,
+                finance: {
+                  type: selectedType,
+                  amount: evaluatedAmount,
+                  category: newRecord.category,
+                  account: matchedAcc,
+                  description: newRecord.description
+                }
+              })
             })
           });
         } catch (logErr) {
@@ -488,7 +507,18 @@ export default function FinanzasPage() {
             department: activeEmp?.department || 'recepcion',
             module: 'finanzas',
             action: 'movimiento_financiero',
-            details: `Eliminó movimiento contable (ID: ${editingRecord.id}): ${editingRecord.type === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${editingRecord.amount} en cuenta ${matchedAcc} (${editingRecord.category || 'Sin categoría'})`
+            details: JSON.stringify({
+              text: `Eliminó movimiento contable (ID: ${editingRecord.id}): ${editingRecord.type === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${editingRecord.amount} en cuenta ${matchedAcc} (${editingRecord.category || 'Sin categoría'})`,
+              finance: {
+                type: editingRecord.type,
+                amount: editingRecord.amount,
+                category: editingRecord.category || 'Sin categoría',
+                account: matchedAcc,
+                description: editingRecord.description,
+                id: editingRecord.id,
+                deleted: true
+              }
+            })
           })
         });
       } catch (logErr) {
@@ -583,7 +613,19 @@ export default function FinanzasPage() {
             department: activeEmp?.department || 'recepcion',
             module: 'finanzas',
             action: 'movimiento_financiero',
-            details: `Realizó un traspaso de $${convertedFromAmount} ${fromAcc.currency} desde ${fromAcc.name} a ${toAcc.name} (Monto recibido: $${convertedToAmount} ${toAcc.currency})`
+            details: JSON.stringify({
+              text: `Realizó un traspaso de $${convertedFromAmount} ${fromAcc.currency} desde ${fromAcc.name} a ${toAcc.name} (Monto recibido: $${convertedToAmount} ${toAcc.currency})`,
+              finance: {
+                type: 'traspaso',
+                amount: convertedFromAmount,
+                currency: fromAcc.currency,
+                toAmount: convertedToAmount,
+                toCurrency: toAcc.currency,
+                account: fromAcc.name,
+                toAccount: toAcc.name,
+                description: transferDescription || 'Traspaso de fondos'
+              }
+            })
           })
         });
       } catch (logErr) {
@@ -801,7 +843,15 @@ export default function FinanzasPage() {
                 department: employee.department,
                 module: 'recepcion',
                 action: 'payment_reconciled',
-                details: `Concilió manualmente pago pendiente a Beds24 de $${record.amount} para reserva B24 ID ${actualBookId} (Registro ID: ${record.id})`
+                details: JSON.stringify({
+                  text: `Concilió manualmente pago pendiente a Beds24 de $${record.amount} para reserva B24 ID ${actualBookId} (Registro ID: ${record.id})`,
+                  finance: {
+                    type: 'reconciled',
+                    amount: record.amount,
+                    bookingId: actualBookId,
+                    description: `Conciliación Beds24 - Registro ID: ${record.id}`
+                  }
+                })
               })
             });
           } catch (logErr) {
@@ -1018,8 +1068,16 @@ export default function FinanzasPage() {
           body: JSON.stringify({
             employee_num: '999',
             employee_name: 'Administrador',
+            department: 'recepcion',
             module: 'finanzas',
-            action: `Renombrar cuenta: "${currentName}" a "${clean}"`
+            action: 'renombrar_cuenta',
+            details: JSON.stringify({
+              text: `Renombró cuenta: "${currentName}" a "${clean}"`,
+              account: {
+                oldName: currentName,
+                newName: clean
+              }
+            })
           })
         });
       } catch (err) {
