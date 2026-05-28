@@ -355,8 +355,8 @@ export default function AjustesPage() {
       {/* Modal cambio PIN */}
       {pinModal && (
         <>
-          <div className="fixed inset-0 bg-zinc-900/30 z-40 backdrop-blur-sm" onClick={() => setPinModal(null)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl p-5 pb-10 space-y-4">
+          <div className="fixed inset-0 bg-zinc-900/40 z-[90] backdrop-blur-sm" onClick={() => setPinModal(null)} />
+          <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl shadow-2xl p-5 pb-16 pb-safe space-y-4 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Key size={16} className="text-zinc-650"/>
@@ -429,8 +429,8 @@ export default function AjustesPage() {
       {/* Modal CRUD Empleado */}
       {showEmployeeModal && (
         <>
-          <div className="fixed inset-0 bg-zinc-900/30 z-40 backdrop-blur-sm" onClick={() => setShowEmployeeModal(false)} />
-          <div className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-3xl shadow-2xl p-5 pb-10 space-y-4 animate-in slide-in-from-bottom">
+          <div className="fixed inset-0 bg-zinc-900/40 z-[90] backdrop-blur-sm" onClick={() => setShowEmployeeModal(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl shadow-2xl p-5 pb-16 pb-safe space-y-4 animate-in slide-in-from-bottom duration-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users size={16} className="text-zinc-650"/>
