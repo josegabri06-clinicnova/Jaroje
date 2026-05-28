@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function getCompactNotes(text: string): string {
   if (!text) return "Sin desglose detallado.";
@@ -77,6 +82,55 @@ export async function POST(req: Request) {
 
     const tipoTexto = type === 'anticipo' ? 'Anticipo' : type === 'bono' ? 'Bono' : 'Nómina';
 
+    // --- AUTOGENERACIÓN DE DOCUMENTO DE TEXTO PLANO ---
+    // Si no hay comprobante manual subido, pero hay desglose de conceptos (notes),
+    // generamos un recibo en TXT y lo subimos a Supabase Storage. Esto nos permite
+    // enviar todo el desglose vertical quincenal y la asistencia día por día
+    // eludiendo la restricción estricta de Meta sobre saltos de línea (\n) en variables.
+    let finalDocumentUrl = document_url;
+
+    if (!finalDocumentUrl && notes && notes.trim() !== '') {
+      try {
+        const txtContent = `================================================
+HOTEL CONDOMINIO JAROJE - RECIBO DE PAGO
+================================================
+Colaborador : ${employeeName.toUpperCase()}
+Concepto    : ${tipoTexto.toUpperCase()}
+Periodo     : ${period}
+Monto Total : MX$${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+================================================
+
+DESGLOSE DETALLADO DE CONCEPTOS (EXCEL):
+------------------------------------------------
+${notes.replace(/\*/g, '')}
+
+------------------------------------------------
+Este documento sirve como desglose quincenal de nómina generado de forma automática por el sistema staySync.
+================================================`;
+
+        const fileName = `Recibo_${employeeName.replace(/\s+/g, '_')}_${Date.now()}.txt`;
+        
+        const { error: uploadError } = await supabase.storage
+          .from('payroll_documents')
+          .upload(fileName, Buffer.from(txtContent, 'utf-8'), {
+            contentType: 'text/plain; charset=utf-8',
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (!uploadError) {
+          const { data: publicUrlData } = supabase.storage
+            .from('payroll_documents')
+            .getPublicUrl(fileName);
+          finalDocumentUrl = publicUrlData.publicUrl;
+        } else {
+          console.error("Error subiendo recibo txt autogenerado a Supabase Storage:", uploadError);
+        }
+      } catch (errUpload) {
+        console.error("Excepción en flujo de autogeneración de recibo txt:", errUpload);
+      }
+    }
+
     // Enviar WhatsApp usando la API oficial de Meta (Cloud API) con PLANTILLA
     const waResponse = await fetch(`https://graph.facebook.com/v17.0/${PHONE_ID}/messages`, {
       method: 'POST',
@@ -90,20 +144,22 @@ export async function POST(req: Request) {
         to: cleanPhone,
         type: "template",
         template: {
-          name: document_url ? "nominas_jaroje_2" : "nominas_jaroje",
+          name: finalDocumentUrl ? "nominas_jaroje_2" : "nominas_jaroje",
           language: {
             code: "es_MX"
           },
           components: [
             // Solo añadir el header si hay un documento y la plantilla en Meta tiene un Header tipo "Documento"
-            ...(document_url ? [{
+            ...(finalDocumentUrl ? [{
               type: "header",
               parameters: [
                 {
                   type: "document",
                   document: {
-                    link: document_url,
-                    filename: `Comprobante_${employeeName.replace(/\s+/g, '_')}.pdf`
+                    link: finalDocumentUrl,
+                    filename: finalDocumentUrl.toLowerCase().includes('.txt')
+                      ? `Recibo_${employeeName.replace(/\s+/g, '_')}.txt`
+                      : `Comprobante_${employeeName.replace(/\s+/g, '_')}.pdf`
                   }
                 }
               ]
@@ -132,7 +188,7 @@ export async function POST(req: Request) {
                   text: Number(amount).toLocaleString('es-MX')
                 },
                 // Solo añadir el quinto parámetro 'excel' si NO hay documento adjunto (plantilla nominas_jaroje)
-                ...(!document_url ? [{
+                ...(!finalDocumentUrl ? [{
                   type: "text",
                   parameter_name: "excel",
                   text: getCompactNotes(notes)
@@ -148,41 +204,6 @@ export async function POST(req: Request) {
 
     if (!waResponse.ok) {
       throw new Error(`Error Meta API: ${JSON.stringify(waData)}`);
-    }
-
-    // --- ENVIAR SEGUNDO MENSAJE SECUNDARIO LIBRE (Session Message) ---
-    // Contiene la bitácora de asistencia y el desglose vertical idéntico al Excel.
-    // Como la plantilla anterior se entregó con éxito, la ventana de 24h está abierta.
-    if (notes && notes.trim() !== '') {
-      try {
-        const headerText = `📝 *BITÁCORA DE ASISTENCIA Y RECIBO DETALLADO (EXCEL):*\n\n`;
-        const cleanNotes = notes.split('\n').map((line: string) => line.trimEnd()).join('\n');
-        
-        const secondMsgRes = await fetch(`https://graph.facebook.com/v17.0/${PHONE_ID}/messages`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            messaging_product: "whatsapp",
-            recipient_type: "individual",
-            to: cleanPhone,
-            type: "text",
-            text: {
-              preview_url: false,
-              body: `${headerText}${cleanNotes}`
-            }
-          })
-        });
-
-        if (!secondMsgRes.ok) {
-          const secondMsgData = await secondMsgRes.json();
-          console.warn("Fallo al enviar bitácora secundaria libre de asistencia:", secondMsgData);
-        }
-      } catch (err2) {
-        console.error("Excepción al disparar el segundo mensaje libre:", err2);
-      }
     }
 
     return NextResponse.json({ success: true, message: 'WhatsApp enviado al empleado' });
