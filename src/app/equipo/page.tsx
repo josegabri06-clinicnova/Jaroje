@@ -336,6 +336,9 @@ export default function EquipoPage() {
       const vacQnaVal = getVal(['vacaciones en la quincena', 'vacaciones quincena'], '0');
       linesArray.push(`*VACACIONES EN LA QUINCENA*   ${vacQnaVal}`);
 
+      // Mensaje de verificación legal al final solicitado por el cliente
+      linesArray.push(`*XF VERICA QUE TU NOMINA ESTE CORRECTA. SI NO MANDAME MENSAJE --INMEDIATAMENTE--*                    ${emp.employee_num}`);
+
       const generatedBreakdown = linesArray.join('\n');
       setRawText(generatedBreakdown);
       setLoadedFromSheet(true);
