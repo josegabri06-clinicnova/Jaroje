@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 function getCompactNotes(text: string): string {
   if (!text) return "Sin desglose detallado.";
   
-  // 1. Procesar el desglose de conceptos y bitácora de asistencia
   const lines = text.split('\n');
   const cleanParts: string[] = [];
   
@@ -20,36 +19,41 @@ function getCompactNotes(text: string): string {
       continue;
     }
     
-    // Limpiar puntos suspensivos y comprimir espacios seguidos
+    // Limpiar puntos suspensivos, tabulaciones y comprimir espacios seguidos
     let cleanLine = trimmed
       .replace(/\.{2,}/g, ':') // Reemplazar puntos suspensivos ..... por :
       .replace(/…+/g, ':')
+      .replace(/\t/g, ' ')
       .replace(/\s+/g, ' ') // Quitar múltiples espacios consecutivos
       .trim();
       
     if (cleanLine) {
+      // Evitar duplicar el bullet si ya viene
+      if (!cleanLine.startsWith('🔹') && !cleanLine.startsWith('*')) {
+        cleanLine = `🔹 ${cleanLine}`;
+      } else if (cleanLine.startsWith('*') && !cleanLine.includes('🔹')) {
+        cleanLine = `🔹 ${cleanLine}`;
+      }
       cleanParts.push(cleanLine);
     }
   }
   
-  // 2. Unir con el delimitador premium homologado por Meta
-  let compact = cleanParts.join(' 🔹 ');
+  // Unir con un único salto de línea \n (nunca usar \n\n para evitar el filtro estricto de Meta)
+  let vertical = cleanParts.join('\n');
   
-  // 3. Quitar estrictamente cualquier salto de línea, retorno de carro y tabulador
-  compact = compact
-    .replace(/[\r\n\t]/g, ' ')
-    .replace(/\s+/g, ' ') // Compresión definitiva (nunca más de 1 espacio seguido)
+  // Compresión definitiva de espacios seguidos
+  vertical = vertical
+    .replace(/ {2,}/g, ' ')
     .trim();
     
-  // 4. Agregar sufijo indicativo
-  const suffix = " 🔹 (Consulta recibo completo y bitácora detallada en staySync)";
-  const maxSafeLen = 1000 - suffix.length;
+  const suffix = "\n🔹 (Consulta recibo completo y bitácora detallada en staySync)";
+  const maxSafeLen = 950 - suffix.length;
   
-  if (compact.length > maxSafeLen) {
-    compact = compact.substring(0, maxSafeLen - 3) + '...';
+  if (vertical.length > maxSafeLen) {
+    vertical = vertical.substring(0, maxSafeLen - 3) + '...';
   }
   
-  return compact + suffix;
+  return vertical + suffix;
 }
 
 

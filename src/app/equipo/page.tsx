@@ -281,25 +281,53 @@ export default function EquipoPage() {
       const vacacionesVal = getVal(['vacaciones x tomar', 'vacaciones por tomar', 'vacaciones restantes'], '0');
       linesArray.push(`*VACACIONES X TOMAR.....*   ${vacacionesVal}`);
 
-      // Asistencia Bitácora Dinámica
-      const dayNames = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
+      // Asistencia Bitácora Dinámica (Escanear columnas en formato de fecha como 5/16/2026)
       const attendanceKeys = Object.keys(sheetMatch).filter(key => {
-        const k = key.toLowerCase().trim();
-        return dayNames.some(day => k.startsWith(day));
+        const k = key.trim();
+        return /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(k);
       });
 
-      // Ordenar cronológicamente por número de día
+      // Ordenar cronológicamente por fecha real
       attendanceKeys.sort((a, b) => {
-        const numA = Number(a.match(/\d+/)?.[0] || 0);
-        const numB = Number(b.match(/\d+/)?.[0] || 0);
-        return numA - numB;
+        const partsA = a.split('/');
+        const partsB = b.split('/');
+        const dateA = new Date(Number(partsA[2]), Number(partsA[0]) - 1, Number(partsA[1]));
+        const dateB = new Date(Number(partsB[2]), Number(partsB[0]) - 1, Number(partsB[1]));
+        return dateA.getTime() - dateB.getTime();
       });
+
+      // Helper para convertir fecha a formato legible y súper compacto "Lun 18/05"
+      const parseAttendanceDate = (dateStr: string) => {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          const month = parseInt(parts[0], 10) - 1;
+          const day = parseInt(parts[1], 10);
+          const year = parseInt(parts[2], 10);
+          const date = new Date(year, month, day);
+          if (!isNaN(date.getTime())) {
+            const daysOfWeek = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+            const dayName = daysOfWeek[date.getDay()];
+            const pad = (n: number) => n.toString().padStart(2, '0');
+            return `${dayName} ${pad(day)}/${pad(month + 1)}`;
+          }
+        }
+        return dateStr.toUpperCase();
+      };
 
       if (attendanceKeys.length > 0) {
+        linesArray.push('ASISTENCIA DE LA QUINCENA:');
         attendanceKeys.forEach(key => {
           const val = sheetMatch[key];
-          if (val && val.trim() !== '') {
-            linesArray.push(`${key.toUpperCase()}   ${val.trim()}`);
+          // Solo mostrar días con asistencia registrada y omitir descansos/ceros
+          if (val && val.trim() !== '' && val.trim() !== '0' && val.trim() !== '00  --  00' && val.trim() !== '00 -- 00') {
+            const dateLabel = parseAttendanceDate(key);
+            // Comprimir horas de "08:10 am  --  04:16 pm" a "08:10am - 04:16pm"
+            const compactHours = val.trim()
+              .replace(/\s+/g, '')
+              .replace(/--/g, ' - ')
+              .replace(/am/gi, 'am')
+              .replace(/pm/gi, 'pm');
+            linesArray.push(`${dateLabel}: ${compactHours}`);
           }
         });
       }
