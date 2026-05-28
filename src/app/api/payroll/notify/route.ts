@@ -146,6 +146,41 @@ export async function POST(req: Request) {
       throw new Error(`Error Meta API: ${JSON.stringify(waData)}`);
     }
 
+    // --- ENVIAR SEGUNDO MENSAJE SECUNDARIO LIBRE (Session Message) ---
+    // Contiene la bitácora de asistencia y el desglose vertical idéntico al Excel.
+    // Como la plantilla anterior se entregó con éxito, la ventana de 24h está abierta.
+    if (notes && notes.trim() !== '') {
+      try {
+        const headerText = `📝 *BITÁCORA DE ASISTENCIA Y RECIBO DETALLADO (EXCEL):*\n\n`;
+        const cleanNotes = notes.split('\n').map((line: string) => line.trimEnd()).join('\n');
+        
+        const secondMsgRes = await fetch(`https://graph.facebook.com/v17.0/${PHONE_ID}/messages`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: cleanPhone,
+            type: "text",
+            text: {
+              preview_url: false,
+              body: `${headerText}${cleanNotes}`
+            }
+          })
+        });
+
+        if (!secondMsgRes.ok) {
+          const secondMsgData = await secondMsgRes.json();
+          console.warn("Fallo al enviar bitácora secundaria libre de asistencia:", secondMsgData);
+        }
+      } catch (err2) {
+        console.error("Excepción al disparar el segundo mensaje libre:", err2);
+      }
+    }
+
     return NextResponse.json({ success: true, message: 'WhatsApp enviado al empleado' });
 
   } catch (error: any) {
