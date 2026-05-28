@@ -45,8 +45,13 @@ export default function EmployeeModal({
 
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Filtrar los empleados permitidos en este departamento
-  const departmentEmployees = employees.filter(emp => emp.department === module);
+  // Ordenar todos los empleados por departamento y nombre
+  const sortedEmployees = [...employees].sort((a, b) => {
+    if (a.department !== b.department) {
+      return a.department.localeCompare(b.department);
+    }
+    return a.full_name.localeCompare(b.full_name);
+  });
 
   // Módulo en lenguaje natural elegante
   const moduleLabel = {
@@ -143,7 +148,7 @@ export default function EmployeeModal({
     } else {
       // Error: Activar animación de sacudida (wiggle/shake)
       setIsWiggling(true);
-      setErrorMessage('Código no registrado para este departamento');
+      setErrorMessage('Código de empleado no registrado');
 
       // Animación de sacudida y resetear display
       setTimeout(() => {
@@ -282,16 +287,39 @@ export default function EmployeeModal({
 
         {/* Guía Rápida Elegante de Códigos (Para que el personal recuerde sus códigos en la tablet) */}
         <div className="border-t border-gray-100 pt-4 mt-2">
-          <p className="text-[10px] text-gray-400 font-semibold tracking-wider uppercase text-center mb-2">
-            Códigos de {moduleLabel}
+          <p className="text-[10px] text-gray-400 font-bold tracking-wider uppercase text-center mb-2 flex items-center justify-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+            Directorio de Códigos de Acceso
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
           </p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-left px-2 max-h-24 overflow-y-auto">
-            {departmentEmployees.map((emp) => (
-              <div key={`${emp.employee_num}-${emp.full_name}`} className="flex justify-between items-center text-[11px] text-gray-500 border-b border-gray-50 py-0.5">
-                <span className="font-semibold text-gray-700">{emp.employee_num}</span>
-                <span className="truncate max-w-[100px]">{emp.full_name.split(' ')[0]} {emp.full_name.split(' ')[1] || ''}</span>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-left px-2 max-h-28 overflow-y-auto custom-scrollbar">
+            {sortedEmployees.map((emp) => {
+              const deptLabel = {
+                recepcion: 'REC',
+                limpieza: 'LMP',
+                mantenimiento: 'MTTO'
+              }[emp.department as 'recepcion' | 'limpieza' | 'mantenimiento'] || '';
+              const deptBg = {
+                recepcion: 'bg-indigo-50 text-indigo-650 border-indigo-100/50',
+                limpieza: 'bg-amber-50 text-amber-650 border-amber-100/50',
+                mantenimiento: 'bg-rose-50 text-rose-650 border-rose-100/50'
+              }[emp.department as 'recepcion' | 'limpieza' | 'mantenimiento'] || 'bg-gray-50 text-gray-650';
+              return (
+                <div key={`${emp.employee_num}-${emp.full_name}-${emp.department}`} className="flex justify-between items-center text-[11px] text-gray-500 border-b border-gray-50 py-0.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`text-[8px] font-black px-1.2 py-0.2 rounded border uppercase tracking-wide shrink-0 ${deptBg}`}>
+                      {deptLabel}
+                    </span>
+                    <span className="truncate max-w-[110px] font-medium text-gray-700">
+                      {emp.full_name.split(' ')[0]} {emp.full_name.split(' ')[1] || ''}
+                    </span>
+                  </div>
+                  <span className="font-extrabold text-indigo-600 bg-indigo-50/50 px-1.5 py-0.2 rounded font-mono shrink-0">
+                    {emp.employee_num}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 

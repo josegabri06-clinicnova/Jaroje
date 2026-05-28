@@ -327,22 +327,24 @@ export default function MantenimientoPage() {
   });
 
   const exportToCSV = () => {
-    if (filteredTasks.length === 0) return alert("No hay datos.");
-    const headers = ["Fecha", "Estado", "Tipo", "Ubicación", "Descripción"];
+    if (tasks.length === 0) return alert("No hay datos para exportar.");
+    const headers = ["Fecha", "Estado", "Tipo", "Ubicación", "Reportado por", "Descripción", "Fecha de Resolución"];
     const csv = [
       headers.join(","),
-      ...filteredTasks.map(t => [
+      ...tasks.map(t => [
         format(new Date(t.created_at), 'dd/MM/yyyy'),
         t.status,
         t.type,
         `"${t.room}"`,
-        `"${t.description.replace(/"/g, '""')}"`
+        `"${(t.reported_by || '').replace(/"/g, '""')}"`,
+        `"${t.description.replace(/"/g, '""')}"`,
+        t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy') : '""'
       ].join(","))
     ].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `Mantenimiento_Jaroje.csv`;
+    link.download = `Reporte_Mantenimiento_Completo_Jaroje.csv`;
     link.click();
   };
 
@@ -361,6 +363,34 @@ export default function MantenimientoPage() {
           <button onClick={() => openModal()} className="w-10 h-10 bg-zinc-900 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform">
             <Plus size={20} strokeWidth={2.5} />
           </button>
+        </div>
+      </div>
+
+      {/* KPIs Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+          <span className="text-[20px] font-black text-purple-650 leading-none">
+            {tasks.filter(t => t.status === 'nuevo').length}
+          </span>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Nuevos</p>
+        </div>
+        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+          <span className="text-[20px] font-black text-amber-500 leading-none">
+            {tasks.filter(t => t.status === 'pendiente').length}
+          </span>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Pendientes</p>
+        </div>
+        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+          <span className="text-[20px] font-black text-blue-500 leading-none">
+            {tasks.filter(t => t.status === 'en_proceso').length}
+          </span>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
+        </div>
+        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+          <span className="text-[20px] font-black text-emerald-650 leading-none">
+            {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === new Date().toISOString().split('T')[0]).length}
+          </span>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>
         </div>
       </div>
 
@@ -468,14 +498,6 @@ export default function MantenimientoPage() {
                   
                   {/* Action buttons */}
                   <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {filterStatus === 'nuevo' && (
-                      <button
-                        onClick={() => handleUpdateStatus(task.id, 'pendiente')}
-                        className="px-2.5 py-1 bg-zinc-900 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-zinc-800"
-                      >
-                        Revisar ✓
-                      </button>
-                    )}
                     {filterStatus === 'pendiente' && (
                       <button
                         onClick={() => handleUpdateStatus(task.id, 'en_proceso')}

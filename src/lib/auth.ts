@@ -274,13 +274,27 @@ export async function syncEmployeesFromServer(): Promise<Employee[]> {
   return getOfficialEmployees();
 }
 
-// Validar localmente si un número de empleado existe y pertenece al departamento
+// Validar localmente si un número de empleado existe en cualquier departamento
 export function validateEmployeeNum(num: string, department: 'recepcion' | 'mantenimiento' | 'limpieza'): Employee | null {
   const list = getOfficialEmployees();
-  const match = list.find(
+  
+  // Buscar primero en el departamento solicitado para evitar colisiones
+  const matchInDept = list.find(
     emp => emp.employee_num === num && emp.department === department
   );
-  return match || null;
+  if (matchInDept) return matchInDept;
+
+  // Si no se encuentra en el departamento solicitado, buscar en cualquier otro departamento
+  const matchAnywhere = list.find(emp => emp.employee_num === num);
+  if (matchAnywhere) {
+    // Retornamos el empleado adaptando su departamento al módulo donde está ingresando
+    return {
+      ...matchAnywhere,
+      department: department
+    };
+  }
+
+  return null;
 }
 
 

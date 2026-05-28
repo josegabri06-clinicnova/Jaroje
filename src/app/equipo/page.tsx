@@ -577,7 +577,7 @@ export default function EquipoPage() {
   };
 
   const fetchAccounts = async () => {
-    const { data } = await supabase.from('accounts').select('*').order('name', { ascending: true });
+    const { data } = await supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true });
     if (data && data.length > 0) {
       setAccounts(data);
       setSelectedAccountId(data[0].id);

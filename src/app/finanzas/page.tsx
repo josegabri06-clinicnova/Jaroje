@@ -289,7 +289,7 @@ export default function FinanzasPage() {
     setIsLoading(true);
     
     const [accRes, recRes] = await Promise.all([
-      supabase.from('accounts').select('*').order('name', { ascending: true }),
+      supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
       supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false })
     ]);
     

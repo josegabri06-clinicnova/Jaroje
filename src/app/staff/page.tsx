@@ -99,7 +99,7 @@ export default function StaffPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
-  const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping' | 'inventario'>('tareas');
+  const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping'>('tareas');
   const [taskTab, setTaskTab] = useState<'nuevos' | 'pendientes' | 'en_proceso' | 'resueltos'>('nuevos');
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
@@ -682,13 +682,6 @@ export default function StaffPage() {
               Habitaciones
             </button>
           )}
-
-          <button 
-            onClick={() => setMainTab('inventario')} 
-            className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all cursor-pointer ${mainTab === 'inventario' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-          >
-            Inventario
-          </button>
         </div>
 
         {/* ── SECCIÓN 1: TAREAS Y LIMPIEZA PROGRAMADA ── */}
@@ -1193,51 +1186,7 @@ export default function StaffPage() {
           </div>
         )}
 
-        {/* ── SECCIÓN 3: CONTROL DE INVENTARIO ── */}
-        {mainTab === 'inventario' && (
-          <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-              <Package size={16} className="text-zinc-650" />
-              <span className="text-[13px] font-extrabold text-zinc-800">Control de Insumos</span>
-            </div>
 
-            <div className="divide-y divide-zinc-150">
-              {inventory.map((item, index) => {
-                const isLow = item.stock <= item.min_stock;
-                return (
-                  <div key={item.id} className={`p-4 flex items-center justify-between gap-3 ${isLow ? 'bg-rose-50/60' : 'bg-white'}`}>
-                    <div className="min-w-0">
-                      <p className="text-[14px] font-bold text-zinc-900 leading-tight">{item.item_name}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200/50 uppercase">{item.category}</span>
-                        <p className={`text-[11px] font-bold ${isLow ? 'text-rose-600' : 'text-zinc-400'}`}>
-                          Stock: {item.stock} <span className="opacity-60">(Min: {item.min_stock})</span>
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-1 bg-zinc-100 p-1.5 rounded-xl border border-zinc-200/60 shrink-0">
-                      <button 
-                        onClick={() => updateStock(item.id, item.stock, -1)} 
-                        disabled={item.stock === 0} 
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 text-zinc-600 flex items-center justify-center cursor-pointer active:scale-90 transition-transform disabled:opacity-40"
-                      >
-                        <Minus size={14} strokeWidth={2.5} />
-                      </button>
-                      <span className="w-8 text-center text-sm font-black text-zinc-950">{item.stock}</span>
-                      <button 
-                        onClick={() => updateStock(item.id, item.stock, 1)} 
-                        className="w-8 h-8 rounded-lg bg-zinc-950 text-white flex items-center justify-center cursor-pointer active:scale-90 transition-transform"
-                      >
-                        <Plus size={14} strokeWidth={2.5} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── NOTIFICACIONES TOAST ── */}

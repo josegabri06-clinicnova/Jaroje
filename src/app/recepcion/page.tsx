@@ -13,6 +13,7 @@ import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
+import InventarioPage from '../inventario/page';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -320,7 +321,7 @@ export default function RecepcionPage() {
         fetch('/api/tasks'),
         supabase.from('inventory').select('*').order('category').order('item_name'),
         supabase.from('checkins').select('*'),
-        supabase.from('accounts').select('*')
+        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true })
       ]);
       const rj = await r.json();
       const tj = await t.json();
@@ -1119,51 +1120,7 @@ export default function RecepcionPage() {
 
       {/* ── VISTA INVENTARIO ────────────────────────────────────────────── */}
       {mainTab === 'inventario' && (
-        <div className="space-y-6">
-          {['Limpieza', 'Amenidades', 'Ropa de Cama'].map(cat => {
-            const items = inventory.filter(i => i.category === cat);
-            if (items.length === 0) return null;
-            return (
-              <div key={cat} className="space-y-2">
-                <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest pl-1">{cat}</h3>
-                <div className="bg-white border border-zinc-200/80 rounded-[20px] overflow-hidden shadow-sm divide-y divide-zinc-100">
-                  {items.map(item => (
-                    <div key={item.id} className="flex items-center justify-between p-4 hover:bg-zinc-50/30 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
-                          <Package size={16} className="text-zinc-500" />
-                        </div>
-                        <div>
-                          <p className="text-[14px] font-bold text-zinc-900 leading-tight">{item.item_name}</p>
-                          <p className={`text-[11px] font-semibold mt-0.5 ${
-                            item.stock <= (item.min_threshold || 5) ? 'text-red-500' : 'text-zinc-400'
-                          }`}>
-                            {item.stock} unidades en stock
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 bg-zinc-100/80 p-1.5 rounded-xl border border-zinc-200/40">
-                        <button
-                          onClick={() => updateStock(item.id, item.stock, -1)}
-                          className="w-7 h-7 rounded-lg bg-white border border-zinc-200/65 flex items-center justify-center hover:bg-zinc-50 active:scale-95 cursor-pointer shadow-sm"
-                        >
-                          <Minus size={12} className="text-zinc-600" />
-                        </button>
-                        <span className="text-[13px] font-bold text-zinc-900 w-6 text-center">{item.stock}</span>
-                        <button
-                          onClick={() => updateStock(item.id, item.stock, 1)}
-                          className="w-7 h-7 rounded-lg bg-white border border-zinc-200/65 flex items-center justify-center hover:bg-zinc-50 active:scale-95 cursor-pointer shadow-sm"
-                        >
-                          <Plus size={12} className="text-zinc-600" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <InventarioPage />
       )}
 
       {/* ── MODAL PROCESO CHECK-IN / WALK-IN ───────────────────────────── */}

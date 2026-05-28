@@ -42,3 +42,35 @@ export async function GET() {
   }
 }
 
+// POST — Guardar o actualizar el catálogo de empleados en Supabase settings
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const { employees } = body;
+
+    if (!Array.isArray(employees)) {
+      return NextResponse.json(
+        { success: false, error: 'Estructura de datos inválida. Debe ser un array de empleados.' },
+        { status: 400 }
+      );
+    }
+
+    // Upsert atómico en la tabla de configuraciones
+    const { error } = await supabase
+      .from('settings')
+      .upsert(
+        { key: 'official_employees', value: JSON.stringify(employees) },
+        { onConflict: 'key' }
+      );
+
+    if (error) {
+      console.error('API Employees: Error persistiendo catálogo en settings:', error.message);
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, count: employees.length });
+  } catch (err: any) {
+    console.error('API Employees POST: Error inesperado:', err.message);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}

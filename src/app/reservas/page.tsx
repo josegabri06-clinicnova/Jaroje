@@ -256,7 +256,7 @@ export default function ReservasList() {
       const [res, chk, acc] = await Promise.all([
         fetch('/api/reservas'),
         supabase.from('checkins').select('*'),
-        supabase.from('accounts').select('*')
+        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true })
       ]);
       const json = await res.json();
       
