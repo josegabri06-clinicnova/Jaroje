@@ -129,11 +129,13 @@ export function BottomNav() {
             <span className="font-semibold text-emerald-700 text-[13px]">Registrar Transacción</span>
           </Link>
           <div className="h-px w-full bg-zinc-100"></div>
+          {/* NOMINAS - Habilitar si el cliente reactiva el servicio
           <Link href="/equipo?action=pay_payroll" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-blue-50/80 transition-colors group">
             <div className="bg-blue-100/50 rounded-lg p-1.5 text-blue-600 group-hover:text-blue-700 group-hover:bg-blue-100 shadow-sm transition-all"><Users size={16} strokeWidth={2.5}/></div>
             <span className="font-semibold text-blue-700 text-[13px]">Registrar Nómina</span>
           </Link>
           <div className="h-px w-full bg-zinc-100"></div>
+          */}
           <Link href="/mantenimiento?action=new_task" onClick={() => setMenuOpen(false)} className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-amber-50/80 transition-colors group">
             <div className="bg-amber-100/50 rounded-lg p-1.5 text-amber-600 group-hover:text-amber-700 group-hover:bg-amber-100 shadow-sm transition-all"><Wrench size={16} strokeWidth={2.5}/></div>
             <span className="font-semibold text-amber-700 text-[13px]">Reportar Mantenimiento</span>

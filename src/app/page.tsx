@@ -267,7 +267,7 @@ export default function AdminDashboard() {
               <p className="text-[11px] font-bold text-emerald-600 mt-0.5">MX${Math.round(financeBalance).toLocaleString('es-MX')}</p>
             </div>
           </Link>
-          {/* NOMINAS */}
+          {/* NOMINAS - Habilitar de nuevo si el cliente reactiva el servicio
           <Link href="/equipo" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
             <Users size={20} className="text-zinc-700" />
             <div>
@@ -275,6 +275,7 @@ export default function AdminDashboard() {
               <p className="text-[11px] font-medium text-blue-500 mt-0.5">Gestión de Turnos</p>
             </div>
           </Link>
+          */}
           {/* INVENTARIO */}
           <Link href="/inventario" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
             <Package size={20} className="text-zinc-700" />
