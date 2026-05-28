@@ -176,6 +176,72 @@ export default function EquipoPage() {
   const [isLoadingSheetRows, setIsLoadingSheetRows] = useState(false);
   const [loadedFromSheet, setLoadedFromSheet] = useState(false);
   const [sheetSyncError, setSheetSyncError] = useState(false);
+  const [formEmployeeNum, setFormEmployeeNum] = useState('');
+  const [employeeQuery, setEmployeeQuery] = useState('');
+  const [isDropdownFocused, setIsDropdownFocused] = useState(false);
+
+  const handleSelectEmployee = (emp: any) => {
+    setFormEmployeeNum(emp.employee_num);
+    setName(emp.full_name);
+    if (emp.phone) {
+      setPhone(emp.phone);
+    }
+    
+    // Importación inteligente desde Google Sheets usando el No. Empleado
+    const sheetMatch = sheetRows.find(row => {
+      const rowNum = String(row['no. empleado'] || row['no_empleado'] || row['num'] || row['codigo'] || '').trim();
+      return rowNum === String(emp.employee_num).trim();
+    });
+    
+    if (sheetMatch) {
+      // Extraer y limpiar Whatsapp
+      const rawPhone = sheetMatch['whatsapp'] || sheetMatch['telefono'] || sheetMatch['teléfono'] || '';
+      const cleanPhone = rawPhone.replace(/\D/g, '');
+      if (cleanPhone) {
+        setPhone(cleanPhone.startsWith('52') ? cleanPhone : '52' + cleanPhone);
+      }
+
+      // Extraer y limpiar monto (= TOTAL A DEPOSITAR)
+      const rawAmount = sheetMatch['= total a depositar'] || sheetMatch['total a depositar'] || '';
+      const cleanAmount = rawAmount.replace(/[^\d.]/g, '');
+      if (cleanAmount) {
+        setAmount(cleanAmount);
+      }
+
+      // Construir desglose automático premium
+      const concepts: string[] = [];
+      const addConcept = (label: string, colName: string) => {
+        const valStr = sheetMatch[colName];
+        if (valStr && valStr !== '$0' && valStr !== '$0.00' && valStr !== '0' && valStr !== '$ 0' && valStr !== '$ -' && valStr.trim() !== '') {
+          concepts.push(`${label}: ${valStr.trim()}`);
+        }
+      };
+      
+      addConcept('NÓMINA BASE', 'nomina quincenal');
+      addConcept('DÍAS TRAB', 'dias lab+vac');
+      addConcept('RETARDOS', 'retardos');
+      addConcept('PENALIZACIÓN PUNTUALIDAD', 'penalizacion puntualidad');
+      addConcept('EXTRAS', '+ extras');
+      addConcept('INTEGRADA', '= nomina integrada');
+      addConcept('PAGO PRÉSTAMO', '- pago prestamos');
+      addConcept('ADELANTO', '- adelanto nomina');
+      addConcept('AHORRO QNA', '- ahorro quincenal');
+      addConcept('PRÉSTAMO RESTANTE', 'prestamos x pagar');
+      addConcept('AHORRO ACUMULADO', 'ahorro acumulado');
+      addConcept('VACACIONES POR TOMAR', 'vacaciones x tomar');
+
+      const generatedBreakdown = concepts.join(' 🔸 ');
+      setRawText(generatedBreakdown);
+      setLoadedFromSheet(true);
+    } else {
+      setLoadedFromSheet(false);
+      setAmount('');
+      setRawText('');
+    }
+    
+    setEmployeeQuery('');
+    setIsDropdownFocused(false);
+  };
 
   const handleExcelPaste = (val: string) => {
     setRawText(val);
@@ -499,6 +565,7 @@ export default function EquipoPage() {
     setRawText('');
     setFile(null);
     setLoadedFromSheet(false);
+    setFormEmployeeNum('');
     fetchRecords();
     setIsSaving(false);
   };
@@ -729,6 +796,7 @@ export default function EquipoPage() {
                   setRawText('');
                   setFile(null);
                   setLoadedFromSheet(false);
+                  setFormEmployeeNum('');
                 }}
                 className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-505 flex items-center justify-center hover:bg-zinc-200 transition-colors"
               >
@@ -814,86 +882,207 @@ export default function EquipoPage() {
                   {activeFormTab === 'excel' ? 'Revisión y Ajustes' : 'Datos del Pago'}
                 </span>
                 
-                <div>
-                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Empleado</label>
-                  <input 
-                    type="text" required
-                    list="employee-names"
-                    value={name} 
-                    onChange={e => {
-                      const val = e.target.value;
-                      setName(val);
-                      
-                      // 1. Autocompletado tradicional básico
-                      const found = syncedEmployees.find(emp => emp.full_name.toLowerCase().trim() === val.toLowerCase().trim());
-                      if (found && found.phone) {
-                        setPhone(found.phone);
-                      }
-                      
-                      // 2. Importación Inteligente de Celdas desde Google Sheets
-                      if (val) {
-                        const sheetMatch = sheetRows.find(row => (row['nombre'] || '').toLowerCase().trim() === val.toLowerCase().trim());
-                        if (sheetMatch) {
-                          // Extraer y limpiar Whatsapp
-                          const rawPhone = sheetMatch['whatsapp'] || sheetMatch['telefono'] || sheetMatch['teléfono'] || '';
-                          const cleanPhone = rawPhone.replace(/\D/g, '');
-                          if (cleanPhone) setPhone(cleanPhone.startsWith('52') ? cleanPhone : '52' + cleanPhone);
-
-                          // Extraer y limpiar monto (= TOTAL A DEPOSITAR)
-                          const rawAmount = sheetMatch['= total a depositar'] || sheetMatch['total a depositar'] || '';
-                          const cleanAmount = rawAmount.replace(/[^\d.]/g, '');
-                          if (cleanAmount) setAmount(cleanAmount);
-
-                          // Construir desglose automático premium
-                          const concepts: string[] = [];
-                          const addConcept = (label: string, colName: string) => {
-                            const valStr = sheetMatch[colName];
-                            if (valStr && valStr !== '$0' && valStr !== '$0.00' && valStr !== '0' && valStr !== '$ 0' && valStr !== '$ -' && valStr.trim() !== '') {
-                              concepts.push(`${label}: ${valStr.trim()}`);
-                            }
-                          };
-                          
-                          addConcept('NÓMINA BASE', 'nomina quincenal');
-                          addConcept('DÍAS TRAB', 'dias lab+vac');
-                          addConcept('RETARDOS', 'retardos');
-                          addConcept('PENALIZACIÓN PUNTUALIDAD', 'penalizacion puntualidad');
-                          addConcept('EXTRAS', '+ extras');
-                          addConcept('INTEGRADA', '= nomina integrada');
-                          addConcept('PAGO PRÉSTAMO', '- pago prestamos');
-                          addConcept('ADELANTO', '- adelanto nomina');
-                          addConcept('AHORRO QNA', '- ahorro quincenal');
-                          addConcept('PRÉSTAMO RESTANTE', 'prestamos x pagar');
-                          addConcept('AHORRO ACUMULADO', 'ahorro acumulado');
-                          addConcept('VACACIONES POR TOMAR', 'vacaciones x tomar');
-
-                          const generatedBreakdown = concepts.join(' 🔸 ');
-                          setRawText(generatedBreakdown);
-                          setLoadedFromSheet(true);
-                        } else {
-                          setLoadedFromSheet(false);
-                        }
-                      } else {
-                        setLoadedFromSheet(false);
-                      }
-                    }}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10 text-zinc-800"
-                    placeholder="Escribe el nombre del empleado..."
-                  />
-                  {loadedFromSheet && (
-                    <div className="mt-2 text-[11px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-in slide-in-from-top-1 duration-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>✨ Datos y Desglose cargados en vivo desde Google Sheets</span>
+                {/* Buscador de Empleado e Información */}
+                {(!name || !formEmployeeNum) ? (
+                  <div className="relative">
+                    <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
+                      Buscar Empleado (Por No. Empleado, Nombre o Departamento)
+                    </label>
+                    <div className="relative flex items-center">
+                      <input
+                        type="text"
+                        value={employeeQuery}
+                        onChange={e => {
+                          setEmployeeQuery(e.target.value);
+                          setIsDropdownFocused(true);
+                        }}
+                        onFocus={() => setIsDropdownFocused(true)}
+                        placeholder="Ingresa número de empleado, nombre o área..."
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3.5 pl-11 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10 text-zinc-800 font-medium"
+                      />
+                      <div className="absolute left-4 text-zinc-400">
+                        <Users size={18} />
+                      </div>
+                      {employeeQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setEmployeeQuery('')}
+                          className="absolute right-4 text-zinc-400 hover:text-zinc-600 transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
                     </div>
-                  )}
-                  <datalist id="employee-names">
-                    {syncedEmployees.map((emp, i) => (
-                      <option key={`${emp.employee_num}-${i}`} value={emp.full_name}>
-                        {emp.department.toUpperCase()} — No. {emp.employee_num}
-                      </option>
-                    ))}
-                  </datalist>
-                </div>
 
+                    {/* Dropdown de Resultados de Búsqueda */}
+                    {isDropdownFocused && (
+                      <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto divide-y divide-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                        {(() => {
+                          const filtered = syncedEmployees.filter(emp => {
+                            const q = employeeQuery.toLowerCase().trim();
+                            if (!q) return true;
+                            return (
+                              String(emp.employee_num).toLowerCase().includes(q) ||
+                              String(emp.full_name).toLowerCase().includes(q) ||
+                              String(emp.department).toLowerCase().includes(q)
+                            );
+                          });
+
+                          if (filtered.length === 0) {
+                            return (
+                              <div className="p-4 text-center text-zinc-400 text-[13px] font-medium">
+                                Ningún empleado coincide con "{employeeQuery}".
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setName(employeeQuery);
+                                    setFormEmployeeNum('MANUAL');
+                                    setIsDropdownFocused(false);
+                                  }}
+                                  className="block text-zinc-900 hover:underline font-bold text-xs mt-1.5 mx-auto"
+                                >
+                                  Crear registro 100% manual
+                                </button>
+                              </div>
+                            );
+                          }
+
+                          return filtered.map((emp, i) => {
+                            // Determinar color de badge por departamento
+                            let deptBg = "bg-zinc-100 text-zinc-700";
+                            let deptLabel = "Limpieza";
+                            if (emp.department === 'recepcion') {
+                              deptBg = "bg-blue-50 text-blue-700 border border-blue-100";
+                              deptLabel = "Recepción";
+                            } else if (emp.department === 'mantenimiento') {
+                              deptBg = "bg-emerald-50 text-emerald-700 border border-emerald-100";
+                              deptLabel = "Mantenimiento";
+                            } else {
+                              deptBg = "bg-purple-50 text-purple-700 border border-purple-100";
+                            }
+
+                            const initials = emp.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase();
+
+                            return (
+                              <button
+                                key={`${emp.employee_num}-${i}`}
+                                type="button"
+                                onClick={() => handleSelectEmployee(emp)}
+                                className="w-full p-3.5 hover:bg-zinc-50 transition-colors flex items-center gap-3 text-left cursor-pointer border-0 outline-none"
+                              >
+                                <div className="w-10 h-10 rounded-full bg-zinc-900 text-white flex items-center justify-center font-bold text-xs shrink-0 tracking-tight">
+                                  {initials}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-zinc-900 truncate block text-[14px]">
+                                      {emp.full_name}
+                                    </span>
+                                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-zinc-100 text-zinc-650 font-mono shrink-0">
+                                      No. {emp.employee_num}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${deptBg}`}>
+                                      {deptLabel}
+                                    </span>
+                                    {emp.phone && (
+                                      <span className="text-[11px] text-zinc-400 font-semibold font-mono">
+                                        +{emp.phone}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          });
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Botón de cierre en el exterior */}
+                    {isDropdownFocused && (
+                      <div
+                        className="fixed inset-0 z-40 bg-transparent"
+                        onClick={() => setIsDropdownFocused(false)}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-zinc-900 text-white rounded-3xl p-5 shadow-xl space-y-4 animate-in zoom-in-95 duration-200 relative overflow-hidden">
+                    {/* Patrón de fondo sutil */}
+                    <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4 scale-150 text-white">
+                      <Users size={200} />
+                    </div>
+                    
+                    <div className="flex items-start justify-between relative z-10">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-zinc-700 to-zinc-600 text-white flex items-center justify-center font-bold text-sm shadow-md uppercase tracking-tight">
+                          {name.split(' ').map((n) => n[0]).join('').substring(0, 2)}
+                        </div>
+                        
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h4 className="text-[16px] font-extrabold tracking-tight truncate max-w-[200px] sm:max-w-none">
+                              {name}
+                            </h4>
+                            <span className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full bg-white/20 text-white font-mono shrink-0">
+                              No. {formEmployeeNum}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider ${
+                              syncedEmployees.find(e => String(e.employee_num) === String(formEmployeeNum))?.department === 'recepcion'
+                                ? "bg-blue-500/20 text-blue-300"
+                                : syncedEmployees.find(e => String(e.employee_num) === String(formEmployeeNum))?.department === 'mantenimiento'
+                                  ? "bg-emerald-500/20 text-emerald-300"
+                                  : "bg-purple-500/20 text-purple-300"
+                            }`}>
+                              {syncedEmployees.find(e => String(e.employee_num) === String(formEmployeeNum))?.department === 'recepcion' ? 'Recepción' :
+                               syncedEmployees.find(e => String(e.employee_num) === String(formEmployeeNum))?.department === 'mantenimiento' ? 'Mantenimiento' : 'Limpieza'}
+                            </span>
+                            
+                            {phone && (
+                              <span className="text-[11px] text-white/50 font-semibold font-mono">
+                                +{phone}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormEmployeeNum('');
+                          setName('');
+                          setPhone('52');
+                          setAmount('');
+                          setRawText('');
+                          setLoadedFromSheet(false);
+                        }}
+                        className="w-8 h-8 rounded-full bg-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer shrink-0 border-0"
+                        title="Cambiar Empleado"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+
+                    {loadedFromSheet ? (
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center gap-2 text-[12px] font-bold text-emerald-400">
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>✨ Desglose y neto importados en vivo de Google Sheets</span>
+                      </div>
+                    ) : (
+                      <div className="bg-white/5 border border-white/10 rounded-2xl p-3 flex items-center gap-2 text-[12px] font-bold text-zinc-400">
+                        <span className="w-2 h-2 rounded-full bg-zinc-500" />
+                        <span>Modo entrada manual (Celdas no encontradas en el Sheet)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Monto (MX$)</label>
@@ -986,12 +1175,13 @@ export default function EquipoPage() {
                 <button 
                   type="button" 
                   onClick={() => {
-                    setShowModal(false);
-                    setAmount('');
-                    setName('');
-                    setRawText('');
-                    setFile(null);
-                    setLoadedFromSheet(false);
+                  setShowModal(false);
+                  setAmount('');
+                  setName('');
+                  setRawText('');
+                  setFile(null);
+                  setLoadedFromSheet(false);
+                  setFormEmployeeNum('');
                   }}
                   className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-colors cursor-pointer text-[14px]"
                 >
