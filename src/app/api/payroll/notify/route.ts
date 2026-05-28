@@ -5,7 +5,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-function getCompactNotes(text: string): string {
+function getCompactNotesFlat(text: string): string {
   if (!text) return "Sin desglose detallado.";
   
   const lines = text.split('\n');
@@ -33,32 +33,58 @@ function getCompactNotes(text: string): string {
       .trim();
       
     if (cleanLine) {
-      // Evitar duplicar el bullet si ya viene
-      if (!cleanLine.startsWith('🔹') && !cleanLine.startsWith('*')) {
-        cleanLine = `🔹 ${cleanLine}`;
-      } else if (cleanLine.startsWith('*') && !cleanLine.includes('🔹')) {
-        cleanLine = `🔹 ${cleanLine}`;
-      }
       cleanParts.push(cleanLine);
     }
   }
   
-  // Unir con un único salto de línea \n (nunca usar \n\n para evitar el filtro estricto de Meta)
-  let vertical = cleanParts.join('\n');
+  // Unir con bullet en una sola línea plana (SIN NINGÚN salto de línea \n)
+  let compact = cleanParts.join(' 🔹 ');
   
-  // Compresión definitiva de espacios seguidos
-  vertical = vertical
+  // Compresión absoluta para evitar violar restricciones de Meta en texto plano
+  compact = compact
+    .replace(/[\r\n\t]/g, ' ')
     .replace(/ {2,}/g, ' ')
     .trim();
     
-  const suffix = "\n🔹 (Consulta recibo completo y bitácora detallada en staySync)";
+  const suffix = " 🔹 (Consulta recibo completo y bitácora detallada en staySync)";
   const maxSafeLen = 950 - suffix.length;
   
-  if (vertical.length > maxSafeLen) {
-    vertical = vertical.substring(0, maxSafeLen - 3) + '...';
+  if (compact.length > maxSafeLen) {
+    compact = compact.substring(0, maxSafeLen - 3) + '...';
   }
   
-  return vertical + suffix;
+  return compact + suffix;
+}
+
+function getCompactNotesVertical(text: string): string {
+  if (!text) return "Sin desglose detallado.";
+  
+  const lines = text.split('\n');
+  const cleanParts: string[] = [];
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    const lower = trimmed.toLowerCase();
+    if (trimmed.includes('*') && (lower.includes('101') || lower.includes('108') || lower.includes('102') || lower.includes('110') || lower.includes('107') || lower.includes('103'))) {
+      continue;
+    }
+    if (lower.includes('quincena del') || lower.includes('quincena de')) {
+      continue;
+    }
+    
+    let cleanLine = trimmed
+      .replace(/\t/g, ' ')
+      .replace(/ {2,}/g, ' ')
+      .trim();
+      
+    if (cleanLine) {
+      cleanParts.push(cleanLine);
+    }
+  }
+  
+  return cleanParts.join('\n');
 }
 
 
@@ -91,6 +117,7 @@ export async function POST(req: Request) {
 
     if (!finalDocumentUrl && notes && notes.trim() !== '') {
       try {
+        const verticalNotes = getCompactNotesVertical(notes);
         const txtContent = `================================================
 HOTEL CONDOMINIO JAROJE - RECIBO DE PAGO
 ================================================
@@ -102,7 +129,7 @@ Monto Total : MX$${Number(amount).toLocaleString('es-MX', { minimumFractionDigit
 
 DESGLOSE DETALLADO DE CONCEPTOS (EXCEL):
 ------------------------------------------------
-${notes.replace(/\*/g, '')}
+${verticalNotes}
 
 ------------------------------------------------
 Este documento sirve como desglose quincenal de nómina generado de forma automática por el sistema staySync.
@@ -191,7 +218,7 @@ Este documento sirve como desglose quincenal de nómina generado de forma autom�
                 ...(!finalDocumentUrl ? [{
                   type: "text",
                   parameter_name: "excel",
-                  text: getCompactNotes(notes)
+                  text: getCompactNotesFlat(notes)
                 }] : [])
               ]
             }
