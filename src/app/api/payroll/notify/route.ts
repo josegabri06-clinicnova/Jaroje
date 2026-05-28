@@ -3,15 +3,53 @@ import { NextResponse } from 'next/server';
 function getCompactNotes(text: string): string {
   if (!text) return "Sin desglose detallado.";
   
-  // Mantener los saltos de línea y la estructura vertical idéntica al Excel del hotel
-  const cleanLines = text.split('\n').map(line => line.trimEnd());
-  const formattedText = cleanLines.join('\n');
+  // 1. Procesar el desglose de conceptos y bitácora de asistencia
+  const lines = text.split('\n');
+  const cleanParts: string[] = [];
   
-  if (formattedText.length > 1020) {
-    return formattedText.substring(0, 1000) + '\n... (Ver completo en la App)';
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    // Omitir cabecera redundante de empleado y teléfono en el cuerpo
+    const lower = trimmed.toLowerCase();
+    if (trimmed.includes('*') && (lower.includes('101') || lower.includes('108') || lower.includes('102') || lower.includes('110') || lower.includes('107') || lower.includes('103'))) {
+      continue;
+    }
+    if (lower.includes('quincena del') || lower.includes('quincena de')) {
+      continue;
+    }
+    
+    // Limpiar puntos suspensivos y comprimir espacios seguidos
+    let cleanLine = trimmed
+      .replace(/\.{2,}/g, ':') // Reemplazar puntos suspensivos ..... por :
+      .replace(/…+/g, ':')
+      .replace(/\s+/g, ' ') // Quitar múltiples espacios consecutivos
+      .trim();
+      
+    if (cleanLine) {
+      cleanParts.push(cleanLine);
+    }
   }
   
-  return formattedText;
+  // 2. Unir con el delimitador premium homologado por Meta
+  let compact = cleanParts.join(' 🔹 ');
+  
+  // 3. Quitar estrictamente cualquier salto de línea, retorno de carro y tabulador
+  compact = compact
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/\s+/g, ' ') // Compresión definitiva (nunca más de 1 espacio seguido)
+    .trim();
+    
+  // 4. Agregar sufijo indicativo
+  const suffix = " 🔹 (Consulta recibo completo y bitácora detallada en staySync)";
+  const maxSafeLen = 1000 - suffix.length;
+  
+  if (compact.length > maxSafeLen) {
+    compact = compact.substring(0, maxSafeLen - 3) + '...';
+  }
+  
+  return compact + suffix;
 }
 
 
