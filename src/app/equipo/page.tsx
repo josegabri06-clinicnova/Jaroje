@@ -226,29 +226,89 @@ export default function EquipoPage() {
         return defaultValue;
       };
 
-      // Construir desglose automático premium en el orden exacto del Google Sheet
-      const concepts: string[] = [];
-      const addConcept = (label: string, colNames: string[], defaultVal: string = '$0.00') => {
-        const val = getVal(colNames, defaultVal);
-        concepts.push(`${label}: ${val}`);
-      };
-      
-      addConcept('NOMINA QUINCENAL', ['nomina quincenal', 'sueldo quincenal', 'sueldo base']);
-      addConcept('DIAS LAB+VAC', ['dias lab+vac', 'dias trabajados', 'días lab+vac'], '15');
-      addConcept('RETARDOS', ['retardos'], '0');
-      addConcept('PENALIZACION PUNTUALIDAD', ['penalizacion puntualidad', 'penalización puntualidad']);
-      addConcept('DIA FESTIVO', ['dia festivo', 'día festivo', 'festivos']);
-      addConcept('+ EXTRAS', ['+ extras', 'extras', 'bono apoyo', 'bonos']);
-      addConcept('= NOMINA INTEGRADA', ['= nomina integrada', 'nomina integrada', 'integrada']);
-      addConcept('- PAGO PRESTAMOS', ['- pago prestamos', 'pago prestamos', 'pago prestamo', 'prestamos']);
-      addConcept('- ADELANTO NOMINA', ['- adelanto nomina', 'adelanto nomina', 'adelanto']);
-      addConcept('- AHORRO QUINCENAL', ['- ahorro quincenal', 'ahorro quincenal', 'ahorro']);
-      addConcept('= TOTAL A DEPOSITAR', ['= total a depositar', 'total a depositar', 'total a pagar', 'neto']);
-      addConcept('PRESTAMOS X PAGAR', ['prestamos x pagar', 'prestamos por pagar', 'prestamo restante', 'restamos x pagar'], '$0.00');
-      addConcept('AHORRO ACUMULADO', ['ahorro acumulado', 'ahorro total'], '$0.00');
-      addConcept('VACACIONES X TOMAR', ['vacaciones x tomar', 'vacaciones por tomar', 'vacaciones restantes'], '0');
+      // Construir desglose de conceptos idéntico al Excel (Línea por Línea y en Orden)
+      const linesArray: string[] = [];
 
-      const generatedBreakdown = concepts.join(' 🔸 ');
+      // Cabecera quincenal y teléfono
+      const periodLabel = `Quincena del ${format(new Date(), 'dd/MM/yyyy')}`;
+      linesArray.push(`${periodLabel}   ${phone}`);
+      linesArray.push(`${emp.employee_num}   *${emp.full_name.toUpperCase()}*`);
+
+      // Función para agregar filas formateadas
+      const addRow = (concept: string, colNames: string[], defaultVal: string = '$0.00', dots: string = '......') => {
+        const val = getVal(colNames, defaultVal);
+        linesArray.push(`${concept}${dots}   ${val}`);
+      };
+
+      addRow('NOMINA QUINCENAL', ['nomina quincenal', 'sueldo quincenal', 'sueldo base'], '$0.00', '......');
+      addRow('DIAS LAB+VAC', ['dias lab+vac', 'dias trabajados', 'días lab+vac'], '15', '.....');
+      addRow('RETARDOS', ['retardos'], '0', '.....');
+      addRow('. -PENALIZACION PUNTUALIDAD', ['penalizacion puntualidad', 'penalización puntualidad'], '$0.00', '.....');
+
+      // Buscar si el título de Día Festivo contiene fecha dinámica en el objeto sheetMatch
+      const rawFestivoKey = Object.keys(sheetMatch).find(k => k.toLowerCase().includes('dia festivo') || k.toLowerCase().includes('día festivo')) || 'dia festivo';
+      let festivoLabel = rawFestivoKey.toUpperCase();
+      if (!festivoLabel.startsWith('.')) festivoLabel = `. +${festivoLabel}`;
+      addRow(festivoLabel, [rawFestivoKey, 'dia festivo', 'día festivo'], '$0.00', '.....');
+
+      // Buscar si hay columna de extras/bonos
+      const rawExtrasKey = Object.keys(sheetMatch).find(k => k.toLowerCase().includes('extras') || k.toLowerCase().includes('bono apoyo')) || '+ extras';
+      let extrasLabel = rawExtrasKey.toUpperCase();
+      if (!extrasLabel.startsWith('.')) extrasLabel = `. +${extrasLabel}`;
+      addRow(extrasLabel, [rawExtrasKey, '+ extras', 'extras', 'bono apoyo', 'bonos'], '$0.00', '.....');
+
+      // Nómina Integrada
+      const integratedVal = getVal(['= nomina integrada', 'nomina integrada', 'integrada'], '$0.00');
+      linesArray.push(`*. = NOMINA INTEGRADA   ${integratedVal}*`);
+
+      addRow('. - PAGO PRESTAMOS', ['- pago prestamos', 'pago prestamos', 'pago prestamo', 'prestamos'], '$0.00', '.....');
+      addRow('. - ADELANTO NOMINA', ['- adelanto nomina', 'adelanto nomina', 'adelanto'], '$0.00', '.....');
+      addRow('. - AHORRO QUINCENAL', ['- ahorro quincenal', 'ahorro quincenal', 'ahorro'], '$0.00', '.....');
+
+      // Total a depositar
+      const totalDepositVal = getVal(['= total a depositar', 'total a depositar', 'total a pagar', 'neto'], '$0.00');
+      linesArray.push(`*. = TOTAL A DEPOSITAR   ${totalDepositVal}*`);
+
+      linesArray.push(''); // Fila vacía divisoria
+
+      // Saldos de control
+      const prestamosVal = getVal(['prestamos x pagar', 'prestamos por pagar', 'prestamo restante', 'restamos x pagar'], '$0.00 de []');
+      linesArray.push(`PRESTAMOS X PAGAR.....   ${prestamosVal}`);
+
+      const ahorroVal = getVal(['ahorro acumulado', 'ahorro total'], '$0.00');
+      linesArray.push(`AHORRO ACUMULADO.....   ${ahorroVal}`);
+
+      const vacacionesVal = getVal(['vacaciones x tomar', 'vacaciones por tomar', 'vacaciones restantes'], '0');
+      linesArray.push(`*VACACIONES X TOMAR.....*   ${vacacionesVal}`);
+
+      // Asistencia Bitácora Dinámica
+      const dayNames = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
+      const attendanceKeys = Object.keys(sheetMatch).filter(key => {
+        const k = key.toLowerCase().trim();
+        return dayNames.some(day => k.startsWith(day));
+      });
+
+      // Ordenar cronológicamente por número de día
+      attendanceKeys.sort((a, b) => {
+        const numA = Number(a.match(/\d+/)?.[0] || 0);
+        const numB = Number(b.match(/\d+/)?.[0] || 0);
+        return numA - numB;
+      });
+
+      if (attendanceKeys.length > 0) {
+        attendanceKeys.forEach(key => {
+          const val = sheetMatch[key];
+          if (val && val.trim() !== '') {
+            linesArray.push(`${key.toUpperCase()}   ${val.trim()}`);
+          }
+        });
+      }
+
+      // Vacaciones en la quincena
+      const vacQnaVal = getVal(['vacaciones en la quincena', 'vacaciones quincena'], '0');
+      linesArray.push(`*VACACIONES EN LA QUINCENA*   ${vacQnaVal}`);
+
+      const generatedBreakdown = linesArray.join('\n');
       setRawText(generatedBreakdown);
       setLoadedFromSheet(true);
     } else {
@@ -448,8 +508,11 @@ export default function EquipoPage() {
 
   const fetchAccounts = async () => {
     const { data } = await supabase.from('accounts').select('*').order('name', { ascending: true });
-    if (data) {
+    if (data && data.length > 0) {
       setAccounts(data);
+      setSelectedAccountId(data[0].id);
+      setAccountIdA(data[0].id);
+      setAccountIdB(data[1]?.id || data[0].id);
     }
   };
 

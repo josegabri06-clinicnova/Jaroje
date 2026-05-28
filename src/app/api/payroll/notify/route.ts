@@ -1,50 +1,17 @@
 import { NextResponse } from 'next/server';
 
 function getCompactNotes(text: string): string {
-  if (!text) return "N/A";
+  if (!text) return "Sin desglose detallado.";
   
-  // Cortar en el primer día de la semana detectado para excluir la bitácora de asistencia en WhatsApp
-  const lines = text.split('\n');
-  const dayNames = ['lunes', 'martes', 'miércoles', 'miercoles', 'jueves', 'viernes', 'sábado', 'sabado', 'domingo'];
-  const cleanLines: string[] = [];
+  // Mantener los saltos de línea y la estructura vertical idéntica al Excel del hotel
+  const cleanLines = text.split('\n').map(line => line.trimEnd());
+  const formattedText = cleanLines.join('\n');
   
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    
-    const lower = trimmed.toLowerCase();
-    const startsWithDay = dayNames.some(day => lower.startsWith(day));
-    if (startsWithDay) {
-      break;
-    }
-    
-    // Limpiar cada línea quitando asteriscos, puntos suspensivos y normalizando espacios
-    const cleanLine = trimmed
-      .replace(/\*/g, '')
-      .replace(/\.{2,}/g, ':')
-      .replace(/…+/g, ':')
-      .replace(/\s+/g, ' ')
-      .trim();
-      
-    if (cleanLine) {
-      cleanLines.push(cleanLine);
-    }
+  if (formattedText.length > 1020) {
+    return formattedText.substring(0, 1000) + '\n... (Ver completo en la App)';
   }
   
-  // Unir todas las líneas limpias con el separador premium " 🔸 "
-  let compact = cleanLines.join(' 🔸 ');
-  
-  // Reemplazar saltos de línea, tabuladores y múltiples espacios por un solo espacio (exigencia de Meta Graph API)
-  compact = compact
-    .replace(/[\r\n\t]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-    
-  if (compact.length > 1000) {
-    return compact.substring(0, 990) + '... (Ver desglose completo en la App)';
-  }
-  
-  return compact || "Sin desglose detallado.";
+  return formattedText;
 }
 
 
