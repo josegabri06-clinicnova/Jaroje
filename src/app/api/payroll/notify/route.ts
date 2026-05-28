@@ -74,9 +74,12 @@ function getCompactNotesVertical(text: string): string {
       continue;
     }
     
+    // Limpiar puntos suspensivos, tabulaciones y comprimir espacios seguidos
     let cleanLine = trimmed
+      .replace(/\.{2,}/g, ':') // Reemplazar puntos suspensivos ..... por :
+      .replace(/…+/g, ':')
       .replace(/\t/g, ' ')
-      .replace(/ {2,}/g, ' ')
+      .replace(/\s+/g, ' ')
       .trim();
       
     if (cleanLine) {
@@ -84,7 +87,17 @@ function getCompactNotesVertical(text: string): string {
     }
   }
   
-  return cleanParts.join('\n');
+  let compact = cleanParts.join(' 🔹 ');
+  compact = compact
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+    
+  if (compact.length > 1000) {
+    compact = compact.substring(0, 997) + '...';
+  }
+  
+  return compact;
 }
 
 
