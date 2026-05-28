@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X, Trash2 } from 'lucide-react';
+import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X, Trash2, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { getRole, getAdminPin } from '@/lib/auth';
 
@@ -23,6 +23,7 @@ type PayrollRecord = {
   notes: string;
   document_url?: string;
   whatsapp_sent: boolean;
+  comprobante_sent?: boolean;
 };
 
 function parseAttendanceLogs(text: string) {
@@ -166,6 +167,7 @@ export default function EquipoPage() {
   
   // Details Modal State
   const [selectedRecordForDetails, setSelectedRecordForDetails] = useState<PayrollRecord | null>(null);
+  const [sendingDetailId, setSendingDetailId] = useState<string | null>(null);
 
   // Google Sheets sync state
   const [sheetUrl, setSheetUrl] = useState('');
@@ -396,6 +398,43 @@ export default function EquipoPage() {
       alert(`Error al conectar con la API de WhatsApp: ${err.message || err}`);
     } finally {
       setRetryingId(null);
+    }
+  };
+  
+  const handleSendVerticalBreakdown = async (record: PayrollRecord) => {
+    setSendingDetailId(record.id);
+    try {
+      const waRes = await fetch('/api/payroll/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          phone: record.employee_phone, 
+          employeeName: record.employee_name, 
+          amount: record.amount.toString(), 
+          period: record.period, 
+          type: record.type, 
+          notes: record.notes,
+          templateName: 'recibo_nomina_vertical'
+        })
+      });
+      
+      if (waRes.ok) {
+        try {
+          await supabase.from('payroll').update({ comprobante_sent: true }).eq('id', record.id);
+        } catch (dbErr) {
+          console.error("Error actualizando comprobante_sent en Supabase:", dbErr);
+        }
+        alert("¡Recibo detallado y asistencia enviados con éxito!");
+        fetchRecords();
+      } else {
+        const errData = await waRes.json();
+        alert(`Fallo al enviar recibo detallado: ${errData.error || 'Error de API'}`);
+      }
+    } catch (err: any) {
+      console.error("Error enviando recibo vertical", err);
+      alert(`Error al conectar con la API de WhatsApp: ${err.message || err}`);
+    } finally {
+      setSendingDetailId(null);
     }
   };
 
@@ -688,9 +727,10 @@ export default function EquipoPage() {
       }
     }
 
-    // 3. Enviar WhatsApp (Opcional)
+    // 3. Enviar WhatsApp (Opcional - Envío automático del aviso principal)
     if (sendWhatsapp && inserted) {
       try {
+        // Mensaje 1: Aviso de nómina formal (nominas_jaroje)
         const waRes = await fetch('/api/payroll/notify', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -892,12 +932,13 @@ export default function EquipoPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-100/50 flex-wrap">
+                  {/* Badge de Estado: Aviso Principal */}
                   {record.whatsapp_sent ? (
                     <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
-                      <CheckCircle2 size={12} /> WhatsApp Enviado
+                      <CheckCircle2 size={12} /> Aviso Enviado
                     </span>
                   ) : (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
                       <span className="flex items-center gap-1 text-[11px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-md">
                         <AlertCircle size={12} /> Sin notificar
                       </span>
@@ -915,18 +956,59 @@ export default function EquipoPage() {
                       </button>
                     </div>
                   )}
+
+                  {/* Badge de Estado: Comprobante Detallado */}
+                  {record.notes && record.comprobante_sent && (
+                    <span className="flex items-center gap-1 text-[11px] font-medium text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md">
+                      <CheckCircle2 size={12} /> Comprobante Enviado
+                    </span>
+                  )}
+
                   {record.document_url && (
                     <a href={record.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[11px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md transition-colors ml-1">
                       <Paperclip size={12} /> Ver adjunto
                     </a>
                   )}
-                  {record.notes && (
-                    <button 
-                      onClick={() => setSelectedRecordForDetails(record)}
-                      className="flex items-center gap-1 text-[11px] font-bold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
-                    >
-                      <Receipt size={12} /> Ver Desglose
-                    </button>
+
+                   {record.notes && (
+                    <>
+                      <button 
+                        onClick={() => setSelectedRecordForDetails(record)}
+                        className="flex items-center gap-1 text-[11px] font-bold text-zinc-700 bg-zinc-100 hover:bg-zinc-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer"
+                      >
+                        <Receipt size={12} /> Ver Desglose
+                      </button>
+                      
+                      {record.comprobante_sent ? (
+                        <button 
+                          onClick={() => handleSendVerticalBreakdown(record)}
+                          disabled={sendingDetailId === record.id}
+                          className="flex items-center gap-1 text-[11px] font-bold text-zinc-650 bg-zinc-50 hover:bg-zinc-100 disabled:opacity-50 px-2.5 py-1 rounded-md transition-colors cursor-pointer border border-zinc-200/60"
+                          title="Reenviar comprobante de asistencia y nómina por WhatsApp"
+                        >
+                          {sendingDetailId === record.id ? (
+                            <div className="w-3 h-3 border-2 border-zinc-600 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <MessageSquare size={12} />
+                          )}
+                          Reenviar Comprobante
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => handleSendVerticalBreakdown(record)}
+                          disabled={sendingDetailId === record.id}
+                          className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 disabled:opacity-50 px-2.5 py-1 rounded-md transition-colors cursor-pointer border border-emerald-100/50"
+                          title="Enviar comprobante de asistencia y nómina por WhatsApp"
+                        >
+                          {sendingDetailId === record.id ? (
+                            <div className="w-3 h-3 border-2 border-emerald-700 border-t-transparent rounded-full animate-spin" />
+                          ) : (
+                            <MessageSquare size={12} />
+                          )}
+                          Enviar Comprobante
+                        </button>
+                      )}
+                    </>
                   )}
                   <button 
                     onClick={() => handleDeleteRecord(record.id, record.employee_name, record.amount, record.period)}

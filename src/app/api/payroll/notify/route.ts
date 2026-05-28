@@ -90,7 +90,7 @@ function getCompactNotesVertical(text: string): string {
 
 export async function POST(req: Request) {
   try {
-    const { phone, employeeName, amount, period, type, document_url, notes } = await req.json();
+    const { phone, employeeName, amount, period, type, document_url, notes, templateName } = await req.json();
 
     if (!phone || !employeeName || !amount) {
       return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 });
@@ -108,6 +108,8 @@ export async function POST(req: Request) {
 
     const tipoTexto = type === 'anticipo' ? 'Anticipo' : type === 'bono' ? 'Bono' : 'Nómina';
 
+    const isVertical = templateName === 'recibo_nomina_vertical';
+
     // --- AUTOGENERACIÓN DE DOCUMENTO DE TEXTO PLANO ---
     // Si no hay comprobante manual subido, pero hay desglose de conceptos (notes),
     // generamos un recibo en TXT y lo subimos a Supabase Storage. Esto nos permite
@@ -115,7 +117,7 @@ export async function POST(req: Request) {
     // eludiendo la restricción estricta de Meta sobre saltos de línea (\n) en variables.
     let finalDocumentUrl = document_url;
 
-    if (!finalDocumentUrl && notes && notes.trim() !== '') {
+    if (!isVertical && !finalDocumentUrl && notes && notes.trim() !== '') {
       try {
         const verticalNotes = getCompactNotesVertical(notes);
         const txtContent = `================================================
@@ -158,6 +160,57 @@ Este documento sirve como desglose quincenal de nómina generado de forma autom�
       }
     }
 
+    const finalTemplateName = isVertical ? 'recibo_nomina_vertical' : (finalDocumentUrl ? 'nominas_jaroje_2' : 'nominas_jaroje');
+
+    const components = [
+      // Solo añadir el header si hay un documento y la plantilla en Meta tiene un Header tipo "Documento"
+      ...(!isVertical && finalDocumentUrl ? [{
+        type: "header",
+        parameters: [
+          {
+            type: "document",
+            document: {
+              link: finalDocumentUrl,
+              filename: finalDocumentUrl.toLowerCase().includes('.txt')
+                ? `Recibo_${employeeName.replace(/\s+/g, '_')}.txt`
+                : `Comprobante_${employeeName.replace(/\s+/g, '_')}.pdf`
+            }
+          }
+        ]
+      }] : []),
+      {
+        type: "body",
+        parameters: [
+          {
+            type: "text",
+            parameter_name: "nombre",
+            text: employeeName
+          },
+          {
+            type: "text",
+            parameter_name: "tipo",
+            text: tipoTexto
+          },
+          {
+            type: "text",
+            parameter_name: "periodo",
+            text: period
+          },
+          {
+            type: "text",
+            parameter_name: "monto",
+            text: Number(amount).toLocaleString('es-MX')
+          },
+          // Solo añadir el quinto parámetro 'excel' si es vertical O si NO hay documento adjunto
+          ...(isVertical || !finalDocumentUrl ? [{
+            type: "text",
+            parameter_name: "excel",
+            text: isVertical ? getCompactNotesVertical(notes) : getCompactNotesFlat(notes)
+          }] : [])
+        ]
+      }
+    ];
+
     // Enviar WhatsApp usando la API oficial de Meta (Cloud API) con PLANTILLA
     const waResponse = await fetch(`https://graph.facebook.com/v17.0/${PHONE_ID}/messages`, {
       method: 'POST',
@@ -171,58 +224,11 @@ Este documento sirve como desglose quincenal de nómina generado de forma autom�
         to: cleanPhone,
         type: "template",
         template: {
-          name: finalDocumentUrl ? "nominas_jaroje_2" : "nominas_jaroje",
+          name: finalTemplateName,
           language: {
             code: "es_MX"
           },
-          components: [
-            // Solo añadir el header si hay un documento y la plantilla en Meta tiene un Header tipo "Documento"
-            ...(finalDocumentUrl ? [{
-              type: "header",
-              parameters: [
-                {
-                  type: "document",
-                  document: {
-                    link: finalDocumentUrl,
-                    filename: finalDocumentUrl.toLowerCase().includes('.txt')
-                      ? `Recibo_${employeeName.replace(/\s+/g, '_')}.txt`
-                      : `Comprobante_${employeeName.replace(/\s+/g, '_')}.pdf`
-                  }
-                }
-              ]
-            }] : []),
-            {
-              type: "body",
-              parameters: [
-                {
-                  type: "text",
-                  parameter_name: "nombre",
-                  text: employeeName
-                },
-                {
-                  type: "text",
-                  parameter_name: "tipo",
-                  text: tipoTexto
-                },
-                {
-                  type: "text",
-                  parameter_name: "periodo",
-                  text: period
-                },
-                {
-                  type: "text",
-                  parameter_name: "monto",
-                  text: Number(amount).toLocaleString('es-MX')
-                },
-                // Solo añadir el quinto parámetro 'excel' si NO hay documento adjunto (plantilla nominas_jaroje)
-                ...(!finalDocumentUrl ? [{
-                  type: "text",
-                  parameter_name: "excel",
-                  text: getCompactNotesFlat(notes)
-                }] : [])
-              ]
-            }
-          ]
+          components
         }
       })
     });
