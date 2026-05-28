@@ -267,15 +267,25 @@ export default function AdminDashboard() {
               <p className="text-[11px] font-bold text-emerald-600 mt-0.5">MX${Math.round(financeBalance).toLocaleString('es-MX')}</p>
             </div>
           </Link>
-          {/* NOMINAS - Habilitar de nuevo si el cliente reactiva el servicio
-          <Link href="/equipo" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <Users size={20} className="text-zinc-700" />
+          {/* MANTENIMIENTO */}
+          <Link href="/mantenimiento" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all group">
+            <div className="flex justify-between items-start w-full">
+              <Wrench size={20} className="text-rose-500 group-hover:scale-110 transition-transform" />
+              <span className="text-[10px] font-bold text-blue-650 bg-blue-50 px-2 py-0.5 rounded-full">Ver Incidencias →</span>
+            </div>
             <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">NOMINAS</p>
-              <p className="text-[11px] font-medium text-blue-500 mt-0.5">Gestión de Turnos</p>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">MANTENIMIENTO</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <p className="text-[11px] font-bold text-rose-600">
+                  {tasks.filter(t => t.status === 'pendiente' || t.status === 'nuevo' || t.status === 'en_proceso').length} activos
+                </p>
+                <span className="text-zinc-300 text-[10px]">•</span>
+                <p className="text-[11px] font-bold text-emerald-600">
+                  {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === todayStr).length} hoy
+                </p>
+              </div>
             </div>
           </Link>
-          */}
           {/* INVENTARIO */}
           <Link href="/inventario" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
             <Package size={20} className="text-zinc-700" />
@@ -551,37 +561,6 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── 8. MTTO (REPORTES NUEVOS / COMPLETADOS HOY) ────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-            <Wrench size={13} className="text-rose-500" />
-            Mantenimiento (MTTO)
-          </h3>
-          <Link href="/mantenimiento" className="text-[11px] font-bold text-blue-600 hover:underline">Ver Tareas →</Link>
-        </div>
-
-        <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm p-4 flex gap-4 items-center justify-between">
-          <div className="flex-1 grid grid-cols-2 divide-x divide-zinc-100">
-            <div className="text-center pr-2 flex flex-col items-center justify-center">
-              <span className="text-[20px] font-black text-rose-600">
-                {tasks.filter(t => t.status === 'pendiente').length}
-              </span>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Reportes Activos</p>
-            </div>
-            <div className="text-center pl-2 flex flex-col items-center justify-center">
-              <span className="text-[20px] font-black text-emerald-600">
-                {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === todayStr).length}
-              </span>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Completados Hoy</p>
-            </div>
-          </div>
-          <Link href="/mantenimiento?action=new_task" className="px-4 py-3 shrink-0 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12px] shadow-md shadow-rose-100 flex items-center gap-1.5 transition-all active:scale-95">
-            <Plus size={14} strokeWidth={2.5} />
-            <span>Reportar Mtto</span>
-          </Link>
-        </div>
-      </div>
 
     </div>
   );

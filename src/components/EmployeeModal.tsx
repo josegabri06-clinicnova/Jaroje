@@ -45,13 +45,8 @@ export default function EmployeeModal({
 
   const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Ordenar todos los empleados por departamento y nombre
-  const sortedEmployees = [...employees].sort((a, b) => {
-    if (a.department !== b.department) {
-      return a.department.localeCompare(b.department);
-    }
-    return a.full_name.localeCompare(b.full_name);
-  });
+  // Mantener el orden manual establecido por el administrador en ajustes
+  const sortedEmployees = employees;
 
   // Módulo en lenguaje natural elegante
   const moduleLabel = {

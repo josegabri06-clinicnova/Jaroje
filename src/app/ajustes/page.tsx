@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
-  Hotel, Shield, ChevronRight, 
+  Hotel, Shield, ChevronRight, ChevronUp, ChevronDown,
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2
 } from 'lucide-react';
@@ -207,6 +207,39 @@ export default function AjustesPage() {
     }
   };
 
+  const handleMoveEmployee = async (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= employees.length) return;
+
+    const updatedList = [...employees];
+    // Swap
+    const temp = updatedList[index];
+    updatedList[index] = updatedList[newIndex];
+    updatedList[newIndex] = temp;
+
+    try {
+      const res = await fetch('/api/employees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employees: updatedList })
+      });
+
+      if (res.ok) {
+        setEmployees(updatedList);
+        localStorage.setItem('jaroje_official_employees', JSON.stringify(updatedList));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('sync-copilot'));
+        }
+      } else {
+        const body = await res.json();
+        alert(`Error al ordenar empleado: ${body.error || 'Error desconocido'}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Error de red al ordenar empleado.');
+    }
+  };
+
   const handleLogout = () => { logout(); router.replace('/login'); };
 
   const SectionHeader = ({ icon, title }: { icon: React.ReactNode; title: string }) => (
@@ -291,7 +324,7 @@ export default function AjustesPage() {
             No hay empleados registrados. Crea uno nuevo.
           </div>
         ) : (
-          employees.map((emp) => {
+          employees.map((emp, index) => {
             const deptLabel = {
               recepcion: 'Recepción',
               limpieza: 'Limpieza',
@@ -316,7 +349,26 @@ export default function AjustesPage() {
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-0.5 shrink-0">
+                  <button 
+                    onClick={() => handleMoveEmployee(index, 'up')}
+                    disabled={index === 0}
+                    className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Mover arriba"
+                  >
+                    <ChevronUp size={13} />
+                  </button>
+                  <button 
+                    onClick={() => handleMoveEmployee(index, 'down')}
+                    disabled={index === employees.length - 1}
+                    className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Mover abajo"
+                  >
+                    <ChevronDown size={13} />
+                  </button>
+
+                  <div className="w-px h-5 bg-zinc-100 mx-1"></div>
+
                   <button 
                     onClick={() => openEditEmployee(emp)} 
                     className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 transition-colors"
