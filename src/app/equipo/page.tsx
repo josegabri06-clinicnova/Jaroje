@@ -180,6 +180,13 @@ export default function EquipoPage() {
   const [employeeQuery, setEmployeeQuery] = useState('');
   const [isDropdownFocused, setIsDropdownFocused] = useState(false);
 
+  // Estados contables del Split Payout (Pagar desde 2 cuentas distintas)
+  const [splitPayout, setSplitPayout] = useState(false);
+  const [accountIdA, setAccountIdA] = useState('');
+  const [amountA, setAmountA] = useState('');
+  const [accountIdB, setAccountIdB] = useState('');
+  const [amountB, setAmountB] = useState('');
+
   const handleSelectEmployee = (emp: any) => {
     setFormEmployeeNum(emp.employee_num);
     setName(emp.full_name);
@@ -208,27 +215,38 @@ export default function EquipoPage() {
         setAmount(cleanAmount);
       }
 
-      // Construir desglose automático premium
-      const concepts: string[] = [];
-      const addConcept = (label: string, colName: string) => {
-        const valStr = sheetMatch[colName];
-        if (valStr && valStr !== '$0' && valStr !== '$0.00' && valStr !== '0' && valStr !== '$ 0' && valStr !== '$ -' && valStr.trim() !== '') {
-          concepts.push(`${label}: ${valStr.trim()}`);
+      // Helper flexible para extraer valores de celdas con fallbacks
+      const getVal = (colNames: string[], defaultValue: string = '$0.00') => {
+        for (const colName of colNames) {
+          const val = sheetMatch[colName.toLowerCase().trim()];
+          if (val !== undefined && val !== null && val.trim() !== '') {
+            return val.trim();
+          }
         }
+        return defaultValue;
+      };
+
+      // Construir desglose automático premium en el orden exacto del Google Sheet
+      const concepts: string[] = [];
+      const addConcept = (label: string, colNames: string[], defaultVal: string = '$0.00') => {
+        const val = getVal(colNames, defaultVal);
+        concepts.push(`${label}: ${val}`);
       };
       
-      addConcept('NÓMINA BASE', 'nomina quincenal');
-      addConcept('DÍAS TRAB', 'dias lab+vac');
-      addConcept('RETARDOS', 'retardos');
-      addConcept('PENALIZACIÓN PUNTUALIDAD', 'penalizacion puntualidad');
-      addConcept('EXTRAS', '+ extras');
-      addConcept('INTEGRADA', '= nomina integrada');
-      addConcept('PAGO PRÉSTAMO', '- pago prestamos');
-      addConcept('ADELANTO', '- adelanto nomina');
-      addConcept('AHORRO QNA', '- ahorro quincenal');
-      addConcept('PRÉSTAMO RESTANTE', 'prestamos x pagar');
-      addConcept('AHORRO ACUMULADO', 'ahorro acumulado');
-      addConcept('VACACIONES POR TOMAR', 'vacaciones x tomar');
+      addConcept('NOMINA QUINCENAL', ['nomina quincenal', 'sueldo quincenal', 'sueldo base']);
+      addConcept('DIAS LAB+VAC', ['dias lab+vac', 'dias trabajados', 'días lab+vac'], '15');
+      addConcept('RETARDOS', ['retardos'], '0');
+      addConcept('PENALIZACION PUNTUALIDAD', ['penalizacion puntualidad', 'penalización puntualidad']);
+      addConcept('DIA FESTIVO', ['dia festivo', 'día festivo', 'festivos']);
+      addConcept('+ EXTRAS', ['+ extras', 'extras', 'bono apoyo', 'bonos']);
+      addConcept('= NOMINA INTEGRADA', ['= nomina integrada', 'nomina integrada', 'integrada']);
+      addConcept('- PAGO PRESTAMOS', ['- pago prestamos', 'pago prestamos', 'pago prestamo', 'prestamos']);
+      addConcept('- ADELANTO NOMINA', ['- adelanto nomina', 'adelanto nomina', 'adelanto']);
+      addConcept('- AHORRO QUINCENAL', ['- ahorro quincenal', 'ahorro quincenal', 'ahorro']);
+      addConcept('= TOTAL A DEPOSITAR', ['= total a depositar', 'total a depositar', 'total a pagar', 'neto']);
+      addConcept('PRESTAMOS X PAGAR', ['prestamos x pagar', 'prestamos por pagar', 'prestamo restante', 'restamos x pagar'], '$0.00');
+      addConcept('AHORRO ACUMULADO', ['ahorro acumulado', 'ahorro total'], '$0.00');
+      addConcept('VACACIONES X TOMAR', ['vacaciones x tomar', 'vacaciones por tomar', 'vacaciones restantes'], '0');
 
       const generatedBreakdown = concepts.join(' 🔸 ');
       setRawText(generatedBreakdown);
@@ -477,13 +495,16 @@ export default function EquipoPage() {
       }
     }
 
+    // Generar periodo automáticamente a partir de la fecha actual
+    const autoPeriod = `Quincena ${format(new Date(), 'dd/MM/yyyy')}`;
+
     // 2. Guardar en Supabase
     const newRecord = {
       employee_name: name,
       employee_phone: phone,
       amount: Number(amount),
       type,
-      period,
+      period: autoPeriod,
       notes: rawText || '',
       document_url,
       whatsapp_sent: false
@@ -502,28 +523,71 @@ export default function EquipoPage() {
       return;
     }
 
-    // 2b. Registrar egreso en FINANZAS si se seleccionó una cuenta
-    if (selectedAccountId && inserted) {
+    // 2b. Registrar egreso en FINANZAS (Soporte Split Payout)
+    if (inserted) {
       try {
-        const financeRecord = {
-          type: 'egreso',
-          amount: Number(amount),
-          category: 'Nóminas',
-          description: `Nómina ${period} - Empleado: ${name}`,
-          account_id: selectedAccountId,
-          payment_method: 'Transferencia',
-          date: new Date().toISOString().split('T')[0]
-        };
+        const currentDate = new Date().toISOString().split('T')[0];
 
-        const { error: finError } = await supabase.from('finances').insert([financeRecord]);
-        if (!finError) {
-          // Obtener saldo actual de la cuenta para restar el egreso
-          const { data: acc } = await supabase.from('accounts').select('balance').eq('id', selectedAccountId).single();
-          if (acc) {
-            await supabase.from('accounts').update({ balance: acc.balance - Number(amount) }).eq('id', selectedAccountId);
+        if (splitPayout) {
+          // Registro Dividido en dos cuentas contables
+          if (accountIdA && Number(amountA) > 0) {
+            const accNameA = accounts.find(a => a.id === accountIdA)?.name || 'Cuenta A';
+            const financeRecordA = {
+              type: 'egreso',
+              amount: Number(amountA),
+              category: 'Nóminas',
+              description: `Nómina - Empleado: ${name} (${accNameA})`,
+              account_id: accountIdA,
+              payment_method: 'Transferencia',
+              date: currentDate
+            };
+            const { error: errA } = await supabase.from('finances').insert([financeRecordA]);
+            if (!errA) {
+              const { data: accA } = await supabase.from('accounts').select('balance').eq('id', accountIdA).single();
+              if (accA) {
+                await supabase.from('accounts').update({ balance: accA.balance - Number(amountA) }).eq('id', accountIdA);
+              }
+            }
           }
-        } else {
-          console.error("Error al registrar en finanzas:", finError);
+
+          if (accountIdB && Number(amountB) > 0) {
+            const accNameB = accounts.find(a => a.id === accountIdB)?.name || 'Cuenta B';
+            const financeRecordB = {
+              type: 'egreso',
+              amount: Number(amountB),
+              category: 'Nóminas',
+              description: `Nómina - Empleado: ${name} (${accNameB})`,
+              account_id: accountIdB,
+              payment_method: 'Transferencia',
+              date: currentDate
+            };
+            const { error: errB } = await supabase.from('finances').insert([financeRecordB]);
+            if (!errB) {
+              const { data: accB } = await supabase.from('accounts').select('balance').eq('id', accountIdB).single();
+              if (accB) {
+                await supabase.from('accounts').update({ balance: accB.balance - Number(amountB) }).eq('id', accountIdB);
+              }
+            }
+          }
+        } else if (selectedAccountId) {
+          // Registro tradicional único
+          const financeRecord = {
+            type: 'egreso',
+            amount: Number(amount),
+            category: 'Nóminas',
+            description: `Nómina - Empleado: ${name}`,
+            account_id: selectedAccountId,
+            payment_method: 'Transferencia',
+            date: currentDate
+          };
+
+          const { error: finError } = await supabase.from('finances').insert([financeRecord]);
+          if (!finError) {
+            const { data: acc } = await supabase.from('accounts').select('balance').eq('id', selectedAccountId).single();
+            if (acc) {
+              await supabase.from('accounts').update({ balance: acc.balance - Number(amount) }).eq('id', selectedAccountId);
+            }
+          }
         }
       } catch (finErr) {
         console.error("Error en flujo de registro financiero:", finErr);
@@ -540,7 +604,7 @@ export default function EquipoPage() {
             phone, 
             employeeName: name, 
             amount, 
-            period, 
+            period: autoPeriod, 
             type, 
             document_url,
             notes: inserted.notes
@@ -566,6 +630,11 @@ export default function EquipoPage() {
     setFile(null);
     setLoadedFromSheet(false);
     setFormEmployeeNum('');
+    setSplitPayout(false);
+    setAccountIdA('');
+    setAmountA('');
+    setAccountIdB('');
+    setAmountB('');
     fetchRecords();
     setIsSaving(false);
   };
@@ -797,6 +866,11 @@ export default function EquipoPage() {
                   setFile(null);
                   setLoadedFromSheet(false);
                   setFormEmployeeNum('');
+                  setSplitPayout(false);
+                  setAccountIdA('');
+                  setAmountA('');
+                  setAccountIdB('');
+                  setAmountB('');
                 }}
                 className="w-8 h-8 rounded-full bg-zinc-100 text-zinc-505 flex items-center justify-center hover:bg-zinc-200 transition-colors"
               >
@@ -1106,27 +1180,135 @@ export default function EquipoPage() {
                   </div>
                 </div>
 
-                 <div>
-                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Periodo</label>
-                  <input 
-                    type="text" required
-                    value={period} onChange={e => setPeriod(e.target.value)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] focus:ring-2 focus:ring-zinc-900/10"
+                {/* Switch Dividir Pago */}
+                <div className="flex items-center gap-3 bg-zinc-50 p-3.5 rounded-2xl border border-zinc-200 mt-2">
+                  <input
+                    type="checkbox"
+                    id="split-payout"
+                    checked={splitPayout}
+                    onChange={e => {
+                      const checked = e.target.checked;
+                      setSplitPayout(checked);
+                      if (checked) {
+                        setAmountA(amount || '0');
+                        setAmountB('0');
+                        if (accounts.length > 0) {
+                          setAccountIdA(selectedAccountId || accounts[0].id);
+                          setAccountIdB(accounts[1]?.id || accounts[0].id);
+                        }
+                      }
+                    }}
+                    className="w-5 h-5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
                   />
+                  <label htmlFor="split-payout" className="flex-1 text-[13px] font-bold text-zinc-700 cursor-pointer flex items-center gap-2">
+                    <svg className="w-4 h-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                    </svg>
+                    Dividir nómina en 2 cuentas contables distintas
+                  </label>
                 </div>
 
-                <div>
-                  <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Cuenta Financiera (Para Finanzas)</label>
-                  <select 
-                    value={selectedAccountId} onChange={e => setSelectedAccountId(e.target.value)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10"
-                  >
-                    <option value="">-- No registrar en Finanzas --</option>
-                    {accounts.map(acc => (
-                      <option key={acc.id} value={acc.id}>{acc.name} (Saldo: MX${acc.balance.toLocaleString('es-MX')})</option>
-                    ))}
-                  </select>
-                </div>
+                {/* Selectores de Cuentas */}
+                {!splitPayout ? (
+                  <div>
+                    <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Cuenta Financiera (Para Finanzas)</label>
+                    <select
+                      value={selectedAccountId}
+                      onChange={e => setSelectedAccountId(e.target.value)}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-zinc-900/10 text-[14px]"
+                    >
+                      <option value="">-- No registrar en Finanzas --</option>
+                      {accounts.map(acc => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} (Saldo: MX${acc.balance.toLocaleString('es-MX')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-3 bg-zinc-50/50 p-4 border border-zinc-200 rounded-2xl">
+                    <span className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest block mb-1">Distribución de Egreso</span>
+                    
+                    <div className="grid grid-cols-5 gap-2.5">
+                      <div className="col-span-3">
+                        <label className="block text-[11px] font-bold text-zinc-450 uppercase mb-1">Cuenta Principal A</label>
+                        <select
+                          value={accountIdA}
+                          onChange={e => setAccountIdA(e.target.value)}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10 text-[13px]"
+                        >
+                          {accounts.map(acc => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.name} (MX${acc.balance.toLocaleString('es-MX')})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[11px] font-bold text-zinc-450 uppercase mb-1">Monto A (MX$)</label>
+                        <input
+                          type="number"
+                          value={amountA}
+                          onChange={e => setAmountA(e.target.value)}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10 text-[13px] font-bold"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-2.5">
+                      <div className="col-span-3">
+                        <label className="block text-[11px] font-bold text-zinc-450 uppercase mb-1">Cuenta Secundaria B</label>
+                        <select
+                          value={accountIdB}
+                          onChange={e => setAccountIdB(e.target.value)}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10 text-[13px]"
+                        >
+                          {accounts.map(acc => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.name} (MX${acc.balance.toLocaleString('es-MX')})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[11px] font-bold text-zinc-450 uppercase mb-1">Monto B (MX$)</label>
+                        <input
+                          type="number"
+                          value={amountB}
+                          onChange={e => setAmountB(e.target.value)}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-zinc-900/10 text-[13px] font-bold"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Alerta de validación en tiempo real */}
+                    {(() => {
+                      const totalNet = Number(amount) || 0;
+                      const sumA = Number(amountA) || 0;
+                      const sumB = Number(amountB) || 0;
+                      const totalSum = sumA + sumB;
+                      const diff = totalNet - totalSum;
+
+                      if (Math.abs(diff) > 0.01) {
+                        return (
+                          <div className="mt-2 text-[11px] font-extrabold text-amber-600 bg-amber-50 border border-amber-200/50 px-3 py-2 rounded-xl flex items-center gap-1.5 animate-in slide-in-from-top-1 duration-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                            <span>⚠️ La suma (MX${totalSum.toLocaleString('es-MX')}) difiere del total en MX${diff.toLocaleString('es-MX')}</span>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <div className="mt-2 text-[11px] font-extrabold text-emerald-600 bg-emerald-50 border border-emerald-200/50 px-3 py-2 rounded-xl flex items-center gap-1.5 animate-in slide-in-from-top-1 duration-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>✨ Distribución perfecta. Suma coincide al 100%</span>
+                          </div>
+                        );
+                      }
+                    })()}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Teléfono (Para WhatsApp)</label>
@@ -1175,13 +1357,18 @@ export default function EquipoPage() {
                 <button 
                   type="button" 
                   onClick={() => {
-                  setShowModal(false);
-                  setAmount('');
-                  setName('');
-                  setRawText('');
-                  setFile(null);
-                  setLoadedFromSheet(false);
-                  setFormEmployeeNum('');
+                    setShowModal(false);
+                    setAmount('');
+                    setName('');
+                    setRawText('');
+                    setFile(null);
+                    setLoadedFromSheet(false);
+                    setFormEmployeeNum('');
+                    setSplitPayout(false);
+                    setAccountIdA('');
+                    setAmountA('');
+                    setAccountIdB('');
+                    setAmountB('');
                   }}
                   className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-colors cursor-pointer text-[14px]"
                 >
@@ -1189,7 +1376,7 @@ export default function EquipoPage() {
                 </button>
                 <button 
                   type="submit" 
-                  disabled={isSaving}
+                  disabled={isSaving || (splitPayout && Math.abs((Number(amount) || 0) - ((Number(amountA) || 0) + (Number(amountB) || 0))) > 0.01)}
                   className="flex-1 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer shadow-lg text-[14px]"
                 >
                   {isSaving ? 'Guardando...' : 'Registrar Pago'}
