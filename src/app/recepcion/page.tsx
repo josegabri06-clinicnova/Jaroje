@@ -195,12 +195,77 @@ export default function RecepcionPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ type: 'mantenimiento', room: ROOMS[0], description: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+
+  // Estados del Grid Físico de Habitaciones
+  const [roomStatuses, setRoomStatuses] = useState<any[]>([]);
+  const [selectedRoomForStatus, setSelectedRoomForStatus] = useState<any | null>(null);
+  const [showRoomStatusModal, setShowRoomStatusModal] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   // Availability check for Walk-In
   const [roomInventory, setRoomInventory] = useState<any[]>([]);
   const [checkingAvail, setCheckingAvail] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const mttoPhotoRef = useRef<HTMLInputElement>(null);
+
+  const handleMttoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const b64 = await compressImage(file);
+    setPhotoFile(file);
+    setPhotoBase64(b64);
+  };
+
+  const handleUpdateRoomStatus = async (newStatus: string) => {
+    if (!selectedRoomForStatus) return;
+    setStatusUpdating(true);
+    
+    const emp = getActiveEmployee('recepcion');
+    const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepción';
+
+    try {
+      const res = await fetch('/api/room-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_number: selectedRoomForStatus.room_number,
+          status: newStatus,
+          updated_by: operatorName
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        // Registrar log de auditoría
+        if (emp) {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'recepcion',
+              action: 'change_room_status',
+              room: selectedRoomForStatus.room_number,
+              details: `Cambió el estado de Habitación ${selectedRoomForStatus.room_number} a '${newStatus}' desde Recepción`
+            })
+          });
+        }
+        fetchData();
+        setShowRoomStatusModal(false);
+      } else {
+        alert('Error al actualizar el estado: ' + json.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión');
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
 
   // Lock body scroll and hide BottomNav when any modal is open
   useEffect(() => {
@@ -316,12 +381,13 @@ export default function RecepcionPage() {
 
   const fetchData = async () => {
     try {
-      const [r, t, inv, chk, acc] = await Promise.all([
+      const [r, t, inv, chk, acc, rms] = await Promise.all([
         fetch('/api/reservas'),
         fetch('/api/tasks'),
         supabase.from('inventory').select('*').order('category').order('item_name'),
         supabase.from('checkins').select('*'),
-        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true })
+        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
+        supabase.from('room_status').select('*')
       ]);
       const rj = await r.json();
       const tj = await t.json();
@@ -350,6 +416,7 @@ export default function RecepcionPage() {
       if (tj.success) setTasks(tj.data);
       if (inv.data) setInventory(inv.data);
       if (acc.data) setAccounts(acc.data);
+      if (rms.data) setRoomStatuses(rms.data);
     } catch (err) {
       console.error(err);
     }
@@ -881,30 +948,89 @@ export default function RecepcionPage() {
         <div className="space-y-6">
 
           {/* ── BOTONES DE ACCIÓN RÁPIDA ─────────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex gap-3">
             <button
               onClick={() => {
                 setRoomInventory([]);
-                setSelectedReserva({ id: 'walkin', room: '679077', check_in: todayStr, check_out: tomorrowStr, guest_name: '' });
+                setSelectedReserva({ id: 'walkin', room: '101', check_in: todayStr, check_out: tomorrowStr, guest_name: '' });
                 setShowCheckInModal(true);
                 fetchAvailability(todayStr, tomorrowStr);
               }}
-              className="bg-zinc-900 hover:bg-black text-white rounded-2xl p-4 flex flex-col items-center justify-center gap-2 text-center transition-all active:scale-[0.98] shadow-md cursor-pointer"
+              className="flex-1 bg-zinc-900 hover:bg-black text-white rounded-2xl p-4 flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] shadow-md cursor-pointer"
             >
-              <UserPlus size={20} strokeWidth={2.5} />
-              <span className="text-[13px] font-bold leading-tight">Registrar Walk-In</span>
+              <UserPlus size={18} strokeWidth={2.5} />
+              <span className="text-[14px] font-black tracking-tight">Registrar Walk-In</span>
             </button>
-            <div
-              onClick={() => {
-                // Redirigir a walkin con query params
-                setRoomInventory([]);
-                setSelectedReserva({ id: 'walkin', room: '679077', check_in: todayStr, check_out: tomorrowStr, guest_name: '' });
-                setShowCheckInModal(true);
-                fetchAvailability(todayStr, tomorrowStr);
-              }}
-              className="cursor-pointer"
-            >
-              <LiveAvailabilityWidget />
+          </div>
+
+          {/* ── ESTADO FÍSICO DE HABITACIONES (GRID INTERACTIVO PREMIUM) ── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+                <BedDouble size={14} className="text-blue-500" />
+                Habitaciones Disponibles / Limpias
+              </h3>
+            </div>
+
+            <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-sm p-5 space-y-4">
+              {/* Conteo por estados */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 text-center shadow-sm">
+                  <span className="text-[16px] font-black text-emerald-700">
+                    {roomStatuses.filter(r => r.status === 'disponible').length}
+                  </span>
+                  <p className="text-[8.5px] font-extrabold text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2.5 text-center shadow-sm">
+                  <span className="text-[16px] font-black text-blue-700">
+                    {roomStatuses.filter(r => r.status === 'limpia').length}
+                  </span>
+                  <p className="text-[8.5px] font-extrabold text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-2.5 text-center shadow-sm">
+                  <span className="text-[16px] font-black text-amber-700">
+                    {roomStatuses.filter(r => r.status === 'en_limpieza').length}
+                  </span>
+                  <p className="text-[8.5px] font-extrabold text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                </div>
+              </div>
+
+              {/* Mini Grid visual de 21 unidades */}
+              {roomStatuses.length === 0 ? (
+                <div className="text-center py-6 text-[12px] text-zinc-450 font-semibold animate-pulse">Cargando estado físico de unidades...</div>
+              ) : (
+                <div className="grid grid-cols-7 gap-2 pt-1">
+                  {roomStatuses
+                    .sort((a, b) => String(a.room_number).localeCompare(String(b.room_number), undefined, {numeric: true}))
+                    .map(room => {
+                      let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                      if (room.status === 'disponible') {
+                        colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                      } else if (room.status === 'limpia') {
+                        colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                      } else if (room.status === 'en_limpieza') {
+                        colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                      }
+                      return (
+                        <div
+                          key={room.id}
+                          onClick={() => {
+                            setSelectedRoomForStatus(room);
+                            setShowRoomStatusModal(true);
+                          }}
+                          className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                        >
+                          <span className="text-[11px] font-extrabold tracking-tight leading-none">{room.room_number}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${
+                            room.status === 'disponible' ? 'bg-emerald-250' :
+                            room.status === 'limpia' ? 'bg-blue-250' :
+                            room.status === 'en_limpieza' ? 'bg-amber-250' : 'bg-zinc-300'
+                          }`} />
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1281,7 +1407,7 @@ export default function RecepcionPage() {
                     <Camera size={20} className="text-zinc-400" />
                     <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
                     <input
-                      type="file" accept="image/*" capture="environment"
+                      type="file" accept="image/*"
                       ref={fileRef} onChange={handleDniUpload} className="hidden"
                     />
                   </div>
@@ -1527,7 +1653,7 @@ export default function RecepcionPage() {
                   <select 
                     value={form.room} 
                     onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 pr-10 text-[14px] font-bold text-zinc-900 outline-none appearance-none focus:ring-2 focus:ring-zinc-950/5"
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 pr-10 text-[14px] font-bold text-zinc-900 outline-none appearance-none focus:ring-2 focus:ring-zinc-955/5"
                   >
                     {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
                   </select>
@@ -1548,6 +1674,44 @@ export default function RecepcionPage() {
                 />
               </div>
 
+              {/* Foto Evidencia (Opcional) */}
+              <div>
+                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Foto de la Falla (Opcional)</label>
+                <input 
+                  ref={mttoPhotoRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleMttoImageUpload}
+                  className="hidden"
+                />
+                {photoBase64 ? (
+                  <div className="space-y-2">
+                    <div className="relative rounded-2xl overflow-hidden border border-zinc-200 aspect-video">
+                      <img src={photoBase64} alt="Evidencia" className="w-full h-full object-cover" />
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          setPhotoFile(null);
+                          setPhotoBase64(null);
+                        }}
+                        className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80 shadow"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => mttoPhotoRef.current?.click()}
+                    className="w-full border-2 border-dashed border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 rounded-2xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-zinc-500 hover:text-zinc-700 transition-colors"
+                  >
+                    <Camera size={24} className="text-zinc-455" />
+                    <span className="text-[12px] font-bold">Tomar Foto</span>
+                  </button>
+                )}
+              </div>
+
               {/* Botón de Envío */}
               <button 
                 type="button"
@@ -1561,7 +1725,12 @@ export default function RecepcionPage() {
                     await fetch('/api/tasks', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin' }),
+                      body: JSON.stringify({ 
+                        ...form, 
+                        reported_by: operatorName, 
+                        direction: 'staff_to_admin',
+                        image_base64: photoBase64 || undefined
+                      }),
                     });
 
                     // Registrar log de auditoría
@@ -1586,6 +1755,8 @@ export default function RecepcionPage() {
                     }
 
                     setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+                    setPhotoFile(null);
+                    setPhotoBase64(null);
                     setShowForm(false);
                     alert('¡Incidencia de mantenimiento reportada al administrador!');
                     setSubmitting(false);

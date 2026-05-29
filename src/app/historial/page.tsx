@@ -202,25 +202,43 @@ const playIncidentSound = () => {
 const resolveDeepLink = (log: any) => {
   const actionLower = (log.action || '').toLowerCase();
   const moduleLower = (log.module || '').toLowerCase();
+  const detailsLower = (log.details || '').toLowerCase();
   
   // Expresión regular para parsear Beds24 ID o Reserva ID de 5 a 12 dígitos
   const idMatch = log.details?.match(/(?:id|reserva|beds24|id_reserva)\s*#?[:\-]?\s*(\d{5,12})/i);
   
+  // Inicios de turno, firmas o sesiones no deben llevar a ningún lado (la sección de nóminas fue eliminada)
+  if (
+    actionLower.includes('sesion') || 
+    actionLower.includes('turno') || 
+    actionLower.includes('firma') || 
+    actionLower.includes('inicio_sesion')
+  ) {
+    return null;
+  }
+
+  // Detección robusta de incidencias de mantenimiento técnica o limpieza de mantenimiento
+  if (
+    moduleLower === 'mantenimiento' || 
+    actionLower.includes('mantenimiento') || 
+    actionLower.includes('maintenance') || 
+    actionLower.includes('incidencia') || 
+    actionLower.includes('tarea') || 
+    actionLower.includes('task') ||
+    detailsLower.includes('daño técnico') ||
+    detailsLower.includes('mantenimiento')
+  ) {
+    return '/mantenimiento';
+  }
+
   if (moduleLower === 'finanzas' || actionLower.includes('finan') || actionLower.includes('pago') || actionLower.includes('transac')) {
     return '/finanzas';
-  }
-  if (moduleLower === 'mantenimiento' || actionLower.includes('mantenimiento') || actionLower.includes('incidencia') || actionLower.includes('tarea')) {
-    return '/mantenimiento';
   }
   if (moduleLower === 'limpieza' || actionLower.includes('limpieza') || actionLower.includes('cambio_estado')) {
     return '/recepcion'; // Los logs de limpieza de habitaciones redirigen a Recepción como recomendado
   }
   if (moduleLower === 'inventario' || actionLower.includes('inventario') || actionLower.includes('stock')) {
     return '/inventario';
-  }
-  // Inicios de turno, firmas o sesiones no deben llevar a ningún lado (la sección de nóminas fue eliminada)
-  if (actionLower.includes('sesion') || actionLower.includes('turno') || actionLower.includes('firma')) {
-    return null;
   }
   if (moduleLower === 'equipo') {
     return '/equipo';

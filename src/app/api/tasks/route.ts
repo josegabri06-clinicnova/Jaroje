@@ -64,6 +64,7 @@ export async function POST(req: Request) {
       direction:     body.direction     || 'staff_to_admin',
       read_by_admin: body.direction === 'admin_to_staff',
       image_base64:  body.image_base64  || null,
+      photo_url:     body.photo_url     || null,
     };
 
     const { data, error } = await supabase.from('tasks').insert([newTask]).select().single();

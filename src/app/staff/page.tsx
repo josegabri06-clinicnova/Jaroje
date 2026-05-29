@@ -116,6 +116,7 @@ export default function StaffPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const resolvePhotoRef = useRef<HTMLInputElement>(null);
   
   const staffName = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_staff_name') || 'Personal') : 'Personal';
   const role = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_role') || 'staff_limpieza') : 'staff_limpieza';
@@ -1084,7 +1085,7 @@ export default function StaffPage() {
                 )}
               </div>
             ) : (
-              // BÁNNER INFORMATIVO Y HERMOSO SI ES CLEANER / RECEPCIÓN (ELIMINA EL RUIDO VISUAL)
+              // BÁNNER INFORMATIVO SI ES CLEANER / RECEPCIÓN (ELIMINA EL RUIDO VISUAL)
               <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden border border-zinc-800">
                 <div className="absolute right-0 bottom-0 opacity-10 translate-x-4 translate-y-4">
                   <Wrench size={160} />
@@ -1122,66 +1123,65 @@ export default function StaffPage() {
                 <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
               </div>
 
-              {/* Leyenda de Estados */}
-              <div className="flex gap-2 flex-wrap text-[10px] font-black tracking-wide uppercase">
-                <span className="px-2 py-1 rounded bg-zinc-100 border border-zinc-200 text-zinc-600">Disponible</span>
-                <span className="px-2 py-1 rounded bg-amber-50 border border-amber-200 text-amber-700 animate-pulse">En Limpieza</span>
-                <span className="px-2 py-1 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">Limpia</span>
-              </div>
-
-              {/* Grid Interactivo */}
+              {/* Conteo por estados */}
               <div className="grid grid-cols-3 gap-2">
-                {ROOMS.map((r) => {
-                  const stateInfo = getRoomState(r);
-                  let stateStyle = 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50';
-                  let badge = '';
-
-                  if (stateInfo.status === 'en_limpieza') {
-                    stateStyle = 'bg-gradient-to-br from-amber-50 to-orange-50/70 border-amber-200 text-amber-700 shadow-sm shadow-amber-50';
-                    badge = 'bg-amber-500';
-                  } else if (stateInfo.status === 'limpia') {
-                    stateStyle = 'bg-gradient-to-br from-emerald-50 to-teal-50/70 border-emerald-200 text-emerald-700 shadow-sm shadow-emerald-50';
-                    badge = 'bg-emerald-500';
-                  }
-
-                  return (
-                    <button
-                      key={r}
-                      onClick={() => {
-                        if (canModifyStatus) {
-                          setSelectedRoom(r);
-                          setShowStatusModal(true);
-                        }
-                      }}
-                      disabled={!canModifyStatus}
-                      className={`relative border rounded-2xl p-3 flex flex-col justify-between h-20 text-left transition-all ${stateStyle} ${canModifyStatus ? 'active:scale-95 cursor-pointer' : 'opacity-90 cursor-default'}`}
-                    >
-                      <div className="flex items-center justify-between w-full">
-                        <span className="text-[14px] font-black leading-none">{r}</span>
-                        {badge && (
-                          <span className="relative flex h-2 w-2">
-                            {stateInfo.status === 'en_limpieza' && (
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                            )}
-                            <span className={`relative inline-flex rounded-full h-2 w-2 ${badge}`}></span>
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="space-y-0.5">
-                        <p className="text-[9px] font-black uppercase opacity-80 leading-none truncate">
-                          {stateInfo.status === 'en_limpieza' ? 'En Limpieza' : stateInfo.status === 'limpia' ? 'Limpia' : 'Disponible'}
-                        </p>
-                        {stateInfo.guest_name && (
-                          <p className="text-[8px] font-bold text-zinc-400 truncate leading-none max-w-[80px]">
-                            {stateInfo.guest_name}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 text-center shadow-sm">
+                  <span className="text-[16px] font-black text-emerald-700">
+                    {roomStatuses.filter(r => r.status === 'disponible').length}
+                  </span>
+                  <p className="text-[8.5px] font-extrabold text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2.5 text-center shadow-sm">
+                  <span className="text-[16px] font-black text-blue-700">
+                    {roomStatuses.filter(r => r.status === 'limpia').length}
+                  </span>
+                  <p className="text-[8.5px] font-extrabold text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-2.5 text-center shadow-sm">
+                  <span className="text-[16px] font-black text-amber-700">
+                    {roomStatuses.filter(r => r.status === 'en_limpieza').length}
+                  </span>
+                  <p className="text-[8.5px] font-extrabold text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                </div>
               </div>
+
+              {/* Grid Interactivo Premium (7 Columnas de Bolitas de Colores) */}
+              {roomStatuses.length === 0 ? (
+                <div className="text-center py-6 text-[12px] text-zinc-450 font-semibold animate-pulse">Cargando estado físico de unidades...</div>
+              ) : (
+                <div className="grid grid-cols-7 gap-2 pt-1">
+                  {ROOMS.map(r => {
+                    const roomInfo = getRoomState(r);
+                    let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                    if (roomInfo.status === 'disponible') {
+                      colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                    } else if (roomInfo.status === 'limpia') {
+                      colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                    } else if (roomInfo.status === 'en_limpieza') {
+                      colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                    }
+                    return (
+                      <div
+                        key={r}
+                        onClick={() => {
+                          if (canModifyStatus) {
+                            setSelectedRoom(r);
+                            setShowStatusModal(true);
+                          }
+                        }}
+                        className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                      >
+                        <span className="text-[11px] font-extrabold tracking-tight leading-none">{r}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${
+                          roomInfo.status === 'disponible' ? 'bg-emerald-250' :
+                          roomInfo.status === 'limpia' ? 'bg-blue-250' :
+                          roomInfo.status === 'en_limpieza' ? 'bg-amber-250' : 'bg-zinc-300'
+                        }`} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1287,7 +1287,6 @@ export default function StaffPage() {
                   ref={fileRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   multiple
                   onChange={handleImage}
                   className="hidden"
@@ -1329,7 +1328,7 @@ export default function StaffPage() {
                     className="w-full border-2 border-dashed border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 rounded-2xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-zinc-500 hover:text-zinc-700 transition-colors"
                   >
                     <Camera size={24} className="text-zinc-450" />
-                    <span className="text-[12px] font-bold">Tomar fotos o subir de galería</span>
+                    <span className="text-[12px] font-bold">Tomar Foto</span>
                   </button>
                 )}
               </div>
@@ -1451,12 +1450,40 @@ export default function StaffPage() {
                   Evidencia Fotográfica (Opcional)
                 </label>
                 <input
+                  ref={resolvePhotoRef}
                   type="file"
                   accept="image/*"
                   onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 outline-none text-[12px] file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-[11px] file:font-bold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer"
+                  className="hidden"
                 />
-                <p className="text-[10px] text-zinc-400 mt-1 font-medium">Puedes tomar o seleccionar una foto del trabajo terminado.</p>
+                {resolvePhotoFile ? (
+                  <div className="space-y-2">
+                    <div className="relative rounded-2xl overflow-hidden border border-zinc-200 aspect-video bg-zinc-100">
+                      <img
+                        src={URL.createObjectURL(resolvePhotoFile)}
+                        alt="Evidencia resolución"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setResolvePhotoFile(null)}
+                        className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80 shadow"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-emerald-600 font-bold pl-1">✓ Foto lista para adjuntar</p>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => resolvePhotoRef.current?.click()}
+                    className="w-full border-2 border-dashed border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-emerald-600 hover:text-emerald-700 transition-colors"
+                  >
+                    <Camera size={24} className="text-emerald-500" />
+                    <span className="text-[12px] font-bold">Tomar Foto / Seleccionar</span>
+                  </button>
+                )}
               </div>
 
               <div className="flex gap-2 pt-2 pb-1">

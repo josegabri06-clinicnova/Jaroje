@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus, CheckCircle2, AlertTriangle, Wrench, Sparkles, X, Edit2, Download, Trash2, Bell } from 'lucide-react';
+import { Plus, CheckCircle2, AlertTriangle, Wrench, Sparkles, X, Edit2, Download, Trash2, Bell, Camera, Image as ImageIcon } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -25,6 +25,7 @@ interface Task {
   resolved_at: string | null;
   photo_url?: string | null;
   resolution_photo_url?: string | null;
+  image_base64?: string | null;
 }
 
 const TYPE_CFG: Record<string, any> = {
@@ -62,6 +63,9 @@ export default function MantenimientoPage() {
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
   const [resolveComments, setResolveComments] = useState('');
   const [resolvePhotoFile, setResolvePhotoFile] = useState<File | null>(null);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const resolutionFileInputRef = useRef<HTMLInputElement>(null);
 
   // Read-only Details Drawer State
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -533,7 +537,7 @@ export default function MantenimientoPage() {
                     <span className="text-[11px] font-medium text-zinc-400">
                       {format(new Date(task.created_at), 'd MMM', { locale: es })}
                     </span>
-                    {task.photo_url && (
+                    {(task.photo_url || task.image_base64) && (
                       <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100 flex items-center gap-0.5">
                         📷 Foto
                       </span>
@@ -606,22 +610,53 @@ export default function MantenimientoPage() {
 
               {!editingTask && (
                 <div>
-                  <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Tomar foto o elegir de fototeca - Opcional)</label>
+                  <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Opcional)</label>
                   <input 
+                    ref={fileInputRef}
                     type="file"
                     accept="image/*"
                     onChange={e => setPhotoFile(e.target.files ? e.target.files[0] : null)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[12px] file:font-semibold file:bg-zinc-900 file:text-white hover:file:bg-zinc-800 cursor-pointer"
+                    className="hidden"
                   />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      <Camera size={16} />
+                      <span>Tomar Foto</span>
+                    </button>
+                    {photoFile && (
+                      <button
+                        type="button"
+                        onClick={() => setPhotoFile(null)}
+                        className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                  {photoFile && (
+                    <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
+                      ✓ Seleccionado: <span className="font-bold text-zinc-800">{photoFile.name}</span>
+                    </p>
+                  )}
                 </div>
               )}
 
-              {editingTask?.photo_url && (
+              {(editingTask?.photo_url || editingTask?.image_base64) && (
                 <div>
                   <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto Original</label>
-                  <a href={editingTask.photo_url} target="_blank" rel="noreferrer">
-                    <img src={editingTask.photo_url} alt="Incidencia" className="w-full h-32 object-cover rounded-xl border border-zinc-200" />
-                  </a>
+                  {(() => {
+                    const srcUrl = editingTask.photo_url || editingTask.image_base64 || '';
+                    const isBase64 = srcUrl.startsWith('data:');
+                    return (
+                      <a href={isBase64 ? undefined : srcUrl} target="_blank" rel="noreferrer" className={isBase64 ? '' : 'cursor-pointer'}>
+                        <img src={srcUrl} alt="Incidencia" className="w-full h-32 object-cover rounded-xl border border-zinc-200" />
+                      </a>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -754,11 +789,36 @@ export default function MantenimientoPage() {
                   Evidencia Fotográfica (Opcional)
                 </label>
                 <input
+                  ref={resolutionFileInputRef}
                   type="file"
                   accept="image/*"
                   onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[12px] file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer border-dashed border-2 border-zinc-200"
+                  className="hidden"
                 />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => resolutionFileInputRef.current?.click()}
+                    className="flex-1 py-3 px-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    <Camera size={16} />
+                    <span>Tomar Foto / Seleccionar Imagen</span>
+                  </button>
+                  {resolvePhotoFile && (
+                    <button
+                      type="button"
+                      onClick={() => setResolvePhotoFile(null)}
+                      className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                    >
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+                {resolvePhotoFile && (
+                  <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
+                    ✓ Seleccionado: <span className="font-bold text-zinc-800">{resolvePhotoFile.name}</span>
+                  </p>
+                )}
                 <p className="text-[11px] text-zinc-400 mt-2 font-medium">Puedes adjuntar una foto del trabajo terminado.</p>
               </div>
 
@@ -841,16 +901,22 @@ export default function MantenimientoPage() {
               </div>
 
               {/* Foto si existe */}
-              {selectedTaskForDetails.photo_url && (
+              {(selectedTaskForDetails.photo_url || selectedTaskForDetails.image_base64) && (
                 <div className="space-y-2 pt-2">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Evidencia Fotográfica</span>
-                  <a href={selectedTaskForDetails.photo_url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-2xl border border-zinc-200 hover:opacity-95 transition-opacity">
-                    <img 
-                      src={selectedTaskForDetails.photo_url} 
-                      alt="Evidencia inicial" 
-                      className="w-full h-48 object-cover"
-                    />
-                  </a>
+                  {(() => {
+                    const srcUrl = selectedTaskForDetails.photo_url || selectedTaskForDetails.image_base64 || '';
+                    const isBase64 = srcUrl.startsWith('data:');
+                    return (
+                      <a href={isBase64 ? undefined : srcUrl} target="_blank" rel="noreferrer" className={`block overflow-hidden rounded-2xl border border-zinc-200 ${isBase64 ? '' : 'hover:opacity-95 transition-opacity'}`}>
+                        <img 
+                          src={srcUrl} 
+                          alt="Evidencia inicial" 
+                          className="w-full h-48 object-cover"
+                        />
+                      </a>
+                    );
+                  })()}
                 </div>
               )}
             </div>
