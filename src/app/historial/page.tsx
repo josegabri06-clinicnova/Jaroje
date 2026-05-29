@@ -218,7 +218,11 @@ const resolveDeepLink = (log: any) => {
   if (moduleLower === 'inventario' || actionLower.includes('inventario') || actionLower.includes('stock')) {
     return '/inventario';
   }
-  if (moduleLower === 'equipo' || actionLower.includes('sesion') || actionLower.includes('turno') || actionLower.includes('firma')) {
+  // Inicios de turno, firmas o sesiones no deben llevar a ningún lado (la sección de nóminas fue eliminada)
+  if (actionLower.includes('sesion') || actionLower.includes('turno') || actionLower.includes('firma')) {
+    return null;
+  }
+  if (moduleLower === 'equipo') {
     return '/equipo';
   }
   if (moduleLower === 'bot' || actionLower.includes('bot') || actionLower.includes('whatsapp')) {
