@@ -150,7 +150,7 @@ export default function RecepcionPage() {
   const [activeEmployee, setActiveEmployeeState] = useState<Employee | null>(null);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
-    type: 'checkin' | 'checkout' | 'mantenimiento';
+    type: 'checkin' | 'checkout' | 'mantenimiento' | 'room_status';
     payload?: any;
     callback: (...args: any[]) => void;
   } | null>(null);
@@ -166,7 +166,7 @@ export default function RecepcionPage() {
 
   // Interceptor de firma de empleado
   const runWithSignature = (
-    type: 'checkin' | 'checkout' | 'mantenimiento',
+    type: 'checkin' | 'checkout' | 'mantenimiento' | 'room_status',
     callback: (...args: any[]) => void,
     payload?: any
   ) => {
@@ -1590,93 +1590,56 @@ export default function RecepcionPage() {
           </div>
         </div>
       )}
-      {/* Modal Reporte de Mantenimiento desde Recepción */}
-      {showForm && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div onClick={() => setShowForm(false)} className="absolute inset-0" />
-          <div className="relative bg-white rounded-t-[32px] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
-            
-            {/* Tirador */}
-            <div className="flex justify-center py-3 flex-shrink-0">
-              <div className="w-10 h-1.5 rounded-full bg-zinc-200" />
-            </div>
 
+      {/* Modal Reporte de Mantenimiento desde Recepción (Centrado Premium como Admin) */}
+      {showForm && (
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div onClick={() => setShowForm(false)} className="absolute inset-0" />
+          <div className="relative bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto">
+            
             {/* Header */}
-            <div className="flex items-center justify-between px-6 pb-4 border-b border-zinc-100 flex-shrink-0">
-              <h3 className="text-lg font-black text-zinc-900 flex items-center gap-2">
-                <Wrench size={18} className="text-rose-600" />
-                Reportar Daño Técnico (Mantenimiento)
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
+                <Wrench size={20} className="text-rose-500 animate-pulse" />
+                Reportar MTTO
               </h3>
               <button 
                 onClick={() => setShowForm(false)} 
-                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
               >
-                <X size={15} strokeWidth={2.5} />
+                <X size={16} strokeWidth={3} />
               </button>
             </div>
 
-            {/* Contenido Scrollable */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-5">
-              
-              {/* Tipo de Tarea */}
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+              {/* Descripción */}
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2.5">Tipo de Incidencia</label>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {[
-                    { id: 'limpieza', label: 'Limpieza', icon: Sparkles, bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-700' },
-                    { id: 'mantenimiento', label: 'Mtto.', icon: Wrench, bg: 'bg-rose-50', border: 'border-rose-200', text: 'text-rose-700' },
-                    { id: 'otro', label: 'Otro', icon: AlertTriangle, bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700' }
-                  ].map((cfg) => {
-                    const Icon = cfg.icon;
-                    const active = form.type === cfg.id;
-                    return (
-                      <button 
-                        key={cfg.id}
-                        type="button"
-                        onClick={() => setForm(f => ({ ...f, type: cfg.id }))}
-                        className={`flex flex-col items-center gap-2 py-3 rounded-2xl border-2 transition-all cursor-pointer ${active ? `${cfg.bg} ${cfg.border} ${cfg.text}` : 'border-zinc-100 bg-zinc-50/50 text-zinc-400'}`}
-                      >
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? 'bg-white shadow-sm' : 'bg-zinc-100'}`}>
-                          <Icon size={15} className={active ? cfg.text : 'text-zinc-400'} />
-                        </div>
-                        <span className="text-[11px] font-black">{cfg.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Descripción del Daño</label>
+                <textarea 
+                  required
+                  rows={3}
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Ej. Fuga de agua en el lavabo..."
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10 resize-none font-medium text-zinc-900"
+                />
               </div>
 
               {/* Habitación */}
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Habitación / Ubicación</label>
-                <div className="relative">
-                  <select 
-                    value={form.room} 
-                    onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 pr-10 text-[14px] font-bold text-zinc-900 outline-none appearance-none focus:ring-2 focus:ring-zinc-955/5"
-                  >
-                    {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="text-zinc-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Descripción */}
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Descripción del Daño</label>
-                <textarea 
-                  required
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Detalla qué está fallando..."
-                  rows={3}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 text-[14px] text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-950/5 resize-none leading-relaxed"
-                />
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Ubicación</label>
+                <select 
+                  value={form.room} 
+                  onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
+                >
+                  {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
+                </select>
               </div>
 
               {/* Foto Evidencia (Opcional) */}
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Foto de la Falla (Opcional)</label>
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Opcional)</label>
                 <input 
                   ref={mttoPhotoRef}
                   type="file"
@@ -1684,31 +1647,32 @@ export default function RecepcionPage() {
                   onChange={handleMttoImageUpload}
                   className="hidden"
                 />
-                {photoBase64 ? (
-                  <div className="space-y-2">
-                    <div className="relative rounded-2xl overflow-hidden border border-zinc-200 aspect-video">
-                      <img src={photoBase64} alt="Evidencia" className="w-full h-full object-cover" />
-                      <button 
-                        type="button"
-                        onClick={() => {
-                          setPhotoFile(null);
-                          setPhotoBase64(null);
-                        }}
-                        className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80 shadow"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button 
+                <div className="flex gap-2">
+                  <button
                     type="button"
                     onClick={() => mttoPhotoRef.current?.click()}
-                    className="w-full border-2 border-dashed border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 rounded-2xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-zinc-500 hover:text-zinc-700 transition-colors"
+                    className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
-                    <Camera size={24} className="text-zinc-455" />
-                    <span className="text-[12px] font-bold">Tomar Foto</span>
+                    <Camera size={16} />
+                    <span>Tomar Foto</span>
                   </button>
+                  {photoFile && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotoFile(null);
+                        setPhotoBase64(null);
+                      }}
+                      className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                    >
+                      Eliminar
+                    </button>
+                  )}
+                </div>
+                {photoFile && (
+                  <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
+                    ✓ Seleccionado: <span className="font-bold text-zinc-800">{photoFile.name}</span>
+                  </p>
                 )}
               </div>
 
@@ -1758,7 +1722,7 @@ export default function RecepcionPage() {
                     setPhotoFile(null);
                     setPhotoBase64(null);
                     setShowForm(false);
-                    alert('¡Incidencia de mantenimiento reportada al administrador!');
+                    alert('¡Incidencia de mantenimiento reportada con éxito!');
                     setSubmitting(false);
                   });
                 }}
@@ -1766,10 +1730,10 @@ export default function RecepcionPage() {
                 className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold py-4 rounded-2xl text-[14px] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-98"
               >
                 <Send size={14} />
-                <span>{submitting ? 'Enviando...' : 'Enviar Incidencia a Mantenimiento'}</span>
+                <span>{submitting ? 'Enviando Reporte...' : 'Enviar Reporte al Administrador'}</span>
               </button>
+            </form>
 
-            </div>
           </div>
         </div>
       )}
@@ -1801,6 +1765,48 @@ export default function RecepcionPage() {
           }
         }}
       />
+
+      {/* ── MODAL CAMBIAR ESTADO DE HABITACIÓN (BOTTOM SHEET SELECCIÓN RÁPIDA) ── */}
+      {showRoomStatusModal && selectedRoomForStatus && (
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div onClick={() => setShowRoomStatusModal(false)} className="absolute inset-0" />
+          <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+              <div>
+                <h3 className="text-lg font-black text-zinc-900">Habitación {selectedRoomForStatus.room_number}</h3>
+                <p className="text-[11px] text-zinc-450 font-bold mt-0.5">Asignar estatus operativo real</p>
+              </div>
+              <button 
+                onClick={() => setShowRoomStatusModal(false)} 
+                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Opciones */}
+            <div className="space-y-3">
+              {[
+                { id: 'disponible', title: 'Disponible', desc: 'Habitación limpia, lista para huéspedes y libre de detalles.', color: 'border-zinc-200 hover:bg-zinc-50 text-zinc-800' },
+                { id: 'en_limpieza', title: 'En Limpieza', desc: 'El personal de limpieza está trabajando actualmente en la unidad.', color: 'border-amber-200 bg-amber-50/10 hover:bg-amber-50/30 text-amber-800' },
+                { id: 'limpia', title: 'Limpia (Inspeccionada)', desc: 'Unidad completamente aseada, sanitizada e inspeccionada.', color: 'border-emerald-200 bg-emerald-50/10 hover:bg-emerald-50/30 text-emerald-800' }
+              ].map((opt) => (
+                <button
+                  key={opt.id}
+                  onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus(opt.id))}
+                  className={`w-full text-left p-4 border-2 rounded-2xl flex flex-col justify-center transition-all cursor-pointer active:scale-[0.99] ${opt.color}`}
+                >
+                  <span className="text-[14px] font-black leading-tight">{opt.title}</span>
+                  <span className="text-[11px] opacity-75 font-semibold mt-1 leading-snug">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

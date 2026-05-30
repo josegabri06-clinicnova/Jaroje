@@ -66,6 +66,7 @@ export default function MantenimientoPage() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const resolutionFileInputRef = useRef<HTMLInputElement>(null);
+  const editResolutionFileInputRef = useRef<HTMLInputElement>(null);
 
   // Read-only Details Drawer State
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -712,11 +713,36 @@ export default function MantenimientoPage() {
                     </a>
                   ) : null}
                   <input 
+                    ref={editResolutionFileInputRef}
                     type="file"
                     accept="image/*"
                     onChange={e => setResolutionPhotoFile(e.target.files ? e.target.files[0] : null)}
-                    className="w-full bg-white border border-emerald-200 rounded-xl px-4 py-3 outline-none text-[13px] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[12px] file:font-semibold file:bg-emerald-600 file:text-white hover:file:bg-emerald-700 cursor-pointer"
+                    className="hidden"
                   />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => editResolutionFileInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      <Camera size={16} />
+                      <span>Tomar Foto</span>
+                    </button>
+                    {resolutionPhotoFile && (
+                      <button
+                        type="button"
+                        onClick={() => setResolutionPhotoFile(null)}
+                        className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                  {resolutionPhotoFile && (
+                    <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
+                      ✓ Seleccionado: <span className="font-bold text-zinc-800">{resolutionPhotoFile.name}</span>
+                    </p>
+                  )}
                   <p className="text-[11px] text-emerald-600 mt-2 font-medium">Puedes adjuntar una foto como evidencia del cierre (opcional).</p>
                 </div>
               )}

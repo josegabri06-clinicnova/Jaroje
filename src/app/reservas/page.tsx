@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Search, RefreshCw, User, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, RefreshCw, User, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -70,6 +70,7 @@ export default function ReservasList() {
   const [paymentReference, setPaymentReference] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   const [isReassigning, setIsReassigning] = useState(false);
   const [targetRoomName, setTargetRoomName] = useState('');
@@ -795,12 +796,37 @@ export default function ReservasList() {
                     </label>
                     <div className="relative">
                       <input 
+                        ref={docInputRef}
                         type="file"
                         onChange={e => setDocumentFile(e.target.files ? e.target.files[0] : null)}
-                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[12px] file:font-semibold file:bg-zinc-900 file:text-white hover:file:bg-zinc-800 cursor-pointer"
+                        className="hidden"
                         accept="image/*,.pdf"
                         required
                       />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => docInputRef.current?.click()}
+                          className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                        >
+                          <Camera size={16} />
+                          <span>Tomar Foto</span>
+                        </button>
+                        {documentFile && (
+                          <button
+                            type="button"
+                            onClick={() => setDocumentFile(null)}
+                            className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                          >
+                            Eliminar
+                          </button>
+                        )}
+                      </div>
+                      {documentFile && (
+                        <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
+                          ✓ Seleccionado: <span className="font-bold text-zinc-800">{documentFile.name}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
 

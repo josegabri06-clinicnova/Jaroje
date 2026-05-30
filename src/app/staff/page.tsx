@@ -703,6 +703,76 @@ export default function StaffPage() {
               ))}
             </div>
 
+            {/* ── ESTADO FÍSICO DE HABITACIONES (GRID INTERACTIVO PREMIUM EN TAREAS) ── */}
+            {!isMantenimiento && (
+              <div className="bg-white border border-zinc-200 rounded-[28px] p-5 shadow-sm space-y-4">
+                <div>
+                  <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
+                  <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
+                </div>
+
+                {/* Conteo por estados */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
+                    <span className="text-[15px] font-black text-emerald-700">
+                      {roomStatuses.filter(r => r.status === 'disponible').length}
+                    </span>
+                    <p className="text-[8px] font-extrabold text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
+                    <span className="text-[15px] font-black text-blue-700">
+                      {roomStatuses.filter(r => r.status === 'limpia').length}
+                    </span>
+                    <p className="text-[8px] font-extrabold text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
+                  </div>
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
+                    <span className="text-[15px] font-black text-amber-700">
+                      {roomStatuses.filter(r => r.status === 'en_limpieza').length}
+                    </span>
+                    <p className="text-[8px] font-extrabold text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                  </div>
+                </div>
+
+                {/* Grid Interactivo */}
+                {roomStatuses.length === 0 ? (
+                  <div className="text-center py-4 text-[11px] text-zinc-400 font-semibold animate-pulse">Cargando unidades...</div>
+                ) : (
+                  <div className="grid grid-cols-7 gap-2 pt-1">
+                    {ROOMS.map(r => {
+                      const roomInfo = getRoomState(r);
+                      let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                      if (roomInfo.status === 'disponible') {
+                        colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                      } else if (roomInfo.status === 'limpia') {
+                        colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                      } else if (roomInfo.status === 'en_limpieza') {
+                        colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                      }
+                      return (
+                        <div
+                          key={r}
+                          onClick={() => {
+                            if (canModifyStatus) {
+                              setSelectedRoom(r);
+                              setShowStatusModal(true);
+                            }
+                          }}
+                          className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                        >
+                          <span className="text-[11px] font-extrabold tracking-tight leading-none">{r}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${
+                            roomInfo.status === 'disponible' ? 'bg-emerald-250' :
+                            roomInfo.status === 'limpia' ? 'bg-blue-250' :
+                            roomInfo.status === 'en_limpieza' ? 'bg-amber-250' : 'bg-zinc-300'
+                          }`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Llegadas de Hoy (Check-in) */}
             {!isMantenimiento && llegadas.length > 0 && (
               <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
@@ -1193,96 +1263,61 @@ export default function StaffPage() {
       {successMsg && (
         <div className="fixed bottom-6 left-4 right-4 z-[9000] animate-in fade-in slide-in-from-bottom-5">
           <div className="bg-zinc-900 text-white text-[13px] font-bold px-5 py-3.5 rounded-2xl text-center shadow-xl flex items-center justify-center gap-2 max-w-md mx-auto border border-zinc-800">
-            <CheckCheck size={16} className="text-emerald-400 shrink-0" />
+            <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
             <span>{successMsg}</span>
           </div>
         </div>
       )}
 
-      {/* ── MODAL REPORTE DE INCIDENCIA (BOTTOM SHEET PREMIUM) ── */}
+      {/* ── MODAL REPORTE DE INCIDENCIA (CENTRADO PREMIUM COMO ADMIN) ── */}
       {showForm && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div onClick={() => setShowForm(false)} className="absolute inset-0" />
-          <div className="relative bg-white rounded-t-[32px] shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
+          <div className="relative bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto mx-auto">
             
-            {/* Tirador */}
-            <div className="flex justify-center py-3 flex-shrink-0">
-              <div className="w-10 h-1.5 rounded-full bg-zinc-200" />
-            </div>
-
             {/* Header */}
-            <div className="flex items-center justify-between px-6 pb-4 border-b border-zinc-100 flex-shrink-0">
-              <h3 className="text-lg font-black text-zinc-900 flex items-center gap-2">
-                <Wrench size={18} className="text-rose-600" />
-                Reportar Daño Técnico
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
+                <Wrench size={20} className="text-rose-500 animate-pulse" />
+                Reportar MTTO
               </h3>
               <button 
                 onClick={() => setShowForm(false)} 
-                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
               >
-                <X size={15} strokeWidth={2.5} />
+                <X size={16} strokeWidth={3} />
               </button>
             </div>
 
-            {/* Contenido Scrollable */}
-            <div className="overflow-y-auto flex-1 p-6 space-y-5">
-              
-              {/* Tipo de Tarea */}
+            <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+              {/* Descripción */}
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2.5">Tipo de Incidencia</label>
-                <div className="grid grid-cols-3 gap-2.5">
-                  {(['limpieza', 'mantenimiento', 'otro'] as const).map((k) => {
-                    const cfg = TYPE_CFG[k];
-                    const Icon = cfg.icon;
-                    const active = form.type === k;
-                    return (
-                      <button 
-                        key={k}
-                        type="button"
-                        onClick={() => setForm(f => ({ ...f, type: k }))}
-                        className={`flex flex-col items-center gap-2 py-3 rounded-2xl border-2 transition-all cursor-pointer ${active ? `${cfg.bg} ${cfg.border} ${cfg.text}` : 'border-zinc-100 bg-zinc-50/50 text-zinc-400'}`}
-                      >
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${active ? 'bg-white shadow-sm' : 'bg-zinc-100'}`}>
-                          <Icon size={15} className={active ? cfg.text : 'text-zinc-400'} />
-                        </div>
-                        <span className="text-[11px] font-black">{cfg.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Descripción del Daño</label>
+                <textarea 
+                  required
+                  rows={3}
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Ej. Fuga de agua en el baño..."
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-zinc-900/10 resize-none font-medium text-zinc-900"
+                />
               </div>
 
               {/* Habitación */}
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Habitación / Ubicación</label>
-                <div className="relative">
-                  <select 
-                    value={form.room} 
-                    onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 pr-10 text-[14px] font-bold text-zinc-900 outline-none appearance-none focus:ring-2 focus:ring-zinc-950/5"
-                  >
-                    {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="text-zinc-450 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Descripción */}
-              <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Descripción del Daño</label>
-                <textarea 
-                  required
-                  value={form.description}
-                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                  placeholder="Detalla qué está fallando (ej. gotea grifo del baño)..."
-                  rows={3}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl py-3.5 px-4 text-[14px] text-zinc-900 outline-none focus:ring-2 focus:ring-zinc-950/5 resize-none leading-relaxed"
-                />
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Ubicación</label>
+                <select 
+                  value={form.room} 
+                  onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
+                >
+                  {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
+                </select>
               </div>
 
               {/* Foto Evidencia (Múltiple) */}
               <div>
-                <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">Foto de la Falla (Opcional - Múltiple)</label>
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Falla (Opcional - Múltiple)</label>
                 <input 
                   ref={fileRef}
                   type="file"
@@ -1291,45 +1326,51 @@ export default function StaffPage() {
                   onChange={handleImage}
                   className="hidden"
                 />
-                {imagePreviews.length > 0 ? (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-2">
-                      {imagePreviews.map((img, idx) => (
-                        <div key={idx} className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-square">
-                          <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover" />
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setImagePreviews(prev => prev.filter((_, i) => i !== idx));
-                              if (idx === 0) {
-                                setImagePreview(imagePreviews[1] || null);
-                              }
-                            }}
-                            className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80"
-                          >
-                            <X size={10} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={() => fileRef.current?.click()}
-                      className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all text-center flex items-center justify-center gap-1 cursor-pointer"
-                    >
-                      <Camera size={13} strokeWidth={2.5} />
-                      <span>Agregar más fotos</span>
-                    </button>
-                  </div>
-                ) : (
-                  <button 
+                <div className="flex gap-2 mb-3">
+                  <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="w-full border-2 border-dashed border-zinc-200 bg-zinc-50 hover:bg-zinc-100/50 rounded-2xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-zinc-500 hover:text-zinc-700 transition-colors"
+                    className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
-                    <Camera size={24} className="text-zinc-450" />
-                    <span className="text-[12px] font-bold">Tomar Foto</span>
+                    <Camera size={16} />
+                    <span>Tomar Foto</span>
                   </button>
+                  {imagePreviews.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setImagePreviews([]);
+                        setImagePreview(null);
+                      }}
+                      className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                    >
+                      Limpiar Todo
+                    </button>
+                  )}
+                </div>
+                {imagePreviews.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 bg-zinc-50 border border-zinc-200/50 p-3 rounded-2xl">
+                    {imagePreviews.map((img, idx) => (
+                      <div key={idx} className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-square">
+                        <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover" />
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const filtered = imagePreviews.filter((_, i) => i !== idx);
+                            setImagePreviews(filtered);
+                            if (filtered.length > 0) {
+                              setImagePreview(filtered[0]);
+                            } else {
+                              setImagePreview(null);
+                            }
+                          }}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80 shadow"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -1344,7 +1385,7 @@ export default function StaffPage() {
                 <span>{submitting ? 'Enviando Reporte...' : 'Enviar Reporte al Administrador'}</span>
               </button>
 
-            </div>
+            </form>
           </div>
         </div>
       )}

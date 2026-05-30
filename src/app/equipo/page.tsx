@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X, Trash2, MessageSquare } from 'lucide-react';
+import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X, Trash2, MessageSquare, Camera } from 'lucide-react';
 import Link from 'next/link';
 import { getRole, getAdminPin } from '@/lib/auth';
 
@@ -162,6 +162,7 @@ export default function EquipoPage() {
   const [type, setType] = useState<'nomina' | 'anticipo' | 'bono'>('nomina');
   const [period, setPeriod] = useState('1ra Quincena ' + format(new Date(), 'MMM', { locale: es }));
   const [file, setFile] = useState<File | null>(null);
+  const comprobanteInputRef = useRef<HTMLInputElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [sendWhatsapp, setSendWhatsapp] = useState(true);
   
@@ -1508,11 +1509,36 @@ export default function EquipoPage() {
                 <div>
                   <label className="block text-[12px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">Comprobante (Opcional)</label>
                   <input 
+                    ref={comprobanteInputRef}
                     type="file"
                     onChange={e => setFile(e.target.files ? e.target.files[0] : null)}
-                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[13px] file:font-semibold file:bg-zinc-900 file:text-white hover:file:bg-zinc-800 cursor-pointer"
+                    className="hidden"
                     accept="image/*,.pdf"
                   />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => comprobanteInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      <Camera size={16} />
+                      <span>Tomar Foto</span>
+                    </button>
+                    {file && (
+                      <button
+                        type="button"
+                        onClick={() => setFile(null)}
+                        className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                  {file && (
+                    <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
+                      ✓ Seleccionado: <span className="font-bold text-zinc-800">{file.name}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-3 bg-zinc-50 p-3 rounded-xl border border-zinc-200">
