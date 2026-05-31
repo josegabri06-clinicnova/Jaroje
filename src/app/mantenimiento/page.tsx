@@ -669,7 +669,14 @@ export default function MantenimientoPage() {
                       value={formRoom} onChange={e => setFormRoom(e.target.value)}
                       className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                     >
-                      {ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
+                      {ROOMS.map(r => {
+                        const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(r);
+                        return (
+                          <option key={r} value={r}>
+                            {isRoom ? `Habitación ${r}` : r}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
                   <div>
@@ -699,7 +706,14 @@ export default function MantenimientoPage() {
                     value={formRoom} onChange={e => setFormRoom(e.target.value)}
                     className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                   >
-                    {ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
+                    {ROOMS.map(r => {
+                      const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(r);
+                      return (
+                        <option key={r} value={r}>
+                          {isRoom ? `Habitación ${r}` : r}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
