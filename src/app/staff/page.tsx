@@ -877,13 +877,7 @@ export default function StaffPage() {
                     <span className="text-[15px] font-black text-emerald-700">
                       {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'disponible').length}
                     </span>
-                    <p className="text-[7.5px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
-                  </div>
-                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
-                    <span className="text-[15px] font-black text-blue-700">
-                      {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'limpia').length}
-                    </span>
-                    <p className="text-[7.5px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
+                    <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
                   </div>
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
                     <span className="text-[15px] font-black text-amber-700">
@@ -892,13 +886,19 @@ export default function StaffPage() {
                         return s === 'en_limpieza' || s === 'limpieza_programada';
                       }).length}
                     </span>
-                    <p className="text-[7.5px] font-black text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                    <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
                   </div>
                   <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
                     <span className="text-[15px] font-black text-rose-700">
                       {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'sucio_checkout').length}
                     </span>
-                    <p className="text-[7.5px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check-Outs</p>
+                    <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Aviso Check Out</p>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
+                    <span className="text-[15px] font-black text-blue-700">
+                      {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'limpia').length}
+                    </span>
+                    <p className="text-[7.2px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limp. Terminada</p>
                   </div>
                 </div>
 
@@ -1399,13 +1399,7 @@ export default function StaffPage() {
                   <span className="text-[15px] font-black text-emerald-700">
                     {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'disponible').length}
                   </span>
-                  <p className="text-[7.5px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
-                </div>
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
-                  <span className="text-[15px] font-black text-blue-700">
-                    {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'limpia').length}
-                  </span>
-                  <p className="text-[7.5px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
+                  <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
                 </div>
                 <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-amber-700">
@@ -1414,13 +1408,19 @@ export default function StaffPage() {
                       return s === 'en_limpieza' || s === 'limpieza_programada';
                     }).length}
                   </span>
-                  <p className="text-[7.5px] font-black text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                  <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
                 </div>
                 <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-rose-700">
                     {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'sucio_checkout').length}
                   </span>
-                  <p className="text-[7.5px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check-Outs</p>
+                  <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Aviso Check Out</p>
+                </div>
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
+                  <span className="text-[15px] font-black text-blue-700">
+                    {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'limpia').length}
+                  </span>
+                  <p className="text-[7.2px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limp. Terminada</p>
                 </div>
               </div>
 
