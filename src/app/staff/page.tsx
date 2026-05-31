@@ -40,6 +40,17 @@ interface Reserva {
   guest_name?: string;
   check_in: string;
   check_out: string;
+  checked_out?: boolean;
+}
+
+interface CleanTask {
+  room: string;
+  type: 'checkout' | 'stayover';
+  dbStatus: string;
+  operStatus: string;
+  guestName?: string;
+  keysReturned: boolean;
+  reserva?: any;
 }
 
 interface Task {
@@ -368,6 +379,85 @@ export default function StaffPage() {
   const llegadas = reservas.filter(r => r.check_in === todayStr);
   const salidas  = reservas.filter(r => r.check_out === todayStr);
   const ocupadas = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr);
+
+  const getScheduledCleanings = (): CleanTask[] => {
+    const list: CleanTask[] = [];
+    
+    ROOMS.forEach(r => {
+      const dbStatus = getRoomDbStatus(r, roomStatuses);
+      const operStatus = getRoomOperationalStatus(r, dbStatus, reservas, todayStr);
+      
+      // 1. Verificar si es salida hoy (Check-out)
+      const salidaRes = reservas.find(res => {
+        const rRoom = String(res.room || '').replace(/[\s()]/g, '');
+        return rRoom.includes(r) && res.check_out === todayStr;
+      });
+      
+      if (salidaRes) {
+        list.push({
+          room: r,
+          type: 'checkout',
+          dbStatus,
+          operStatus,
+          guestName: salidaRes.guest_name,
+          keysReturned: dbStatus === 'sucio_checkout' || salidaRes.checked_out || false,
+          reserva: salidaRes
+        });
+        return;
+      }
+      
+      // 2. Verificar si es stayover hoy (Servicio durante estancia)
+      const stayoverRes = reservas.find(res => {
+        const rRoom = String(res.room || '').replace(/[\s()]/g, '');
+        return rRoom.includes(r) && res.check_in <= todayStr && res.check_out > todayStr;
+      });
+      
+      if (stayoverRes && !stayoverRes.checked_out) {
+        // Calcular si requiere servicio hoy por regla de días
+        const checkInDate = new Date(stayoverRes.check_in + 'T12:00:00');
+        const todayDate = new Date(todayStr + 'T12:00:00');
+        const diffTime = Math.abs(todayDate.getTime() - checkInDate.getTime());
+        const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
+        
+        const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(r);
+        const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506'].includes(r);
+        
+        let requiresService = false;
+        if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 2 !== 0) {
+          requiresService = true;
+        } else if (isDailyRoom && dayOfStay >= 2) {
+          requiresService = true;
+        }
+        
+        if (requiresService) {
+          list.push({
+            room: r,
+            type: 'stayover',
+            dbStatus,
+            operStatus,
+            guestName: stayoverRes.guest_name,
+            keysReturned: false,
+            reserva: stayoverRes
+          });
+        }
+      }
+    });
+    
+    // Ordenar: primero check-outs no terminados, luego stayovers no terminados, luego terminados.
+    return list.sort((a, b) => {
+      const aFinished = a.dbStatus === 'limpia' || a.dbStatus === 'disponible';
+      const bFinished = b.dbStatus === 'limpia' || b.dbStatus === 'disponible';
+      if (aFinished && !bFinished) return 1;
+      if (!aFinished && bFinished) return -1;
+      
+      // Luego por tipo: checkout tiene prioridad sobre stayover
+      if (a.type === 'checkout' && b.type !== 'checkout') return -1;
+      if (a.type !== 'checkout' && b.type === 'checkout') return 1;
+      
+      // Luego por número de habitación
+      return a.room.localeCompare(b.room, undefined, { numeric: true });
+    });
+  };
 
   const roleFilteredTasks = tasks.filter(t => {
     if (t.type === 'aviso' || t.type === 'otro') return true;
@@ -886,83 +976,98 @@ export default function StaffPage() {
               </div>
             )}
 
-            {/* Salidas de Hoy / Limpiezas Requeridas */}
+            {/* LIMPIEZA PROGRAMADA (Check out + Servicios) */}
             {!isMantenimiento && (
               <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
                 <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
                   <Sparkles size={16} className="text-amber-600" strokeWidth={2.5} />
-                  <span className="text-[13px] font-extrabold text-zinc-800">Limpiezas Programadas (Check-outs)</span>
+                  <span className="text-[13px] font-extrabold text-zinc-800">Limpieza Programada (Check-out + Servicios)</span>
                 </div>
                 
-                {salidas.length === 0 ? (
+                {getScheduledCleanings().length === 0 ? (
                   <div className="p-6 text-center text-zinc-400 text-[13px] font-semibold">
-                    No hay salidas programadas para hoy.
+                    No hay limpiezas programadas para hoy.
                   </div>
                 ) : (
                   <div className="divide-y divide-zinc-100">
-                    {salidas.map((r) => {
-                      const cleaned = isRoomClean(r.room || '');
-                      
-                      // Extraer número de habitación de forma robusta
-                      const m = (r.room || '').match(/(\d{3})/);
-                      const roomNum = m ? m[1] : (r.room || '');
-                      const dbStatus = roomStatuses.find(rs => rs.room_number === roomNum);
-                      const currentStatus = dbStatus?.status || 'disponible';
-                      const checkoutDone = currentStatus === 'en_limpieza';
+                    {getScheduledCleanings().map((task) => {
+                      const isFinished = task.dbStatus === 'limpia' || task.dbStatus === 'disponible';
+                      const inProgress = task.dbStatus === 'en_limpieza';
 
                       return (
-                        <div key={r.id} className="p-4 flex items-center justify-between gap-3">
+                        <div key={task.room} className="p-4 flex items-center justify-between gap-3">
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              cleaned 
+                              isFinished 
                                 ? 'bg-emerald-50 text-emerald-600' 
-                                : checkoutDone 
-                                  ? 'bg-emerald-50 border border-emerald-100 text-emerald-600 animate-pulse' 
-                                  : 'bg-amber-50 text-amber-600'
+                                : inProgress 
+                                  ? 'bg-amber-50 border border-amber-100 text-amber-600 animate-pulse' 
+                                  : task.type === 'checkout' && task.keysReturned
+                                    ? 'bg-rose-50 border border-rose-100 text-rose-600 animate-pulse'
+                                    : 'bg-zinc-50 border border-zinc-100 text-zinc-500'
                             }`}>
-                              {cleaned ? <CheckCircle2 size={18} /> : <Sparkles size={18} />}
+                              {isFinished ? <CheckCircle2 size={18} /> : <Sparkles size={18} />}
                             </div>
                             <div className="min-w-0">
-                              <p className="text-[14px] font-bold text-zinc-900 leading-tight">Hab. {r.room || 'Sin asignar'}</p>
-                              {cleaned ? (
-                                <p className="text-[12px] font-semibold text-emerald-600 mt-0.5">✓ Habitación Lista para Check-in</p>
-                              ) : checkoutDone ? (
-                                <p className="text-[12px] font-extrabold text-emerald-600 mt-0.5 flex items-center gap-1 animate-pulse">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                                  Salida Confirmada · Vacía (Entrar ya)
-                                </p>
+                              <p className="text-[14px] font-bold text-zinc-900 leading-tight">
+                                Hab. {task.room} <span className="text-[10px] font-black text-zinc-400 uppercase">({task.type === 'checkout' ? 'Salida' : 'Estancia'})</span>
+                              </p>
+                              {task.type === 'checkout' ? (
+                                <>
+                                  {isFinished ? (
+                                    <p className="text-[12px] font-semibold text-emerald-600 mt-0.5">✓ Habitación Lista para Check-in</p>
+                                  ) : task.keysReturned ? (
+                                    <p className="text-[12px] font-extrabold text-rose-650 mt-0.5 flex items-center gap-1 animate-pulse">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                                      Salida Confirmada · Vacía (Entrar ya)
+                                    </p>
+                                  ) : (
+                                    <p className="text-[12px] font-bold text-rose-500/80 mt-0.5 flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                                      Ocupada · Esperando entrega de llaves
+                                    </p>
+                                  )}
+                                </>
                               ) : (
-                                <p className="text-[12px] font-bold text-rose-500 mt-0.5 flex items-center gap-1">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-                                  Ocupada · Esperando entrega de llaves
-                                </p>
+                                <>
+                                  {isFinished ? (
+                                    <p className="text-[12px] font-semibold text-emerald-600 mt-0.5">✓ Servicio de Estancia Realizado</p>
+                                  ) : (
+                                    <p className="text-[12px] font-bold text-amber-600 mt-0.5 flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-450 shrink-0" />
+                                      Servicio de Estancia Programado para Hoy
+                                    </p>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
                           
-                          {cleaned ? (
+                          {isFinished ? (
                             <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 flex items-center gap-1">
                               ✓ Lista
                             </span>
                           ) : (
                             <button
                               onClick={() => {
-                                if (!checkoutDone) {
+                                if (task.type === 'checkout' && !task.keysReturned) {
                                   const force = window.confirm(
-                                    `⚠️ ATENCIÓN DE SEGURIDAD OPERATIVA:\n\nEl huésped de la Habitación ${roomNum} no ha entregado llaves formalmente en Recepción.\n\n¿Confirmas que la habitación ya está físicamente vacía y deseas forzar la firma de limpieza?`
+                                    `⚠️ ATENCIÓN DE SEGURIDAD OPERATIVA:\n\nEl huésped de la Habitación ${task.room} no ha entregado llaves formalmente en Recepción.\n\n¿Confirmas que la habitación ya está físicamente vacía y deseas forzar la firma de limpieza?`
                                   );
                                   if (!force) return;
                                 }
                                 runWithSignature(
                                   'room_status', 
                                   (payload) => changeRoomStatus(payload.room, payload.status), 
-                                  { room: r.room, status: 'limpia' }
+                                  { room: task.room, status: 'limpia' }
                                 );
                               }}
                               className={`text-white text-[11px] font-black tracking-wide uppercase px-3 py-2 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95 ${
-                                checkoutDone 
-                                  ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-100' 
-                                  : 'bg-zinc-400 hover:bg-zinc-500 shadow-zinc-100 opacity-80'
+                                task.type === 'checkout' && task.keysReturned
+                                  ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-100'
+                                  : inProgress
+                                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-100' 
+                                    : 'bg-zinc-500 hover:bg-zinc-650 shadow-zinc-100 opacity-90'
                               }`}
                             >
                               Marcar Lista
