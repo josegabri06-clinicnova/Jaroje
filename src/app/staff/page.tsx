@@ -22,7 +22,16 @@ const ROOMS = [
   '101','102','103','104','105','106','107',
   '201','202','203','204','205','206',
   '301','302','303','304','305','306',
-  '401','402'
+  '401','402',
+  '500','501','502','503','504','505','506'
+];
+
+const ROOM_ROWS = [
+  { label: 'Apartamentos Premier 3 Recámaras (101-107)', rooms: ['101','102','103','104','105','106','107'] },
+  { label: 'Apartamentos Premier 2 Recámaras (201-206)', rooms: ['201','202','203','204','205','206'] },
+  { label: 'Unidades Especiales (401-402)', rooms: ['401','402'] },
+  { label: 'Habitaciones Dobles (301-306)', rooms: ['301','302','303','304','305','306'] },
+  { label: 'Apartamentos Nuevos (500-506)', rooms: ['500','501','502','503','504','505','506'] }
 ];
 
 interface Reserva {
@@ -92,6 +101,60 @@ async function compressImage(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
+  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum));
+  return dbStatusObj ? dbStatusObj.status : 'disponible';
+}
+
+function getRoomOperationalStatus(
+  roomNum: string,
+  dbStatus: string, // 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout'
+  activeReservations: any[],
+  todayStr: string
+): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' {
+  // 1. Si está limpia (AZUL), disponible (VERDE) o sucio_checkout (ROJO) por base de datos, respetar esa decisión manual
+  if (dbStatus === 'limpia') return 'limpia'; // Azul
+  if (dbStatus === 'disponible') return 'disponible'; // Verde
+  if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo
+  
+  // 2. Buscar si hay una reserva activa hoy
+  const currentRes = activeReservations.find(r => {
+    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
+    return rRoom.includes(roomNum) && r.check_in <= todayStr && r.check_out > todayStr;
+  });
+
+  if (currentRes && !currentRes.checked_out) {
+    // Calcular días de estancia transcurridos
+    const checkInDate = new Date(currentRes.check_in + 'T12:00:00');
+    const todayDate = new Date(todayStr + 'T12:00:00');
+    const diffTime = Math.abs(todayDate.getTime() - checkInDate.getTime());
+    const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
+
+    const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
+    const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506'].includes(roomNum);
+
+    if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 2 !== 0) {
+      return 'limpieza_programada'; // Amarillo automático por 3er día
+    }
+    if (isDailyRoom && dayOfStay >= 2) {
+      return 'limpieza_programada'; // Amarillo automático diario
+    }
+  }
+
+  // 3. Buscar si tiene salida programada hoy y aún no entrega llaves
+  const isSalidaHoy = activeReservations.some(r => {
+    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
+    return rRoom.includes(roomNum) && r.check_out === todayStr && !r.checked_out;
+  });
+
+  if (isSalidaHoy) {
+    return 'limpieza_programada'; // Amarillo automático por checkout pendiente
+  }
+
+  // 4. Si el estado explícito es 'en_limpieza', o no tiene reserva pero requiere limpieza
+  return (dbStatus as any) || 'en_limpieza'; // Amarillo por defecto
 }
 
 export default function StaffPage() {
@@ -479,21 +542,20 @@ export default function StaffPage() {
       });
     }
 
-    // Guardar en la tabla room_status de Supabase (las marcadas como 'limpia' pasan automáticamente a 'disponible')
-    const statusToSave = newStatus === 'limpia' ? 'disponible' : newStatus;
+    // Guardar en la tabla room_status de Supabase
     const res = await fetch('/api/room-status', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         room_number: roomNumber,
-        status: statusToSave,
+        status: newStatus,
         updated_by: operatorName
       }),
     });
     
     const json = await res.json();
     if (json.success) {
-      setSuccessMsg(`Habitación ${roomNumber} marcada como ${statusToSave}`);
+      setSuccessMsg(`Habitación ${roomNumber} marcada como ${newStatus}`);
       setTimeout(() => setSuccessMsg(''), 3000);
     }
 
@@ -712,64 +774,89 @@ export default function StaffPage() {
                 </div>
 
                 {/* Conteo por estados */}
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-4 gap-1.5">
                   <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
                     <span className="text-[15px] font-black text-emerald-700">
-                      {roomStatuses.filter(r => r.status === 'disponible').length}
+                      {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'disponible').length}
                     </span>
-                    <p className="text-[8px] font-extrabold text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
+                    <p className="text-[7.5px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
                   </div>
                   <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
                     <span className="text-[15px] font-black text-blue-700">
-                      {roomStatuses.filter(r => r.status === 'limpia').length}
+                      {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'limpia').length}
                     </span>
-                    <p className="text-[8px] font-extrabold text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
+                    <p className="text-[7.5px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
                   </div>
                   <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
                     <span className="text-[15px] font-black text-amber-700">
-                      {roomStatuses.filter(r => r.status === 'en_limpieza').length}
+                      {ROOMS.filter(r => {
+                        const s = getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr);
+                        return s === 'en_limpieza' || s === 'limpieza_programada';
+                      }).length}
                     </span>
-                    <p className="text-[8px] font-extrabold text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                    <p className="text-[7.5px] font-black text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                  </div>
+                  <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
+                    <span className="text-[15px] font-black text-rose-700">
+                      {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'sucio_checkout').length}
+                    </span>
+                    <p className="text-[7.5px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check-Outs</p>
                   </div>
                 </div>
 
-                {/* Grid Interactivo */}
-                {roomStatuses.length === 0 ? (
-                  <div className="text-center py-4 text-[11px] text-zinc-400 font-semibold animate-pulse">Cargando unidades...</div>
-                ) : (
-                  <div className="grid grid-cols-7 gap-2 pt-1">
-                    {ROOMS.map(r => {
-                      const roomInfo = getRoomState(r);
-                      let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
-                      if (roomInfo.status === 'disponible') {
-                        colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
-                      } else if (roomInfo.status === 'limpia') {
-                        colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
-                      } else if (roomInfo.status === 'en_limpieza') {
-                        colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
-                      }
-                      return (
-                        <div
-                          key={r}
-                          onClick={() => {
-                            if (canModifyStatus) {
-                              setSelectedRoom(r);
-                              setShowStatusModal(true);
-                            }
-                          }}
-                          className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
-                        >
-                          <span className="text-[11px] font-extrabold tracking-tight leading-none">{r}</span>
-                          <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${
-                            roomInfo.status === 'disponible' ? 'bg-emerald-250' :
-                            roomInfo.status === 'limpia' ? 'bg-blue-250' :
-                            roomInfo.status === 'en_limpieza' ? 'bg-amber-250' : 'bg-zinc-300'
-                          }`} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                {/* Grid visual premium agrupado por Renglones/Filas */}
+                <div className="space-y-4 pt-1">
+                  {ROOM_ROWS.map((row) => (
+                    <div key={row.label} className="space-y-2 border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">
+                          {row.label}
+                        </span>
+                        <span className="text-[8px] font-extrabold bg-zinc-50 border border-zinc-150 px-1.5 py-0.5 rounded text-zinc-400">
+                          {row.rooms.length} HAB
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-7 gap-2">
+                        {row.rooms.map((roomNum) => {
+                          const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
+                          const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr);
+
+                          let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                          let dotClass = 'bg-zinc-300';
+                          if (operStatus === 'disponible') {
+                            colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                            dotClass = 'bg-emerald-250';
+                          } else if (operStatus === 'limpia') {
+                            colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                            dotClass = 'bg-blue-250';
+                          } else if (operStatus === 'sucio_checkout') {
+                            colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
+                            dotClass = 'bg-rose-250';
+                          } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
+                            colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                            dotClass = 'bg-amber-250';
+                          }
+
+                          return (
+                            <div
+                              key={roomNum}
+                              onClick={() => {
+                                if (canModifyStatus) {
+                                  setSelectedRoom(roomNum);
+                                  setShowStatusModal(true);
+                                }
+                              }}
+                              className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                            >
+                              <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
+                              <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1194,64 +1281,89 @@ export default function StaffPage() {
               </div>
 
               {/* Conteo por estados */}
-              <div className="grid grid-cols-3 gap-2">
-                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2.5 text-center shadow-sm">
-                  <span className="text-[16px] font-black text-emerald-700">
-                    {roomStatuses.filter(r => r.status === 'disponible').length}
+              <div className="grid grid-cols-4 gap-1.5">
+                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
+                  <span className="text-[15px] font-black text-emerald-700">
+                    {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'disponible').length}
                   </span>
-                  <p className="text-[8.5px] font-extrabold text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
+                  <p className="text-[7.5px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
                 </div>
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2.5 text-center shadow-sm">
-                  <span className="text-[16px] font-black text-blue-700">
-                    {roomStatuses.filter(r => r.status === 'limpia').length}
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
+                  <span className="text-[15px] font-black text-blue-700">
+                    {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'limpia').length}
                   </span>
-                  <p className="text-[8.5px] font-extrabold text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
+                  <p className="text-[7.5px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limpias</p>
                 </div>
-                <div className="bg-amber-50 border border-amber-100 rounded-xl p-2.5 text-center shadow-sm">
-                  <span className="text-[16px] font-black text-amber-700">
-                    {roomStatuses.filter(r => r.status === 'en_limpieza').length}
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
+                  <span className="text-[15px] font-black text-amber-700">
+                    {ROOMS.filter(r => {
+                      const s = getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr);
+                      return s === 'en_limpieza' || s === 'limpieza_programada';
+                    }).length}
                   </span>
-                  <p className="text-[8.5px] font-extrabold text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                  <p className="text-[7.5px] font-black text-amber-600 uppercase tracking-wider mt-0.5">En Limpieza</p>
+                </div>
+                <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
+                  <span className="text-[15px] font-black text-rose-700">
+                    {ROOMS.filter(r => getRoomOperationalStatus(r, getRoomDbStatus(r, roomStatuses), reservas, todayStr) === 'sucio_checkout').length}
+                  </span>
+                  <p className="text-[7.5px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check-Outs</p>
                 </div>
               </div>
 
-              {/* Grid Interactivo Premium (7 Columnas de Bolitas de Colores) */}
-              {roomStatuses.length === 0 ? (
-                <div className="text-center py-6 text-[12px] text-zinc-450 font-semibold animate-pulse">Cargando estado físico de unidades...</div>
-              ) : (
-                <div className="grid grid-cols-7 gap-2 pt-1">
-                  {ROOMS.map(r => {
-                    const roomInfo = getRoomState(r);
-                    let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
-                    if (roomInfo.status === 'disponible') {
-                      colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
-                    } else if (roomInfo.status === 'limpia') {
-                      colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
-                    } else if (roomInfo.status === 'en_limpieza') {
-                      colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
-                    }
-                    return (
-                      <div
-                        key={r}
-                        onClick={() => {
-                          if (canModifyStatus) {
-                            setSelectedRoom(r);
-                            setShowStatusModal(true);
-                          }
-                        }}
-                        className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
-                      >
-                        <span className="text-[11px] font-extrabold tracking-tight leading-none">{r}</span>
-                        <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${
-                          roomInfo.status === 'disponible' ? 'bg-emerald-250' :
-                          roomInfo.status === 'limpia' ? 'bg-blue-250' :
-                          roomInfo.status === 'en_limpieza' ? 'bg-amber-250' : 'bg-zinc-300'
-                        }`} />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+              {/* Grid visual premium agrupado por Renglones/Filas */}
+              <div className="space-y-4 pt-1">
+                {ROOM_ROWS.map((row) => (
+                  <div key={row.label} className="space-y-2 border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">
+                        {row.label}
+                      </span>
+                      <span className="text-[8px] font-extrabold bg-zinc-50 border border-zinc-150 px-1.5 py-0.5 rounded text-zinc-400">
+                        {row.rooms.length} HAB
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-7 gap-2">
+                      {row.rooms.map((roomNum) => {
+                        const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
+                        const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr);
+
+                        let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                        let dotClass = 'bg-zinc-300';
+                        if (operStatus === 'disponible') {
+                          colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                          dotClass = 'bg-emerald-250';
+                        } else if (operStatus === 'limpia') {
+                          colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                          dotClass = 'bg-blue-250';
+                        } else if (operStatus === 'sucio_checkout') {
+                          colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
+                          dotClass = 'bg-rose-250';
+                        } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
+                          colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                          dotClass = 'bg-amber-250';
+                        }
+
+                        return (
+                          <div
+                            key={roomNum}
+                            onClick={() => {
+                              if (canModifyStatus) {
+                                setSelectedRoom(roomNum);
+                                setShowStatusModal(true);
+                              }
+                            }}
+                            className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                          >
+                            <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
+                            <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -1413,9 +1525,9 @@ export default function StaffPage() {
             {/* Opciones */}
             <div className="space-y-3">
               {[
-                { id: 'disponible', title: 'Disponible', desc: 'Habitación limpia, lista para huéspedes y libre de detalles.', color: 'border-zinc-200 hover:bg-zinc-50 text-zinc-800' },
-                { id: 'en_limpieza', title: 'En Limpieza', desc: 'El personal de limpieza está trabajando actualmente en la unidad.', color: 'border-amber-200 bg-amber-50/10 hover:bg-amber-50/30 text-amber-800' },
-                { id: 'limpia', title: 'Limpia (Inspeccionada)', desc: 'Unidad completamente aseada, sanitizada e inspeccionada.', color: 'border-emerald-200 bg-emerald-50/10 hover:bg-emerald-50/30 text-emerald-800' }
+                { id: 'en_limpieza', title: '🟡 Iniciar Limpieza / En Limpieza', desc: 'Comenzar a limpiar la habitación. Aparecerá en AMARILLO.', color: 'border-amber-200 bg-amber-50/10 hover:bg-amber-50/30 text-amber-800' },
+                { id: 'limpia', title: '🔵 Finalizar Limpieza', desc: 'Marcar como terminada para que recepción verifique. Se pintará en AZUL.', color: 'border-blue-200 bg-blue-50/10 hover:bg-blue-50/30 text-blue-800' },
+                { id: 'disponible', title: '🟢 Disponible / Aprobada', desc: 'Habitación aprobada e inspeccionada directamente. Se pintará en VERDE.', color: 'border-emerald-200 bg-emerald-50/10 hover:bg-emerald-50/30 text-emerald-800' }
               ].map((opt) => (
                 <button
                   key={opt.id}

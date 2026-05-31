@@ -35,7 +35,7 @@ const TYPE_CFG: Record<string, any> = {
   otro:          { icon: AlertTriangle, label: 'Otro',          bg: 'bg-blue-50', text: 'text-blue-600' },
 };
 
-const ROOMS = ['General', '101','102','103','104','105','106','107','201','202','203','204','205','206','301','302','303','304','305','306','401','402','Cocina', 'Recepción', 'Alberca'];
+const ROOMS = ['General', '101','102','103','104','105','106','107','201','202','203','204','205','206','301','302','303','304','305','306','401','402','500','501','502','503','504','505','506','Cocina', 'Recepción', 'Alberca'];
 
 export default function MantenimientoPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
