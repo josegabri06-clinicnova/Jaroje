@@ -343,18 +343,33 @@ export default function StaffPage() {
 
   const fetchData = async () => {
     try {
-      const [r, t, inv, rs] = await Promise.all([
+      const [r, t, inv, rs, chk] = await Promise.all([
         fetch('/api/reservas'),
         fetch('/api/tasks'),
         supabase.from('inventory').select('*').order('category').order('item_name'),
-        fetch('/api/room-status')
+        fetch('/api/room-status'),
+        supabase.from('checkins').select('*')
       ]);
       
       const rj = await r.json();
       const tj = await t.json();
       const rsj = await rs.json();
       
-      if (rj.success && rj.data) setReservas(rj.data);
+      let checkinMap: Record<string, any> = {};
+      if (chk.data) {
+        chk.data.forEach(c => {
+          checkinMap[String(c.reservation_id)] = c;
+        });
+      }
+      
+      if (rj.success && rj.data) {
+        setReservas(rj.data.map((res: any) => ({
+          ...res,
+          room: res.room_name || res.room || 'Sin asignar',
+          checked_in: checkinMap[String(res.id)]?.status === 'checked_in',
+          checked_out: checkinMap[String(res.id)]?.status === 'checked_out'
+        })));
+      }
       if (tj.success) setTasks(tj.data);
       if (inv.data) setInventory(inv.data);
       if (rsj.success && rsj.data) setRoomStatuses(rsj.data);
