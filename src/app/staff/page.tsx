@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   CheckCircle2, AlertTriangle, Wrench, Sparkles, BedDouble,
@@ -1622,47 +1622,172 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* ── MODAL CAMBIAR ESTADO DE HABITACIÓN (BOTTOM SHEET SELECCIÓN RÁPIDA) ── */}
-      {showStatusModal && selectedRoom && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div onClick={() => setShowStatusModal(false)} className="absolute inset-0" />
-          <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
-              <div>
-                <h3 className="text-lg font-black text-zinc-900">Habitación {selectedRoom}</h3>
-                <p className="text-[11px] text-zinc-450 font-bold mt-0.5">Asignar estatus operativo real</p>
-              </div>
-              <button 
-                onClick={() => setShowStatusModal(false)} 
-                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-505 cursor-pointer hover:bg-zinc-200"
-              >
-                <X size={15} strokeWidth={2.5} />
-              </button>
-            </div>
+      {/* ── MODAL DETALLE / FINALIZACIÓN DE LIMPIEZA (BOTTOM SHEET STAFF OPERATIVO CERRADO) ── */}
+      {showStatusModal && selectedRoom && (() => {
+        const dbStatus = getRoomDbStatus(selectedRoom, roomStatuses);
+        const operStatus = getRoomOperationalStatus(selectedRoom, dbStatus, reservas, todayStr);
 
-            {/* Opciones */}
-            <div className="space-y-3">
-              {[
-                { id: 'en_limpieza', title: '🟡 Iniciar Limpieza / En Limpieza', desc: 'Comenzar a limpiar la habitación. Aparecerá en AMARILLO.', color: 'border-amber-200 bg-amber-50/10 hover:bg-amber-50/30 text-amber-800' },
-                { id: 'limpia', title: '🔵 Finalizar Limpieza', desc: 'Marcar como terminada para que recepción verifique. Se pintará en AZUL.', color: 'border-blue-200 bg-blue-50/10 hover:bg-blue-50/30 text-blue-800' },
-                { id: 'disponible', title: '🟢 Disponible / Aprobada', desc: 'Habitación aprobada e inspeccionada directamente. Se pintará en VERDE.', color: 'border-emerald-200 bg-emerald-50/10 hover:bg-emerald-50/30 text-emerald-800' }
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: opt.id as any })}
-                  className={`w-full text-left p-4 border-2 rounded-2xl flex flex-col justify-center transition-all cursor-pointer active:scale-[0.99] ${opt.color}`}
+        // Formateador de fecha/hora de la última actualización
+        const formatLastUpdated = (dateStr?: string) => {
+          if (!dateStr) return '—';
+          try {
+            return format(parseISO(dateStr), "d 'de' MMMM, h:mm a", { locale: es });
+          } catch (e) {
+            return dateStr;
+          }
+        };
+
+        const isCleanTerminated = operStatus === 'limpia';
+        const isAvailable = operStatus === 'disponible';
+        const isDirty = operStatus === 'sucio_checkout' || operStatus === 'en_limpieza' || operStatus === 'limpieza_programada';
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div onClick={() => setShowStatusModal(false)} className="absolute inset-0" />
+            <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+                <div>
+                  <h3 className="text-lg font-black text-zinc-900">Habitación {selectedRoom}</h3>
+                  <p className="text-[11px] text-zinc-400 font-bold mt-0.5">
+                    {isDirty ? 'Registro de Servicio Técnico / Limpieza' : 'Información de Estatus de Habitación'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowStatusModal(false)} 
+                  className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
                 >
-                  <span className="text-[14px] font-black leading-tight">{opt.title}</span>
-                  <span className="text-[11px] opacity-75 font-semibold mt-1 leading-snug">{opt.desc}</span>
+                  <X size={15} strokeWidth={2.5} />
                 </button>
-              ))}
-            </div>
+              </div>
 
+              {/* Contenido Condicional */}
+              {isDirty ? (
+                // CASO DIRTY: Botón Único de "Finalizar Limpieza"
+                <div className="space-y-5">
+                  <div className="bg-amber-50 border border-amber-250 rounded-2xl p-4 space-y-3.5 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
+                        ⚠️
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-black text-amber-800 uppercase tracking-wider">
+                          {operStatus === 'sucio_checkout' ? 'Check-Out (Pendiente Limpieza)' : 'Limpieza Programada'}
+                        </p>
+                        <p className="text-[10px] text-amber-600 font-bold">Se requiere servicio físico para habilitar la habitación.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="border-t border-amber-200/40 pt-3 space-y-1.5 text-[12px] text-zinc-650 font-semibold">
+                      {operStatus === 'sucio_checkout' ? (
+                        <p className="leading-relaxed">
+                          Huésped entregó llaves en Recepción. Por favor realiza la **limpieza profunda de salida** antes de reportar la finalización.
+                        </p>
+                      ) : (
+                        <p className="leading-relaxed">
+                          Servicio ordinario (Stayover diario o stayover cada 3er día) según calendario Beds24.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 pt-2">
+                    <button
+                      onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: 'limpia' })}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 active:scale-[0.98]"
+                    >
+                      <CheckCircle2 size={16} strokeWidth={2.5} />
+                      <span>Finalizar Limpieza (Marcar en Azul)</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowStatusModal(false);
+                        setForm({ type: 'mantenimiento', room: selectedRoom, description: '' });
+                        setShowForm(true);
+                      }}
+                      className="w-full bg-rose-50 hover:bg-rose-100 text-rose-650 border border-rose-200 font-bold text-[12px] py-3.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Wrench size={14} />
+                      <span>Reportar Falla o Avería Técnica (MTTO)</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // CASO RENDER INFORMATIVO (Verde o Azul): Solo Lectura
+                <div className="space-y-5">
+                  <div className="flex justify-center">
+                    {(() => {
+                      let bg = 'bg-zinc-150 text-zinc-700 border-zinc-200';
+                      let label = 'Desconocido';
+                      let desc = '';
+                      
+                      if (isAvailable) {
+                        bg = 'bg-emerald-500 text-white border-emerald-600 shadow-lg shadow-emerald-500/10';
+                        label = '🟢 Disponible';
+                        desc = 'La habitación está limpia, ha sido aprobada físicamente por Recepción y se encuentra lista para renta.';
+                      } else if (isCleanTerminated) {
+                        bg = 'bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/10';
+                        label = '🔵 Limpieza Terminada';
+                        desc = 'Has reportado la limpieza de esta habitación con éxito. Actualmente se encuentra esperando la inspección de Recepción para pasar a Verde.';
+                      }
+
+                      const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(selectedRoom));
+
+                      return (
+                        <div className="w-full space-y-4">
+                          <div className={`p-4 border rounded-2xl text-center ${bg}`}>
+                            <span className="text-[14px] font-black tracking-wide uppercase">{label}</span>
+                          </div>
+                          
+                          <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-3">
+                            <p className="text-[12px] text-zinc-500 font-semibold leading-relaxed">
+                              {desc}
+                            </p>
+                            
+                            {dbStatusObj && (dbStatusObj.updated_by || dbStatusObj.updated_at) && (
+                              <div className="border-t border-zinc-200/40 pt-3 space-y-1.5 text-[11px] text-zinc-400 font-bold">
+                                {dbStatusObj.updated_by && (
+                                  <div className="flex justify-between">
+                                    <span>Registrado por:</span>
+                                    <span className="font-extrabold text-zinc-700">{dbStatusObj.updated_by}</span>
+                                  </div>
+                                )}
+                                {dbStatusObj.updated_at && (
+                                  <div className="flex justify-between">
+                                    <span>Fecha/Hora:</span>
+                                    <span className="font-bold text-zinc-700">{formatLastUpdated(dbStatusObj.updated_at)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        setShowStatusModal(false);
+                        setForm({ type: 'mantenimiento', room: selectedRoom, description: '' });
+                        setShowForm(true);
+                      }}
+                      className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] tracking-wide uppercase py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98]"
+                    >
+                      <Wrench size={14} />
+                      <span>Reportar Incidencia de Mantenimiento</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Modal táctil de finalización obligatoria (Cierre de MTTO) */}
       {showResolveModal && resolvingTask && (
