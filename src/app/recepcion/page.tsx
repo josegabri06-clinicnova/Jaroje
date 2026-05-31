@@ -1116,7 +1116,10 @@ export default function RecepcionPage() {
                               setSelectedRoomForStatus({
                                 room_number: roomNum,
                                 status: dbStatus,
-                                id: dbStatusObj.id || roomNum
+                                id: dbStatusObj.id || roomNum,
+                                updated_by: dbStatusObj.updated_by || null,
+                                updated_at: dbStatusObj.updated_at || null,
+                                operStatus: operStatus
                               } as any);
                               setShowRoomStatusModal(true);
                             }}
@@ -1873,48 +1876,179 @@ export default function RecepcionPage() {
         }}
       />
 
-      {/* ── MODAL CAMBIAR ESTADO DE HABITACIÓN (BOTTOM SHEET SELECCIÓN RÁPIDA) ── */}
-      {showRoomStatusModal && selectedRoomForStatus && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div onClick={() => setShowRoomStatusModal(false)} className="absolute inset-0" />
-          <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
-            
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
-              <div>
-                <h3 className="text-lg font-black text-zinc-900">Habitación {selectedRoomForStatus.room_number}</h3>
-                <p className="text-[11px] text-zinc-450 font-bold mt-0.5">Asignar estatus operativo real</p>
-              </div>
-              <button 
-                onClick={() => setShowRoomStatusModal(false)} 
-                className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
-              >
-                <X size={15} strokeWidth={2.5} />
-              </button>
-            </div>
+      {/* ── MODAL DETALLE / INSPECCIÓN DE HABITACIÓN (BOTTOM SHEET OPERATIVO CERRADO) ── */}
+      {showRoomStatusModal && selectedRoomForStatus && (() => {
+        const operStatus = selectedRoomForStatus.operStatus;
 
-            {/* Opciones */}
-            <div className="space-y-3">
-              {[
-                { id: 'disponible', title: '🟢 Disponible', desc: 'Habitación limpia, inspeccionada y lista para recibir huéspedes.', color: 'border-emerald-200 bg-emerald-50/10 hover:bg-emerald-50/30 text-emerald-800' },
-                { id: 'en_limpieza', title: '🟡 Limpieza Programada', desc: 'Se requiere o se está realizando una limpieza ordinaria/stayover.', color: 'border-amber-200 bg-amber-50/10 hover:bg-amber-50/30 text-amber-800' },
-                { id: 'sucio_checkout', title: '🔴 Aviso CHECK OUT', desc: 'Huésped entregó llaves. Limpieza de salida requerida urgente.', color: 'border-rose-200 bg-rose-50/10 hover:bg-rose-50/30 text-rose-800' },
-                { id: 'limpia', title: '🔵 Limpieza Terminada', desc: 'Limpieza finalizada por recamareras, esperando inspección de recepción.', color: 'border-blue-200 bg-blue-50/10 hover:bg-blue-50/30 text-blue-800' }
-              ].map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus(opt.id))}
-                  className={`w-full text-left p-4 border-2 rounded-2xl flex flex-col justify-center transition-all cursor-pointer active:scale-[0.99] ${opt.color}`}
+        // Formateador de fecha/hora de la última actualización
+        const formatLastUpdated = (dateStr?: string) => {
+          if (!dateStr) return '—';
+          try {
+            return format(parseISO(dateStr), "d 'de' MMMM, h:mm a", { locale: es });
+          } catch (e) {
+            return dateStr;
+          }
+        };
+
+        const isCleanTerminated = operStatus === 'limpia';
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div onClick={() => setShowRoomStatusModal(false)} className="absolute inset-0" />
+            <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-zinc-900">Habitación {selectedRoomForStatus.room_number}</h3>
+                    {isCleanTerminated && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                        Inspección Pendiente
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-400 font-bold mt-0.5">
+                    {isCleanTerminated ? 'Control de Calidad y Aprobación de Renta' : 'Información Operativa de la Habitación'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowRoomStatusModal(false)} 
+                  className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
                 >
-                  <span className="text-[14px] font-black leading-tight">{opt.title}</span>
-                  <span className="text-[11px] opacity-75 font-semibold mt-1 leading-snug">{opt.desc}</span>
+                  <X size={15} strokeWidth={2.5} />
                 </button>
-              ))}
-            </div>
+              </div>
 
+              {/* Contenido Condicional */}
+              {isCleanTerminated ? (
+                // CASO AZUL: Inspección y Aprobación
+                <div className="space-y-5">
+                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-3.5 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold">
+                        🧹
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-black text-blue-800 uppercase tracking-wider">Limpieza Finalizada</p>
+                        <p className="text-[10px] text-blue-600 font-bold">La habitación está lista para control físico.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="border-t border-blue-200/40 pt-3 space-y-2 text-[12px]">
+                      <div className="flex justify-between items-center text-zinc-700">
+                        <span className="font-bold text-zinc-400">Limpiado por:</span>
+                        <span className="font-extrabold text-blue-900">{selectedRoomForStatus.updated_by || 'Personal de Limpieza'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-zinc-700">
+                        <span className="font-bold text-zinc-400">Hora de término:</span>
+                        <span className="font-bold text-zinc-800">{formatLastUpdated(selectedRoomForStatus.updated_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[12px] text-zinc-500 font-medium leading-relaxed bg-zinc-50 border border-zinc-200/60 p-3.5 rounded-xl">
+                    ℹ️ **Instrucciones:** Antes de habilitar la habitación, el recepcionista en turno debe verificar físicamente que el cuarto cumpla con los estándares de limpieza y amenidades.
+                  </p>
+
+                  <div className="flex flex-col gap-2.5 pt-2">
+                    <button
+                      onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('disponible'))}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer shadow-md shadow-emerald-600/15 flex items-center justify-center gap-2 active:scale-[0.98]"
+                    >
+                      <CheckCircle2 size={16} strokeWidth={2.5} />
+                      <span>Aprobar Inspección (Marcar Disponible)</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowRoomStatusModal(false);
+                        setForm({ type: 'mantenimiento', room: selectedRoomForStatus.room_number, description: '' });
+                        setShowForm(true);
+                      }}
+                      className="w-full bg-rose-50 hover:bg-rose-100 text-rose-650 border border-rose-200 font-bold text-[12px] py-3.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Wrench size={14} />
+                      <span>Reportar Daño o Detalle Técnico (MTTO)</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // CASO RESTO (Verde, Amarillo, Rojo): Tarjeta Informativa de Solo Lectura
+                <div className="space-y-5">
+                  <div className="flex justify-center">
+                    {(() => {
+                      let bg = 'bg-zinc-150 text-zinc-700 border-zinc-200';
+                      let label = 'Desconocido';
+                      let desc = '';
+                      
+                      if (operStatus === 'disponible') {
+                        bg = 'bg-emerald-500 text-white border-emerald-600 shadow-lg shadow-emerald-500/10';
+                        label = '🟢 Disponible';
+                        desc = 'La habitación se encuentra limpia, inspeccionada y lista para recibir huéspedes de check-in inmediato.';
+                      } else if (operStatus === 'sucio_checkout') {
+                        bg = 'bg-rose-500 text-white border-rose-600 shadow-lg shadow-rose-500/10';
+                        label = '🔴 Aviso Check Out';
+                        desc = 'El recepcionista ha dado salida al huésped. El cuarto requiere una limpieza profunda de salida para volver a rentarse.';
+                      } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
+                        bg = 'bg-amber-400 text-white border-amber-500 shadow-lg shadow-amber-450/10';
+                        label = '🟡 Limpieza Programada';
+                        desc = 'Se requiere limpieza ordinaria (Stayover diario, cada 3er día o checkout programado para hoy) basada en reservas de Beds24.';
+                      }
+
+                      return (
+                        <div className="w-full space-y-4">
+                          <div className={`p-4 border rounded-2xl text-center ${bg}`}>
+                            <span className="text-[14px] font-black tracking-wide uppercase">{label}</span>
+                          </div>
+                          
+                          <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-3">
+                            <p className="text-[12px] text-zinc-500 font-semibold leading-relaxed">
+                              {desc}
+                            </p>
+                            
+                            {(selectedRoomForStatus.updated_by || selectedRoomForStatus.updated_at) && (
+                              <div className="border-t border-zinc-200/40 pt-3 space-y-1.5 text-[11px] text-zinc-400 font-bold">
+                                {selectedRoomForStatus.updated_by && (
+                                  <div className="flex justify-between">
+                                    <span>Última acción por:</span>
+                                    <span className="font-extrabold text-zinc-700">{selectedRoomForStatus.updated_by}</span>
+                                  </div>
+                                )}
+                                {selectedRoomForStatus.updated_at && (
+                                  <div className="flex justify-between">
+                                    <span>Fecha/Hora:</span>
+                                    <span className="font-bold text-zinc-700">{formatLastUpdated(selectedRoomForStatus.updated_at)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        setShowRoomStatusModal(false);
+                        setForm({ type: 'mantenimiento', room: selectedRoomForStatus.room_number, description: '' });
+                        setShowForm(true);
+                      }}
+                      className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] tracking-wide uppercase py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98]"
+                    >
+                      <Wrench size={14} />
+                      <span>Reportar Incidencia de Mantenimiento</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
