@@ -454,6 +454,26 @@ export default function StaffPage() {
           });
         }
       }
+
+      // 3. Fallback Unificador: Si la habitación está en estado sucio o limpieza y no tiene una reserva activa hoy
+      // registrada en la lista, se agrega de forma automática para mantener una sincronización visual del 100%.
+      const alreadyAdded = list.some(item => item.room === r);
+      if (!alreadyAdded && (
+        operStatus === 'sucio_checkout' || 
+        operStatus === 'en_limpieza' || 
+        operStatus === 'limpieza_programada' ||
+        dbStatus === 'limpia'
+      )) {
+        list.push({
+          room: r,
+          type: operStatus === 'sucio_checkout' ? 'checkout' : 'stayover',
+          dbStatus,
+          operStatus,
+          guestName: operStatus === 'sucio_checkout' ? 'Aviso Check-Out' : 'Limpieza Programada',
+          keysReturned: operStatus === 'sucio_checkout',
+          reserva: null
+        });
+      }
     });
     
     // Ordenar: primero check-outs no terminados, luego stayovers no terminados, luego terminados.
