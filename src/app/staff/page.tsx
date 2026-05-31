@@ -59,6 +59,7 @@ interface CleanTask {
   guestName?: string;
   keysReturned: boolean;
   reserva?: any;
+  isUpdatedToday: boolean;
 }
 
 interface Task {
@@ -429,7 +430,8 @@ export default function StaffPage() {
           operStatus,
           guestName: salidaRes.guest_name,
           keysReturned: dbStatus === 'sucio_checkout' || salidaRes.checked_out || false,
-          reserva: salidaRes
+          reserva: salidaRes,
+          isUpdatedToday: !!(dbStatusObj?.updated_at && dbStatusObj.updated_at.startsWith(todayStr))
         });
         return;
       }
@@ -465,7 +467,8 @@ export default function StaffPage() {
             operStatus,
             guestName: stayoverRes.guest_name,
             keysReturned: false,
-            reserva: stayoverRes
+            reserva: stayoverRes,
+            isUpdatedToday: !!(dbStatusObj?.updated_at && dbStatusObj.updated_at.startsWith(todayStr))
           });
         }
       }
@@ -486,15 +489,16 @@ export default function StaffPage() {
           operStatus,
           guestName: operStatus === 'sucio_checkout' ? 'Aviso Check-Out' : 'Limpieza Programada',
           keysReturned: operStatus === 'sucio_checkout',
-          reserva: null
+          reserva: null,
+          isUpdatedToday: !!(dbStatusObj?.updated_at && dbStatusObj.updated_at.startsWith(todayStr))
         });
       }
     });
     
     // Ordenar: primero check-outs no terminados, luego stayovers no terminados, luego terminados.
     return list.sort((a, b) => {
-      const aFinished = a.dbStatus === 'limpia' || a.dbStatus === 'disponible';
-      const bFinished = b.dbStatus === 'limpia' || b.dbStatus === 'disponible';
+      const aFinished = a.dbStatus === 'limpia' || (a.dbStatus === 'disponible' && a.isUpdatedToday);
+      const bFinished = b.dbStatus === 'limpia' || (b.dbStatus === 'disponible' && b.isUpdatedToday);
       if (aFinished && !bFinished) return 1;
       if (!aFinished && bFinished) return -1;
       
@@ -1054,7 +1058,7 @@ export default function StaffPage() {
                 ) : (
                   <div className="divide-y divide-zinc-100">
                     {getScheduledCleanings().map((task) => {
-                      const isFinished = task.dbStatus === 'limpia' || task.dbStatus === 'disponible';
+                      const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
                       const inProgress = task.dbStatus === 'en_limpieza';
 
                       return (
