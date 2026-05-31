@@ -34,6 +34,14 @@ const ROOM_ROWS = [
   { label: 'Apartamentos Nuevos (500-506)', rooms: ['500','501','502','503','504','505','506'] }
 ];
 
+const MTTO_LOCATIONS = [
+  'General',
+  ...ROOMS,
+  'Cocina',
+  'Recepción',
+  'Alberca'
+];
+
 interface Reserva {
   id: string;
   room: string;
@@ -313,7 +321,7 @@ export default function StaffPage() {
     }
   };
 
-  const [form, setForm] = useState({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
+  const [form, setForm] = useState({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: 'General', description: '' });
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Lock body on modal open and hide bottom navigation bar
@@ -726,7 +734,7 @@ export default function StaffPage() {
             module: emp.department,
             action: 'report_maintenance',
             room: form.room,
-            details: `Reportó daño técnico/incidencia en Habitación ${form.room}: ${form.description}`
+            details: `Reportó daño técnico/incidencia en ${['General', 'Cocina', 'Recepción', 'Alberca'].includes(form.room) ? form.room : `Habitación ${form.room}`}: ${form.description}`
           })
         });
       } catch (e) {
@@ -734,7 +742,7 @@ export default function StaffPage() {
       }
     }
 
-    setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: ROOMS[0], description: '' });
+    setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: 'General', description: '' });
     setImagePreview(null);
     setImagePreviews([]);
     setShowForm(false);
@@ -745,7 +753,7 @@ export default function StaffPage() {
   };
 
   const openMaintenanceReport = () => {
-    setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+    setForm({ type: 'mantenimiento', room: 'General', description: '' });
     setImagePreview(null);
     setImagePreviews([]);
     setShowForm(true);
@@ -1528,7 +1536,14 @@ export default function StaffPage() {
                   onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
                 >
-                  {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
+                  {MTTO_LOCATIONS.map(r => {
+                    const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(r);
+                    return (
+                      <option key={r} value={r}>
+                        {isRoom ? `Habitación ${r}` : r}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 

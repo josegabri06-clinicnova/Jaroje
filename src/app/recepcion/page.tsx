@@ -65,6 +65,14 @@ const ROOM_ROWS = [
   { label: 'Apartamentos Nuevos (500-506)', rooms: ['500','501','502','503','504','505','506'] }
 ];
 
+const MTTO_LOCATIONS = [
+  'General',
+  ...ROOMS,
+  'Cocina',
+  'Recepción',
+  'Alberca'
+];
+
 const BEDS24_ROOMS = [
   { id: '679077', name: 'Habitación DOBLE - 2 camas dobles' },
   { id: '679087', name: 'Apartamento Premier de 1 dormitorio' },
@@ -256,7 +264,7 @@ export default function RecepcionPage() {
 
   // Modal Mtto
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+  const [form, setForm] = useState({ type: 'mantenimiento', room: 'General', description: '' });
   const [submitting, setSubmitting] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
@@ -973,7 +981,7 @@ export default function RecepcionPage() {
         </div>
         <button
           onClick={() => {
-            setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+            setForm({ type: 'mantenimiento', room: 'General', description: '' });
             setShowForm(true);
           }}
           className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-md shadow-rose-200 active:scale-95 transition-all cursor-pointer"
@@ -1725,7 +1733,14 @@ export default function RecepcionPage() {
                   onChange={e => setForm(f => ({ ...f, room: e.target.value }))}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[15px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
                 >
-                  {ROOMS.map(r => <option key={r} value={r}>Habitación {r}</option>)}
+                  {MTTO_LOCATIONS.map(r => {
+                    const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(r);
+                    return (
+                      <option key={r} value={r}>
+                        {isRoom ? `Habitación ${r}` : r}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1802,7 +1817,7 @@ export default function RecepcionPage() {
                             module: 'recepcion',
                             action: 'report_maintenance',
                             room: form.room,
-                            details: `Reportó daño técnico en Habitación ${form.room}: ${form.description}`
+                            details: `Reportó daño técnico en ${['General', 'Cocina', 'Recepción', 'Alberca'].includes(form.room) ? form.room : `Habitación ${form.room}`}: ${form.description}`
                           })
                         });
                       } catch (e) {
@@ -1810,7 +1825,7 @@ export default function RecepcionPage() {
                       }
                     }
 
-                    setForm({ type: 'mantenimiento', room: ROOMS[0], description: '' });
+                    setForm({ type: 'mantenimiento', room: 'General', description: '' });
                     setPhotoFile(null);
                     setPhotoBase64(null);
                     setShowForm(false);
