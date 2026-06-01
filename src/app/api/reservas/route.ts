@@ -60,13 +60,15 @@ export async function POST(req: Request) {
         roomId: finalRoomId,
         unitId: finalUnitId,
         roomQty: 1,
-        checkAvailability: true,
-        assignBooking: true,
         arrival: checkIn,
         departure: checkOut,
         firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
         status: "confirmed",
-        ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {})
+        ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
+        actions: {
+          checkAvailability: true,
+          assignBooking: true
+        }
       }])
     });
 
