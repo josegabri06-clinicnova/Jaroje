@@ -2047,7 +2047,17 @@ export default function RecepcionPage() {
                     })()}
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-2">
+                    {(operStatus === 'sucio_checkout' || operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') && (
+                      <button
+                        onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpia'))}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-[0.98]"
+                      >
+                        <Sparkles size={14} />
+                        <span>Finalizar Limpieza (Marcar en Azul)</span>
+                      </button>
+                    )}
+                    
                     <button
                       onClick={() => {
                         setShowRoomStatusModal(false);
