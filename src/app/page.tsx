@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, BedDouble, Sparkles, BarChart3,
   MessageCircle, TrendingUp, RefreshCw, AlertCircle, Users, Moon,
-  Wallet, Package, Plus, Lock, XCircle, History, Phone, Clock, CheckCircle2, Wrench
+  Wallet, Package, Plus, Lock, XCircle, History, Phone, Clock, CheckCircle2, Wrench, X
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { format, addDays, formatDistanceToNow } from 'date-fns';
+import { format, addDays, formatDistanceToNow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
 
@@ -16,6 +16,83 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+const ROOMS = [
+  '101','102','103','104','105','106','107',
+  '201','202','203','204','205','206',
+  '301','302','303','304','305','306',
+  '401','402',
+  '500','501','502','503','504','505','506'
+];
+
+function getLocalDateStr(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
+  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum));
+  return dbStatusObj ? dbStatusObj.status : 'disponible';
+}
+
+function getRoomOperationalStatus(
+  roomNum: string,
+  dbStatus: string, // 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout'
+  activeReservations: any[],
+  todayStr: string,
+  lastUpdatedAt?: string
+): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' {
+  const isUpdatedToday = lastUpdatedAt && lastUpdatedAt.startsWith(todayStr);
+
+  // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato
+  if (isUpdatedToday) {
+    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpieza terminada)
+    if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Aviso Check Out)
+    if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
+    if (dbStatus === 'disponible') return 'disponible'; // Verde (Disponible)
+  }
+
+  // 2. Si es de ayer o antes (estatus obsoleto), ignorar la DB y calcular fresh de Beds24 para hoy:
+
+  // Buscar si hay una reserva activa hoy para estancia (Stayover)
+  const currentRes = activeReservations.find(r => {
+    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
+    return rRoom.includes(roomNum) && r.check_in <= todayStr && r.check_out > todayStr;
+  });
+
+  if (currentRes && !currentRes.checked_out) {
+    // Calcular días de estancia transcurridos
+    const checkInDate = new Date(currentRes.check_in + 'T12:00:00');
+    const todayDate = new Date(todayStr + 'T12:00:00');
+    const diffTime = Math.abs(todayDate.getTime() - checkInDate.getTime());
+    const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
+
+    const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','501','402'].includes(roomNum);
+    const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(roomNum);
+
+    if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
+      return 'limpieza_programada'; // Amarillo automático por 3er día (Stayover cada 3er día)
+    }
+    if (isDailyRoom && dayOfStay >= 2) {
+      return 'limpieza_programada'; // Amarillo automático diario durante estancia
+    }
+  }
+
+  // Buscar si tiene salida programada hoy (Check-out)
+  const isSalidaHoy = activeReservations.some(r => {
+    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
+    return rRoom.includes(roomNum) && r.check_out === todayStr && !r.checked_out;
+  });
+
+  if (isSalidaHoy) {
+    return 'limpieza_programada'; // Amarillo automático por checkout programado hoy
+  }
+
+  // 3. Si no tiene salida ni estancia programada que requiera limpieza hoy, está disponible
+  return 'disponible'; // Verde por defecto
+}
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -27,6 +104,10 @@ export default function AdminDashboard() {
   const [tokenError, setTokenError] = useState(false);
   const [hoy, setHoy] = useState('');
   const [financeBalance, setFinanceBalance] = useState(0);
+
+  const [showRoomStatusModal, setShowRoomStatusModal] = useState(false);
+  const [selectedRoomForStatus, setSelectedRoomForStatus] = useState<any | null>(null);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   const fetchAll = async () => {
     setIsLoading(true);
@@ -77,6 +158,54 @@ export default function AdminDashboard() {
       console.error(e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleUpdateRoomStatus = async (newStatus: string) => {
+    if (!selectedRoomForStatus) return;
+    setStatusUpdating(true);
+
+    try {
+      const res = await fetch('/api/room-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          room_number: selectedRoomForStatus.room_number,
+          status: newStatus,
+          updated_by: 'Administrador'
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        // Registrar log de auditoría
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: 'ADMIN',
+            employee_name: 'Administrador',
+            department: 'recepcion',
+            module: 'recepcion',
+            action: 'change_room_status',
+            room: selectedRoomForStatus.room_number,
+            details: `Cambió el estado de Habitación ${selectedRoomForStatus.room_number} a '${newStatus}' desde el Dashboard de Administración`
+          })
+        });
+
+        // Actualizar estados locales de inmediato
+        const roomsRes = await fetch('/api/room-status');
+        const roomsJson = await roomsRes.json();
+        if (roomsJson.success) setRoomStatuses(roomsJson.data || []);
+        
+        setShowRoomStatusModal(false);
+      } else {
+        alert('Error al actualizar el estado: ' + json.error);
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error de conexión');
+    } finally {
+      setStatusUpdating(false);
     }
   };
 
@@ -458,61 +587,96 @@ export default function AdminDashboard() {
         </div>
 
         <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm p-4 space-y-4">
-          {/* Conteo por estados */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center">
-              <span className="text-[16px] font-bold text-emerald-700">
-                {roomStatuses.filter(r => r.status === 'disponible').length}
+          {/* Conteo por estados (4 columnas igual que recepción) */}
+          <div className="grid grid-cols-4 gap-1.5">
+            <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
+              <span className="text-[15px] font-black text-emerald-700">
+                {ROOMS.filter(r => {
+                  const dbStatus = getRoomDbStatus(r, roomStatuses);
+                  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+                  return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'disponible';
+                }).length}
               </span>
-              <p className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Disponibles</p>
+              <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
             </div>
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center">
-              <span className="text-[16px] font-bold text-blue-700">
-                {roomStatuses.filter(r => r.status === 'limpia').length}
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
+              <span className="text-[15px] font-black text-amber-700">
+                {ROOMS.filter(r => {
+                  const dbStatus = getRoomDbStatus(r, roomStatuses);
+                  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+                  const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                  return s === 'en_limpieza' || s === 'limpieza_programada';
+                }).length}
               </span>
-              <p className="text-[9px] font-bold text-blue-600 uppercase tracking-wider">Limpias</p>
+              <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Programadas</p>
             </div>
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center">
-              <span className="text-[16px] font-bold text-amber-700">
-                {roomStatuses.filter(r => r.status === 'en_limpieza').length}
+            <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
+              <span className="text-[15px] font-black text-rose-700">
+                {ROOMS.filter(r => {
+                  const dbStatus = getRoomDbStatus(r, roomStatuses);
+                  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+                  return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'sucio_checkout';
+                }).length}
               </span>
-              <p className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">En Limpieza</p>
+              <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
+            </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
+              <span className="text-[15px] font-black text-blue-700">
+                {ROOMS.filter(r => {
+                  const dbStatus = getRoomDbStatus(r, roomStatuses);
+                  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+                  return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'limpia';
+                }).length}
+              </span>
+              <p className="text-[7.2px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limp. Lista</p>
             </div>
           </div>
 
-          {/* Mini Grid visual */}
-          {roomStatuses.length === 0 ? (
-            <div className="text-center py-2 text-[11px] text-zinc-400 font-medium">Cargando estado físico...</div>
-          ) : (
-            <div className="grid grid-cols-6 gap-1.5 pt-1">
-              {roomStatuses
-                .sort((a, b) => String(a.room_number).localeCompare(String(b.room_number), undefined, {numeric: true}))
-                .map(room => {
-                  let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
-                  if (room.status === 'disponible') {
-                    colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100';
-                  } else if (room.status === 'limpia') {
-                    colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100';
-                  } else if (room.status === 'en_limpieza') {
-                    colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100';
-                  }
-                  return (
-                    <div
-                      key={room.id}
-                      onClick={() => router.push('/recepcion')}
-                      className={`aspect-square rounded-xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-105 active:scale-95 transition-all text-center ${colorClasses}`}
-                    >
-                      <span className="text-[11px] font-bold tracking-tight leading-none">{room.room_number}</span>
-                      <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${
-                        room.status === 'disponible' ? 'bg-emerald-200' :
-                        room.status === 'limpia' ? 'bg-blue-200' :
-                        room.status === 'en_limpieza' ? 'bg-amber-200' : 'bg-zinc-300'
-                      }`} />
-                    </div>
-                  );
-                })}
-            </div>
-          )}
+          {/* Grid visual compacto (6 columnas para celular) */}
+          <div className="grid grid-cols-6 gap-1.5 pt-1">
+            {ROOMS.map(roomNum => {
+              const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
+              const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
+              const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+
+              let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+              let dotClass = 'bg-zinc-300';
+              if (operStatus === 'disponible') {
+                colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                dotClass = 'bg-emerald-200';
+              } else if (operStatus === 'limpia') {
+                colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                dotClass = 'bg-blue-200';
+              } else if (operStatus === 'sucio_checkout') {
+                colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
+                dotClass = 'bg-rose-200';
+              } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
+                colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                dotClass = 'bg-amber-200';
+              }
+
+              return (
+                <div
+                  key={roomNum}
+                  onClick={() => {
+                    setSelectedRoomForStatus({
+                      room_number: roomNum,
+                      status: dbStatus,
+                      id: dbStatusObj.id || roomNum,
+                      updated_by: dbStatusObj.updated_by || null,
+                      updated_at: dbStatusObj.updated_at || null,
+                      operStatus: operStatus
+                    });
+                    setShowRoomStatusModal(true);
+                  }}
+                  className={`aspect-square rounded-xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-105 active:scale-95 transition-all text-center ${colorClasses}`}
+                >
+                  <span className="text-[11px] font-bold tracking-tight leading-none">{roomNum}</span>
+                  <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -586,6 +750,205 @@ export default function AdminDashboard() {
         </div>
       </div>
 
+      {/* ── MODAL DETALLE / INSPECCIÓN DE HABITACIÓN EN ADMIN (INTERACTIVO COMPACTO) ── */}
+      {showRoomStatusModal && selectedRoomForStatus && (() => {
+        const operStatus = selectedRoomForStatus.operStatus;
+
+        // Formateador de fecha/hora de la última actualización
+        const formatLastUpdated = (dateStr?: string) => {
+          if (!dateStr) return '—';
+          try {
+            return format(parseISO(dateStr), "d 'de' MMMM, h:mm a", { locale: es });
+          } catch (e) {
+            return dateStr;
+          }
+        };
+
+        const isCleanTerminated = operStatus === 'limpia';
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div onClick={() => setShowRoomStatusModal(false)} className="absolute inset-0" />
+            <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-black text-zinc-900">Habitación {selectedRoomForStatus.room_number}</h3>
+                    {isCleanTerminated && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                        Inspección Pendiente
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-400 font-bold mt-0.5">
+                    {isCleanTerminated ? 'Control de Calidad y Aprobación de Renta' : 'Información Operativa de la Habitación'}
+                  </p>
+                </div>
+                <button 
+                  onClick={() => setShowRoomStatusModal(false)} 
+                  className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+                >
+                  <X size={15} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              {/* Contenido Condicional */}
+              {isCleanTerminated ? (
+                // CASO AZUL: Inspección y Aprobación
+                <div className="space-y-5">
+                  <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-3.5 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center font-bold">
+                        🧹
+                      </div>
+                      <div>
+                        <p className="text-[12px] font-black text-blue-800 uppercase tracking-wider">Limpieza Finalizada</p>
+                        <p className="text-[10px] text-blue-600 font-bold">La habitación está lista para control físico.</p>
+                      </div>
+                    </div>
+                    
+                    <div className="border-t border-blue-200/40 pt-3 space-y-2 text-[12px]">
+                      <div className="flex justify-between items-center text-zinc-700">
+                        <span className="font-bold text-zinc-400">Limpiado por:</span>
+                        <span className="font-extrabold text-blue-900">{selectedRoomForStatus.updated_by || 'Personal de Limpieza'}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-zinc-700">
+                        <span className="font-bold text-zinc-400">Hora de término:</span>
+                        <span className="font-bold text-zinc-800">{formatLastUpdated(selectedRoomForStatus.updated_at)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[12px] text-zinc-500 font-medium leading-relaxed bg-zinc-50 border border-zinc-200/60 p-3.5 rounded-xl">
+                    ℹ️ **Instrucciones de Administrador:** Puedes aprobar directamente la inspección para habilitarla o reportar algún detalle técnico a mantenimiento si no cumple el estándar.
+                  </p>
+
+                  <div className="flex flex-col gap-2.5 pt-2">
+                    <button
+                      onClick={() => handleUpdateRoomStatus('disponible')}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer shadow-md shadow-emerald-600/15 flex items-center justify-center gap-2 active:scale-[0.98]"
+                    >
+                      <CheckCircle2 size={16} strokeWidth={2.5} />
+                      <span>Aprobar Inspección (Marcar Disponible)</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setShowRoomStatusModal(false);
+                        router.push(`/mantenimiento?action=new_task&room=${selectedRoomForStatus.room_number}`);
+                      }}
+                      className="w-full bg-rose-50 hover:bg-rose-100 text-rose-650 border border-rose-200 font-bold text-[12px] py-3.5 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Wrench size={14} />
+                      <span>Reportar Daño o Detalle Técnico (MTTO)</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // CASO RESTO (Verde, Amarillo, Rojo): Tarjeta Informativa e interactiva con botones rápidos
+                <div className="space-y-5">
+                  <div className="flex justify-center">
+                    {(() => {
+                      let bg = 'bg-zinc-150 text-zinc-700 border-zinc-200';
+                      let label = 'Desconocido';
+                      let desc = '';
+                      
+                      if (operStatus === 'disponible') {
+                        bg = 'bg-emerald-500 text-white border-emerald-600 shadow-lg shadow-emerald-500/10';
+                        label = '🟢 Disponible';
+                        desc = 'La habitación se encuentra limpia, inspeccionada y lista para recibir huéspedes de check-in inmediato.';
+                      } else if (operStatus === 'sucio_checkout') {
+                        bg = 'bg-rose-500 text-white border-rose-600 shadow-lg shadow-rose-500/10';
+                        label = '🔴 Check Out';
+                        desc = 'Se ha dado salida al huésped. El cuarto requiere una limpieza profunda de salida para volver a rentarse.';
+                      } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
+                        bg = 'bg-amber-400 text-white border-amber-500 shadow-lg shadow-amber-450/10';
+                        label = '🟡 Limpieza Programada';
+                        desc = 'Se requiere limpieza ordinaria (Stayover diario, cada 3er día o checkout programado para hoy) basada en reservas de Beds24.';
+                      }
+
+                      return (
+                        <div className="w-full space-y-4">
+                          <div className={`p-4 border rounded-2xl text-center ${bg}`}>
+                            <span className="text-[14px] font-black tracking-wide uppercase">{label}</span>
+                          </div>
+                          
+                          <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-3">
+                            <p className="text-[12px] text-zinc-500 font-semibold leading-relaxed">
+                              {desc}
+                            </p>
+                            
+                            {(selectedRoomForStatus.updated_by || selectedRoomForStatus.updated_at) && (
+                              <div className="border-t border-zinc-200/40 pt-3 space-y-1.5 text-[11px] text-zinc-400 font-bold">
+                                {selectedRoomForStatus.updated_by && (
+                                  <div className="flex justify-between">
+                                    <span>Última acción por:</span>
+                                    <span className="font-extrabold text-zinc-700">{selectedRoomForStatus.updated_by}</span>
+                                  </div>
+                                )}
+                                {selectedRoomForStatus.updated_at && (
+                                  <div className="flex justify-between">
+                                    <span>Fecha/Hora:</span>
+                                    <span className="font-bold text-zinc-700">{formatLastUpdated(selectedRoomForStatus.updated_at)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="pt-2 space-y-2">
+                    {/* Botones rápidos de control de estatus */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleUpdateRoomStatus('disponible')}
+                        className="py-3 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <span>Marcar Disponible</span>
+                      </button>
+                      <button
+                        onClick={() => handleUpdateRoomStatus('limpia')}
+                        className="py-3 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <span>Marcar Limpia (Azul)</span>
+                      </button>
+                      <button
+                        onClick={() => handleUpdateRoomStatus('en_limpieza')}
+                        className="py-3 px-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <span>Iniciar Limpieza</span>
+                      </button>
+                      <button
+                        onClick={() => handleUpdateRoomStatus('sucio_checkout')}
+                        className="py-3 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                      >
+                        <span>Marcar Check Out</span>
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setShowRoomStatusModal(false);
+                        router.push(`/mantenimiento?action=new_task&room=${selectedRoomForStatus.room_number}`);
+                      }}
+                      className="w-full mt-1 bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] tracking-wide uppercase py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98]"
+                    >
+                      <Wrench size={14} />
+                      <span>Reportar Incidencia de Mantenimiento</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
