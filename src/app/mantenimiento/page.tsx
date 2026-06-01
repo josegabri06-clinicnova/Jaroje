@@ -105,7 +105,19 @@ export default function MantenimientoPage() {
     try {
       const res = await fetch('/api/tasks');
       const json = await res.json();
-      if (json.success) setTasks(json.data);
+      if (json.success) {
+        // Filtrar tareas que correspondan puramente al módulo de limpieza
+        const maintenanceTasks = (json.data || []).filter((t: any) => {
+          const desc = (t.description || '').toLowerCase();
+          const isClean = t.type === 'limpieza' || 
+                          desc.includes('check-out completado') || 
+                          desc.includes('lista para limpieza') || 
+                          desc.includes('servicio de limpieza') || 
+                          desc.includes('limpieza programada');
+          return !isClean;
+        });
+        setTasks(maintenanceTasks);
+      }
     } catch (e) {
       console.error(e);
     }

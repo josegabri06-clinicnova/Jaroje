@@ -549,9 +549,26 @@ export default function StaffPage() {
   };
 
   const roleFilteredTasks = tasks.filter(t => {
-    if (t.type === 'aviso' || t.type === 'otro') return true;
-    if (isMantenimiento) return t.type === 'mantenimiento';
-    if (isLimpieza) return t.type === 'limpieza';
+    const descLower = (t.description || '').toLowerCase();
+    const isCleanTask = t.type === 'limpieza' || 
+                        descLower.includes('check-out completado') || 
+                        descLower.includes('lista para limpieza') || 
+                        descLower.includes('servicio de limpieza') || 
+                        descLower.includes('limpieza programada');
+
+    if (isMantenimiento) {
+      // Si es mantenimiento, excluir estrictamente tareas que sean de limpieza
+      if (isCleanTask) return false;
+      return t.type === 'mantenimiento' || t.type === 'aviso' || t.type === 'otro';
+    }
+
+    if (isLimpieza) {
+      // Si es limpieza, permitir las de limpieza y avisos/otros no de mantenimiento
+      if (isCleanTask) return true;
+      if (t.type === 'mantenimiento') return false;
+      return t.type === 'limpieza' || t.type === 'aviso' || t.type === 'otro';
+    }
+
     return true;
   });
 
