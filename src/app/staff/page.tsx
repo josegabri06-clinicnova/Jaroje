@@ -10,7 +10,7 @@ import {
   RefreshCw, ShieldAlert, UserPlus
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
-import { getActiveEmployee, clearActiveEmployee, Employee } from '@/lib/auth';
+import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServer, getOfficialEmployees } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -187,6 +187,37 @@ export default function StaffPage() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
   const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping'>('tareas');
+  
+  const [employeesList, setEmployeesList] = useState<Employee[]>([]);
+  const [assignments, setAssignments] = useState<Record<string, { employeeNum: string; notes: string }>>({});
+
+  // Cargar recamareras oficiales y asignaciones guardadas en localStorage
+  useEffect(() => {
+    const loadEmps = async () => {
+      const emps = await syncEmployeesFromServer();
+      setEmployeesList(emps.filter(e => e.department === 'limpieza'));
+    };
+    loadEmps();
+
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('jaroje_daily_assignments');
+      if (saved) {
+        try {
+          setAssignments(JSON.parse(saved));
+        } catch (e) {
+          console.error('Error parseando jaroje_daily_assignments:', e);
+        }
+      }
+    }
+  }, []);
+
+  const updateAssignment = (room: string, employeeNum: string, notes: string) => {
+    setAssignments(prev => {
+      const next = { ...prev, [room]: { employeeNum, notes } };
+      localStorage.setItem('jaroje_daily_assignments', JSON.stringify(next));
+      return next;
+    });
+  };
   const [taskTab, setTaskTab] = useState<'nuevos' | 'pendientes' | 'en_proceso' | 'resueltos'>('nuevos');
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
@@ -480,7 +511,8 @@ export default function StaffPage() {
         operStatus === 'sucio_checkout' || 
         operStatus === 'en_limpieza' || 
         operStatus === 'limpieza_programada' ||
-        dbStatus === 'limpia'
+        dbStatus === 'sucio_checkout' ||
+        dbStatus === 'en_limpieza'
       )) {
         list.push({
           room: r,
@@ -803,6 +835,44 @@ export default function StaffPage() {
     setShowForm(true);
   };
 
+  const handleCopyReport = () => {
+    const pendingRooms = getScheduledCleanings().filter(task => {
+      const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
+      return !isFinished;
+    });
+
+    if (pendingRooms.length === 0) {
+      alert("No hay limpiezas pendientes para reportar hoy.");
+      return;
+    }
+
+    const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
+    let text = `📋 *REPORTE DIARIO DE LIMPIEZA*\n🏨 *Jaroje Condominios*\n📅 *${dateStr.toUpperCase()}*\n\n`;
+
+    pendingRooms.forEach((task, idx) => {
+      const stateLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
+      const assignment = assignments[task.room];
+      const empNum = assignment?.employeeNum || '';
+      const empName = getOfficialEmployees().find(e => e.employee_num === empNum)?.full_name || 'Sin asignar ❌';
+      const notes = assignment?.notes?.trim() || 'Sin observaciones';
+
+      text += `${idx + 1}. *Hab. ${task.room}*\n`;
+      text += `   • *Estado:* ${stateLabel}\n`;
+      text += `   • *Asignado:* ${empName}\n`;
+      text += `   • *Observaciones:* ${notes}\n\n`;
+    });
+
+    text += `_Generado automáticamente desde Jaroje OS_`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setSuccessMsg('📋 ¡Reporte de limpieza copiado al portapapeles! Listo para WhatsApp.');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    }).catch(err => {
+      console.error("Error al copiar al portapapeles:", err);
+      alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
+    });
+  };
+
   // Obtener estado de una habitación
   const getRoomState = (roomNum: string) => {
     const dbStatus = roomStatuses.find(rs => rs.room_number === roomNum);
@@ -817,7 +887,7 @@ export default function StaffPage() {
         <div>
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
             <h2 className="text-[20px] font-black text-zinc-900 tracking-tight leading-none">
-              {isMantenimiento ? 'Mtto. Técnico' : 'Personal Operativo'}
+              {isMantenimiento ? 'Mtto. Técnico' : 'LIMPIEZA'}
             </h2>
             <span className="text-[11px] font-black tracking-widest uppercase bg-zinc-900 text-white px-2 py-0.5 rounded-md scale-90">
               {role === 'staff_limpieza' ? 'Limpieza' : role === 'staff_mantenimiento' ? 'Mtto' : role}
@@ -869,584 +939,26 @@ export default function StaffPage() {
 
       <div className="max-w-md mx-auto px-4 mt-4 space-y-4">
         
-        {/* Pestañas Principales Integradas */}
-        <div className="flex bg-zinc-200/60 p-1 rounded-2xl">
-          <button 
-            onClick={() => setMainTab('tareas')} 
-            className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all cursor-pointer ${mainTab === 'tareas' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-          >
-            {isMantenimiento ? 'Mis Tareas' : 'Tareas de Hoy'}
-          </button>
-          
-          {/* Ocultar pestaña Housekeeping al personal puramente técnico de mantenimiento */}
-          {!isMantenimiento && (
-            <button 
-              onClick={() => setMainTab('housekeeping')} 
-              className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all cursor-pointer ${mainTab === 'housekeeping' ? 'bg-white text-zinc-950 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-            >
-              Habitaciones
-            </button>
-          )}
+        {/* KPI Cards */}
+        <div className="grid grid-cols-3 gap-2.5">
+          {[
+            { label: 'Llegan', value: llegadas.length, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+            { label: 'Salen', value: salidas.length, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100' },
+            { label: 'Ocupadas', value: ocupadas.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
+          ].map((k, i) => (
+            <div key={i} className={`bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center ${k.bg}`}>
+              <p className={`text-2xl font-black ${k.color} leading-none mb-1`}>{k.value}</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{k.label}</p>
+            </div>
+          ))}
         </div>
 
-        {/* ── SECCIÓN 1: TAREAS Y LIMPIEZA PROGRAMADA ── */}
-        {mainTab === 'tareas' && (
+        {/* VISTA DE LIMPIEZA / RECEPCIÓN */}
+        {!isMantenimiento && (
           <div className="space-y-4">
             
-            {/* KPI Cards */}
-            <div className="grid grid-cols-3 gap-2.5">
-              {[
-                { label: 'Llegan', value: llegadas.length, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-                { label: 'Salen', value: salidas.length, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100' },
-                { label: 'Ocupadas', value: ocupadas.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
-              ].map((k, i) => (
-                <div key={i} className={`bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center ${k.bg}`}>
-                  <p className={`text-2xl font-black ${k.color} leading-none mb-1`}>{k.value}</p>
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{k.label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* ── ESTADO FÍSICO DE HABITACIONES (GRID INTERACTIVO PREMIUM EN TAREAS) ── */}
-            {!isMantenimiento && (
-              <div className="bg-white border border-zinc-200 rounded-[28px] p-5 shadow-sm space-y-4">
-                <div>
-                  <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
-                  <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
-                </div>
-
-                {/* Conteo por estados */}
-                <div className="grid grid-cols-4 gap-1.5">
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
-                    <span className="text-[15px] font-black text-emerald-700">
-                      {ROOMS.filter(r => {
-                        const dbStatus = getRoomDbStatus(r, roomStatuses);
-                        const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                        return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'disponible';
-                      }).length}
-                    </span>
-                    <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
-                  </div>
-                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
-                    <span className="text-[15px] font-black text-amber-700">
-                      {ROOMS.filter(r => {
-                        const dbStatus = getRoomDbStatus(r, roomStatuses);
-                        const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                        const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-                        return s === 'en_limpieza' || s === 'limpieza_programada';
-                      }).length}
-                    </span>
-                    <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
-                  </div>
-                  <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
-                    <span className="text-[15px] font-black text-rose-700">
-                      {ROOMS.filter(r => {
-                        const dbStatus = getRoomDbStatus(r, roomStatuses);
-                        const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                        return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'sucio_checkout';
-                      }).length}
-                    </span>
-                    <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Aviso Check Out</p>
-                  </div>
-                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
-                    <span className="text-[15px] font-black text-blue-700">
-                      {ROOMS.filter(r => {
-                        const dbStatus = getRoomDbStatus(r, roomStatuses);
-                        const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                        return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'limpia';
-                      }).length}
-                    </span>
-                    <p className="text-[7.2px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limp. Terminada</p>
-                  </div>
-                </div>
-
-                {/* Grid visual premium agrupado por Renglones/Filas */}
-                <div className="space-y-4 pt-1">
-                  {ROOM_ROWS.map((row) => (
-                    <div key={row.label} className="space-y-2 border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">
-                          {row.label}
-                        </span>
-                        <span className="text-[8px] font-extrabold bg-zinc-50 border border-zinc-150 px-1.5 py-0.5 rounded text-zinc-400">
-                          {row.rooms.length} HAB
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-7 gap-2">
-                        {row.rooms.map((roomNum) => {
-                          const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
-                          const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
-                          const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, (dbStatusObj as any)?.updated_at);
-
-                          let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
-                          let dotClass = 'bg-zinc-300';
-                          if (operStatus === 'disponible') {
-                            colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
-                            dotClass = 'bg-emerald-250';
-                          } else if (operStatus === 'limpia') {
-                            colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
-                            dotClass = 'bg-blue-250';
-                          } else if (operStatus === 'sucio_checkout') {
-                            colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
-                            dotClass = 'bg-rose-250';
-                          } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
-                            colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
-                            dotClass = 'bg-amber-250';
-                          }
-
-                          return (
-                            <div
-                              key={roomNum}
-                              onClick={() => {
-                                if (canModifyStatus) {
-                                  setSelectedRoom(roomNum);
-                                  setShowStatusModal(true);
-                                }
-                              }}
-                              className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
-                            >
-                              <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
-                              <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Llegadas de Hoy (Check-in) */}
-            {!isMantenimiento && llegadas.length > 0 && (
-              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
-                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-                  <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
-                  <span className="text-[13px] font-extrabold text-zinc-800">Próximos Check-ins ({llegadas.length})</span>
-                </div>
-                <div className="divide-y divide-zinc-100">
-                  {llegadas.map((r) => (
-                    <div key={r.id} className="p-4 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                          <BedDouble size={18} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[14px] font-bold text-zinc-900 leading-tight">Hab. {r.room || 'Sin asignar'}</p>
-                          <p className="text-[12px] font-semibold text-zinc-400 truncate mt-0.5">{r.guest_name || 'Huésped'}</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-100/70 text-emerald-700">Hoy</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* LIMPIEZA PROGRAMADA (Check out + Servicios) */}
-            {!isMantenimiento && (
-              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
-                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-                  <Sparkles size={16} className="text-amber-600" strokeWidth={2.5} />
-                  <span className="text-[13px] font-extrabold text-zinc-800">Limpieza Programada (Check-out + Servicios)</span>
-                </div>
-                
-                {getScheduledCleanings().length === 0 ? (
-                  <div className="p-6 text-center text-zinc-400 text-[13px] font-semibold">
-                    No hay limpiezas programadas para hoy.
-                  </div>
-                ) : (
-                  <div className="divide-y divide-zinc-100">
-                    {getScheduledCleanings().map((task) => {
-                      const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
-                      const inProgress = task.dbStatus === 'en_limpieza';
-
-                      return (
-                        <div key={task.room} className="p-4 flex items-center justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              isFinished 
-                                ? 'bg-emerald-50 text-emerald-600' 
-                                : inProgress 
-                                  ? 'bg-amber-50 border border-amber-100 text-amber-600 animate-pulse' 
-                                  : task.type === 'checkout' && task.keysReturned
-                                    ? 'bg-rose-50 border border-rose-100 text-rose-600 animate-pulse'
-                                    : 'bg-zinc-50 border border-zinc-100 text-zinc-500'
-                            }`}>
-                              {isFinished ? <CheckCircle2 size={18} /> : <Sparkles size={18} />}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[14px] font-bold text-zinc-900 leading-tight">
-                                Hab. {task.room} <span className="text-[10px] font-black text-zinc-400 uppercase">({task.type === 'checkout' ? 'Salida' : 'Estancia'})</span>
-                              </p>
-                              {task.type === 'checkout' ? (
-                                <>
-                                  {isFinished ? (
-                                    <p className="text-[12px] font-semibold text-emerald-600 mt-0.5">✓ Habitación Lista para Check-in</p>
-                                  ) : task.keysReturned ? (
-                                    <p className="text-[12px] font-extrabold text-rose-650 mt-0.5 flex items-center gap-1 animate-pulse">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                                      Salida Confirmada · Vacía (Entrar ya)
-                                    </p>
-                                  ) : (
-                                    <p className="text-[12px] font-bold text-rose-500/80 mt-0.5 flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                                      Ocupada · Esperando entrega de llaves
-                                    </p>
-                                  )}
-                                </>
-                              ) : (
-                                <>
-                                  {isFinished ? (
-                                    <p className="text-[12px] font-semibold text-emerald-600 mt-0.5">✓ Servicio de Estancia Realizado</p>
-                                  ) : (
-                                    <p className="text-[12px] font-bold text-amber-600 mt-0.5 flex items-center gap-1">
-                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-450 shrink-0" />
-                                      Servicio de Estancia Programado para Hoy
-                                    </p>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {isFinished ? (
-                            <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 flex items-center gap-1">
-                              ✓ Lista
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => {
-                                if (task.type === 'checkout' && !task.keysReturned) {
-                                  const force = window.confirm(
-                                    `⚠️ ATENCIÓN DE SEGURIDAD OPERATIVA:\n\nEl huésped de la Habitación ${task.room} no ha entregado llaves formalmente en Recepción.\n\n¿Confirmas que la habitación ya está físicamente vacía y deseas forzar la firma de limpieza?`
-                                  );
-                                  if (!force) return;
-                                }
-                                runWithSignature(
-                                  'room_status', 
-                                  (payload) => changeRoomStatus(payload.room, payload.status), 
-                                  { room: task.room, status: 'limpia' }
-                                );
-                              }}
-                              className={`text-white text-[11px] font-black tracking-wide uppercase px-3 py-2 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95 ${
-                                task.type === 'checkout' && task.keysReturned
-                                  ? 'bg-rose-600 hover:bg-rose-500 shadow-rose-100'
-                                  : inProgress
-                                    ? 'bg-amber-600 hover:bg-amber-500 shadow-amber-100' 
-                                    : 'bg-zinc-500 hover:bg-zinc-650 shadow-zinc-100 opacity-90'
-                              }`}
-                            >
-                              Marcar Lista
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TABLERO DE INCIDENCIAS (Filtrado para evitar ruido a Limpieza/Recepción) */}
-            {(isMantenimiento || role === 'admin') ? (
-              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
-                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle size={16} className="text-zinc-600" />
-                    <span className="text-[13px] font-extrabold text-zinc-800">Control de Incidencias</span>
-                  </div>
-                </div>
-
-                <div className="p-2 bg-zinc-50 border-b border-zinc-100 grid grid-cols-4 gap-1">
-                  <button 
-                    onClick={() => setTaskTab('nuevos')} 
-                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'nuevos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-                  >
-                    NUEVOS ({nuevos.length})
-                  </button>
-                  <button 
-                    onClick={() => setTaskTab('pendientes')} 
-                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'pendientes' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-                  >
-                    PENDIENTES ({pendientes.length})
-                  </button>
-                  <button 
-                    onClick={() => setTaskTab('en_proceso')} 
-                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'en_proceso' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-                  >
-                    EN PROCESO ({enProceso.length})
-                  </button>
-                  <button 
-                    onClick={() => setTaskTab('resueltos')} 
-                    className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'resueltos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-                  >
-                    RESUELTOS ({resueltos.length})
-                  </button>
-                </div>
-
-                {taskTab === 'nuevos' && (
-                  nuevos.length === 0 ? (
-                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                      <CheckCircle2 size={24} className="text-emerald-500" />
-                      <p className="text-[12px] font-semibold text-zinc-400">Sin nuevos reportes</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-zinc-100">
-                      {nuevos.map((t) => {
-                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                        const Icon = cfg.icon;
-                        const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-                        
-                        return (
-                          <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                                  <Icon size={14} className={cfg.text} />
-                                </div>
-                                <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
-                                <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
-                              </div>
-                              <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
-                            </div>
-
-                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
-
-                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                              <span>•</span>
-                              <span>{dateStr}</span>
-                            </div>
-
-                            {renderTaskImagesCarousel(t)}
-
-                            <div className="pt-1">
-                              <button 
-                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                                className="w-full py-3 bg-zinc-900 text-white rounded-xl text-[11px] font-extrabold hover:bg-zinc-800 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
-                              >
-                                MARCAR COMO REVISADO ✓
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )
-                )}
-
-                {taskTab === 'pendientes' && (
-                  pendientes.length === 0 ? (
-                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                      <Clock size={24} className="text-zinc-300" />
-                      <p className="text-[12px] font-semibold text-zinc-400">Sin reportes pendientes</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-zinc-100">
-                      {pendientes.map((t) => {
-                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                        const Icon = cfg.icon;
-                        const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-
-                        return (
-                          <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                                  <Icon size={14} className={cfg.text} />
-                                </div>
-                                <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
-                                <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
-                              </div>
-                              <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
-                            </div>
-
-                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
-
-                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                              <span>•</span>
-                              <span>{dateStr}</span>
-                            </div>
-
-                            {renderTaskImagesCarousel(t)}
-
-                            <div className="pt-1">
-                              <button 
-                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
-                                className="w-full py-3 bg-amber-500 text-white rounded-xl text-[11px] font-extrabold hover:bg-amber-600 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
-                              >
-                                INICIAR TRABAJO ⚡
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )
-                )}
-
-                {taskTab === 'en_proceso' && (
-                  enProceso.length === 0 ? (
-                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                      <Clock size={24} className="text-zinc-300" />
-                      <p className="text-[12px] font-semibold text-zinc-400">Sin trabajos en proceso</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-zinc-100">
-                      {enProceso.map((t) => {
-                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                        const Icon = cfg.icon;
-                        const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-
-                        return (
-                          <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                                  <Icon size={14} className={cfg.text} />
-                                </div>
-                                <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
-                                <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
-                              </div>
-                              <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
-                            </div>
-
-                            <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
-
-                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                              <span>•</span>
-                              <span>{dateStr}</span>
-                            </div>
-
-                            {renderTaskImagesCarousel(t)}
-
-                            <div className="flex gap-2 pt-1">
-                              <button 
-                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                                className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-zinc-100 border border-zinc-200 text-zinc-500 hover:bg-zinc-200 active:scale-[0.96] transition-all cursor-pointer text-center"
-                              >
-                                Regresar ↩
-                              </button>
-                              <button 
-                                onClick={() => handleOpenResolveModal(t)}
-                                className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
-                              >
-                                ✓ Terminar
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )
-                )}
-
-                {taskTab === 'resueltos' && (
-                  resueltos.length === 0 ? (
-                    <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                      <Clock size={24} className="text-zinc-300" />
-                      <p className="text-[12px] font-semibold text-zinc-400">Historial vacío</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-zinc-100 bg-zinc-50/50">
-                      {resueltos.map((t) => {
-                        const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                        const Icon = cfg.icon;
-                        const originalImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                        const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-                        const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-
-                        return (
-                          <div key={t.id} className="p-4 space-y-2 opacity-85 animate-in fade-in duration-155">
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 rounded-lg bg-zinc-200 flex items-center justify-center shrink-0">
-                                  <Icon size={12} className="text-zinc-650" />
-                                </div>
-                                <span className="text-[12px] font-bold text-zinc-650">{cfg.label}</span>
-                                <span className="text-[11px] font-bold text-zinc-400 bg-white px-2 py-0.5 rounded-md border border-zinc-150">Hab. {t.room}</span>
-                              </div>
-                              <span className="text-[10px] font-semibold text-zinc-400">{elapsed(t.created_at)}</span>
-                            </div>
-                            <p className="text-[13px] text-zinc-650 pl-1 whitespace-pre-line leading-relaxed font-medium">{t.description}</p>
-                            
-                            <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                              <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                              <span>•</span>
-                              <span>{dateStr}</span>
-                            </div>
-
-                            {/* Mostrar foto original si existe */}
-                            {getTaskImages(t).length > 0 && (
-                              <div className="space-y-1 pl-1">
-                                <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Foto Reportada</span>
-                                {renderTaskImagesCarousel(t)}
-                              </div>
-                            )}
-                            
-                            {/* Mostrar foto de resolución si existe */}
-                            {t.resolution_photo_url && (
-                              <div className="space-y-1 pl-1">
-                                <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Evidencia de Cierre</span>
-                                <div className="rounded-2xl overflow-hidden border border-zinc-200">
-                                  <a href={t.resolution_photo_url} target="_blank" rel="noreferrer">
-                                    <img src={t.resolution_photo_url} alt="Evidencia de Resolución" className="w-full max-h-40 object-cover" />
-                                  </a>
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600 pl-1 pt-1">
-                              <CheckCheck size={14} />
-                              <span>Cerrado en: {resolvedStr}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )
-                )}
-              </div>
-            ) : (
-              // BÁNNER INFORMATIVO SI ES CLEANER / RECEPCIÓN (ELIMINA EL RUIDO VISUAL)
-              <div className="bg-gradient-to-br from-zinc-900 to-zinc-950 text-white rounded-3xl p-6 shadow-xl relative overflow-hidden border border-zinc-800">
-                <div className="absolute right-0 bottom-0 opacity-10 translate-x-4 translate-y-4">
-                  <Wrench size={160} />
-                </div>
-                <div className="relative z-10 space-y-4">
-                  <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                    <ShieldAlert size={20} className="text-rose-400" />
-                  </div>
-                  <div>
-                    <h4 className="text-[15px] font-black">Reporte de Daños Técnicos</h4>
-                    <p className="text-[12px] text-zinc-400 leading-relaxed mt-1">
-                      Si encuentras fugas de agua, fallos eléctricos, cerraduras rotas o cualquier anomalía, notifícalo directamente al administrador.
-                    </p>
-                  </div>
-                  <button 
-                    onClick={openMaintenanceReport}
-                    className="bg-white text-zinc-950 text-[11px] font-black uppercase px-4 py-2.5 rounded-xl flex items-center gap-2 active:scale-95 transition-all cursor-pointer shadow-lg"
-                  >
-                    <Wrench size={12} strokeWidth={2.5} />
-                    Reportar Incidencia
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── SECCIÓN 2: TABLERO HOUSEKEEPING (Grid de Habitaciones 101 a 402 en tiempo real) ── */}
-        {mainTab === 'housekeeping' && !isMantenimiento && (
-          <div className="space-y-4">
-            
-            <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-4">
+            {/* ── ESTADO FÍSICO DE HABITACIONES (GRID INTERACTIVO PREMIUM) ── */}
+            <div className="bg-white border border-zinc-200 rounded-[28px] p-5 shadow-sm space-y-4">
               <div>
                 <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
                 <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
@@ -1552,10 +1064,406 @@ export default function StaffPage() {
                 ))}
               </div>
             </div>
+
+            {/* Llegadas de Hoy (Check-in) */}
+            {llegadas.length > 0 && (
+              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
+                  <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
+                  <span className="text-[13px] font-extrabold text-zinc-800">Próximos Check-ins ({llegadas.length})</span>
+                </div>
+                <div className="divide-y divide-zinc-100">
+                  {llegadas.map((r) => (
+                    <div key={r.id} className="p-4 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                          <BedDouble size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[14px] font-bold text-zinc-900 leading-tight">Hab. {r.room || 'Sin asignar'}</p>
+                          <p className="text-[12px] font-semibold text-zinc-400 truncate mt-0.5">{r.guest_name || 'Huésped'}</p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-100/70 text-emerald-700">Hoy</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── NUEVA SECCIÓN: REPORTE DIARIO DE LIMPIEZA ── */}
+            <div className="bg-white border border-zinc-200 rounded-[28px] p-5 shadow-sm space-y-4 animate-in fade-in duration-200">
+              <div>
+                <h3 className="text-[15px] font-black text-zinc-900 tracking-tight">Reporte Diario de Limpieza</h3>
+                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Asigna el personal de aseo y copia el reporte consolidado.</p>
+              </div>
+
+              {(() => {
+                const pendingRooms = getScheduledCleanings().filter(task => {
+                  const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
+                  return !isFinished;
+                });
+
+                if (pendingRooms.length === 0) {
+                  return (
+                    <div className="p-6 text-center bg-zinc-50/50 border border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center gap-1.5">
+                      <CheckCircle2 className="text-emerald-500" size={22} />
+                      <p className="text-[12px] font-bold text-zinc-500">🎉 Todo limpio. No hay tareas de aseo por asignar hoy.</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-4">
+                    <div className="overflow-x-auto -mx-5 px-5">
+                      <table className="w-full min-w-[320px] text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-100">
+                            <th className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pb-2 pr-2">HABITACIÓN</th>
+                            <th className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pb-2 pr-2">ESTADO</th>
+                            <th className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pb-2 pr-2">ASIGNADO</th>
+                            <th className="text-[10px] font-black text-zinc-400 uppercase tracking-wider pb-2">OBSERVACIONES</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {pendingRooms.map(task => {
+                            const assignment = assignments[task.room] || { employeeNum: '', notes: '' };
+                            const isCheckout = task.type === 'checkout';
+
+                            return (
+                              <tr key={task.room} className="align-middle">
+                                {/* HABITACIÓN */}
+                                <td className="py-2.5 pr-2">
+                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-zinc-900 text-white text-[12px] font-black select-none">
+                                    {task.room}
+                                  </span>
+                                </td>
+
+                                {/* ESTADO */}
+                                <td className="py-2.5 pr-2">
+                                  <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border select-none ${
+                                    isCheckout 
+                                      ? 'bg-rose-50 text-rose-700 border-rose-100' 
+                                      : 'bg-amber-50 text-amber-700 border-amber-100'
+                                  }`}>
+                                    {isCheckout ? 'Check Out' : 'Servicio'}
+                                  </span>
+                                </td>
+
+                                {/* ASIGNADO */}
+                                <td className="py-2.5 pr-2">
+                                  <select
+                                    value={assignment.employeeNum}
+                                    onChange={e => updateAssignment(task.room, e.target.value, assignment.notes)}
+                                    className="w-full max-w-[110px] bg-zinc-50 border border-zinc-200 rounded-xl px-1.5 py-1.5 outline-none text-[10.5px] font-bold text-zinc-800 focus:ring-1 focus:ring-zinc-900/10 cursor-pointer"
+                                  >
+                                    <option value="">Seleccionar...</option>
+                                    {employeesList.map(emp => (
+                                      <option key={emp.employee_num} value={emp.employee_num}>
+                                        {emp.full_name.split(' ')[0]} ({emp.employee_num})
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+
+                                {/* OBSERVACIONES */}
+                                <td className="py-2.5">
+                                  <input
+                                    type="text"
+                                    value={assignment.notes}
+                                    onChange={e => updateAssignment(task.room, assignment.employeeNum, e.target.value)}
+                                    placeholder="Obs..."
+                                    className="w-full min-w-[70px] bg-zinc-50 border border-zinc-200 rounded-xl px-2.5 py-1.5 outline-none text-[10.5px] font-semibold text-zinc-900 focus:ring-1 focus:ring-zinc-900/10"
+                                  />
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <button
+                      onClick={handleCopyReport}
+                      className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-extrabold text-[12px] tracking-wide uppercase py-3.5 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 shadow-md shadow-zinc-100"
+                    >
+                      <Send size={13} strokeWidth={2.5} />
+                      <span>MANDAR REPORTE</span>
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+
           </div>
         )}
 
+        {/* TABLERO DE INCIDENCIAS (Filtrado para evitar ruido a Limpieza/Recepción) */}
+        {(isMantenimiento || role === 'admin') && (
+          <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={16} className="text-zinc-600" />
+                <span className="text-[13px] font-extrabold text-zinc-800">Control de Incidencias</span>
+              </div>
+            </div>
 
+            <div className="p-2 bg-zinc-50 border-b border-zinc-100 grid grid-cols-4 gap-1">
+              <button 
+                onClick={() => setTaskTab('nuevos')} 
+                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'nuevos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+              >
+                NUEVOS ({nuevos.length})
+              </button>
+              <button 
+                onClick={() => setTaskTab('pendientes')} 
+                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'pendientes' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+              >
+                PENDIENTES ({pendientes.length})
+              </button>
+              <button 
+                onClick={() => setTaskTab('en_proceso')} 
+                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'en_proceso' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+              >
+                EN PROCESO ({enProceso.length})
+              </button>
+              <button 
+                onClick={() => setTaskTab('resueltos')} 
+                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'resueltos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
+              >
+                RESUELTOS ({resueltos.length})
+              </button>
+            </div>
+
+            {taskTab === 'nuevos' && (
+              nuevos.length === 0 ? (
+                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                  <CheckCircle2 size={24} className="text-emerald-500" />
+                  <p className="text-[12px] font-semibold text-zinc-400">Sin nuevos reportes</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-100">
+                  {nuevos.map((t) => {
+                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                    const Icon = cfg.icon;
+                    const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+                    
+                    return (
+                      <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                              <Icon size={14} className={cfg.text} />
+                            </div>
+                            <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
+                            <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                        </div>
+
+                        <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
+
+                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                          <span>•</span>
+                          <span>{dateStr}</span>
+                        </div>
+
+                        {renderTaskImagesCarousel(t)}
+
+                        <div className="pt-1">
+                          <button 
+                            onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                            className="w-full py-3 bg-zinc-900 text-white rounded-xl text-[11px] font-extrabold hover:bg-zinc-800 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
+                          >
+                            MARCAR COMO REVISADO ✓
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {taskTab === 'pendientes' && (
+              pendientes.length === 0 ? (
+                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                  <Clock size={24} className="text-zinc-300" />
+                  <p className="text-[12px] font-semibold text-zinc-400">Sin reportes pendientes</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-100">
+                  {pendientes.map((t) => {
+                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                    const Icon = cfg.icon;
+                    const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+
+                    return (
+                      <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                              <Icon size={14} className={cfg.text} />
+                            </div>
+                            <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
+                            <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                        </div>
+
+                        <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
+
+                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                          <span>•</span>
+                          <span>{dateStr}</span>
+                        </div>
+
+                        {renderTaskImagesCarousel(t)}
+
+                        <div className="pt-1">
+                          <button 
+                            onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
+                            className="w-full py-3 bg-amber-500 text-white rounded-xl text-[11px] font-extrabold hover:bg-amber-600 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
+                          >
+                            INICIAR TRABAJO ⚡
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {taskTab === 'en_proceso' && (
+              enProceso.length === 0 ? (
+                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                  <Clock size={24} className="text-zinc-300" />
+                  <p className="text-[12px] font-semibold text-zinc-400">Sin trabajos en proceso</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-100">
+                  {enProceso.map((t) => {
+                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                    const Icon = cfg.icon;
+                    const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+
+                    return (
+                      <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
+                              <Icon size={14} className={cfg.text} />
+                            </div>
+                            <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
+                            <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
+                          </div>
+                          <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                        </div>
+
+                        <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
+
+                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                          <span>•</span>
+                          <span>{dateStr}</span>
+                        </div>
+
+                        {renderTaskImagesCarousel(t)}
+
+                        <div className="flex gap-2 pt-1">
+                          <button 
+                            onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                            className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-zinc-100 border border-zinc-200 text-zinc-500 hover:bg-zinc-200 active:scale-[0.96] transition-all cursor-pointer text-center"
+                          >
+                            Regresar ↩
+                          </button>
+                          <button 
+                            onClick={() => handleOpenResolveModal(t)}
+                            className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
+                          >
+                            ✓ Terminar
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+
+            {taskTab === 'resueltos' && (
+              resueltos.length === 0 ? (
+                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
+                  <Clock size={24} className="text-zinc-300" />
+                  <p className="text-[12px] font-semibold text-zinc-400">Historial vacío</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-100 bg-zinc-50/50">
+                  {resueltos.map((t) => {
+                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
+                    const Icon = cfg.icon;
+                    const originalImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
+                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+                    const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+
+                    return (
+                      <div key={t.id} className="p-4 space-y-2 opacity-85 animate-in fade-in duration-155">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-zinc-200 flex items-center justify-center shrink-0">
+                              <Icon size={12} className="text-zinc-650" />
+                            </div>
+                            <span className="text-[12px] font-bold text-zinc-650">{cfg.label}</span>
+                            <span className="text-[11px] font-bold text-zinc-400 bg-white px-2 py-0.5 rounded-md border border-zinc-150">Hab. {t.room}</span>
+                          </div>
+                          <span className="text-[10px] font-semibold text-zinc-400">{elapsed(t.created_at)}</span>
+                        </div>
+                        <p className="text-[13px] text-zinc-650 pl-1 whitespace-pre-line leading-relaxed font-medium">{t.description}</p>
+                        
+                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
+                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
+                          <span>•</span>
+                          <span>{dateStr}</span>
+                        </div>
+
+                        {/* Mostrar foto original si existe */}
+                        {getTaskImages(t).length > 0 && (
+                          <div className="space-y-1 mt-2 pl-1">
+                            <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Foto Reportada</span>
+                            {renderTaskImagesCarousel(t)}
+                          </div>
+                        )}
+                        
+                        {/* Mostrar foto de resolución si existe */}
+                        {t.resolution_photo_url && (
+                          <div className="space-y-1 mt-2 pl-1">
+                            <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Evidencia de Cierre</span>
+                            <div className="rounded-2xl overflow-hidden border border-zinc-200">
+                              <a href={t.resolution_photo_url} target="_blank" rel="noreferrer">
+                                <img src={t.resolution_photo_url} alt="Evidencia de Resolución" className="w-full max-h-40 object-cover" />
+                              </a>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600 pl-1 pt-1">
+                          <CheckCheck size={14} />
+                          <span>Cerrado en: {resolvedStr}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── NOTIFICACIONES TOAST ── */}
