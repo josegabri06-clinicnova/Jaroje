@@ -135,15 +135,19 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' {
-  // 1. Si está limpia (AZUL) o sucio_checkout (ROJO) por base de datos, respetar de inmediato
-  if (dbStatus === 'limpia') return 'limpia'; // Azul
-  if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo
-  
-  // 2. Si está disponible (VERDE) y fue actualizado hoy, respetar de inmediato (ya se limpió y aprobó hoy)
   const isUpdatedToday = lastUpdatedAt && lastUpdatedAt.startsWith(todayStr);
-  if (dbStatus === 'disponible' && isUpdatedToday) return 'disponible'; // Verde
-  
-  // 2. Buscar si hay una reserva activa hoy
+
+  // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato
+  if (isUpdatedToday) {
+    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpieza terminada)
+    if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Aviso Check Out)
+    if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
+    if (dbStatus === 'disponible') return 'disponible'; // Verde (Disponible)
+  }
+
+  // 2. Si es de ayer o antes (estatus obsoleto), ignorar la DB y calcular fresh de Beds24 para hoy:
+
+  // Buscar si hay una reserva activa hoy para estancia (Stayover)
   const currentRes = activeReservations.find(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
     return rRoom.includes(roomNum) && r.check_in <= todayStr && r.check_out > todayStr;
@@ -160,25 +164,25 @@ function getRoomOperationalStatus(
     const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(roomNum);
 
     if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
-      return 'limpieza_programada'; // Amarillo automático por 3er día (Stayover cada 3er día de estancia)
+      return 'limpieza_programada'; // Amarillo automático por 3er día (Stayover cada 3er día)
     }
     if (isDailyRoom && dayOfStay >= 2) {
       return 'limpieza_programada'; // Amarillo automático diario durante estancia
     }
   }
 
-  // 3. Buscar si tiene salida programada hoy y aún no entrega llaves
+  // Buscar si tiene salida programada hoy (Check-out)
   const isSalidaHoy = activeReservations.some(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
     return rRoom.includes(roomNum) && r.check_out === todayStr && !r.checked_out;
   });
 
   if (isSalidaHoy) {
-    return 'limpieza_programada'; // Amarillo automático por checkout pendiente
+    return 'limpieza_programada'; // Amarillo automático por checkout programado hoy
   }
 
-  // 4. Si el estado explícito es 'en_limpieza', o no tiene reserva pero requiere limpieza
-  return (dbStatus as any) || 'en_limpieza'; // Amarillo por defecto
+  // 3. Si no tiene salida ni estancia programada que requiera limpieza hoy, está disponible
+  return 'disponible'; // Verde por defecto
 }
 
 export default function StaffPage() {
