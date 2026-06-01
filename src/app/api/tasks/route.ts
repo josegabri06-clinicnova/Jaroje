@@ -81,15 +81,42 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const olderThanDays = searchParams.get('olderThanDays');
     
     if (id) {
-      // Delete single
-      await supabase.from('tasks').delete().eq('id', id);
-    } else {
-      // Keep only resolved if no ID (just for cleanup if needed)
-      // Actually let's just make it delete all if no ID is provided
-      await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      const { error } = await supabase.from('tasks').delete().eq('id', id);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
     }
+
+    if (olderThanDays) {
+      const days = parseInt(olderThanDays);
+      if (isNaN(days)) {
+        return NextResponse.json({ success: false, error: 'Parámetro olderThanDays inválido' }, { status: 400 });
+      }
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('status', 'resuelta')
+        .lt('created_at', cutoffDate.toISOString());
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    const body = await req.json().catch(() => ({}));
+    if (body.ids && Array.isArray(body.ids)) {
+      const { error } = await supabase
+        .from('tasks')
+        .delete()
+        .in('id', body.ids);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    const { error } = await supabase.from('tasks').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

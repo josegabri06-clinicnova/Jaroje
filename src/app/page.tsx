@@ -233,95 +233,7 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* ── 2. ACCIONES RÁPIDAS ───────────────────────────────────────── */}
-      <div>
-        <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Acciones Rápidas</h3>
-        <div className="grid grid-cols-3 gap-2">
-          <Link href="/nueva"
-            className="bg-zinc-900 hover:bg-black text-white rounded-2xl p-4 flex flex-col items-center gap-2 text-center active:scale-[0.97] transition-all shadow-sm">
-            <Plus size={20} strokeWidth={2.5} />
-            <span className="text-[12px] font-bold leading-tight">Nueva Reserva</span>
-          </Link>
-          <Link href="/nueva?mode=bloqueo"
-            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-zinc-50 active:scale-[0.97] transition-all shadow-sm">
-            <Lock size={20} className="text-zinc-700" strokeWidth={2.5} />
-            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Aplicar Bloqueo</span>
-          </Link>
-          <Link href="/mantenimiento?action=new_task"
-            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-rose-50/50 active:scale-[0.97] transition-all shadow-sm group">
-            <Wrench size={20} className="text-rose-500 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
-            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Reportar MTTO</span>
-          </Link>
-        </div>
-      </div>
-
-      {/* ── 3. HERRAMIENTAS ───────────────────────────────────────────── */}
-      <div>
-        <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Herramientas</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {/* FINANZAS */}
-          <Link href="/finanzas" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <Wallet size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">FINANZAS</p>
-              <p className="text-[11px] font-bold text-emerald-600 mt-0.5">MX${Math.round(financeBalance).toLocaleString('es-MX')}</p>
-            </div>
-          </Link>
-          {/* MANTENIMIENTO */}
-          <Link href="/mantenimiento" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all group">
-            <div className="flex justify-between items-start w-full">
-              <Wrench size={20} className="text-rose-500 group-hover:scale-110 transition-transform" />
-              <span className="text-[10px] font-bold text-blue-650 bg-blue-50 px-2 py-0.5 rounded-full">Ver Incidencias →</span>
-            </div>
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">MANTENIMIENTO</p>
-              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                <p className="text-[11px] font-bold text-rose-600">
-                  {tasks.filter(t => t.status === 'pendiente' || t.status === 'nuevo' || t.status === 'en_proceso').length} activos
-                </p>
-                <span className="text-zinc-300 text-[10px]">•</span>
-                <p className="text-[11px] font-bold text-emerald-600">
-                  {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === todayStr).length} hoy
-                </p>
-              </div>
-            </div>
-          </Link>
-          {/* INVENTARIO */}
-          <Link href="/inventario" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <Package size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">INVENTARIO</p>
-              <p className="text-[11px] font-medium text-amber-500 mt-0.5">Stock de Consumibles</p>
-            </div>
-          </Link>
-          {/* ANALYTICS */}
-          <Link href="/analytics" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <BarChart3 size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">ANALYTICS</p>
-              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Revenue · Métricas</p>
-            </div>
-          </Link>
-          {/* PRECIO DINÁMICO */}
-          <Link href="/precios" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <TrendingUp size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">PRECIO DINÁMICO</p>
-              <p className="text-[11px] font-bold text-emerald-500 mt-0.5">Algoritmo Activo</p>
-            </div>
-          </Link>
-          {/* HISTORIAL */}
-          <Link href="/historial" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <History size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">HISTORIAL</p>
-              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Registro Auditoría</p>
-            </div>
-          </Link>
-        </div>
-      </div>
-
-      {/* ── 4. LLEGADAS HOY ───────────────────────────────────────────── */}
+      {/* ── 2. LLEGADAS HOY ───────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
@@ -376,7 +288,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* ── 5. SALIDAS HOY ────────────────────────────────────────────── */}
+      {/* ── 3. SALIDAS HOY ────────────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
@@ -441,6 +353,97 @@ export default function AdminDashboard() {
               </div>
             </>
           )}
+        </div>
+      </div>
+
+      {/* ── 4. ACCIONES RÁPIDAS ───────────────────────────────────────── */}
+      <div>
+        <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Acciones Rápidas</h3>
+        <div className="grid grid-cols-3 gap-2">
+          <Link href="/nueva"
+            className="bg-zinc-900 hover:bg-black text-white rounded-2xl p-4 flex flex-col items-center gap-2 text-center active:scale-[0.97] transition-all shadow-sm">
+            <Plus size={20} strokeWidth={2.5} />
+            <span className="text-[12px] font-bold leading-tight">Nueva Reserva</span>
+          </Link>
+          <Link href="/nueva?mode=bloqueo"
+            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-zinc-50 active:scale-[0.97] transition-all shadow-sm">
+            <Lock size={20} className="text-zinc-700" strokeWidth={2.5} />
+            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Aplicar Bloqueo</span>
+          </Link>
+          <Link href="/mantenimiento?action=new_task"
+            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-rose-50/50 active:scale-[0.97] transition-all shadow-sm group">
+            <Wrench size={20} className="text-rose-500 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
+            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Reportar MTTO</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* ── 5. HERRAMIENTAS ───────────────────────────────────────────── */}
+      <div>
+        <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest mb-3">Herramientas</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {/* FINANZAS */}
+          <Link href="/finanzas" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <Wallet size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">FINANZAS</p>
+              <p className="text-[11px] font-bold text-emerald-600 mt-0.5">MX${Math.round(financeBalance).toLocaleString('es-MX')}</p>
+            </div>
+          </Link>
+          {/* MANTENIMIENTO */}
+          <Link href="/mantenimiento" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all group">
+            <div className="flex justify-between items-start w-full">
+              <Wrench size={20} className="text-rose-500 group-hover:scale-110 transition-transform" />
+              <span className="text-[10px] font-bold text-blue-650 bg-blue-50 px-2 py-0.5 rounded-full">Ver Incidencias →</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">MANTENIMIENTO</p>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <p className="text-[11px] font-bold text-rose-600">
+                  {tasks.filter(t => t.status === 'pendiente' || t.status === 'nuevo' || t.status === 'en_proceso').length} activos
+                </p>
+                <span className="text-zinc-300 text-[10px]">•</span>
+                <p className="text-[11px] font-bold text-emerald-600">
+                  {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === todayStr).length} hoy
+                </p>
+              </div>
+            </div>
+          </Link>
+          {/* INVENTARIO */}
+          <Link href="/inventario" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <Package size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">INVENTARIO</p>
+              <p className="text-[11px] font-medium text-amber-500 mt-0.5">Stock de Consumibles</p>
+            </div>
+          </Link>
+          {/* ANALYTICS */}
+          <Link href="/analytics" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <BarChart3 size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">ANALYTICS</p>
+              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Revenue · Métricas</p>
+            </div>
+          </Link>
+          {/* PRECIO DINÁMICO */}
+          <Link href="/precios" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
+            <TrendingUp size={20} className="text-zinc-700" />
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">PRECIO DINÁMICO</p>
+              <p className="text-[11px] font-bold text-emerald-500 mt-0.5">Algoritmo Activo</p>
+            </div>
+          </Link>
+          {/* DEPURACIÓN DE DATOS */}
+          <Link href="/limpieza" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all group">
+            <div className="flex justify-between items-start w-full">
+              <Sparkles size={20} className="text-zinc-700 group-hover:scale-115 transition-transform duration-300" />
+              <span className="text-[10px] font-bold text-zinc-650 bg-zinc-50 px-2 py-0.5 rounded-full">Depurar →</span>
+            </div>
+            <div>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">DEPURACIÓN DE DATOS</p>
+              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Limpieza y Archivo</p>
+            </div>
+          </Link>
         </div>
       </div>
 
@@ -516,7 +519,10 @@ export default function AdminDashboard() {
       {/* ── 7. PRÓXIMAS RESERVAS ──────────────────────────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Próximas Reservas</h3>
+          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+            <Users size={13} />
+            Próximas Reservas
+          </h3>
           <span className="text-[11px] font-semibold bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md">{reservas.length} total</span>
         </div>
         <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
@@ -534,13 +540,32 @@ export default function AdminDashboard() {
                   onClick={() => router.push(`/reservas?id=${r.id}`)}
                   className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
                       <Users size={14} className="text-zinc-500" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-[14px] font-semibold text-zinc-900 leading-tight truncate">{r.guest_name}</p>
-                      <p className="text-[11px] font-medium text-zinc-500 truncate">{r.room_name} · {r.channel}</p>
+                      <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-medium text-zinc-500 flex-wrap leading-none">
+                        <span className="truncate">{r.room_name}</span>
+                        <span>•</span>
+                        <span className="truncate">{r.channel}</span>
+                        {r.guest_phone && (
+                          <>
+                            <span>•</span>
+                            <a
+                              href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-0.5 text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
+                            >
+                              <Phone size={9} />
+                              <span>{r.guest_phone}</span>
+                            </a>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0 ml-2">

@@ -1083,7 +1083,7 @@ export default function RecepcionPage() {
                       return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'sucio_checkout';
                     }).length}
                   </span>
-                  <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Aviso Check Out</p>
+                  <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
                 </div>
                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-blue-700">
@@ -2010,7 +2010,7 @@ export default function RecepcionPage() {
                         desc = 'La habitación se encuentra limpia, inspeccionada y lista para recibir huéspedes de check-in inmediato.';
                       } else if (operStatus === 'sucio_checkout') {
                         bg = 'bg-rose-500 text-white border-rose-600 shadow-lg shadow-rose-500/10';
-                        label = '🔴 Aviso Check Out';
+                        label = '🔴 Check Out';
                         desc = 'El recepcionista ha dado salida al huésped. El cuarto requiere una limpieza profunda de salida para volver a rentarse.';
                       } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
                         bg = 'bg-amber-400 text-white border-amber-500 shadow-lg shadow-amber-450/10';

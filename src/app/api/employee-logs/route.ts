@@ -93,3 +93,49 @@ export async function GET(req: Request) {
   }
 }
 
+// DELETE — Eliminar registros de auditoría de Supabase (gobernanza de datos)
+export async function DELETE(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const olderThanDays = searchParams.get('olderThanDays');
+
+    if (id) {
+      const { error } = await supabase.from('employee_logs').delete().eq('id', id);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    if (olderThanDays) {
+      const days = parseInt(olderThanDays);
+      if (isNaN(days)) {
+        return NextResponse.json({ success: false, error: 'Parámetro olderThanDays inválido' }, { status: 400 });
+      }
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - days);
+      const { error } = await supabase
+        .from('employee_logs')
+        .delete()
+        .lt('created_at', cutoffDate.toISOString());
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    // Borrado por cuerpo JSON (lista de IDs)
+    const body = await req.json().catch(() => ({}));
+    if (body.ids && Array.isArray(body.ids)) {
+      const { error } = await supabase
+        .from('employee_logs')
+        .delete()
+        .in('id', body.ids);
+      if (error) throw error;
+      return NextResponse.json({ success: true });
+    }
+
+    return NextResponse.json({ success: false, error: 'ID o lista de IDs no especificados' }, { status: 400 });
+  } catch (err: any) {
+    console.error('API Employee Logs DELETE Error:', err.message);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+

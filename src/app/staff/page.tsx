@@ -223,6 +223,7 @@ export default function StaffPage() {
     });
   };
   const [taskTab, setTaskTab] = useState<'nuevos' | 'pendientes' | 'en_proceso' | 'resueltos'>('nuevos');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
   const [resolveComments, setResolveComments] = useState('');
@@ -523,7 +524,7 @@ export default function StaffPage() {
           type: operStatus === 'sucio_checkout' ? 'checkout' : 'stayover',
           dbStatus,
           operStatus,
-          guestName: operStatus === 'sucio_checkout' ? 'Aviso Check-Out' : 'Limpieza Programada',
+          guestName: operStatus === 'sucio_checkout' ? 'Check-Out' : 'Limpieza Programada',
           keysReturned: operStatus === 'sucio_checkout',
           reserva: null,
           isUpdatedToday: !!(dbStatusObj?.updated_at && dbStatusObj.updated_at.startsWith(todayStr))
@@ -558,6 +559,20 @@ export default function StaffPage() {
   const pendientes  = roleFilteredTasks.filter(t => t.status === 'pendiente');
   const enProceso   = roleFilteredTasks.filter(t => t.status === 'en_proceso');
   const resueltos   = roleFilteredTasks.filter(t => t.status === 'resuelta');
+
+  const filterBySearch = (list: Task[]) => {
+    if (!searchQuery.trim()) return list;
+    const q = searchQuery.toLowerCase().trim();
+    return list.filter(t => 
+      (t.description || '').toLowerCase().includes(q) || 
+      (t.room || '').toLowerCase().includes(q)
+    );
+  };
+
+  const filteredNuevos = filterBySearch(nuevos);
+  const filteredPendientes = filterBySearch(pendientes);
+  const filteredEnProceso = filterBySearch(enProceso);
+  const filteredResueltos = filterBySearch(resueltos);
 
   const handleOpenResolveModal = (task: Task) => {
     setResolvingTask(task);
@@ -944,18 +959,20 @@ export default function StaffPage() {
       <div className="max-w-md mx-auto px-4 mt-4 space-y-4">
         
         {/* KPI Cards */}
-        <div className="grid grid-cols-3 gap-2.5">
-          {[
-            { label: 'Llegan', value: llegadas.length, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-            { label: 'Salen', value: salidas.length, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100' },
-            { label: 'Ocupadas', value: ocupadas.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
-          ].map((k, i) => (
-            <div key={i} className={`bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center ${k.bg}`}>
-              <p className={`text-2xl font-black ${k.color} leading-none mb-1`}>{k.value}</p>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{k.label}</p>
-            </div>
-          ))}
-        </div>
+        {!isMantenimiento && (
+          <div className="grid grid-cols-3 gap-2.5">
+            {[
+              { label: 'Llegan', value: llegadas.length, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
+              { label: 'Salen', value: salidas.length, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100' },
+              { label: 'Ocupadas', value: ocupadas.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
+            ].map((k, i) => (
+              <div key={i} className={`bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center ${k.bg}`}>
+                <p className={`text-2xl font-black ${k.color} leading-none mb-1`}>{k.value}</p>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{k.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* VISTA DE LIMPIEZA / RECEPCIÓN */}
         {!isMantenimiento && (
@@ -999,7 +1016,7 @@ export default function StaffPage() {
                       return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'sucio_checkout';
                     }).length}
                   </span>
-                  <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Aviso Check Out</p>
+                  <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
                 </div>
                 <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-blue-700">
@@ -1202,270 +1219,206 @@ export default function StaffPage() {
           </div>
         )}
 
-        {/* TABLERO DE INCIDENCIAS (Filtrado para evitar ruido a Limpieza/Recepción) */}
+        {/* TABLERO DE INCIDENCIAS (Rediseño Premium estilo /mantenimiento) */}
         {(isMantenimiento || role === 'admin') && (
-          <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <AlertTriangle size={16} className="text-zinc-600" />
-                <span className="text-[13px] font-extrabold text-zinc-800">Control de Incidencias</span>
+          <div className="space-y-4">
+            
+            {/* Título de Sección Móvil */}
+            <div>
+              <h3 className="text-[15px] font-black text-zinc-900">Control de Incidencias</h3>
+              <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Gestión de Tareas y Reportes</p>
+            </div>
+
+            {/* KPIs Grid 2x2 para Móviles */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+                <span className="text-[20px] font-black text-purple-650 leading-none">
+                  {nuevos.length}
+                </span>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Nuevos</p>
+              </div>
+              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+                <span className="text-[20px] font-black text-amber-500 leading-none">
+                  {pendientes.length}
+                </span>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Pendientes</p>
+              </div>
+              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+                <span className="text-[20px] font-black text-blue-500 leading-none">
+                  {enProceso.length}
+                </span>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
+              </div>
+              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+                <span className="text-[20px] font-black text-emerald-650 leading-none">
+                  {resueltos.filter(t => {
+                    if (!t.resolved_at) return false;
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    return t.resolved_at.split('T')[0] === todayStr;
+                  }).length}
+                </span>
+                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>
               </div>
             </div>
 
-            <div className="p-2 bg-zinc-50 border-b border-zinc-100 grid grid-cols-4 gap-1">
-              <button 
-                onClick={() => setTaskTab('nuevos')} 
-                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'nuevos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-              >
-                NUEVOS ({nuevos.length})
-              </button>
-              <button 
-                onClick={() => setTaskTab('pendientes')} 
-                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'pendientes' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-              >
-                PENDIENTES ({pendientes.length})
-              </button>
-              <button 
-                onClick={() => setTaskTab('en_proceso')} 
-                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'en_proceso' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-              >
-                EN PROCESO ({enProceso.length})
-              </button>
-              <button 
-                onClick={() => setTaskTab('resueltos')} 
-                className={`py-2 text-[9px] font-black rounded-lg text-center transition-all ${taskTab === 'resueltos' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/50' : 'text-zinc-400'}`}
-              >
-                RESUELTOS ({resueltos.length})
-              </button>
+            {/* Pestañas de Filtro Premium estilo Cápsula */}
+            <div className="flex bg-zinc-200/60 p-1 rounded-2xl gap-1">
+              {[
+                { id: 'nuevos', label: 'Nuevos' },
+                { id: 'pendientes', label: 'Pendientes' },
+                { id: 'en_proceso', label: 'En Proceso' },
+                { id: 'resueltos', label: 'Resueltos' },
+              ].map(f => (
+                <button 
+                  key={f.id}
+                  onClick={() => setTaskTab(f.id as any)}
+                  className={`flex-1 py-2.5 text-[11px] font-bold rounded-xl transition-all ${taskTab === f.id ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/50' : 'text-zinc-500 hover:text-zinc-700'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
             </div>
 
-            {taskTab === 'nuevos' && (
-              nuevos.length === 0 ? (
-                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                  <CheckCircle2 size={24} className="text-emerald-500" />
-                  <p className="text-[12px] font-semibold text-zinc-400">Sin nuevos reportes</p>
+            {/* Barra de Búsqueda Interactiva */}
+            <div className="flex gap-2 items-center">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  placeholder="Buscar por descripción o habitación..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full bg-white border border-zinc-200 rounded-2xl pl-10 pr-4 py-2.5 outline-none text-[13px] font-medium text-zinc-900 placeholder-zinc-400 focus:ring-2 focus:ring-zinc-900/5 focus:border-zinc-300 transition-all shadow-sm"
+                />
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                  </svg>
                 </div>
-              ) : (
-                <div className="divide-y divide-zinc-100">
-                  {nuevos.map((t) => {
-                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                    const Icon = cfg.icon;
-                    const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-                    
-                    return (
-                      <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                              <Icon size={14} className={cfg.text} />
-                            </div>
-                            <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
-                            <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
-                          </div>
-                          <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                {searchQuery && (
+                  <button 
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 active:scale-95 transition-transform"
+                  >
+                    <X size={12} strokeWidth={3} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Listado de Incidencias */}
+            <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col divide-y divide-zinc-100 overflow-hidden">
+              {(() => {
+                const list = taskTab === 'nuevos' ? filteredNuevos
+                           : taskTab === 'pendientes' ? filteredPendientes
+                           : taskTab === 'en_proceso' ? filteredEnProceso
+                           : filteredResueltos;
+
+                if (list.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-zinc-400 text-[13px] font-semibold flex flex-col items-center justify-center gap-2">
+                      <CheckCircle2 size={24} className="text-zinc-300" />
+                      <span>No hay tareas en este estado.</span>
+                    </div>
+                  );
+                }
+
+                return list.map(t => {
+                  const cfg = TYPE_CFG[t.type] || TYPE_CFG['otro'];
+                  const Icon = cfg.icon;
+                  const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+                  const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+
+                  return (
+                    <div key={t.id} className="p-4 flex flex-col gap-3.5 hover:bg-zinc-50 transition-colors duration-150">
+                      <div className="flex gap-3.5">
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.bg} ${cfg.text}`}>
+                          <Icon size={18} strokeWidth={2.5} />
                         </div>
-
-                        <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
-
-                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                          <span>•</span>
-                          <span>{dateStr}</span>
-                        </div>
-
-                        {renderTaskImagesCarousel(t)}
-
-                        <div className="pt-1">
-                          <button 
-                            onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                            className="w-full py-3 bg-zinc-900 text-white rounded-xl text-[11px] font-extrabold hover:bg-zinc-800 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
-                          >
-                            MARCAR COMO REVISADO ✓
-                          </button>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-zinc-900 leading-snug whitespace-pre-line">
+                            {t.description}
+                          </p>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
 
-            {taskTab === 'pendientes' && (
-              pendientes.length === 0 ? (
-                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                  <Clock size={24} className="text-zinc-300" />
-                  <p className="text-[12px] font-semibold text-zinc-400">Sin reportes pendientes</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-zinc-100">
-                  {pendientes.map((t) => {
-                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                    const Icon = cfg.icon;
-                    const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+                      {/* Carrusel de fotos de incidencia si existen */}
+                      {renderTaskImagesCarousel(t)}
 
-                    return (
-                      <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                              <Icon size={14} className={cfg.text} />
-                            </div>
-                            <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
-                            <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
+                      {/* Foto de cierre si existe */}
+                      {t.resolution_photo_url && (
+                        <div className="space-y-1 mt-1 pl-1">
+                          <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Evidencia de Cierre</span>
+                          <div className="rounded-2xl overflow-hidden border border-zinc-200 max-w-sm">
+                            <a href={t.resolution_photo_url} target="_blank" rel="noreferrer">
+                              <img src={t.resolution_photo_url} alt="Evidencia de Cierre" className="w-full max-h-40 object-cover" />
+                            </a>
                           </div>
-                          <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                        </div>
+                      )}
+
+                      {/* Footer de Tarjeta con Datos y Acciones */}
+                      <div className="flex items-center justify-between gap-2 mt-1 pt-2.5 border-t border-zinc-100/60 pl-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-650">
+                            Hab: {t.room}
+                          </span>
+                          <span className="text-[10px] font-semibold text-zinc-400">
+                            {format(new Date(t.created_at), 'd MMM', { locale: es })}
+                          </span>
+                          <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded border border-zinc-200">
+                            De: {t.reported_by || 'Admin'}
+                          </span>
                         </div>
 
-                        <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
-
-                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                          <span>•</span>
-                          <span>{dateStr}</span>
-                        </div>
-
-                        {renderTaskImagesCarousel(t)}
-
-                        <div className="pt-1">
-                          <button 
-                            onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
-                            className="w-full py-3 bg-amber-500 text-white rounded-xl text-[11px] font-extrabold hover:bg-amber-600 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
-                          >
-                            INICIAR TRABAJO ⚡
-                          </button>
+                        {/* Botones táctiles rápidos adaptados a la app móvil de personal */}
+                        <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {taskTab === 'nuevos' && (
+                            <button
+                              onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                              className="px-2.5 py-1.5 bg-zinc-900 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-zinc-800 transition-all text-center"
+                            >
+                              Revisar ✓
+                            </button>
+                          )}
+                          {taskTab === 'pendientes' && (
+                            <button
+                              onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
+                              className="px-2.5 py-1.5 bg-amber-500 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-amber-600 transition-all text-center"
+                            >
+                              Iniciar ⚡
+                            </button>
+                          )}
+                          {taskTab === 'en_proceso' && (
+                            <>
+                              <button
+                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                                className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-250"
+                              >
+                                Regresar ↩
+                              </button>
+                              <button
+                                onClick={() => handleOpenResolveModal(t)}
+                                className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-emerald-700 transition-all text-center"
+                              >
+                                Terminar ✅
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
 
-            {taskTab === 'en_proceso' && (
-              enProceso.length === 0 ? (
-                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                  <Clock size={24} className="text-zinc-300" />
-                  <p className="text-[12px] font-semibold text-zinc-400">Sin trabajos en proceso</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-zinc-100">
-                  {enProceso.map((t) => {
-                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                    const Icon = cfg.icon;
-                    const taskImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-
-                    return (
-                      <div key={t.id} className="p-4 space-y-3 animate-in fade-in duration-155">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg ${cfg.bg} flex items-center justify-center shrink-0`}>
-                              <Icon size={14} className={cfg.text} />
-                            </div>
-                            <span className={`text-[12px] font-extrabold ${cfg.text}`}>{cfg.label}</span>
-                            <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">Hab. {t.room}</span>
-                          </div>
-                          <span className="text-[10px] font-bold text-zinc-400">{elapsed(t.created_at)}</span>
+                      {taskTab === 'resueltos' && (
+                        <div className="flex items-center gap-1.5 text-[11px] font-black text-emerald-600 pl-1 pt-1.5 border-t border-zinc-100/50">
+                          <CheckCheck size={13} />
+                          <span>Cerrado: {resolvedStr}</span>
                         </div>
-
-                        <p className="text-[13px] text-zinc-650 leading-relaxed pl-1 whitespace-pre-line font-medium">{t.description}</p>
-
-                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                          <span>•</span>
-                          <span>{dateStr}</span>
-                        </div>
-
-                        {renderTaskImagesCarousel(t)}
-
-                        <div className="flex gap-2 pt-1">
-                          <button 
-                            onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                            className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-zinc-100 border border-zinc-200 text-zinc-500 hover:bg-zinc-200 active:scale-[0.96] transition-all cursor-pointer text-center"
-                          >
-                            Regresar ↩
-                          </button>
-                          <button 
-                            onClick={() => handleOpenResolveModal(t)}
-                            className="flex-1 py-2.5 rounded-xl text-[11px] font-black bg-emerald-600 text-white hover:bg-emerald-500 active:scale-[0.96] transition-all cursor-pointer shadow-md text-center"
-                          >
-                            ✓ Terminar
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
-
-            {taskTab === 'resueltos' && (
-              resueltos.length === 0 ? (
-                <div className="p-8 text-center flex flex-col items-center justify-center gap-2">
-                  <Clock size={24} className="text-zinc-300" />
-                  <p className="text-[12px] font-semibold text-zinc-400">Historial vacío</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-zinc-100 bg-zinc-50/50">
-                  {resueltos.map((t) => {
-                    const cfg = TYPE_CFG[t.type] || TYPE_CFG.otro;
-                    const Icon = cfg.icon;
-                    const originalImg = t.photo_url && t.photo_url !== 'null' ? t.photo_url : t.image_base64;
-                    const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-                    const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-
-                    return (
-                      <div key={t.id} className="p-4 space-y-2 opacity-85 animate-in fade-in duration-155">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-lg bg-zinc-200 flex items-center justify-center shrink-0">
-                              <Icon size={12} className="text-zinc-650" />
-                            </div>
-                            <span className="text-[12px] font-bold text-zinc-650">{cfg.label}</span>
-                            <span className="text-[11px] font-bold text-zinc-400 bg-white px-2 py-0.5 rounded-md border border-zinc-150">Hab. {t.room}</span>
-                          </div>
-                          <span className="text-[10px] font-semibold text-zinc-400">{elapsed(t.created_at)}</span>
-                        </div>
-                        <p className="text-[13px] text-zinc-650 pl-1 whitespace-pre-line leading-relaxed font-medium">{t.description}</p>
-                        
-                        <div className="flex items-center gap-2 text-[10.5px] font-bold text-zinc-400 pl-1">
-                          <span className="bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded">De: {t.reported_by || 'Admin'}</span>
-                          <span>•</span>
-                          <span>{dateStr}</span>
-                        </div>
-
-                        {/* Mostrar foto original si existe */}
-                        {getTaskImages(t).length > 0 && (
-                          <div className="space-y-1 mt-2 pl-1">
-                            <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Foto Reportada</span>
-                            {renderTaskImagesCarousel(t)}
-                          </div>
-                        )}
-                        
-                        {/* Mostrar foto de resolución si existe */}
-                        {t.resolution_photo_url && (
-                          <div className="space-y-1 mt-2 pl-1">
-                            <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Evidencia de Cierre</span>
-                            <div className="rounded-2xl overflow-hidden border border-zinc-200">
-                              <a href={t.resolution_photo_url} target="_blank" rel="noreferrer">
-                                <img src={t.resolution_photo_url} alt="Evidencia de Resolución" className="w-full max-h-40 object-cover" />
-                              </a>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-1 text-[11px] font-black text-emerald-600 pl-1 pt-1">
-                          <CheckCheck size={14} />
-                          <span>Cerrado en: {resolvedStr}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
+                      )}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
           </div>
         )}
       </div>
