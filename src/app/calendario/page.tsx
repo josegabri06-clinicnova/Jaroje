@@ -8,11 +8,11 @@ import { useRouter } from 'next/navigation';
 
 // ─── ROOM STRUCTURE ──────────────────────────────────────────────────────────
 const ROOM_GROUPS = [
-  { label: 'Estándar', color: '#6366f1', bg: '#eef2ff', rooms: ['301','302','303','304','305','306'] },
-  { label: 'Condo 2R', color: '#0ea5e9', bg: '#f0f9ff', rooms: ['201','202','203','204','205','206'] },
   { label: 'Condo 3R', color: '#f59e0b', bg: '#fffbeb', rooms: ['101','102','103','104','105','106','107'] },
-  { label: 'Condo 1R', color: '#10b981', bg: '#f0fdf4', rooms: ['402'] },
-  { label: 'Casa Lujo', color: '#ec4899', bg: '#fdf4ff', rooms: ['401'] },
+  { label: 'Condo 2R', color: '#0ea5e9', bg: '#f0f9ff', rooms: ['201','202','203','204','205','206'] },
+  { label: 'Especial', color: '#10b981', bg: '#f0fdf4', rooms: ['401','402'] },
+  { label: 'Estándar', color: '#6366f1', bg: '#eef2ff', rooms: ['301','302','303','304','305','306'] },
+  { label: 'Nuevos', color: '#a855f7', bg: '#faf5ff', rooms: ['500','501','502','503','504','505','506'] },
 ];
 
 const ALL_ROOMS = ROOM_GROUPS.flatMap(g => g.rooms);
@@ -35,6 +35,14 @@ const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
   '402': { roomId: '679087', unitId: '1' },
   // --- Casa Lujo (Casa Vacacional 401) ---
   '401': { roomId: '679008', unitId: '1' },
+  // --- Nuevos (500-506) ---
+  '500': { roomId: '685542', unitId: '1' },
+  '501': { roomId: '685542', unitId: '1' },
+  '502': { roomId: '685542', unitId: '1' },
+  '503': { roomId: '685542', unitId: '1' },
+  '504': { roomId: '685542', unitId: '1' },
+  '505': { roomId: '685542', unitId: '1' },
+  '506': { roomId: '685542', unitId: '1' },
 };
 
 const COLS = 10; // days to show
@@ -168,10 +176,33 @@ export default function CalendarPage() {
             className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 active:scale-95 transition-all shadow-sm">
             <ChevronRight size={16} className="text-zinc-600" />
           </button>
+          <label className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 active:scale-95 transition-all shadow-sm cursor-pointer relative" title="Seleccionar fecha">
+            <CalendarDays size={15} className="text-zinc-650" />
+            <input 
+              type="date" 
+              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              onChange={(e) => {
+                if (e.target.value) {
+                  const selectedDate = new Date(e.target.value + 'T00:00:00');
+                  setStartDate(selectedDate);
+                }
+              }}
+            />
+          </label>
         </div>
-        <span className="text-[13px] font-bold text-zinc-700 capitalize">
+        <label className="text-[13px] font-bold text-zinc-700 hover:text-blue-600 transition-colors cursor-pointer relative capitalize flex items-center gap-1" title="Seleccionar fecha">
           {format(startDate, "d MMM", { locale: es })} — {format(days[COLS - 1], "d MMM yyyy", { locale: es })}
-        </span>
+          <input 
+            type="date" 
+            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            onChange={(e) => {
+              if (e.target.value) {
+                const selectedDate = new Date(e.target.value + 'T00:00:00');
+                setStartDate(selectedDate);
+              }
+            }}
+          />
+        </label>
         <button onClick={goToday}
           className="text-[12px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-100 active:scale-95 transition-all">
           Hoy
