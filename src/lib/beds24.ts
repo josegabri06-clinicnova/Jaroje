@@ -226,8 +226,22 @@ export function getChannelMultiplier(referer: string): number {
 }
 
 // Calcular precio real estimado
-export function getRealPrice(roomId: string | null | undefined, dateStr: string | null | undefined, referer: string): number {
+export function getRealPrice(
+  roomId: string | null | undefined, 
+  dateStr: string | null | undefined, 
+  referer: string,
+  beds24RatesMap?: Record<string, Record<string, number>>
+): number {
   const id = String(roomId || '');
+  
+  // 1. Intentar obtener tarifa dinámica de Beds24
+  if (beds24RatesMap && dateStr && beds24RatesMap[id] && beds24RatesMap[id][dateStr]) {
+    const dynamicPrice = beds24RatesMap[id][dateStr];
+    const multiplier = getChannelMultiplier(referer);
+    return Math.round(dynamicPrice * multiplier);
+  }
+
+  // 2. Fallback al catálogo estático si no hay tarifa dinámica o falla la conexión
   const prices = JAROJE_PRICES[id];
   if (!prices) {
     return 2000;
@@ -329,6 +343,81 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
   return bookingsArray;
 }
 
+// Obtener mapa de tarifas diarias desde Beds24 API v2 (para el rango de fechas solicitado)
+export async function fetchBeds24RatesMap(
+  token: string, 
+  fromDateStr: string, 
+  toDateStr: string
+): Promise<Record<string, Record<string, number>>> {
+  const ratesMap: Record<string, Record<string, number>> = {};
+  try {
+    const res = await fetch(`https://api.beds24.com/v2/inventory/calendar?from=${fromDateStr}&to=${toDateStr}`, {
+      method: 'GET',
+      headers: { 'token': token },
+      cache: 'no-store'
+    });
+    if (!res.ok) {
+      console.warn(`[Beds24 Rates] API responded with status ${res.status}`);
+      return ratesMap;
+    }
+    const json = await res.json();
+    if (json && Array.isArray(json.data)) {
+      json.data.forEach((roomItem: any) => {
+        const roomId = String(roomItem.roomId);
+        ratesMap[roomId] = {};
+        if (Array.isArray(roomItem.calendar)) {
+          roomItem.calendar.forEach((dayItem: any) => {
+            const dateStr = dayItem.date;
+            // Beds24 v2 devuelve las tarifas en price1 o price
+            const dailyPrice = dayItem.price1 || dayItem.price || 0;
+            if (dailyPrice > 0) {
+              ratesMap[roomId][dateStr] = Number(dailyPrice);
+            }
+          });
+        }
+      });
+    }
+  } catch (err: any) {
+    console.warn(`[Beds24 Rates] Fallback to static catalog due to network or API error: ${err.message}`);
+  }
+  return ratesMap;
+}
+
+// Calcular la tarifa diaria promedio dinámicamente sumando las tarifas de cada noche de estancia
+export function getAverageRatesForDates(
+  roomId: string | null | undefined,
+  arrival: string | null | undefined,
+  departure: string | null | undefined,
+  referer: string,
+  beds24RatesMap: Record<string, Record<string, number>>
+): number {
+  if (!arrival || !departure) {
+    return getRealPrice(roomId, arrival, referer, beds24RatesMap);
+  }
+
+  const id = String(roomId || '');
+  const start = new Date(arrival);
+  const end = new Date(departure);
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start.getTime() >= end.getTime()) {
+    return getRealPrice(roomId, arrival, referer, beds24RatesMap);
+  }
+
+  let totalSum = 0;
+  let daysCount = 0;
+
+  const current = new Date(start);
+  while (current < end) {
+    const currentDateStr = current.toISOString().split('T')[0];
+    const dailyPrice = getRealPrice(id, currentDateStr, referer, beds24RatesMap);
+    totalSum += dailyPrice;
+    daysCount++;
+    current.setDate(current.getDate() + 1);
+  }
+
+  return daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap);
+}
+
 // Obtener y mapear reservas activas (Backend Server-Side)
 export async function getBeds24Bookings(): Promise<any[]> {
   const today = new Date();
@@ -340,7 +429,15 @@ export async function getBeds24Bookings(): Promise<any[]> {
   toDate.setDate(today.getDate() + 1000);
   const arrivalTo = toDate.toISOString().split('T')[0];
 
+  // 1. Obtener token y reservas raw
+  const token = await getBeds24Token();
   const bookingsArray = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
+
+  // 2. Obtener tarifas de calendario dinámicas de Beds24 (de hoy a 365 días en adelante)
+  const ratesToDate = new Date(today);
+  ratesToDate.setDate(today.getDate() + 365);
+  const ratesTo = ratesToDate.toISOString().split('T')[0];
+  const beds24RatesMap = await fetchBeds24RatesMap(token, arrivalFrom, ratesTo);
 
   const ROOM_MAP = [
     { roomId: '679077', units: [{ unitId: '1', name: '301' }, { unitId: '2', name: '302' }, { unitId: '3', name: '303' }, { unitId: '4', name: '304' }, { unitId: '5', name: '305' }, { unitId: '6', name: '306' }] },
@@ -380,8 +477,8 @@ export async function getBeds24Bookings(): Promise<any[]> {
 
       const roomData = getRoomMetadata(b.roomId, b.roomName);
       let pricePerNight = b.price ? (Number(b.price) / nights) : null;
-      if (!isOTA && (!pricePerNight || pricePerNight <= 0)) {
-        pricePerNight = getRealPrice(String(b.roomId), b.arrival, rawSource);
+      if (!isOTA && (!pricePerNight || pricePerNight < 10)) {
+        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap);
       } else if (isOTA && !pricePerNight) {
         pricePerNight = 0;
       }
