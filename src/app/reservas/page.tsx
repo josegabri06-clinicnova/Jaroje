@@ -11,7 +11,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TABS = ['Todas', 'Hoy', 'Próximas', 'WhatsApp Bot', 'Airbnb', 'Booking.com'];
+const TABS = ['Todas', 'Hoy', 'Próximas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -424,7 +424,12 @@ export default function ReservasList() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  const filtered = reservas.filter(r => {
+  // Reservas activas operativas: no han completado el checkout Y su fecha de salida es hoy o futura
+  const activeReservas = reservas.filter(r => !r.is_checked_out && r.check_out >= todayStr);
+  // Reservas completadas / pasadas: ya hicieron checkout O la fecha de salida ya transcurrió
+  const completedReservas = reservas.filter(r => r.is_checked_out || r.check_out < todayStr);
+
+  const filtered = (activeTab === 'Completadas' ? completedReservas : activeReservas).filter(r => {
     const matchSearch = !search || 
       r.guest_name?.toLowerCase().includes(search.toLowerCase()) ||
       r.id?.toString().includes(search);
@@ -432,7 +437,7 @@ export default function ReservasList() {
     let matchTab = true;
     if (activeTab === 'Hoy') matchTab = r.check_in === todayStr || r.check_out === todayStr;
     else if (activeTab === 'Próximas') matchTab = r.check_in >= todayStr;
-    else if (activeTab !== 'Todas') matchTab = r.channel === activeTab;
+    else if (activeTab !== 'Todas' && activeTab !== 'Completadas') matchTab = r.channel === activeTab;
 
     return matchSearch && matchTab;
   });
@@ -446,7 +451,7 @@ export default function ReservasList() {
         <div>
           <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Reservas</h2>
           <p className="text-[13px] font-medium text-zinc-500 mt-0.5">
-            {isLoading ? '...' : `${reservas.length} activas · MX$${totalRevenue.toLocaleString('es-MX')} estimado`}
+            {isLoading ? '...' : `${activeReservas.length} activas · MX$${totalRevenue.toLocaleString('es-MX')} estimado`}
           </p>
         </div>
         <div className="flex items-center gap-2">
