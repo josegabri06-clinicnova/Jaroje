@@ -670,6 +670,26 @@ export default function ReservasList() {
                 <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
               </div>
 
+              {/* Bloque: Timeline */}
+              <div>
+                <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Estancia</h5>
+                <div className="flex items-center justify-between text-[14px] bg-zinc-50 border border-zinc-200 p-4 rounded-2xl">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-in</span>
+                    <span className="text-zinc-900 font-semibold">{selectedRes.check_in ? format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                  </div>
+                  <div className="flex-1 flex justify-center px-4">
+                    <div className="w-8 h-8 rounded-full border border-zinc-200 bg-white flex items-center justify-center shadow-sm">
+                      <Clock size={14} className="text-zinc-400" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-out</span>
+                    <span className="text-zinc-900 font-semibold">{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                  </div>
+                </div>
+              </div>
+
               {/* Desglose Financiero Completo */}
               <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-3 shadow-sm">
                 <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-150 pb-1.5">Resumen Financiero</span>
@@ -781,26 +801,6 @@ export default function ReservasList() {
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Bloque: Timeline */}
-              <div>
-                <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Estancia</h5>
-                <div className="flex items-center justify-between text-[14px] bg-zinc-50 border border-zinc-200 p-4 rounded-2xl">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-in</span>
-                    <span className="text-zinc-900 font-semibold">{selectedRes.check_in ? format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
-                  </div>
-                  <div className="flex-1 flex justify-center px-4">
-                    <div className="w-8 h-8 rounded-full border border-zinc-200 bg-white flex items-center justify-center shadow-sm">
-                      <Clock size={14} className="text-zinc-400" />
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-out</span>
-                    <span className="text-zinc-900 font-semibold">{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
-                  </div>
-                </div>
               </div>
 
               {/* Bloque: Notas */}

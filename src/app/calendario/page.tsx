@@ -375,7 +375,14 @@ export default function CalendarPage() {
                 {selectedReserva.guest_phone && (
                   <div className="flex items-center gap-2">
                     <Phone size={13} className="text-zinc-400 shrink-0" />
-                    <span className="text-[13px] font-semibold text-zinc-800">{selectedReserva.guest_phone}</span>
+                    <a
+                      href={`https://wa.me/${selectedReserva.guest_phone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1"
+                    >
+                      {selectedReserva.guest_phone}
+                    </a>
                   </div>
                 )}
                 {selectedReserva.nights && (
