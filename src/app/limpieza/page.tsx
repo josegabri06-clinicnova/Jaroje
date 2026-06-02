@@ -288,19 +288,19 @@ export default function LimpiezaDatosPage() {
         </div>
 
         {/* Acciones principales basadas en la selección */}
-        <div className="flex items-center justify-between gap-4 flex-wrap pt-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
           <div className="flex items-center gap-2">
             <span className="text-[13px] font-bold text-zinc-800">
               Seleccionados: <span className="text-zinc-950 font-black">{selectedIds.size}</span>
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto justify-start sm:justify-end">
             {/* Exportar JSON */}
             <button
               onClick={handleExportJSON}
               disabled={selectedIds.size === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 disabled:opacity-50 rounded-xl text-[12px] font-extrabold transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 disabled:opacity-50 rounded-xl text-[12px] font-extrabold transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
             >
               <Download size={14} className="text-zinc-600" />
               <span>Respaldo JSON</span>
@@ -309,7 +309,7 @@ export default function LimpiezaDatosPage() {
             <button
               onClick={handleExportCSV}
               disabled={selectedIds.size === 0}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 disabled:opacity-50 rounded-xl text-[12px] font-extrabold transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-zinc-200 hover:border-zinc-300 text-zinc-700 disabled:opacity-50 rounded-xl text-[12px] font-extrabold transition-all cursor-pointer hover:scale-[1.01] active:scale-[0.99]"
             >
               <Download size={14} className="text-zinc-600" />
               <span>Respaldo CSV</span>
@@ -319,7 +319,7 @@ export default function LimpiezaDatosPage() {
             <button
               onClick={() => setShowConfirmModal(true)}
               disabled={selectedIds.size === 0}
-              className="inline-flex items-center gap-1.5 px-4.5 py-2.5 bg-rose-650 hover:bg-rose-600 text-white disabled:opacity-40 rounded-xl text-[12px] font-black tracking-wide shadow-sm active:scale-[0.97] transition-all cursor-pointer"
+              className="w-full sm:w-auto flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4.5 py-2.5 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-40 rounded-xl text-[12px] font-black tracking-wide shadow-sm active:scale-[0.97] transition-all cursor-pointer"
             >
               <Trash2 size={14} />
               <span>Purgar Selección</span>

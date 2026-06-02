@@ -628,35 +628,77 @@ export default function ReservasList() {
                 <div className="w-14 h-14 rounded-2xl bg-zinc-100 border border-zinc-200 flex items-center justify-center shrink-0">
                   <User size={24} className="text-zinc-600" />
                 </div>
-                <div>
-                  <h4 className="text-[18px] font-bold text-zinc-900 tracking-tight">{selectedRes.guest_name}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[12px] font-medium text-zinc-500">{selectedRes.guest_phone || 'Sin teléfono'}</span>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-[18px] font-bold text-zinc-900 tracking-tight truncate">{selectedRes.guest_name}</h4>
+                  <div className="flex items-center gap-2 flex-wrap mt-1">
+                    {selectedRes.guest_phone ? (
+                      <a 
+                        href={`https://wa.me/${selectedRes.guest_phone.replace(/\D/g, '')}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        title="Enviar mensaje por WhatsApp"
+                        className="text-[12px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>{selectedRes.guest_phone}</span>
+                        <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                          <polyline points="15 3 21 3 21 9"></polyline>
+                          <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                      </a>
+                    ) : (
+                      <span className="text-[12px] font-medium text-zinc-500">Sin teléfono</span>
+                    )}
                     {selectedRes.guest_email && (
                       <>
                         <span className="text-zinc-300">·</span>
-                        <span className="text-[12px] font-medium text-zinc-500 truncate max-w-[150px]">{selectedRes.guest_email}</span>
+                        <span className="text-[12px] font-medium text-zinc-500 truncate max-w-[140px]" title={selectedRes.guest_email}>
+                          {selectedRes.guest_email}
+                        </span>
                       </>
                     )}
                   </div>
                 </div>
               </div>
 
-              {/* Bloque: Financiero & Tags */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 bg-zinc-50 border border-zinc-200 p-4 rounded-2xl">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Precio Total</span>
-                  <div className="flex items-end gap-1">
-                    <span className="text-[22px] font-bold text-zinc-900 leading-none">MX${selectedRes.price_estimate}</span>
-                    <span className="text-[12px] font-medium text-zinc-500 mb-0.5">/ {selectedRes.nights} noche{selectedRes.nights !== 1 ? 's' : ''}</span>
-                  </div>
+              {/* Canal & Estado Tags Row */}
+              <div className="flex items-center gap-2">
+                <div className="px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center">
+                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">{selectedRes.channel}</span>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <div className="px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center">
-                    <span className="text-[12px] font-bold text-blue-700 uppercase tracking-wider">{selectedRes.channel}</span>
+                <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
+              </div>
+
+              {/* Desglose Financiero Completo */}
+              <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-3 shadow-sm">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-150 pb-1.5">Resumen Financiero</span>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-zinc-400">Tarifa Diaria (Promedio)</span>
+                    <span className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
+                      MX${(selectedRes.price_per_night || Math.round((selectedRes.price_estimate || 0) / (selectedRes.nights || 1))).toLocaleString('es-MX')}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-center">
-                    <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-zinc-400">Total Estancia</span>
+                    <span className="text-[15px] font-black text-zinc-950 mt-0.5">
+                      MX${(selectedRes.price_estimate || 0).toLocaleString('es-MX')}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-zinc-400">Anticipo</span>
+                    <span className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                      MX${(selectedRes.deposit || 0).toLocaleString('es-MX')}
+                    </span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[11px] font-bold text-zinc-400">Adeudo Pendiente</span>
+                    <span className={`text-[15px] font-black mt-0.5 ${
+                      (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-600'
+                    }`}>
+                      MX${(selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0))).toLocaleString('es-MX')}
+                    </span>
                   </div>
                 </div>
               </div>
