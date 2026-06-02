@@ -288,10 +288,49 @@ export async function getBeds24Token(): Promise<string> {
   return refreshData.token;
 }
 
+// Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
+export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string): Promise<any[]> {
+  const BEDS24_TOKEN = await getBeds24Token();
+  let url = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=100`;
+  let bookingsArray: any[] = [];
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+      cache: 'no-store'
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('TOKEN_EXPIRED');
+    }
+
+    if (!res.ok) {
+      throw new Error(`Error BEDS24 ${res.status}: ${await res.text()}`);
+    }
+
+    const dataB24 = await res.json();
+    if (dataB24.data && Array.isArray(dataB24.data)) {
+      bookingsArray = bookingsArray.concat(dataB24.data);
+    }
+
+    // Seguir el enlace de la siguiente página si existe
+    if (dataB24.pages && dataB24.pages.nextPageExists && dataB24.pages.nextPageLink) {
+      url = dataB24.pages.nextPageLink;
+      if (url.startsWith('/')) {
+        url = `https://api.beds24.com${url}`;
+      }
+    } else {
+      hasNextPage = false;
+    }
+  }
+
+  return bookingsArray;
+}
+
 // Obtener y mapear reservas activas (Backend Server-Side)
 export async function getBeds24Bookings(): Promise<any[]> {
-  const BEDS24_TOKEN = await getBeds24Token();
-
   const today = new Date();
   const fromDate = new Date(today);
   fromDate.setDate(today.getDate() - 180);
@@ -301,22 +340,7 @@ export async function getBeds24Bookings(): Promise<any[]> {
   toDate.setDate(today.getDate() + 1000);
   const arrivalTo = toDate.toISOString().split('T')[0];
 
-  const beds24Response = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=1000`, {
-    method: 'GET',
-    headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-    cache: 'no-store'
-  });
-
-  if (beds24Response.status === 401 || beds24Response.status === 403) {
-    throw new Error('TOKEN_EXPIRED');
-  }
-
-  if (!beds24Response.ok) {
-    throw new Error(`Error BEDS24 ${beds24Response.status}: ${await beds24Response.text()}`);
-  }
-
-  const dataB24 = await beds24Response.json();
-  const bookingsArray = dataB24.data && Array.isArray(dataB24.data) ? dataB24.data : [];
+  const bookingsArray = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
 
   const ROOM_MAP = [
     { roomId: '679077', units: [{ unitId: '1', name: '301' }, { unitId: '2', name: '302' }, { unitId: '3', name: '303' }, { unitId: '4', name: '304' }, { unitId: '5', name: '305' }, { unitId: '6', name: '306' }] },

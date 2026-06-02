@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token, getUnitName, getRealPrice, getRoomMetadata } from '@/lib/beds24';
+import { fetchAllRawBeds24Bookings, getUnitName, getRealPrice, getRoomMetadata } from '@/lib/beds24';
 
 async function fetchBeds24Bookings() {
-  const BEDS24_TOKEN = await getBeds24Token();
-
   const today = new Date();
   const fromDate = new Date(today);
   fromDate.setDate(today.getDate() - 180);
@@ -13,18 +11,7 @@ async function fetchBeds24Bookings() {
   toDate.setDate(today.getDate() + 1000);
   const arrivalTo = toDate.toISOString().split('T')[0];
 
-  const res = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=1000`, {
-    headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-    cache: 'no-store'
-  });
-
-  if (res.status === 401 || res.status === 403) {
-    throw new Error('TOKEN_EXPIRED');
-  }
-  if (!res.ok) throw new Error(`Beds24 error ${res.status}`);
-
-  const data = await res.json();
-  return data.data && Array.isArray(data.data) ? data.data : [];
+  return fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
 }
 
 function mapBooking(b: any) {

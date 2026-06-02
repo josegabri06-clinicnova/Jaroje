@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token, getParentMapping } from '@/lib/beds24';
+import { fetchAllRawBeds24Bookings, getParentMapping } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,8 +67,6 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Faltan fechas de checkIn y checkOut' }, { status: 400 });
     }
 
-    const BEDS24_TOKEN = await getBeds24Token();
-
     const today = new Date();
     const fromDate = new Date(today);
     fromDate.setDate(today.getDate() - 180);
@@ -78,13 +76,8 @@ export async function GET(req: Request) {
     toDate.setDate(today.getDate() + 1000);
     const arrivalTo = toDate.toISOString().split('T')[0];
 
-    const bookingsRes = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=1000`, {
-      method: 'GET',
-      headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      cache: 'no-store'
-    });
-    
-    const bookingsData = await bookingsRes.ok ? await bookingsRes.json() : { data: [] };
+    const bookingsRaw = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
+    const bookingsData = { data: bookingsRaw };
 
     // Calcular ocupación cruzada
     const occupiedUnits = new Set<string>();
