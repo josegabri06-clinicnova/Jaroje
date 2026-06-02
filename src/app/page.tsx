@@ -25,6 +25,15 @@ const ROOMS = [
   '500','501','502','503','504','505','506'
 ];
 
+const ROOM_ROWS = [
+  { label: 'Apartamentos Premier 3 Recámaras (101-107)', rooms: ['101','102','103','104','105','106','107'] },
+  { label: 'Apartamentos Premier 2 Recámaras (201-206)', rooms: ['201','202','203','204','205','206'] },
+  { label: 'Unidades Especiales (401-402)', rooms: ['401','402'] },
+  { label: 'Habitaciones Dobles (301-306)', rooms: ['301','302','303','304','305','306'] },
+  { label: 'Apartamentos Nuevos (500-506)', rooms: ['500','501','502','503','504','505','506'] }
+];
+
+
 function getLocalDateStr(date: Date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -586,7 +595,7 @@ export default function AdminDashboard() {
           <Link href="/recepcion" className="text-[11px] font-bold text-blue-600 hover:underline">Ir a Recepción →</Link>
         </div>
 
-        <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm p-4 space-y-4">
+        <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-sm p-5 space-y-4">
           {/* Conteo por estados (4 columnas igual que recepción) */}
           <div className="grid grid-cols-4 gap-1.5">
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
@@ -608,7 +617,7 @@ export default function AdminDashboard() {
                   return s === 'en_limpieza' || s === 'limpieza_programada';
                 }).length}
               </span>
-              <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Programadas</p>
+              <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
             </div>
             <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
               <span className="text-[15px] font-black text-rose-700">
@@ -628,57 +637,72 @@ export default function AdminDashboard() {
                   return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'limpia';
                 }).length}
               </span>
-              <p className="text-[7.2px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limp. Lista</p>
+              <p className="text-[7.2px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limp. Terminada</p>
             </div>
           </div>
 
-          {/* Grid visual compacto (6 columnas para celular) */}
-          <div className="grid grid-cols-6 gap-1.5 pt-1">
-            {ROOMS.map(roomNum => {
-              const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
-              const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
-              const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-
-              let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
-              let dotClass = 'bg-zinc-300';
-              if (operStatus === 'disponible') {
-                colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
-                dotClass = 'bg-emerald-200';
-              } else if (operStatus === 'limpia') {
-                colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
-                dotClass = 'bg-blue-200';
-              } else if (operStatus === 'sucio_checkout') {
-                colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
-                dotClass = 'bg-rose-200';
-              } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
-                colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
-                dotClass = 'bg-amber-200';
-              }
-
-              return (
-                <div
-                  key={roomNum}
-                  onClick={() => {
-                    setSelectedRoomForStatus({
-                      room_number: roomNum,
-                      status: dbStatus,
-                      id: dbStatusObj.id || roomNum,
-                      updated_by: dbStatusObj.updated_by || null,
-                      updated_at: dbStatusObj.updated_at || null,
-                      operStatus: operStatus
-                    });
-                    setShowRoomStatusModal(true);
-                  }}
-                  className={`aspect-square rounded-xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-105 active:scale-95 transition-all text-center ${colorClasses}`}
-                >
-                  <span className="text-[11px] font-bold tracking-tight leading-none">{roomNum}</span>
-                  <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
+          {/* Grid visual premium agrupado por Renglones/Filas */}
+          <div className="space-y-4 pt-1">
+            {ROOM_ROWS.map((row) => (
+              <div key={row.label} className="space-y-2 border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">
+                    {row.label}
+                  </span>
+                  <span className="text-[8px] font-extrabold bg-zinc-50 border border-zinc-150 px-1.5 py-0.5 rounded text-zinc-400">
+                    {row.rooms.length} HAB
+                  </span>
                 </div>
-              );
-            })}
+                <div className="grid grid-cols-7 gap-2">
+                  {row.rooms.map((roomNum) => {
+                    const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
+                    const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
+                    const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+
+                    let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                    let dotClass = 'bg-zinc-300';
+                    if (operStatus === 'disponible') {
+                      colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                      dotClass = 'bg-emerald-250';
+                    } else if (operStatus === 'limpia') {
+                      colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                      dotClass = 'bg-blue-250';
+                    } else if (operStatus === 'sucio_checkout') {
+                      colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
+                      dotClass = 'bg-rose-250';
+                    } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
+                      colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                      dotClass = 'bg-amber-250';
+                    }
+
+                    return (
+                      <div
+                        key={roomNum}
+                        onClick={() => {
+                          setSelectedRoomForStatus({
+                            room_number: roomNum,
+                            status: dbStatus,
+                            id: dbStatusObj.id || roomNum,
+                            updated_by: dbStatusObj.updated_by || null,
+                            updated_at: dbStatusObj.updated_at || null,
+                            operStatus: operStatus
+                          });
+                          setShowRoomStatusModal(true);
+                        }}
+                        className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                      >
+                        <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
+
 
       {/* ── 7. PRÓXIMAS RESERVAS ──────────────────────────────────────── */}
       <div>

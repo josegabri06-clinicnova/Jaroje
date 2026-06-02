@@ -324,7 +324,7 @@ function unlockBody() {
 export function NotificationBell() {
   const router = useRouter();
   const [open, setOpen]           = useState(false);
-  const [tab, setTab]             = useState<'incidents' | 'history'>('incidents');
+  const [tab, setTab]             = useState<'incidents' | 'history'>('history');
   const [tasks, setTasks]         = useState<Task[]>([]);
   const [unread, setUnread]       = useState(0);
   const [resolving, setResolving] = useState<string | null>(null);
@@ -459,7 +459,7 @@ export function NotificationBell() {
   const handleOpen = () => {
     setSheetHeight(window.innerHeight * 0.85);
     setOpen(true);
-    setTab('incidents');
+    setTab('history');
     setUnread(0);
   };
 
@@ -805,28 +805,12 @@ export function NotificationBell() {
         <div style={s.handle}><div style={s.handleBar} /></div>
 
         {/* Header */}
-        <div style={{ padding: '8px 20px 12px', borderBottom: '1px solid #f4f4f5', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ padding: '16px 20px 16px', borderBottom: '1px solid #f4f4f5', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <p style={{ fontSize: 17, fontWeight: 700, color: '#18181b', margin: 0 }}>Centro de Actividad & Notificaciones</p>
             <button onClick={() => setOpen(false)} style={{ width: 32, height: 32, borderRadius: 10, background: '#f4f4f5', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <X size={15} color="#71717a" strokeWidth={2.5} />
             </button>
-          </div>
-          <div style={{ display: 'flex', gap: 6, background: '#f4f4f5', padding: 4, borderRadius: 12 }}>
-            {[
-              { key: 'incidents', label: `Incidencias${incidentTasks.length > 0 ? ` (${incidentTasks.length})` : ''}` },
-              { key: 'history',   label: `Historial de Actividad` }
-            ].map(t => (
-              <button key={t.key} onClick={() => setTab(t.key as any)} style={{
-                flex: 1, padding: '8px 2px', borderRadius: 8, border: 'none', cursor: 'pointer',
-                fontSize: 11, fontWeight: 700, transition: 'all 0.15s',
-                background: tab === t.key ? 'white' : 'transparent',
-                color: tab === t.key ? '#18181b' : '#71717a',
-                boxShadow: tab === t.key ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-              }}>
-                {t.label}
-              </button>
-            ))}
           </div>
         </div>
 
