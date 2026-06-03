@@ -47,7 +47,7 @@ export async function POST(req: Request) {
         arrival: checkIn,
         departure: checkOut,
         firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
-        status: isBlock ? 4 : 1,
+        status: isBlock ? "black" : "confirmed",
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
         actions: {
           checkAvailability: true,
@@ -99,7 +99,7 @@ export async function DELETE(req: Request) {
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify([{
         id: Number(id),
-        status: 0
+        status: "cancelled"
       }])
     });
 
