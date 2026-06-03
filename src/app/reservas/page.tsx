@@ -931,7 +931,7 @@ export default function ReservasList() {
                             return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
                           }
                           if (paymentMethod === 'transferencia') {
-                            return ['BANAMEX', 'BBVA', 'SANTANDER', 'IBC ROL (DLL)', 'WISE', 'REVOLUT'].includes(name);
+                            return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
                           }
                           return false;
                         })

@@ -114,6 +114,22 @@ function getNextDayStr(dateStr: string): string {
   return getLocalDateStr(d);
 }
 
+function addDaysToDateStr(dateStr: string, days: number): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return getLocalDateStr(d);
+}
+
+function getNightsBetweenDates(checkIn: string, checkOut: string): number {
+  if (!checkIn || !checkOut) return 1;
+  const d1 = new Date(checkIn + 'T12:00:00');
+  const d2 = new Date(checkOut + 'T12:00:00');
+  const diffTime = Math.abs(d2.getTime() - d1.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+}
+
+
 async function compressImage(file: File): Promise<string> {
   return new Promise(resolve => {
     const reader = new FileReader();
@@ -420,7 +436,7 @@ export default function RecepcionPage() {
         return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
       }
       if (paymentMode === 'transferencia') {
-        return ['BANAMEX', 'BBVA', 'SANTANDER', 'IBC ROL (DLL)', 'WISE', 'REVOLUT'].includes(name);
+        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
       }
       return false;
     });
@@ -1429,10 +1445,10 @@ export default function RecepcionPage() {
                           if (newIn && newIn < todayStr) {
                             newIn = todayStr;
                           }
-                          let newOut = selectedReserva.check_out;
-                          if (selectedReserva.check_out && selectedReserva.check_out <= newIn) {
-                            newOut = getNextDayStr(newIn);
-                          }
+                          // Recalcular el check-out manteniendo las noches actuales
+                          const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
+                          const newOut = addDaysToDateStr(newIn, currentNights);
+                          
                           setSelectedReserva({ ...selectedReserva, check_in: newIn, check_out: newOut, room: '', unit_id: '' });
                           fetchAvailability(newIn, newOut);
                         }}
@@ -1440,25 +1456,53 @@ export default function RecepcionPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-Out (Salida)</label>
-                      <input
-                        key={selectedReserva.check_in ? `walkin-out-${selectedReserva.check_in}` : `walkin-out-loading-${tomorrowStr}`}
-                        type="date"
-                        min={selectedReserva.check_in ? getNextDayStr(selectedReserva.check_in) : tomorrowStr}
-                        value={selectedReserva.check_out}
-                        onChange={e => {
-                          let newOut = e.target.value;
-                          const minOut = selectedReserva.check_in ? getNextDayStr(selectedReserva.check_in) : tomorrowStr;
-                          if (newOut && newOut < minOut) {
-                            newOut = minOut;
-                          }
-                          setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
-                          fetchAvailability(selectedReserva.check_in, newOut);
-                        }}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
-                      />
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Noches</label>
+                      <div className="flex items-center bg-white border border-zinc-200 rounded-xl px-2 py-1 h-[42px] justify-between">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
+                            if (currentNights > 1) {
+                              const newNights = currentNights - 1;
+                              const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
+                              setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
+                              fetchAvailability(selectedReserva.check_in, newOut);
+                            }
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-zinc-600 transition-all active:scale-90"
+                          disabled={getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out) <= 1}
+                        >
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span className="text-[14px] font-bold text-zinc-900 px-2 min-w-[24px] text-center">
+                          {getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out)}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
+                            const newNights = currentNights + 1;
+                            const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
+                            setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
+                            fetchAvailability(selectedReserva.check_in, newOut);
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg text-zinc-600 transition-all active:scale-90"
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
                     </div>
                   </div>
+
+                  {selectedReserva.check_out && (
+                    <div className="flex items-center gap-2.5 bg-zinc-100/60 border border-zinc-200/40 rounded-xl px-3 py-2 text-zinc-600 animate-in fade-in duration-200">
+                      <Calendar size={13} className="text-zinc-400 shrink-0" />
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Check-Out (Salida):</span>
+                      <span className="text-[12px] font-black text-zinc-800">
+                        {format(parseISO(selectedReserva.check_out), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
+                      </span>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
                       Seleccionar Habitación Libre {checkingAvail && '· buscando...'}
@@ -1644,7 +1688,7 @@ export default function RecepcionPage() {
                               return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
                             }
                             if (paymentMode === 'transferencia') {
-                              return ['BANAMEX', 'BBVA', 'SANTANDER', 'IBC ROL (DLL)', 'WISE', 'REVOLUT'].includes(name);
+                              return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
                             }
                             return false;
                           })
