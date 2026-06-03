@@ -68,6 +68,7 @@ export default function ReservasList() {
   const [showPaymentFlow, setShowPaymentFlow] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('efectivo');
   const [paymentReference, setPaymentReference] = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const docInputRef = useRef<HTMLInputElement>(null);
@@ -88,6 +89,20 @@ export default function ReservasList() {
       setAvailableRooms({});
     }
   }, [selectedRes]);
+
+  useEffect(() => {
+    if (showPaymentFlow && selectedRes) {
+      const balanceVal = selectedRes.balance !== undefined
+        ? selectedRes.balance
+        : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+      
+      if (balanceVal > 0) {
+        setPaymentAmount(balanceVal.toString());
+      } else {
+        setPaymentAmount('');
+      }
+    }
+  }, [showPaymentFlow, selectedRes]);
 
   // Consultar disponibilidad real de habitaciones en las fechas de la reserva
   useEffect(() => {
@@ -225,8 +240,8 @@ export default function ReservasList() {
         }
       }
 
-      // 1. Guardar el Check-in
-      await supabase.from('checkins').insert([{
+      // 1. Guardar el Check-in (usando upsert con onConflict para evitar fallos de clave duplicada)
+      const { error: upsertErr } = await supabase.from('checkins').upsert({
         reservation_id: selectedRes.id.toString(),
         guest_name: selectedRes.guest_name,
         room: selectedRes.room_name,
@@ -234,29 +249,58 @@ export default function ReservasList() {
         check_out_date: selectedRes.check_out,
         status: 'checked_in',
         checked_in_by: 'Admin',
-        document_url: document_url
-      }]);
+        document_url: document_url,
+        dni_image: document_url
+      }, { onConflict: 'reservation_id' });
 
-      // 2. Registrar el Ingreso Financiero
-      const accountName = accounts.find(a => a.id === paymentReference)?.name || paymentReference;
-      const paymentDetail = paymentMethod === 'efectivo' ? `Sobre/Caja: ${accountName}` : 
-                            paymentMethod === 'tarjeta' ? `Terminal/Autorización: ${accountName}` : 
-                            `Cuenta destino: ${accountName}`;
+      if (upsertErr) {
+        console.error("Error guardando Check-in en base de datos:", upsertErr);
+        alert("Fallo al guardar el Check-in en la base de datos: " + upsertErr.message);
+        setCheckInLoading(false);
+        return;
+      }
 
-      const { error: financeErr } = await supabase.from('finances').insert([{
-        type: 'ingreso',
-        amount: selectedRes.price_estimate,
-        category: 'Alojamiento',
-        description: `Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail}`,
-        payment_method: paymentMethod,
-        account_id: paymentReference,
-        date: new Date().toISOString().split('T')[0]
-      }]);
+      // 2. Registrar el Ingreso Financiero sólo si hay un pago seleccionado y un monto mayor a 0
+      const paymentAmountNum = Number(paymentAmount || 0);
+      if (paymentReference && paymentAmountNum > 0) {
+        const accountName = accounts.find(a => a.id === paymentReference)?.name || paymentReference;
+        const paymentDetail = paymentMethod === 'efectivo' ? `Sobre/Caja: ${accountName}` : 
+                              paymentMethod === 'tarjeta' ? `Terminal/Autorización: ${accountName}` : 
+                              `Cuenta destino: ${accountName}`;
 
-      if (!financeErr && paymentReference) {
-        const acc = accounts.find(a => a.id === paymentReference);
-        if (acc) {
-          await supabase.from('accounts').update({ balance: acc.balance + selectedRes.price_estimate }).eq('id', paymentReference);
+        const { error: financeErr } = await supabase.from('finances').insert([{
+          type: 'ingreso',
+          amount: paymentAmountNum,
+          category: 'Alojamiento',
+          description: `Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail} [Pending Sync: B24]`,
+          payment_method: paymentMethod,
+          account_id: paymentReference,
+          date: new Date().toISOString().split('T')[0]
+        }]);
+
+        if (!financeErr) {
+          const acc = accounts.find(a => a.id === paymentReference);
+          if (acc) {
+            await supabase.from('accounts').update({ balance: acc.balance + paymentAmountNum }).eq('id', paymentReference);
+          }
+
+          // Registrar el pago en Beds24 en tiempo real
+          try {
+            await fetch('/api/reservas/payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookId: selectedRes.id,
+                amount: paymentAmountNum,
+                paymentMethod: paymentMethod,
+                employeeNum: '999' // Admin
+              })
+            });
+          } catch (payB24Err) {
+            console.error("Error al registrar pago en Beds24:", payB24Err);
+          }
+        } else {
+          console.error("Error al registrar ingreso en finanzas:", financeErr);
         }
       }
 
@@ -264,6 +308,7 @@ export default function ReservasList() {
       setShowPaymentFlow(false);
       setDocumentFile(null);
       setPaymentReference('');
+      setPaymentAmount('');
       
       // Actualizar estado local
       setReservas(prev => prev.map(r => r.id === selectedRes.id ? { 
@@ -275,7 +320,7 @@ export default function ReservasList() {
       // También actualizar selectedRes para que el botón de Ver Documento aparezca de inmediato
       setSelectedRes((prev: any) => ({ ...prev, is_checked_in: true, document_url: document_url }));
 
-      alert('¡Check-in realizado y pago registrado en Finanzas!');
+      alert('¡Check-in realizado con éxito!');
     } catch (error) {
       console.error(error);
       alert('Error al realizar el check-in.');
@@ -877,75 +922,138 @@ export default function ReservasList() {
                     </div>
                   </div>
 
-                  {/* Adeudo por Pagar */}
-                  <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm mb-4 animate-in fade-in duration-300">
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest block">
-                        Adeudo por Pagar
-                      </span>
-                      <p className="text-[11px] text-amber-600 font-medium">
-                        Monto total a cobrar por la estancia.
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[20px] font-black text-amber-700">
-                        ${(selectedRes.price_estimate || 0).toLocaleString('es-MX')} MXN
-                      </span>
-                    </div>
-                  </div>
+                  {/* Adeudo por Pagar Desglosado */}
+                  {(() => {
+                    const pendingBalance = selectedRes.balance !== undefined
+                      ? selectedRes.balance
+                      : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+                    const depositVal = selectedRes.deposit || 0;
+                    const totalVal = selectedRes.price_estimate || 0;
 
-                  <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-3 pt-3 border-t border-zinc-100">Registrar Pago</p>
-                  <div className="grid grid-cols-3 gap-2 mb-4">
-                    {['efectivo', 'tarjeta', 'transferencia'].map(m => (
-                      <button 
-                        key={m}
-                        type="button"
-                        onClick={() => { setPaymentMethod(m); setPaymentReference(''); }}
-                        className={`py-2 px-2 text-[12px] font-semibold rounded-lg capitalize border ${paymentMethod === m ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
+                    if (pendingBalance <= 0) {
+                      return (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm mb-4 animate-in fade-in duration-300">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
+                              Estancia Liquidada
+                            </span>
+                            <p className="text-[11px] text-emerald-600 font-medium leading-relaxed">
+                              Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')} (100% Pagado)
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[20px] font-black text-emerald-700">
+                              $0.00 MXN
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
 
-                  <div className="mb-4">
-                    <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                      {paymentMethod === 'efectivo' ? 'Sobre de Efectivo' : 
-                       paymentMethod === 'tarjeta' ? 'Cuenta de Cobro con Tarjeta' : 
-                       'Cuenta de Depósito'}
-                    </label>
-                    <select
-                      required
-                      value={paymentReference}
-                      onChange={e => setPaymentReference(e.target.value)}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900 cursor-pointer"
-                    >
-                      <option value="" disabled>Selecciona una opción</option>
-                      {accounts
-                        .filter(a => {
-                          const name = a.name.trim().toUpperCase();
-                          if (paymentMethod === 'efectivo') {
-                            return name === 'EFECTIVO';
-                          }
-                          if (paymentMethod === 'tarjeta') {
-                            return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                          }
-                          if (paymentMethod === 'transferencia') {
-                            return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
-                          }
-                          return false;
-                        })
-                        .map(a => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                    </select>
-                  </div>
+                    return (
+                      <div className="space-y-4">
+                        <div className="bg-rose-50 border border-rose-250 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-extrabold text-rose-800 uppercase tracking-widest block">
+                              Adeudo por Pagar
+                            </span>
+                            <p className="text-[10px] text-rose-600 font-semibold leading-relaxed">
+                              Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[20px] font-black text-rose-700">
+                              ${pendingBalance.toLocaleString('es-MX')} MXN
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-1 pt-3 border-t border-zinc-100">Registrar Pago</p>
+                        <div className="grid grid-cols-3 gap-2 mb-2">
+                          {['efectivo', 'tarjeta', 'transferencia'].map(m => (
+                            <button 
+                              key={m}
+                              type="button"
+                              onClick={() => { setPaymentMethod(m); setPaymentReference(''); }}
+                              className={`py-2 px-2 text-[12px] font-semibold rounded-lg capitalize border ${paymentMethod === m ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}
+                            >
+                              {m}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mb-2">
+                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
+                            Monto a Cobrar
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
+                            <input
+                              type="number"
+                              value={paymentAmount}
+                              onChange={e => setPaymentAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full bg-white border border-zinc-200 rounded-xl py-2 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
+                            {paymentMethod === 'efectivo' ? 'Sobre de Efectivo' : 
+                             paymentMethod === 'tarjeta' ? 'Cuenta de Cobro con Tarjeta' : 
+                             'Cuenta de Depósito'}
+                          </label>
+                          <select
+                            required
+                            value={paymentReference}
+                            onChange={e => setPaymentReference(e.target.value)}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900 cursor-pointer"
+                          >
+                            <option value="" disabled>Selecciona una opción</option>
+                            {accounts
+                              .filter(a => {
+                                const name = a.name.trim().toUpperCase();
+                                if (paymentMethod === 'efectivo') {
+                                  return name === 'EFECTIVO';
+                                }
+                                if (paymentMethod === 'tarjeta') {
+                                  return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                }
+                                if (paymentMethod === 'transferencia') {
+                                  return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
+                                }
+                                return false;
+                              })
+                              .map(a => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="flex gap-2">
                     <button onClick={() => setShowPaymentFlow(false)} className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[13px] transition-colors">Cancelar</button>
                     <button 
                       onClick={handleConfirmCheckIn} 
-                      disabled={checkInLoading || !documentFile || !paymentReference.trim()} 
+                      disabled={(() => {
+                        if (checkInLoading) return true;
+                        if (!documentFile) return true; // DNI obligatorio
+                        
+                        const pendingBalance = selectedRes.balance !== undefined
+                          ? selectedRes.balance
+                          : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+
+                        if (pendingBalance > 0) {
+                          const currentPayment = Number(paymentAmount || 0);
+                          if (!paymentReference.trim()) return true;
+                          if (currentPayment < pendingBalance) return true;
+                        }
+
+                        return false;
+                      })()}
                       className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[13px] shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
                     >
                       {checkInLoading ? <RefreshCw size={16} className="animate-spin" /> : <LogIn size={16} />}

@@ -35,6 +35,8 @@ interface Reserva {
   price_estimate?: number;
   num_adult?: number;
   num_child?: number;
+  deposit?: number;
+  balance?: number;
 }
 
 interface Task {
@@ -448,6 +450,20 @@ export default function RecepcionPage() {
     }
   }, [paymentMode, accounts]);
 
+  useEffect(() => {
+    if (showCheckInModal && selectedReserva && selectedReserva.id !== 'walkin') {
+      const balanceVal = selectedReserva.balance !== undefined
+        ? selectedReserva.balance
+        : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+      
+      if (balanceVal > 0) {
+        setPaymentAmount(balanceVal.toString());
+      } else {
+        setPaymentAmount('');
+      }
+    }
+  }, [showCheckInModal, selectedReserva]);
+
   const handleUnlockPrice = () => {
     if (pinInput === '1234') {
       setIsPriceUnlocked(true);
@@ -672,7 +688,8 @@ export default function RecepcionPage() {
           check_out_date: selectedReserva.check_out || todayStr,
           status: 'checked_in',
           checked_in_by: operatorName,
-          dni_image: finalDniUrl || null
+          dni_image: finalDniUrl || null,
+          document_url: finalDniUrl || null
         }, { onConflict: 'reservation_id' });
 
         if (upsertErr) console.error("Supabase Walkin Upsert Error:", upsertErr);
@@ -730,7 +747,8 @@ export default function RecepcionPage() {
         check_out_date: selectedReserva.check_out,
         status: 'checked_in',
         checked_in_by: operatorName,
-        dni_image: finalDniUrl || null
+        dni_image: finalDniUrl || null,
+        document_url: finalDniUrl || null
       }, { onConflict: 'reservation_id' });
 
       if (upsertErr) console.error("Supabase Checkin Error:", upsertErr);
@@ -1594,24 +1612,62 @@ export default function RecepcionPage() {
               </div>
 
               {/* Adeudo por Pagar */}
-              <div className="bg-amber-50 border border-amber-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
-                <div className="space-y-0.5">
-                  <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest block">
-                    Adeudo por Pagar
-                  </span>
-                  <p className="text-[11px] text-amber-600 font-medium">
-                    Monto total a cobrar por la estancia.
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="text-[20px] font-black text-amber-700">
-                    ${selectedReserva.id === 'walkin'
-                      ? parseFloat(paymentAmount || '0').toLocaleString('es-MX')
-                      : (selectedReserva.price_estimate || 0).toLocaleString('es-MX')
-                    } MXN
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const balanceVal = selectedReserva.id === 'walkin'
+                  ? Number(paymentAmount || 0)
+                  : (selectedReserva.balance !== undefined
+                      ? selectedReserva.balance
+                      : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
+
+                const depositVal = selectedReserva.id === 'walkin' ? 0 : (selectedReserva.deposit || 0);
+                const totalVal = selectedReserva.id === 'walkin'
+                  ? Number(paymentAmount || 0)
+                  : (selectedReserva.price_estimate || 0);
+
+                if (balanceVal <= 0) {
+                  return (
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+                      <div className="space-y-0.5">
+                        <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
+                          Estancia Liquidada
+                        </span>
+                        <p className="text-[11px] text-emerald-600 font-medium">
+                          Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')} (100% Pagado)
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[20px] font-black text-emerald-700">
+                          $0.00 MXN
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+                    <div className="space-y-0.5">
+                      <span className="text-[10px] font-extrabold text-rose-800 uppercase tracking-widest block">
+                        Adeudo por Pagar
+                      </span>
+                      {selectedReserva.id !== 'walkin' ? (
+                        <p className="text-[10px] text-rose-600 font-medium leading-tight">
+                          Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-rose-600 font-medium">
+                          Monto total a cobrar por la estancia.
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[20px] font-black text-rose-700">
+                        ${balanceVal.toLocaleString('es-MX')} MXN
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Registro de Pago */}
               <div className="space-y-3 pt-2">
@@ -1709,11 +1765,32 @@ export default function RecepcionPage() {
             <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
               <button
                 onClick={() => runWithSignature('checkin', () => processCheckIn())}
-                disabled={
-                  submitting ||
-                  (!dniPreview && selectedReserva.id !== 'walkin') ||
-                  (selectedReserva.id === 'walkin' && (!selectedReserva.guest_name || !selectedReserva.unit_id))
-                }
+                disabled={(() => {
+                  if (submitting) return true;
+                  
+                  // Validación DNI obligatoria para reservas existentes
+                  if (selectedReserva.id !== 'walkin' && !dniPreview) return true;
+
+                  // Validación campos Walk-in obligatorios
+                  if (selectedReserva.id === 'walkin' && (!selectedReserva.guest_name || !selectedReserva.unit_id)) return true;
+
+                  // Calcular balance pendiente
+                  const pendingBalance = selectedReserva.id === 'walkin'
+                    ? Number(paymentAmount || 0)
+                    : (selectedReserva.balance !== undefined
+                        ? selectedReserva.balance
+                        : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
+
+                  if (pendingBalance > 0) {
+                    const currentPayment = Number(paymentAmount || 0);
+                    // Si hay adeudo, se requiere método de pago, cuenta/sobre y que el monto cubra el adeudo
+                    if (!paymentMode) return true;
+                    if (!selectedAccountId) return true;
+                    if (currentPayment < pendingBalance) return true;
+                  }
+                  
+                  return false;
+                })()}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[14px] py-3.5 rounded-xl transition-all cursor-pointer shadow-md shadow-blue-600/15 disabled:opacity-40 flex items-center justify-center gap-2"
               >
                 {submitting ? 'Registrando...' : 'Completar Check-In'}
