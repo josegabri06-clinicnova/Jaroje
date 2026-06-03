@@ -63,7 +63,7 @@ export async function POST(req: Request) {
         arrival: checkIn,
         departure: checkOut,
         firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
-        status: "confirmed",
+        status: isBlock ? 4 : 1,
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
         actions: {
           checkAvailability: true,
@@ -78,6 +78,18 @@ export async function POST(req: Request) {
     }
 
     const dataB24 = await beds24Response.json();
+    
+    // Validar errores individuales en el array de respuesta de Beds24 v2
+    if (dataB24 && Array.isArray(dataB24.data)) {
+      const firstResult = dataB24.data[0];
+      if (firstResult && firstResult.success === false) {
+        const errorMsg = firstResult.errors 
+          ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+          : firstResult.message || 'Error individual en Beds24';
+        return NextResponse.json({ error: `Beds24 rechazó la reserva: ${errorMsg}` }, { status: 400 });
+      }
+    }
+
     return NextResponse.json({ success: true, message: "Reserva registrada en Beds24.", data: dataB24 });
 
   } catch (err: any) {
@@ -103,7 +115,7 @@ export async function DELETE(req: Request) {
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify([{
         id: Number(id),
-        status: "cancelled"
+        status: 0
       }])
     });
 
@@ -120,6 +132,18 @@ export async function DELETE(req: Request) {
     await supabase.from('checkins').delete().eq('reservation_id', id.toString());
 
     const dataB24 = await beds24Response.json();
+
+    // Validar errores individuales en el array de respuesta de Beds24 v2
+    if (dataB24 && Array.isArray(dataB24.data)) {
+      const firstResult = dataB24.data[0];
+      if (firstResult && firstResult.success === false) {
+        const errorMsg = firstResult.errors 
+          ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+          : firstResult.message || 'Error individual al cancelar en Beds24';
+        return NextResponse.json({ error: `Beds24 rechazó la cancelación: ${errorMsg}` }, { status: 400 });
+      }
+    }
+
     return NextResponse.json({ success: true, message: "Reserva cancelada en Beds24 y liberada localmente.", data: dataB24 });
 
   } catch (err: any) {
@@ -178,6 +202,18 @@ export async function PUT(req: Request) {
       .eq('reservation_id', id.toString());
 
     const dataB24 = await beds24Response.json();
+
+    // Validar errores individuales en el array de respuesta de Beds24 v2
+    if (dataB24 && Array.isArray(dataB24.data)) {
+      const firstResult = dataB24.data[0];
+      if (firstResult && firstResult.success === false) {
+        const errorMsg = firstResult.errors 
+          ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+          : firstResult.message || 'Error individual al reasignar en Beds24';
+        return NextResponse.json({ error: `Beds24 rechazó la reasignación: ${errorMsg}` }, { status: 400 });
+      }
+    }
+
     return NextResponse.json({ 
       success: true, 
       message: `Habitación reasignada exitosamente a la ${roomName}.`, 
