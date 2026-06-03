@@ -1,3 +1,5 @@
+import { supabase } from './supabase';
+
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────
 // Fuente de verdad para reservas del Hotel Condominios Jaroje.
 // Centraliza las tarifas, cálculo de temporadas, refresh de tokens y mapeo de unidades.
@@ -264,42 +266,95 @@ export function getRoomMetadata(roomId: string | null | undefined, roomName: str
   return JAROJE_CATALOG['default_2'];
 }
 
-// Auto-refresh del token de autenticación Beds24
+// Auto-refresh del token de autenticación Beds24 con persistencia en Supabase (B2B SaaS Ready)
 export async function getBeds24Token(): Promise<string> {
-  const tempToken = process.env.BEDS24_TEMP_TOKEN;
-  const refreshToken = process.env.BEDS24_REFRESH_TOKEN;
+  let tempToken: string | null = null;
+  let refreshToken: string | null = null;
 
-  if (!refreshToken) throw new Error('Falta BEDS24_REFRESH_TOKEN en las variables de entorno.');
+  // 1. Intentar leer los tokens desde la base de datos en Supabase
+  try {
+    const { data, error } = await supabase
+      .from('beds24_auth')
+      .select('temp_token, refresh_token')
+      .eq('id', 1)
+      .single();
 
+    if (!error && data) {
+      tempToken = data.temp_token;
+      refreshToken = data.refresh_token;
+    }
+  } catch (err) {
+    console.error("Error al leer tokens de Supabase:", err);
+  }
+
+  // Fallback a variables de entorno locales si no hay nada en la base de datos
+  if (!refreshToken) {
+    tempToken = process.env.BEDS24_TEMP_TOKEN || null;
+    refreshToken = process.env.BEDS24_REFRESH_TOKEN || null;
+  }
+
+  // 2. Si hay un tempToken, validar si sigue activo con un probe rápido de red
   if (tempToken) {
     try {
       const probe = await fetch('https://api.beds24.com/v2/bookings?limit=1', {
         headers: { 'token': tempToken },
         cache: 'no-store'
       });
-      if (probe.ok || probe.status === 404) return tempToken;
+      if (probe.ok || probe.status === 404) {
+        return tempToken;
+      }
     } catch (e) {
-      console.warn("Probe de token de Beds24 falló, reintentando refrescar...");
+      console.warn("Probe de token de Beds24 falló, intentando refrescar...");
     }
   }
 
+  if (!refreshToken) {
+    throw new Error('Falta BEDS24_REFRESH_TOKEN en la base de datos y variables de entorno.');
+  }
+
+  // 3. Si el tempToken venció o no existe, refrescar usando el refreshToken
   const refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
     method: 'GET',
     headers: { 'refreshToken': refreshToken },
     cache: 'no-store'
   });
+
+  if (!refreshRes.ok) {
+    throw new Error('TOKEN_EXPIRED');
+  }
+
   const refreshData = await refreshRes.json();
 
   if (!refreshData.token) {
     throw new Error('TOKEN_EXPIRED');
   }
 
-  process.env.BEDS24_TEMP_TOKEN = refreshData.token;
-  if (refreshData.refreshToken) {
-    process.env.BEDS24_REFRESH_TOKEN = refreshData.refreshToken;
+  const newTempToken = refreshData.token;
+  const newRefreshToken = refreshData.refreshToken || refreshToken;
+
+  // 4. Guardar los nuevos tokens de vuelta en Supabase (upsert en id = 1)
+  try {
+    const { error: upsertError } = await supabase
+      .from('beds24_auth')
+      .upsert({
+        id: 1,
+        temp_token: newTempToken,
+        refresh_token: newRefreshToken,
+        updated_at: new Date().toISOString()
+      });
+
+    if (upsertError) {
+      console.error("Error al persistir nuevos tokens en Supabase:", upsertError.message);
+    }
+  } catch (err) {
+    console.error("Error crítico al guardar tokens en base de datos:", err);
   }
 
-  return refreshData.token;
+  // Actualizar también en variables de proceso en memoria como respaldo secundario
+  process.env.BEDS24_TEMP_TOKEN = newTempToken;
+  process.env.BEDS24_REFRESH_TOKEN = newRefreshToken;
+
+  return newTempToken;
 }
 
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
