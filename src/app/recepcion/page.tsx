@@ -770,7 +770,12 @@ export default function RecepcionPage() {
             document_url: finalDniUrl || null
           }, { onConflict: 'reservation_id' });
 
-          if (upsertErr) console.error(`Supabase Walkin Upsert Error para Hab ${room.name}:`, upsertErr);
+          if (upsertErr) {
+            console.error(`Supabase Walkin Upsert Error para Hab ${room.name}:`, upsertErr);
+            alert(`Error al registrar check-in local en Supabase para Habitación ${room.name}: ` + upsertErr.message);
+            setSubmitting(false);
+            return;
+          }
 
           bookedReservas.push({
             id: beds24AssignedId,
@@ -910,7 +915,12 @@ export default function RecepcionPage() {
         document_url: finalDniUrl || null
       }, { onConflict: 'reservation_id' });
 
-      if (upsertErr) console.error("Supabase Checkin Error:", upsertErr);
+      if (upsertErr) {
+        console.error("Supabase Checkin Error:", upsertErr);
+        alert("Fallo al guardar el Check-In en la base de datos: " + upsertErr.message);
+        setSubmitting(false);
+        return;
+      }
 
       setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined } : r));
 
