@@ -2048,8 +2048,8 @@ export default function RecepcionPage() {
                 disabled={(() => {
                   if (submitting) return true;
                   
-                  // Validación DNI obligatoria para reservas existentes
-                  if (selectedReserva.id !== 'walkin' && !dniPreview) return true;
+                  // Validación DNI obligatoria para todas las reservas y walk-ins
+                  if (!dniPreview) return true;
 
                   // Validación campos Walk-in obligatorios
                   if (selectedReserva.id === 'walkin') {
@@ -2058,7 +2058,8 @@ export default function RecepcionPage() {
                       !selectedReserva.guest_name || 
                       !hasRoomSelected || 
                       !selectedReserva.guest_phone || 
-                      (selectedReserva.num_adult || 0) < 1
+                      (selectedReserva.num_adult || 0) < 1 ||
+                      Number(paymentAmount || 0) <= 0
                     ) return true;
                   }
 
