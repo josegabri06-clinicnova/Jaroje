@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { ShieldAlert, CheckCircle2, Lock, Unlock } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { getUnitName, getRoomMetadata } from '@/lib/beds24';
+import { format, parseISO } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 const PRICES: Record<string, Record<string, number>> = {
   '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
@@ -43,6 +45,13 @@ function getNextDayStr(dateStr: string): string {
   return getLocalDateStr(d);
 }
 
+function addDaysToDateStr(dateStr: string, days: number): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return getLocalDateStr(d);
+}
+
 export default function VercelActionForm() {
   const router = useRouter();
   const [mode, setMode] = useState<'reserva' | 'bloqueo'>('reserva');
@@ -61,8 +70,14 @@ export default function VercelActionForm() {
     checkOut: '',
     guestName: '',
     channel: 'Directo',
-    price: ''
+    price: '',
+    phone: '',
+    numAdult: 1,
+    numChild: 0,
+    notes: ''
   });
+
+  const [nights, setNights] = useState<number>(1);
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
@@ -136,6 +151,12 @@ export default function VercelActionForm() {
       return alert("Por favor, selecciona una habitación física específica.");
     }
 
+    if (mode === 'reserva') {
+      if (!form.guestName || !form.phone || !form.notes || form.numAdult < 1) {
+        return alert("Por favor, rellene todos los campos obligatorios: Nombre del Huésped, N. Móvil, Adultos y Nota.");
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -148,6 +169,10 @@ export default function VercelActionForm() {
         guestName: form.guestName,
         isBlock,
         price: isBlock ? 0 : Number(form.price),
+        phone: isBlock ? '' : form.phone,
+        numAdult: isBlock ? 1 : form.numAdult,
+        numChild: isBlock ? 0 : form.numChild,
+        notes: isBlock ? '' : form.notes,
       };
 
       const bgRes = await fetch('/api/reservas', {
@@ -284,34 +309,39 @@ export default function VercelActionForm() {
                 if (newCheckIn && newCheckIn < todayStr) {
                   newCheckIn = todayStr;
                 }
-                let newCheckOut = form.checkOut;
-                if (form.checkOut && form.checkOut <= newCheckIn) {
-                  newCheckOut = getNextDayStr(newCheckIn);
-                }
+                const newCheckOut = addDaysToDateStr(newCheckIn, nights);
                 setForm({...form, checkIn: newCheckIn, checkOut: newCheckOut, roomId: '', unitId: ''});
               }}
             />
           </div>
           <div className="flex-1 min-w-0 space-y-1.5">
-            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Check-Out</label>
+            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Noches</label>
             <input 
-              key={form.checkIn ? `checkout-${form.checkIn}` : `checkout-loading-${todayStr}`}
-              type="date" 
+              type="number" 
               required
-              min={form.checkIn ? getNextDayStr(form.checkIn) : getNextDayStr(todayStr)}
+              min={1}
               className="w-full min-w-0 max-w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl px-2.5 py-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
-              value={form.checkOut}
+              value={nights}
               onChange={e => {
-                let newCheckOut = e.target.value;
-                const minCheckOut = form.checkIn ? getNextDayStr(form.checkIn) : getNextDayStr(todayStr);
-                if (newCheckOut && newCheckOut < minCheckOut) {
-                  newCheckOut = minCheckOut;
+                const newNights = Math.max(1, Number(e.target.value) || 1);
+                setNights(newNights);
+                if (form.checkIn) {
+                  const newCheckOut = addDaysToDateStr(form.checkIn, newNights);
+                  setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '' }));
                 }
-                setForm({...form, checkOut: newCheckOut, roomId: '', unitId: ''});
               }}
             />
           </div>
         </div>
+
+        {form.checkOut && (
+          <div className="text-[12px] font-medium text-zinc-500 bg-zinc-50 border border-zinc-200/60 p-3.5 rounded-xl flex items-center gap-2 animate-in fade-in duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <span className="font-semibold uppercase tracking-wider text-[10px] text-zinc-400">Check-Out (Salida):</span>
+            <span className="font-bold text-zinc-800">
+              {format(parseISO(form.checkOut), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
+            </span>
+          </div>
+        )}
 
         {/* Mapa Visual de Habitaciones */}
         {form.checkIn && form.checkOut && (
@@ -375,52 +405,102 @@ export default function VercelActionForm() {
 
             {/* Extra Form Fields for Reserva only */}
             {mode === 'reserva' && (
-              <div className="grid grid-cols-2 gap-3.5 pt-1">
+              <>
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Origen</label>
-                  <div className="relative">
-                    <select 
-                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none appearance-none"
-                      value={form.channel}
-                      onChange={e => setForm({...form, channel: e.target.value})}
-                    >
-                      <option value="Directo">Directo Web</option>
-                      <option value="WhatsApp">WhatsApp</option>
-                      <option value="Recepción">Walk-in Recepción</option>
-                      <option value="Airbnb">Airbnb</option>
-                      <option value="Booking.com">Booking.com</option>
-                    </select>
-                  </div>
+                  <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">N. Móvil</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ej. +52 55 1234 5678"
+                    className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
+                    value={form.phone}
+                    onChange={e => setForm({...form, phone: e.target.value})}
+                  />
                 </div>
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center pr-1">
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Total</label>
-                    <button 
-                      type="button" 
-                      onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
-                      className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
-                    >
-                      {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
-                      {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Adultos</label>
                     <input 
                       type="number" 
-                      placeholder="0.00"
-                      readOnly={!isPriceUnlocked}
-                      className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                        isPriceUnlocked 
-                          ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
-                          : 'bg-zinc-100 border-zinc-200/80 text-zinc-600 cursor-not-allowed'
-                      }`}
-                      value={form.price}
-                      onChange={e => setForm({...form, price: e.target.value})}
+                      required
+                      min={1}
+                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                      value={form.numAdult}
+                      onChange={e => setForm({...form, numAdult: Math.max(1, Number(e.target.value) || 1)})}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Niños</label>
+                    <input 
+                      type="number" 
+                      required
+                      min={0}
+                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                      value={form.numChild}
+                      onChange={e => setForm({...form, numChild: Math.max(0, Number(e.target.value) || 0)})}
                     />
                   </div>
                 </div>
-              </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Nota / Comentarios</label>
+                  <textarea 
+                    required
+                    placeholder="Ej. Requiere factura, check-in temprano..."
+                    className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
+                    value={form.notes}
+                    onChange={e => setForm({...form, notes: e.target.value})}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5 pt-1">
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Origen</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none appearance-none"
+                        value={form.channel}
+                        onChange={e => setForm({...form, channel: e.target.value})}
+                      >
+                        <option value="Directo">Directo Web</option>
+                        <option value="WhatsApp">WhatsApp</option>
+                        <option value="Recepción">Walk-in Recepción</option>
+                        <option value="Airbnb">Airbnb</option>
+                        <option value="Booking.com">Booking.com</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center pr-1">
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Total</label>
+                      <button 
+                        type="button" 
+                        onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
+                        className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
+                      >
+                        {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
+                        {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                      <input 
+                        type="number" 
+                        placeholder="0.00"
+                        readOnly={!isPriceUnlocked}
+                        className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                          isPriceUnlocked 
+                            ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
+                            : 'bg-zinc-100 border-zinc-200/80 text-zinc-600 cursor-not-allowed'
+                        }`}
+                        value={form.price}
+                        onChange={e => setForm({...form, price: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Modal PIN */}
@@ -453,7 +533,7 @@ export default function VercelActionForm() {
             <div className="pt-2">
               <button 
                 type="submit" 
-                disabled={loading}
+                disabled={loading || (mode === 'reserva' && (!form.guestName || !form.phone || !form.notes || !form.roomId || !form.unitId))}
                 className={`w-full font-semibold text-[15px] p-3.5 rounded-xl transition-all shadow-sm flex justify-center items-center active:scale-[0.98] ${
                   mode === 'reserva' 
                     ? 'bg-zinc-900 hover:bg-black text-white' 

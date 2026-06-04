@@ -37,6 +37,7 @@ interface Reserva {
   num_child?: number;
   deposit?: number;
   balance?: number;
+  notes?: string;
 }
 
 interface Task {
@@ -397,7 +398,11 @@ export default function RecepcionPage() {
         unit_id: walkinUnit || undefined,
         check_in: targetDate,
         check_out: nextDay,
-        guest_name: ''
+        guest_name: '',
+        guest_phone: '',
+        num_adult: 1,
+        num_child: 0,
+        notes: ''
       });
       setShowCheckInModal(true);
       fetchAvailability(targetDate, nextDay);
@@ -637,11 +642,15 @@ export default function RecepcionPage() {
           body: JSON.stringify({
             roomId: selectedReserva.room || '679077',
             unitId: selectedReserva.unit_id || '1',
-            checkIn: todayStr,
+            checkIn: selectedReserva.check_in || todayStr,
             checkOut: selectedReserva.check_out || todayStr,
             guestName: selectedReserva.guest_name || 'Walk-In',
             isBlock: false,
-            price: Number(paymentAmount || 0)
+            price: Number(paymentAmount || 0),
+            phone: selectedReserva.guest_phone || '',
+            numAdult: selectedReserva.num_adult || 1,
+            numChild: selectedReserva.num_child || 0,
+            notes: selectedReserva.notes || ''
           })
         });
         const resData = await bgRes.json();
@@ -684,7 +693,7 @@ export default function RecepcionPage() {
           reservation_id: beds24AssignedId,
           guest_name: selectedReserva.guest_name,
           room: roomNameHuman,
-          check_in_date: todayStr,
+          check_in_date: selectedReserva.check_in || todayStr,
           check_out_date: selectedReserva.check_out || todayStr,
           status: 'checked_in',
           checked_in_by: operatorName,
@@ -698,7 +707,7 @@ export default function RecepcionPage() {
           id: beds24AssignedId,
           guest_name: selectedReserva.guest_name,
           room: roomNameHuman,
-          check_in: todayStr,
+          check_in: selectedReserva.check_in || todayStr,
           check_out: selectedReserva.check_out || todayStr,
           checked_in: true,
           dni_image: finalDniUrl || undefined
@@ -1065,7 +1074,17 @@ export default function RecepcionPage() {
             <button
               onClick={() => {
                 setRoomInventory([]);
-                setSelectedReserva({ id: 'walkin', room: '101', check_in: todayStr, check_out: tomorrowStr, guest_name: '' });
+                setSelectedReserva({
+                  id: 'walkin',
+                  room: '101',
+                  check_in: todayStr,
+                  check_out: tomorrowStr,
+                  guest_name: '',
+                  guest_phone: '',
+                  num_adult: 1,
+                  num_child: 0,
+                  notes: ''
+                });
                 setShowCheckInModal(true);
                 fetchAvailability(todayStr, tomorrowStr);
               }}
@@ -1450,6 +1469,80 @@ export default function RecepcionPage() {
                       className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
                     />
                   </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">N. Móvil</label>
+                    <input
+                      type="text"
+                      value={selectedReserva.guest_phone || ''}
+                      onChange={e => setSelectedReserva({ ...selectedReserva, guest_phone: e.target.value })}
+                      placeholder="Ej. +52 55 1234 5678"
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Adultos</label>
+                      <div className="flex items-center bg-white border border-zinc-200 rounded-xl px-2 py-1 h-[42px] justify-between">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = selectedReserva.num_adult || 1;
+                            if (current > 1) {
+                              setSelectedReserva({ ...selectedReserva, num_adult: current - 1 });
+                            }
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-zinc-600 transition-all active:scale-90"
+                          disabled={(selectedReserva.num_adult || 1) <= 1}
+                        >
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span className="text-[14px] font-bold text-zinc-900 px-2 min-w-[24px] text-center">
+                          {selectedReserva.num_adult || 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = selectedReserva.num_adult || 1;
+                            setSelectedReserva({ ...selectedReserva, num_adult: current + 1 });
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg text-zinc-600 transition-all active:scale-90"
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Niños</label>
+                      <div className="flex items-center bg-white border border-zinc-200 rounded-xl px-2 py-1 h-[42px] justify-between">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = selectedReserva.num_child || 0;
+                            if (current > 0) {
+                              setSelectedReserva({ ...selectedReserva, num_child: current - 1 });
+                            }
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-zinc-600 transition-all active:scale-90"
+                          disabled={(selectedReserva.num_child || 0) <= 0}
+                        >
+                          <Minus size={14} strokeWidth={2.5} />
+                        </button>
+                        <span className="text-[14px] font-bold text-zinc-900 px-2 min-w-[24px] text-center">
+                          {selectedReserva.num_child || 0}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = selectedReserva.num_child || 0;
+                            setSelectedReserva({ ...selectedReserva, num_child: current + 1 });
+                          }}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg text-zinc-600 transition-all active:scale-90"
+                        >
+                          <Plus size={14} strokeWidth={2.5} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-In (Entrada)</label>
@@ -1521,6 +1614,15 @@ export default function RecepcionPage() {
                       </span>
                     </div>
                   )}
+                  <div>
+                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Nota</label>
+                    <textarea
+                      value={selectedReserva.notes || ''}
+                      onChange={e => setSelectedReserva({ ...selectedReserva, notes: e.target.value })}
+                      placeholder="Ej. Requiere factura, check-in temprano..."
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 h-16 resize-none"
+                    />
+                  </div>
                   <div>
                     <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
                       Seleccionar Habitación Libre {checkingAvail && '· buscando...'}
@@ -1772,7 +1874,13 @@ export default function RecepcionPage() {
                   if (selectedReserva.id !== 'walkin' && !dniPreview) return true;
 
                   // Validación campos Walk-in obligatorios
-                  if (selectedReserva.id === 'walkin' && (!selectedReserva.guest_name || !selectedReserva.unit_id)) return true;
+                  if (selectedReserva.id === 'walkin' && (
+                    !selectedReserva.guest_name || 
+                    !selectedReserva.unit_id || 
+                    !selectedReserva.guest_phone || 
+                    !selectedReserva.notes ||
+                    (selectedReserva.num_adult || 0) < 1
+                  )) return true;
 
                   // Calcular balance pendiente
                   const pendingBalance = selectedReserva.id === 'walkin'

@@ -24,7 +24,19 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { roomId, unitId, checkIn, checkOut, guestName, isBlock = false, price } = body;
+    const { 
+      roomId, 
+      unitId, 
+      checkIn, 
+      checkOut, 
+      guestName, 
+      isBlock = false, 
+      price,
+      phone,
+      numAdult,
+      numChild,
+      notes
+    } = body;
 
     if (!roomId || !unitId || !checkIn || !checkOut) {
       return NextResponse.json({ error: 'Faltan parámetros: roomId, unitId, checkIn, checkOut' }, { status: 400 });
@@ -49,6 +61,14 @@ export async function POST(req: Request) {
         firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
         status: isBlock ? "black" : "confirmed",
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
+        ...(!isBlock ? {
+          mobile: phone || '',
+          phone: phone || '',
+          numAdult: numAdult !== undefined ? Number(numAdult) : 1,
+          numChild: numChild !== undefined ? Number(numChild) : 0,
+          notes: notes || '',
+          comments: notes || ''
+        } : {}),
         actions: {
           checkAvailability: true,
           assignBooking: true
