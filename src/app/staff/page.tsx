@@ -17,6 +17,13 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+function getLocalDateStr(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Habitaciones físicas consistentes (101 a 402) según requerimiento de Jaroje OS
 const ROOMS = [
   '101','102','103','104','105','106','107',
@@ -134,18 +141,29 @@ function getRoomOperationalStatus(
   activeReservations: any[],
   todayStr: string,
   lastUpdatedAt?: string
-): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' {
+): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' {
   const isUpdatedToday = lastUpdatedAt && lastUpdatedAt.startsWith(todayStr);
 
-  // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato
+  const hasResToday = activeReservations.some(r => {
+    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
+    const matches = rRoom.includes(roomNum);
+    const isActiveToday = (r.check_in <= todayStr && r.check_out > todayStr) || (r.check_in === todayStr);
+    return matches && isActiveToday && !r.checked_out;
+  });
+
+  // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato si es limpieza/sucio
   if (isUpdatedToday) {
-    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpieza terminada)
     if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Aviso Check Out)
     if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
-    if (dbStatus === 'disponible') return 'disponible'; // Verde (Disponible)
+    if (dbStatus === 'limpia') {
+      return hasResToday ? 'ocupada' : 'limpia'; // Si está reservada hoy, no se muestra limpia/disponible
+    }
+    if (dbStatus === 'disponible') {
+      return hasResToday ? 'ocupada' : 'disponible';
+    }
   }
 
-  // 2. Si es de ayer o antes (estatus obsoleto), ignorar la DB y calcular fresh de Beds24 para hoy:
+  // 2. Si es de ayer o antes (estatus obsoleto), calcular fresh de Beds24 para hoy:
 
   // Buscar si hay una reserva activa hoy para estancia (Stayover)
   const currentRes = activeReservations.find(r => {
@@ -181,6 +199,10 @@ function getRoomOperationalStatus(
     return 'limpieza_programada'; // Amarillo automático por checkout programado hoy
   }
 
+  if (hasResToday) {
+    return 'ocupada';
+  }
+
   // 3. Si no tiene salida ni estancia programada que requiera limpieza hoy, está disponible
   return 'disponible'; // Verde por defecto
 }
@@ -188,6 +210,7 @@ function getRoomOperationalStatus(
 export default function StaffPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [todayStr, setTodayStr] = useState('');
   const [inventory, setInventory] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
   const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping'>('tareas');
@@ -363,7 +386,6 @@ export default function StaffPage() {
   };
 
   const [form, setForm] = useState({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: 'General', description: '' });
-  const todayStr = new Date().toISOString().split('T')[0];
 
   // Lock body on modal open and hide bottom navigation bar
   useEffect(() => {
@@ -416,6 +438,7 @@ export default function StaffPage() {
   };
 
   useEffect(() => {
+    setTodayStr(getLocalDateStr());
     fetchData();
 
     // ── SUPABASE REALTIME EN TIEMPO REAL PARA ROOM_STATUS ──
@@ -1684,6 +1707,10 @@ export default function StaffPage() {
                         bg = 'bg-emerald-500 text-white border-emerald-600 shadow-lg shadow-emerald-500/10';
                         label = '🟢 Disponible';
                         desc = 'La habitación está limpia, ha sido aprobada físicamente por Recepción y se encuentra lista para renta.';
+                      } else if (operStatus === 'ocupada') {
+                        bg = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                        label = '⚪ Ocupada / Reservada';
+                        desc = 'La habitación cuenta con una estancia activa o una llegada programada para el día de hoy, por lo que no está disponible para nuevos walk-ins.';
                       } else if (isCleanTerminated) {
                         bg = 'bg-blue-500 text-white border-blue-600 shadow-lg shadow-blue-500/10';
                         label = '🔵 Limpieza Terminada';

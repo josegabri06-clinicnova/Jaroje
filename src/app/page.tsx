@@ -916,6 +916,10 @@ export default function AdminDashboard() {
                         bg = 'bg-emerald-500 text-white border-emerald-600 shadow-lg shadow-emerald-500/10';
                         label = '🟢 Disponible';
                         desc = 'La habitación se encuentra limpia, inspeccionada y lista para recibir huéspedes de check-in inmediato.';
+                      } else if (operStatus === 'ocupada') {
+                        bg = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                        label = '⚪ Ocupada / Reservada';
+                        desc = 'La habitación cuenta con una estancia activa o una llegada programada para el día de hoy, por lo que no está disponible para nuevos walk-ins.';
                       } else if (operStatus === 'sucio_checkout') {
                         bg = 'bg-rose-500 text-white border-rose-600 shadow-lg shadow-rose-500/10';
                         label = '🔴 Check Out';
@@ -961,32 +965,34 @@ export default function AdminDashboard() {
 
                   <div className="pt-2 space-y-2">
                     {/* Botones rápidos de control de estatus */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => handleUpdateRoomStatus('disponible')}
-                        className="py-3 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <span>Marcar Disponible</span>
-                      </button>
-                      <button
-                        onClick={() => handleUpdateRoomStatus('limpia')}
-                        className="py-3 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <span>Marcar Limpia (Azul)</span>
-                      </button>
-                      <button
-                        onClick={() => handleUpdateRoomStatus('en_limpieza')}
-                        className="py-3 px-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <span>Iniciar Limpieza</span>
-                      </button>
-                      <button
-                        onClick={() => handleUpdateRoomStatus('sucio_checkout')}
-                        className="py-3 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                      >
-                        <span>Marcar Check Out</span>
-                      </button>
-                    </div>
+                    {operStatus !== 'ocupada' && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => handleUpdateRoomStatus('disponible')}
+                          className="py-3 px-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <span>Marcar Disponible</span>
+                        </button>
+                        <button
+                          onClick={() => handleUpdateRoomStatus('limpia')}
+                          className="py-3 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <span>Marcar Limpia (Azul)</span>
+                        </button>
+                        <button
+                          onClick={() => handleUpdateRoomStatus('en_limpieza')}
+                          className="py-3 px-2 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <span>Iniciar Limpieza</span>
+                        </button>
+                        <button
+                          onClick={() => handleUpdateRoomStatus('sucio_checkout')}
+                          className="py-3 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl font-bold text-[11px] transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <span>Marcar Check Out</span>
+                        </button>
+                      </div>
+                    )}
 
                     <button
                       onClick={() => {
