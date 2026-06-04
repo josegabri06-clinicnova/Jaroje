@@ -1622,60 +1622,8 @@ export default function RecepcionPage() {
               {selectedReserva.id === 'walkin' ? (
                 // Lógica de Walk-In
                 <div className="space-y-5">
-                  <div>
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nombre del Huésped</label>
-                    <input
-                      type="text"
-                      value={selectedReserva.guest_name}
-                      onChange={e => setSelectedReserva({ ...selectedReserva, guest_name: e.target.value })}
-                      placeholder="Ej. Carlos Slim"
-                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">N. Móvil</label>
-                    <input
-                      type="text"
-                      value={selectedReserva.guest_phone || ''}
-                      onChange={e => setSelectedReserva({ ...selectedReserva, guest_phone: e.target.value })}
-                      placeholder="Ej. +52 55 1234 5678"
-                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setSelectedReserva({
-                            ...selectedReserva,
-                            num_adult: val === '' ? '' : Math.max(1, Number(val)) as any
-                          });
-                        }}
-                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setSelectedReserva({
-                            ...selectedReserva,
-                            num_child: val === '' ? '' : Math.max(0, Number(val)) as any
-                          });
-                        }}
-                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                      />
-                    </div>
-                  </div>
+                  
+                  {/* 1. Fechas y Noches */}
                   <div className="grid grid-cols-2 gap-3.5">
                     <div>
                       <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Check-In (Entrada)</label>
@@ -1738,15 +1686,8 @@ export default function RecepcionPage() {
                       </span>
                     </div>
                   )}
-                  <div>
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nota / Comentarios (Opcional)</label>
-                    <textarea
-                      value={selectedReserva.notes || ''}
-                      onChange={e => setSelectedReserva({ ...selectedReserva, notes: e.target.value })}
-                      placeholder="Ej. Requiere factura, check-in temprano..."
-                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
-                    />
-                  </div>
+
+                  {/* 2. Seleccionar Habitación */}
                   <div className="space-y-3 pt-2">
                     <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Seleccionar Habitación Libre {checkingAvail && '· buscando...'}</label>
 
@@ -1836,6 +1777,75 @@ export default function RecepcionPage() {
                             </button>
                           </span>
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. Datos del Huésped (se muestran solo tras seleccionar una habitación) */}
+                  {((selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0) || selectedReserva.unit_id) && (
+                    <div className="space-y-5 pt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                      <div>
+                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nombre del Huésped</label>
+                        <input
+                          type="text"
+                          value={selectedReserva.guest_name}
+                          onChange={e => setSelectedReserva({ ...selectedReserva, guest_name: e.target.value })}
+                          placeholder="Ej. Carlos Slim"
+                          className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">N. Móvil</label>
+                        <input
+                          type="text"
+                          value={selectedReserva.guest_phone || ''}
+                          onChange={e => setSelectedReserva({ ...selectedReserva, guest_phone: e.target.value })}
+                          placeholder="Ej. +52 55 1234 5678"
+                          className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3.5">
+                        <div>
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
+                          <input
+                            type="number"
+                            min={1}
+                            value={selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setSelectedReserva({
+                                ...selectedReserva,
+                                num_adult: val === '' ? '' : Math.max(1, Number(val)) as any
+                              });
+                            }}
+                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
+                          <input
+                            type="number"
+                            min={0}
+                            value={selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setSelectedReserva({
+                                ...selectedReserva,
+                                num_child: val === '' ? '' : Math.max(0, Number(val)) as any
+                              });
+                            }}
+                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nota / Comentarios (Opcional)</label>
+                        <textarea
+                          value={selectedReserva.notes || ''}
+                          onChange={e => setSelectedReserva({ ...selectedReserva, notes: e.target.value })}
+                          placeholder="Ej. Requiere factura, check-in temprano..."
+                          className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
+                        />
                       </div>
                     </div>
                   )}
