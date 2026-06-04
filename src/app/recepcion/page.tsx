@@ -329,6 +329,15 @@ export default function RecepcionPage() {
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
+  const [typedNights, setTypedNights] = useState<string>('');
+
+  useEffect(() => {
+    if (selectedReserva?.check_in && selectedReserva?.check_out) {
+      setTypedNights(String(getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out)));
+    } else {
+      setTypedNights('');
+    }
+  }, [selectedReserva?.check_in, selectedReserva?.check_out]);
 
   // Modal Mtto
   const [showForm, setShowForm] = useState(false);
@@ -1698,10 +1707,21 @@ export default function RecepcionPage() {
                       <input
                         type="number"
                         min={1}
-                        value={getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out)}
+                        value={typedNights}
                         onChange={e => {
-                          const newNights = Math.max(1, Number(e.target.value) || 1);
-                          const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
+                          const val = e.target.value;
+                          setTypedNights(val);
+                          const num = Number(val);
+                          if (num > 0) {
+                            const newOut = addDaysToDateStr(selectedReserva.check_in, num);
+                            setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
+                            fetchAvailability(selectedReserva.check_in, newOut);
+                          }
+                        }}
+                        onBlur={() => {
+                          const num = Math.max(1, Number(typedNights) || 1);
+                          setTypedNights(String(num));
+                          const newOut = addDaysToDateStr(selectedReserva.check_in, num);
                           setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
                           fetchAvailability(selectedReserva.check_in, newOut);
                         }}

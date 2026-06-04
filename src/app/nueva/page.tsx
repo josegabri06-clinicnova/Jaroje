@@ -78,7 +78,7 @@ export default function VercelActionForm() {
     notes: ''
   });
 
-  const [nights, setNights] = useState<number>(1);
+  const [nights, setNights] = useState<number | ''>(1);
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
@@ -339,7 +339,7 @@ export default function VercelActionForm() {
                 if (newCheckIn && newCheckIn < todayStr) {
                   newCheckIn = todayStr;
                 }
-                const newCheckOut = addDaysToDateStr(newCheckIn, nights);
+                const newCheckOut = addDaysToDateStr(newCheckIn, Number(nights) || 1);
                 setForm({...form, checkIn: newCheckIn, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: []});
               }}
             />
@@ -353,10 +353,24 @@ export default function VercelActionForm() {
               className="w-full min-w-0 max-w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl px-2.5 py-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={nights}
               onChange={e => {
-                const newNights = Math.max(1, Number(e.target.value) || 1);
-                setNights(newNights);
+                const val = e.target.value;
+                if (val === '') {
+                  setNights('');
+                  return;
+                }
+                const num = Number(val);
+                if (isNaN(num)) return;
+                setNights(num);
                 if (form.checkIn) {
-                  const newCheckOut = addDaysToDateStr(form.checkIn, newNights);
+                  const newCheckOut = addDaysToDateStr(form.checkIn, num);
+                  setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
+                }
+              }}
+              onBlur={() => {
+                const num = Math.max(1, Number(nights) || 1);
+                setNights(num);
+                if (form.checkIn) {
+                  const newCheckOut = addDaysToDateStr(form.checkIn, num);
                   setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
                 }
               }}
