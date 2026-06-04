@@ -169,7 +169,7 @@ export default function AdminDashboard() {
               room: res.room_name || res.room || 'Sin asignar',
               checked_in: checkinMap[String(res.id)]?.status === 'checked_in',
               checked_out: checkinMap[String(res.id)]?.status === 'checked_out',
-              dni_image: checkinMap[String(res.id)]?.dni_image
+              dni_image: checkinMap[String(res.id)]?.document_url
             }))
           );
         }

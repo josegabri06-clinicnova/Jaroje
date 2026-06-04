@@ -249,8 +249,7 @@ export default function ReservasList() {
         check_out_date: selectedRes.check_out,
         status: 'checked_in',
         checked_in_by: 'Admin',
-        document_url: document_url,
-        dni_image: document_url
+        document_url: document_url
       }, { onConflict: 'reservation_id' });
 
       if (upsertErr) {

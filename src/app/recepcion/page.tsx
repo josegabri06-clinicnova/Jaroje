@@ -585,7 +585,7 @@ export default function RecepcionPage() {
               room: res.room_name || res.room || 'Sin asignar',
               checked_in: alreadyCheckedIn || checkinMap[String(res.id)]?.status === 'checked_in',
               checked_out: checkinMap[String(res.id)]?.status === 'checked_out',
-              dni_image: checkinMap[String(res.id)]?.dni_image
+              dni_image: checkinMap[String(res.id)]?.document_url
             };
           });
         });
@@ -766,7 +766,6 @@ export default function RecepcionPage() {
             check_out_date: selectedReserva.check_out || todayStr,
             status: 'checked_in',
             checked_in_by: operatorName,
-            dni_image: finalDniUrl || null,
             document_url: finalDniUrl || null
           }, { onConflict: 'reservation_id' });
 
@@ -911,7 +910,6 @@ export default function RecepcionPage() {
         check_out_date: selectedReserva.check_out,
         status: 'checked_in',
         checked_in_by: operatorName,
-        dni_image: finalDniUrl || null,
         document_url: finalDniUrl || null
       }, { onConflict: 'reservation_id' });
 
