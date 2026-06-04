@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, CheckCircle2, Lock, Unlock } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, Lock, Unlock, X } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { getUnitName, getRoomMetadata } from '@/lib/beds24';
 import { format, parseISO } from 'date-fns';
@@ -66,6 +66,7 @@ export default function VercelActionForm() {
   const [form, setForm] = useState({
     roomId: '',
     unitId: '',
+    groupRooms: [] as { roomId: string; unitId: string; name: string }[],
     checkIn: '',
     checkOut: '',
     guestName: '',
@@ -88,9 +89,8 @@ export default function VercelActionForm() {
 
   // Calcular precio automático
   useEffect(() => {
-    if (form.roomId && form.checkIn && form.checkOut && !isPriceUnlocked) {
+    if (form.checkIn && form.checkOut && !isPriceUnlocked) {
       const season = getSeason(form.checkIn);
-      const basePrice = PRICES[form.roomId]?.[season] || 0;
       
       const diffTime = Math.abs(new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime());
       const nights = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
@@ -99,14 +99,28 @@ export default function VercelActionForm() {
       if (form.channel === 'Airbnb') multiplier = 1.25;
       if (form.channel === 'Booking.com') multiplier = 1.10;
 
-      const priceWithChannel = Math.round(basePrice * multiplier);
-      const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
-      const totalPerNight = priceWithChannel + tax;
-      const totalStay = totalPerNight * nights;
+      let totalStay = 0;
+      const group = form.groupRooms || [];
+
+      if (group.length > 0) {
+        group.forEach(gr => {
+          const basePrice = PRICES[gr.roomId]?.[season] || 0;
+          const priceWithChannel = Math.round(basePrice * multiplier);
+          const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
+          const totalPerNight = priceWithChannel + tax;
+          totalStay += totalPerNight * nights;
+        });
+      } else if (form.roomId) {
+        const basePrice = PRICES[form.roomId]?.[season] || 0;
+        const priceWithChannel = Math.round(basePrice * multiplier);
+        const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
+        const totalPerNight = priceWithChannel + tax;
+        totalStay = totalPerNight * nights;
+      }
 
       setForm(prev => ({ ...prev, price: totalStay.toString() }));
     }
-  }, [form.roomId, form.checkIn, form.checkOut, form.channel, isPriceUnlocked]);
+  }, [form.roomId, form.groupRooms, form.checkIn, form.checkOut, form.channel, isPriceUnlocked]);
 
   const handleUnlockPrice = () => {
     if (pinInput === '1234') { // PIN Hardcodeado o del env
@@ -147,8 +161,9 @@ export default function VercelActionForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!form.roomId || !form.unitId) {
-      return alert("Por favor, selecciona una habitación física específica.");
+    const hasRoomSelected = (form.groupRooms && form.groupRooms.length > 0) || (form.roomId && form.unitId);
+    if (!hasRoomSelected) {
+      return alert("Por favor, selecciona al menos una habitación física específica.");
     }
 
     if (mode === 'reserva') {
@@ -161,80 +176,95 @@ export default function VercelActionForm() {
 
     try {
       const isBlock = mode === 'bloqueo';
-      const payload = {
-        roomId: form.roomId,
-        unitId: form.unitId,
-        checkIn: form.checkIn,
-        checkOut: form.checkOut,
-        guestName: form.guestName,
-        isBlock,
-        price: isBlock ? 0 : Number(form.price),
-        phone: isBlock ? '' : form.phone,
-        numAdult: isBlock ? 1 : (Number(form.numAdult) || 1),
-        numChild: isBlock ? 0 : (Number(form.numChild) || 0),
-        notes: isBlock ? '' : (form.notes || ''),
-      };
-
-      const bgRes = await fetch('/api/reservas', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
       
-      const responseData = await bgRes.json();
+      const roomsToBook = form.groupRooms && form.groupRooms.length > 0
+        ? form.groupRooms
+        : [{
+            roomId: form.roomId,
+            unitId: form.unitId,
+            name: getUnitName(form.roomId, form.unitId) || form.unitId
+          }];
 
-      if (!bgRes.ok) throw new Error(responseData.error || 'Error al conectar con Beds24');
+      const totalRooms = roomsToBook.length;
+      const totalPayment = isBlock ? 0 : Number(form.price || 0);
+      const pricePerRoom = Math.round(totalPayment / totalRooms);
+      const roomNamesList = roomsToBook.map(r => r.name).join(', ');
 
-      alert(mode === 'reserva' 
-        ? '¡Éxito! Reserva conectada hacia Beds24 y confirmada en la unidad seleccionada.' 
-        : '¡Éxito! Bloqueo aplicado en la unidad seleccionada.');
+      for (const room of roomsToBook) {
+        const payload = {
+          roomId: room.roomId,
+          unitId: room.unitId,
+          checkIn: form.checkIn,
+          checkOut: form.checkOut,
+          guestName: form.guestName,
+          isBlock,
+          price: pricePerRoom,
+          phone: isBlock ? '' : form.phone,
+          numAdult: isBlock ? 1 : (Number(form.numAdult) || 1),
+          numChild: isBlock ? 0 : (Number(form.numChild) || 0),
+          notes: isBlock ? '' : `${form.notes || ''}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`,
+        };
 
-      // Registrar auditoría rica 360
-      try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
-        
-        const unitNum = getUnitName(form.roomId, form.unitId) || form.unitId;
-        const roomMeta = getRoomMetadata(form.roomId, null);
-        const roomDisplayName = roomMeta ? `${roomMeta.nombre} (${unitNum})` : `Habitación ${unitNum}`;
-        
-        await fetch('/api/employee-logs', {
+        const bgRes = await fetch('/api/reservas', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            employee_num: employeeNum,
-            employee_name: employeeName,
-            department: employeeDept,
-            module: 'recepcion',
-            action: isBlock ? 'bloqueo_habitacion' : 'reserva_creada',
-            room: unitNum,
-            details: JSON.stringify({
-              text: isBlock 
-                ? `Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}. Motivo: ${form.guestName || 'Mantenimiento'}`
-                : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${form.price} vía ${form.channel}`,
-              reserva: {
-                guestName: form.guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
-                roomId: form.roomId,
-                unitId: form.unitId,
-                roomName: roomDisplayName,
-                checkIn: form.checkIn,
-                checkOut: form.checkOut,
-                price: isBlock ? 0 : Number(form.price),
-                channel: form.channel,
-                isBlock
-              }
-            })
-          })
+          body: JSON.stringify(payload)
         });
-      } catch (logErr) {
-        console.error("Error registrando log de reserva/bloqueo:", logErr);
+        
+        const responseData = await bgRes.json();
+
+        if (!bgRes.ok) throw new Error(responseData.error || `Error al registrar habitación ${room.name} en Beds24`);
+
+        // Registrar auditoría rica 360 por habitación
+        try {
+          const emp = getActiveEmployee('recepcion');
+          const employeeNum = emp?.employee_num || '999';
+          const employeeName = emp?.full_name || 'Administrador';
+          const employeeDept = emp?.department || 'recepcion';
+          
+          const roomMeta = getRoomMetadata(room.roomId, null);
+          const roomDisplayName = roomMeta ? `${roomMeta.nombre} (${room.name})` : `Habitación ${room.name}`;
+          
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              employee_num: employeeNum,
+              employee_name: employeeName,
+              department: employeeDept,
+              module: 'recepcion',
+              action: isBlock ? 'bloqueo_habitacion' : 'reserva_creada',
+              room: room.name,
+              details: JSON.stringify({
+                text: isBlock 
+                  ? `Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}. Motivo: ${form.guestName || 'Mantenimiento'}`
+                  : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${pricePerRoom} vía ${form.channel}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`,
+                reserva: {
+                  guestName: form.guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
+                  roomId: room.roomId,
+                  unitId: room.unitId,
+                  roomName: roomDisplayName,
+                  checkIn: form.checkIn,
+                  checkOut: form.checkOut,
+                  price: pricePerRoom,
+                  channel: form.channel,
+                  isBlock
+                }
+              })
+            })
+          });
+        } catch (logErr) {
+          console.error("Error registrando log de reserva/bloqueo:", logErr);
+        }
       }
+
+      alert(mode === 'reserva' 
+        ? '¡Éxito! Reserva(s) conectada(s) hacia Beds24 y confirmada(s) en la(s) unidad(es) seleccionada(s).' 
+        : '¡Éxito! Bloqueo(s) aplicado(s) en la(s) unidad(es) seleccionada(s).');
       
       router.push('/reservas');
     } catch (err: any) {
@@ -310,7 +340,7 @@ export default function VercelActionForm() {
                   newCheckIn = todayStr;
                 }
                 const newCheckOut = addDaysToDateStr(newCheckIn, nights);
-                setForm({...form, checkIn: newCheckIn, checkOut: newCheckOut, roomId: '', unitId: ''});
+                setForm({...form, checkIn: newCheckIn, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: []});
               }}
             />
           </div>
@@ -327,7 +357,7 @@ export default function VercelActionForm() {
                 setNights(newNights);
                 if (form.checkIn) {
                   const newCheckOut = addDaysToDateStr(form.checkIn, newNights);
-                  setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '' }));
+                  setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
                 }
               }}
             />
@@ -357,13 +387,39 @@ export default function VercelActionForm() {
                     <h4 className="text-[12px] font-bold text-zinc-700 mb-2">{roomGroup.name}</h4>
                     <div className="flex flex-wrap gap-2">
                       {roomGroup.units.map((u: any) => {
-                        const isSelected = form.roomId === roomGroup.roomId && form.unitId === u.unitId;
+                        const isSelected = form.groupRooms?.some(gr => gr.roomId === roomGroup.roomId && gr.unitId === u.unitId) || (form.roomId === roomGroup.roomId && form.unitId === u.unitId);
                         return (
                           <button
                             key={u.unitId}
                             type="button"
                             disabled={!u.isAvailable}
-                            onClick={() => setForm({ ...form, roomId: roomGroup.roomId, unitId: u.unitId })}
+                            onClick={() => {
+                              const currentGroup = form.groupRooms || [];
+                              let baseGroup = currentGroup;
+                              if (baseGroup.length === 0 && form.roomId && form.unitId) {
+                                baseGroup = [{
+                                  roomId: form.roomId,
+                                  unitId: form.unitId,
+                                  name: getUnitName(form.roomId, form.unitId) || form.unitId
+                                }];
+                              }
+
+                              const exists = baseGroup.some(gr => gr.roomId === roomGroup.roomId && gr.unitId === u.unitId);
+                              let newGroup;
+                              if (exists) {
+                                newGroup = baseGroup.filter(gr => !(gr.roomId === roomGroup.roomId && gr.unitId === u.unitId));
+                              } else {
+                                newGroup = [...baseGroup, { roomId: roomGroup.roomId, unitId: u.unitId, name: u.name }];
+                              }
+
+                              const last = newGroup[newGroup.length - 1];
+                              setForm({
+                                ...form,
+                                groupRooms: newGroup,
+                                roomId: last ? last.roomId : '',
+                                unitId: last ? last.unitId : ''
+                              });
+                            }}
                             className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all ${
                               !u.isAvailable 
                                 ? 'bg-zinc-200/50 text-zinc-400 cursor-not-allowed line-through' 
@@ -379,6 +435,35 @@ export default function VercelActionForm() {
                     </div>
                   </div>
                 ))}
+
+                {form.groupRooms && form.groupRooms.length > 0 && (
+                  <div className="bg-blue-50 border border-blue-200/60 rounded-xl p-3 space-y-1.5 animate-in fade-in duration-200">
+                    <span className="text-[10px] font-bold text-blue-700 uppercase tracking-widest block">Habitaciones Seleccionadas ({form.groupRooms.length})</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {form.groupRooms.map(gr => (
+                        <span key={`${gr.roomId}_${gr.unitId}`} className="px-2.5 py-1 bg-white border border-blue-200 text-blue-800 text-[11px] font-black rounded-lg shadow-sm flex items-center gap-1">
+                          {gr.name}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newGroup = form.groupRooms!.filter(x => !(x.roomId === gr.roomId && x.unitId === gr.unitId));
+                              const last = newGroup[newGroup.length - 1];
+                              setForm({
+                                ...form,
+                                groupRooms: newGroup,
+                                roomId: last ? last.roomId : '',
+                                unitId: last ? last.unitId : ''
+                              });
+                            }}
+                            className="w-3.5 h-3.5 rounded-full hover:bg-zinc-100 flex items-center justify-center text-blue-500 hover:text-blue-700 transition-colors"
+                          >
+                            <X size={10} strokeWidth={3} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
                <div className="text-[13px] text-zinc-500 bg-zinc-50 p-4 rounded-xl border border-zinc-200">No hay disponibilidad o revisa las fechas.</div>
@@ -538,7 +623,7 @@ export default function VercelActionForm() {
             <div className="pt-2">
               <button 
                 type="submit" 
-                disabled={loading || (mode === 'reserva' && (!form.guestName || !form.phone || !form.notes || !form.roomId || !form.unitId))}
+                disabled={loading || (mode === 'reserva' && (!form.guestName || !form.phone || !((form.groupRooms && form.groupRooms.length > 0) || (form.roomId && form.unitId))))}
                 className={`w-full font-semibold text-[15px] p-3.5 rounded-xl transition-all shadow-sm flex justify-center items-center active:scale-[0.98] ${
                   mode === 'reserva' 
                     ? 'bg-zinc-900 hover:bg-black text-white' 

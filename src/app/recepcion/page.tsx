@@ -1604,30 +1604,30 @@ export default function RecepcionPage() {
               
               {selectedReserva.id === 'walkin' ? (
                 // Lógica de Walk-In
-                <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Nombre del Huésped</label>
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nombre del Huésped</label>
                     <input
                       type="text"
                       value={selectedReserva.guest_name}
                       onChange={e => setSelectedReserva({ ...selectedReserva, guest_name: e.target.value })}
                       placeholder="Ej. Carlos Slim"
-                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">N. Móvil</label>
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">N. Móvil</label>
                     <input
                       type="text"
                       value={selectedReserva.guest_phone || ''}
                       onChange={e => setSelectedReserva({ ...selectedReserva, guest_phone: e.target.value })}
                       placeholder="Ej. +52 55 1234 5678"
-                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3.5">
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Adultos</label>
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
                       <input
                         type="number"
                         min={1}
@@ -1639,11 +1639,11 @@ export default function RecepcionPage() {
                             num_adult: val === '' ? '' : Math.max(1, Number(val)) as any
                           });
                         }}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Niños</label>
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
                       <input
                         type="number"
                         min={0}
@@ -1655,13 +1655,13 @@ export default function RecepcionPage() {
                             num_child: val === '' ? '' : Math.max(0, Number(val)) as any
                           });
                         }}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3.5">
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Check-In (Entrada)</label>
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Check-In (Entrada)</label>
                       <input
                         key={todayStr ? `walkin-in-${todayStr}` : 'walkin-in-loading'}
                         type="date"
@@ -1682,82 +1682,58 @@ export default function RecepcionPage() {
                           });
                           fetchAvailability(newIn, newOut);
                         }}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Noches</label>
-                      <div className="flex items-center bg-white border border-zinc-200 rounded-xl px-2 py-1 h-[42px] justify-between">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
-                            if (currentNights > 1) {
-                              const newNights = currentNights - 1;
-                              const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
-                              setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
-                              fetchAvailability(selectedReserva.check_in, newOut);
-                            }
-                          }}
-                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-zinc-600 transition-all active:scale-90"
-                          disabled={getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out) <= 1}
-                        >
-                          <Minus size={14} strokeWidth={2.5} />
-                        </button>
-                        <span className="text-[14px] font-bold text-zinc-900 px-2 min-w-[24px] text-center">
-                          {getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out)}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
-                            const newNights = currentNights + 1;
-                            const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
-                            setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
-                            fetchAvailability(selectedReserva.check_in, newOut);
-                          }}
-                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg text-zinc-600 transition-all active:scale-90"
-                        >
-                          <Plus size={14} strokeWidth={2.5} />
-                        </button>
-                      </div>
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Noches</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out)}
+                        onChange={e => {
+                          const newNights = Math.max(1, Number(e.target.value) || 1);
+                          const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
+                          setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
+                          fetchAvailability(selectedReserva.check_in, newOut);
+                        }}
+                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
+                      />
                     </div>
                   </div>
 
                   {selectedReserva.check_out && (
-                    <div className="flex items-center gap-2.5 bg-zinc-100/60 border border-zinc-200/40 rounded-xl px-3 py-2 text-zinc-600 animate-in fade-in duration-200">
-                      <Calendar size={13} className="text-zinc-400 shrink-0" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Check-Out (Salida):</span>
-                      <span className="text-[12px] font-black text-zinc-800">
+                    <div className="text-[12px] font-medium text-zinc-500 bg-zinc-50 border border-zinc-200/60 p-3.5 rounded-xl flex items-center gap-2 animate-in fade-in duration-200 shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                      <span className="font-semibold uppercase tracking-wider text-[10px] text-zinc-400">Check-Out (Salida):</span>
+                      <span className="font-bold text-zinc-800">
                         {format(parseISO(selectedReserva.check_out), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}
                       </span>
                     </div>
                   )}
                   <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Nota</label>
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nota / Comentarios (Opcional)</label>
                     <textarea
                       value={selectedReserva.notes || ''}
                       onChange={e => setSelectedReserva({ ...selectedReserva, notes: e.target.value })}
                       placeholder="Ej. Requiere factura, check-in temprano..."
-                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 h-16 resize-none"
+                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
                     />
                   </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
-                      Seleccionar Habitación Libre {checkingAvail && '· buscando...'}
-                    </label>
+                  <div className="space-y-3 pt-2">
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Seleccionar Habitación Libre {checkingAvail && '· buscando...'}</label>
 
                     {roomInventory.length > 0 ? (
-                      <div className="space-y-3 pr-1">
+                      <div className="space-y-4">
                         {roomInventory.map((roomGroup: any) => (
-                          <div key={roomGroup.roomId} className="space-y-1">
-                            <p className="text-[11px] font-bold text-zinc-700">{roomGroup.name}</p>
-                            <div className="flex flex-wrap gap-1.5">
+                          <div key={roomGroup.roomId} className="bg-zinc-50 border border-zinc-200/60 rounded-xl p-3">
+                            <h4 className="text-[12px] font-bold text-zinc-700 mb-2">{roomGroup.name}</h4>
+                            <div className="flex flex-wrap gap-2">
                               {roomGroup.units.map((u: any) => {
                                 const isSelected = selectedReserva.groupRooms?.some(gr => gr.roomId === roomGroup.roomId && gr.unitId === u.unitId) || (selectedReserva.room === roomGroup.roomId && selectedReserva.unit_id === u.unitId);
                                 return (
                                   <button
                                     key={u.unitId}
+                                    type="button"
                                     disabled={!u.isAvailable}
                                     onClick={() => {
                                       const currentGroup = selectedReserva.groupRooms || [];
@@ -1786,12 +1762,12 @@ export default function RecepcionPage() {
                                         unit_id: last ? last.unitId : ''
                                       });
                                     }}
-                                    className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                                    className={`px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all ${
                                       !u.isAvailable
-                                        ? 'bg-zinc-100 border-zinc-200 text-zinc-300 line-through cursor-not-allowed'
+                                        ? 'bg-zinc-200/50 text-zinc-400 cursor-not-allowed line-through'
                                         : isSelected
-                                        ? 'bg-zinc-900 border-zinc-900 text-white shadow-sm'
-                                        : 'bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50'
+                                        ? 'bg-zinc-900 text-white shadow-md scale-105'
+                                        : 'bg-white border border-zinc-200 text-zinc-700 hover:border-zinc-400 hover:bg-zinc-100'
                                     }`}
                                   >
                                     {u.name}
@@ -1803,9 +1779,7 @@ export default function RecepcionPage() {
                         ))}
                       </div>
                     ) : (
-                      <div className="bg-white border border-zinc-200/80 p-3 rounded-xl text-center">
-                        <p className="text-[11px] text-zinc-400 font-medium">Ingresa fechas válidas para buscar disponibilidad.</p>
-                      </div>
+                      <div className="text-[13px] text-zinc-500 bg-zinc-50 p-4 rounded-xl border border-zinc-200">Ingresa fechas válidas para buscar disponibilidad.</div>
                     )}
                   </div>
 
@@ -1985,29 +1959,31 @@ export default function RecepcionPage() {
                       </div>
                     )}
                     <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-base">$</span>
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
                       <input
                         type="number"
                         value={paymentAmount}
                         onChange={e => setPaymentAmount(e.target.value)}
                         placeholder="0.00"
                         readOnly={selectedReserva.id === 'walkin' && !isPriceUnlocked}
-                        className={`w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-8 pr-4 font-bold text-[15px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 ${
-                          (selectedReserva.id === 'walkin' && !isPriceUnlocked) ? 'bg-zinc-100/60 text-zinc-400 cursor-not-allowed' : ''
+                        className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                          (selectedReserva.id === 'walkin' && !isPriceUnlocked)
+                            ? 'bg-zinc-100 border-zinc-200/80 text-zinc-600 cursor-not-allowed shadow-none'
+                            : 'bg-[#fafafa] border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm'
                         }`}
                       />
                     </div>
 
                     {/* Selector de cuenta/sobre */}
                     <div className="space-y-1.5 pt-1">
-                      <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
                         ¿A qué sobre va el dinero?
                       </label>
                       <select
                         value={selectedAccountId}
                         onChange={e => setSelectedAccountId(e.target.value)}
                         required
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 text-[13px] font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 cursor-pointer animate-in slide-in-from-top-1 duration-200"
+                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
                       >
                         <option value="" disabled>Selecciona un sobre...</option>
                         {accounts
