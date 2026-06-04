@@ -152,8 +152,8 @@ export default function VercelActionForm() {
     }
 
     if (mode === 'reserva') {
-      if (!form.guestName || !form.phone || !form.notes || form.numAdult < 1) {
-        return alert("Por favor, rellene todos los campos obligatorios: Nombre del Huésped, N. Móvil, Adultos y Nota.");
+      if (!form.guestName || !form.phone || !form.numAdult || Number(form.numAdult) < 1) {
+        return alert("Por favor, rellene todos los campos obligatorios: Nombre del Huésped, N. Móvil y Adultos.");
       }
     }
 
@@ -170,9 +170,9 @@ export default function VercelActionForm() {
         isBlock,
         price: isBlock ? 0 : Number(form.price),
         phone: isBlock ? '' : form.phone,
-        numAdult: isBlock ? 1 : form.numAdult,
-        numChild: isBlock ? 0 : form.numChild,
-        notes: isBlock ? '' : form.notes,
+        numAdult: isBlock ? 1 : (Number(form.numAdult) || 1),
+        numChild: isBlock ? 0 : (Number(form.numChild) || 0),
+        notes: isBlock ? '' : (form.notes || ''),
       };
 
       const bgRes = await fetch('/api/reservas', {
@@ -427,7 +427,10 @@ export default function VercelActionForm() {
                       min={1}
                       className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
                       value={form.numAdult}
-                      onChange={e => setForm({...form, numAdult: Math.max(1, Number(e.target.value) || 1)})}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForm({...form, numAdult: val === '' ? '' : Math.max(1, Number(val)) as any});
+                      }}
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -438,15 +441,17 @@ export default function VercelActionForm() {
                       min={0}
                       className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
                       value={form.numChild}
-                      onChange={e => setForm({...form, numChild: Math.max(0, Number(e.target.value) || 0)})}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setForm({...form, numChild: val === '' ? '' : Math.max(0, Number(val)) as any});
+                      }}
                     />
                   </div>
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Nota / Comentarios</label>
+                  <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Nota / Comentarios (Opcional)</label>
                   <textarea 
-                    required
                     placeholder="Ej. Requiere factura, check-in temprano..."
                     className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
                     value={form.notes}

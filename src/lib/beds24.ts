@@ -106,7 +106,6 @@ export function getUnitName(roomId: string | null | undefined, unitId: string | 
     // 401 & 402 & 500
     '679093': '401', '679008': '401', // Casa Vacacional
     '679087': '402',                  // Apartamento Premier de 1 dormitorio
-    '685542': '500',                  // Habitación 500
   };
 
   if (specificRooms[id]) return specificRooms[id];
@@ -117,7 +116,8 @@ export function getUnitName(roomId: string | null | undefined, unitId: string | 
     '679087': { '1': '402' },
     '679091': { '1': '201', '2': '202', '3': '203', '4': '204', '5': '205', '6': '206' },
     '679092': { '1': '101', '2': '102', '3': '103', '4': '104', '5': '105', '6': '106', '7': '107' },
-    '679093': { '1': '401' }
+    '679093': { '1': '401' },
+    '685542': { '1': '500', '2': '501', '3': '502', '4': '503', '5': '504', '6': '505', '7': '506' }
   };
 
   return oldUnitMap[id]?.[uId] || null;
@@ -149,6 +149,12 @@ export function getBeds24RoomIdAndUnit(physicalRoomName: string | null | undefin
     '401': { roomId: '679093', unitId: '1' },
     '402': { roomId: '679087', unitId: '1' },
     '500': { roomId: '685542', unitId: '1' },
+    '501': { roomId: '685542', unitId: '2' },
+    '502': { roomId: '685542', unitId: '3' },
+    '503': { roomId: '685542', unitId: '4' },
+    '504': { roomId: '685542', unitId: '5' },
+    '505': { roomId: '685542', unitId: '6' },
+    '506': { roomId: '685542', unitId: '7' },
   };
   return map[name] || null;
 }

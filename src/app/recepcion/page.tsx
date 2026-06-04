@@ -1628,65 +1628,35 @@ export default function RecepcionPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Adultos</label>
-                      <div className="flex items-center bg-white border border-zinc-200 rounded-xl px-2 py-1 h-[42px] justify-between">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const current = selectedReserva.num_adult || 1;
-                            if (current > 1) {
-                              setSelectedReserva({ ...selectedReserva, num_adult: current - 1 });
-                            }
-                          }}
-                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-zinc-600 transition-all active:scale-90"
-                          disabled={(selectedReserva.num_adult || 1) <= 1}
-                        >
-                          <Minus size={14} strokeWidth={2.5} />
-                        </button>
-                        <span className="text-[14px] font-bold text-zinc-900 px-2 min-w-[24px] text-center">
-                          {selectedReserva.num_adult || 1}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const current = selectedReserva.num_adult || 1;
-                            setSelectedReserva({ ...selectedReserva, num_adult: current + 1 });
-                          }}
-                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg text-zinc-600 transition-all active:scale-90"
-                        >
-                          <Plus size={14} strokeWidth={2.5} />
-                        </button>
-                      </div>
+                      <input
+                        type="number"
+                        min={1}
+                        value={selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setSelectedReserva({
+                            ...selectedReserva,
+                            num_adult: val === '' ? '' : Math.max(1, Number(val)) as any
+                          });
+                        }}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                      />
                     </div>
                     <div>
                       <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">Niños</label>
-                      <div className="flex items-center bg-white border border-zinc-200 rounded-xl px-2 py-1 h-[42px] justify-between">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const current = selectedReserva.num_child || 0;
-                            if (current > 0) {
-                              setSelectedReserva({ ...selectedReserva, num_child: current - 1 });
-                            }
-                          }}
-                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-zinc-600 transition-all active:scale-90"
-                          disabled={(selectedReserva.num_child || 0) <= 0}
-                        >
-                          <Minus size={14} strokeWidth={2.5} />
-                        </button>
-                        <span className="text-[14px] font-bold text-zinc-900 px-2 min-w-[24px] text-center">
-                          {selectedReserva.num_child || 0}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const current = selectedReserva.num_child || 0;
-                            setSelectedReserva({ ...selectedReserva, num_child: current + 1 });
-                          }}
-                          className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg text-zinc-600 transition-all active:scale-90"
-                        >
-                          <Plus size={14} strokeWidth={2.5} />
-                        </button>
-                      </div>
+                      <input
+                        type="number"
+                        min={0}
+                        value={selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setSelectedReserva({
+                            ...selectedReserva,
+                            num_child: val === '' ? '' : Math.max(0, Number(val)) as any
+                          });
+                        }}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                      />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -1778,7 +1748,7 @@ export default function RecepcionPage() {
                     </label>
 
                     {roomInventory.length > 0 ? (
-                      <div className="space-y-3 max-h-[200px] overflow-y-auto pr-1">
+                      <div className="space-y-3 pr-1">
                         {roomInventory.map((roomGroup: any) => (
                           <div key={roomGroup.roomId} className="space-y-1">
                             <p className="text-[11px] font-bold text-zinc-700">{roomGroup.name}</p>
@@ -2084,7 +2054,6 @@ export default function RecepcionPage() {
                       !selectedReserva.guest_name || 
                       !hasRoomSelected || 
                       !selectedReserva.guest_phone || 
-                      !selectedReserva.notes ||
                       (selectedReserva.num_adult || 0) < 1
                     ) return true;
                   }
