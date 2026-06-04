@@ -128,6 +128,7 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [tokenError, setTokenError] = useState(false);
   const [hoy, setHoy] = useState('');
+  const [todayStr, setTodayStr] = useState('');
   const [financeBalance, setFinanceBalance] = useState(0);
 
   const [showRoomStatusModal, setShowRoomStatusModal] = useState(false);
@@ -135,8 +136,8 @@ export default function AdminDashboard() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
 
-  const fetchAll = async () => {
-    setIsLoading(true);
+  const fetchAll = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     setTokenError(false);
     try {
       const [resRes, convRes, roomsRes, tasksRes, chkRes] = await Promise.all([
@@ -198,7 +199,7 @@ export default function AdminDashboard() {
     } catch (e) {
       console.error(e);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -251,24 +252,15 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    const today = getLocalDateStr();
+    setTodayStr(today);
     setHoy(format(new Date(), "EEEE, d MMM", { locale: es }));
-    fetchAll();
+    fetchAll(false);
     const interval = setInterval(() => {
-      fetch('/api/conversations').then(r => r.json()).then(j => {
-        if (j.success) setConversations(j.data || []);
-      });
-      // Poll tasks and rooms too to keep live metrics accurate
-      fetch('/api/tasks').then(r => r.json()).then(j => {
-        if (j.success) setTasks(j.data || []);
-      });
-      fetch('/api/room-status').then(r => r.json()).then(j => {
-        if (j.success) setRoomStatuses(j.data || []);
-      });
+      fetchAll(true);
     }, 15000);
     return () => clearInterval(interval);
   }, []);
-
-  const todayStr = new Date().toISOString().split('T')[0];
   const llegadasHoy = reservas.filter(r => r.check_in === todayStr);
   const salidasHoy = reservas.filter(r => r.check_out === todayStr);
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr).slice(0, 5);
@@ -307,7 +299,7 @@ export default function AdminDashboard() {
             <span className="text-[13px] font-medium text-zinc-500 capitalize">{hoy}</span>
           </div>
         </div>
-        <button onClick={fetchAll} disabled={isLoading}
+        <button onClick={() => fetchAll()} disabled={isLoading}
           className="w-9 h-9 flex items-center justify-center bg-white border border-zinc-200 rounded-xl shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
           <RefreshCw size={15} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
