@@ -133,27 +133,43 @@ export default function AdminDashboard() {
   const [showRoomStatusModal, setShowRoomStatusModal] = useState(false);
   const [selectedRoomForStatus, setSelectedRoomForStatus] = useState<any | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
+  const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
 
   const fetchAll = async () => {
     setIsLoading(true);
     setTokenError(false);
     try {
-      const [resRes, convRes, roomsRes, tasksRes] = await Promise.all([
+      const [resRes, convRes, roomsRes, tasksRes, chkRes] = await Promise.all([
         fetch('/api/reservas').catch(() => null),
         fetch('/api/conversations').catch(() => null),
         fetch('/api/room-status').catch(() => null),
         fetch('/api/tasks').catch(() => null),
+        supabase.from('checkins').select('*')
       ]);
+
+      let checkinMap: Record<string, any> = {};
+      if (chkRes && chkRes.data) {
+        chkRes.data.forEach((c: any) => {
+          checkinMap[String(c.reservation_id)] = c;
+        });
+      }
 
       if (resRes) {
         const resJson = await resRes.json();
         if (resJson.error === 'TOKEN_EXPIRED') {
           setTokenError(true);
         } else if (resJson.success) {
+          const sorted = resJson.data.sort((a: any, b: any) =>
+            new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
+          );
           setReservas(
-            resJson.data.sort((a: any, b: any) =>
-              new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
-            )
+            sorted.map((res: any) => ({
+              ...res,
+              room: res.room_name || res.room || 'Sin asignar',
+              checked_in: checkinMap[String(res.id)]?.status === 'checked_in',
+              checked_out: checkinMap[String(res.id)]?.status === 'checked_out',
+              dni_image: checkinMap[String(res.id)]?.dni_image
+            }))
           );
         }
       }
@@ -310,18 +326,27 @@ export default function AdminDashboard() {
 
       {/* ── KPIs ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm">
+        <button 
+          onClick={() => setKpiModalType('encasa')}
+          className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+        >
           <p className="text-[20px] font-bold text-zinc-900">{activeNow}</p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">En casa</p>
-        </div>
-        <div className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm">
+        </button>
+        <button 
+          onClick={() => setKpiModalType('llegan')}
+          className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+        >
           <p className="text-[20px] font-bold text-emerald-600">{llegadasHoy.length}</p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan</p>
-        </div>
-        <div className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm">
+        </button>
+        <button 
+          onClick={() => setKpiModalType('salen')}
+          className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+        >
           <p className="text-[20px] font-bold text-amber-500">{salidasHoy.length}</p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen</p>
-        </div>
+        </button>
       </div>
 
       {/* ── 1. WHATSAPP INBOX ────────────────────────────────────────── */}
@@ -984,6 +1009,115 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               )}
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── MODAL DETALLES DE KPI (GUEST LIST) ── */}
+      {kpiModalType && (() => {
+        let title = 'Detalles';
+        let badgeColor = 'bg-zinc-100 text-zinc-800';
+        let filtered: any[] = [];
+
+        if (kpiModalType === 'encasa') {
+          title = 'Huéspedes En Casa';
+          badgeColor = 'bg-zinc-900 text-white';
+          filtered = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr);
+        } else if (kpiModalType === 'llegan') {
+          title = 'Llegadas Hoy';
+          badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+          filtered = llegadasHoy;
+        } else if (kpiModalType === 'salen') {
+          title = 'Salidas Hoy';
+          badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+          filtered = salidasHoy;
+        }
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div onClick={() => setKpiModalType(null)} className="absolute inset-0" />
+            <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-4 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto max-h-[85vh] flex flex-col">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black text-zinc-900">{title}</h3>
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${badgeColor}`}>
+                    {filtered.length}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setKpiModalType(null)} 
+                  className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+                >
+                  <X size={15} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              {/* List body */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 py-1">
+                {filtered.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
+                    No hay huéspedes en este grupo para el día de hoy.
+                  </div>
+                ) : (
+                  filtered.map(r => {
+                    const nightsVal = r.nights || 1;
+                    const cleanPhone = r.guest_phone ? r.guest_phone.replace(/\D/g, '') : '';
+                    
+                    return (
+                      <div 
+                        key={r.id} 
+                        onClick={() => {
+                          setKpiModalType(null);
+                          router.push(`/reservas?id=${r.id}`);
+                        }}
+                        className="p-4 border border-zinc-150 rounded-2xl hover:border-zinc-300 hover:bg-zinc-50/50 transition-all cursor-pointer space-y-2.5"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-[14px] font-black text-zinc-950 leading-tight">{r.guest_name || 'Huésped Sin Nombre'}</h4>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">ID: {r.id}</span>
+                          </div>
+                          <span className="text-[11px] font-extrabold bg-zinc-900 text-white px-2.5 py-1 rounded-lg">
+                            {r.room_name || r.room || 'Sin asign'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-[12px] pt-1.5 border-t border-zinc-100">
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Estancia</span>
+                            <p className="font-semibold text-zinc-800 truncate">
+                              {r.check_in} al {r.check_out} ({nightsVal}n)
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal / Origen</span>
+                            <p className="font-semibold text-zinc-800">{r.channel || 'Directo'}</p>
+                          </div>
+                        </div>
+
+                        {cleanPhone && (
+                          <div className="pt-2 flex justify-end gap-2">
+                            <a
+                              href={`https://wa.me/${cleanPhone}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all active:scale-95 shadow-sm"
+                            >
+                              <MessageCircle size={12} className="text-emerald-600" />
+                              WhatsApp
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
 
             </div>
           </div>
