@@ -38,6 +38,7 @@ interface Reserva {
   deposit?: number;
   balance?: number;
   notes?: string;
+  groupRooms?: { roomId: string; unitId: string; name: string }[];
 }
 
 interface Task {
@@ -240,6 +241,30 @@ function getRoomOperationalStatus(
   return 'disponible'; // Verde por defecto
 }
 
+function getUnitNumberFromInventory(roomId: string, unitId: string, roomInventory: any[]): string {
+  if (roomInventory && roomInventory.length > 0) {
+    const group = roomInventory.find((g: any) => g.roomId === roomId);
+    if (group) {
+      const unit = group.units.find((u: any) => u.unitId === unitId);
+      if (unit) return unit.name;
+    }
+  }
+  const staticMap: Record<string, Record<string, string>> = {
+    '679077': { '1': '301', '2': '302', '3': '303', '4': '304', '5': '305', '6': '306' },
+    '679087': { '1': '402' },
+    '679091': { '1': '201', '2': '202', '3': '203', '4': '204', '5': '205', '6': '206' },
+    '679092': { '1': '101', '2': '102', '3': '103', '4': '104', '5': '105', '6': '106', '7': '107' },
+    '679093': { '1': '401' }
+  };
+  return staticMap[roomId]?.[unitId] || unitId;
+}
+
+function getFriendlyRoomName(roomId: string, unitId: string, roomInventory: any[]): string {
+  const base = BEDS24_ROOMS.find(r => r.id === roomId)?.name || roomId;
+  const num = getUnitNumberFromInventory(roomId, unitId, roomInventory);
+  return `${base} (${num})`;
+}
+
 export default function RecepcionPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -404,14 +429,21 @@ export default function RecepcionPage() {
     const walkinDate = searchParams.get('date');
 
     if (isWalkin) {
-      const targetRoom = walkinRoom || '679077';
+      const targetRoom = walkinRoom || '';
       const targetDate = walkinDate || todayStr;
       const nextDay = getNextDayStr(targetDate);
       setRoomInventory([]);
+      const targetUnit = walkinUnit || '';
+      const initialGroup = targetRoom && targetUnit ? [{
+        roomId: targetRoom,
+        unitId: targetUnit,
+        name: getUnitNumberFromInventory(targetRoom, targetUnit, [])
+      }] : [];
       setSelectedReserva({
         id: 'walkin',
         room: targetRoom,
-        unit_id: walkinUnit || undefined,
+        unit_id: targetUnit || undefined,
+        groupRooms: initialGroup,
         check_in: targetDate,
         check_out: nextDay,
         guest_name: '',
@@ -429,20 +461,33 @@ export default function RecepcionPage() {
   }, [searchParams, todayStr]);
 
   useEffect(() => {
-    if (selectedReserva?.id === 'walkin' && selectedReserva.room && selectedReserva.check_in && selectedReserva.check_out && !isPriceUnlocked) {
+    if (selectedReserva?.id === 'walkin' && selectedReserva.check_in && selectedReserva.check_out && !isPriceUnlocked) {
       const season = getSeason(selectedReserva.check_in);
-      const basePrice = PRICES[selectedReserva.room]?.[season] || 2000;
       const diffTime = Math.abs(new Date(selectedReserva.check_out).getTime() - new Date(selectedReserva.check_in).getTime());
       const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
 
-      const priceWithChannel = Math.round(basePrice * 1.0);
-      const tax = Math.round(priceWithChannel * 0.19);
-      const totalPerNight = priceWithChannel + tax;
-      const totalStay = totalPerNight * nights;
+      let totalStay = 0;
+      const group = selectedReserva.groupRooms || [];
+
+      if (group.length > 0) {
+        group.forEach(gr => {
+          const basePrice = PRICES[gr.roomId]?.[season] || 2000;
+          const priceWithChannel = Math.round(basePrice * 1.0);
+          const tax = Math.round(priceWithChannel * 0.19);
+          const totalPerNight = priceWithChannel + tax;
+          totalStay += totalPerNight * nights;
+        });
+      } else if (selectedReserva.room) {
+        const basePrice = PRICES[selectedReserva.room]?.[season] || 2000;
+        const priceWithChannel = Math.round(basePrice * 1.0);
+        const tax = Math.round(priceWithChannel * 0.19);
+        const totalPerNight = priceWithChannel + tax;
+        totalStay = totalPerNight * nights;
+      }
 
       setPaymentAmount(totalStay.toString());
     }
-  }, [selectedReserva?.room, selectedReserva?.check_in, selectedReserva?.check_out, isPriceUnlocked]);
+  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, isPriceUnlocked]);
 
   useEffect(() => {
     if (!paymentMode) {
@@ -647,57 +692,27 @@ export default function RecepcionPage() {
 
     const emp = getActiveEmployee('recepcion');
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
-    let actualBookId = selectedReserva.id;
 
-    // Si es walkin, crear en Beds24 primero
     if (selectedReserva.id === 'walkin') {
       try {
-        const bgRes = await fetch('/api/reservas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            roomId: selectedReserva.room || '679077',
-            unitId: selectedReserva.unit_id || '1',
-            checkIn: selectedReserva.check_in || todayStr,
-            checkOut: selectedReserva.check_out || todayStr,
-            guestName: selectedReserva.guest_name || 'Walk-In',
-            isBlock: false,
-            price: Number(paymentAmount || 0),
-            phone: selectedReserva.guest_phone || '',
-            numAdult: selectedReserva.num_adult || 1,
-            numChild: selectedReserva.num_child || 0,
-            notes: selectedReserva.notes || ''
-          })
-        });
-        const resData = await bgRes.json();
-        if (!bgRes.ok) {
-          alert('Error al sincronizar con Beds24: ' + (resData.error || 'Error desconocido'));
-          setSubmitting(false);
-          return;
-        }
+        const roomsToBook = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
+          ? selectedReserva.groupRooms
+          : [{ 
+              roomId: selectedReserva.room, 
+              unitId: selectedReserva.unit_id || '', 
+              name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) 
+            }];
 
-        const b24Array = resData.data;
-        const beds24AssignedId = (Array.isArray(b24Array) && b24Array[0]?.new?.id)
-          ? String(b24Array[0].new.id)
-          : (resData.data && resData.data.id ? String(resData.data.id) : `b24-${Date.now()}`);
+        const totalRooms = roomsToBook.length;
+        const totalPayment = Number(paymentAmount || 0);
+        const pricePerRoom = Math.round(totalPayment / totalRooms);
 
-        actualBookId = beds24AssignedId;
-
-        const baseRoomName = BEDS24_ROOMS.find(r => r.id === selectedReserva.room)?.name || selectedReserva.room;
-        let finalRoomName = baseRoomName;
-        if (selectedReserva.unit_id && roomInventory.length > 0) {
-          const matchedGroup = roomInventory.find((g: any) => g.roomId === selectedReserva.room);
-          if (matchedGroup) {
-            const matchedUnit = matchedGroup.units.find((u: any) => u.unitId === selectedReserva.unit_id);
-            if (matchedUnit) finalRoomName = `${baseRoomName} (${matchedUnit.name})`;
-          }
-        }
-        const roomNameHuman = finalRoomName;
+        const roomNamesList = roomsToBook.map(r => r.name).join(', ');
 
         let finalDniUrl = null;
         if (dniFile) {
           const fileExt = dniFile.name.split('.').pop() || 'jpg';
-          const fileName = `dni_${beds24AssignedId}_${Date.now()}.${fileExt}`;
+          const fileName = `dni_walkin_group_${Date.now()}.${fileExt}`;
           const { data, error } = await supabase.storage.from('dni_images').upload(fileName, dniFile);
           if (!error && data) {
             const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
@@ -705,54 +720,173 @@ export default function RecepcionPage() {
           }
         }
 
-        const { error: upsertErr } = await supabase.from('checkins').upsert({
-          reservation_id: beds24AssignedId,
-          guest_name: selectedReserva.guest_name,
-          room: roomNameHuman,
-          check_in_date: selectedReserva.check_in || todayStr,
-          check_out_date: selectedReserva.check_out || todayStr,
-          status: 'checked_in',
-          checked_in_by: operatorName,
-          dni_image: finalDniUrl || null,
-          document_url: finalDniUrl || null
-        }, { onConflict: 'reservation_id' });
+        const bookedBeds24Ids: string[] = [];
+        const bookedReservas: any[] = [];
 
-        if (upsertErr) console.error("Supabase Walkin Upsert Error:", upsertErr);
-
-        setReservas(prev => [...prev, {
-          id: beds24AssignedId,
-          guest_name: selectedReserva.guest_name,
-          room: roomNameHuman,
-          check_in: selectedReserva.check_in || todayStr,
-          check_out: selectedReserva.check_out || todayStr,
-          checked_in: true,
-          dni_image: finalDniUrl || undefined
-        }]);
-
-        // Registrar log en Supabase
-        if (emp) {
-          await fetch('/api/employee-logs', {
+        for (const room of roomsToBook) {
+          const bgRes = await fetch('/api/reservas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              employee_num: emp.employee_num,
-              employee_name: emp.full_name,
-              department: emp.department,
-              module: 'recepcion',
-              action: 'walk_in',
-              room: roomNameHuman,
-              details: `Registró Walk-In de ${selectedReserva.guest_name || 'Huésped'}`
+              roomId: room.roomId,
+              unitId: room.unitId,
+              checkIn: selectedReserva.check_in || todayStr,
+              checkOut: selectedReserva.check_out || todayStr,
+              guestName: selectedReserva.guest_name || 'Walk-In',
+              isBlock: false,
+              price: pricePerRoom,
+              phone: selectedReserva.guest_phone || '',
+              numAdult: selectedReserva.num_adult || 1,
+              numChild: selectedReserva.num_child || 0,
+              notes: `${selectedReserva.notes || ''} (Grupo: Habs ${roomNamesList})`
             })
           });
+
+          const resData = await bgRes.json();
+          if (!bgRes.ok) {
+            alert(`Error al registrar habitación ${room.name} en Beds24: ` + (resData.error || 'Error desconocido'));
+            setSubmitting(false);
+            return;
+          }
+
+          const b24Array = resData.data;
+          const beds24AssignedId = (Array.isArray(b24Array) && b24Array[0]?.new?.id)
+            ? String(b24Array[0].new.id)
+            : (resData.data && resData.data.id ? String(resData.data.id) : `b24-${Date.now()}`);
+
+          bookedBeds24Ids.push(beds24AssignedId);
+
+          const roomNameHuman = getFriendlyRoomName(room.roomId, room.unitId, roomInventory);
+
+          const { error: upsertErr } = await supabase.from('checkins').upsert({
+            reservation_id: beds24AssignedId,
+            guest_name: selectedReserva.guest_name,
+            room: roomNameHuman,
+            check_in_date: selectedReserva.check_in || todayStr,
+            check_out_date: selectedReserva.check_out || todayStr,
+            status: 'checked_in',
+            checked_in_by: operatorName,
+            dni_image: finalDniUrl || null,
+            document_url: finalDniUrl || null
+          }, { onConflict: 'reservation_id' });
+
+          if (upsertErr) console.error(`Supabase Walkin Upsert Error para Hab ${room.name}:`, upsertErr);
+
+          bookedReservas.push({
+            id: beds24AssignedId,
+            guest_name: selectedReserva.guest_name,
+            room: roomNameHuman,
+            check_in: selectedReserva.check_in || todayStr,
+            check_out: selectedReserva.check_out || todayStr,
+            checked_in: true,
+            dni_image: finalDniUrl || undefined
+          });
+
+          if (emp) {
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: emp.employee_num,
+                employee_name: emp.full_name,
+                department: emp.department,
+                module: 'recepcion',
+                action: 'walk_in',
+                room: roomNameHuman,
+                details: `Registró Walk-In de ${selectedReserva.guest_name || 'Huésped'} (Grupo: ${roomNamesList})`
+              })
+            });
+          }
+        }
+
+        setReservas(prev => [...prev, ...bookedReservas]);
+
+        if (paymentMode && totalPayment > 0) {
+          const baseDesc = `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} - Habs ${roomNamesList} (Operado por: ${operatorName}) [Reservas B24: ${bookedBeds24Ids.join(', ')}]`;
+
+          const { data: insertedRows } = await supabase.from('finances').insert({
+            type: 'ingreso',
+            amount: totalPayment,
+            category: 'Reserva Directa',
+            description: `${baseDesc} [Pending Sync: B24]`,
+            payment_method: paymentMode,
+            account_id: selectedAccountId || null,
+            date: todayStr
+          }).select();
+
+          const insertedRecordId = insertedRows?.[0]?.id;
+
+          if (selectedAccountId) {
+            const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+            if (matchedAcc) {
+              const newBalance = matchedAcc.balance + totalPayment;
+              await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+            }
+          }
+
+          let allSynced = true;
+          let syncErrors: string[] = [];
+
+          for (let i = 0; i < bookedBeds24Ids.length; i++) {
+            const bookId = bookedBeds24Ids[i];
+            const splitAmount = i === bookedBeds24Ids.length - 1
+              ? totalPayment - (pricePerRoom * (bookedBeds24Ids.length - 1))
+              : pricePerRoom;
+
+            try {
+              const b24PayRes = await fetch('/api/reservas/payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  bookId: bookId,
+                  amount: splitAmount,
+                  paymentMethod: paymentMode,
+                  employeeNum: emp?.employee_num || null
+                })
+              });
+              const payData = await b24PayRes.json();
+              if (!b24PayRes.ok || !payData.success) {
+                allSynced = false;
+                syncErrors.push(`Hab ${roomsToBook[i].name}: ${payData.error || 'Error desconocido'}`);
+              }
+            } catch (payErr: any) {
+              allSynced = false;
+              syncErrors.push(`Hab ${roomsToBook[i].name}: ${payErr.message || payErr}`);
+            }
+          }
+
+          if (allSynced && insertedRecordId) {
+            await supabase.from('finances').update({
+              description: `${baseDesc} [Synced: B24]`
+            }).eq('id', insertedRecordId);
+          } else {
+            alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+          }
+
+          if (emp) {
+            const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: emp.employee_num,
+                employee_name: emp.full_name,
+                department: emp.department,
+                module: 'recepcion',
+                action: 'payment_received',
+                room: `Grupo: ${roomNamesList}`,
+                details: `Recibió pago total de $${totalPayment} vía ${paymentMode} para Grupo Habs ${roomNamesList} (Depositado en sobre: ${matchedAccName})`
+              })
+            });
+          }
         }
 
       } catch (err: any) {
-        alert('Fallo de conexión al enviar reserva a Beds24: ' + err.message);
+        alert('Fallo de conexión al procesar reservas de grupo en Beds24: ' + err.message);
         setSubmitting(false);
         return;
       }
     } else {
-      // Check-in de reserva existente
       let finalDniUrl = null;
       if (dniFile) {
         const fileExt = dniFile.name.split('.').pop() || 'jpg';
@@ -780,7 +914,6 @@ export default function RecepcionPage() {
 
       setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined } : r));
 
-      // Registrar log en Supabase
       if (emp) {
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -796,82 +929,77 @@ export default function RecepcionPage() {
           })
         });
       }
-    }
 
-    // Registrar pago si corresponde
-    if (paymentMode && paymentAmount) {
-      const amountNum = Number(paymentAmount);
-      const baseDesc = `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName}) [Reserva B24: ${actualBookId}]`;
+      if (paymentMode && paymentAmount) {
+        const amountNum = Number(paymentAmount);
+        const baseDesc = `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName}) [Reserva B24: ${selectedReserva.id}]`;
 
-      // 1. Insertar transacción local en Supabase con tag de pendiente
-      const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
-        type: 'ingreso',
-        amount: amountNum,
-        category: 'Reserva Directa',
-        description: `${baseDesc} [Pending Sync: B24]`,
-        payment_method: paymentMode,
-        account_id: selectedAccountId || null,
-        date: todayStr
-      }).select();
+        const { data: insertedRows } = await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: amountNum,
+          category: 'Reserva Directa',
+          description: `${baseDesc} [Pending Sync: B24]`,
+          payment_method: paymentMode,
+          account_id: selectedAccountId || null,
+          date: todayStr
+        }).select();
 
-      const insertedRecordId = insertedRows?.[0]?.id;
+        const insertedRecordId = insertedRows?.[0]?.id;
 
-      if (selectedAccountId) {
-        const matchedAcc = accounts.find(a => a.id === selectedAccountId);
-        if (matchedAcc) {
-          const newBalance = matchedAcc.balance + amountNum;
-          await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+        if (selectedAccountId) {
+          const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+          if (matchedAcc) {
+            const newBalance = matchedAcc.balance + amountNum;
+            await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+          }
         }
-      }
 
-      // 2. Sincronizar pago con Beds24 en tiempo real
-      let syncedSuccess = false;
-      try {
-        const b24PayRes = await fetch('/api/reservas/payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookId: actualBookId,
-            amount: amountNum,
-            paymentMethod: paymentMode,
-            employeeNum: emp?.employee_num || null
-          })
-        });
-        const payData = await b24PayRes.json();
-        if (b24PayRes.ok && payData.success) {
-          syncedSuccess = true;
-        } else {
-          console.error("Fallo de sincronización Beds24 de pago:", payData.error || 'Error desconocido');
-          alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar el pago.\nDetalle: ${payData.error || 'Error desconocido'}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+        let syncedSuccess = false;
+        try {
+          const b24PayRes = await fetch('/api/reservas/payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookId: selectedReserva.id,
+              amount: amountNum,
+              paymentMethod: paymentMode,
+              employeeNum: emp?.employee_num || null
+            })
+          });
+          const payData = await b24PayRes.json();
+          if (b24PayRes.ok && payData.success) {
+            syncedSuccess = true;
+          } else {
+            console.error("Fallo de sincronización Beds24 de pago:", payData.error || 'Error desconocido');
+            alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar el pago.\nDetalle: ${payData.error || 'Error desconocido'}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+          }
+        } catch (payErr: any) {
+          console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
+          alert(`⚠️ Error de Red / Conexión Beds24:\nEl cobro local se registró correctamente en Supabase, pero falló el envío a Beds24 debido a problemas de red.\nDetalle: ${payErr.message || payErr}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
         }
-      } catch (payErr: any) {
-        console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
-        alert(`⚠️ Error de Red / Conexión Beds24:\nEl cobro local se registró correctamente en Supabase, pero falló el envío a Beds24 debido a problemas de red.\nDetalle: ${payErr.message || payErr}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
-      }
 
-      // 3. Si fue exitoso, actualizar tag a sincronizado
-      if (syncedSuccess && insertedRecordId) {
-        await supabase.from('finances').update({
-          description: `${baseDesc} [Synced: B24]`
-        }).eq('id', insertedRecordId);
-      }
+        if (syncedSuccess && insertedRecordId) {
+          await supabase.from('finances').update({
+            description: `${baseDesc} [Synced: B24]`
+          }).eq('id', insertedRecordId);
+        }
 
-      // Log de cobro
-      if (emp) {
-        const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
-        await fetch('/api/employee-logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            employee_num: emp.employee_num,
-            employee_name: emp.full_name,
-            department: emp.department,
-            module: 'recepcion',
-            action: 'payment_received',
-            room: selectedReserva.room,
-            details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName})`
-          })
-        });
+        if (emp) {
+          const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'recepcion',
+              action: 'payment_received',
+              room: selectedReserva.room,
+              details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName})`
+            })
+          });
+        }
       }
     }
 
@@ -1092,7 +1220,9 @@ export default function RecepcionPage() {
                 setRoomInventory([]);
                 setSelectedReserva({
                   id: 'walkin',
-                  room: '101',
+                  room: '',
+                  unit_id: '',
+                  groupRooms: [],
                   check_in: todayStr,
                   check_out: tomorrowStr,
                   guest_name: '',
@@ -1565,18 +1695,21 @@ export default function RecepcionPage() {
                       <input
                         key={todayStr ? `walkin-in-${todayStr}` : 'walkin-in-loading'}
                         type="date"
-                        min={todayStr}
                         value={selectedReserva.check_in}
                         onChange={e => {
-                          let newIn = e.target.value;
-                          if (newIn && newIn < todayStr) {
-                            newIn = todayStr;
-                          }
+                          const newIn = e.target.value;
                           // Recalcular el check-out manteniendo las noches actuales
                           const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
                           const newOut = addDaysToDateStr(newIn, currentNights);
                           
-                          setSelectedReserva({ ...selectedReserva, check_in: newIn, check_out: newOut, room: '', unit_id: '' });
+                          setSelectedReserva({ 
+                            ...selectedReserva, 
+                            check_in: newIn, 
+                            check_out: newOut, 
+                            room: '', 
+                            unit_id: '',
+                            groupRooms: [] 
+                          });
                           fetchAvailability(newIn, newOut);
                         }}
                         className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[14px] font-semibold focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
@@ -1592,7 +1725,7 @@ export default function RecepcionPage() {
                             if (currentNights > 1) {
                               const newNights = currentNights - 1;
                               const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
-                              setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
+                              setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
                               fetchAvailability(selectedReserva.check_in, newOut);
                             }
                           }}
@@ -1610,7 +1743,7 @@ export default function RecepcionPage() {
                             const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
                             const newNights = currentNights + 1;
                             const newOut = addDaysToDateStr(selectedReserva.check_in, newNights);
-                            setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '' });
+                            setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
                             fetchAvailability(selectedReserva.check_in, newOut);
                           }}
                           className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-lg text-zinc-600 transition-all active:scale-90"
@@ -1651,12 +1784,38 @@ export default function RecepcionPage() {
                             <p className="text-[11px] font-bold text-zinc-700">{roomGroup.name}</p>
                             <div className="flex flex-wrap gap-1.5">
                               {roomGroup.units.map((u: any) => {
-                                const isSelected = selectedReserva.room === roomGroup.roomId && selectedReserva.unit_id === u.unitId;
+                                const isSelected = selectedReserva.groupRooms?.some(gr => gr.roomId === roomGroup.roomId && gr.unitId === u.unitId) || (selectedReserva.room === roomGroup.roomId && selectedReserva.unit_id === u.unitId);
                                 return (
                                   <button
                                     key={u.unitId}
                                     disabled={!u.isAvailable}
-                                    onClick={() => setSelectedReserva({ ...selectedReserva, room: roomGroup.roomId, unit_id: u.unitId })}
+                                    onClick={() => {
+                                      const currentGroup = selectedReserva.groupRooms || [];
+                                      let baseGroup = currentGroup;
+                                      if (baseGroup.length === 0 && selectedReserva.room && selectedReserva.unit_id) {
+                                        baseGroup = [{
+                                          roomId: selectedReserva.room,
+                                          unitId: selectedReserva.unit_id,
+                                          name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id, roomInventory)
+                                        }];
+                                      }
+
+                                      const exists = baseGroup.some(gr => gr.roomId === roomGroup.roomId && gr.unitId === u.unitId);
+                                      let newGroup;
+                                      if (exists) {
+                                        newGroup = baseGroup.filter(gr => !(gr.roomId === roomGroup.roomId && gr.unitId === u.unitId));
+                                      } else {
+                                        newGroup = [...baseGroup, { roomId: roomGroup.roomId, unitId: u.unitId, name: u.name }];
+                                      }
+                                      
+                                      const last = newGroup[newGroup.length - 1];
+                                      setSelectedReserva({
+                                        ...selectedReserva,
+                                        groupRooms: newGroup,
+                                        room: last ? last.roomId : '',
+                                        unit_id: last ? last.unitId : ''
+                                      });
+                                    }}
                                     className={`px-3 py-1.5 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
                                       !u.isAvailable
                                         ? 'bg-zinc-100 border-zinc-200 text-zinc-300 line-through cursor-not-allowed'
@@ -1679,6 +1838,35 @@ export default function RecepcionPage() {
                       </div>
                     )}
                   </div>
+
+                  {selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200/60 rounded-xl p-3 space-y-1.5 animate-in fade-in duration-200">
+                      <span className="text-[10px] font-bold text-blue-700 uppercase tracking-widest block">Habitaciones Seleccionadas ({selectedReserva.groupRooms.length})</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedReserva.groupRooms.map(gr => (
+                          <span key={`${gr.roomId}_${gr.unitId}`} className="px-2.5 py-1 bg-white border border-blue-200 text-blue-800 text-[11px] font-black rounded-lg shadow-sm flex items-center gap-1">
+                            {gr.name}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newGroup = selectedReserva.groupRooms!.filter(x => !(x.roomId === gr.roomId && x.unitId === gr.unitId));
+                                const last = newGroup[newGroup.length - 1];
+                                setSelectedReserva({
+                                  ...selectedReserva,
+                                  groupRooms: newGroup,
+                                  room: last ? last.roomId : '',
+                                  unit_id: last ? last.unitId : ''
+                                });
+                              }}
+                              className="w-3.5 h-3.5 rounded-full hover:bg-zinc-100 flex items-center justify-center text-blue-500 hover:text-blue-700 transition-colors"
+                            >
+                              <X size={10} strokeWidth={3} />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 // Información Reserva Existente
@@ -1890,13 +2078,16 @@ export default function RecepcionPage() {
                   if (selectedReserva.id !== 'walkin' && !dniPreview) return true;
 
                   // Validación campos Walk-in obligatorios
-                  if (selectedReserva.id === 'walkin' && (
-                    !selectedReserva.guest_name || 
-                    !selectedReserva.unit_id || 
-                    !selectedReserva.guest_phone || 
-                    !selectedReserva.notes ||
-                    (selectedReserva.num_adult || 0) < 1
-                  )) return true;
+                  if (selectedReserva.id === 'walkin') {
+                    const hasRoomSelected = (selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0) || selectedReserva.unit_id;
+                    if (
+                      !selectedReserva.guest_name || 
+                      !hasRoomSelected || 
+                      !selectedReserva.guest_phone || 
+                      !selectedReserva.notes ||
+                      (selectedReserva.num_adult || 0) < 1
+                    ) return true;
+                  }
 
                   // Calcular balance pendiente
                   const pendingBalance = selectedReserva.id === 'walkin'
