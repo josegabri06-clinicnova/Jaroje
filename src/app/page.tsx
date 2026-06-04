@@ -52,18 +52,29 @@ function getRoomOperationalStatus(
   activeReservations: any[],
   todayStr: string,
   lastUpdatedAt?: string
-): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' {
+): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' {
   const isUpdatedToday = lastUpdatedAt && lastUpdatedAt.startsWith(todayStr);
 
-  // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato
+  const hasResToday = activeReservations.some(r => {
+    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
+    const matches = rRoom.includes(roomNum);
+    const isActiveToday = (r.check_in <= todayStr && r.check_out > todayStr) || (r.check_in === todayStr);
+    return matches && isActiveToday && !r.checked_out;
+  });
+
+  // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato si es limpieza/sucio
   if (isUpdatedToday) {
-    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpieza terminada)
     if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Aviso Check Out)
     if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
-    if (dbStatus === 'disponible') return 'disponible'; // Verde (Disponible)
+    if (dbStatus === 'limpia') {
+      return hasResToday ? 'ocupada' : 'limpia'; // Si está reservada hoy, no se muestra limpia/disponible
+    }
+    if (dbStatus === 'disponible') {
+      return hasResToday ? 'ocupada' : 'disponible';
+    }
   }
 
-  // 2. Si es de ayer o antes (estatus obsoleto), ignorar la DB y calcular fresh de Beds24 para hoy:
+  // 2. Si es de ayer o antes (estatus obsoleto), calcular fresh de Beds24 para hoy:
 
   // Buscar si hay una reserva activa hoy para estancia (Stayover)
   const currentRes = activeReservations.find(r => {
@@ -97,6 +108,11 @@ function getRoomOperationalStatus(
 
   if (isSalidaHoy) {
     return 'limpieza_programada'; // Amarillo automático por checkout programado hoy
+  }
+
+  // Si no necesita limpieza, y está reservada/ocupada hoy, se muestra sin color (ocupada)
+  if (hasResToday) {
+    return 'ocupada';
   }
 
   // 3. Si no tiene salida ni estancia programada que requiera limpieza hoy, está disponible
