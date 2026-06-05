@@ -526,10 +526,11 @@ export async function getBeds24Bookings(): Promise<any[]> {
         : 1;
 
       const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+      const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
 
       let channel = 'Directo';
-      if (rawSource.includes('airbnb')) channel = 'Airbnb';
-      else if (rawSource.includes('booking')) channel = 'Booking.com';
+      if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
+      else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
       else if (rawSource.includes('expedia')) channel = 'Expedia';
       else if (rawSource.includes('whatsapp') || rawSource.includes('n8n')) channel = 'WhatsApp Bot';
       else if (rawSource.includes('beds24')) channel = 'Beds24';
