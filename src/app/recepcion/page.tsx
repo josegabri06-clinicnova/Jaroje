@@ -11,7 +11,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { getActiveEmployee, clearActiveEmployee, Employee } from '@/lib/auth';
+import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import InventarioPage from '../inventario/page';
 
@@ -23,6 +23,7 @@ interface Reserva {
   id: string;
   room: string;
   unit_id?: string;
+  daily_rate?: string;
   guest_name?: string;
   guest_phone?: string;
   guest_email?: string;
@@ -337,6 +338,7 @@ export default function RecepcionPage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
+  const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
   const [typedNights, setTypedNights] = useState<string>('');
@@ -479,34 +481,63 @@ export default function RecepcionPage() {
     }
   }, [searchParams, todayStr]);
 
+  // Recalcular precio estimado en base a la edición manual o automática
   useEffect(() => {
-    if (selectedReserva?.id === 'walkin' && selectedReserva.check_in && selectedReserva.check_out && !isPriceUnlocked) {
-      const season = getSeason(selectedReserva.check_in);
-      const diffTime = Math.abs(new Date(selectedReserva.check_out).getTime() - new Date(selectedReserva.check_in).getTime());
-      const nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    if (selectedReserva?.id !== 'walkin' || !selectedReserva.check_in || !selectedReserva.check_out) return;
 
+    const diffTime = Math.abs(new Date(selectedReserva.check_out).getTime() - new Date(selectedReserva.check_in).getTime());
+    const computedNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    const totalRooms = (selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0) ? selectedReserva.groupRooms.length : 1;
+
+    if (isDailyRateEdited) {
+      const rateNum = Number(selectedReserva.daily_rate) || 0;
+      const calculatedTotal = rateNum * computedNights * totalRooms;
+      setSelectedReserva(prev => {
+        if (!prev) return null;
+        if (prev.price_estimate === calculatedTotal) return prev;
+        return { ...prev, price_estimate: calculatedTotal };
+      });
+      setPaymentAmount(calculatedTotal.toString());
+    } else {
+      const season = getSeason(selectedReserva.check_in);
+      let calculatedDailyRate = 0;
       let totalStay = 0;
       const group = selectedReserva.groupRooms || [];
 
       if (group.length > 0) {
-        group.forEach(gr => {
-          const basePrice = PRICES[gr.roomId]?.[season] || 2000;
-          const priceWithChannel = Math.round(basePrice * 1.0);
-          const tax = Math.round(priceWithChannel * 0.19);
-          const totalPerNight = priceWithChannel + tax;
-          totalStay += totalPerNight * nights;
+        const gr = group[0];
+        const basePrice = PRICES[gr.roomId]?.[season] || 2000;
+        const priceWithChannel = Math.round(basePrice * 1.0);
+        const tax = Math.round(priceWithChannel * 0.19);
+        calculatedDailyRate = priceWithChannel + tax;
+
+        group.forEach(g => {
+          const bp = PRICES[g.roomId]?.[season] || 2000;
+          const pwc = Math.round(bp * 1.0);
+          const t = Math.round(pwc * 0.19);
+          totalStay += (pwc + t) * computedNights;
         });
       } else if (selectedReserva.room) {
         const basePrice = PRICES[selectedReserva.room]?.[season] || 2000;
         const priceWithChannel = Math.round(basePrice * 1.0);
         const tax = Math.round(priceWithChannel * 0.19);
-        const totalPerNight = priceWithChannel + tax;
-        totalStay = totalPerNight * nights;
+        calculatedDailyRate = priceWithChannel + tax;
+        totalStay = calculatedDailyRate * computedNights;
       }
 
+      setSelectedReserva(prev => {
+        if (!prev) return null;
+        const dailyRateStr = calculatedDailyRate > 0 ? calculatedDailyRate.toString() : '';
+        if (prev.daily_rate === dailyRateStr && prev.price_estimate === totalStay) return prev;
+        return {
+          ...prev,
+          daily_rate: dailyRateStr,
+          price_estimate: totalStay
+        };
+      });
       setPaymentAmount(totalStay.toString());
     }
-  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, isPriceUnlocked]);
+  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, isDailyRateEdited]);
 
   useEffect(() => {
     if (!paymentMode) {
@@ -550,7 +581,7 @@ export default function RecepcionPage() {
   }, [showCheckInModal, selectedReserva]);
 
   const handleUnlockPrice = () => {
-    if (pinInput === '1234') {
+    if (pinInput === getAdminPin()) {
       setIsPriceUnlocked(true);
       setShowPinModal(false);
       setPinInput('');
@@ -724,7 +755,8 @@ export default function RecepcionPage() {
 
         const totalRooms = roomsToBook.length;
         const totalPayment = Number(paymentAmount || 0);
-        const pricePerRoom = Math.round(totalPayment / totalRooms);
+        const pricePerRoom = Math.round((selectedReserva.price_estimate || 0) / totalRooms);
+        const depositPerRoom = Math.round(totalPayment / totalRooms);
 
         const roomNamesList = roomsToBook.map(r => r.name).join(', ');
 
@@ -754,6 +786,7 @@ export default function RecepcionPage() {
               guestName: selectedReserva.guest_name || 'Walk-In',
               isBlock: false,
               price: pricePerRoom,
+              deposit: depositPerRoom,
               phone: selectedReserva.guest_phone || '',
               numAdult: selectedReserva.num_adult || 1,
               numChild: selectedReserva.num_child || 0,
@@ -1857,6 +1890,57 @@ export default function RecepcionPage() {
                           className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
                         />
                       </div>
+
+                      {/* Pricing Section (Walk-In) */}
+                      <div className="grid grid-cols-2 gap-3.5 pt-1">
+                        {/* Tarifa Diaria */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center pr-1">
+                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Diaria (x Hab)</label>
+                            <button 
+                              type="button" 
+                              onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
+                              className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
+                            >
+                              {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
+                              {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
+                            </button>
+                          </div>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                            <input 
+                              type="number" 
+                              placeholder="0.00"
+                              readOnly={!isPriceUnlocked}
+                              className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                                isPriceUnlocked 
+                                  ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
+                                  : 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
+                              }`}
+                              value={selectedReserva.daily_rate || ''}
+                              onChange={e => {
+                                setIsDailyRateEdited(true);
+                                setSelectedReserva({ ...selectedReserva, daily_rate: e.target.value });
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Tarifa Total */}
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Total</label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                            <input 
+                              type="number" 
+                              placeholder="0.00"
+                              readOnly
+                              className="w-full bg-zinc-100 border border-zinc-200/80 text-zinc-650 cursor-not-allowed rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                              value={selectedReserva.price_estimate || 0}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1993,19 +2077,11 @@ export default function RecepcionPage() {
 
                 {paymentMode && (
                   <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
-                    {selectedReserva.id === 'walkin' && (
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Monto a cobrar</span>
-                        <button
-                          type="button"
-                          onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
-                          className="text-[10px] font-extrabold text-blue-600 flex items-center gap-1 bg-none border-none hover:underline cursor-pointer"
-                        >
-                          {isPriceUnlocked ? <Unlock size={11} /> : <Lock size={11} />}
-                          {isPriceUnlocked ? 'BLOQUEAR PRECIO' : 'MODIFICAR PRECIO'}
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                        {selectedReserva.id === 'walkin' ? 'Pago Actual (Anticipo)' : 'Monto a cobrar'}
+                      </span>
+                    </div>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
                       <input
@@ -2013,12 +2089,7 @@ export default function RecepcionPage() {
                         value={paymentAmount}
                         onChange={e => setPaymentAmount(e.target.value)}
                         placeholder="0.00"
-                        readOnly={selectedReserva.id === 'walkin' && !isPriceUnlocked}
-                        className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                          (selectedReserva.id === 'walkin' && !isPriceUnlocked)
-                            ? 'bg-zinc-100 border-zinc-200/80 text-zinc-600 cursor-not-allowed shadow-none'
-                            : 'bg-[#fafafa] border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm'
-                        }`}
+                        className="w-full bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
                       />
                     </div>
 

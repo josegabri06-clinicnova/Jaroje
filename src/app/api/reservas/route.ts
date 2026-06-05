@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       guestName, 
       isBlock = false, 
       price,
+      deposit,
       phone,
       numAdult,
       numChild,
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
         firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
         status: isBlock ? "black" : "confirmed",
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
+        ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
         ...(!isBlock ? {
           mobile: phone || '',
           phone: phone || '',
