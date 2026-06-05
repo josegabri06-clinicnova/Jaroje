@@ -5,15 +5,31 @@ import { useRouter } from 'next/navigation';
 import { 
   Hotel, Shield, ChevronRight, ChevronUp, ChevronDown,
   Star, Key, X, Check, Eye, EyeOff, LogOut,
-  Users, Plus, Trash2, Edit2
+  Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { 
   getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, 
   saveAdminPin, saveStaffLimpiezaPin, saveStaffMantenimientoPin, saveRecepcionPin, 
   logout 
 } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 
 type PinTarget = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion' | null;
+
+interface Employee {
+  employee_num: string;
+  full_name: string;
+  department: 'recepcion' | 'limpieza' | 'mantenimiento';
+}
+
+interface Account {
+  id: string;
+  name: string;
+  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR';
+  balance: number;
+  currency: string;
+  sort_index?: number | null;
+}
 
 export default function AjustesPage() {
   const router = useRouter();
@@ -28,16 +44,28 @@ export default function AjustesPage() {
   const [pinSuccess, setPinSuccess] = useState('');
 
   // Employees CRUD states
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(true);
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
-  const [editingEmployee, setEditingEmployee] = useState<any | null>(null);
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   
   // Employees Form states
   const [formEmployeeNum, setFormEmployeeNum] = useState('');
   const [formEmployeeName, setFormEmployeeName] = useState('');
   const [formEmployeeDept, setFormEmployeeDept] = useState<'recepcion' | 'limpieza' | 'mantenimiento'>('recepcion');
   const [isSavingEmployee, setIsSavingEmployee] = useState(false);
+
+  // Cuentas states
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [showAccountOrderModal, setShowAccountOrderModal] = useState(false);
+  const [showAddAccountModal, setShowAddAccountModal] = useState(false);
+  const [accName, setAccName] = useState('');
+  const [accBalance, setAccBalance] = useState('');
+  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR'>('EFECTIVO');
+  const [accCurrency, setAccCurrency] = useState('MXN');
+  const [isSavingAcc, setIsSavingAcc] = useState(false);
+  const [renamingAccount, setRenamingAccount] = useState<string | null>(null);
+  const [renamingNewName, setRenamingNewName] = useState('');
 
   // Load pins and employees on mount
   const fetchEmployees = async () => {
@@ -59,8 +87,24 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchAccounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('*')
+        .order('sort_index', { ascending: true })
+        .order('name', { ascending: true });
+      if (!error && data) {
+        setAccounts(data);
+      }
+    } catch (e) {
+      console.error("Error fetching accounts:", e);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
+    fetchAccounts();
   }, []);
 
   const openPinModal = (target: PinTarget) => {
@@ -100,7 +144,7 @@ export default function AjustesPage() {
   };
 
   // Employees CRUD actions
-  const openEditEmployee = (emp?: any) => {
+  const openEditEmployee = (emp?: Employee) => {
     if (emp) {
       setEditingEmployee(emp);
       setFormEmployeeNum(emp.employee_num);
@@ -175,7 +219,7 @@ export default function AjustesPage() {
     }
   };
 
-  const handleDeleteEmployee = async (emp: any) => {
+  const handleDeleteEmployee = async (emp: Employee) => {
     if (!confirm(`¿Estás seguro de que deseas dar de baja a ${emp.full_name}?`)) {
       return;
     }
@@ -240,6 +284,170 @@ export default function AjustesPage() {
     }
   };
 
+  // --- ACCOUNT CRUD HANDLERS ---
+  const sortAccounts = (accs: Account[]) => {
+    return [...accs].sort((a, b) => {
+      const sortA = a.sort_index !== undefined && a.sort_index !== null ? a.sort_index : 999;
+      const sortB = b.sort_index !== undefined && b.sort_index !== null ? b.sort_index : 999;
+      if (sortA !== sortB) return sortA - sortB;
+      
+      const nameA = a.name.trim().toUpperCase();
+      const nameB = b.name.trim().toUpperCase();
+      return nameA.localeCompare(nameB);
+    });
+  };
+
+  const moveAccount = async (accName: string, direction: 'up' | 'down') => {
+    const sorted = sortAccounts(accounts);
+    const index = sorted.findIndex(a => a.name.trim().toUpperCase() === accName.trim().toUpperCase());
+    if (index === -1) return;
+
+    const targetIndex = index + (direction === 'up' ? -1 : 1);
+    if (targetIndex < 0 || targetIndex >= sorted.length) return;
+
+    const newSorted = [...sorted];
+    const [movedItem] = newSorted.splice(index, 1);
+    newSorted.splice(targetIndex, 0, movedItem);
+
+    const updatedAccounts = accounts.map(a => {
+      const newIdx = newSorted.findIndex(item => item.id === a.id);
+      return { ...a, sort_index: newIdx };
+    });
+    setAccounts(updatedAccounts);
+
+    try {
+      const promises = updatedAccounts.map(a => 
+        supabase.from('accounts').update({ sort_index: a.sort_index }).eq('id', a.id)
+      );
+      await Promise.all(promises);
+    } catch (e) {
+      console.error("Error al guardar el nuevo orden en Supabase:", e);
+    }
+  };
+
+  const handleRenameAccount = async (accId: string, currentName: string) => {
+    const clean = renamingNewName.trim();
+    if (!clean) return alert("El nombre no puede estar vacío.");
+    
+    const duplicate = accounts.find(a => a.id !== accId && a.name.trim().toUpperCase() === clean.toUpperCase());
+    if (duplicate) return alert(`Ya existe una cuenta con el nombre "${clean}".`);
+    
+    setIsSavingAcc(true);
+    const { error } = await supabase
+      .from('accounts')
+      .update({ name: clean })
+      .eq('id', accId);
+      
+    setIsSavingAcc(false);
+    if (error) {
+      console.error(error);
+      alert("Error al renombrar cuenta en Supabase");
+    } else {
+      setAccounts(accounts.map(a => a.id === accId ? { ...a, name: clean } : a));
+      setRenamingAccount(null);
+      setRenamingNewName('');
+      
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: '999',
+            employee_name: 'Administrador',
+            department: 'recepcion',
+            module: 'finanzas',
+            action: 'renombrar_cuenta',
+            details: JSON.stringify({
+              text: `Renombró cuenta: "${currentName}" a "${clean}"`,
+              account: {
+                oldName: currentName,
+                newName: clean
+              }
+            })
+          })
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const handleDeleteAccount = async (accountId: string) => {
+    const acc = accounts.find(a => a.id === accountId);
+    if (!acc) return;
+
+    if (acc.balance !== 0) {
+      if (!confirm(`⚠️ Esta cuenta tiene un saldo activo de $${Math.round(acc.balance).toLocaleString('es-MX')} ${acc.currency}. Si la eliminas, perderás este saldo en el total general. ¿Deseas continuar?`)) {
+        return;
+      }
+    } else {
+      if (!confirm(`¿Seguro que deseas eliminar la cuenta "${acc.name}"?`)) {
+        return;
+      }
+    }
+
+    try {
+      await supabase.from('finances').update({ account_id: null }).eq('account_id', accountId);
+
+      const { error } = await supabase.from('accounts').delete().eq('id', accountId);
+      if (error) throw error;
+
+      alert("✅ Cuenta eliminada con éxito.");
+      fetchAccounts();
+    } catch (err) {
+      console.error(err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      alert("❌ Error al eliminar la cuenta: " + errMsg);
+    }
+  };
+
+  const handleAddAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accName) return alert("Por favor ingresa un nombre para la cuenta");
+
+    setIsSavingAcc(true);
+    const balanceNum = Number(accBalance) || 0;
+
+    try {
+      const { error } = await supabase.from('accounts').insert([{
+        name: accName,
+        group_type: accGroupType,
+        balance: balanceNum,
+        currency: accCurrency
+      }]);
+
+      if (error) throw error;
+
+      if (balanceNum > 0) {
+        const { data: newAcc } = await supabase.from('accounts').select('id').eq('name', accName).single();
+        if (newAcc) {
+          await supabase.from('finances').insert([{
+            type: 'ingreso',
+            amount: balanceNum,
+            category: 'Ajuste',
+            description: 'Saldo inicial de apertura de la cuenta',
+            account_id: newAcc.id,
+            payment_method: 'efectivo',
+            date: new Date().toISOString().split('T')[0]
+          }]);
+        }
+      }
+
+      alert("✅ Cuenta creada con éxito.");
+      setShowAddAccountModal(false);
+      setAccName('');
+      setAccBalance('');
+      setAccCurrency('MXN');
+      fetchAccounts();
+    } catch (err) {
+      console.error(err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      alert("❌ Error al crear la cuenta: " + errMsg);
+    } finally {
+      setIsSavingAcc(false);
+    }
+  };
+
   const handleLogout = () => { logout(); router.replace('/login'); };
 
   const SectionHeader = ({ icon, title }: { icon: React.ReactNode; title: string }) => (
@@ -300,6 +508,12 @@ export default function AjustesPage() {
         <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
         <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
         <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
+      </Card>
+
+      {/* Configuración Contable */}
+      <SectionHeader icon={<Hotel size={15} strokeWidth={2.5} />} title="Configuración Contable" />
+      <Card>
+        <Row label="Acomodar Cuentas" onPress={() => setShowAccountOrderModal(true)} />
       </Card>
 
       {/* Catálogo de Empleados (CRUD Manual) */}
@@ -525,7 +739,7 @@ export default function AjustesPage() {
                   <label className="text-[11px] font-bold text-zinc-405 uppercase tracking-wide mb-1.5 block">Departamento</label>
                   <select
                     value={formEmployeeDept}
-                    onChange={e => setFormEmployeeDept(e.target.value as any)}
+                    onChange={e => setFormEmployeeDept(e.target.value as 'recepcion' | 'limpieza' | 'mantenimiento')}
                     className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900"
                   >
                     <option value="recepcion">Recepción</option>
@@ -548,6 +762,235 @@ export default function AjustesPage() {
                 </>
               )}
             </button>
+          </div>
+        </>
+      )}
+
+      {/* Modal Acomodar Cuentas (Estilo Inventario) */}
+      {showAccountOrderModal && (
+        <>
+          <div className="fixed inset-0 bg-zinc-900/40 z-[90] backdrop-blur-sm" onClick={() => setShowAccountOrderModal(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-3xl shadow-2xl p-5 pb-16 pb-safe space-y-4 animate-in slide-in-from-bottom duration-300 flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-2 shrink-0">
+              <div>
+                <h3 className="font-bold text-zinc-900 text-base">Acomodar Cuentas</h3>
+                <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mt-0.5">Organiza, Renombra o Elimina</p>
+              </div>
+              <button 
+                onClick={() => setShowAccountOrderModal(false)}
+                className="p-2 rounded-xl hover:bg-zinc-100 transition-colors"
+              >
+                <X size={18} className="text-zinc-500"/>
+              </button>
+            </div>
+
+            {/* LISTA DE CUENTAS */}
+            <div className="space-y-2 overflow-y-auto pr-1 flex-1 py-1">
+              {sortAccounts(accounts).map((acc, index, arr) => (
+                <div 
+                  key={acc.id}
+                  className="flex items-center justify-between bg-zinc-50 border border-zinc-200/60 p-3 rounded-2xl hover:bg-white transition-all duration-300"
+                >
+                  <div className="truncate flex-1 pr-2">
+                    {renamingAccount === acc.id ? (
+                      <div className="flex items-center gap-1.5 w-full">
+                        <input
+                          type="text"
+                          value={renamingNewName}
+                          onChange={(e) => setRenamingNewName(e.target.value)}
+                          className="w-full bg-zinc-100 border border-zinc-300 rounded-lg px-2.5 py-1 text-[12px] font-bold outline-none focus:bg-white focus:border-zinc-900 text-zinc-900"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleRenameAccount(acc.id, acc.name);
+                            if (e.key === 'Escape') setRenamingAccount(null);
+                          }}
+                        />
+                        <button 
+                          onClick={() => handleRenameAccount(acc.id, acc.name)}
+                          className="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 text-white rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          Sí
+                        </button>
+                        <button 
+                          onClick={() => setRenamingAccount(null)}
+                          className="px-2 py-1 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 rounded-lg text-[10px] font-bold transition-all cursor-pointer"
+                        >
+                          No
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        <span className="font-extrabold text-zinc-900 text-[13px] block truncate leading-tight select-none">
+                          {acc.name}
+                        </span>
+                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-wider block mt-0.5">{acc.group_type}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 select-none">
+                    <button
+                      disabled={index === 0}
+                      onClick={() => moveAccount(acc.name, 'up')}
+                      className="p-1.5 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 rounded-lg text-zinc-650 cursor-pointer active:scale-90 transition-transform"
+                      title="Mover arriba"
+                    >
+                      <ArrowUp size={12} strokeWidth={2.5} />
+                    </button>
+                    <button
+                      disabled={index === arr.length - 1}
+                      onClick={() => moveAccount(acc.name, 'down')}
+                      className="p-1.5 bg-zinc-100 hover:bg-zinc-200 disabled:opacity-40 rounded-lg text-zinc-650 cursor-pointer active:scale-90 transition-transform"
+                      title="Mover abajo"
+                    >
+                      <ArrowDown size={12} strokeWidth={2.5} />
+                    </button>
+                    {renamingAccount !== acc.id && (
+                      <>
+                        <button
+                          onClick={() => {
+                            setRenamingAccount(acc.id);
+                            setRenamingNewName(acc.name);
+                          }}
+                          className="p-1.5 hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 rounded-lg transition-all cursor-pointer"
+                          title="Renombrar Cuenta"
+                        >
+                          <Edit2 size={12} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAccount(acc.id)}
+                          className="p-1.5 hover:bg-rose-50 text-zinc-400 hover:text-rose-600 rounded-lg transition-all cursor-pointer"
+                          title="Eliminar Cuenta"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* BOTÓN CREAR NUEVA CUENTA */}
+            <div className="pt-3 border-t border-zinc-100 shrink-0 space-y-2">
+              <button 
+                onClick={() => {
+                  setAccName('');
+                  setAccBalance('');
+                  setAccGroupType('EFECTIVO');
+                  setAccCurrency('MXN');
+                  setShowAddAccountModal(true);
+                }}
+                className="w-full py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold border border-zinc-250/60 rounded-xl transition-all duration-300 text-[12px] active:scale-[0.96] cursor-pointer text-center flex items-center justify-center gap-1.5"
+              >
+                <Plus size={14} strokeWidth={2.5} />
+                Agregar Nueva Cuenta
+              </button>
+              <button 
+                onClick={() => setShowAccountOrderModal(false)}
+                className="w-full py-3 bg-zinc-900 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+              >
+                Listo
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Modal Premium para Crear Cuentas */}
+      {showAddAccountModal && (
+        <>
+          <div className="fixed inset-0 bg-zinc-900/40 z-[110] backdrop-blur-sm" onClick={() => setShowAddAccountModal(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-[120] bg-white rounded-t-3xl shadow-2xl p-5 pb-16 pb-safe space-y-4 animate-in slide-in-from-bottom duration-300">
+            <div className="flex justify-between items-center mb-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <Plus size={16} className="text-zinc-650" />
+                <h3 className="font-bold text-zinc-900 text-base">Nueva Cuenta</h3>
+              </div>
+              <button 
+                onClick={() => setShowAddAccountModal(false)}
+                className="p-2 rounded-xl hover:bg-zinc-100 transition-colors"
+              >
+                <X size={18} className="text-zinc-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddAccount} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5 block">Nombre de la Cuenta</label>
+                <input 
+                  type="text" required
+                  placeholder="Ej. Caja Recepción, Dólares..."
+                  value={accName}
+                  onChange={e => setAccName(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900 placeholder:text-zinc-300 font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5 block">Grupo Contable</label>
+                <select 
+                  value={accGroupType}
+                  onChange={e => setAccGroupType(e.target.value as 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR')}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                >
+                  <option value="EFECTIVO">EFECTIVO (Cajas físicas)</option>
+                  <option value="BANCOS">BANCOS (Cuentas corrientes)</option>
+                  <option value="AHORROS">AHORROS (Fondos guardados)</option>
+                  <option value="EXTRANJERO">EXTRANJERO (DLL/EUR)</option>
+                  <option value="CUENTAS X COBRAR">CUENTAS X COBRAR (Saldos a favor / Booking)</option>
+                  <option value="CUENTAS X PAGAR">CUENTAS X PAGAR (Obligaciones a pagar / Proveedores)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5 block">Saldo Inicial</label>
+                  <input 
+                    type="number" step="0.01"
+                    placeholder="0.00"
+                    value={accBalance}
+                    onChange={e => setAccBalance(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900 placeholder:text-zinc-300 font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5 block">Moneda (Divisa)</label>
+                  <select 
+                    value={accCurrency}
+                    onChange={e => setAccCurrency(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                  >
+                    <option value="MXN">MXN (Pesos)</option>
+                    <option value="USD">USD (Dólares)</option>
+                    <option value="EUR">EUR (Euros)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setShowAddAccountModal(false)}
+                  className="flex-1 py-3.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit"
+                  disabled={isSavingAcc}
+                  className="flex-1 py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] disabled:opacity-45 shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  {isSavingAcc ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Plus size={14} />
+                      <span>Crear Cuenta</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </>
       )}
