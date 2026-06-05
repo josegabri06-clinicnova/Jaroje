@@ -37,3 +37,17 @@ body {
   }
 }
 
+/* Normalizar inputs de tipo date y number en iOS Safari */
+input[type="date"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  display: flex !important;
+  align-items: center !important;
+  min-height: 1.5em !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}

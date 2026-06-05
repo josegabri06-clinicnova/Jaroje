@@ -361,14 +361,14 @@ export default function VercelActionForm() {
         
         {/* Fechas (Primero, para poder cargar disponibilidad) */}
         <div className="grid grid-cols-2 gap-3.5 w-full">
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Check-In</label>
+          <div className="space-y-1.5 min-w-0">
+            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Check-In</label>
             <input 
               key={todayStr ? `checkin-${todayStr}` : 'checkin-loading'}
               type="date" 
               required
               min={todayStr}
-              className="w-full min-w-0 max-w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl px-2.5 py-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
+              className="w-full min-w-0 h-14 px-3.5 py-0 bg-[#fafafa] border border-zinc-200/80 rounded-xl text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block appearance-none"
               value={form.checkIn}
               onChange={e => {
                 let newCheckIn = e.target.value;
@@ -380,13 +380,13 @@ export default function VercelActionForm() {
               }}
             />
           </div>
-          <div className="flex-1 min-w-0 space-y-1.5">
-            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Noches</label>
+          <div className="space-y-1.5 min-w-0">
+            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Noches</label>
             <input 
               type="number" 
               required
               min={1}
-              className="w-full min-w-0 max-w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl px-2.5 py-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
+              className="w-full min-w-0 h-14 px-3.5 py-0 bg-[#fafafa] border border-zinc-200/80 rounded-xl text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
               value={nights}
               onChange={e => {
                 const val = e.target.value;
