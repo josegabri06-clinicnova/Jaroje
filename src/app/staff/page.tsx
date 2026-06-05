@@ -3,11 +3,12 @@
 import { useEffect, useState, useRef } from 'react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import {
+import { 
   CheckCircle2, AlertTriangle, Wrench, Sparkles, BedDouble,
   ArrowDownLeft, Clock, Plus, X, Send,
   ChevronDown, CheckCheck, Camera, Bell, Package, Minus,
-  RefreshCw, ShieldAlert, UserPlus
+  RefreshCw, ShieldAlert, UserPlus, Trash2, Download, Database, 
+  History, ChevronLeft, Calendar, Moon, Users
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServer, getOfficialEmployees } from '@/lib/auth';
@@ -33,6 +34,11 @@ function getLocalDateStr(date: Date = new Date()): string {
     return `${year}-${month}-${day}`;
   }
 }
+
+const getUnitDisplay = (roomStr: string) => {
+  const match = (roomStr || '').match(/\(([^)]+)\)/);
+  return match ? match[1] : (roomStr || '').split(' ')[0];
+};
 
 // Habitaciones físicas consistentes (101 a 402) según requerimiento de Jaroje OS
 const ROOMS = [
@@ -62,10 +68,23 @@ const MTTO_LOCATIONS = [
 interface Reserva {
   id: string;
   room: string;
+  room_name?: string;
   guest_name?: string;
+  guest_phone?: string;
+  guest_email?: string;
   check_in: string;
   check_out: string;
+  checked_in?: boolean;
   checked_out?: boolean;
+  nights?: number;
+  price_estimate?: number;
+  price_per_night?: number;
+  num_adult?: number;
+  num_child?: number;
+  deposit?: number;
+  balance?: number;
+  notes?: string;
+  channel?: string;
 }
 
 interface CleanTask {
@@ -219,6 +238,7 @@ function getRoomOperationalStatus(
 
 export default function StaffPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [todayStr, setTodayStr] = useState('');
   const [inventory, setInventory] = useState<any[]>([]);
@@ -1011,16 +1031,27 @@ export default function StaffPage() {
         {/* KPI Cards */}
         {!isMantenimiento && (
           <div className="grid grid-cols-3 gap-2.5">
-            {[
-              { label: 'Llegan', value: llegadas.length, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-100' },
-              { label: 'Salen', value: salidas.length, color: 'text-rose-600', bg: 'bg-rose-50 border-rose-100' },
-              { label: 'Ocupadas', value: ocupadas.length, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
-            ].map((k, i) => (
-              <div key={i} className={`bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col justify-center items-center ${k.bg}`}>
-                <p className={`text-2xl font-black ${k.color} leading-none mb-1`}>{k.value}</p>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">{k.label}</p>
-              </div>
-            ))}
+            <button 
+              onClick={() => setKpiModalType('encasa')}
+              className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-center items-center cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+            >
+              <p className="text-2xl font-black text-zinc-900 leading-none mb-1">{ocupadas.length}</p>
+              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">En casa</p>
+            </button>
+            <button 
+              onClick={() => setKpiModalType('llegan')}
+              className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-center items-center cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+            >
+              <p className="text-2xl font-black text-emerald-600 leading-none mb-1">{llegadas.length}</p>
+              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">Llegan</p>
+            </button>
+            <button 
+              onClick={() => setKpiModalType('salen')}
+              className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-center items-center cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+            >
+              <p className="text-2xl font-black text-amber-500 leading-none mb-1">{salidas.length}</p>
+              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">Salen</p>
+            </button>
           </div>
         )}
 
@@ -1926,6 +1957,105 @@ export default function StaffPage() {
           }
         }}
       />
+
+      {/* ── MODAL DETALLES DE KPI (SECURE FOR LIMPIEZA/STAFF) ── */}
+      {kpiModalType && (() => {
+        let title = 'Detalles';
+        let badgeColor = 'bg-zinc-100 text-zinc-800';
+        let filtered: any[] = [];
+
+        if (kpiModalType === 'encasa') {
+          title = 'Huéspedes En Casa';
+          badgeColor = 'bg-zinc-900 text-white';
+          filtered = ocupadas;
+        } else if (kpiModalType === 'llegan') {
+          title = 'Llegadas Hoy';
+          badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+          filtered = llegadas;
+        } else if (kpiModalType === 'salen') {
+          title = 'Salidas Hoy';
+          badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+          filtered = salidas;
+        }
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div onClick={() => setKpiModalType(null)} className="absolute inset-0" />
+            <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-4 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto max-h-[85vh] flex flex-col">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black text-zinc-900">{title}</h3>
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${badgeColor}`}>
+                    {filtered.length}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setKpiModalType(null)} 
+                  className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+                >
+                  <X size={15} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              {/* List body */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 py-1">
+                {filtered.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
+                    No hay huéspedes en este grupo para el día de hoy.
+                  </div>
+                ) : (
+                  filtered.map(r => {
+                    const nightsVal = r.nights || 1;
+                    return (
+                      <div 
+                        key={r.id} 
+                        className="p-4 border border-zinc-150 rounded-2xl bg-zinc-50/20 space-y-2.5 select-none"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-[14px] font-black text-zinc-950 leading-tight">{r.guest_name || 'Huésped Sin Nombre'}</h4>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Reserva ID: {r.id}</span>
+                          </div>
+                          <span className="text-[11px] font-extrabold bg-zinc-900 text-white px-2.5 py-1 rounded-lg">
+                            {getUnitDisplay(r.room || r.room_name || '')}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-[12px] pt-1.5 border-t border-zinc-100">
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Estancia</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                                {format(new Date(r.check_in + 'T12:00:00'), 'dd MMM', { locale: es })}
+                              </span>
+                              <span className="text-zinc-400 text-[10px] font-bold">➔</span>
+                              <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                                {format(new Date(r.check_out + 'T12:00:00'), 'dd MMM', { locale: es })}
+                              </span>
+                              <span className="text-[9px] font-black bg-zinc-900 text-white px-2 py-0.5 rounded-full">
+                                {nightsVal}n
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Canal / Origen</span>
+                            <p className="font-bold text-zinc-800 bg-zinc-100/50 border border-zinc-100 px-2.5 py-0.5 rounded-xl w-fit">
+                              {r.channel || 'Directo'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );

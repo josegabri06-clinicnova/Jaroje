@@ -1219,14 +1219,25 @@ export default function AdminDashboard() {
 
                         <div className="grid grid-cols-2 gap-4 text-[12px] pt-1.5 border-t border-zinc-100">
                           <div>
-                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Estancia</span>
-                            <p className="font-semibold text-zinc-800 truncate">
-                              {r.check_in} al {r.check_out} ({nightsVal}n)
-                            </p>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Estancia</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                                {format(new Date(r.check_in + 'T12:00:00'), 'dd MMM', { locale: es })}
+                              </span>
+                              <span className="text-zinc-400 text-[10px] font-bold">➔</span>
+                              <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                                {format(new Date(r.check_out + 'T12:00:00'), 'dd MMM', { locale: es })}
+                              </span>
+                              <span className="text-[9px] font-black bg-zinc-900 text-white px-2 py-0.5 rounded-full">
+                                {nightsVal}n
+                              </span>
+                            </div>
                           </div>
                           <div>
-                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal / Origen</span>
-                            <p className="font-semibold text-zinc-800">{r.channel || 'Directo'}</p>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Canal / Origen</span>
+                            <p className="font-bold text-zinc-800 bg-zinc-100/50 border border-zinc-100 px-2.5 py-0.5 rounded-xl w-fit">
+                              {r.channel || 'Directo'}
+                            </p>
                           </div>
                         </div>
 

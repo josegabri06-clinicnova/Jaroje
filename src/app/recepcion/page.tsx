@@ -332,6 +332,7 @@ export default function RecepcionPage() {
 
   // Modal Check-In / Walk-In
   const [showCheckInModal, setShowCheckInModal] = useState(false);
+  const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
@@ -1300,6 +1301,31 @@ export default function RecepcionPage() {
 
       {mainTab === 'recepcion' && (
         <div className="space-y-6">
+
+          {/* ── KPIs DE HOY (Replicado de Admin pero seguro) ────────────────── */}
+          <div className="grid grid-cols-3 gap-2">
+            <button 
+              onClick={() => setKpiModalType('encasa')}
+              className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+            >
+              <p className="text-[20px] font-bold text-zinc-900">{reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr).length}</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">En casa</p>
+            </button>
+            <button 
+              onClick={() => setKpiModalType('llegan')}
+              className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+            >
+              <p className="text-[20px] font-bold text-emerald-600">{llegadas.length}</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan</p>
+            </button>
+            <button 
+              onClick={() => setKpiModalType('salen')}
+              className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+            >
+              <p className="text-[20px] font-bold text-amber-500">{salidas.length}</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen</p>
+            </button>
+          </div>
 
           {/* ── BOTONES DE ACCIÓN RÁPIDA ─────────────────────────────────── */}
           <div className="flex gap-3">
@@ -2643,7 +2669,105 @@ export default function RecepcionPage() {
         );
       })()}
 
+      {/* ── MODAL DETALLES DE KPI (SECURE FOR RECEPCION) ── */}
+      {kpiModalType && (() => {
+        let title = 'Detalles';
+        let badgeColor = 'bg-zinc-100 text-zinc-800';
+        let filtered: any[] = [];
+
+        if (kpiModalType === 'encasa') {
+          title = 'Huéspedes En Casa';
+          badgeColor = 'bg-zinc-900 text-white';
+          filtered = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr);
+        } else if (kpiModalType === 'llegan') {
+          title = 'Llegadas Hoy';
+          badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+          filtered = llegadas;
+        } else if (kpiModalType === 'salen') {
+          title = 'Salidas Hoy';
+          badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+          filtered = salidas;
+        }
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+            <div onClick={() => setKpiModalType(null)} className="absolute inset-0" />
+            <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-4 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto max-h-[85vh] flex flex-col">
+              
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-black text-zinc-900">{title}</h3>
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${badgeColor}`}>
+                    {filtered.length}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setKpiModalType(null)} 
+                  className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
+                >
+                  <X size={15} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              {/* List body */}
+              <div className="flex-1 overflow-y-auto space-y-3 pr-1 py-1">
+                {filtered.length === 0 ? (
+                  <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
+                    No hay huéspedes en este grupo para el día de hoy.
+                  </div>
+                ) : (
+                  filtered.map(r => {
+                    const nightsVal = r.nights || 1;
+                    return (
+                      <div 
+                        key={r.id} 
+                        className="p-4 border border-zinc-150 rounded-2xl bg-zinc-50/20 space-y-2.5 select-none"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <h4 className="text-[14px] font-black text-zinc-950 leading-tight">{r.guest_name || 'Huésped Sin Nombre'}</h4>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Reserva ID: {r.id}</span>
+                          </div>
+                          <span className="text-[11px] font-extrabold bg-zinc-900 text-white px-2.5 py-1 rounded-lg">
+                            {getUnitDisplay(r.room || r.room_name || '')}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-[12px] pt-1.5 border-t border-zinc-100">
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Estancia</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                                {format(new Date(r.check_in + 'T12:00:00'), 'dd MMM', { locale: es })}
+                              </span>
+                              <span className="text-zinc-400 text-[10px] font-bold">➔</span>
+                              <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                                {format(new Date(r.check_out + 'T12:00:00'), 'dd MMM', { locale: es })}
+                              </span>
+                              <span className="text-[9px] font-black bg-zinc-900 text-white px-2 py-0.5 rounded-full">
+                                {nightsVal}n
+                              </span>
+                            </div>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Canal / Origen</span>
+                            <p className="font-bold text-zinc-800 bg-zinc-100/50 border border-zinc-100 px-2.5 py-0.5 rounded-xl w-fit">
+                              {r.channel || 'Directo'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
-
