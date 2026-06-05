@@ -147,6 +147,13 @@ export default function VercelActionForm() {
     }
   }, [form.roomId, form.groupRooms, form.checkIn, form.checkOut, form.channel, form.dailyRate, isDailyRateEdited, isDepositEdited]);
 
+  // Resetear ediciones manuales cuando cambien las habitaciones seleccionadas
+  useEffect(() => {
+    setIsDailyRateEdited(false);
+    setIsDepositEdited(false);
+    setIsPriceUnlocked(false);
+  }, [form.roomId, form.unitId, form.groupRooms]);
+
   const handleUnlockPrice = () => {
     if (pinInput === getAdminPin()) {
       setIsPriceUnlocked(true);

@@ -539,6 +539,12 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, isDailyRateEdited]);
 
+  // Resetear ediciones manuales cuando cambien las habitaciones seleccionadas
+  useEffect(() => {
+    setIsDailyRateEdited(false);
+    setIsPriceUnlocked(false);
+  }, [selectedReserva?.room, selectedReserva?.unit_id, selectedReserva?.groupRooms]);
+
   useEffect(() => {
     if (!paymentMode) {
       setSelectedAccountId('');
