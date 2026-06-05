@@ -105,10 +105,20 @@ function getSeason(dateStr: string): string {
 }
 
 function getLocalDateStr(date: Date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  try {
+    const formatter = new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(date);
+  } catch (e) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 }
 
 function getNextDayStr(dateStr: string): string {
@@ -553,7 +563,7 @@ export default function RecepcionPage() {
     if (!checkIn || !checkOut || checkIn >= checkOut) return;
     setCheckingAvail(true);
     try {
-      const res = await fetch(`/api/availability?checkIn=${checkIn}&checkOut=${checkOut}`);
+      const res = await fetch(`/api/availability?checkIn=${checkIn}&checkOut=${checkOut}&t=` + Date.now());
       const data = await res.json();
       if (data.success && data.inventory) {
         setRoomInventory(data.inventory);
@@ -568,8 +578,8 @@ export default function RecepcionPage() {
   const fetchData = async () => {
     try {
       const [r, t, inv, chk, acc, rms] = await Promise.all([
-        fetch('/api/reservas'),
-        fetch('/api/tasks'),
+        fetch('/api/reservas?t=' + Date.now()),
+        fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),

@@ -333,7 +333,7 @@ export default function ReservasList() {
     setTokenError(false);
     try {
       const [res, chk, acc] = await Promise.all([
-        fetch('/api/reservas'),
+        fetch('/api/reservas?t=' + Date.now()),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true })
       ]);

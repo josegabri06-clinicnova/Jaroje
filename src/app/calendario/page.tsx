@@ -79,7 +79,7 @@ export default function CalendarPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/reservas');
+      const res = await fetch('/api/reservas?t=' + Date.now());
       const json = await res.json();
       if (json.success) setReservas(json.data || []);
     } catch (e) {

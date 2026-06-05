@@ -35,10 +35,20 @@ const ROOM_ROWS = [
 
 
 function getLocalDateStr(date: Date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  try {
+    const formatter = new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(date);
+  } catch (e) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 }
 
 function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
@@ -141,10 +151,10 @@ export default function AdminDashboard() {
     setTokenError(false);
     try {
       const [resRes, convRes, roomsRes, tasksRes, chkRes] = await Promise.all([
-        fetch('/api/reservas').catch(() => null),
-        fetch('/api/conversations').catch(() => null),
-        fetch('/api/room-status').catch(() => null),
-        fetch('/api/tasks').catch(() => null),
+        fetch('/api/reservas?t=' + Date.now()).catch(() => null),
+        fetch('/api/conversations?t=' + Date.now()).catch(() => null),
+        fetch('/api/room-status?t=' + Date.now()).catch(() => null),
+        fetch('/api/tasks?t=' + Date.now()).catch(() => null),
         supabase.from('checkins').select('*')
       ]);
 
@@ -235,7 +245,7 @@ export default function AdminDashboard() {
         });
 
         // Actualizar estados locales de inmediato
-        const roomsRes = await fetch('/api/room-status');
+        const roomsRes = await fetch('/api/room-status?t=' + Date.now());
         const roomsJson = await roomsRes.json();
         if (roomsJson.success) setRoomStatuses(roomsJson.data || []);
         

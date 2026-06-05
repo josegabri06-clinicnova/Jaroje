@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { fetchAllRawBeds24Bookings, getUnitName, getRealPrice, getRoomMetadata } from '@/lib/beds24';
 
+export const dynamic = 'force-dynamic';
+
 async function fetchBeds24Bookings() {
   const today = new Date();
   const fromDate = new Date(today);

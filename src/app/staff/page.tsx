@@ -18,10 +18,20 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 function getLocalDateStr(date: Date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  try {
+    const formatter = new Intl.DateTimeFormat('fr-CA', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    return formatter.format(date);
+  } catch (e) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
 }
 
 // Habitaciones físicas consistentes (101 a 402) según requerimiento de Jaroje OS
@@ -403,10 +413,10 @@ export default function StaffPage() {
   const fetchData = async () => {
     try {
       const [r, t, inv, rs, chk] = await Promise.all([
-        fetch('/api/reservas'),
-        fetch('/api/tasks'),
+        fetch('/api/reservas?t=' + Date.now()),
+        fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
-        fetch('/api/room-status'),
+        fetch('/api/room-status?t=' + Date.now()),
         supabase.from('checkins').select('*')
       ]);
       
