@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, BedDouble, Sparkles, BarChart3,
   MessageCircle, TrendingUp, RefreshCw, AlertCircle, Users, Moon,
-  Wallet, Package, Plus, Lock, XCircle, History, Phone, Clock, CheckCircle2, Wrench, X
+  Wallet, Package, Plus, Lock, XCircle, History, Phone, Clock, CheckCircle2, Wrench, X, CircleDot
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -50,6 +50,11 @@ function getLocalDateStr(date: Date = new Date()): string {
     return `${year}-${month}-${day}`;
   }
 }
+
+const getUnitDisplay = (roomStr: string) => {
+  const match = (roomStr || '').match(/\(([^)]+)\)/);
+  return match ? match[1] : (roomStr || '').split(' ')[0];
+};
 
 function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
   const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum));
@@ -434,37 +439,109 @@ export default function AdminDashboard() {
           ) : llegadasHoy.length === 0 ? (
             <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay llegadas programadas para hoy.</div>
           ) : (
-            <>
-              <div className="grid grid-cols-4 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Unidad</span>
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Nombre</span>
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Canal</span>
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide text-right">Adeudo</span>
-              </div>
-              <div className="divide-y divide-zinc-100">
-                {llegadasHoy.map(r => {
-                  const unitMatch = (r.room_name || '').match(/\((\d+)\)/);
-                  const unit = unitMatch ? unitMatch[1] : (r.room_name || '—').split(' ')[0];
-                  return (
-                    <div
-                      key={r.id}
-                      onClick={() => router.push(`/reservas?id=${r.id}`)}
-                      className="grid grid-cols-4 px-4 py-3 items-center cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-emerald-500" />
-                        <span className="text-[13px] font-bold text-zinc-900">{unit}</span>
-                      </div>
-                      <span className="text-[12px] font-semibold text-zinc-800 truncate pr-1">{r.guest_name?.split(' ')[0] || '—'}</span>
-                      <span className="text-[11px] font-medium text-zinc-500 truncate">{r.channel || 'Directo'}</span>
-                      <span className="text-[12px] font-bold text-emerald-600 text-right">
-                        {r.price_estimate ? `$${Math.round(r.price_estimate).toLocaleString()}` : '—'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[850px]">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50/30">
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Pax</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Total</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Adeudo</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {llegadasHoy.map(r => {
+                    const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
+                    const unit = getUnitDisplay(r.room || r.room_name || '');
+                    const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
+                    const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+                    return (
+                      <tr
+                        key={r.id}
+                        onClick={() => router.push(`/reservas?id=${r.id}`)}
+                        className="hover:bg-zinc-50/50 transition-colors cursor-pointer"
+                      >
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center justify-center font-extrabold text-[12px] bg-zinc-900 text-white rounded-lg px-2.5 py-1 min-w-[36px]">
+                            {unit}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
+                          {r.guest_name}
+                        </td>
+                        <td className="py-3 px-4 text-[12px] text-zinc-500 font-medium">
+                          {r.guest_phone ? (
+                            <a
+                              href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                            >
+                              <Phone size={11} className="text-emerald-500" />
+                              {r.guest_phone}
+                            </a>
+                          ) : (
+                            <span className="text-zinc-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center text-[12px] font-semibold text-zinc-700">
+                          <span className="inline-flex items-center gap-1">
+                            <Users size={12} className="text-zinc-400" />
+                            {paxTotal}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center text-[12px] font-semibold text-zinc-700">
+                          <span className="inline-flex items-center gap-1">
+                            <Moon size={12} className="text-zinc-400" />
+                            {r.nights || 1}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-zinc-900 text-[13px]">
+                          ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-semibold text-zinc-600 text-[13px]">
+                          ${dailyRate.toLocaleString('es-MX') || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right text-[13px]">
+                          {balanceVal > 0 ? (
+                            <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                              ${balanceVal.toLocaleString('es-MX')}
+                            </span>
+                          ) : (
+                            <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                              $0.00
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {r.checked_in ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
+                              <CheckCircle2 size={12} /> En Casa
+                            </span>
+                          ) : (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/recepcion?checkin=${r.id}`);
+                              }}
+                              className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                            >
+                              Check-In
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>
@@ -489,50 +566,96 @@ export default function AdminDashboard() {
           ) : salidasHoy.length === 0 ? (
             <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay salidas programadas para hoy.</div>
           ) : (
-            <>
-              <div className="grid grid-cols-4 px-4 py-2 bg-zinc-50 border-b border-zinc-100">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Unidad</span>
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Nombre</span>
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Canal</span>
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide text-right">Contacto</span>
-              </div>
-              <div className="divide-y divide-zinc-100">
-                {salidasHoy.map(r => {
-                  const unitMatch = (r.room_name || '').match(/\((\d+)\)/);
-                  const unit = unitMatch ? unitMatch[1] : (r.room_name || '—').split(' ')[0];
-                  return (
-                    <div
-                      key={r.id}
-                      onClick={() => router.push(`/reservas?id=${r.id}`)}
-                      className="grid grid-cols-4 px-4 py-3 items-center cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-400" />
-                        <span className="text-[13px] font-bold text-zinc-900">{unit}</span>
-                      </div>
-                      <span className="text-[12px] font-semibold text-zinc-800 truncate pr-1">{r.guest_name?.split(' ')[0] || '—'}</span>
-                      <span className="text-[11px] font-medium text-zinc-500 truncate">{r.channel || 'Directo'}</span>
-                      <div className="text-right">
-                        {r.guest_phone ? (
-                          <a
-                            href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-600 text-[10px] font-bold shadow-sm transition-all active:scale-95"
-                          >
-                            <MessageCircle size={10} className="fill-emerald-50 text-emerald-600" />
-                            <span>WhatsApp</span>
-                          </a>
-                        ) : (
-                          <span className="text-[11px] text-zinc-300 font-semibold">—</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[850px]">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50/30">
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Total</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Estado</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100">
+                  {salidasHoy.map(r => {
+                    const unit = getUnitDisplay(r.room || r.room_name || '');
+                    const isPending = !r.checked_out;
+                    const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
+                    return (
+                      <tr
+                        key={r.id}
+                        onClick={() => router.push(`/reservas?id=${r.id}`)}
+                        className="hover:bg-zinc-50/50 transition-colors cursor-pointer"
+                      >
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center justify-center font-extrabold text-[12px] bg-zinc-900 text-white rounded-lg px-2.5 py-1 min-w-[36px]">
+                            {unit}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
+                          {r.guest_name}
+                        </td>
+                        <td className="py-3 px-4 text-[12px] text-zinc-500 font-medium">
+                          {r.guest_phone ? (
+                            <a
+                              href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                            >
+                              <Phone size={11} className="text-emerald-500" />
+                              {r.guest_phone}
+                            </a>
+                          ) : (
+                            <span className="text-zinc-300">—</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center text-[12px] font-semibold text-zinc-700">
+                          {r.nights || 1}n
+                        </td>
+                        <td className="py-3 px-4 text-right font-bold text-zinc-900 text-[13px]">
+                          ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-right font-semibold text-zinc-600 text-[13px]">
+                          ${dailyRate.toLocaleString('es-MX') || '—'}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {r.checked_out ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-zinc-500 bg-zinc-100 px-2.5 py-1 rounded-xl border border-zinc-200">
+                              Completado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
+                              <CircleDot size={10} className="animate-pulse" /> Pendiente Out
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {isPending ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/recepcion?checkout=${r.id}`);
+                              }}
+                              className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                            >
+                              Dar Salida
+                            </button>
+                          ) : (
+                            <span className="text-[11px] text-zinc-400 font-bold">Listo ✓</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

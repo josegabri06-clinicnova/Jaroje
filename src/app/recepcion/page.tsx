@@ -34,6 +34,7 @@ interface Reserva {
   dni_image?: string;
   nights?: number;
   price_estimate?: number;
+  price_per_night?: number;
   num_adult?: number;
   num_child?: number;
   deposit?: number;
@@ -480,6 +481,27 @@ export default function RecepcionPage() {
       router.replace('/recepcion');
     }
   }, [searchParams, todayStr]);
+
+  // Interceptar URL para Check-in / Check-out automáticos desde Admin Dashboard
+  useEffect(() => {
+    if (reservas.length === 0) return;
+    const paramCheckin = searchParams.get('checkin');
+    const paramCheckout = searchParams.get('checkout');
+    if (paramCheckin) {
+      const match = reservas.find(r => String(r.id) === String(paramCheckin));
+      if (match && !match.checked_in) {
+        setSelectedReserva(match);
+        setShowCheckInModal(true);
+      }
+      router.replace('/recepcion');
+    } else if (paramCheckout) {
+      const match = reservas.find(r => String(r.id) === String(paramCheckout));
+      if (match && !match.checked_out) {
+        runWithSignature('checkout', (reserva) => processCheckOut(reserva), match);
+      }
+      router.replace('/recepcion');
+    }
+  }, [searchParams, reservas]);
 
   // Recalcular precio estimado en base a la edición manual o automática
   useEffect(() => {
@@ -1325,7 +1347,7 @@ export default function RecepcionPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[700px]">
+                <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead>
                     <tr className="border-b border-zinc-100 bg-zinc-50/30">
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
@@ -1333,6 +1355,7 @@ export default function RecepcionPage() {
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Pax</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Total</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Adeudo</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
@@ -1343,6 +1366,8 @@ export default function RecepcionPage() {
                       const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
                       const unit = getUnitDisplay(r.room);
                       const isPending = !r.checked_in;
+                      const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
+                      const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
                       return (
                         <tr
                           key={r.id}
@@ -1395,14 +1420,17 @@ export default function RecepcionPage() {
                           <td className="py-4 px-4 text-right font-bold text-zinc-900 text-[13px]">
                             ${r.price_estimate?.toLocaleString('es-MX') || '—'}
                           </td>
+                          <td className="py-4 px-4 text-right font-semibold text-zinc-600 text-[13px]">
+                            ${dailyRate.toLocaleString('es-MX') || '—'}
+                          </td>
                           <td className="py-4 px-4 text-right text-[13px]">
-                            {r.checked_in ? (
-                              <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                $0.00
+                            {balanceVal > 0 ? (
+                              <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
+                                ${balanceVal.toLocaleString('es-MX')}
                               </span>
                             ) : (
-                              <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                                ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                              <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                                $0.00
                               </span>
                             )}
                           </td>
@@ -1451,13 +1479,15 @@ export default function RecepcionPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[600px]">
+                <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead>
                     <tr className="border-b border-zinc-100 bg-zinc-50/30">
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
-                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa Total</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Total</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Estado</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
                     </tr>
@@ -1466,6 +1496,7 @@ export default function RecepcionPage() {
                     {salidas.map(r => {
                       const unit = getUnitDisplay(r.room);
                       const isPending = !r.checked_out;
+                      const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
                       return (
                         <tr key={r.id} className="hover:bg-zinc-50/30 transition-colors">
                           <td className="py-4 px-4">
@@ -1473,14 +1504,33 @@ export default function RecepcionPage() {
                               {unit}
                             </span>
                           </td>
-                          <td className="py-4 px-4 font-semibold text-zinc-950 text-[13px]">
+                          <td className="py-4 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
                             {r.guest_name}
+                          </td>
+                          <td className="py-4 px-4 text-[12px] text-zinc-500 font-medium">
+                            {r.guest_phone ? (
+                              <a
+                                href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                              >
+                                <Phone size={11} className="text-emerald-500" />
+                                {r.guest_phone}
+                              </a>
+                            ) : (
+                              <span className="text-zinc-300">—</span>
+                            )}
                           </td>
                           <td className="py-4 px-4 text-center text-[12px] font-semibold text-zinc-700">
                             {r.nights || 1}n
                           </td>
                           <td className="py-4 px-4 text-right font-bold text-zinc-900 text-[13px]">
                             ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                          </td>
+                          <td className="py-4 px-4 text-right font-semibold text-zinc-600 text-[13px]">
+                            ${dailyRate.toLocaleString('es-MX') || '—'}
                           </td>
                           <td className="py-4 px-4 text-center">
                             {r.checked_out ? (
