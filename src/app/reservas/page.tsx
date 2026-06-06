@@ -1338,12 +1338,31 @@ export default function ReservasList() {
                   </div>
                 </div>
               ) : (
-                <button 
-                  onClick={() => setShowPaymentFlow(true)}
-                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-[15px] py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-[0_4px_14px_rgba(37,99,235,0.25)] flex items-center justify-center gap-2"
-                >
-                  <LogIn size={18} strokeWidth={2.5} /> Iniciar Check-In
-                </button>
+                (() => {
+                  const todayStr = new Date().toLocaleDateString('sv-SE');
+                  const isFuture = selectedRes.check_in && selectedRes.check_in > todayStr;
+                  
+                  if (isFuture) {
+                    return (
+                      <button 
+                        disabled
+                        className="w-full bg-zinc-100 text-zinc-400 font-bold text-[14px] py-3.5 rounded-xl cursor-not-allowed flex items-center justify-center gap-2 border border-zinc-200"
+                      >
+                        <LogIn size={18} strokeWidth={2.5} className="opacity-40" />
+                        <span>Check-In disponible el {format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es })}</span>
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <button 
+                      onClick={() => setShowPaymentFlow(true)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-[15px] py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-[0_4px_14px_rgba(37,99,235,0.25)] flex items-center justify-center gap-2"
+                    >
+                      <LogIn size={18} strokeWidth={2.5} /> Iniciar Check-In
+                    </button>
+                  );
+                })()
               )}
               
               {/* Cancelar Reserva Button */}

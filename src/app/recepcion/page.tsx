@@ -2797,6 +2797,10 @@ export default function RecepcionPage() {
               <button
                 onClick={() => runWithSignature('checkin', () => processCheckIn())}
                 disabled={(() => {
+                  const todayStr = new Date().toLocaleDateString('sv-SE');
+                  const isFuture = selectedReserva.id !== 'walkin' && selectedReserva.check_in && selectedReserva.check_in > todayStr;
+                  if (isFuture) return true;
+
                   if (submitting) return true;
                   
                   // Validación DNI obligatoria para todas las reservas y walk-ins
@@ -2833,7 +2837,11 @@ export default function RecepcionPage() {
                 })()}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[14px] py-3.5 rounded-xl transition-all cursor-pointer shadow-md shadow-blue-600/15 disabled:opacity-40 flex items-center justify-center gap-2"
               >
-                {submitting ? 'Registrando...' : 'Completar Check-In'}
+                {submitting 
+                  ? 'Registrando...' 
+                  : (selectedReserva.id !== 'walkin' && selectedReserva.check_in && selectedReserva.check_in > new Date().toLocaleDateString('sv-SE'))
+                    ? `No disponible hasta el ${format(parseISO(selectedReserva.check_in), 'dd MMM yyyy', { locale: es })}`
+                    : 'Completar Check-In'}
               </button>
             </div>
           </div>
