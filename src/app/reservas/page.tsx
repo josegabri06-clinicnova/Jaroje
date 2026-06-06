@@ -55,6 +55,9 @@ function StatusBadge({ status, isCheckedIn, isCheckedOut }: { status: string, is
   );
 }
 
+const normalizeText = (text: string) => 
+  (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 export default function ReservasList() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
@@ -475,7 +478,7 @@ export default function ReservasList() {
 
   const filtered = (activeTab === 'Completadas' ? completedReservas : activeReservas).filter(r => {
     const matchSearch = !search || 
-      r.guest_name?.toLowerCase().includes(search.toLowerCase()) ||
+      normalizeText(r.guest_name).includes(normalizeText(search)) ||
       r.id?.toString().includes(search);
     
     let matchTab = true;
