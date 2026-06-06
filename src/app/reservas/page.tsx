@@ -94,6 +94,7 @@ export default function ReservasList() {
   const [editAdults, setEditAdults] = useState(1);
   const [editChildren, setEditChildren] = useState(0);
   const [editPrice, setEditPrice] = useState('');
+  const [editDeposit, setEditDeposit] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saveEditLoading, setSaveEditLoading] = useState(false);
 
@@ -107,12 +108,14 @@ export default function ReservasList() {
       setEditAdults(Number(selectedRes.num_adult || 1));
       setEditChildren(Number(selectedRes.num_child || 0));
       setEditPrice(String(selectedRes.price_estimate || ''));
+      setEditDeposit(String(selectedRes.deposit || '0'));
       setEditNotes(selectedRes.notes || '');
     } else {
       setIsReassigning(false);
       setTargetRoomName('');
       setAvailableRooms({});
       setIsEditingRes(false);
+      setEditDeposit('');
       setEditNotes('');
     }
   }, [selectedRes]);
@@ -405,6 +408,7 @@ export default function ReservasList() {
           numAdult: editAdults,
           numChild: editChildren,
           price: Number(editPrice),
+          deposit: Number(editDeposit),
           notes: editNotes
         })
       });
@@ -430,7 +434,7 @@ export default function ReservasList() {
             action: 'reserva_modificada_admin',
             room: selectedRes.room_name || 'General',
             details: JSON.stringify({
-              text: `Administrador modificó reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}). Nombre: ${editGuestName}, Tel: ${editPhone}, Pax: ${editAdults}A/${editChildren}N, Total: MX$${editPrice}`,
+              text: `Administrador modificó reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}). Nombre: ${editGuestName}, Tel: ${editPhone}, Pax: ${editAdults}A/${editChildren}N, Total: MX$${editPrice}, Anticipo: MX$${editDeposit}`,
               modificacion: {
                 bookingId: selectedRes.id,
                 guestName: editGuestName,
@@ -438,6 +442,7 @@ export default function ReservasList() {
                 numAdult: editAdults,
                 numChild: editChildren,
                 price: Number(editPrice),
+                deposit: Number(editDeposit),
                 notes: editNotes
               }
             })
@@ -454,7 +459,8 @@ export default function ReservasList() {
         num_adult: editAdults,
         num_child: editChildren,
         price_estimate: Number(editPrice),
-        balance: Number(editPrice) - (prev.deposit || 0),
+        deposit: Number(editDeposit),
+        balance: Number(editPrice) - Number(editDeposit),
         notes: editNotes
       }));
 
@@ -465,7 +471,8 @@ export default function ReservasList() {
         num_adult: editAdults,
         num_child: editChildren,
         price_estimate: Number(editPrice),
-        balance: Number(editPrice) - (r.deposit || 0),
+        deposit: Number(editDeposit),
+        balance: Number(editPrice) - Number(editDeposit),
         notes: editNotes
       } : r));
 
@@ -844,14 +851,25 @@ export default function ReservasList() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa Total Estancia</label>
-                    <input
-                      type="number"
-                      value={editPrice}
-                      onChange={e => setEditPrice(e.target.value)}
-                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa Total Estancia</label>
+                      <input
+                        type="number"
+                        value={editPrice}
+                        onChange={e => setEditPrice(e.target.value)}
+                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Anticipo</label>
+                      <input
+                        type="number"
+                        value={editDeposit}
+                        onChange={e => setEditDeposit(e.target.value)}
+                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                      />
+                    </div>
                   </div>
 
                   <div>

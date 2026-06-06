@@ -385,6 +385,7 @@ export default function RecepcionPage() {
   const [editedAdults, setEditedAdults] = useState(1);
   const [editedChildren, setEditedChildren] = useState(0);
   const [editedPrice, setEditedPrice] = useState('');
+  const [editedDeposit, setEditedDeposit] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
   const [loadingAvailability, setLoadingAvailability] = useState(false);
@@ -400,6 +401,7 @@ export default function RecepcionPage() {
       setEditedAdults(Number(selectedReserva.num_adult || 1));
       setEditedChildren(Number(selectedReserva.num_child || 0));
       setEditedPrice(String(selectedReserva.price_estimate || ''));
+      setEditedDeposit(String(selectedReserva.deposit || '0'));
       setEditedNotes(selectedReserva.notes || '');
       setIsReassigning(false);
       setTargetRoomName('');
@@ -408,6 +410,7 @@ export default function RecepcionPage() {
       setEditedAdults(1);
       setEditedChildren(0);
       setEditedPrice('');
+      setEditedDeposit('');
       setEditedNotes('');
       setIsReassigning(false);
       setTargetRoomName('');
@@ -470,6 +473,7 @@ export default function RecepcionPage() {
           numAdult: editedAdults,
           numChild: editedChildren,
           price: Number(editedPrice),
+          deposit: Number(editedDeposit),
           notes: editedNotes
         })
       });
@@ -495,7 +499,7 @@ export default function RecepcionPage() {
             action: 'reserva_modificada',
             room: selectedReserva.room || 'General',
             details: JSON.stringify({
-              text: `Modificó la reserva de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}). Pax: ${editedAdults}A/${editedChildren}N, Tel: ${editedPhone}, Total: MX$${editedPrice}`,
+              text: `Modificó la reserva de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}). Pax: ${editedAdults}A/${editedChildren}N, Tel: ${editedPhone}, Total: MX$${editedPrice}, Anticipo: MX$${editedDeposit}`,
               modificacion: {
                 bookingId: selectedReserva.id,
                 guestName: selectedReserva.guest_name,
@@ -503,6 +507,7 @@ export default function RecepcionPage() {
                 numAdult: editedAdults,
                 numChild: editedChildren,
                 price: Number(editedPrice),
+                deposit: Number(editedDeposit),
                 notes: editedNotes
               }
             })
@@ -518,7 +523,8 @@ export default function RecepcionPage() {
         num_adult: editedAdults,
         num_child: editedChildren,
         price_estimate: Number(editedPrice),
-        balance: Number(editedPrice) - (prev.deposit || 0),
+        deposit: Number(editedDeposit),
+        balance: Number(editedPrice) - Number(editedDeposit),
         notes: editedNotes
       }));
 
@@ -528,7 +534,8 @@ export default function RecepcionPage() {
         num_adult: editedAdults,
         num_child: editedChildren,
         price_estimate: Number(editedPrice),
-        balance: Number(editedPrice) - (r.deposit || 0),
+        deposit: Number(editedDeposit),
+        balance: Number(editedPrice) - Number(editedDeposit),
         notes: editedNotes
       } : r));
 
@@ -2518,21 +2525,33 @@ export default function RecepcionPage() {
                         </div>
                       </div>
 
-                      <div>
-                        <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa Estancia (Recalculada/Total)</label>
-                        <input
-                          type="number"
-                          value={editedPrice}
-                          onChange={e => setEditedPrice(e.target.value)}
-                          placeholder="Monto"
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
-                        />
-                        {suggestedPrice !== Number(selectedReserva.price_estimate || 0) && (
-                          <p className="text-[10px] text-blue-600 font-bold mt-1">
-                            💡 Ajuste de tarifa sugerido por persona adicional: MX${suggestedPrice}
-                          </p>
-                        )}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa Estancia</label>
+                          <input
+                            type="number"
+                            value={editedPrice}
+                            onChange={e => setEditedPrice(e.target.value)}
+                            placeholder="Monto"
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Anticipo</label>
+                          <input
+                            type="number"
+                            value={editedDeposit}
+                            onChange={e => setEditedDeposit(e.target.value)}
+                            placeholder="Monto"
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
+                          />
+                        </div>
                       </div>
+                      {suggestedPrice !== Number(selectedReserva.price_estimate || 0) && (
+                        <p className="text-[10px] text-blue-600 font-bold mt-1">
+                          💡 Ajuste de tarifa sugerido por persona adicional: MX${suggestedPrice}
+                        </p>
+                      )}
 
                       <div>
                         <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Observaciones / Notas de Reserva</label>

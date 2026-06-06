@@ -161,7 +161,7 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, roomName, guestName, phone, numAdult, numChild, price, notes } = body;
+    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
@@ -201,6 +201,9 @@ export async function PUT(req: Request) {
     }
     if (price !== undefined) {
       updatePayload.price = Number(price);
+    }
+    if (deposit !== undefined) {
+      updatePayload.deposit = Number(deposit);
     }
     if (notes !== undefined) {
       updatePayload.notes = notes;
