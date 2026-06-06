@@ -58,6 +58,11 @@ function StatusBadge({ status, isCheckedIn, isCheckedOut }: { status: string, is
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
+function fmtCurrency(amount: number, guestName?: string) {
+  const isUSD = guestName?.toUpperCase().includes('(US DOLLARS)');
+  return (isUSD ? 'USD$' : 'MX$') + Math.round(amount || 0).toLocaleString('es-MX');
+}
+
 export default function ReservasList() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
@@ -720,7 +725,7 @@ export default function ReservasList() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-[15px] font-bold text-zinc-900">MX${r.price_estimate}</p>
+                    <p className="text-[15px] font-bold text-zinc-900">{fmtCurrency(r.price_estimate || 0, r.guest_name)}</p>
                     <p className="text-[11px] text-zinc-400 font-medium mt-0.5">{r.nights} noche{r.nights !== 1 ? 's' : ''}</p>
                   </div>
                 </div>
@@ -928,19 +933,19 @@ export default function ReservasList() {
                   <div className="flex flex-col">
                     <span className="text-[11px] font-bold text-zinc-400">Tarifa Diaria (Promedio)</span>
                     <span className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
-                      MX${(selectedRes.price_per_night || Math.round((selectedRes.price_estimate || 0) / (selectedRes.nights || 1))).toLocaleString('es-MX')}
+                      {fmtCurrency(selectedRes.price_per_night || Math.round((selectedRes.price_estimate || 0) / (selectedRes.nights || 1)), selectedRes.guest_name)}
                     </span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[11px] font-bold text-zinc-400">Total Estancia</span>
                     <span className="text-[15px] font-black text-zinc-950 mt-0.5">
-                      MX${(selectedRes.price_estimate || 0).toLocaleString('es-MX')}
+                      {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
                     </span>
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[11px] font-bold text-zinc-400">Anticipo</span>
                     <span className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                      MX${(selectedRes.deposit || 0).toLocaleString('es-MX')}
+                      {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
                     </span>
                   </div>
                   <div className="flex flex-col">
@@ -948,7 +953,7 @@ export default function ReservasList() {
                     <span className={`text-[15px] font-black mt-0.5 ${
                       (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-600'
                     }`}>
-                      MX${(selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0))).toLocaleString('es-MX')}
+                      {fmtCurrency(selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)), selectedRes.guest_name)}
                     </span>
                   </div>
                 </div>
@@ -1125,12 +1130,12 @@ export default function ReservasList() {
                               Estancia Liquidada
                             </span>
                             <p className="text-[11px] text-emerald-600 font-medium leading-relaxed">
-                              Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')} (100% Pagado)
+                              Total: {fmtCurrency(totalVal, selectedRes.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedRes.guest_name)} (100% Pagado)
                             </p>
                           </div>
                           <div className="text-right">
                             <span className="text-[20px] font-black text-emerald-700">
-                              $0.00 MXN
+                              {fmtCurrency(0, selectedRes.guest_name)}
                             </span>
                           </div>
                         </div>
@@ -1145,12 +1150,12 @@ export default function ReservasList() {
                               Adeudo por Pagar
                             </span>
                             <p className="text-[10px] text-rose-600 font-semibold leading-relaxed">
-                              Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')}
+                              Total: {fmtCurrency(totalVal, selectedRes.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedRes.guest_name)}
                             </p>
                           </div>
                           <div className="text-right">
                             <span className="text-[20px] font-black text-rose-700">
-                              ${pendingBalance.toLocaleString('es-MX')} MXN
+                              {fmtCurrency(pendingBalance, selectedRes.guest_name)}
                             </span>
                           </div>
                         </div>
@@ -1200,17 +1205,29 @@ export default function ReservasList() {
                             <option value="" disabled>Selecciona una opción</option>
                             {accounts
                               .filter(a => {
-                                const name = a.name.trim().toUpperCase();
-                                if (paymentMethod === 'efectivo') {
-                                  return name === 'EFECTIVO';
+                                const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                if (isUSD) {
+                                  const isUSDAcc = a.currency?.toUpperCase() === 'USD';
+                                  if (!isUSDAcc) return false;
+                                  
+                                  const name = a.name.trim().toUpperCase();
+                                  if (paymentMethod === 'efectivo') {
+                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                  }
+                                  return !name.includes('EFE') && !name.includes('CASH');
+                                } else {
+                                  const name = a.name.trim().toUpperCase();
+                                  if (paymentMethod === 'efectivo') {
+                                    return name === 'EFECTIVO';
+                                  }
+                                  if (paymentMethod === 'tarjeta') {
+                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                  }
+                                  if (paymentMethod === 'transferencia') {
+                                    return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
+                                  }
+                                  return false;
                                 }
-                                if (paymentMethod === 'tarjeta') {
-                                  return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                }
-                                if (paymentMethod === 'transferencia') {
-                                  return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
-                                }
-                                return false;
                               })
                               .map(a => (
                                 <option key={a.id} value={a.id}>{a.name}</option>

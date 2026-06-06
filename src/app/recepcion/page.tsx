@@ -316,6 +316,11 @@ function getFriendlyRoomName(roomId: string, unitId: string, roomInventory: any[
   return `${base} (${num})`;
 }
 
+function fmtCurrency(amount: number, guestName?: string) {
+  const isUSD = guestName?.toUpperCase().includes('(US DOLLARS)');
+  return (isUSD ? 'USD$' : 'MX$') + Math.round(amount || 0).toLocaleString('es-MX');
+}
+
 export default function RecepcionPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -1769,19 +1774,19 @@ export default function RecepcionPage() {
                             </span>
                           </td>
                           <td className="py-4 px-4 text-right font-bold text-zinc-900 text-[13px]">
-                            ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                            {r.price_estimate !== undefined ? fmtCurrency(r.price_estimate, r.guest_name) : '—'}
                           </td>
                           <td className="py-4 px-4 text-right font-semibold text-zinc-600 text-[13px]">
-                            ${dailyRate.toLocaleString('es-MX') || '—'}
+                            {dailyRate !== undefined ? fmtCurrency(dailyRate, r.guest_name) : '—'}
                           </td>
                           <td className="py-4 px-4 text-right text-[13px]">
                             {balanceVal > 0 ? (
                               <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
-                                ${balanceVal.toLocaleString('es-MX')}
+                                {fmtCurrency(balanceVal, r.guest_name)}
                               </span>
                             ) : (
                               <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-                                $0.00
+                                {fmtCurrency(0, r.guest_name)}
                               </span>
                             )}
                           </td>
@@ -1878,10 +1883,10 @@ export default function RecepcionPage() {
                             {r.nights || 1}n
                           </td>
                           <td className="py-4 px-4 text-right font-bold text-zinc-900 text-[13px]">
-                            ${r.price_estimate?.toLocaleString('es-MX') || '—'}
+                            {r.price_estimate !== undefined ? fmtCurrency(r.price_estimate, r.guest_name) : '—'}
                           </td>
                           <td className="py-4 px-4 text-right font-semibold text-zinc-600 text-[13px]">
-                            ${dailyRate.toLocaleString('es-MX') || '—'}
+                            {dailyRate !== undefined ? fmtCurrency(dailyRate, r.guest_name) : '—'}
                           </td>
                           <td className="py-4 px-4 text-center">
                             {r.checked_out ? (
@@ -2573,12 +2578,12 @@ export default function RecepcionPage() {
                           Estancia Liquidada
                         </span>
                         <p className="text-[11px] text-emerald-600 font-medium">
-                          Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')} (100% Pagado)
+                          Total: {fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedReserva.guest_name)} (100% Pagado)
                         </p>
                       </div>
                       <div className="text-right">
                         <span className="text-[20px] font-black text-emerald-700">
-                          $0.00 MXN
+                          {fmtCurrency(0, selectedReserva.guest_name)}
                         </span>
                       </div>
                     </div>
@@ -2593,7 +2598,7 @@ export default function RecepcionPage() {
                       </span>
                       {selectedReserva.id !== 'walkin' ? (
                         <p className="text-[10px] text-rose-600 font-medium leading-tight">
-                          Total: ${totalVal.toLocaleString('es-MX')} | Anticipos: ${depositVal.toLocaleString('es-MX')}
+                          Total: {fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedReserva.guest_name)}
                         </p>
                       ) : (
                         <p className="text-[11px] text-rose-600 font-medium">
@@ -2603,7 +2608,7 @@ export default function RecepcionPage() {
                     </div>
                     <div className="text-right">
                       <span className="text-[20px] font-black text-rose-700">
-                        ${balanceVal.toLocaleString('es-MX')} MXN
+                        {fmtCurrency(balanceVal, selectedReserva.guest_name)}
                       </span>
                     </div>
                   </div>
@@ -2666,17 +2671,29 @@ export default function RecepcionPage() {
                         <option value="" disabled>Selecciona un sobre...</option>
                         {accounts
                           .filter(acc => {
-                            const name = acc.name.trim().toUpperCase();
-                            if (paymentMode === 'efectivo') {
-                              return name === 'EFECTIVO';
+                            const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                            if (isUSD) {
+                              const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                              if (!isUSDAcc) return false;
+                              
+                              const name = acc.name.trim().toUpperCase();
+                              if (paymentMode === 'efectivo') {
+                                return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                              }
+                              return !name.includes('EFE') && !name.includes('CASH');
+                            } else {
+                              const name = acc.name.trim().toUpperCase();
+                              if (paymentMode === 'efectivo') {
+                                return name === 'EFECTIVO';
+                              }
+                              if (paymentMode === 'tarjeta') {
+                                return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                              }
+                              if (paymentMode === 'transferencia') {
+                                return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                              }
+                              return false;
                             }
-                            if (paymentMode === 'tarjeta') {
-                              return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                            }
-                            if (paymentMode === 'transferencia') {
-                              return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                            }
-                            return false;
                           })
                           .map(acc => (
                             <option key={acc.id} value={acc.id}>
