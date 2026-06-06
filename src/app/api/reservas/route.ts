@@ -157,21 +157,50 @@ export async function DELETE(req: Request) {
   }
 }
 
-// PUT: Cambiar asignación de habitación de una reserva en Beds24 y en Supabase
+// PUT: Modificar datos de una reserva en Beds24 y en Supabase (habitación, nombre, teléfono, pax, tarifa)
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, roomName } = body;
+    const { id, roomName, guestName, phone, numAdult, numChild, price } = body;
 
-    if (!id || !roomName) {
-      return NextResponse.json({ error: 'Faltan parámetros: id (de la reserva), roomName (número físico)' }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
     }
 
     const { getBeds24RoomIdAndUnit, getRoomMetadata } = await import('@/lib/beds24');
-    const mapping = getBeds24RoomIdAndUnit(roomName);
 
-    if (!mapping) {
-      return NextResponse.json({ error: `La habitación ${roomName} no es una habitación física válida en staySync.` }, { status: 400 });
+    const updatePayload: any = {
+      id: Number(id)
+    };
+
+    let displayRoomName = '';
+    if (roomName) {
+      const mapping = getBeds24RoomIdAndUnit(roomName);
+      if (!mapping) {
+        return NextResponse.json({ error: `La habitación ${roomName} no es una habitación física válida en staySync.` }, { status: 400 });
+      }
+      updatePayload.roomId = Number(mapping.roomId);
+      updatePayload.unitId = Number(mapping.unitId);
+
+      const roomData = getRoomMetadata(mapping.roomId, null);
+      displayRoomName = roomData?.nombre || `Habitación ${roomName}`;
+    }
+
+    if (guestName) {
+      updatePayload.firstName = guestName;
+    }
+    if (phone !== undefined) {
+      updatePayload.phone = phone;
+      updatePayload.mobile = phone;
+    }
+    if (numAdult !== undefined) {
+      updatePayload.numAdult = Number(numAdult);
+    }
+    if (numChild !== undefined) {
+      updatePayload.numChild = Number(numChild);
+    }
+    if (price !== undefined) {
+      updatePayload.price = Number(price);
     }
 
     const BEDS24_TOKEN = await getBeds24Token();
@@ -180,32 +209,34 @@ export async function PUT(req: Request) {
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify([{
-        id: Number(id),
-        roomId: Number(mapping.roomId),
-        unitId: Number(mapping.unitId)
-      }])
+      body: JSON.stringify([updatePayload])
     });
 
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
-      throw new Error(`Beds24 rechazó el cambio de habitación: ${errText}`);
+      throw new Error(`Beds24 rechazó la modificación: ${errText}`);
     }
 
-    // 2. Actualizar registro local de checkin en Supabase si ya se inició o realizó
+    // 2. Actualizar registro local de checkin en Supabase si existe
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
     const { createClient } = await import('@supabase/supabase-js');
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    // Obtener metadatos para armar el nombre amigable (ej: "Apartamento Premier 101" o "Apartamento Premier 101 (101)")
-    const roomData = getRoomMetadata(mapping.roomId, null);
-    const displayRoomName = roomData?.nombre || `Habitación ${roomName}`;
+    const dbUpdate: any = {};
+    if (displayRoomName) {
+      dbUpdate.room = displayRoomName;
+    }
+    if (guestName) {
+      dbUpdate.guest_name = guestName;
+    }
 
-    await supabase
-      .from('checkins')
-      .update({ room: displayRoomName })
-      .eq('reservation_id', id.toString());
+    if (Object.keys(dbUpdate).length > 0) {
+      await supabase
+        .from('checkins')
+        .update(dbUpdate)
+        .eq('reservation_id', id.toString());
+    }
 
     const dataB24 = await beds24Response.json();
 
@@ -215,14 +246,14 @@ export async function PUT(req: Request) {
       if (firstResult && firstResult.success === false) {
         const errorMsg = firstResult.errors 
           ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
-          : firstResult.message || 'Error individual al reasignar en Beds24';
-        return NextResponse.json({ error: `Beds24 rechazó la reasignación: ${errorMsg}` }, { status: 400 });
+          : firstResult.message || 'Error individual en Beds24';
+        return NextResponse.json({ error: `Beds24 rechazó la actualización: ${errorMsg}` }, { status: 400 });
       }
     }
 
     return NextResponse.json({ 
       success: true, 
-      message: `Habitación reasignada exitosamente a la ${roomName}.`, 
+      message: `Reserva actualizada exitosamente.`, 
       room_name: displayRoomName,
       data: dataB24 
     });

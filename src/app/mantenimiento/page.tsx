@@ -13,6 +13,10 @@ const supabase = createClient(
 
 import { getActiveEmployee } from '@/lib/auth';
 
+const normalizeText = (text: string) => 
+  (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+
 interface Task {
   id: string;
   type: string;
@@ -383,9 +387,9 @@ export default function MantenimientoPage() {
     
     // Search query (matches description or room)
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchesDesc = t.description.toLowerCase().includes(q);
-      const matchesRoom = t.room.toLowerCase().includes(q);
+      const q = normalizeText(searchQuery);
+      const matchesDesc = normalizeText(t.description).includes(q);
+      const matchesRoom = normalizeText(t.room).includes(q);
       if (!matchesDesc && !matchesRoom) return false;
     }
     

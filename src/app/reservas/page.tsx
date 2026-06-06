@@ -82,14 +82,30 @@ export default function ReservasList() {
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
   const [loadingAvailability, setLoadingAvailability] = useState(false);
 
+  // Estados para edición de reserva (Admin)
+  const [isEditingRes, setIsEditingRes] = useState(false);
+  const [editGuestName, setEditGuestName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAdults, setEditAdults] = useState(1);
+  const [editChildren, setEditChildren] = useState(0);
+  const [editPrice, setEditPrice] = useState('');
+  const [saveEditLoading, setSaveEditLoading] = useState(false);
+
   useEffect(() => {
     if (selectedRes) {
       setShowPaymentFlow(false);
       setIsCheckedIn(selectedRes.is_checked_in || false);
+      setIsEditingRes(false);
+      setEditGuestName(selectedRes.guest_name || '');
+      setEditPhone(selectedRes.guest_phone || '');
+      setEditAdults(Number(selectedRes.num_adult || 1));
+      setEditChildren(Number(selectedRes.num_child || 0));
+      setEditPrice(String(selectedRes.price_estimate || ''));
     } else {
       setIsReassigning(false);
       setTargetRoomName('');
       setAvailableRooms({});
+      setIsEditingRes(false);
     }
   }, [selectedRes]);
 
@@ -364,6 +380,90 @@ export default function ReservasList() {
       console.error("Error al cargar reservas", e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveReservationEdit = async () => {
+    if (!selectedRes) return;
+    setSaveEditLoading(true);
+    try {
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedRes.id,
+          guestName: editGuestName,
+          phone: editPhone,
+          numAdult: editAdults,
+          numChild: editChildren,
+          price: Number(editPrice)
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
+      
+      alert('✅ Reserva modificada con éxito.');
+      
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'reserva_modificada_admin',
+            room: selectedRes.room_name || 'General',
+            details: JSON.stringify({
+              text: `Administrador modificó reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}). Nombre: ${editGuestName}, Tel: ${editPhone}, Pax: ${editAdults}A/${editChildren}N, Total: MX$${editPrice}`,
+              modificacion: {
+                bookingId: selectedRes.id,
+                guestName: editGuestName,
+                phone: editPhone,
+                numAdult: editAdults,
+                numChild: editChildren,
+                price: Number(editPrice)
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de modificación:", logErr);
+      }
+
+      setSelectedRes((prev: any) => ({
+        ...prev,
+        guest_name: editGuestName,
+        guest_phone: editPhone,
+        num_adult: editAdults,
+        num_child: editChildren,
+        price_estimate: Number(editPrice),
+        balance: Number(editPrice) - (prev.deposit || 0)
+      }));
+
+      setReservas(prev => prev.map(r => r.id === selectedRes.id ? {
+        ...r,
+        guest_name: editGuestName,
+        guest_phone: editPhone,
+        num_adult: editAdults,
+        num_child: editChildren,
+        price_estimate: Number(editPrice),
+        balance: Number(editPrice) - (r.deposit || 0)
+      } : r));
+
+      setIsEditingRes(false);
+      fetchReservas();
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al guardar cambios:\n\n${err.message}`);
+    } finally {
+      setSaveEditLoading(false);
     }
   };
 
@@ -654,21 +754,105 @@ export default function ReservasList() {
             className="bg-white w-full sm:w-[400px] h-[85vh] sm:h-auto sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom"
           >
             {/* Cabecera Modal */}
-            <div className="px-6 py-5 border-b border-zinc-100 flex items-center justify-between sticky top-0 bg-white z-10">
+            <div className="px-6 py-5 border-b border-zinc-100 flex items-center justify-between sticky top-0 bg-white z-10 font-sans">
               <div>
-                <h3 className="text-[18px] font-semibold text-zinc-900 leading-tight">Detalles de Reserva</h3>
+                <h3 className="text-[18px] font-semibold text-zinc-900 leading-tight">
+                  {isEditingRes ? 'Editar Reserva' : 'Detalles de Reserva'}
+                </h3>
                 <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">ID: {selectedRes.id || selectedRes.room_id || 'N/A'}</p>
               </div>
-              <button 
-                onClick={() => setSelectedRes(null)}
-                className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedRes.status !== 'cancelled' && (
+                  <button
+                    onClick={() => setIsEditingRes(!isEditingRes)}
+                    className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    {isEditingRes ? 'Cancelar' : 'Editar 📝'}
+                  </button>
+                )}
+                <button 
+                  onClick={() => setSelectedRes(null)}
+                  className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+              </div>
             </div>
 
             {/* Contenido Modal */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              
+              {isEditingRes ? (
+                // Formulario de Edición Admin
+                <div className="space-y-4 font-sans">
+                  <div>
+                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nombre del Huésped</label>
+                    <input
+                      type="text"
+                      value={editGuestName}
+                      onChange={e => setEditGuestName(e.target.value)}
+                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Teléfono Móvil</label>
+                    <input
+                      type="text"
+                      value={editPhone}
+                      onChange={e => setEditPhone(e.target.value)}
+                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
+                      <select
+                        value={editAdults}
+                        onChange={e => setEditAdults(Number(e.target.value))}
+                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] cursor-pointer outline-none"
+                      >
+                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
+                      <select
+                        value={editChildren}
+                        onChange={e => setEditChildren(Number(e.target.value))}
+                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] cursor-pointer outline-none"
+                      >
+                        {[0,1,2,3,4,5,6,7,8].map(n => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa Total Estancia</label>
+                    <input
+                      type="number"
+                      value={editPrice}
+                      onChange={e => setEditPrice(e.target.value)}
+                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleSaveReservationEdit}
+                    disabled={saveEditLoading}
+                    className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] tracking-wide uppercase py-3.5 rounded-2xl transition-all cursor-pointer shadow-md disabled:opacity-40"
+                  >
+                    {saveEditLoading ? 'Guardando Cambios...' : '💾 Guardar Cambios'}
+                  </button>
+                </div>
+              ) : (
+                // Detalles Normales
+                <>
               
               {/* Bloque: Huésped */}
               <div className="flex items-center gap-4">
@@ -850,7 +1034,6 @@ export default function ReservasList() {
                 )}
               </div>
 
-              {/* Bloque: Notas */}
               {selectedRes.notes && (
                 <div>
                   <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Notas del Huésped</h5>
@@ -860,6 +1043,8 @@ export default function ReservasList() {
                 </div>
               )}
 
+            </>
+          )}
             </div>
             
             {/* Acción Botón */}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
@@ -93,6 +93,45 @@ const PRICES: Record<string, Record<string, number>> = {
   '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
   '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
   '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 },
+};
+
+const PHYSICAL_ROOM_GROUPS = [
+  {
+    category: 'Apartamentos Premier de 3 Recámaras',
+    rooms: ['101', '102', '103', '104', '105', '106', '107']
+  },
+  {
+    category: 'Apartamentos Premier de 2 Recámaras',
+    rooms: ['201', '202', '203', '204', '205', '206']
+  },
+  {
+    category: 'Habitaciones Dobles',
+    rooms: ['301', '302', '303', '304', '305', '306']
+  },
+  {
+    category: 'Otras Unidades',
+    rooms: ['401', '402', '500', '501', '502', '503', '504', '505', '506']
+  }
+];
+
+const getCapacityRules = (roomName: string) => {
+  const r = (roomName || '').toLowerCase();
+  if (r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+    return { base: 2, max: 2 };
+  }
+  if (r.includes('1 dormitorio') || r.includes('402')) {
+    return { base: 2, max: 4 };
+  }
+  if (r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
+    return { base: 4, max: 6 };
+  }
+  if (r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
+    return { base: 6, max: 8 };
+  }
+  if (r.includes('casa') || r.includes('401') || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506')) {
+    return { base: 8, max: 12 };
+  }
+  return { base: 6, max: 8 }; // default fallback
 };
 
 function getSeason(dateStr: string): string {
@@ -334,6 +373,229 @@ export default function RecepcionPage() {
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
+
+  // Estados para reasignar y editar reservas existentes en Recepción
+  const [editedPhone, setEditedPhone] = useState('');
+  const [editedAdults, setEditedAdults] = useState(1);
+  const [editedChildren, setEditedChildren] = useState(0);
+  const [editedPrice, setEditedPrice] = useState('');
+  const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
+  const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [targetRoomName, setTargetRoomName] = useState('');
+  const [reassignLoading, setReassignLoading] = useState(false);
+  const [isSavingChanges, setIsSavingChanges] = useState(false);
+
+  // Inicializar estados editados al cambiar de reserva
+  useEffect(() => {
+    if (selectedReserva) {
+      setEditedPhone(selectedReserva.guest_phone || '');
+      setEditedAdults(Number(selectedReserva.num_adult || 1));
+      setEditedChildren(Number(selectedReserva.num_child || 0));
+      setEditedPrice(String(selectedReserva.price_estimate || ''));
+      setIsReassigning(false);
+      setTargetRoomName('');
+    } else {
+      setEditedPhone('');
+      setEditedAdults(1);
+      setEditedChildren(0);
+      setEditedPrice('');
+      setIsReassigning(false);
+      setTargetRoomName('');
+    }
+  }, [selectedReserva]);
+
+  const suggestedPrice = useMemo(() => {
+    if (!selectedReserva || selectedReserva.id === 'walkin') return 0;
+    const originalPax = (selectedReserva.num_adult || 1) + (selectedReserva.num_child || 0);
+    const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room).base);
+    const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room).base);
+    const diffExtra = newExtraGuests - originalExtraGuests;
+    const priceAdjustment = diffExtra * 200 * (selectedReserva.nights || 1);
+    return Math.round(Number(selectedReserva.price_estimate || 0) + priceAdjustment);
+  }, [selectedReserva, editedAdults, editedChildren]);
+
+  // Sincronizar el precio editado cuando cambia el precio sugerido
+  useEffect(() => {
+    if (selectedReserva && selectedReserva.id !== 'walkin') {
+      setEditedPrice(String(suggestedPrice));
+    }
+  }, [suggestedPrice]);
+
+  useEffect(() => {
+    if (isReassigning && selectedReserva?.check_in && selectedReserva?.check_out) {
+      const fetchReassignAvailability = async () => {
+        setLoadingAvailability(true);
+        try {
+          const res = await fetch(`/api/availability?checkIn=${selectedReserva.check_in}&checkOut=${selectedReserva.check_out}`);
+          const json = await res.json();
+          if (json.success && json.inventory) {
+            const availMap: Record<string, boolean> = {};
+            json.inventory.forEach((cat: any) => {
+              cat.units.forEach((u: any) => {
+                availMap[String(u.name)] = u.isAvailable;
+              });
+            });
+            setAvailableRooms(availMap);
+          }
+        } catch (err) {
+          console.error("Error al obtener disponibilidad para reasignar:", err);
+        } finally {
+          setLoadingAvailability(false);
+        }
+      };
+      fetchReassignAvailability();
+    }
+  }, [isReassigning, selectedReserva]);
+
+  const handleSaveChanges = async () => {
+    if (!selectedReserva) return;
+    setIsSavingChanges(true);
+    try {
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedReserva.id,
+          phone: editedPhone,
+          numAdult: editedAdults,
+          numChild: editedChildren,
+          price: Number(editedPrice)
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
+      
+      alert('✅ Cambios guardados con éxito.');
+      
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'reserva_modificada',
+            room: selectedReserva.room || 'General',
+            details: JSON.stringify({
+              text: `Modificó la reserva de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}). Pax: ${editedAdults}A/${editedChildren}N, Tel: ${editedPhone}, Total: MX$${editedPrice}`,
+              modificacion: {
+                bookingId: selectedReserva.id,
+                guestName: selectedReserva.guest_name,
+                phone: editedPhone,
+                numAdult: editedAdults,
+                numChild: editedChildren,
+                price: Number(editedPrice)
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de modificación:", logErr);
+      }
+
+      setSelectedReserva((prev: any) => ({
+        ...prev,
+        guest_phone: editedPhone,
+        num_adult: editedAdults,
+        num_child: editedChildren,
+        price_estimate: Number(editedPrice),
+        balance: Number(editedPrice) - (prev.deposit || 0)
+      }));
+
+      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? {
+        ...r,
+        guest_phone: editedPhone,
+        num_adult: editedAdults,
+        num_child: editedChildren,
+        price_estimate: Number(editedPrice),
+        balance: Number(editedPrice) - (r.deposit || 0)
+      } : r));
+
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al guardar cambios:\n\n${err.message}`);
+    } finally {
+      setIsSavingChanges(false);
+    }
+  };
+
+  const handleReassignRoom = async () => {
+    if (!selectedReserva || !targetRoomName) return;
+    
+    const confirmChange = confirm(`⚠️ ¿Estás seguro de que deseas reasignar la reserva de ${selectedReserva.guest_name} a la habitación ${targetRoomName}?\n\nEsto actualizará la asignación en Beds24 y sincronizará la habitación en tu registro local de Supabase.`);
+    if (!confirmChange) return;
+
+    setReassignLoading(true);
+    try {
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedReserva.id,
+          roomName: targetRoomName
+        })
+      });
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
+
+      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
+
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'reasignacion_habitacion',
+            room: targetRoomName,
+            details: JSON.stringify({
+              text: `Reasignó la habitación de la reserva de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) desde ${selectedReserva.room || 'Sin asignar'} a la Habitación ${targetRoomName}`,
+              reasignacion: {
+                bookingId: selectedReserva.id,
+                guestName: selectedReserva.guest_name,
+                fromRoom: selectedReserva.room || 'Sin asignar',
+                toRoom: targetRoomName
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de reasignación:", logErr);
+      }
+
+      setIsReassigning(false);
+      setTargetRoomName('');
+      
+      const updatedRoomName = data.room_name || `Habitación ${targetRoomName}`;
+      setSelectedReserva((prev: any) => ({ ...prev, room: updatedRoomName }));
+      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, room: updatedRoomName, room_name: updatedRoomName } : r));
+      
+      fetchData();
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al reasignar habitación:\n\n${err.message}`);
+    } finally {
+      setReassignLoading(false);
+    }
+  };
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
@@ -1308,7 +1570,9 @@ export default function RecepcionPage() {
               onClick={() => setKpiModalType('encasa')}
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
-              <p className="text-[20px] font-bold text-zinc-900">{reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr).length}</p>
+              <p className="text-[20px] font-bold text-zinc-900">
+                {reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in))).length}
+              </p>
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">En casa</p>
             </button>
             <button 
@@ -2027,22 +2291,168 @@ export default function RecepcionPage() {
                   )}
                 </div>
               ) : (
-                // Información Reserva Existente
-                <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4">
-                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Huésped</span>
-                  <p className="text-[16px] font-bold text-zinc-950 leading-tight">{selectedReserva.guest_name}</p>
-                  
-                  <div className="grid grid-cols-2 gap-4 mt-4 pt-3 border-t border-zinc-200/40">
+                // Información Reserva Existente (Editable)
+                <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-4">
+                  <div className="flex justify-between items-start">
                     <div>
-                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación</span>
-                      <p className="text-[13px] font-bold text-zinc-900">{selectedReserva.room}</p>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Huésped</span>
+                      <p className="text-[16px] font-bold text-zinc-950 leading-tight">{selectedReserva.guest_name}</p>
                     </div>
-                    <div>
-                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Salida (Out)</span>
-                      <p className="text-[13px] font-bold text-zinc-900">
-                        {selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}
-                      </p>
+                    {!isReassigning && (
+                      <button
+                        onClick={() => setIsReassigning(true)}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Reasignar 🔀
+                      </button>
+                    )}
+                  </div>
+
+                  {isReassigning ? (
+                    <div className="bg-blue-50/40 border border-blue-100/80 p-3 rounded-xl space-y-2.5 animate-in slide-in-from-top-2 duration-150">
+                      <div>
+                        <label className="block text-[9px] font-extrabold text-blue-800 uppercase tracking-widest mb-1">
+                          Seleccionar Habitación Física
+                        </label>
+                        <select
+                          value={targetRoomName}
+                          onChange={e => setTargetRoomName(e.target.value)}
+                          disabled={loadingAvailability}
+                          className="w-full bg-white border border-zinc-200 rounded-lg px-2.5 py-2 text-[12px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
+                        >
+                          <option value="" disabled>
+                            {loadingAvailability ? '⏳ Buscando disponibilidad...' : 'Selecciona habitación...'}
+                          </option>
+                          {PHYSICAL_ROOM_GROUPS.map(group => (
+                            <optgroup key={group.category} label={group.category}>
+                              {group.rooms.map(roomNum => {
+                                const isAvail = availableRooms[roomNum];
+                                return (
+                                  <option key={roomNum} value={roomNum}>
+                                    Habitación {roomNum} {isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
+                                  </option>
+                                );
+                              })}
+                            </optgroup>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleReassignRoom}
+                          disabled={reassignLoading || !targetRoomName}
+                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] py-1.5 rounded-lg shadow-sm transition-all active:scale-95 disabled:opacity-40"
+                        >
+                          {reassignLoading ? 'Guardando...' : 'Confirmar Reasignación'}
+                        </button>
+                        <button
+                          onClick={() => { setIsReassigning(false); setTargetRoomName(''); }}
+                          className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 font-extrabold text-[11px] py-1.5 rounded-lg transition-all"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
                     </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
+                      <div>
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación</span>
+                        <p className="text-[13px] font-bold text-zinc-900">{selectedReserva.room}</p>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Salida (Out)</span>
+                        <p className="text-[13px] font-bold text-zinc-900">
+                          {selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Edición de Datos */}
+                  <div className="space-y-3 pt-3 border-t border-zinc-200/40 font-sans">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Editar Datos del Huésped</span>
+                    
+                    <div className="grid grid-cols-1 gap-2.5">
+                      <div>
+                        <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Teléfono Móvil</label>
+                        <input
+                          type="text"
+                          value={editedPhone}
+                          onChange={e => setEditedPhone(e.target.value)}
+                          placeholder="Sin teléfono"
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Adultos</label>
+                          <select
+                            value={editedAdults}
+                            onChange={e => {
+                              const rules = getCapacityRules(selectedReserva.room);
+                              const val = Number(e.target.value);
+                              if (val + editedChildren > rules.max) {
+                                alert(`La capacidad máxima de esta unidad es de ${rules.max} huéspedes.`);
+                                setEditedAdults(rules.max - editedChildren);
+                              } else {
+                                setEditedAdults(val);
+                              }
+                            }}
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold cursor-pointer outline-none"
+                          >
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Niños</label>
+                          <select
+                            value={editedChildren}
+                            onChange={e => {
+                              const rules = getCapacityRules(selectedReserva.room);
+                              const val = Number(e.target.value);
+                              if (editedAdults + val > rules.max) {
+                                alert(`La capacidad máxima de esta unidad es de ${rules.max} huéspedes.`);
+                                setEditedChildren(rules.max - editedAdults);
+                              } else {
+                                setEditedChildren(val);
+                              }
+                            }}
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold cursor-pointer outline-none"
+                          >
+                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(n => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa Estancia (Recalculada/Total)</label>
+                        <input
+                          type="number"
+                          value={editedPrice}
+                          onChange={e => setEditedPrice(e.target.value)}
+                          placeholder="Monto"
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
+                        />
+                        {suggestedPrice !== Number(selectedReserva.price_estimate || 0) && (
+                          <p className="text-[10px] text-blue-600 font-bold mt-1">
+                            💡 Ajuste de tarifa sugerido por persona adicional: MX${suggestedPrice}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleSaveChanges}
+                      disabled={isSavingChanges}
+                      className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[11px] tracking-wide uppercase py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-40"
+                    >
+                      {isSavingChanges ? 'Guardando...' : '💾 Guardar Datos del Huésped'}
+                    </button>
                   </div>
                 </div>
               )}
@@ -2678,7 +3088,7 @@ export default function RecepcionPage() {
         if (kpiModalType === 'encasa') {
           title = 'Huéspedes En Casa';
           badgeColor = 'bg-zinc-900 text-white';
-          filtered = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr);
+          filtered = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in)));
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';

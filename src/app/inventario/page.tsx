@@ -9,6 +9,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const normalizeText = (text: string) => 
+  (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+
 type InventoryItem = {
   id: string;
   item_name: string;
@@ -546,8 +550,9 @@ export default function InventarioPage() {
   };
 
   const filteredItems = items.filter(item => {
-    const matchesSearch = item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          item.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const q = normalizeText(searchTerm);
+    const matchesSearch = normalizeText(item.item_name).includes(q) || 
+                          normalizeText(item.category).includes(q);
     const matchesLowStock = onlyLowStock ? item.stock <= item.min_stock : true;
     return matchesSearch && matchesLowStock;
   });

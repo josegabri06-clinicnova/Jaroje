@@ -13,6 +13,10 @@ import { Employee, validatePinAsync, getActiveEmployee } from '@/lib/auth';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+const normalizeText = (text: string) => 
+  (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
  
 type Account = {
   id: string;
@@ -901,13 +905,13 @@ export default function FinanzasPage() {
     // 3. Filtrar por búsqueda de texto
     let matchSearch = true;
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      const desc = String(r.description || '').toLowerCase();
-      const cat = String(r.category || '').toLowerCase();
+      const query = normalizeText(searchQuery).trim();
+      const desc = normalizeText(r.description || '');
+      const cat = normalizeText(r.category || '');
       const amt = String(r.amount || '');
-      const accountName = String(r.accounts?.name || '').toLowerCase();
+      const accountName = normalizeText(r.accounts?.name || '');
       const dateStr = String(r.date || '');
-      const typeStr = String(r.type || '').toLowerCase();
+      const typeStr = normalizeText(r.type || '');
 
       matchSearch = desc.includes(query) || 
                     cat.includes(query) || 

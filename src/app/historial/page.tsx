@@ -17,6 +17,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const normalizeText = (text: string) => 
+  (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+
 type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot' | 'finanzas' | 'tarea' | 'sesion' | 'inventario';
 
 interface HistoryEvent {
@@ -793,14 +797,14 @@ export default function HistorialPage() {
     // 1. Filtro de Texto
     let matchText = true;
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+      const q = normalizeText(searchQuery).trim();
       matchText = 
-        ev.title.toLowerCase().includes(q) ||
-        ev.desc.toLowerCase().includes(q) ||
-        ev.employee_name.toLowerCase().includes(q) ||
-        ev.details.toLowerCase().includes(q) ||
-        (ev.room && ev.room.includes(q)) ||
-        ev.type.toLowerCase().includes(q);
+        normalizeText(ev.title).includes(q) ||
+        normalizeText(ev.desc).includes(q) ||
+        normalizeText(ev.employee_name).includes(q) ||
+        normalizeText(ev.details).includes(q) ||
+        (ev.room && normalizeText(ev.room).includes(q)) ||
+        normalizeText(ev.type).includes(q);
     }
 
     // 2. Filtro de Módulo/Concepto

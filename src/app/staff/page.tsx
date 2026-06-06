@@ -18,6 +18,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const normalizeText = (text: string) => 
+  (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+
 function getLocalDateStr(date: Date = new Date()): string {
   try {
     const formatter = new Intl.DateTimeFormat('fr-CA', {
@@ -632,10 +636,10 @@ export default function StaffPage() {
 
   const filterBySearch = (list: Task[]) => {
     if (!searchQuery.trim()) return list;
-    const q = searchQuery.toLowerCase().trim();
+    const q = normalizeText(searchQuery).trim();
     return list.filter(t => 
-      (t.description || '').toLowerCase().includes(q) || 
-      (t.room || '').toLowerCase().includes(q)
+      normalizeText(t.description).includes(q) || 
+      normalizeText(t.room).includes(q)
     );
   };
 

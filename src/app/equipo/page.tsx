@@ -12,6 +12,10 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const normalizeText = (text: string) => 
+  (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+
 type PayrollRecord = {
   id: string;
   created_at: string;
@@ -1170,12 +1174,12 @@ export default function EquipoPage() {
                       <div className="absolute z-50 left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto divide-y divide-zinc-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
                         {(() => {
                           const filtered = syncedEmployees.filter(emp => {
-                            const q = employeeQuery.toLowerCase().trim();
+                            const q = normalizeText(employeeQuery).trim();
                             if (!q) return true;
                             return (
-                              String(emp.employee_num).toLowerCase().includes(q) ||
-                              String(emp.full_name).toLowerCase().includes(q) ||
-                              String(emp.department).toLowerCase().includes(q)
+                              normalizeText(String(emp.employee_num)).includes(q) ||
+                              normalizeText(String(emp.full_name)).includes(q) ||
+                              normalizeText(String(emp.department)).includes(q)
                             );
                           });
 
