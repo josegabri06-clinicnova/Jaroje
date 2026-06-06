@@ -94,6 +94,7 @@ export default function ReservasList() {
   const [editAdults, setEditAdults] = useState(1);
   const [editChildren, setEditChildren] = useState(0);
   const [editPrice, setEditPrice] = useState('');
+  const [editDailyRate, setEditDailyRate] = useState('');
   const [editDeposit, setEditDeposit] = useState('');
   const [editNotes, setEditNotes] = useState('');
   const [saveEditLoading, setSaveEditLoading] = useState(false);
@@ -107,7 +108,10 @@ export default function ReservasList() {
       setEditPhone(selectedRes.guest_phone || '');
       setEditAdults(Number(selectedRes.num_adult || 1));
       setEditChildren(Number(selectedRes.num_child || 0));
-      setEditPrice(String(selectedRes.price_estimate || ''));
+      const priceEstimate = selectedRes.price_estimate || 0;
+      const nights = selectedRes.nights || 1;
+      setEditPrice(String(priceEstimate));
+      setEditDailyRate(String(Math.round(priceEstimate / nights)));
       setEditDeposit(String(selectedRes.deposit || '0'));
       setEditNotes(selectedRes.notes || '');
     } else {
@@ -115,6 +119,7 @@ export default function ReservasList() {
       setTargetRoomName('');
       setAvailableRooms({});
       setIsEditingRes(false);
+      setEditDailyRate('');
       setEditDeposit('');
       setEditNotes('');
     }
@@ -853,14 +858,38 @@ export default function ReservasList() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
+                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa por Noche</label>
+                      <input
+                        type="number"
+                        value={editDailyRate}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEditDailyRate(val);
+                          if (val !== '') {
+                            setEditPrice(String(Math.round(Number(val) * (selectedRes.nights || 1))));
+                          }
+                        }}
+                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                      />
+                    </div>
+                    <div>
                       <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa Total Estancia</label>
                       <input
                         type="number"
                         value={editPrice}
-                        onChange={e => setEditPrice(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setEditPrice(val);
+                          if (val !== '') {
+                            setEditDailyRate(String(Math.round(Number(val) / (selectedRes.nights || 1))));
+                          }
+                        }}
                         className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
                       />
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Anticipo</label>
                       <input
@@ -869,6 +898,14 @@ export default function ReservasList() {
                         onChange={e => setEditDeposit(e.target.value)}
                         className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
                       />
+                    </div>
+                    <div className="flex flex-col justify-center pl-1">
+                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest mb-1.5 block">Adeudo Pendiente</span>
+                      <span className={`text-[14px] font-black ${
+                        (Number(editPrice || 0) - Number(editDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-600'
+                      }`}>
+                        {fmtCurrency(Number(editPrice || 0) - Number(editDeposit || 0), selectedRes.guest_name)}
+                      </span>
                     </div>
                   </div>
 

@@ -385,6 +385,7 @@ export default function RecepcionPage() {
   const [editedAdults, setEditedAdults] = useState(1);
   const [editedChildren, setEditedChildren] = useState(0);
   const [editedPrice, setEditedPrice] = useState('');
+  const [editedDailyRate, setEditedDailyRate] = useState('');
   const [editedDeposit, setEditedDeposit] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
@@ -400,7 +401,10 @@ export default function RecepcionPage() {
       setEditedPhone(selectedReserva.guest_phone || '');
       setEditedAdults(Number(selectedReserva.num_adult || 1));
       setEditedChildren(Number(selectedReserva.num_child || 0));
-      setEditedPrice(String(selectedReserva.price_estimate || ''));
+      const priceEstimate = selectedReserva.price_estimate || 0;
+      const nights = selectedReserva.nights || 1;
+      setEditedPrice(String(priceEstimate));
+      setEditedDailyRate(String(Math.round(priceEstimate / nights)));
       setEditedDeposit(String(selectedReserva.deposit || '0'));
       setEditedNotes(selectedReserva.notes || '');
       setIsReassigning(false);
@@ -410,6 +414,7 @@ export default function RecepcionPage() {
       setEditedAdults(1);
       setEditedChildren(0);
       setEditedPrice('');
+      setEditedDailyRate('');
       setEditedDeposit('');
       setEditedNotes('');
       setIsReassigning(false);
@@ -2527,15 +2532,40 @@ export default function RecepcionPage() {
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa Estancia</label>
+                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa por Noche</label>
                           <input
                             type="number"
-                            value={editedPrice}
-                            onChange={e => setEditedPrice(e.target.value)}
+                            value={editedDailyRate}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setEditedDailyRate(val);
+                              if (val !== '') {
+                                setEditedPrice(String(Math.round(Number(val) * (selectedReserva.nights || 1))));
+                              }
+                            }}
                             placeholder="Monto"
                             className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
                           />
                         </div>
+                        <div>
+                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa Estancia (Total)</label>
+                          <input
+                            type="number"
+                            value={editedPrice}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setEditedPrice(val);
+                              if (val !== '') {
+                                setEditedDailyRate(String(Math.round(Number(val) / (selectedReserva.nights || 1))));
+                              }
+                            }}
+                            placeholder="Monto"
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Anticipo</label>
                           <input
@@ -2545,6 +2575,14 @@ export default function RecepcionPage() {
                             placeholder="Monto"
                             className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
                           />
+                        </div>
+                        <div className="flex flex-col justify-center pl-1">
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
+                          <span className={`text-[13px] font-black ${
+                            (Number(editedPrice || 0) - Number(editedDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-600'
+                          }`}>
+                            {fmtCurrency(Number(editedPrice || 0) - Number(editedDeposit || 0), selectedReserva.guest_name)}
+                          </span>
                         </div>
                       </div>
                       {suggestedPrice !== Number(selectedReserva.price_estimate || 0) && (
