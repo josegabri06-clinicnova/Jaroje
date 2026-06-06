@@ -385,6 +385,7 @@ export default function RecepcionPage() {
   const [editedAdults, setEditedAdults] = useState(1);
   const [editedChildren, setEditedChildren] = useState(0);
   const [editedPrice, setEditedPrice] = useState('');
+  const [editedNotes, setEditedNotes] = useState('');
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [isReassigning, setIsReassigning] = useState(false);
@@ -399,6 +400,7 @@ export default function RecepcionPage() {
       setEditedAdults(Number(selectedReserva.num_adult || 1));
       setEditedChildren(Number(selectedReserva.num_child || 0));
       setEditedPrice(String(selectedReserva.price_estimate || ''));
+      setEditedNotes(selectedReserva.notes || '');
       setIsReassigning(false);
       setTargetRoomName('');
     } else {
@@ -406,6 +408,7 @@ export default function RecepcionPage() {
       setEditedAdults(1);
       setEditedChildren(0);
       setEditedPrice('');
+      setEditedNotes('');
       setIsReassigning(false);
       setTargetRoomName('');
     }
@@ -466,7 +469,8 @@ export default function RecepcionPage() {
           phone: editedPhone,
           numAdult: editedAdults,
           numChild: editedChildren,
-          price: Number(editedPrice)
+          price: Number(editedPrice),
+          notes: editedNotes
         })
       });
       const data = await res.json();
@@ -498,7 +502,8 @@ export default function RecepcionPage() {
                 phone: editedPhone,
                 numAdult: editedAdults,
                 numChild: editedChildren,
-                price: Number(editedPrice)
+                price: Number(editedPrice),
+                notes: editedNotes
               }
             })
           })
@@ -513,7 +518,8 @@ export default function RecepcionPage() {
         num_adult: editedAdults,
         num_child: editedChildren,
         price_estimate: Number(editedPrice),
-        balance: Number(editedPrice) - (prev.deposit || 0)
+        balance: Number(editedPrice) - (prev.deposit || 0),
+        notes: editedNotes
       }));
 
       setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? {
@@ -522,7 +528,8 @@ export default function RecepcionPage() {
         num_adult: editedAdults,
         num_child: editedChildren,
         price_estimate: Number(editedPrice),
-        balance: Number(editedPrice) - (r.deposit || 0)
+        balance: Number(editedPrice) - (r.deposit || 0),
+        notes: editedNotes
       } : r));
 
       fetchData();
@@ -2426,18 +2433,28 @@ export default function RecepcionPage() {
                       </div>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
-                      <div>
-                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación</span>
-                        <p className="text-[13px] font-bold text-zinc-900">{selectedReserva.room}</p>
+                    <>
+                      <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
+                        <div>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación</span>
+                          <p className="text-[13px] font-bold text-zinc-900">{selectedReserva.room}</p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Salida (Out)</span>
+                          <p className="text-[13px] font-bold text-zinc-900">
+                            {selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Salida (Out)</span>
-                        <p className="text-[13px] font-bold text-zinc-900">
-                          {selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}
-                        </p>
-                      </div>
-                    </div>
+                      {selectedReserva.notes && (
+                        <div className="pt-2.5 border-t border-zinc-200/40">
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Notas / Observaciones</span>
+                          <p className="text-[12px] font-medium text-zinc-750 italic bg-amber-50/40 border border-amber-100/50 p-2.5 rounded-xl leading-relaxed">
+                            "{selectedReserva.notes}"
+                          </p>
+                        </div>
+                      )}
+                    </>
                   )}
 
                   {/* Edición de Datos */}
@@ -2515,6 +2532,16 @@ export default function RecepcionPage() {
                             💡 Ajuste de tarifa sugerido por persona adicional: MX${suggestedPrice}
                           </p>
                         )}
+                      </div>
+
+                      <div>
+                        <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Observaciones / Notas de Reserva</label>
+                        <textarea
+                          value={editedNotes}
+                          onChange={e => setEditedNotes(e.target.value)}
+                          placeholder="Notas u observaciones de la estancia..."
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none h-16 resize-none"
+                        />
                       </div>
                     </div>
 

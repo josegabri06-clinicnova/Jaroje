@@ -94,6 +94,7 @@ export default function ReservasList() {
   const [editAdults, setEditAdults] = useState(1);
   const [editChildren, setEditChildren] = useState(0);
   const [editPrice, setEditPrice] = useState('');
+  const [editNotes, setEditNotes] = useState('');
   const [saveEditLoading, setSaveEditLoading] = useState(false);
 
   useEffect(() => {
@@ -106,11 +107,13 @@ export default function ReservasList() {
       setEditAdults(Number(selectedRes.num_adult || 1));
       setEditChildren(Number(selectedRes.num_child || 0));
       setEditPrice(String(selectedRes.price_estimate || ''));
+      setEditNotes(selectedRes.notes || '');
     } else {
       setIsReassigning(false);
       setTargetRoomName('');
       setAvailableRooms({});
       setIsEditingRes(false);
+      setEditNotes('');
     }
   }, [selectedRes]);
 
@@ -401,7 +404,8 @@ export default function ReservasList() {
           phone: editPhone,
           numAdult: editAdults,
           numChild: editChildren,
-          price: Number(editPrice)
+          price: Number(editPrice),
+          notes: editNotes
         })
       });
       const data = await res.json();
@@ -433,7 +437,8 @@ export default function ReservasList() {
                 phone: editPhone,
                 numAdult: editAdults,
                 numChild: editChildren,
-                price: Number(editPrice)
+                price: Number(editPrice),
+                notes: editNotes
               }
             })
           })
@@ -449,7 +454,8 @@ export default function ReservasList() {
         num_adult: editAdults,
         num_child: editChildren,
         price_estimate: Number(editPrice),
-        balance: Number(editPrice) - (prev.deposit || 0)
+        balance: Number(editPrice) - (prev.deposit || 0),
+        notes: editNotes
       }));
 
       setReservas(prev => prev.map(r => r.id === selectedRes.id ? {
@@ -459,7 +465,8 @@ export default function ReservasList() {
         num_adult: editAdults,
         num_child: editChildren,
         price_estimate: Number(editPrice),
-        balance: Number(editPrice) - (r.deposit || 0)
+        balance: Number(editPrice) - (r.deposit || 0),
+        notes: editNotes
       } : r));
 
       setIsEditingRes(false);
@@ -844,6 +851,16 @@ export default function ReservasList() {
                       value={editPrice}
                       onChange={e => setEditPrice(e.target.value)}
                       className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Observaciones / Notas de Reserva</label>
+                    <textarea
+                      value={editNotes}
+                      onChange={e => setEditNotes(e.target.value)}
+                      placeholder="Notas u observaciones de la estancia..."
+                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400 h-20 resize-none"
                     />
                   </div>
 
