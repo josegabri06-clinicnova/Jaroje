@@ -116,19 +116,19 @@ const PHYSICAL_ROOM_GROUPS = [
 
 const getCapacityRules = (roomName: string) => {
   const r = (roomName || '').toLowerCase();
-  if (r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
     return { base: 2, max: 2 };
   }
-  if (r.includes('1 dormitorio') || r.includes('402')) {
+  if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
     return { base: 2, max: 4 };
   }
-  if (r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
+  if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
     return { base: 4, max: 6 };
   }
-  if (r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
+  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
     return { base: 6, max: 8 };
   }
-  if (r.includes('casa') || r.includes('401') || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506')) {
+  if (r === '679093' || r.includes('casa') || r.includes('401') || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506')) {
     return { base: 8, max: 12 };
   }
   return { base: 6, max: 8 }; // default fallback
@@ -321,6 +321,7 @@ export default function RecepcionPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [rules, setRules] = useState<any[]>([]);
   const [cleanToast, setCleanToast] = useState<{ room: string; by: string } | null>(null);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
@@ -766,63 +767,121 @@ export default function RecepcionPage() {
     }
   }, [searchParams, reservas]);
 
+  const calculateWalkinPrices = (res: Reserva, isEdited: boolean) => {
+    if (!res.check_in || !res.check_out) {
+      return { dailyRate: 0, totalStay: 0, suggestedDailyRate: 0 };
+    }
+    const diffTime = Math.abs(new Date(res.check_out).getTime() - new Date(res.check_in).getTime());
+    const computedNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+    const totalRooms = (res.groupRooms && res.groupRooms.length > 0) ? res.groupRooms.length : 1;
+    const numGuests = (Number(res.num_adult) || 1) + (Number(res.num_child) || 0);
+    
+    let suggestedTotal = 0;
+    const group = res.groupRooms || [];
+    const activeRooms = group.length > 0 ? group : (res.room ? [{ roomId: res.room }] : []);
+    
+    activeRooms.forEach(rm => {
+      const capRules = getCapacityRules(rm.roomId);
+      const extraGuests = Math.max(0, numGuests - capRules.base);
+      const surchargePerNight = extraGuests * 200;
+      
+      for (let i = 0; i < computedNights; i++) {
+        const curr = new Date(res.check_in + 'T12:00:00');
+        curr.setDate(curr.getDate() + i);
+        const dateStr = curr.toISOString().split('T')[0];
+        
+        const specialRule = rules.find(rule => 
+          rule.room_type_id === rm.roomId && 
+          rule.rule_type === 'special' && 
+          rule.start_date <= dateStr && 
+          rule.end_date >= dateStr
+        );
+        
+        const seasonalRule = rules.find(rule => 
+          rule.room_type_id === rm.roomId && 
+          rule.rule_type === 'seasonal' && 
+          rule.start_date <= dateStr && 
+          rule.end_date >= dateStr
+        );
+        
+        const baseRule = rules.find(rule => 
+          rule.room_type_id === rm.roomId && 
+          rule.rule_type === 'base'
+        );
+        
+        let priceUsed = 0;
+        if (specialRule) {
+          priceUsed = Number(specialRule.price);
+        } else if (seasonalRule) {
+          priceUsed = Number(seasonalRule.price);
+        } else if (baseRule) {
+          priceUsed = Number(baseRule.price);
+        } else {
+          const fallbackSeason = getSeason(dateStr);
+          priceUsed = PRICES[rm.roomId]?.[fallbackSeason] || 2000;
+        }
+        
+        const nightBase = priceUsed + surchargePerNight;
+        const nightWithChannel = Math.round(nightBase * 1.0);
+        const nightTax = Math.round(nightWithChannel * 0.19);
+        suggestedTotal += (nightWithChannel + nightTax);
+      }
+    });
+
+    const suggestedDailyRate = computedNights > 0 ? Math.round(suggestedTotal / computedNights / totalRooms) : 0;
+    
+    let dailyRate = 0;
+    let totalStay = 0;
+    
+    if (isEdited) {
+      dailyRate = Number(res.daily_rate) || 0;
+      totalStay = dailyRate * computedNights * totalRooms;
+    } else {
+      dailyRate = suggestedDailyRate;
+      totalStay = suggestedTotal;
+    }
+    
+    return {
+      dailyRate,
+      totalStay,
+      suggestedDailyRate
+    };
+  };
+
+  const suggestedWalkinDailyRate = useMemo(() => {
+    if (!selectedReserva || selectedReserva.id !== 'walkin') return 0;
+    const { suggestedDailyRate } = calculateWalkinPrices(selectedReserva, isDailyRateEdited);
+    return suggestedDailyRate;
+  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, selectedReserva?.num_adult, selectedReserva?.num_child, rules, isDailyRateEdited]);
+
   // Recalcular precio estimado en base a la edición manual o automática
   useEffect(() => {
     if (selectedReserva?.id !== 'walkin' || !selectedReserva.check_in || !selectedReserva.check_out) return;
 
-    const diffTime = Math.abs(new Date(selectedReserva.check_out).getTime() - new Date(selectedReserva.check_in).getTime());
-    const computedNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-    const totalRooms = (selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0) ? selectedReserva.groupRooms.length : 1;
-
-    if (isDailyRateEdited) {
-      const rateNum = Number(selectedReserva.daily_rate) || 0;
-      const calculatedTotal = rateNum * computedNights * totalRooms;
-      setSelectedReserva(prev => {
-        if (!prev) return null;
-        if (prev.price_estimate === calculatedTotal) return prev;
-        return { ...prev, price_estimate: calculatedTotal };
-      });
-      setPaymentAmount(calculatedTotal.toString());
-    } else {
-      const season = getSeason(selectedReserva.check_in);
-      let calculatedDailyRate = 0;
-      let totalStay = 0;
-      const group = selectedReserva.groupRooms || [];
-
-      if (group.length > 0) {
-        const gr = group[0];
-        const basePrice = PRICES[gr.roomId]?.[season] || 2000;
-        const priceWithChannel = Math.round(basePrice * 1.0);
-        const tax = Math.round(priceWithChannel * 0.19);
-        calculatedDailyRate = priceWithChannel + tax;
-
-        group.forEach(g => {
-          const bp = PRICES[g.roomId]?.[season] || 2000;
-          const pwc = Math.round(bp * 1.0);
-          const t = Math.round(pwc * 0.19);
-          totalStay += (pwc + t) * computedNights;
-        });
-      } else if (selectedReserva.room) {
-        const basePrice = PRICES[selectedReserva.room]?.[season] || 2000;
-        const priceWithChannel = Math.round(basePrice * 1.0);
-        const tax = Math.round(priceWithChannel * 0.19);
-        calculatedDailyRate = priceWithChannel + tax;
-        totalStay = calculatedDailyRate * computedNights;
-      }
-
-      setSelectedReserva(prev => {
-        if (!prev) return null;
-        const dailyRateStr = calculatedDailyRate > 0 ? calculatedDailyRate.toString() : '';
-        if (prev.daily_rate === dailyRateStr && prev.price_estimate === totalStay) return prev;
-        return {
-          ...prev,
-          daily_rate: dailyRateStr,
-          price_estimate: totalStay
-        };
-      });
-      setPaymentAmount(totalStay.toString());
-    }
-  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, isDailyRateEdited]);
+    const { dailyRate, totalStay } = calculateWalkinPrices(selectedReserva, isDailyRateEdited);
+    
+    setSelectedReserva(prev => {
+      if (!prev) return null;
+      const dailyRateStr = dailyRate > 0 ? dailyRate.toString() : '';
+      if (prev.daily_rate === dailyRateStr && prev.price_estimate === totalStay) return prev;
+      return {
+        ...prev,
+        daily_rate: dailyRateStr,
+        price_estimate: totalStay
+      };
+    });
+    setPaymentAmount(totalStay.toString());
+  }, [
+    selectedReserva?.room,
+    selectedReserva?.groupRooms,
+    selectedReserva?.check_in,
+    selectedReserva?.check_out,
+    selectedReserva?.num_adult,
+    selectedReserva?.num_child,
+    isDailyRateEdited,
+    selectedReserva?.daily_rate,
+    rules
+  ]);
 
   // Resetear ediciones manuales cuando cambien las habitaciones seleccionadas
   useEffect(() => {
@@ -899,13 +958,14 @@ export default function RecepcionPage() {
 
   const fetchData = async () => {
     try {
-      const [r, t, inv, chk, acc, rms] = await Promise.all([
+      const [r, t, inv, chk, acc, rms, prc] = await Promise.all([
         fetch('/api/reservas?t=' + Date.now()),
         fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
-        supabase.from('room_status').select('*')
+        supabase.from('room_status').select('*'),
+        fetch('/api/precios?t=' + Date.now()).then(res => res.json()).catch(() => ({ success: false, data: [] }))
       ]);
       const rj = await r.json();
       const tj = await t.json();
@@ -935,6 +995,7 @@ export default function RecepcionPage() {
       if (inv.data) setInventory(inv.data);
       if (acc.data) setAccounts(acc.data);
       if (rms.data) setRoomStatuses(rms.data);
+      if (prc.success && prc.data) setRules(prc.data);
     } catch (err) {
       console.error(err);
     }
@@ -2243,23 +2304,29 @@ export default function RecepcionPage() {
                         <div className="space-y-1.5">
                           <div className="flex justify-between items-center pr-1">
                             <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Diaria (x Hab)</label>
-                            <button 
-                              type="button" 
-                              onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
-                              className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
-                            >
-                              {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
-                              {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
-                            </button>
+                            {selectedReserva.id === 'walkin' ? (
+                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md">
+                                Sugerido: ${suggestedWalkinDailyRate.toLocaleString('es-MX')}
+                              </span>
+                            ) : (
+                              <button 
+                                type="button" 
+                                onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
+                                className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
+                              >
+                                {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
+                                {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
+                              </button>
+                            )}
                           </div>
                           <div className="relative">
                             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
                             <input 
                               type="number" 
                               placeholder="0.00"
-                              readOnly={!isPriceUnlocked}
+                              readOnly={selectedReserva.id !== 'walkin' && !isPriceUnlocked}
                               className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                                isPriceUnlocked 
+                                isPriceUnlocked || selectedReserva.id === 'walkin'
                                   ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
                                   : 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
                               }`}
