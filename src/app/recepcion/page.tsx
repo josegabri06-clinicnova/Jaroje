@@ -390,6 +390,7 @@ export default function RecepcionPage() {
   const [editedDailyRate, setEditedDailyRate] = useState('');
   const [editedDeposit, setEditedDeposit] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
+  const [groupRoomRates, setGroupRoomRates] = useState<Record<string, string>>({});
   const [abonoPaymentMode, setAbonoPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [abonoAccountId, setAbonoAccountId] = useState('');
   const [registerAbonoInFinances, setRegisterAbonoInFinances] = useState(true);
@@ -409,7 +410,11 @@ export default function RecepcionPage() {
 
   // Inicializar estados editados al cambiar de reserva
   useEffect(() => {
+    setGroupRoomRates({});
     if (selectedReserva) {
+      if (selectedReserva.id === 'walkin') {
+        setPaymentAmount('0');
+      }
       setEditedPhone(selectedReserva.guest_phone || '');
       setEditedAdults(Number(selectedReserva.num_adult || 1));
       setEditedChildren(Number(selectedReserva.num_child || 0));
@@ -430,6 +435,7 @@ export default function RecepcionPage() {
       setAbonoFlowPaymentMethod(null);
       setAbonoFlowAccountId('');
     } else {
+      setPaymentAmount('');
       setEditedPhone('');
       setEditedAdults(1);
       setEditedChildren(0);
@@ -1054,24 +1060,89 @@ export default function RecepcionPage() {
     }
   }, [searchParams, reservas]);
 
-  const calculateWalkinPrices = (res: Reserva, isEdited: boolean) => {
+  const distributeGuestsInRooms = (rooms: any[], numAdults: number, numChildren: number) => {
+    let adultsLeft = Math.max(0, numAdults);
+    let childrenLeft = Math.max(0, numChildren);
+    
+    const roomsWithCap = rooms.map(rm => {
+      const cap = getCapacityRules(rm.roomId || rm.room);
+      return {
+        roomId: rm.roomId || rm.room,
+        unitId: rm.unitId || rm.unit_id || '',
+        name: rm.name || 'Habitación',
+        max: cap.max,
+        base: cap.base,
+        adults: 0,
+        children: 0
+      };
+    });
+    
+    // Paso 1: Cada habitación seleccionada requiere al menos 1 adulto si hay adultos disponibles
+    roomsWithCap.forEach(r => {
+      if (adultsLeft > 0) {
+        r.adults = 1;
+        adultsLeft--;
+      }
+    });
+    
+    // Paso 2: Distribuir adultos restantes respetando el límite max de cada habitación
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const space = r.max - currentTotal;
+      if (space > 0 && adultsLeft > 0) {
+        const toAdd = Math.min(space, adultsLeft);
+        r.adults += toAdd;
+        adultsLeft -= toAdd;
+      }
+    }
+    
+    // Paso 3: Distribuir niños respetando el límite max
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const space = r.max - currentTotal;
+      if (space > 0 && childrenLeft > 0) {
+        const toAdd = Math.min(space, childrenLeft);
+        r.children += toAdd;
+        childrenLeft -= toAdd;
+      }
+    }
+    
+    // Paso 4: Si quedan excedentes (por encima del máximo teórico), sumarlos a la última habitación
+    if (adultsLeft > 0 && roomsWithCap.length > 0) {
+      roomsWithCap[roomsWithCap.length - 1].adults += adultsLeft;
+    }
+    if (childrenLeft > 0 && roomsWithCap.length > 0) {
+      roomsWithCap[roomsWithCap.length - 1].children += childrenLeft;
+    }
+    
+    return roomsWithCap;
+  };
+
+  const calculateWalkinPrices = (res: Reserva) => {
     if (!res.check_in || !res.check_out) {
-      return { dailyRate: 0, totalStay: 0, suggestedDailyRate: 0 };
+      return { totalStay: 0, roomDetails: [], suggestedDailyRate: 0 };
     }
     const diffTime = Math.abs(new Date(res.check_out).getTime() - new Date(res.check_in).getTime());
     const computedNights = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
-    const totalRooms = (res.groupRooms && res.groupRooms.length > 0) ? res.groupRooms.length : 1;
-    const numGuests = (Number(res.num_adult) || 1) + (Number(res.num_child) || 0);
     
-    let suggestedTotal = 0;
-    const group = res.groupRooms || [];
-    const activeRooms = group.length > 0 ? group : (res.room ? [{ roomId: res.room }] : []);
+    const group = res.groupRooms && res.groupRooms.length > 0
+      ? res.groupRooms
+      : [{ roomId: res.room, unitId: res.unit_id || '', name: getUnitNumberFromInventory(res.room, res.unit_id || '', roomInventory) }];
     
-    activeRooms.forEach(rm => {
+    const distributedGuests = distributeGuestsInRooms(group, Number(res.num_adult || 1), Number(res.num_child || 0));
+
+    let totalStay = 0;
+    let sumSuggestedRates = 0;
+
+    const roomDetails = group.map((rm, index) => {
+      const dist = distributedGuests[index] || { adults: 1, children: 0 };
+      const numGuests = dist.adults + dist.children;
+      
       const capRules = getCapacityRules(rm.roomId);
       const extraGuests = Math.max(0, numGuests - capRules.base);
       const surchargePerNight = extraGuests * 200;
       
+      let suggestedTotalRoom = 0;
       for (let i = 0; i < computedNights; i++) {
         const curr = new Date(res.check_in + 'T12:00:00');
         curr.setDate(curr.getDate() + i);
@@ -1111,53 +1182,61 @@ export default function RecepcionPage() {
         const nightBase = priceUsed + surchargePerNight;
         const nightWithChannel = Math.round(nightBase * 1.0);
         const nightTax = Math.round(nightWithChannel * 0.19);
-        suggestedTotal += (nightWithChannel + nightTax);
+        suggestedTotalRoom += (nightWithChannel + nightTax);
       }
-    });
+      
+      const suggestedDailyRate = computedNights > 0 ? Math.round(suggestedTotalRoom / computedNights) : 0;
+      sumSuggestedRates += suggestedDailyRate;
 
-    const suggestedDailyRate = computedNights > 0 ? Math.round(suggestedTotal / computedNights / totalRooms) : 0;
+      // Detectar si el usuario modificó manualmente esta habitación específica
+      const key = `${rm.roomId}_${rm.unitId || ''}`;
+      const userPrice = groupRoomRates[key];
+      const dailyRate = userPrice !== undefined && userPrice !== '' ? Number(userPrice) : suggestedDailyRate;
+      const roomTotal = dailyRate * computedNights;
+      
+      totalStay += roomTotal;
+      
+      return {
+        roomId: rm.roomId,
+        unitId: rm.unitId || '',
+        name: rm.name || 'Habitación',
+        suggestedDailyRate,
+        dailyRate,
+        roomTotal,
+        adults: dist.adults,
+        children: dist.children
+      };
+    });
     
-    let dailyRate = 0;
-    let totalStay = 0;
-    
-    if (isEdited) {
-      dailyRate = Number(res.daily_rate) || 0;
-      totalStay = dailyRate * computedNights * totalRooms;
-    } else {
-      dailyRate = suggestedDailyRate;
-      totalStay = suggestedTotal;
-    }
+    const suggestedDailyRate = group.length > 0 ? Math.round(sumSuggestedRates / group.length) : 0;
     
     return {
-      dailyRate,
       totalStay,
+      roomDetails,
       suggestedDailyRate
     };
   };
 
   const suggestedWalkinDailyRate = useMemo(() => {
     if (!selectedReserva || selectedReserva.id !== 'walkin') return 0;
-    const { suggestedDailyRate } = calculateWalkinPrices(selectedReserva, isDailyRateEdited);
+    const { suggestedDailyRate } = calculateWalkinPrices(selectedReserva);
     return suggestedDailyRate;
-  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, selectedReserva?.num_adult, selectedReserva?.num_child, rules, isDailyRateEdited]);
+  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, selectedReserva?.num_adult, selectedReserva?.num_child, rules, groupRoomRates]);
 
   // Recalcular precio estimado en base a la edición manual o automática
   useEffect(() => {
     if (selectedReserva?.id !== 'walkin' || !selectedReserva.check_in || !selectedReserva.check_out) return;
 
-    const { dailyRate, totalStay } = calculateWalkinPrices(selectedReserva, isDailyRateEdited);
+    const { totalStay } = calculateWalkinPrices(selectedReserva);
     
     setSelectedReserva(prev => {
       if (!prev) return null;
-      const dailyRateStr = dailyRate > 0 ? dailyRate.toString() : '';
-      if (prev.daily_rate === dailyRateStr && prev.price_estimate === totalStay) return prev;
+      if (prev.price_estimate === totalStay) return prev;
       return {
         ...prev,
-        daily_rate: dailyRateStr,
         price_estimate: totalStay
       };
     });
-    setPaymentAmount(totalStay.toString());
   }, [
     selectedReserva?.room,
     selectedReserva?.groupRooms,
@@ -1165,9 +1244,8 @@ export default function RecepcionPage() {
     selectedReserva?.check_out,
     selectedReserva?.num_adult,
     selectedReserva?.num_child,
-    isDailyRateEdited,
-    selectedReserva?.daily_rate,
-    rules
+    rules,
+    groupRoomRates
   ]);
 
   // Resetear ediciones manuales cuando cambien las habitaciones seleccionadas
@@ -1384,20 +1462,12 @@ export default function RecepcionPage() {
 
     if (selectedReserva.id === 'walkin') {
       try {
-        const roomsToBook = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
-          ? selectedReserva.groupRooms
-          : [{ 
-              roomId: selectedReserva.room, 
-              unitId: selectedReserva.unit_id || '', 
-              name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) 
-            }];
-
-        const totalRooms = roomsToBook.length;
+        const { totalStay, roomDetails } = calculateWalkinPrices(selectedReserva);
+        const totalRooms = roomDetails.length;
         const totalPayment = Number(paymentAmount || 0);
-        const pricePerRoom = Math.round((selectedReserva.price_estimate || 0) / totalRooms);
-        const depositPerRoom = Math.round(totalPayment / totalRooms);
+        const depositPerRoom = totalRooms > 0 ? Math.round(totalPayment / totalRooms) : 0;
 
-        const roomNamesList = roomsToBook.map(r => r.name).join(', ');
+        const roomNamesList = roomDetails.map(r => r.name).join(', ');
 
         let finalDniUrl = null;
         if (dniFile) {
@@ -1413,7 +1483,7 @@ export default function RecepcionPage() {
         const bookedBeds24Ids: string[] = [];
         const bookedReservas: any[] = [];
 
-        for (const room of roomsToBook) {
+        for (const room of roomDetails) {
           const bgRes = await fetch('/api/reservas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1424,11 +1494,11 @@ export default function RecepcionPage() {
               checkOut: selectedReserva.check_out || todayStr,
               guestName: selectedReserva.guest_name || 'Walk-In',
               isBlock: false,
-              price: pricePerRoom,
+              price: room.roomTotal,
               deposit: depositPerRoom,
               phone: selectedReserva.guest_phone || '',
-              numAdult: selectedReserva.num_adult || 1,
-              numChild: selectedReserva.num_child || 0,
+              numAdult: room.adults,
+              numChild: room.children,
               notes: `${selectedReserva.notes || ''} (Grupo: Habs ${roomNamesList})`
             })
           });
@@ -1525,8 +1595,8 @@ export default function RecepcionPage() {
           for (let i = 0; i < bookedBeds24Ids.length; i++) {
             const bookId = bookedBeds24Ids[i];
             const splitAmount = i === bookedBeds24Ids.length - 1
-              ? totalPayment - (pricePerRoom * (bookedBeds24Ids.length - 1))
-              : pricePerRoom;
+              ? totalPayment - (depositPerRoom * (bookedBeds24Ids.length - 1))
+              : depositPerRoom;
 
             try {
               const b24PayRes = await fetch('/api/reservas/payment', {
@@ -1542,11 +1612,11 @@ export default function RecepcionPage() {
               const payData = await b24PayRes.json();
               if (!b24PayRes.ok || !payData.success) {
                 allSynced = false;
-                syncErrors.push(`Hab ${roomsToBook[i].name}: ${payData.error || 'Error desconocido'}`);
+                syncErrors.push(`Hab ${roomDetails[i].name}: ${payData.error || 'Error desconocido'}`);
               }
             } catch (payErr: any) {
               allSynced = false;
-              syncErrors.push(`Hab ${roomsToBook[i].name}: ${payErr.message || payErr}`);
+              syncErrors.push(`Hab ${roomDetails[i].name}: ${payErr.message || payErr}`);
             }
           }
 
@@ -2600,16 +2670,82 @@ export default function RecepcionPage() {
                       </div>
 
                       {/* Pricing Section (Walk-In) */}
-                      <div className="grid grid-cols-2 gap-3.5 pt-1">
-                        {/* Tarifa Diaria */}
-                        <div className="space-y-1.5">
-                          <div className="flex justify-between items-center pr-1">
-                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Diaria (x Hab)</label>
-                            {selectedReserva.id === 'walkin' ? (
-                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded-md">
-                                Sugerido: ${suggestedWalkinDailyRate.toLocaleString('es-MX')}
-                              </span>
-                            ) : (
+                      {selectedReserva.id === 'walkin' ? (() => {
+                        const { roomDetails, totalStay } = calculateWalkinPrices(selectedReserva);
+                        return (
+                          <div className="space-y-4 pt-1">
+                            <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5 block">
+                              Tarifas por Habitación
+                            </label>
+                            <div className="space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                              {roomDetails.map((room) => {
+                                const key = `${room.roomId}_${room.unitId}`;
+                                return (
+                                  <div 
+                                    key={key} 
+                                    className="flex items-center justify-between gap-3 p-3.5 bg-white border border-zinc-200/80 rounded-2xl hover:border-zinc-300 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.015)]"
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="text-[13px] font-bold text-zinc-800 leading-snug">{room.name}</span>
+                                      <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                                        Sugerido: ${room.suggestedDailyRate.toLocaleString('es-MX')} · ({room.adults}A / {room.children}N)
+                                      </span>
+                                    </div>
+                                    <div className="relative w-32 shrink-0">
+                                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] font-bold text-zinc-400">$</span>
+                                      <input
+                                        type="number"
+                                        placeholder={String(room.suggestedDailyRate)}
+                                        className="w-full bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 rounded-xl py-2 pl-7 pr-3 text-right text-[15px] font-bold text-zinc-900 transition-all outline-none"
+                                        value={groupRoomRates[key] !== undefined ? groupRoomRates[key] : ''}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          setGroupRoomRates(prev => ({
+                                            ...prev,
+                                            [key]: val
+                                          }));
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3.5 pt-1">
+                              {/* Noches */}
+                              <div className="space-y-1.5">
+                                <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Noches</label>
+                                <input 
+                                  type="text" 
+                                  readOnly 
+                                  className="w-full bg-zinc-100 border border-zinc-200/80 text-zinc-650 cursor-not-allowed rounded-xl p-3.5 text-[15px] font-semibold transition-all outline-none"
+                                  value={`${Math.ceil(Math.abs(new Date(selectedReserva.check_out).getTime() - new Date(selectedReserva.check_in).getTime()) / (1000 * 60 * 60 * 24)) || 1} Noches`}
+                                />
+                              </div>
+                              {/* Tarifa Total */}
+                              <div className="space-y-1.5">
+                                <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Tarifa Total</label>
+                                <div className="relative">
+                                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                  <input 
+                                    type="number" 
+                                    placeholder="0.00"
+                                    readOnly
+                                    className="w-full bg-zinc-100 border border-zinc-200/80 text-zinc-650 cursor-not-allowed rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                                    value={totalStay || 0}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })() : (
+                        <div className="grid grid-cols-2 gap-3.5 pt-1">
+                          {/* Tarifa Diaria */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between items-center pr-1">
+                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Diaria (x Hab)</label>
                               <button 
                                 type="button" 
                                 onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
@@ -2618,43 +2754,43 @@ export default function RecepcionPage() {
                                 {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
                                 {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
                               </button>
-                            )}
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                              <input 
+                                type="number" 
+                                placeholder="0.00"
+                                readOnly={!isPriceUnlocked}
+                                className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                                  isPriceUnlocked
+                                    ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
+                                    : 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
+                                }`}
+                                value={selectedReserva.daily_rate || ''}
+                                onChange={e => {
+                                  setIsDailyRateEdited(true);
+                                  setSelectedReserva({ ...selectedReserva, daily_rate: e.target.value });
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                            <input 
-                              type="number" 
-                              placeholder="0.00"
-                              readOnly={selectedReserva.id !== 'walkin' && !isPriceUnlocked}
-                              className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                                isPriceUnlocked || selectedReserva.id === 'walkin'
-                                  ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
-                                  : 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
-                              }`}
-                              value={selectedReserva.daily_rate || ''}
-                              onChange={e => {
-                                setIsDailyRateEdited(true);
-                                setSelectedReserva({ ...selectedReserva, daily_rate: e.target.value });
-                              }}
-                            />
-                          </div>
-                        </div>
 
-                        {/* Tarifa Total */}
-                        <div className="space-y-1.5">
-                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Total</label>
-                          <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                            <input 
-                              type="number" 
-                              placeholder="0.00"
-                              readOnly
-                              className="w-full bg-zinc-100 border border-zinc-200/80 text-zinc-650 cursor-not-allowed rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
-                              value={selectedReserva.price_estimate || 0}
-                            />
+                          {/* Tarifa Total */}
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Total</label>
+                            <div className="relative">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                              <input 
+                                type="number" 
+                                placeholder="0.00"
+                                readOnly
+                                className="w-full bg-zinc-100 border border-zinc-200/80 text-zinc-650 cursor-not-allowed rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                                value={selectedReserva.price_estimate || 0}
+                              />
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -3054,16 +3190,13 @@ export default function RecepcionPage() {
 
                   {/* Adeudo por Pagar */}
                   {(() => {
+                    const totalVal = selectedReserva.price_estimate || 0;
+                    const depositVal = selectedReserva.id === 'walkin' ? Number(paymentAmount || 0) : (selectedReserva.deposit || 0);
                     const balanceVal = selectedReserva.id === 'walkin'
-                      ? Number(paymentAmount || 0)
+                      ? Math.max(0, totalVal - depositVal)
                       : (selectedReserva.balance !== undefined
                           ? selectedReserva.balance
-                          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
-
-                    const depositVal = selectedReserva.id === 'walkin' ? 0 : (selectedReserva.deposit || 0);
-                    const totalVal = selectedReserva.id === 'walkin'
-                      ? Number(paymentAmount || 0)
-                      : (selectedReserva.price_estimate || 0);
+                          : totalVal - depositVal);
 
                     if (balanceVal <= 0) {
                       return (
@@ -3227,8 +3360,7 @@ export default function RecepcionPage() {
                         !selectedReserva.guest_name || 
                         !hasRoomSelected || 
                         !selectedReserva.guest_phone || 
-                        (selectedReserva.num_adult || 0) < 1 ||
-                        Number(paymentAmount || 0) <= 0
+                        (selectedReserva.num_adult || 0) < 1
                       ) return true;
                     }
 
