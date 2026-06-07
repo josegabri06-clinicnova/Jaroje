@@ -1057,6 +1057,74 @@ export default function AdminDashboard() {
                         label = '🟢 Disponible';
                         desc = 'La habitación se encuentra limpia, inspeccionada y lista para recibir huéspedes de check-in inmediato.';
                       } else if (operStatus === 'ocupada') {
+                        const activeRes = reservas.find(r => {
+                          const rRoom = String(r.room || '').replace(/[\s()]/g, '');
+                          const matches = rRoom.includes(selectedRoomForStatus.room_number);
+                          const isActiveToday = (r.check_in <= todayStr && r.check_out > todayStr) || (r.check_in === todayStr);
+                          return matches && isActiveToday && !r.checked_out;
+                        });
+
+                        if (activeRes) {
+                          const checkInFormatted = activeRes.check_in ? format(new Date(activeRes.check_in + 'T12:00:00'), 'd MMM', { locale: es }) : '—';
+                          const checkOutFormatted = activeRes.check_out ? format(new Date(activeRes.check_out + 'T12:00:00'), 'd MMM', { locale: es }) : '—';
+                          
+                          return (
+                            <div className="w-full border border-zinc-200/80 rounded-[24px] p-5 space-y-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] bg-white text-left font-sans">
+                              {/* Fila 1: Nombre y Habitación */}
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <h4 className="text-[17px] font-black text-zinc-900 leading-tight truncate">{activeRes.guest_name}</h4>
+                                  <p className="text-[11px] font-extrabold text-zinc-400 mt-0.5 uppercase tracking-wider leading-none">ID: {activeRes.id}</p>
+                                </div>
+                                <span className="bg-zinc-950 text-white font-bold text-[12px] px-3.5 py-2 rounded-xl text-right inline-block max-w-[170px] truncate leading-none">
+                                  {activeRes.room_name || activeRes.room}
+                                </span>
+                              </div>
+
+                              {/* Fila 2: Estancia y Canal */}
+                              <div className="grid grid-cols-2 gap-4 border-t border-zinc-100 pt-4">
+                                <div>
+                                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">Estancia</span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="bg-zinc-50 border border-zinc-200/80 px-2.5 py-1.5 rounded-lg text-[13px] font-bold text-zinc-800 leading-none">
+                                      {checkInFormatted}
+                                    </span>
+                                    <span className="text-zinc-400 font-bold">→</span>
+                                    <span className="bg-zinc-50 border border-zinc-200/80 px-2.5 py-1.5 rounded-lg text-[13px] font-bold text-zinc-800 leading-none">
+                                      {checkOutFormatted}
+                                    </span>
+                                    <span className="bg-zinc-950 text-white font-black text-[10.5px] px-2 py-0.5 rounded-full shrink-0 leading-none">
+                                      {activeRes.nights}n
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">Canal / Origen</span>
+                                  <span className="bg-zinc-50 border border-zinc-200/80 px-3.5 py-1.5 rounded-full text-[13px] font-bold text-zinc-800 inline-block leading-none">
+                                    {activeRes.channel || 'Directo'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Fila 3: Acciones (WhatsApp) */}
+                              {activeRes.guest_phone && (
+                                <div className="flex justify-end pt-1">
+                                  <a
+                                    href={`https://wa.me/${activeRes.guest_phone.replace(/\D/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="border border-emerald-250 hover:bg-emerald-50 text-emerald-600 font-bold text-[12.5px] px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                                  >
+                                    <Phone size={13} className="text-emerald-500 fill-emerald-500/10" />
+                                    <span>WhatsApp</span>
+                                  </a>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
                         bg = 'bg-zinc-100 text-zinc-500 border-zinc-200';
                         label = '⚪ Ocupada / Reservada';
                         desc = 'La habitación cuenta con una estancia activa o una llegada programada para el día de hoy, por lo que no está disponible para nuevos walk-ins.';
