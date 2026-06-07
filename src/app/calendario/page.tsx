@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { getActiveEmployee, getAdminPin } from '@/lib/auth';
+import { getActiveEmployee, getAdminPin, getRole } from '@/lib/auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -196,6 +196,13 @@ const getReservaStatusColor = (booking: any, todayStr: string) => {
   const isCheckedIn = booking.checked_in || booking.is_checked_in;
   const isCheckedOut = booking.checked_out || booking.is_checked_out;
   
+  if (booking.check_out === todayStr) {
+    return {
+      bg: '#fef3c7', // amber-100
+      border: '#d97706', // amber-600
+      text: '#92400e' // amber-800
+    };
+  }
   if (isCheckedOut) {
     return {
       bg: '#f4f4f5', // gray-100
@@ -208,13 +215,6 @@ const getReservaStatusColor = (booking: any, todayStr: string) => {
       bg: '#dbeafe', // blue-100
       border: '#2563eb', // blue-600
       text: '#1e40af' // blue-800
-    };
-  }
-  if (booking.check_out === todayStr) {
-    return {
-      bg: '#fef3c7', // amber-100
-      border: '#d97706', // amber-600
-      text: '#92400e' // amber-800
     };
   }
   // Default/Llegan / Future
@@ -288,6 +288,7 @@ export default function CalendarPage() {
   const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
   const [typedNights, setTypedNights] = useState<string>('');
   const [showPaymentFlow, setShowPaymentFlow] = useState(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
 
 
@@ -330,7 +331,10 @@ export default function CalendarPage() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+    setUserRole(localStorage.getItem('jaroje_role'));
+  }, []);
 
   useEffect(() => {
     if (selectedReserva?.check_in && selectedReserva?.check_out) {
@@ -1288,7 +1292,7 @@ export default function CalendarPage() {
                 <p className="text-[11px] font-semibold text-zinc-400 mt-0.5 uppercase tracking-wider">ID: {selectedReserva.id}</p>
               </div>
               <div className="flex items-center gap-2">
-                {selectedReserva.status !== 'cancelled' && !selectedReserva.checked_out && (
+                {selectedReserva.status !== 'cancelled' && !selectedReserva.checked_out && userRole === 'admin' && (
                   <button
                     onClick={() => setIsEditingRes(!isEditingRes)}
                     className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"

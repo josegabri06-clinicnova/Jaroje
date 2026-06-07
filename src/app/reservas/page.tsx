@@ -1113,7 +1113,7 @@ export default function ReservasList() {
                 <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">ID: {selectedRes.id || selectedRes.room_id || 'N/A'}</p>
               </div>
               <div className="flex items-center gap-2">
-                {selectedRes.status !== 'cancelled' && userRole !== 'recepcion' && (
+                {selectedRes.status !== 'cancelled' && userRole === 'admin' && (
                   <button
                     onClick={() => setIsEditingRes(!isEditingRes)}
                     className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
