@@ -1873,7 +1873,14 @@ export default function RecepcionPage() {
                       const isPending = !r.checked_out;
                       const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
                       return (
-                        <tr key={r.id} className="hover:bg-zinc-50/30 transition-colors">
+                        <tr 
+                          key={r.id} 
+                          onClick={() => {
+                            setSelectedReserva(r);
+                            setShowCheckInModal(true);
+                          }}
+                          className="hover:bg-zinc-50/30 cursor-pointer transition-colors"
+                        >
                           <td className="py-4 px-4">
                             <span className="inline-flex items-center justify-center font-extrabold text-[12px] bg-zinc-900 text-white rounded-lg px-2.5 py-1 min-w-[36px]">
                               {unit}
@@ -1921,7 +1928,10 @@ export default function RecepcionPage() {
                           <td className="py-4 px-4 text-center">
                             {isPending ? (
                               <button
-                                onClick={() => runWithSignature('checkout', (reserva) => processCheckOut(reserva), r)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  runWithSignature('checkout', (reserva) => processCheckOut(reserva), r);
+                                }}
                                 className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
                               >
                                 Dar Salida
@@ -2072,7 +2082,11 @@ export default function RecepcionPage() {
             <div className="px-6 py-5 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/30">
               <div>
                 <h3 className="text-[16px] font-bold text-zinc-950">
-                  {selectedReserva.id === 'walkin' ? 'Registrar Walk-In' : 'Proceso de Check-In'}
+                  {selectedReserva.id === 'walkin' 
+                    ? 'Registrar Walk-In' 
+                    : selectedReserva.checked_in 
+                      ? 'Detalles de Reserva' 
+                      : 'Proceso de Check-In'}
                 </h3>
                 {selectedReserva.id !== 'walkin' && (
                   <p className="text-[11px] font-semibold text-zinc-400 mt-0.5 uppercase tracking-wider">ID: {selectedReserva.id}</p>
@@ -2517,237 +2531,243 @@ export default function RecepcionPage() {
                 </div>
               )}
 
-              {/* DNI Scanner */}
-              <div className="space-y-2">
-                <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Identificación (DNI/Pasaporte)</h4>
-                {!dniPreview ? (
-                  <div
-                    onClick={() => fileRef.current?.click()}
-                    className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
-                  >
-                    <Camera size={20} className="text-zinc-400" />
-                    <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
-                    <input
-                      type="file" accept="image/*"
-                      ref={fileRef} onChange={handleDniUpload} className="hidden"
-                    />
-                  </div>
-                ) : (
-                  <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm">
-                    <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
-                    <button
-                      onClick={() => { setDniPreview(null); setDniFile(null); }}
-                      className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Adeudo por Pagar */}
-              {(() => {
-                const balanceVal = selectedReserva.id === 'walkin'
-                  ? Number(paymentAmount || 0)
-                  : (selectedReserva.balance !== undefined
-                      ? selectedReserva.balance
-                      : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
-
-                const depositVal = selectedReserva.id === 'walkin' ? 0 : (selectedReserva.deposit || 0);
-                const totalVal = selectedReserva.id === 'walkin'
-                  ? Number(paymentAmount || 0)
-                  : (selectedReserva.price_estimate || 0);
-
-                if (balanceVal <= 0) {
-                  return (
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
-                      <div className="space-y-0.5">
-                        <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
-                          Estancia Liquidada
-                        </span>
-                        <p className="text-[11px] text-emerald-600 font-medium">
-                          Total: {fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedReserva.guest_name)} (100% Pagado)
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[20px] font-black text-emerald-700">
-                          {fmtCurrency(0, selectedReserva.guest_name)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] font-extrabold text-rose-800 uppercase tracking-widest block">
-                        Adeudo por Pagar
-                      </span>
-                      {selectedReserva.id !== 'walkin' ? (
-                        <p className="text-[10px] text-rose-600 font-medium leading-tight">
-                          Total: {fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedReserva.guest_name)}
-                        </p>
-                      ) : (
-                        <p className="text-[11px] text-rose-600 font-medium">
-                          Monto total a cobrar por la estancia.
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[20px] font-black text-rose-700">
-                        {fmtCurrency(balanceVal, selectedReserva.guest_name)}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Registro de Pago */}
-              <div className="space-y-3 pt-2">
-                <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Registrar Pago (Opcional)</h4>
-                <div className="flex gap-2">
-                  {[
-                    { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                    { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                    { id: 'transferencia', label: 'Transferencia', icon: Send }
-                  ].map(m => (
-                    <button
-                      key={m.id}
-                      onClick={() => setPaymentMode(m.id as any)}
-                      className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                        paymentMode === m.id
-                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                          : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
-                      }`}
-                    >
-                      <m.icon size={15} />
-                      <span className="text-[11px] font-bold">{m.label}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {paymentMode && (
-                  <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
-                        {selectedReserva.id === 'walkin' ? 'Pago Actual (Anticipo)' : 'Monto a cobrar'}
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                      <input
-                        type="number"
-                        value={paymentAmount}
-                        onChange={e => setPaymentAmount(e.target.value)}
-                        placeholder="0.00"
-                        className="w-full bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
-                      />
-                    </div>
-
-                    {/* Selector de cuenta/sobre */}
-                    <div className="space-y-1.5 pt-1">
-                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                        ¿A qué sobre va el dinero?
-                      </label>
-                      <select
-                        value={selectedAccountId}
-                        onChange={e => setSelectedAccountId(e.target.value)}
-                        required
-                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+              {!selectedReserva.checked_in && (
+                <>
+                  {/* DNI Scanner */}
+                  <div className="space-y-2">
+                    <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Identificación (DNI/Pasaporte)</h4>
+                    {!dniPreview ? (
+                      <div
+                        onClick={() => fileRef.current?.click()}
+                        className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
                       >
-                        <option value="" disabled>Selecciona un sobre...</option>
-                        {accounts
-                          .filter(acc => {
-                            const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                            if (isUSD) {
-                              const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                              if (!isUSDAcc) return false;
-                              
-                              const name = acc.name.trim().toUpperCase();
-                              if (paymentMode === 'efectivo') {
-                                return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                              }
-                              return !name.includes('EFE') && !name.includes('CASH');
-                            } else {
-                              const name = acc.name.trim().toUpperCase();
-                              if (paymentMode === 'efectivo') {
-                                return name === 'EFECTIVO';
-                              }
-                              if (paymentMode === 'tarjeta') {
-                                return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                              }
-                              if (paymentMode === 'transferencia') {
-                                return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                              }
-                              return false;
-                            }
-                          })
-                          .map(acc => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name}
-                            </option>
-                          ))}
-                      </select>
-                    </div>
+                        <Camera size={20} className="text-zinc-400" />
+                        <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
+                        <input
+                          type="file" accept="image/*"
+                          ref={fileRef} onChange={handleDniUpload} className="hidden"
+                        />
+                      </div>
+                    ) : (
+                      <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm">
+                        <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
+                        <button
+                          onClick={() => { setDniPreview(null); setDniFile(null); }}
+                          className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+
+                  {/* Adeudo por Pagar */}
+                  {(() => {
+                    const balanceVal = selectedReserva.id === 'walkin'
+                      ? Number(paymentAmount || 0)
+                      : (selectedReserva.balance !== undefined
+                          ? selectedReserva.balance
+                          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
+
+                    const depositVal = selectedReserva.id === 'walkin' ? 0 : (selectedReserva.deposit || 0);
+                    const totalVal = selectedReserva.id === 'walkin'
+                      ? Number(paymentAmount || 0)
+                      : (selectedReserva.price_estimate || 0);
+
+                    if (balanceVal <= 0) {
+                      return (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
+                              Estancia Liquidada
+                            </span>
+                            <p className="text-[11px] text-emerald-600 font-medium">
+                              Total: {fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedReserva.guest_name)} (100% Pagado)
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[20px] font-black text-emerald-700">
+                              {fmtCurrency(0, selectedReserva.guest_name)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="bg-rose-50 border border-rose-200/80 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+                        <div className="space-y-0.5">
+                          <span className="text-[10px] font-extrabold text-rose-800 uppercase tracking-widest block">
+                            Adeudo por Pagar
+                          </span>
+                          {selectedReserva.id !== 'walkin' ? (
+                            <p className="text-[10px] text-rose-600 font-medium leading-tight">
+                              Total: {fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedReserva.guest_name)}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-rose-600 font-medium">
+                              Monto total a cobrar por la estancia.
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[20px] font-black text-rose-700">
+                            {fmtCurrency(balanceVal, selectedReserva.guest_name)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Registro de Pago */}
+                  <div className="space-y-3 pt-2">
+                    <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Registrar Pago (Opcional)</h4>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                        { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                        { id: 'transferencia', label: 'Transferencia', icon: Send }
+                      ].map(m => (
+                        <button
+                          key={m.id}
+                          onClick={() => setPaymentMode(m.id as any)}
+                          className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                            paymentMode === m.id
+                              ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                              : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
+                          }`}
+                        >
+                          <m.icon size={15} />
+                          <span className="text-[11px] font-bold">{m.label}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {paymentMode && (
+                      <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                            {selectedReserva.id === 'walkin' ? 'Pago Actual (Anticipo)' : 'Monto a cobrar'}
+                          </span>
+                        </div>
+                        <div className="relative text-left">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                          <input
+                            type="number"
+                            value={paymentAmount}
+                            onChange={e => setPaymentAmount(e.target.value)}
+                            placeholder="0.00"
+                            className="w-full bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                          />
+                        </div>
+
+                        {/* Selector de cuenta/sobre */}
+                        <div className="space-y-1.5 pt-1 text-left">
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                            ¿A qué sobre va el dinero?
+                          </label>
+                          <select
+                            value={selectedAccountId}
+                            onChange={e => setSelectedAccountId(e.target.value)}
+                            required
+                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+                          >
+                            <option value="" disabled>Selecciona un sobre...</option>
+                            {accounts
+                              .filter(acc => {
+                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                if (isUSD) {
+                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                  if (!isUSDAcc) return false;
+                                  
+                                  const name = acc.name.trim().toUpperCase();
+                                  if (paymentMode === 'efectivo') {
+                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                  }
+                                  return !name.includes('EFE') && !name.includes('CASH');
+                                } else {
+                                  const name = acc.name.trim().toUpperCase();
+                                  if (paymentMode === 'efectivo') {
+                                    return name === 'EFECTIVO';
+                                  }
+                                  if (paymentMode === 'tarjeta') {
+                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                  }
+                                  if (paymentMode === 'transferencia') {
+                                    return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                  }
+                                  return false;
+                                }
+                              })
+                              .map(acc => (
+                                <option key={acc.id} value={acc.id}>
+                                  {acc.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
 
             </div>
 
             {/* Acción de Envío */}
-            <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
-              <button
-                onClick={() => runWithSignature('checkin', () => processCheckIn())}
-                disabled={(() => {
-                  const todayStr = new Date().toLocaleDateString('sv-SE');
-                  const isFuture = selectedReserva.id !== 'walkin' && selectedReserva.check_in && selectedReserva.check_in > todayStr;
-                  if (isFuture) return true;
+            {!selectedReserva.checked_in && (
+              <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
+                <button
+                  onClick={() => runWithSignature('checkin', () => processCheckIn())}
+                  disabled={(() => {
+                    const todayStr = new Date().toLocaleDateString('sv-SE');
+                    const isFuture = selectedReserva.id !== 'walkin' && selectedReserva.check_in && selectedReserva.check_in > todayStr;
+                    if (isFuture) return true;
 
-                  if (submitting) return true;
-                  
-                  // Validación DNI obligatoria para todas las reservas y walk-ins
-                  if (!dniPreview) return true;
+                    if (submitting) return true;
+                    
+                    // Validación DNI obligatoria para todas las reservas y walk-ins
+                    if (!dniPreview) return true;
 
-                  // Validación campos Walk-in obligatorios
-                  if (selectedReserva.id === 'walkin') {
-                    const hasRoomSelected = (selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0) || selectedReserva.unit_id;
-                    if (
-                      !selectedReserva.guest_name || 
-                      !hasRoomSelected || 
-                      !selectedReserva.guest_phone || 
-                      (selectedReserva.num_adult || 0) < 1 ||
-                      Number(paymentAmount || 0) <= 0
-                    ) return true;
-                  }
+                    // Validación campos Walk-in obligatorios
+                    if (selectedReserva.id === 'walkin') {
+                      const hasRoomSelected = (selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0) || selectedReserva.unit_id;
+                      if (
+                        !selectedReserva.guest_name || 
+                        !hasRoomSelected || 
+                        !selectedReserva.guest_phone || 
+                        (selectedReserva.num_adult || 0) < 1 ||
+                        Number(paymentAmount || 0) <= 0
+                      ) return true;
+                    }
 
-                  // Calcular balance pendiente
-                  const pendingBalance = selectedReserva.id === 'walkin'
-                    ? Number(paymentAmount || 0)
-                    : (selectedReserva.balance !== undefined
-                        ? selectedReserva.balance
-                        : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
+                    // Calcular balance pendiente
+                    const pendingBalance = selectedReserva.id === 'walkin'
+                      ? Number(paymentAmount || 0)
+                      : (selectedReserva.balance !== undefined
+                          ? selectedReserva.balance
+                          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
 
-                  if (pendingBalance > 0) {
-                    const currentPayment = Number(paymentAmount || 0);
-                    // Si hay adeudo, se requiere método de pago, cuenta/sobre y que el monto cubra el adeudo
-                    if (!paymentMode) return true;
-                    if (!selectedAccountId) return true;
-                    if (currentPayment < pendingBalance) return true;
-                  }
-                  
-                  return false;
-                })()}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[14px] py-3.5 rounded-xl transition-all cursor-pointer shadow-md shadow-blue-600/15 disabled:opacity-40 flex items-center justify-center gap-2"
-              >
-                {submitting 
-                  ? 'Registrando...' 
-                  : (selectedReserva.id !== 'walkin' && selectedReserva.check_in && selectedReserva.check_in > new Date().toLocaleDateString('sv-SE'))
-                    ? `No disponible hasta el ${format(parseISO(selectedReserva.check_in), 'dd MMM yyyy', { locale: es })}`
-                    : 'Completar Check-In'}
-              </button>
-            </div>
+                    if (pendingBalance > 0) {
+                      const currentPayment = Number(paymentAmount || 0);
+                      // Si hay adeudo, se requiere método de pago, cuenta/sobre y que el monto cubra el adeudo
+                      if (!paymentMode) return true;
+                      if (!selectedAccountId) return true;
+                      if (currentPayment < pendingBalance) return true;
+                    }
+                    
+                    return false;
+                  })()}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[14px] py-3.5 rounded-xl transition-all cursor-pointer shadow-md shadow-blue-600/15 disabled:opacity-40 flex items-center justify-center gap-2"
+                >
+                  {submitting 
+                    ? 'Registrando...' 
+                    : (selectedReserva.id !== 'walkin' && selectedReserva.check_in && selectedReserva.check_in > new Date().toLocaleDateString('sv-SE'))
+                      ? `No disponible hasta el ${format(parseISO(selectedReserva.check_in), 'dd MMM yyyy', { locale: es })}`
+                      : 'Completar Check-In'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -3212,7 +3232,12 @@ export default function RecepcionPage() {
                     return (
                       <div 
                         key={r.id} 
-                        className="p-4 border border-zinc-150 rounded-2xl bg-zinc-50/20 space-y-2.5 select-none"
+                        onClick={() => {
+                          setSelectedReserva(r);
+                          setShowCheckInModal(true);
+                          setKpiModalType(null);
+                        }}
+                        className="p-4 border border-zinc-150 rounded-2xl bg-zinc-50/20 space-y-2.5 cursor-pointer hover:bg-zinc-100/50 hover:border-zinc-300 transition-all active:scale-[0.98] select-none"
                       >
                         <div className="flex justify-between items-start">
                           <div>
