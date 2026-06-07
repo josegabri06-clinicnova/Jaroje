@@ -1100,68 +1100,82 @@ export default function ReservasList() {
               
               {isEditingRes ? (
                 // Formulario de Edición Admin
-                <div className="space-y-4 font-sans">
-                  {/* Habitación Reservada */}
-                  <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-2xl flex items-center justify-between">
+                <div className="space-y-4 text-left font-sans animate-in fade-in duration-200">
+                  {/* 1. Nombre del huésped (No. Huéspedes) */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
-                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación Reservada</span>
-                      <span className="text-[14px] font-bold text-zinc-900">{selectedRes.room_name || 'Sin asignar'}</span>
+                      <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Nombre del Huésped</label>
+                      <input
+                        type="text"
+                        value={editGuestName}
+                        onChange={e => setEditGuestName(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
+                      />
                     </div>
-                    <div className="px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg">
-                      <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">{selectedRes.channel}</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
+                        <select
+                          value={editAdults}
+                          onChange={e => setEditAdults(Number(e.target.value))}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
+                        >
+                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
+                        <select
+                          value={editChildren}
+                          onChange={e => setEditChildren(Number(e.target.value))}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
+                        >
+                          {[0,1,2,3,4,5,6,7,8].map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nombre del Huésped</label>
-                    <input
-                      type="text"
-                      value={editGuestName}
-                      onChange={e => setEditGuestName(e.target.value)}
-                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Teléfono Móvil</label>
+                  {/* 2. Teléfono */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Teléfono</label>
                     <input
                       type="text"
                       value={editPhone}
                       onChange={e => setEditPhone(e.target.value)}
-                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* 3. Habitación asignada */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
-                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
-                      <select
-                        value={editAdults}
-                        onChange={e => setEditAdults(Number(e.target.value))}
-                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] cursor-pointer outline-none"
-                      >
-                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
-                          <option key={n} value={n}>{n}</option>
-                        ))}
-                      </select>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación Asignada</span>
+                      <span className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedRes.room_name || 'Sin asignar'}</span>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
-                      <select
-                        value={editChildren}
-                        onChange={e => setEditChildren(Number(e.target.value))}
-                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] cursor-pointer outline-none"
-                      >
-                        {[0,1,2,3,4,5,6,7,8].map(n => (
-                          <option key={n} value={n}>{n}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <span className="text-[10px] text-zinc-455 font-bold italic shrink-0">Bypass de reasignación*</span>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* 4. Canal reservado (directo, Airbnb, Booking) */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
-                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa por Noche</label>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
+                      <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1">
+                        {selectedRes.channel || 'Directo'}
+                      </span>
+                    </div>
+                    <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
+                  </div>
+
+                  {/* 5. Tarifa diaria */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa diaria</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
                       <input
                         type="number"
                         value={editDailyRate}
@@ -1172,47 +1186,71 @@ export default function ReservasList() {
                             setEditPrice(String(Math.round(Number(val) * (selectedRes.nights || 1))));
                           }
                         }}
-                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                        className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"
                       />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa Total Estancia</label>
+                  </div>
+
+                  {/* 6. Total de la reserva */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Total de la reserva</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-450 text-sm">$</span>
                       <input
                         type="number"
                         value={editPrice}
                         readOnly
-                        className="w-full bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-xl p-3 font-semibold text-[14px] cursor-not-allowed outline-none"
+                        className="w-full bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] cursor-not-allowed outline-none shadow-sm"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Anticipo</label>
+                  {/* 7. Anticipo depositado */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Anticipo depositado</label>
+                    <div className="relative">
+                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
                       <input
                         type="number"
                         value={editDeposit}
                         onChange={e => setEditDeposit(e.target.value)}
-                        className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400"
+                        className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"
                       />
-                    </div>
-                    <div className="flex flex-col justify-center pl-1">
-                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest mb-1.5 block">Adeudo Pendiente</span>
-                      <span className={`text-[14px] font-black ${
-                        (Number(editPrice || 0) - Number(editDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-600'
-                      }`}>
-                        {fmtCurrency(Number(editPrice || 0) - Number(editDeposit || 0), selectedRes.guest_name)}
-                      </span>
                     </div>
                   </div>
 
+                  {/* 8. Adeudo Pendiente */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
+                      <p className={`text-[15px] font-black mt-0.5 ${
+                        (Number(editPrice || 0) - Number(editDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-655'
+                      }`}>
+                        {fmtCurrency(Number(editPrice || 0) - Number(editDeposit || 0), selectedRes.guest_name)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 9. Fecha check in- días de estancia- fecha check Out */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Check-in · Estancia · Check-out</span>
+                    <div className="flex items-center justify-between text-[13px] font-semibold text-zinc-900 mt-1 bg-white border border-zinc-150 p-3 rounded-xl">
+                      <span>{selectedRes.check_in ? format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                      <span className="bg-zinc-100 text-zinc-700 px-2.5 py-0.5 rounded-lg font-bold text-[11px] shrink-0 border border-zinc-200">
+                        {selectedRes.nights} noche{selectedRes.nights !== 1 ? 's' : ''}
+                      </span>
+                      <span>{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                    </div>
+                  </div>
+
+                  {/* Observaciones / Notas */}
                   <div>
-                    <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Observaciones / Notas de Reserva</label>
+                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Observaciones / Notas de Reserva</label>
                     <textarea
                       value={editNotes}
                       onChange={e => setEditNotes(e.target.value)}
                       placeholder="Notas u observaciones de la estancia..."
-                      className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:bg-white focus:border-zinc-400 h-20 resize-none"
+                      className="w-full bg-white border border-zinc-200 rounded-xl p-3 text-zinc-900 font-semibold text-[14px] outline-none focus:border-zinc-400 h-20 resize-none shadow-sm"
                     />
                   </div>
 
@@ -1224,6 +1262,7 @@ export default function ReservasList() {
                     {saveEditLoading ? 'Guardando Cambios...' : '💾 Guardar Cambios'}
                   </button>
                 </div>
+              
               ) : (
                 // Detalles Normales
                 <>
