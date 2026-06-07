@@ -431,6 +431,24 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva]);
 
+  // Bloquear el scroll del body principal cuando el modal de check-in está abierto (evita fugas de scroll en móviles)
+  useEffect(() => {
+    if (showCheckInModal && selectedReserva) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, [showCheckInModal, selectedReserva]);
+
   // Auto-seleccionar primer sobre compatible para abono de anticipo
   useEffect(() => {
     if (!abonoPaymentMode) {
@@ -2201,7 +2219,7 @@ export default function RecepcionPage() {
             </div>
 
             {/* Contenido Modal */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            <div className="flex-1 overflow-y-auto overscroll-y-contain p-6 space-y-5">
               
               {selectedReserva.id === 'walkin' ? (
                 // Lógica de Walk-In

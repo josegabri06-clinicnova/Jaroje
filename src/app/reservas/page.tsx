@@ -197,6 +197,24 @@ export default function ReservasList() {
     }
   }, [showPaymentFlow, selectedRes]);
 
+  // Bloquear el scroll del body principal cuando el modal de detalles está abierto (evita fugas de scroll en móviles)
+  useEffect(() => {
+    if (selectedRes) {
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+    } else {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+    };
+  }, [selectedRes]);
+
   // Consultar disponibilidad real de habitaciones en las fechas de la reserva
   useEffect(() => {
     if (isReassigning && selectedRes?.check_in && selectedRes?.check_out) {
@@ -919,7 +937,7 @@ export default function ReservasList() {
             </div>
 
             {/* Contenido Modal */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto overscroll-y-contain p-6 space-y-6">
               
               {isEditingRes ? (
                 // Formulario de Edición Admin
