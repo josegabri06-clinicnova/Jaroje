@@ -41,6 +41,8 @@ interface Reserva {
   balance?: number;
   notes?: string;
   groupRooms?: { roomId: string; unitId: string; name: string }[];
+  channel?: string;
+  status?: string;
 }
 
 interface Task {
@@ -398,6 +400,13 @@ export default function RecepcionPage() {
   const [reassignLoading, setReassignLoading] = useState(false);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
 
+  // Estados para abono dedicado en Recepción
+  const [showAbonoFlow, setShowAbonoFlow] = useState(false);
+  const [abonoAmount, setAbonoAmount] = useState('');
+  const [abonoFlowPaymentMethod, setAbonoFlowPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
+  const [abonoFlowAccountId, setAbonoFlowAccountId] = useState('');
+  const [abonoFlowLoading, setAbonoFlowLoading] = useState(false);
+
   // Inicializar estados editados al cambiar de reserva
   useEffect(() => {
     if (selectedReserva) {
@@ -415,6 +424,11 @@ export default function RecepcionPage() {
       setAbonoPaymentMode(null);
       setAbonoAccountId('');
       setRegisterAbonoInFinances(true);
+
+      setShowAbonoFlow(false);
+      setAbonoAmount('');
+      setAbonoFlowPaymentMethod(null);
+      setAbonoFlowAccountId('');
     } else {
       setEditedPhone('');
       setEditedAdults(1);
@@ -428,6 +442,11 @@ export default function RecepcionPage() {
       setAbonoPaymentMode(null);
       setAbonoAccountId('');
       setRegisterAbonoInFinances(true);
+
+      setShowAbonoFlow(false);
+      setAbonoAmount('');
+      setAbonoFlowPaymentMethod(null);
+      setAbonoFlowAccountId('');
     }
   }, [selectedReserva]);
 
@@ -487,6 +506,45 @@ export default function RecepcionPage() {
       setAbonoAccountId('');
     }
   }, [abonoPaymentMode, accounts, selectedReserva]);
+
+  // Auto-seleccionar primer sobre compatible para el abono de flujo en Recepción
+  useEffect(() => {
+    if (!abonoFlowPaymentMethod) {
+      setAbonoFlowAccountId('');
+      return;
+    }
+    const compatible = accounts.filter(acc => {
+      const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+      if (isUSD) {
+        const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+        if (!isUSDAcc) return false;
+        
+        const name = acc.name.trim().toUpperCase();
+        if (abonoFlowPaymentMethod === 'efectivo') {
+          return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+        }
+        return !name.includes('EFE') && !name.includes('CASH');
+      } else {
+        const name = acc.name.trim().toUpperCase();
+        if (abonoFlowPaymentMethod === 'efectivo') {
+          return name === 'EFECTIVO';
+        }
+        if (abonoFlowPaymentMethod === 'tarjeta') {
+          return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+        }
+        if (abonoFlowPaymentMethod === 'transferencia') {
+          return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+        }
+        return false;
+      }
+    });
+
+    if (compatible.length > 0) {
+      setAbonoFlowAccountId(compatible[0].id);
+    } else {
+      setAbonoFlowAccountId('');
+    }
+  }, [abonoFlowPaymentMethod, accounts, selectedReserva]);
 
   const suggestedPrice = useMemo(() => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return 0;
@@ -551,43 +609,6 @@ export default function RecepcionPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
       
-      // Registrar abono en finanzas si el depósito aumentó y se seleccionó método de pago y cuenta
-      const oldDeposit = selectedReserva.deposit || 0;
-      const newDeposit = Number(editedDeposit) || 0;
-      const depositDiff = newDeposit - oldDeposit;
-
-      if (depositDiff > 0 && registerAbonoInFinances && abonoPaymentMode && abonoAccountId) {
-        const baseDesc = `Abono Anticipo de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room}`;
-        
-        // 1. Insertar en finances
-        const { data: insertedRows, error: financeErr } = await supabase.from('finances').insert({
-          type: 'ingreso',
-          amount: depositDiff,
-          category: 'Reserva Directa',
-          description: baseDesc,
-          payment_method: abonoPaymentMode,
-          account_id: abonoAccountId,
-          date: todayStr || new Date().toLocaleDateString('sv-SE')
-        }).select();
-
-        if (financeErr) {
-          console.error("Error al registrar finanzas para abono:", financeErr);
-          alert(`⚠️ Se guardó el anticipo en Beds24, pero hubo un error al registrar en Finanzas: ${financeErr.message}`);
-        } else {
-          // 2. Actualizar balance de la cuenta
-          const matchedAcc = accounts.find(a => a.id === abonoAccountId);
-          if (matchedAcc) {
-            const newBalance = matchedAcc.balance + depositDiff;
-            const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoAccountId);
-            if (accErr) {
-              console.error("Error al actualizar balance de cuenta para abono:", accErr);
-            } else {
-              setAccounts(prev => prev.map(a => a.id === abonoAccountId ? { ...a, balance: newBalance } : a));
-            }
-          }
-        }
-      }
-
       setAbonoPaymentMode(null);
       setAbonoAccountId('');
       setRegisterAbonoInFinances(true);
@@ -661,6 +682,134 @@ export default function RecepcionPage() {
       alert(`❌ Error al guardar cambios:\n\n${err.message}`);
     } finally {
       setIsSavingChanges(false);
+    }
+  };
+
+  const handleRegisterAbono = async () => {
+    if (!selectedReserva || !abonoAmount || !abonoFlowPaymentMethod || !abonoFlowAccountId) return;
+    setAbonoFlowLoading(true);
+    try {
+      const amountNum = Number(abonoAmount);
+      const oldDeposit = selectedReserva.deposit || 0;
+      const newDeposit = oldDeposit + amountNum;
+
+      // 1. Modificar depósito en Beds24 llamando a la API PUT /api/reservas
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedReserva.id,
+          deposit: newDeposit
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar el abono en Beds24');
+
+      // 2. Registrar en Supabase finances
+      const baseDesc = `Abono Directo de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room}`;
+      const todayStr = new Date().toLocaleDateString('sv-SE');
+
+      const { error: financeErr } = await supabase.from('finances').insert({
+        type: 'ingreso',
+        amount: amountNum,
+        category: 'Alojamiento',
+        description: baseDesc,
+        payment_method: abonoFlowPaymentMethod,
+        account_id: abonoFlowAccountId,
+        date: todayStr
+      });
+
+      if (financeErr) {
+        console.error("Error al registrar finanzas para abono:", financeErr);
+        alert(`⚠️ Se guardó el anticipo en Beds24, pero hubo un error al registrar en Finanzas: ${financeErr.message}`);
+      } else {
+        // 3. Actualizar balance de la cuenta
+        const matchedAcc = accounts.find(a => a.id === abonoFlowAccountId);
+        if (matchedAcc) {
+          const newBalance = matchedAcc.balance + amountNum;
+          const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoFlowAccountId);
+          if (accErr) {
+            console.error("Error al actualizar balance de cuenta para abono:", accErr);
+          } else {
+            setAccounts(prev => prev.map(a => a.id === abonoFlowAccountId ? { ...a, balance: newBalance } : a));
+          }
+        }
+      }
+
+      // Registrar el pago en Beds24 en tiempo real
+      try {
+        await fetch('/api/reservas/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookId: selectedReserva.id,
+            amount: amountNum,
+            paymentMethod: abonoFlowPaymentMethod,
+            employeeNum: getActiveEmployee('recepcion')?.employee_num || '999',
+            description: `Abono Anticipo ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
+          })
+        });
+      } catch (payB24Err) {
+        console.error("Error al registrar pago en Beds24:", payB24Err);
+      }
+
+      // Registrar log de abono
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'abono_registrado',
+            room: selectedReserva.room || 'General',
+            details: JSON.stringify({
+              text: `Registró abono directo de MX$${amountNum} para ${selectedReserva.guest_name} (ID: ${selectedReserva.id}). Cuenta: ${abonoFlowAccountId}, Método: ${abonoFlowPaymentMethod}`,
+              abono: {
+                bookingId: selectedReserva.id,
+                amount: amountNum,
+                paymentMethod: abonoFlowPaymentMethod,
+                accountId: abonoFlowAccountId
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de abono:", logErr);
+      }
+
+      // 4. Actualizar estados locales reactivos
+      setSelectedReserva((prev: any) => ({
+        ...prev,
+        deposit: newDeposit,
+        balance: (prev.price_estimate || 0) - newDeposit
+      }));
+
+      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? {
+        ...r,
+        deposit: newDeposit,
+        balance: (r.price_estimate || 0) - newDeposit
+      } : r));
+
+      setShowAbonoFlow(false);
+      alert('✅ Abono registrado exitosamente.');
+
+      // Refrescar en segundo plano tras delay
+      setTimeout(() => {
+        fetchData();
+      }, 3000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al registrar abono:\n\n${err.message}`);
+    } finally {
+      setAbonoFlowLoading(false);
     }
   };
 
@@ -2515,7 +2664,12 @@ export default function RecepcionPage() {
                   <div className="flex justify-between items-start">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Huésped</span>
-                      <p className="text-[16px] font-bold text-zinc-950 leading-tight">{selectedReserva.guest_name}</p>
+                      <p className="text-[16px] font-bold text-zinc-950 leading-tight">
+                        {selectedReserva.guest_name} 
+                        <span className="text-zinc-500 font-medium text-[12px] ml-1.5">
+                          ({selectedReserva.num_adult || 1}A{Number(selectedReserva.num_child) > 0 ? ` / ${selectedReserva.num_child}N` : ''})
+                        </span>
+                      </p>
                     </div>
                     {!isReassigning && (
                       <button
@@ -2574,18 +2728,101 @@ export default function RecepcionPage() {
                     </div>
                   ) : (
                     <>
+                      {/* Fila: Teléfono y Canal */}
                       <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
                         <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación</span>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
+                          {selectedReserva.guest_phone ? (
+                            <a 
+                              href={`https://wa.me/${selectedReserva.guest_phone.replace(/\D/g, '')}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-[12px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer w-fit mt-0.5"
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              <span>{selectedReserva.guest_phone}</span>
+                            </a>
+                          ) : (
+                            <p className="text-[13px] font-medium text-zinc-500">Sin teléfono</p>
+                          )}
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal y Estado</span>
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded text-[9.5px] uppercase tracking-wide">
+                              {selectedReserva.channel || 'Directo'}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold border ${
+                              selectedReserva.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+                              selectedReserva.status === 'cancelled' ? 'bg-rose-50 border-rose-100 text-rose-700' :
+                              'bg-zinc-100 border-zinc-200 text-zinc-650'
+                            }`}>
+                              {selectedReserva.status === 'confirmed' ? 'Confirmada' : selectedReserva.status === 'cancelled' ? 'Cancelada' : selectedReserva.status || 'Activa'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fila: Habitación y Fechas */}
+                      <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
+                        <div>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación Asignada</span>
                           <p className="text-[13px] font-bold text-zinc-900">{selectedReserva.room}</p>
                         </div>
                         <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Salida (Out)</span>
-                          <p className="text-[13px] font-bold text-zinc-900">
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Estancia</span>
+                          <p className="text-[12px] font-semibold text-zinc-700 mt-0.5 bg-zinc-100/60 px-2 py-0.5 rounded border border-zinc-200/40 w-fit">
+                            {selectedReserva.nights || 0} noche{selectedReserva.nights !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
+                        <div>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Check-In</span>
+                          <p className="text-[12.5px] font-bold text-zinc-900">
+                            {selectedReserva.check_in ? format(parseISO(selectedReserva.check_in), 'dd MMM yyyy', { locale: es }) : '—'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Check-Out</span>
+                          <p className="text-[12.5px] font-bold text-zinc-900">
                             {selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}
                           </p>
                         </div>
                       </div>
+
+                      {/* Desglose Financiero */}
+                      <div className="bg-zinc-100/60 border border-zinc-200/80 p-3 rounded-2xl space-y-2 pt-2.5">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-200/60 pb-1">Resumen Financiero</span>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Tarifa Diaria</span>
+                            <span className="font-extrabold text-zinc-850">
+                              {fmtCurrency(selectedReserva.price_per_night || Math.round((selectedReserva.price_estimate || 0) / (selectedReserva.nights || 1)), selectedReserva.guest_name)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Total Reserva</span>
+                            <span className="font-extrabold text-zinc-900">
+                              {fmtCurrency(selectedReserva.price_estimate || 0, selectedReserva.guest_name)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Anticipo Depositado</span>
+                            <span className="font-extrabold text-emerald-600">
+                              {fmtCurrency(selectedReserva.deposit || 0, selectedReserva.guest_name)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Adeudo Pendiente</span>
+                            <span className={`font-black ${(selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                              {fmtCurrency(selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)), selectedReserva.guest_name)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
                       {selectedReserva.notes && (
                         <div className="pt-2.5 border-t border-zinc-200/40">
                           <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Notas / Observaciones</span>
@@ -2597,140 +2834,190 @@ export default function RecepcionPage() {
                     </>
                   )}
 
-                  {/* Registrar Anticipo y Observaciones */}
-                  <div className="space-y-3 pt-3 border-t border-zinc-200/40 font-sans">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Registrar Anticipo y Observaciones</span>
-                    
-                    <div className="grid grid-cols-1 gap-2.5">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Anticipo</label>
-                          <input
-                            type="number"
-                            value={editedDeposit}
-                            onChange={e => setEditedDeposit(e.target.value)}
-                            placeholder="Monto"
-                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
-                          />
-                        </div>
-                        <div className="flex flex-col justify-center pl-1">
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
-                          <span className={`text-[13px] font-black ${
-                            (Number(editedPrice || 0) - Number(editedDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-600'
-                          }`}>
-                            {fmtCurrency(Number(editedPrice || 0) - Number(editedDeposit || 0), selectedReserva.guest_name)}
-                          </span>
-                        </div>
-                      </div>
+                  {/* Registrar Abono Directo (Registra en Finanzas) */}
+                  {selectedReserva.id !== 'walkin' && (
+                    <div className="pt-3 border-t border-zinc-200/40 space-y-2.5">
+                      {showAbonoFlow ? (
+                        <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 animate-in slide-in-from-bottom duration-250 text-left">
+                          <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
+                            <h4 className="text-[12px] font-extrabold text-zinc-850 uppercase tracking-wider">💰 Registrar Nuevo Abono</h4>
+                            <button 
+                              onClick={() => setShowAbonoFlow(false)}
+                              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-750"
+                            >
+                              ✕ Cancelar
+                            </button>
+                          </div>
 
-                      <div>
-                        <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Observaciones / Notas de Reserva</label>
-                        <textarea
-                          value={editedNotes}
-                          onChange={e => setEditedNotes(e.target.value)}
-                          placeholder="Notas u observaciones de la estancia..."
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none h-16 resize-none"
-                        />
-                      </div>
+                          <div>
+                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Monto a Abonar</label>
+                            <div className="relative">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
+                              <input
+                                type="number"
+                                value={abonoAmount}
+                                onChange={e => setAbonoAmount(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                              />
+                            </div>
+                          </div>
 
-                      {Number(editedDeposit) > (selectedReserva.deposit || 0) && (
-                        <div className="p-3 bg-zinc-50 border border-zinc-200/80 rounded-2xl space-y-2.5 animate-in fade-in duration-200">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={registerAbonoInFinances}
-                              onChange={e => setRegisterAbonoInFinances(e.target.checked)}
-                              className="rounded border-zinc-350 text-zinc-900 focus:ring-zinc-900 w-4 h-4"
-                            />
-                            <span className="text-[12px] font-extrabold text-zinc-850">
-                              💰 Registrar cobro de anticipo en Caja
-                            </span>
-                          </label>
+                          <div className="space-y-1.5">
+                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-widest block">Método de Pago</span>
+                            <div className="flex gap-1.5">
+                              {[
+                                { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                { id: 'transferencia', label: 'Transf.', icon: Send }
+                              ].map(m => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setAbonoFlowPaymentMethod(m.id as any);
+                                  }}
+                                  className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                    abonoFlowPaymentMethod === m.id
+                                      ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                      : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
+                                  }`}
+                                >
+                                  <m.icon size={11} />
+                                  <span className="text-[10px] font-bold">{m.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
 
-                          {registerAbonoInFinances && (
-                            <div className="space-y-2.5 pt-1.5 border-t border-zinc-200/60 animate-in slide-in-from-top-1 duration-150">
-                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Método de Pago</span>
-                              <div className="flex gap-1.5">
-                                {[
-                                  { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                                  { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                                  { id: 'transferencia', label: 'Transf.', icon: Send }
-                                ].map(m => (
-                                  <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => setAbonoPaymentMode(m.id as any)}
-                                    className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                      abonoPaymentMode === m.id
-                                        ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                                        : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
-                                    }`}
-                                  >
-                                    <m.icon size={11} />
-                                    <span className="text-[10px] font-bold">{m.label}</span>
-                                  </button>
-                                ))}
-                              </div>
-
-                              {abonoPaymentMode && (
-                                <div className="space-y-1.5">
-                                  <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest block">
-                                    Sobre / Cuenta Destino
-                                  </label>
-                                  <select
-                                    value={abonoAccountId}
-                                    onChange={e => setAbonoAccountId(e.target.value)}
-                                    required
-                                    className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer animate-in slide-in-from-top-1 duration-150"
-                                  >
-                                    <option value="" disabled>Selecciona un sobre...</option>
-                                    {accounts
-                                      .filter(acc => {
-                                        const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                        if (isUSD) {
-                                          const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                          if (!isUSDAcc) return false;
-                                          
-                                          const name = acc.name.trim().toUpperCase();
-                                          if (abonoPaymentMode === 'efectivo') {
-                                            return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                          }
-                                          return !name.includes('EFE') && !name.includes('CASH');
-                                        } else {
-                                          const name = acc.name.trim().toUpperCase();
-                                          if (abonoPaymentMode === 'efectivo') {
-                                            return name === 'EFECTIVO';
-                                          }
-                                          if (abonoPaymentMode === 'tarjeta') {
-                                            return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                          }
-                                          if (abonoPaymentMode === 'transferencia') {
-                                            return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                          }
-                                          return false;
-                                        }
-                                      })
-                                      .map(acc => (
-                                        <option key={acc.id} value={acc.id}>
-                                          {acc.name}
-                                        </option>
-                                      ))}
-                                  </select>
-                                </div>
-                              )}
+                          {abonoFlowPaymentMethod && (
+                            <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-150">
+                              <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest block">
+                                Sobre / Cuenta Destino
+                              </label>
+                              <select
+                                value={abonoFlowAccountId}
+                                onChange={e => setAbonoFlowAccountId(e.target.value)}
+                                required
+                                className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer"
+                              >
+                                <option value="" disabled>Selecciona un sobre...</option>
+                                {accounts
+                                  .filter(acc => {
+                                    const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                    if (isUSD) {
+                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                      if (!isUSDAcc) return false;
+                                      
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (abonoFlowPaymentMethod === 'efectivo') {
+                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                      }
+                                      return !name.includes('EFE') && !name.includes('CASH');
+                                    } else {
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (abonoFlowPaymentMethod === 'efectivo') {
+                                        return name === 'EFECTIVO';
+                                      }
+                                      if (abonoFlowPaymentMethod === 'tarjeta') {
+                                        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                      }
+                                      if (abonoFlowPaymentMethod === 'transferencia') {
+                                        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                      }
+                                      return false;
+                                    }
+                                  })
+                                  .map(acc => (
+                                    <option key={acc.id} value={acc.id}>
+                                      {acc.name}
+                                    </option>
+                                  ))}
+                              </select>
                             </div>
                           )}
+
+                          <button
+                            onClick={handleRegisterAbono}
+                            disabled={abonoFlowLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoFlowPaymentMethod || !abonoFlowAccountId}
+                            className="w-full py-3 bg-emerald-650 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            {abonoFlowLoading ? 'Procesando...' : 'Confirmar Registro de Abono'}
+                          </button>
                         </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const balance = (Number(editedPrice || 0) - Number(editedDeposit || 0));
+                            setAbonoAmount(balance > 0 ? String(balance) : '');
+                            setAbonoFlowPaymentMethod(null);
+                            setAbonoFlowAccountId('');
+                            setShowAbonoFlow(true);
+                          }}
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
+                        >
+                          💰 Registrar Abono
+                        </button>
                       )}
                     </div>
+                  )}
 
-                    <button
-                      onClick={handleSaveChanges}
-                      disabled={isSavingChanges || (Number(editedDeposit) > (selectedReserva?.deposit || 0) && registerAbonoInFinances && (!abonoPaymentMode || !abonoAccountId))}
-                      className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[11px] tracking-wide uppercase py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      {isSavingChanges ? 'Guardando...' : '💾 Guardar Anticipo / Notas'}
-                    </button>
+                  {/* Registrar Anticipo y Observaciones */}
+                  <div className="space-y-3 pt-3 border-t border-zinc-200/40 font-sans">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Corregir Datos (Bypass Finanzas)</span>
+                    
+                    {!isPriceUnlocked ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowPinModal(true)}
+                        className="w-full py-3 bg-zinc-150 hover:bg-zinc-200 border border-zinc-200 text-zinc-750 font-bold text-[12px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
+                      >
+                        🔓 Desbloquear con PIN de Admin
+                      </button>
+                    ) : (
+                      <div className="space-y-3 animate-in fade-in duration-200">
+                        <div className="grid grid-cols-1 gap-2.5">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Anticipo</label>
+                              <input
+                                type="number"
+                                value={editedDeposit}
+                                onChange={e => setEditedDeposit(e.target.value)}
+                                placeholder="Monto"
+                                className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none focus:border-zinc-400"
+                              />
+                            </div>
+                            <div className="flex flex-col justify-center pl-1">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
+                              <span className={`text-[13px] font-black ${
+                                (Number(editedPrice || 0) - Number(editedDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-600'
+                              }`}>
+                                {fmtCurrency(Number(editedPrice || 0) - Number(editedDeposit || 0), selectedReserva.guest_name)}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Observaciones / Notas de Reserva</label>
+                            <textarea
+                              value={editedNotes}
+                              onChange={e => setEditedNotes(e.target.value)}
+                              placeholder="Notas u observaciones de la estancia..."
+                              className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none focus:border-zinc-400 h-16 resize-none"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={handleSaveChanges}
+                          disabled={isSavingChanges}
+                          className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[11px] tracking-wide uppercase py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {isSavingChanges ? 'Guardando...' : '💾 Guardar Anticipo / Notas'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

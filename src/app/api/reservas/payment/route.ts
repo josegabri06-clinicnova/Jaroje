@@ -41,7 +41,7 @@ async function getBeds24Token(): Promise<string> {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { bookId, amount, paymentMethod, employeeNum } = body;
+    const { bookId, amount, paymentMethod, employeeNum, description: customDescription } = body;
 
     if (!bookId || !amount || !paymentMethod) {
       return NextResponse.json({ 
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
     // Estructurar el pago según la especificación contable de Beds24 API v2:
     // - Las entradas de dinero (pagos recibidos) se mandan con qty = -1 y price = valor positivo.
-    const description = `Cobro Check-In ${paymentMethod.toUpperCase()}${employeeNum ? ` (Operador: ${employeeNum})` : ''} [Jaroje OS]`;
+    const description = customDescription || `Cobro Check-In ${paymentMethod.toUpperCase()}${employeeNum ? ` (Operador: ${employeeNum})` : ''} [Jaroje OS]`;
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
