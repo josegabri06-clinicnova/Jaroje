@@ -90,6 +90,7 @@ export default function ReservasList() {
   // Estados para búsqueda por fecha
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   // Estados para edición de reserva (Admin)
   const [isEditingRes, setIsEditingRes] = useState(false);
@@ -819,7 +820,12 @@ export default function ReservasList() {
   };
 
 
-  useEffect(() => { fetchReservas(); }, []);
+  useEffect(() => {
+    fetchReservas();
+    if (typeof window !== 'undefined') {
+      setUserRole(localStorage.getItem('jaroje_role'));
+    }
+  }, []);
 
 
 
@@ -1072,7 +1078,7 @@ export default function ReservasList() {
                 <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">ID: {selectedRes.id || selectedRes.room_id || 'N/A'}</p>
               </div>
               <div className="flex items-center gap-2">
-                {selectedRes.status !== 'cancelled' && (
+                {selectedRes.status !== 'cancelled' && userRole !== 'recepcion' && (
                   <button
                     onClick={() => setIsEditingRes(!isEditingRes)}
                     className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
@@ -1325,7 +1331,7 @@ export default function ReservasList() {
                   <div className="flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 justify-between pr-2">
                       <span className="text-[11px] font-bold text-zinc-400">Anticipo</span>
-                      {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isEditingDepositInline && (
+                      {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isEditingDepositInline && userRole !== 'recepcion' && (
                         <button 
                           onClick={() => {
                             setInlineDepositValue(String(selectedRes.deposit || 0));
