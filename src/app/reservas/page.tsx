@@ -1331,7 +1331,7 @@ export default function ReservasList() {
                   <div className="flex flex-col justify-center">
                     <div className="flex items-center gap-1.5 justify-between pr-2">
                       <span className="text-[11px] font-bold text-zinc-400">Anticipo</span>
-                      {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isEditingDepositInline && userRole !== 'recepcion' && (
+                      {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isEditingDepositInline && (
                         <button 
                           onClick={() => {
                             setInlineDepositValue(String(selectedRes.deposit || 0));
