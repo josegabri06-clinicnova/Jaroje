@@ -99,11 +99,18 @@ export default function ReservasList() {
   const [editNotes, setEditNotes] = useState('');
   const [saveEditLoading, setSaveEditLoading] = useState(false);
 
+  // Estados para abonar/editar anticipo rápido en detalles
+  const [isEditingDepositInline, setIsEditingDepositInline] = useState(false);
+  const [inlineDepositValue, setInlineDepositValue] = useState('');
+  const [inlineDepositLoading, setInlineDepositLoading] = useState(false);
+
   useEffect(() => {
     if (selectedRes) {
       setShowPaymentFlow(false);
       setIsCheckedIn(selectedRes.is_checked_in || false);
       setIsEditingRes(false);
+      setIsEditingDepositInline(false);
+      setInlineDepositValue('');
       setEditGuestName(selectedRes.guest_name || '');
       setEditPhone(selectedRes.guest_phone || '');
       setEditAdults(Number(selectedRes.num_adult || 1));
@@ -119,6 +126,8 @@ export default function ReservasList() {
       setTargetRoomName('');
       setAvailableRooms({});
       setIsEditingRes(false);
+      setIsEditingDepositInline(false);
+      setInlineDepositValue('');
       setEditDailyRate('');
       setEditDeposit('');
       setEditNotes('');
@@ -1014,11 +1023,86 @@ export default function ReservasList() {
                       {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
                     </span>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-zinc-400">Anticipo</span>
-                    <span className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                      {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
-                    </span>
+                  <div className="flex flex-col justify-center">
+                    <div className="flex items-center gap-1.5 justify-between pr-2">
+                      <span className="text-[11px] font-bold text-zinc-400">Anticipo</span>
+                      {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isEditingDepositInline && (
+                        <button 
+                          onClick={() => {
+                            setInlineDepositValue(String(selectedRes.deposit || 0));
+                            setIsEditingDepositInline(true);
+                          }}
+                          className="text-[10px] font-extrabold text-blue-600 hover:text-blue-700 transition-colors"
+                        >
+                          ✏️ Editar
+                        </button>
+                      )}
+                    </div>
+                    {isEditingDepositInline ? (
+                      <div className="flex items-center gap-1.5 mt-0.5 animate-in slide-in-from-left-2 duration-150">
+                        <div className="relative flex-1 max-w-[100px]">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-zinc-400">$</span>
+                          <input 
+                            type="number"
+                            value={inlineDepositValue}
+                            onChange={e => setInlineDepositValue(e.target.value)}
+                            disabled={inlineDepositLoading}
+                            className="w-full bg-white border border-zinc-300 rounded-lg py-0.5 pl-4 pr-1 text-[12px] font-semibold text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                            placeholder="Monto"
+                          />
+                        </div>
+                        <button 
+                          disabled={inlineDepositLoading}
+                          onClick={async () => {
+                            setInlineDepositLoading(true);
+                            try {
+                              const res = await fetch('/api/reservas', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  id: selectedRes.id,
+                                  deposit: Number(inlineDepositValue)
+                                })
+                              });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.error || 'Error al guardar el anticipo');
+                              
+                              setSelectedRes((prev: any) => ({
+                                ...prev,
+                                deposit: Number(inlineDepositValue),
+                                balance: (prev.price_estimate || 0) - Number(inlineDepositValue)
+                              }));
+
+                              setReservas(prev => prev.map(r => r.id === selectedRes.id ? {
+                                ...r,
+                                deposit: Number(inlineDepositValue),
+                                balance: (r.price_estimate || 0) - Number(inlineDepositValue)
+                              } : r));
+
+                              setIsEditingDepositInline(false);
+                            } catch (err: any) {
+                              alert(`❌ Error al guardar el anticipo:\n\n${err.message}`);
+                            } finally {
+                              setInlineDepositLoading(false);
+                            }
+                          }}
+                          className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-950 text-white rounded-md text-[10px] font-bold shadow-sm active:scale-95 transition-all disabled:opacity-40"
+                        >
+                          {inlineDepositLoading ? '...' : 'OK'}
+                        </button>
+                        <button 
+                          disabled={inlineDepositLoading}
+                          onClick={() => setIsEditingDepositInline(false)}
+                          className="px-1.5 py-0.5 bg-zinc-150 hover:bg-zinc-200 text-zinc-700 rounded-md text-[10px] font-bold active:scale-95 transition-all"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                        {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-col">
                     <span className="text-[11px] font-bold text-zinc-400">Adeudo Pendiente</span>

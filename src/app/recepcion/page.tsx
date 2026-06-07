@@ -2469,102 +2469,11 @@ export default function RecepcionPage() {
                     </>
                   )}
 
-                  {/* Edición de Datos */}
+                  {/* Registrar Anticipo y Observaciones */}
                   <div className="space-y-3 pt-3 border-t border-zinc-200/40 font-sans">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Editar Datos del Huésped</span>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Registrar Anticipo y Observaciones</span>
                     
                     <div className="grid grid-cols-1 gap-2.5">
-                      <div>
-                        <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Teléfono Móvil</label>
-                        <input
-                          type="text"
-                          value={editedPhone}
-                          onChange={e => setEditedPhone(e.target.value)}
-                          placeholder="Sin teléfono"
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
-                        />
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Adultos</label>
-                          <select
-                            value={editedAdults}
-                            onChange={e => {
-                              const rules = getCapacityRules(selectedReserva.room);
-                              const val = Number(e.target.value);
-                              if (val + editedChildren > rules.max) {
-                                alert(`La capacidad máxima de esta unidad es de ${rules.max} huéspedes.`);
-                                setEditedAdults(rules.max - editedChildren);
-                              } else {
-                                setEditedAdults(val);
-                              }
-                            }}
-                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold cursor-pointer outline-none"
-                          >
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(n => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Niños</label>
-                          <select
-                            value={editedChildren}
-                            onChange={e => {
-                              const rules = getCapacityRules(selectedReserva.room);
-                              const val = Number(e.target.value);
-                              if (editedAdults + val > rules.max) {
-                                alert(`La capacidad máxima de esta unidad es de ${rules.max} huéspedes.`);
-                                setEditedChildren(rules.max - editedAdults);
-                              } else {
-                                setEditedChildren(val);
-                              }
-                            }}
-                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold cursor-pointer outline-none"
-                          >
-                            {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(n => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa por Noche</label>
-                          <input
-                            type="number"
-                            value={editedDailyRate}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setEditedDailyRate(val);
-                              if (val !== '') {
-                                setEditedPrice(String(Math.round(Number(val) * (selectedReserva.nights || 1))));
-                              }
-                            }}
-                            placeholder="Monto"
-                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Tarifa Estancia (Total)</label>
-                          <input
-                            type="number"
-                            value={editedPrice}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setEditedPrice(val);
-                              if (val !== '') {
-                                setEditedDailyRate(String(Math.round(Number(val) / (selectedReserva.nights || 1))));
-                              }
-                            }}
-                            placeholder="Monto"
-                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none"
-                          />
-                        </div>
-                      </div>
-
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Anticipo</label>
@@ -2585,11 +2494,6 @@ export default function RecepcionPage() {
                           </span>
                         </div>
                       </div>
-                      {suggestedPrice !== Number(selectedReserva.price_estimate || 0) && (
-                        <p className="text-[10px] text-blue-600 font-bold mt-1">
-                          💡 Ajuste de tarifa sugerido por persona adicional: MX${suggestedPrice}
-                        </p>
-                      )}
 
                       <div>
                         <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Observaciones / Notas de Reserva</label>
@@ -2607,7 +2511,7 @@ export default function RecepcionPage() {
                       disabled={isSavingChanges}
                       className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[11px] tracking-wide uppercase py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-40"
                     >
-                      {isSavingChanges ? 'Guardando...' : '💾 Guardar Datos del Huésped'}
+                      {isSavingChanges ? 'Guardando...' : '💾 Guardar Anticipo / Notas'}
                     </button>
                   </div>
                 </div>
