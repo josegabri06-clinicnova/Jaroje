@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, CheckCircle2, Lock, Unlock, X, Wallet, BedDouble, Send } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, Lock, Unlock, X, Wallet, BedDouble, Send, Minus, Plus } from 'lucide-react';
 import { getActiveEmployee, getAdminPin } from '@/lib/auth';
 import { getUnitName, getRoomMetadata } from '@/lib/beds24';
 import { format, parseISO } from 'date-fns';
@@ -505,35 +505,67 @@ export default function VercelActionForm() {
           </div>
           <div className="space-y-1.5 min-w-0">
             <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Noches</label>
-            <input 
-              type="number" 
-              required
-              min={1}
-              className="w-full min-w-0 h-14 px-3.5 py-0 bg-[#fafafa] border border-zinc-200/80 rounded-xl text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
-              value={nights}
-              onChange={e => {
-                const val = e.target.value;
-                if (val === '') {
-                  setNights('');
-                  return;
-                }
-                const num = Number(val);
-                if (isNaN(num)) return;
-                setNights(num);
-                if (form.checkIn) {
-                  const newCheckOut = addDaysToDateStr(form.checkIn, num);
-                  setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
-                }
-              }}
-              onBlur={() => {
-                const num = Math.max(1, Number(nights) || 1);
-                setNights(num);
-                if (form.checkIn) {
-                  const newCheckOut = addDaysToDateStr(form.checkIn, num);
-                  setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
-                }
-              }}
-            />
+            <div className="relative flex items-center w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl h-14 focus-within:bg-white focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+              <button
+                type="button"
+                onClick={() => {
+                  const current = Number(nights) || 1;
+                  const num = Math.max(1, current - 1);
+                  setNights(num);
+                  if (form.checkIn) {
+                    const newCheckOut = addDaysToDateStr(form.checkIn, num);
+                    setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
+                  }
+                }}
+                className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+              >
+                <Minus size={16} strokeWidth={2.5} />
+              </button>
+              <input 
+                type="number" 
+                required
+                min={1}
+                className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[16px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                value={nights}
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '') {
+                    setNights('');
+                    return;
+                  }
+                  const num = Number(val);
+                  if (isNaN(num)) return;
+                  setNights(num);
+                  if (form.checkIn) {
+                    const newCheckOut = addDaysToDateStr(form.checkIn, num);
+                    setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
+                  }
+                }}
+                onBlur={() => {
+                  const num = Math.max(1, Number(nights) || 1);
+                  setNights(num);
+                  if (form.checkIn) {
+                    const newCheckOut = addDaysToDateStr(form.checkIn, num);
+                    setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const current = Number(nights) || 1;
+                  const num = current + 1;
+                  setNights(num);
+                  if (form.checkIn) {
+                    const newCheckOut = addDaysToDateStr(form.checkIn, num);
+                    setForm(prev => ({ ...prev, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: [] }));
+                  }
+                }}
+                className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+              >
+                <Plus size={16} strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
         </div>
 

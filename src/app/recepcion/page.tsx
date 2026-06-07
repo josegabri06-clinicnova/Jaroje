@@ -2480,29 +2480,59 @@ export default function RecepcionPage() {
                     </div>
                     <div>
                       <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Noches</label>
-                      <input
-                        type="number"
-                        min={1}
-                        value={typedNights}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setTypedNights(val);
-                          const num = Number(val);
-                          if (num > 0) {
+                      <div className="relative flex items-center w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl h-14 focus-within:bg-white focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = Number(typedNights) || 1;
+                            const num = Math.max(1, current - 1);
+                            setTypedNights(String(num));
                             const newOut = addDaysToDateStr(selectedReserva.check_in, num);
                             setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
                             fetchAvailability(selectedReserva.check_in, newOut);
-                          }
-                        }}
-                        onBlur={() => {
-                          const num = Math.max(1, Number(typedNights) || 1);
-                          setTypedNights(String(num));
-                          const newOut = addDaysToDateStr(selectedReserva.check_in, num);
-                          setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
-                          fetchAvailability(selectedReserva.check_in, newOut);
-                        }}
-                        className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block"
-                      />
+                          }}
+                          className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                        >
+                          <Minus size={16} strokeWidth={2.5} />
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          value={typedNights}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setTypedNights(val);
+                            const num = Number(val);
+                            if (num > 0) {
+                              const newOut = addDaysToDateStr(selectedReserva.check_in, num);
+                              setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
+                              fetchAvailability(selectedReserva.check_in, newOut);
+                            }
+                          }}
+                          onBlur={() => {
+                            const num = Math.max(1, Number(typedNights) || 1);
+                            setTypedNights(String(num));
+                            const newOut = addDaysToDateStr(selectedReserva.check_in, num);
+                            setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
+                            fetchAvailability(selectedReserva.check_in, newOut);
+                          }}
+                          className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[16px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = Number(typedNights) || 1;
+                            const num = current + 1;
+                            setTypedNights(String(num));
+                            const newOut = addDaysToDateStr(selectedReserva.check_in, num);
+                            setSelectedReserva({ ...selectedReserva, check_out: newOut, room: '', unit_id: '', groupRooms: [] });
+                            fetchAvailability(selectedReserva.check_in, newOut);
+                          }}
+                          className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                        >
+                          <Plus size={16} strokeWidth={2.5} />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
