@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, RefreshCw, User, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -924,6 +924,17 @@ export default function ReservasList() {
               {isEditingRes ? (
                 // Formulario de Edición Admin
                 <div className="space-y-4 font-sans">
+                  {/* Habitación Reservada */}
+                  <div className="bg-zinc-50 border border-zinc-200 p-3.5 rounded-2xl flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación Reservada</span>
+                      <span className="text-[14px] font-bold text-zinc-900">{selectedRes.room_name || 'Sin asignar'}</span>
+                    </div>
+                    <div className="px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg">
+                      <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider">{selectedRes.channel}</span>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nombre del Huésped</label>
                     <input
@@ -1199,6 +1210,23 @@ export default function ReservasList() {
                   <div className="flex flex-col items-end">
                     <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-out</span>
                     <span className="text-zinc-900 font-semibold">{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloque: Huéspedes (Capacidad) */}
+              <div>
+                <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Huéspedes</h5>
+                <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 p-4 rounded-2xl">
+                  <div className="w-8 h-8 rounded-full border border-zinc-200 bg-white flex items-center justify-center shrink-0 shadow-sm">
+                    <Users size={14} className="text-zinc-500" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Capacidad Reservada</span>
+                    <p className="text-[14px] font-semibold text-zinc-900 leading-tight">
+                      {selectedRes.num_adult} Adulto{selectedRes.num_adult !== 1 ? 's' : ''}
+                      {Number(selectedRes.num_child || 0) > 0 ? ` y ${selectedRes.num_child} Niño${selectedRes.num_child !== 1 ? 's' : ''}` : ''}
+                    </p>
                   </div>
                 </div>
               </div>
