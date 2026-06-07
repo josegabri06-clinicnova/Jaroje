@@ -2996,7 +2996,7 @@ export default function RecepcionPage() {
                   )}
 
                   {/* Registrar Anticipo Button & Panel */}
-                  {selectedReserva.id !== 'walkin' && (
+                  {selectedReserva.id !== 'walkin' && selectedReserva.checked_in && (
                     <div className="pt-3 border-t border-zinc-200/40 space-y-2.5">
                       {showAbonoFlow ? (
                         <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 text-left">
