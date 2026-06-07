@@ -388,6 +388,9 @@ export default function RecepcionPage() {
   const [editedDailyRate, setEditedDailyRate] = useState('');
   const [editedDeposit, setEditedDeposit] = useState('');
   const [editedNotes, setEditedNotes] = useState('');
+  const [abonoPaymentMode, setAbonoPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
+  const [abonoAccountId, setAbonoAccountId] = useState('');
+  const [registerAbonoInFinances, setRegisterAbonoInFinances] = useState(true);
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
   const [loadingAvailability, setLoadingAvailability] = useState(false);
   const [isReassigning, setIsReassigning] = useState(false);
@@ -409,6 +412,9 @@ export default function RecepcionPage() {
       setEditedNotes(selectedReserva.notes || '');
       setIsReassigning(false);
       setTargetRoomName('');
+      setAbonoPaymentMode(null);
+      setAbonoAccountId('');
+      setRegisterAbonoInFinances(true);
     } else {
       setEditedPhone('');
       setEditedAdults(1);
@@ -419,8 +425,50 @@ export default function RecepcionPage() {
       setEditedNotes('');
       setIsReassigning(false);
       setTargetRoomName('');
+      setAbonoPaymentMode(null);
+      setAbonoAccountId('');
+      setRegisterAbonoInFinances(true);
     }
   }, [selectedReserva]);
+
+  // Auto-seleccionar primer sobre compatible para abono de anticipo
+  useEffect(() => {
+    if (!abonoPaymentMode) {
+      setAbonoAccountId('');
+      return;
+    }
+    const compatible = accounts.filter(acc => {
+      const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+      if (isUSD) {
+        const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+        if (!isUSDAcc) return false;
+        
+        const name = acc.name.trim().toUpperCase();
+        if (abonoPaymentMode === 'efectivo') {
+          return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+        }
+        return !name.includes('EFE') && !name.includes('CASH');
+      } else {
+        const name = acc.name.trim().toUpperCase();
+        if (abonoPaymentMode === 'efectivo') {
+          return name === 'EFECTIVO';
+        }
+        if (abonoPaymentMode === 'tarjeta') {
+          return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+        }
+        if (abonoPaymentMode === 'transferencia') {
+          return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+        }
+        return false;
+      }
+    });
+
+    if (compatible.length > 0) {
+      setAbonoAccountId(compatible[0].id);
+    } else {
+      setAbonoAccountId('');
+    }
+  }, [abonoPaymentMode, accounts, selectedReserva]);
 
   const suggestedPrice = useMemo(() => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return 0;
@@ -484,6 +532,47 @@ export default function RecepcionPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
+      
+      // Registrar abono en finanzas si el depósito aumentó y se seleccionó método de pago y cuenta
+      const oldDeposit = selectedReserva.deposit || 0;
+      const newDeposit = Number(editedDeposit) || 0;
+      const depositDiff = newDeposit - oldDeposit;
+
+      if (depositDiff > 0 && registerAbonoInFinances && abonoPaymentMode && abonoAccountId) {
+        const baseDesc = `Abono Anticipo de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room}`;
+        
+        // 1. Insertar en finances
+        const { data: insertedRows, error: financeErr } = await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: depositDiff,
+          category: 'Reserva Directa',
+          description: baseDesc,
+          payment_method: abonoPaymentMode,
+          account_id: abonoAccountId,
+          date: todayStr || new Date().toLocaleDateString('sv-SE')
+        }).select();
+
+        if (financeErr) {
+          console.error("Error al registrar finanzas para abono:", financeErr);
+          alert(`⚠️ Se guardó el anticipo en Beds24, pero hubo un error al registrar en Finanzas: ${financeErr.message}`);
+        } else {
+          // 2. Actualizar balance de la cuenta
+          const matchedAcc = accounts.find(a => a.id === abonoAccountId);
+          if (matchedAcc) {
+            const newBalance = matchedAcc.balance + depositDiff;
+            const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoAccountId);
+            if (accErr) {
+              console.error("Error al actualizar balance de cuenta para abono:", accErr);
+            } else {
+              setAccounts(prev => prev.map(a => a.id === abonoAccountId ? { ...a, balance: newBalance } : a));
+            }
+          }
+        }
+      }
+
+      setAbonoPaymentMode(null);
+      setAbonoAccountId('');
+      setRegisterAbonoInFinances(true);
       
       alert('✅ Cambios guardados con éxito.');
       
@@ -2518,12 +2607,102 @@ export default function RecepcionPage() {
                           className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none h-16 resize-none"
                         />
                       </div>
+
+                      {Number(editedDeposit) > (selectedReserva.deposit || 0) && (
+                        <div className="p-3 bg-zinc-50 border border-zinc-200/80 rounded-2xl space-y-2.5 animate-in fade-in duration-200">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={registerAbonoInFinances}
+                              onChange={e => setRegisterAbonoInFinances(e.target.checked)}
+                              className="rounded border-zinc-350 text-zinc-900 focus:ring-zinc-900 w-4 h-4"
+                            />
+                            <span className="text-[12px] font-extrabold text-zinc-850">
+                              💰 Registrar cobro de anticipo en Caja
+                            </span>
+                          </label>
+
+                          {registerAbonoInFinances && (
+                            <div className="space-y-2.5 pt-1.5 border-t border-zinc-200/60 animate-in slide-in-from-top-1 duration-150">
+                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Método de Pago</span>
+                              <div className="flex gap-1.5">
+                                {[
+                                  { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                  { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                  { id: 'transferencia', label: 'Transf.', icon: Send }
+                                ].map(m => (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    onClick={() => setAbonoPaymentMode(m.id as any)}
+                                    className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                      abonoPaymentMode === m.id
+                                        ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                        : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
+                                    }`}
+                                  >
+                                    <m.icon size={11} />
+                                    <span className="text-[10px] font-bold">{m.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              {abonoPaymentMode && (
+                                <div className="space-y-1.5">
+                                  <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest block">
+                                    Sobre / Cuenta Destino
+                                  </label>
+                                  <select
+                                    value={abonoAccountId}
+                                    onChange={e => setAbonoAccountId(e.target.value)}
+                                    required
+                                    className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer animate-in slide-in-from-top-1 duration-150"
+                                  >
+                                    <option value="" disabled>Selecciona un sobre...</option>
+                                    {accounts
+                                      .filter(acc => {
+                                        const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                        if (isUSD) {
+                                          const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                          if (!isUSDAcc) return false;
+                                          
+                                          const name = acc.name.trim().toUpperCase();
+                                          if (abonoPaymentMode === 'efectivo') {
+                                            return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                          }
+                                          return !name.includes('EFE') && !name.includes('CASH');
+                                        } else {
+                                          const name = acc.name.trim().toUpperCase();
+                                          if (abonoPaymentMode === 'efectivo') {
+                                            return name === 'EFECTIVO';
+                                          }
+                                          if (abonoPaymentMode === 'tarjeta') {
+                                            return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                          }
+                                          if (abonoPaymentMode === 'transferencia') {
+                                            return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                          }
+                                          return false;
+                                        }
+                                      })
+                                      .map(acc => (
+                                        <option key={acc.id} value={acc.id}>
+                                          {acc.name}
+                                        </option>
+                                      ))}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <button
                       onClick={handleSaveChanges}
-                      disabled={isSavingChanges}
-                      className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[11px] tracking-wide uppercase py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-40"
+                      disabled={isSavingChanges || (Number(editedDeposit) > (selectedReserva?.deposit || 0) && registerAbonoInFinances && (!abonoPaymentMode || !abonoAccountId))}
+                      className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[11px] tracking-wide uppercase py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       {isSavingChanges ? 'Guardando...' : '💾 Guardar Anticipo / Notas'}
                     </button>

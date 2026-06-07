@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, RefreshCw, User, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera } from 'lucide-react';
+import { Search, RefreshCw, User, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -99,6 +99,10 @@ export default function ReservasList() {
   const [editNotes, setEditNotes] = useState('');
   const [saveEditLoading, setSaveEditLoading] = useState(false);
 
+  const [abonoPaymentMode, setAbonoPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
+  const [abonoAccountId, setAbonoAccountId] = useState('');
+  const [registerAbonoInFinances, setRegisterAbonoInFinances] = useState(true);
+
   // Estados para abonar/editar anticipo rápido en detalles
   const [isEditingDepositInline, setIsEditingDepositInline] = useState(false);
   const [inlineDepositValue, setInlineDepositValue] = useState('');
@@ -121,6 +125,9 @@ export default function ReservasList() {
       setEditDailyRate(String(Math.round(priceEstimate / nights)));
       setEditDeposit(String(selectedRes.deposit || '0'));
       setEditNotes(selectedRes.notes || '');
+      setAbonoPaymentMode(null);
+      setAbonoAccountId('');
+      setRegisterAbonoInFinances(true);
     } else {
       setIsReassigning(false);
       setTargetRoomName('');
@@ -131,8 +138,50 @@ export default function ReservasList() {
       setEditDailyRate('');
       setEditDeposit('');
       setEditNotes('');
+      setAbonoPaymentMode(null);
+      setAbonoAccountId('');
+      setRegisterAbonoInFinances(true);
     }
   }, [selectedRes]);
+
+  // Auto-seleccionar primer sobre compatible para abono de anticipo
+  useEffect(() => {
+    if (!abonoPaymentMode) {
+      setAbonoAccountId('');
+      return;
+    }
+    const compatible = accounts.filter(acc => {
+      const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+      if (isUSD) {
+        const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+        if (!isUSDAcc) return false;
+        
+        const name = acc.name.trim().toUpperCase();
+        if (abonoPaymentMode === 'efectivo') {
+          return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+        }
+        return !name.includes('EFE') && !name.includes('CASH');
+      } else {
+        const name = acc.name.trim().toUpperCase();
+        if (abonoPaymentMode === 'efectivo') {
+          return name === 'EFECTIVO';
+        }
+        if (abonoPaymentMode === 'tarjeta') {
+          return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+        }
+        if (abonoPaymentMode === 'transferencia') {
+          return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+        }
+        return false;
+      }
+    });
+
+    if (compatible.length > 0) {
+      setAbonoAccountId(compatible[0].id);
+    } else {
+      setAbonoAccountId('');
+    }
+  }, [abonoPaymentMode, accounts, selectedRes]);
 
   useEffect(() => {
     if (showPaymentFlow && selectedRes) {
@@ -428,6 +477,48 @@ export default function ReservasList() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
+
+      // Registrar abono en finanzas si el depósito aumentó y se seleccionó método de pago y cuenta
+      const oldDeposit = selectedRes.deposit || 0;
+      const newDeposit = Number(editDeposit) || 0;
+      const depositDiff = newDeposit - oldDeposit;
+
+      if (depositDiff > 0 && registerAbonoInFinances && abonoPaymentMode && abonoAccountId) {
+        const baseDesc = `Abono Anticipo de ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'}`;
+        const todayStr = new Date().toLocaleDateString('sv-SE');
+        
+        // 1. Insertar en finances
+        const { data: insertedRows, error: financeErr } = await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: depositDiff,
+          category: 'Reserva Directa',
+          description: baseDesc,
+          payment_method: abonoPaymentMode,
+          account_id: abonoAccountId,
+          date: todayStr
+        }).select();
+
+        if (financeErr) {
+          console.error("Error al registrar finanzas para abono:", financeErr);
+          alert(`⚠️ Se guardó el anticipo en Beds24, pero hubo un error al registrar en Finanzas: ${financeErr.message}`);
+        } else {
+          // 2. Actualizar balance de la cuenta
+          const matchedAcc = accounts.find(a => a.id === abonoAccountId);
+          if (matchedAcc) {
+            const newBalance = matchedAcc.balance + depositDiff;
+            const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoAccountId);
+            if (accErr) {
+              console.error("Error al actualizar balance de cuenta para abono:", accErr);
+            } else {
+              setAccounts(prev => prev.map(a => a.id === abonoAccountId ? { ...a, balance: newBalance } : a));
+            }
+          }
+        }
+      }
+
+      setAbonoPaymentMode(null);
+      setAbonoAccountId('');
+      setRegisterAbonoInFinances(true);
       
       alert('✅ Reserva modificada con éxito.');
       
@@ -928,10 +1019,100 @@ export default function ReservasList() {
                     />
                   </div>
 
+                  {Number(editDeposit) > (selectedRes.deposit || 0) && (
+                    <div className="p-3 bg-zinc-50 border border-zinc-200/80 rounded-2xl space-y-2.5 animate-in fade-in duration-200 text-left">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={registerAbonoInFinances}
+                          onChange={e => setRegisterAbonoInFinances(e.target.checked)}
+                          className="rounded border-zinc-350 text-zinc-900 focus:ring-zinc-900 w-4 h-4"
+                        />
+                        <span className="text-[12px] font-extrabold text-zinc-850">
+                          💰 Registrar cobro de anticipo en Caja
+                        </span>
+                      </label>
+
+                      {registerAbonoInFinances && (
+                        <div className="space-y-2.5 pt-1.5 border-t border-zinc-200/60 animate-in slide-in-from-top-1 duration-150">
+                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block">Método de Pago</span>
+                          <div className="flex gap-1.5">
+                            {[
+                              { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                              { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                              { id: 'transferencia', label: 'Transf.', icon: Send }
+                            ].map(m => (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setAbonoPaymentMode(m.id as any)}
+                                className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                  abonoPaymentMode === m.id
+                                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                    : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
+                                }`}
+                              >
+                                <m.icon size={11} />
+                                <span className="text-[10px] font-bold">{m.label}</span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {abonoPaymentMode && (
+                            <div className="space-y-1.5">
+                              <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest block">
+                                Sobre / Cuenta Destino
+                              </label>
+                              <select
+                                value={abonoAccountId}
+                                onChange={e => setAbonoAccountId(e.target.value)}
+                                required
+                                className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer animate-in slide-in-from-top-1 duration-150"
+                              >
+                                <option value="" disabled>Selecciona un sobre...</option>
+                                {accounts
+                                  .filter(acc => {
+                                    const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                    if (isUSD) {
+                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                      if (!isUSDAcc) return false;
+                                      
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (abonoPaymentMode === 'efectivo') {
+                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                      }
+                                      return !name.includes('EFE') && !name.includes('CASH');
+                                    } else {
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (abonoPaymentMode === 'efectivo') {
+                                        return name === 'EFECTIVO';
+                                      }
+                                      if (abonoPaymentMode === 'tarjeta') {
+                                        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                      }
+                                      if (abonoPaymentMode === 'transferencia') {
+                                        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                      }
+                                      return false;
+                                    }
+                                  })
+                                  .map(acc => (
+                                    <option key={acc.id} value={acc.id}>
+                                      {acc.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <button
                     onClick={handleSaveReservationEdit}
-                    disabled={saveEditLoading}
-                    className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] tracking-wide uppercase py-3.5 rounded-2xl transition-all cursor-pointer shadow-md disabled:opacity-40"
+                    disabled={saveEditLoading || (Number(editDeposit) > (selectedRes?.deposit || 0) && registerAbonoInFinances && (!abonoPaymentMode || !abonoAccountId))}
+                    className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] tracking-wide uppercase py-3.5 rounded-2xl transition-all cursor-pointer shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {saveEditLoading ? 'Guardando Cambios...' : '💾 Guardar Cambios'}
                   </button>
@@ -1039,21 +1220,22 @@ export default function ReservasList() {
                       )}
                     </div>
                     {isEditingDepositInline ? (
-                      <div className="flex items-center gap-1.5 mt-0.5 animate-in slide-in-from-left-2 duration-150">
-                        <div className="relative flex-1 max-w-[100px]">
-                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-zinc-400">$</span>
-                          <input 
-                            type="number"
-                            value={inlineDepositValue}
-                            onChange={e => setInlineDepositValue(e.target.value)}
+                      <div className="flex flex-col gap-1 mt-0.5 animate-in slide-in-from-left-2 duration-150">
+                        <div className="flex items-center gap-1.5">
+                          <div className="relative flex-1 max-w-[100px]">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-zinc-400">$</span>
+                            <input 
+                              type="number"
+                              value={inlineDepositValue}
+                              onChange={e => setInlineDepositValue(e.target.value)}
+                              disabled={inlineDepositLoading}
+                              className="w-full bg-white border border-zinc-300 rounded-lg py-0.5 pl-4 pr-1 text-[12px] font-semibold text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+                              placeholder="Monto"
+                            />
+                          </div>
+                          <button 
                             disabled={inlineDepositLoading}
-                            className="w-full bg-white border border-zinc-300 rounded-lg py-0.5 pl-4 pr-1 text-[12px] font-semibold text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-                            placeholder="Monto"
-                          />
-                        </div>
-                        <button 
-                          disabled={inlineDepositLoading}
-                          onClick={async () => {
+                            onClick={async () => {
                             setInlineDepositLoading(true);
                             try {
                               const res = await fetch('/api/reservas', {
@@ -1098,6 +1280,10 @@ export default function ReservasList() {
                           ✕
                         </button>
                       </div>
+                      <span className="text-[9px] font-semibold text-zinc-500 mt-1 block max-w-[180px] leading-tight text-left">
+                        *Para registrar en caja/finanzas, edite la reserva usando el botón "Editar" arriba.
+                      </span>
+                    </div>
                     ) : (
                       <span className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
                         {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
