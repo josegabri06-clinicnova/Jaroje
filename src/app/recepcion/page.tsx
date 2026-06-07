@@ -5,7 +5,7 @@ import { format, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
-  UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
+  User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
   ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
@@ -709,10 +709,10 @@ export default function RecepcionPage() {
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al guardar el abono en Beds24');
+      if (!res.ok) throw new Error(data.error || 'Error al guardar el anticipo en Beds24');
 
       // 2. Registrar en Supabase finances
-      const baseDesc = `Abono Directo de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room}`;
+      const baseDesc = `Anticipo Directo de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room}`;
       const todayStr = new Date().toLocaleDateString('sv-SE');
 
       const { error: financeErr } = await supabase.from('finances').insert({
@@ -726,7 +726,7 @@ export default function RecepcionPage() {
       });
 
       if (financeErr) {
-        console.error("Error al registrar finanzas para abono:", financeErr);
+        console.error("Error al registrar finanzas para anticipo:", financeErr);
         alert(`⚠️ Se guardó el anticipo en Beds24, pero hubo un error al registrar en Finanzas: ${financeErr.message}`);
       } else {
         // 3. Actualizar balance de la cuenta
@@ -735,7 +735,7 @@ export default function RecepcionPage() {
           const newBalance = matchedAcc.balance + amountNum;
           const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoFlowAccountId);
           if (accErr) {
-            console.error("Error al actualizar balance de cuenta para abono:", accErr);
+            console.error("Error al actualizar balance de cuenta para anticipo:", accErr);
           } else {
             setAccounts(prev => prev.map(a => a.id === abonoFlowAccountId ? { ...a, balance: newBalance } : a));
           }
@@ -752,14 +752,14 @@ export default function RecepcionPage() {
             amount: amountNum,
             paymentMethod: abonoFlowPaymentMethod,
             employeeNum: getActiveEmployee('recepcion')?.employee_num || '999',
-            description: `Abono Anticipo ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
+            description: `Anticipo ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
           })
         });
       } catch (payB24Err) {
         console.error("Error al registrar pago en Beds24:", payB24Err);
       }
 
-      // Registrar log de abono
+      // Registrar log de anticipo
       try {
         const emp = getActiveEmployee('recepcion');
         const employeeNum = emp?.employee_num || '999';
@@ -805,7 +805,7 @@ export default function RecepcionPage() {
       } : r));
 
       setShowAbonoFlow(false);
-      alert('✅ Abono registrado exitosamente.');
+      alert('✅ Anticipo registrado exitosamente.');
 
       // Refrescar en segundo plano tras delay
       setTimeout(() => {
@@ -813,7 +813,7 @@ export default function RecepcionPage() {
       }, 3000);
     } catch (err: any) {
       console.error(err);
-      alert(`❌ Error al registrar abono:\n\n${err.message}`);
+      alert(`❌ Error al registrar anticipo:\n\n${err.message}`);
     } finally {
       setAbonoFlowLoading(false);
     }
@@ -2796,197 +2796,215 @@ export default function RecepcionPage() {
                 </div>
               ) : (
                 // Información Reserva Existente (Editable)
-                <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-4">
-                  <div className="flex justify-between items-start">
+                <div className="space-y-4 text-left">
+                  {/* 1. Nombre del huésped (No. Huéspedes) */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div className="w-9 h-9 rounded-xl bg-blue-50/50 border border-blue-100 flex items-center justify-center shrink-0">
+                      <User size={16} className="text-blue-600" />
+                    </div>
                     <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Huésped</span>
-                      <p className="text-[16px] font-bold text-zinc-950 leading-tight">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Nombre del Huésped (Huéspedes)</span>
+                      <h4 className="text-[14px] font-bold text-zinc-900 leading-tight">
                         {selectedReserva.guest_name} 
                         <span className="text-zinc-500 font-medium text-[12px] ml-1.5">
                           ({selectedReserva.num_adult || 1}A{Number(selectedReserva.num_child) > 0 ? ` / ${selectedReserva.num_child}N` : ''})
                         </span>
-                      </p>
+                      </h4>
                     </div>
-                    {!isReassigning && (
-                      <button
-                        onClick={() => setIsReassigning(true)}
-                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                      >
-                        Reasignar 🔀
-                      </button>
+                  </div>
+
+                  {/* 2. Teléfono */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
+                      {selectedReserva.guest_phone ? (
+                        <a 
+                          href={`https://wa.me/${selectedReserva.guest_phone.replace(/\D/g, '')}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>{selectedReserva.guest_phone}</span>
+                          <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                          </svg>
+                        </a>
+                      ) : (
+                        <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Habitación asignada */}
+                  <div className="space-y-2">
+                    <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                      <div>
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
+                        <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedReserva.room || 'Sin asignar'}</p>
+                      </div>
+                      {selectedReserva.status !== 'cancelled' && !selectedReserva.checked_out && !isReassigning && (
+                        <button
+                          onClick={() => setIsReassigning(true)}
+                          className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                        >
+                          Reasignar 🔀
+                        </button>
+                      )}
+                    </div>
+
+                    {isReassigning && (
+                      <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200 text-left">
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5">
+                            Seleccionar Habitación Física
+                          </label>
+                          <select
+                            value={targetRoomName}
+                            onChange={e => setTargetRoomName(e.target.value)}
+                            disabled={loadingAvailability}
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
+                          >
+                            <option value="" disabled>
+                              {loadingAvailability ? '⏳ Buscando disponibilidad...' : 'Selecciona habitación...'}
+                            </option>
+                            {PHYSICAL_ROOM_GROUPS.map(group => (
+                              <optgroup key={group.category} label={group.category}>
+                                {group.rooms.map(roomNum => {
+                                  const isAvail = availableRooms[roomNum];
+                                  return (
+                                    <option key={roomNum} value={roomNum}>
+                                      Habitación {roomNum} {isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setIsReassigning(false); setTargetRoomName(''); }}
+                            className="flex-1 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 text-[12px] font-bold rounded-xl transition-all cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={handleReassignRoom}
+                            disabled={reassignLoading || !targetRoomName}
+                            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/10 cursor-pointer"
+                          >
+                            Confirmar
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
 
-                  {isReassigning ? (
-                    <div className="bg-blue-50/40 border border-blue-100/80 p-3 rounded-xl space-y-2.5 animate-in slide-in-from-top-2 duration-150">
-                      <div>
-                        <label className="block text-[9px] font-extrabold text-blue-800 uppercase tracking-widest mb-1">
-                          Seleccionar Habitación Física
-                        </label>
-                        <select
-                          value={targetRoomName}
-                          onChange={e => setTargetRoomName(e.target.value)}
-                          disabled={loadingAvailability}
-                          className="w-full bg-white border border-zinc-200 rounded-lg px-2.5 py-2 text-[12px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
-                        >
-                          <option value="" disabled>
-                            {loadingAvailability ? '⏳ Buscando disponibilidad...' : 'Selecciona habitación...'}
-                          </option>
-                          {PHYSICAL_ROOM_GROUPS.map(group => (
-                            <optgroup key={group.category} label={group.category}>
-                              {group.rooms.map(roomNum => {
-                                const isAvail = availableRooms[roomNum];
-                                return (
-                                  <option key={roomNum} value={roomNum}>
-                                    Habitación {roomNum} {isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
-                                  </option>
-                                );
-                              })}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleReassignRoom}
-                          disabled={reassignLoading || !targetRoomName}
-                          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] py-1.5 rounded-lg shadow-sm transition-all active:scale-95 disabled:opacity-40"
-                        >
-                          {reassignLoading ? 'Guardando...' : 'Confirmar Reasignación'}
-                        </button>
-                        <button
-                          onClick={() => { setIsReassigning(false); setTargetRoomName(''); }}
-                          className="px-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-700 font-extrabold text-[11px] py-1.5 rounded-lg transition-all"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
+                  {/* 4. Canal reservado (directo, Airbnb, Booking) */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
+                      <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1">
+                        {selectedReserva.channel || 'Directo'}
+                      </span>
                     </div>
-                  ) : (
-                    <>
-                      {/* Fila: Teléfono y Canal */}
-                      <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
-                        <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
-                          {selectedReserva.guest_phone ? (
-                            <a 
-                              href={`https://wa.me/${selectedReserva.guest_phone.replace(/\D/g, '')}`} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-[12px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer w-fit mt-0.5"
-                            >
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              <span>{selectedReserva.guest_phone}</span>
-                            </a>
-                          ) : (
-                            <p className="text-[13px] font-medium text-zinc-500">Sin teléfono</p>
-                          )}
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal y Estado</span>
-                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded text-[9.5px] uppercase tracking-wide">
-                              {selectedReserva.channel || 'Directo'}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold border ${
-                              selectedReserva.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
-                              selectedReserva.status === 'cancelled' ? 'bg-rose-50 border-rose-100 text-rose-700' :
-                              'bg-zinc-100 border-zinc-200 text-zinc-650'
-                            }`}>
-                              {selectedReserva.status === 'confirmed' ? 'Confirmada' : selectedReserva.status === 'cancelled' ? 'Cancelada' : selectedReserva.status || 'Activa'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                    <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold border ${
+                      selectedReserva.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
+                      selectedReserva.status === 'cancelled' ? 'bg-rose-50 border-rose-100 text-rose-700' :
+                      'bg-zinc-100 border-zinc-200 text-zinc-650'
+                    }`}>
+                      {selectedReserva.status === 'confirmed' ? 'Confirmada' : selectedReserva.status === 'cancelled' ? 'Cancelada' : selectedReserva.status || 'Activa'}
+                    </span>
+                  </div>
 
-                      {/* Fila: Habitación y Fechas */}
-                      <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
-                        <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación Asignada</span>
-                          <p className="text-[13px] font-bold text-zinc-900">{selectedReserva.room}</p>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Estancia</span>
-                          <p className="text-[12px] font-semibold text-zinc-700 mt-0.5 bg-zinc-100/60 px-2 py-0.5 rounded border border-zinc-200/40 w-fit">
-                            {selectedReserva.nights || 0} noche{selectedReserva.nights !== 1 ? 's' : ''}
-                          </p>
-                        </div>
-                      </div>
+                  {/* 5. Tarifa diaria */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Tarifa diaria</span>
+                      <p className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
+                        {fmtCurrency(selectedReserva.price_per_night || Math.round((selectedReserva.price_estimate || 0) / (selectedReserva.nights || 1)), selectedReserva.guest_name)}
+                      </p>
+                    </div>
+                  </div>
 
-                      <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-zinc-200/40">
-                        <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Check-In</span>
-                          <p className="text-[12.5px] font-bold text-zinc-900">
-                            {selectedReserva.check_in ? format(parseISO(selectedReserva.check_in), 'dd MMM yyyy', { locale: es }) : '—'}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Check-Out</span>
-                          <p className="text-[12.5px] font-bold text-zinc-900">
-                            {selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}
-                          </p>
-                        </div>
-                      </div>
+                  {/* 6. Total de la reserva */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total de la reserva</span>
+                      <p className="text-[15px] font-black text-zinc-950 mt-0.5">
+                        {fmtCurrency(selectedReserva.price_estimate || 0, selectedReserva.guest_name)}
+                      </p>
+                    </div>
+                  </div>
 
-                      {/* Desglose Financiero */}
-                      <div className="bg-zinc-100/60 border border-zinc-200/80 p-3 rounded-2xl space-y-2 pt-2.5">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-200/60 pb-1">Resumen Financiero</span>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Tarifa Diaria</span>
-                            <span className="font-extrabold text-zinc-850">
-                              {fmtCurrency(selectedReserva.price_per_night || Math.round((selectedReserva.price_estimate || 0) / (selectedReserva.nights || 1)), selectedReserva.guest_name)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Total Reserva</span>
-                            <span className="font-extrabold text-zinc-900">
-                              {fmtCurrency(selectedReserva.price_estimate || 0, selectedReserva.guest_name)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Anticipo Depositado</span>
-                            <span className="font-extrabold text-emerald-600">
-                              {fmtCurrency(selectedReserva.deposit || 0, selectedReserva.guest_name)}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Adeudo Pendiente</span>
-                            <span className={`font-black ${(selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
-                              {fmtCurrency(selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)), selectedReserva.guest_name)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
+                  {/* 7. Anticipo depositado */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
+                      <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                        {fmtCurrency(selectedReserva.deposit || 0, selectedReserva.guest_name)}
+                      </p>
+                    </div>
+                  </div>
 
-                      {selectedReserva.notes && (
-                        <div className="pt-2.5 border-t border-zinc-200/40">
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Notas / Observaciones</span>
-                          <p className="text-[12px] font-medium text-zinc-750 italic bg-amber-50/40 border border-amber-100/50 p-2.5 rounded-xl leading-relaxed">
-                            "{selectedReserva.notes}"
-                          </p>
-                        </div>
-                      )}
-                    </>
+                  {/* 8. Adeudo Pendiente */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
+                      <p className={`text-[15px] font-black mt-0.5 ${
+                        (selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'
+                      }`}>
+                        {fmtCurrency(selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)), selectedReserva.guest_name)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 9. Fecha check in- días de estancia- fecha check Out */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Check-in · Estancia · Check-out</span>
+                    <div className="flex items-center justify-between text-[13px] font-semibold text-zinc-900 mt-1 bg-white border border-zinc-150 p-3 rounded-xl">
+                      <span>{selectedReserva.check_in ? format(parseISO(selectedReserva.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                      <span className="bg-zinc-100 text-zinc-700 px-2.5 py-0.5 rounded-lg font-bold text-[11px] shrink-0 border border-zinc-200">
+                        {selectedReserva.nights || 0} noche{selectedReserva.nights !== 1 ? 's' : ''}
+                      </span>
+                      <span>{selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                    </div>
+                  </div>
+
+                  {/* Notas del Huésped */}
+                  {selectedReserva.notes && (
+                    <div className="bg-amber-50/40 border border-amber-100 p-4 rounded-2xl mt-1">
+                      <span className="text-[10px] font-bold text-amber-850 uppercase tracking-widest block mb-1">Notas / Observaciones</span>
+                      <p className="text-[13px] text-zinc-700 italic leading-relaxed">"{selectedReserva.notes}"</p>
+                    </div>
                   )}
 
-                  {/* Registrar Abono Directo (Registra en Finanzas) */}
+                  {/* Registrar Anticipo Button & Panel */}
                   {selectedReserva.id !== 'walkin' && (
                     <div className="pt-3 border-t border-zinc-200/40 space-y-2.5">
                       {showAbonoFlow ? (
-                        <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 animate-in slide-in-from-bottom duration-250 text-left">
+                        <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 text-left">
                           <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
-                            <h4 className="text-[12px] font-extrabold text-zinc-850 uppercase tracking-wider">💰 Registrar Nuevo Abono</h4>
+                            <h4 className="text-[12px] font-extrabold text-zinc-850 uppercase tracking-wider">💰 Registrar Nuevo Anticipo</h4>
                             <button 
                               onClick={() => setShowAbonoFlow(false)}
-                              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-750"
+                              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-755"
                             >
                               ✕ Cancelar
                             </button>
                           </div>
 
                           <div>
-                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Monto a Abonar</label>
+                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Monto de Anticipo</label>
                             <div className="relative">
                               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
                               <input
@@ -3010,9 +3028,7 @@ export default function RecepcionPage() {
                                 <button
                                   key={m.id}
                                   type="button"
-                                  onClick={() => {
-                                    setAbonoFlowPaymentMethod(m.id as any);
-                                  }}
+                                  onClick={() => setAbonoFlowPaymentMethod(m.id as any)}
                                   className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                                     abonoFlowPaymentMethod === m.id
                                       ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
@@ -3027,7 +3043,7 @@ export default function RecepcionPage() {
                           </div>
 
                           {abonoFlowPaymentMethod && (
-                            <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-150">
+                            <div className="space-y-1.5">
                               <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest block">
                                 Sobre / Cuenta Destino
                               </label>
@@ -3076,9 +3092,9 @@ export default function RecepcionPage() {
                           <button
                             onClick={handleRegisterAbono}
                             disabled={abonoFlowLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoFlowPaymentMethod || !abonoFlowAccountId}
-                            className="w-full py-3 bg-emerald-650 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="w-full py-3 bg-emerald-655 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                           >
-                            {abonoFlowLoading ? 'Procesando...' : 'Confirmar Registro de Abono'}
+                            {abonoFlowLoading ? 'Procesando...' : 'Confirmar Registro de Anticipo'}
                           </button>
                         </div>
                       ) : (
@@ -3092,69 +3108,11 @@ export default function RecepcionPage() {
                           }}
                           className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
                         >
-                          💰 Registrar Abono
+                          💰 Registrar Anticipo
                         </button>
                       )}
                     </div>
                   )}
-
-                  {/* Registrar Anticipo y Observaciones */}
-                  <div className="space-y-3 pt-3 border-t border-zinc-200/40 font-sans">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Corregir Datos (Bypass Finanzas)</span>
-                    
-                    {!isPriceUnlocked ? (
-                      <button
-                        type="button"
-                        onClick={() => setShowPinModal(true)}
-                        className="w-full py-3 bg-zinc-150 hover:bg-zinc-200 border border-zinc-200 text-zinc-750 font-bold text-[12px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer"
-                      >
-                        🔓 Desbloquear con PIN de Admin
-                      </button>
-                    ) : (
-                      <div className="space-y-3 animate-in fade-in duration-200">
-                        <div className="grid grid-cols-1 gap-2.5">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Anticipo</label>
-                              <input
-                                type="number"
-                                value={editedDeposit}
-                                onChange={e => setEditedDeposit(e.target.value)}
-                                placeholder="Monto"
-                                className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none focus:border-zinc-400"
-                              />
-                            </div>
-                            <div className="flex flex-col justify-center pl-1">
-                              <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
-                              <span className={`text-[13px] font-black ${
-                                (Number(editedPrice || 0) - Number(editedDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-600'
-                              }`}>
-                                {fmtCurrency(Number(editedPrice || 0) - Number(editedDeposit || 0), selectedReserva.guest_name)}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-[9px] font-semibold text-zinc-500 uppercase tracking-widest mb-1 block">Observaciones / Notas de Reserva</label>
-                            <textarea
-                              value={editedNotes}
-                              onChange={e => setEditedNotes(e.target.value)}
-                              placeholder="Notas u observaciones de la estancia..."
-                              className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-[13px] font-semibold transition-all outline-none focus:border-zinc-400 h-16 resize-none"
-                            />
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={handleSaveChanges}
-                          disabled={isSavingChanges}
-                          className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[11px] tracking-wide uppercase py-2.5 rounded-xl transition-all cursor-pointer shadow-sm active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {isSavingChanges ? 'Guardando...' : '💾 Guardar Anticipo / Notas'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
                 </div>
               )}
 

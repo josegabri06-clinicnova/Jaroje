@@ -608,10 +608,10 @@ export default function ReservasList() {
         })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Error al guardar el abono en Beds24');
+      if (!res.ok) throw new Error(data.error || 'Error al guardar el anticipo en Beds24');
 
       // 2. Registrar en Supabase finances
-      const baseDesc = `Abono Directo de ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'}`;
+      const baseDesc = `Anticipo Directo de ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'}`;
       const todayStr = new Date().toLocaleDateString('sv-SE');
 
       const { error: financeErr } = await supabase.from('finances').insert({
@@ -625,7 +625,7 @@ export default function ReservasList() {
       });
 
       if (financeErr) {
-        console.error("Error al registrar finanzas para abono:", financeErr);
+        console.error("Error al registrar finanzas para anticipo:", financeErr);
         alert(`⚠️ Se guardó el anticipo en Beds24, pero hubo un error al registrar en Finanzas: ${financeErr.message}`);
       } else {
         // 3. Actualizar balance de la cuenta
@@ -634,7 +634,7 @@ export default function ReservasList() {
           const newBalance = matchedAcc.balance + amountNum;
           const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoAccountId);
           if (accErr) {
-            console.error("Error al actualizar balance de cuenta para abono:", accErr);
+            console.error("Error al actualizar balance de cuenta para anticipo:", accErr);
           } else {
             setAccounts(prev => prev.map(a => a.id === abonoAccountId ? { ...a, balance: newBalance } : a));
           }
@@ -651,14 +651,14 @@ export default function ReservasList() {
             amount: amountNum,
             paymentMethod: abonoPaymentMethod,
             employeeNum: '999', // Admin
-            description: `Abono Anticipo ${abonoPaymentMethod.toUpperCase()} [Jaroje OS]`
+            description: `Anticipo ${abonoPaymentMethod.toUpperCase()} [Jaroje OS]`
           })
         });
       } catch (payB24Err) {
         console.error("Error al registrar pago en Beds24:", payB24Err);
       }
 
-      // Registrar log de abono
+      // Registrar log de anticipo
       try {
         const emp = getActiveEmployee('recepcion');
         const employeeNum = emp?.employee_num || '999';
@@ -704,7 +704,7 @@ export default function ReservasList() {
       } : r));
 
       setShowAbonoFlow(false);
-      alert('✅ Abono registrado exitosamente.');
+      alert('✅ Anticipo registrado exitosamente.');
 
       // Refrescar en segundo plano tras delay
       setTimeout(() => {
@@ -712,7 +712,7 @@ export default function ReservasList() {
       }, 3000);
     } catch (err: any) {
       console.error(err);
-      alert(`❌ Error al registrar abono:\n\n${err.message}`);
+      alert(`❌ Error al registrar anticipo:\n\n${err.message}`);
     } finally {
       setAbonoLoading(false);
     }
@@ -1227,424 +1227,322 @@ export default function ReservasList() {
               ) : (
                 // Detalles Normales
                 <>
-              
-              {/* Bloque: Huésped */}
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-zinc-100 border border-zinc-200 flex items-center justify-center shrink-0">
-                  <User size={24} className="text-zinc-600" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h4 className="text-[18px] font-bold text-zinc-900 tracking-tight truncate">{selectedRes.guest_name}</h4>
-                  <div className="flex items-center gap-2 flex-wrap mt-1">
-                    {selectedRes.guest_phone ? (
-                      <a 
-                        href={`https://wa.me/${selectedRes.guest_phone.replace(/\D/g, '')}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        title="Enviar mensaje por WhatsApp"
-                        className="text-[12px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-lg transition-colors cursor-pointer"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span>{selectedRes.guest_phone}</span>
-                        <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                          <polyline points="15 3 21 3 21 9"></polyline>
-                          <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                      </a>
-                    ) : (
-                      <span className="text-[12px] font-medium text-zinc-500">Sin teléfono</span>
-                    )}
-                    {selectedRes.guest_email && (
-                      <>
-                        <span className="text-zinc-300">·</span>
-                        <span className="text-[12px] font-medium text-zinc-500 truncate max-w-[140px]" title={selectedRes.guest_email}>
-                          {selectedRes.guest_email}
+                  <div className="space-y-4 text-left">
+                  {/* 1. Nombre del huésped (No. Huéspedes) */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div className="w-9 h-9 rounded-xl bg-blue-50/50 border border-blue-100 flex items-center justify-center shrink-0">
+                      <User size={16} className="text-blue-600" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Nombre del Huésped (Huéspedes)</span>
+                      <h4 className="text-[14px] font-bold text-zinc-900 leading-tight">
+                        {selectedRes.guest_name} 
+                        <span className="text-zinc-500 font-medium text-[12px] ml-1.5">
+                          ({selectedRes.num_adult || 1}A{Number(selectedRes.num_child) > 0 ? ` / ${selectedRes.num_child}N` : ''})
                         </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Canal & Estado Tags Row */}
-              <div className="flex items-center gap-2">
-                <div className="px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-lg flex items-center justify-center">
-                  <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">{selectedRes.channel}</span>
-                </div>
-                <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
-              </div>
-
-              {/* Bloque: Timeline */}
-              <div>
-                <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Estancia</h5>
-                <div className="flex items-center justify-between text-[14px] bg-zinc-50 border border-zinc-200 p-4 rounded-2xl">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-in</span>
-                    <span className="text-zinc-900 font-semibold">{selectedRes.check_in ? format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
-                  </div>
-                  <div className="flex-1 flex justify-center px-4">
-                    <div className="w-8 h-8 rounded-full border border-zinc-200 bg-white flex items-center justify-center shadow-sm">
-                      <Clock size={14} className="text-zinc-400" />
+                      </h4>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Check-out</span>
-                    <span className="text-zinc-900 font-semibold">{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
-                  </div>
-                </div>
-              </div>
 
-              {/* Bloque: Huéspedes (Capacidad) */}
-              <div>
-                <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Huéspedes</h5>
-                <div className="flex items-center gap-3 bg-zinc-50 border border-zinc-200 p-4 rounded-2xl">
-                  <div className="w-8 h-8 rounded-full border border-zinc-200 bg-white flex items-center justify-center shrink-0 shadow-sm">
-                    <Users size={14} className="text-zinc-500" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Capacidad Reservada</span>
-                    <p className="text-[14px] font-semibold text-zinc-900 leading-tight">
-                      {selectedRes.num_adult} Adulto{selectedRes.num_adult !== 1 ? 's' : ''}
-                      {Number(selectedRes.num_child || 0) > 0 ? ` y ${selectedRes.num_child} Niño${selectedRes.num_child !== 1 ? 's' : ''}` : ''}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Desglose Financiero Completo */}
-              <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-3 shadow-sm">
-                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block border-b border-zinc-150 pb-1.5">Resumen Financiero</span>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3.5">
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-zinc-400">Tarifa Diaria (Promedio)</span>
-                    <span className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
-                      {fmtCurrency(selectedRes.price_per_night || Math.round((selectedRes.price_estimate || 0) / (selectedRes.nights || 1)), selectedRes.guest_name)}
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-zinc-400">Total Estancia</span>
-                    <span className="text-[15px] font-black text-zinc-950 mt-0.5">
-                      {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
-                    </span>
-                  </div>
-                  <div className="flex flex-col justify-center">
-                    <div className="flex items-center gap-1.5 justify-between pr-2">
-                      <span className="text-[11px] font-bold text-zinc-400">Anticipo</span>
-                      {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isEditingDepositInline && (
-                        <button 
-                          onClick={() => {
-                            setInlineDepositValue(String(selectedRes.deposit || 0));
-                            setIsEditingDepositInline(true);
-                          }}
-                          className="text-[10px] font-extrabold text-blue-600 hover:text-blue-700 transition-colors"
+                  {/* 2. Teléfono */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                      </svg>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
+                      {selectedRes.guest_phone ? (
+                        <a 
+                          href={`https://wa.me/${selectedRes.guest_phone.replace(/\D/g, '')}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
                         >
-                          ✏️ Editar
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span>{selectedRes.guest_phone}</span>
+                          <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                            <polyline points="15 3 21 3 21 9"></polyline>
+                            <line x1="10" y1="14" x2="21" y2="3"></line>
+                          </svg>
+                        </a>
+                      ) : (
+                        <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 3. Habitación asignada */}
+                  <div className="space-y-2">
+                    <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                      <div>
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
+                        <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedRes.room_name || 'Sin asignar'}</p>
+                      </div>
+                      {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isReassigning && (
+                        <button
+                          onClick={() => setIsReassigning(true)}
+                          className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                        >
+                          Reasignar 🔀
                         </button>
                       )}
                     </div>
-                    {isEditingDepositInline ? (
-                      <div className="flex flex-col gap-1 mt-0.5 animate-in slide-in-from-left-2 duration-150">
-                        <div className="flex items-center gap-1.5">
-                          <div className="relative flex-1 max-w-[100px]">
-                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[12px] font-semibold text-zinc-400">$</span>
-                            <input 
-                              type="number"
-                              value={inlineDepositValue}
-                              onChange={e => setInlineDepositValue(e.target.value)}
-                              disabled={inlineDepositLoading}
-                              className="w-full bg-white border border-zinc-300 rounded-lg py-0.5 pl-4 pr-1 text-[12px] font-semibold text-zinc-900 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
-                              placeholder="Monto"
-                            />
-                          </div>
-                          <button 
-                            disabled={inlineDepositLoading}
-                            onClick={async () => {
-                            setInlineDepositLoading(true);
-                            try {
-                              const res = await fetch('/api/reservas', {
-                                method: 'PUT',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                  id: selectedRes.id,
-                                  deposit: Number(inlineDepositValue)
-                                })
-                              });
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data.error || 'Error al guardar el anticipo');
-                              
-                              setSelectedRes((prev: any) => ({
-                                ...prev,
-                                deposit: Number(inlineDepositValue),
-                                balance: (prev.price_estimate || 0) - Number(inlineDepositValue)
-                              }));
 
-                              setReservas(prev => prev.map(r => r.id === selectedRes.id ? {
-                                ...r,
-                                deposit: Number(inlineDepositValue),
-                                balance: (r.price_estimate || 0) - Number(inlineDepositValue)
-                              } : r));
-
-                              setIsEditingDepositInline(false);
-                            } catch (err: any) {
-                              alert(`❌ Error al guardar el anticipo:\n\n${err.message}`);
-                            } finally {
-                              setInlineDepositLoading(false);
-                            }
-                          }}
-                          className="px-2 py-0.5 bg-zinc-900 hover:bg-zinc-950 text-white rounded-md text-[10px] font-bold shadow-sm active:scale-95 transition-all disabled:opacity-40"
-                        >
-                          {inlineDepositLoading ? '...' : 'OK'}
-                        </button>
-                        <button 
-                          disabled={inlineDepositLoading}
-                          onClick={() => setIsEditingDepositInline(false)}
-                          className="px-1.5 py-0.5 bg-zinc-150 hover:bg-zinc-200 text-zinc-700 rounded-md text-[10px] font-bold active:scale-95 transition-all"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      <span className="text-[9px] font-semibold text-zinc-500 mt-1 block max-w-[180px] leading-tight text-left">
-                        *Para registrar en caja/finanzas, edite la reserva usando el botón "Editar" arriba.
-                      </span>
-                    </div>
-                    ) : (
-                      <span className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                        {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[11px] font-bold text-zinc-400">Adeudo Pendiente</span>
-                    <span className={`text-[15px] font-black mt-0.5 ${
-                      (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-600'
-                    }`}>
-                      {fmtCurrency(selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)), selectedRes.guest_name)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Registrar Abono Button & Panel */}
-              {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
-                <div className="mt-3">
-                  {showAbonoFlow ? (
-                    <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 animate-in slide-in-from-bottom duration-250 text-left">
-                      <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
-                        <h4 className="text-[12px] font-extrabold text-zinc-850 uppercase tracking-wider">💰 Registrar Nuevo Abono</h4>
-                        <button 
-                          onClick={() => setShowAbonoFlow(false)}
-                          className="text-[11px] font-bold text-zinc-500 hover:text-zinc-750"
-                        >
-                          ✕ Cancelar
-                        </button>
-                      </div>
-
-                      <div>
-                        <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Monto a Abonar</label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
-                          <input
-                            type="number"
-                            value={abonoAmount}
-                            onChange={e => setAbonoAmount(e.target.value)}
-                            placeholder="0.00"
-                            className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-widest block">Método de Pago</span>
-                        <div className="flex gap-1.5">
-                          {[
-                            { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                            { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                            { id: 'transferencia', label: 'Transf.', icon: Send }
-                          ].map(m => (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => {
-                                setAbonoPaymentMethod(m.id as any);
-                              }}
-                              className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                abonoPaymentMethod === m.id
-                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                                  : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
-                              }`}
-                            >
-                              <m.icon size={11} />
-                              <span className="text-[10px] font-bold">{m.label}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {abonoPaymentMethod && (
-                        <div className="space-y-1.5 animate-in slide-in-from-top-1 duration-150">
-                          <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest block">
-                            Sobre / Cuenta Destino
+                    {isReassigning && (
+                      <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200 text-left">
+                        <div>
+                          <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5">
+                            Seleccionar Nueva Habitación (Filtro de Disponibilidad)
                           </label>
                           <select
-                            value={abonoAccountId}
-                            onChange={e => setAbonoAccountId(e.target.value)}
-                            required
-                            className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer"
+                            value={targetRoomName}
+                            onChange={e => setTargetRoomName(e.target.value)}
+                            disabled={loadingAvailability}
+                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
                           >
-                            <option value="" disabled>Selecciona un sobre...</option>
-                            {accounts
-                              .filter(acc => {
-                                const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                if (isUSD) {
-                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                  if (!isUSDAcc) return false;
-                                  
-                                  const name = acc.name.trim().toUpperCase();
-                                  if (abonoPaymentMethod === 'efectivo') {
-                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                  }
-                                  return !name.includes('EFE') && !name.includes('CASH');
-                                } else {
-                                  const name = acc.name.trim().toUpperCase();
-                                  if (abonoPaymentMethod === 'efectivo') {
-                                    return name === 'EFECTIVO';
-                                  }
-                                  if (abonoPaymentMethod === 'tarjeta') {
-                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                  }
-                                  if (abonoPaymentMethod === 'transferencia') {
-                                    return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                  }
-                                  return false;
-                                }
-                              })
-                              .map(acc => (
-                                <option key={acc.id} value={acc.id}>
-                                  {acc.name}
-                                </option>
-                              ))}
+                            <option value="" disabled>
+                              {loadingAvailability ? '⏳ Analizando ocupación en tiempo real...' : 'Selecciona una habitación física...'}
+                            </option>
+                            {PHYSICAL_ROOM_GROUPS.map(group => (
+                              <optgroup key={group.category} label={group.category}>
+                                {group.rooms.map(room => {
+                                  const isAvail = availableRooms[room] !== false;
+                                  const isCurrent = (selectedRes.room_name || '').includes(room);
+                                  return (
+                                    <option key={room} value={room} disabled={!isAvail || isCurrent}>
+                                      Habitación {room} {isCurrent ? '(Actual)' : isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
+                                    </option>
+                                  );
+                                })}
+                              </optgroup>
+                            ))}
                           </select>
                         </div>
-                      )}
 
-                      <button
-                        onClick={handleRegisterAbono}
-                        disabled={abonoLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoPaymentMethod || !abonoAccountId}
-                        className="w-full py-3 bg-emerald-650 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                      >
-                        {abonoLoading ? 'Procesando...' : 'Confirmar Registro de Abono'}
-                      </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setIsReassigning(false); setTargetRoomName(''); }}
+                            className="flex-1 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 text-[12px] font-bold rounded-xl transition-all cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={handleReassignRoom}
+                            disabled={reassignLoading || !targetRoomName}
+                            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/10 cursor-pointer"
+                          >
+                            Confirmar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 4. Canal reservado (directo, Airbnb, Booking) */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
+                      <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1">
+                        {selectedRes.channel || 'Directo'}
+                      </span>
                     </div>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        const balance = selectedRes.balance !== undefined
-                          ? selectedRes.balance
-                          : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
-                        setAbonoAmount(balance > 0 ? String(balance) : '');
-                        setAbonoPaymentMethod(null);
-                        setAbonoAccountId('');
-                        setShowAbonoFlow(true);
-                      }}
-                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
-                    >
-                      💰 Registrar Abono
-                    </button>
-                  )}
-                </div>
-              )}
+                    <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
+                  </div>
 
-              {/* Bloque: Habitación */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest">Habitación Asignada</h5>
+                  {/* 5. Tarifa diaria */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Tarifa diaria</span>
+                      <p className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
+                        {fmtCurrency(selectedRes.price_per_night || Math.round((selectedRes.price_estimate || 0) / (selectedRes.nights || 1)), selectedRes.guest_name)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 6. Total de la reserva */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total de la reserva</span>
+                      <p className="text-[15px] font-black text-zinc-950 mt-0.5">
+                        {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 7. Anticipo depositado */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
+                      <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                        {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 8. Adeudo Pendiente */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
+                      <p className={`text-[15px] font-black mt-0.5 ${
+                        (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'
+                      }`}>
+                        {fmtCurrency(selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)), selectedRes.guest_name)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* 9. Fecha check in- días de estancia- fecha check Out */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Check-in · Estancia · Check-out</span>
+                    <div className="flex items-center justify-between text-[13px] font-semibold text-zinc-900 mt-1 bg-white border border-zinc-150 p-3 rounded-xl">
+                      <span>{selectedRes.check_in ? format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                      <span className="bg-zinc-100 text-zinc-700 px-2.5 py-0.5 rounded-lg font-bold text-[11px] shrink-0 border border-zinc-200">
+                        {selectedRes.nights} noche{selectedRes.nights !== 1 ? 's' : ''}
+                      </span>
+                      <span>{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                    </div>
+                  </div>
+
+                  {/* Notas del Huésped */}
+                  {selectedRes.notes && (
+                    <div className="bg-amber-50/40 border border-amber-100 p-4 rounded-2xl mt-1">
+                      <span className="text-[10px] font-bold text-amber-850 uppercase tracking-widest block mb-1">Notas del Huésped</span>
+                      <p className="text-[13px] text-zinc-700 italic leading-relaxed">"{selectedRes.notes}"</p>
+                    </div>
+                  )}
+
+                  {/* Registrar Anticipo Button & Panel */}
                   {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
-                    <button
-                      onClick={() => setIsReassigning(!isReassigning)}
-                      className="text-[11px] font-extrabold text-blue-600 hover:text-blue-700 bg-blue-50 px-2 py-1 rounded-lg border border-blue-100 transition-colors cursor-pointer"
-                    >
-                      {isReassigning ? 'Cancelar' : 'Reasignar 🔀'}
-                    </button>
-                  )}
-                </div>
-                
-                {isReassigning ? (
-                  <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200">
-                    <div>
-                      <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5">
-                        Seleccionar Nueva Habitación (Filtro de Disponibilidad)
-                      </label>
-                      <select
-                        value={targetRoomName}
-                        onChange={e => setTargetRoomName(e.target.value)}
-                        disabled={loadingAvailability}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
-                      >
-                        <option value="" disabled>
-                          {loadingAvailability ? '⏳ Analizando ocupación en tiempo real...' : 'Selecciona una habitación física...'}
-                        </option>
-                        {PHYSICAL_ROOM_GROUPS.map(group => (
-                          <optgroup key={group.category} label={group.category}>
-                            {group.rooms.map(room => {
-                              const isAvail = availableRooms[room] !== false; // por defecto disponible si no ha cargado
-                              const isCurrent = (selectedRes.room_name || '').includes(room);
-                              return (
-                                <option 
-                                  key={room} 
-                                  value={room} 
-                                  disabled={!isAvail || isCurrent}
+                    <div className="mt-3">
+                      {showAbonoFlow ? (
+                        <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4">
+                          <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
+                            <h4 className="text-[12px] font-extrabold text-zinc-855 uppercase tracking-wider">💰 Registrar Nuevo Anticipo</h4>
+                            <button 
+                              onClick={() => setShowAbonoFlow(false)}
+                              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-755"
+                            >
+                              ✕ Cancelar
+                            </button>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Monto de Anticipo</label>
+                            <div className="relative">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
+                              <input
+                                type="number"
+                                value={abonoAmount}
+                                onChange={e => setAbonoAmount(e.target.value)}
+                                placeholder="0.00"
+                                className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-widest block">Método de Pago</span>
+                            <div className="flex gap-1.5">
+                              {[
+                                { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                { id: 'transferencia', label: 'Transf.', icon: Send }
+                              ].map(m => (
+                                <button
+                                  key={m.id}
+                                  type="button"
+                                  onClick={() => setAbonoPaymentMethod(m.id as any)}
+                                  className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                    abonoPaymentMethod === m.id
+                                      ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                      : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
+                                  }`}
                                 >
-                                  {room} {isCurrent ? '(Actual)' : isAvail ? '· Disponible ✅' : '· OCUPADA ❌'}
-                                </option>
-                              );
-                            })}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </div>
+                                  <m.icon size={11} />
+                                  <span className="text-[10px] font-bold">{m.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
 
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => { setIsReassigning(false); setTargetRoomName(''); }}
-                        className="flex-1 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 text-[12px] font-bold rounded-xl transition-all cursor-pointer"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={handleReassignRoom}
-                        disabled={reassignLoading || !targetRoomName}
-                        className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/10 cursor-pointer"
-                      >
-                        {reassignLoading ? (
-                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : 'Confirmar'}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-white border border-zinc-200 p-4 rounded-2xl flex items-center gap-3 shadow-sm">
-                    <div className="w-10 h-10 rounded-xl bg-[#E5BD69]/10 flex items-center justify-center shrink-0">
-                      <BedDouble size={18} className="text-[#663311]" />
-                    </div>
-                    <div>
-                      <p className="text-[15px] font-semibold text-zinc-900">{selectedRes.room_name}</p>
-                      <p className="text-[12px] font-medium text-zinc-500 mt-0.5">Property ID: {selectedRes.room_id}</p>
-                    </div>
-                  </div>
-                )}
-              </div>
+                          {abonoPaymentMethod && (
+                            <div className="space-y-1.5">
+                              <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest block">
+                                Sobre / Cuenta Destino
+                              </label>
+                              <select
+                                value={abonoAccountId}
+                                onChange={e => setAbonoAccountId(e.target.value)}
+                                required
+                                className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer"
+                              >
+                                <option value="" disabled>Selecciona un sobre...</option>
+                                {accounts
+                                  .filter(acc => {
+                                    const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                    if (isUSD) {
+                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                      if (!isUSDAcc) return false;
+                                      
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (abonoPaymentMethod === 'efectivo') {
+                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                      }
+                                      return !name.includes('EFE') && !name.includes('CASH');
+                                    } else {
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (abonoPaymentMethod === 'efectivo') {
+                                        return name === 'EFECTIVO';
+                                      }
+                                      if (abonoPaymentMethod === 'tarjeta') {
+                                        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                      }
+                                      if (abonoPaymentMethod === 'transferencia') {
+                                        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                      }
+                                      return false;
+                                    }
+                                  })
+                                  .map(acc => (
+                                    <option key={acc.id} value={acc.id}>
+                                      {acc.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+                          )}
 
-              {selectedRes.notes && (
-                <div>
-                  <h5 className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest mb-2">Notas del Huésped</h5>
-                  <div className="bg-amber-50/50 border border-amber-100 p-4 rounded-2xl">
-                    <p className="text-[13px] text-zinc-700 italic font-medium leading-relaxed">"{selectedRes.notes}"</p>
+                          <button
+                            onClick={handleRegisterAbono}
+                            disabled={abonoLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoPaymentMethod || !abonoAccountId}
+                            className="w-full py-3 bg-emerald-655 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                          >
+                            {abonoLoading ? 'Procesando...' : 'Confirmar Registro de Anticipo'}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            const balance = selectedRes.balance !== undefined
+                              ? selectedRes.balance
+                              : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+                            setAbonoAmount(balance > 0 ? String(balance) : '');
+                            setAbonoPaymentMethod(null);
+                            setAbonoAccountId('');
+                            setShowAbonoFlow(true);
+                          }}
+                          className="w-full py-3 bg-emerald-650 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
+                        >
+                          💰 Registrar Anticipo
+                        </button>
+                      )}
+                    </div>
+                  )}
                   </div>
-                </div>
-              )}
-
-            </>
+                </>
           )}
             </div>
             
