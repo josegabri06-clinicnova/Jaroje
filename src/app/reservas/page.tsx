@@ -286,7 +286,10 @@ export default function ReservasList() {
       setSelectedRes((prev: any) => ({ ...prev, room_name: updatedRoomName }));
       setReservas(prev => prev.map(r => r.id === selectedRes.id ? { ...r, room_name: updatedRoomName } : r));
       
-      fetchReservas(); // Sincronización en segundo plano de seguridad
+      // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
+      setTimeout(() => {
+        fetchReservas();
+      }, 3000);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al reasignar habitación:\n\n${err.message}`);
@@ -300,13 +303,17 @@ export default function ReservasList() {
       const params = new URLSearchParams(window.location.search);
       const searchId = params.get('id');
       if (searchId) {
+        // Evitar sobrescribir si ya está seleccionada y es el mismo ID para evitar el lag de sincronización (Beds24)
+        if (selectedRes && String(selectedRes.id) === String(searchId)) {
+          return;
+        }
         const found = reservas.find(r => r.id.toString() === searchId);
         if (found) {
           setSelectedRes(found);
         }
       }
     }
-  }, [reservas]);
+  }, [reservas, selectedRes]);
 
   const handleConfirmCheckIn = async () => {
     setCheckInLoading(true);
@@ -582,7 +589,11 @@ export default function ReservasList() {
       } : r));
 
       setIsEditingRes(false);
-      fetchReservas();
+      
+      // Retrasar la sincronización en segundo plano para dar tiempo a Beds24 a propagar el cambio
+      setTimeout(() => {
+        fetchReservas();
+      }, 3000);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al guardar cambios:\n\n${err.message}`);
@@ -641,7 +652,11 @@ export default function ReservasList() {
       }
 
       setSelectedRes(null);
-      fetchReservas(); // Refrescar el listado
+      
+      // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
+      setTimeout(() => {
+        fetchReservas(); // Refrescar el listado
+      }, 3000);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al cancelar reserva:\n\n${err.message}`);

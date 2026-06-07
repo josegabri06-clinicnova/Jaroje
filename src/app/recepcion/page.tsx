@@ -633,7 +633,11 @@ export default function RecepcionPage() {
         notes: editedNotes
       } : r));
 
-      fetchData();
+      
+      // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
+      setTimeout(() => {
+        fetchData();
+      }, 3000);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al guardar cambios:\n\n${err.message}`);
@@ -702,7 +706,10 @@ export default function RecepcionPage() {
       setSelectedReserva((prev: any) => ({ ...prev, room: updatedRoomName }));
       setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, room: updatedRoomName, room_name: updatedRoomName } : r));
       
-      fetchData();
+      // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
+      setTimeout(() => {
+        fetchData();
+      }, 3000);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al reasignar habitación:\n\n${err.message}`);
