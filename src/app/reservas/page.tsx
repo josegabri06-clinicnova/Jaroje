@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -63,6 +63,35 @@ function fmtCurrency(amount: number, guestName?: string) {
   return (isUSD ? 'USD$' : 'MX$') + Math.round(amount || 0).toLocaleString('es-MX');
 }
 
+async function compressImage(file: File): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const MAX = 900;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) {
+          if (w > h) {
+            h = (h * MAX) / w;
+            w = MAX;
+          } else {
+            w = (w * MAX) / h;
+            h = MAX;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.src = e.target!.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function ReservasList() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
@@ -78,6 +107,7 @@ export default function ReservasList() {
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const docInputRef = useRef<HTMLInputElement>(null);
 
@@ -436,6 +466,7 @@ export default function ReservasList() {
       setIsCheckedIn(true);
       setShowPaymentFlow(false);
       setDocumentFile(null);
+      setDniPreview(null);
       setPaymentReference('');
       setPaymentAmount('');
       
@@ -1073,7 +1104,11 @@ export default function ReservasList() {
             <div className="px-6 py-5 border-b border-zinc-100 flex items-center justify-between sticky top-0 bg-white z-10 font-sans">
               <div>
                 <h3 className="text-[18px] font-semibold text-zinc-900 leading-tight">
-                  {isEditingRes ? 'Editar Reserva' : 'Detalles de Reserva'}
+                  {isEditingRes 
+                    ? 'Editar Reserva' 
+                    : showPaymentFlow 
+                      ? 'Proceso de Check-In' 
+                      : 'Detalles de Reserva'}
                 </h3>
                 <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">ID: {selectedRes.id || selectedRes.room_id || 'N/A'}</p>
               </div>
@@ -1087,10 +1122,18 @@ export default function ReservasList() {
                   </button>
                 )}
                 <button 
-                  onClick={() => setSelectedRes(null)}
-                  className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95"
+                  onClick={() => {
+                    setSelectedRes(null);
+                    setDniPreview(null);
+                    setDocumentFile(null);
+                    setShowPaymentFlow(false);
+                    setPaymentMethod('efectivo');
+                    setPaymentReference('');
+                    setPaymentAmount('');
+                  }}
+                  className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95 animate-in fade-in duration-200"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  <X size={15} strokeWidth={2.5} />
                 </button>
               </div>
             </div>
@@ -1624,45 +1667,46 @@ export default function ReservasList() {
                   )}
                 </div>
               ) : showPaymentFlow ? (
-                <div className="animate-in fade-in duration-200 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-2">
+                <div className="animate-in fade-in duration-200 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-2 text-left font-sans">
                   
                   {/* DNI Upload */}
                   <div className="mb-4">
                     <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                      DNI / Pasaporte (Obligatorio)
+                      Identificación (DNI/Pasaporte)
                     </label>
                     <div className="relative">
                       <input 
                         ref={docInputRef}
                         type="file"
-                        onChange={e => setDocumentFile(e.target.files ? e.target.files[0] : null)}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const b64 = await compressImage(file);
+                          setDniPreview(b64);
+                          setDocumentFile(file);
+                        }}
                         className="hidden"
-                        accept="image/*,.pdf"
+                        accept="image/*"
                         required
                       />
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
+                      {!dniPreview ? (
+                        <div
                           onClick={() => docInputRef.current?.click()}
-                          className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                          className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
                         >
-                          <Camera size={16} />
-                          <span>Tomar Foto</span>
-                        </button>
-                        {documentFile && (
+                          <Camera size={20} className="text-zinc-400" />
+                          <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
+                        </div>
+                      ) : (
+                        <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white">
+                          <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
                           <button
-                            type="button"
-                            onClick={() => setDocumentFile(null)}
-                            className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                            onClick={() => { setDniPreview(null); setDocumentFile(null); }}
+                            className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
                           >
-                            Eliminar
+                            <X size={14} />
                           </button>
-                        )}
-                      </div>
-                      {documentFile && (
-                        <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
-                          ✓ Seleccionado: <span className="font-bold text-zinc-800">{documentFile.name}</span>
-                        </p>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1714,15 +1758,24 @@ export default function ReservasList() {
                         </div>
 
                         <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-1 pt-3 border-t border-zinc-100">Registrar Pago</p>
-                        <div className="grid grid-cols-3 gap-2 mb-2">
-                          {['efectivo', 'tarjeta', 'transferencia'].map(m => (
-                            <button 
-                              key={m}
+                        <div className="flex gap-2 mb-2">
+                          {[
+                            { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                            { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                            { id: 'transferencia', label: 'Transf.', icon: Send }
+                          ].map(m => (
+                            <button
+                              key={m.id}
                               type="button"
-                              onClick={() => { setPaymentMethod(m); setPaymentReference(''); }}
-                              className={`py-2 px-2 text-[12px] font-semibold rounded-lg capitalize border ${paymentMethod === m ? 'bg-zinc-900 text-white border-zinc-900 shadow-md' : 'bg-zinc-50 text-zinc-600 border-zinc-200 hover:bg-zinc-100'}`}
+                              onClick={() => { setPaymentMethod(m.id); setPaymentReference(''); }}
+                              className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                paymentMethod === m.id
+                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                  : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
+                              }`}
                             >
-                              {m}
+                              <m.icon size={15} />
+                              <span className="text-[11px] font-bold">{m.label}</span>
                             </button>
                           ))}
                         </div>
@@ -1792,12 +1845,24 @@ export default function ReservasList() {
                   })()}
 
                   <div className="flex gap-2">
-                    <button onClick={() => setShowPaymentFlow(false)} className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[13px] transition-colors">Cancelar</button>
+                    <button 
+                      onClick={() => {
+                        setShowPaymentFlow(false);
+                        setDniPreview(null);
+                        setDocumentFile(null);
+                        setPaymentMethod('efectivo');
+                        setPaymentReference('');
+                        setPaymentAmount('');
+                      }} 
+                      className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[13px] transition-colors"
+                    >
+                      Cancelar
+                    </button>
                     <button 
                       onClick={handleConfirmCheckIn} 
                       disabled={(() => {
                         if (checkInLoading) return true;
-                        if (!documentFile) return true; // DNI obligatorio
+                        if (!dniPreview) return true; // DNI obligatorio
                         
                         const pendingBalance = selectedRes.balance !== undefined
                           ? selectedRes.balance
@@ -1811,10 +1876,10 @@ export default function ReservasList() {
 
                         return false;
                       })()}
-                      className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[13px] shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2"
+                      className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[13px] shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2 cursor-pointer"
                     >
                       {checkInLoading ? <RefreshCw size={16} className="animate-spin" /> : <LogIn size={16} />}
-                      {checkInLoading ? 'Procesando...' : 'Confirmar Ingreso'}
+                      {checkInLoading ? 'Procesando...' : 'Completar Check-In'}
                     </button>
                   </div>
                 </div>
