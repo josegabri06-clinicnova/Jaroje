@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldAlert, CheckCircle2, Lock, Unlock, X } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, Lock, Unlock, X, Wallet, BedDouble, Send } from 'lucide-react';
 import { getActiveEmployee, getAdminPin } from '@/lib/auth';
 import { getUnitName, getRoomMetadata } from '@/lib/beds24';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { supabase } from '@/lib/supabase';
 
 const PRICES: Record<string, Record<string, number>> = {
   '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
@@ -101,6 +102,10 @@ export default function VercelActionForm() {
   const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
 
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
+  const [formAccountId, setFormAccountId] = useState('');
+
   // Calcular precio automático
   useEffect(() => {
     if (form.checkIn && form.checkOut) {
@@ -154,6 +159,72 @@ export default function VercelActionForm() {
     setIsPriceUnlocked(false);
   }, [form.roomId, form.unitId, form.groupRooms]);
 
+  // Cargar cuentas (accounts) de Supabase al montar
+  useEffect(() => {
+    const fetchAccounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('accounts')
+          .select('*')
+          .order('sort_index', { ascending: true })
+          .order('name', { ascending: true });
+        if (data) {
+          setAccounts(data);
+        }
+      } catch (err) {
+        console.error("Error fetching accounts:", err);
+      }
+    };
+    fetchAccounts();
+  }, []);
+
+  // Limpiar método y cuenta si el anticipo es 0 o vacío
+  useEffect(() => {
+    if (Number(form.deposit || 0) <= 0) {
+      setFormPaymentMethod(null);
+      setFormAccountId('');
+    }
+  }, [form.deposit]);
+
+  // Auto-seleccionar primer sobre compatible para el anticipo
+  useEffect(() => {
+    if (!formPaymentMethod || accounts.length === 0) {
+      setFormAccountId('');
+      return;
+    }
+    const compatible = accounts.filter(acc => {
+      const isUSD = form.guestName?.toUpperCase().includes('(US DOLLARS)');
+      if (isUSD) {
+        const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+        if (!isUSDAcc) return false;
+        
+        const name = acc.name.trim().toUpperCase();
+        if (formPaymentMethod === 'efectivo') {
+          return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+        }
+        return !name.includes('EFE') && !name.includes('CASH');
+      } else {
+        const name = acc.name.trim().toUpperCase();
+        if (formPaymentMethod === 'efectivo') {
+          return name === 'EFECTIVO';
+        }
+        if (formPaymentMethod === 'tarjeta') {
+          return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+        }
+        if (formPaymentMethod === 'transferencia') {
+          return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+        }
+        return false;
+      }
+    });
+
+    if (compatible.length > 0) {
+      setFormAccountId(compatible[0].id);
+    } else {
+      setFormAccountId('');
+    }
+  }, [formPaymentMethod, accounts, form.guestName]);
+
   const handleUnlockPrice = () => {
     if (pinInput === getAdminPin()) {
       setIsPriceUnlocked(true);
@@ -201,6 +272,11 @@ export default function VercelActionForm() {
     if (mode === 'reserva') {
       if (!form.guestName || !form.phone || !form.numAdult || Number(form.numAdult) < 1) {
         return alert("Por favor, rellene todos los campos obligatorios: Nombre del Huésped, N. Móvil y Adultos.");
+      }
+      if (Number(form.deposit || 0) > 0) {
+        if (!formPaymentMethod || !formAccountId) {
+          return alert("Por favor, selecciona el Método de Pago y la Cuenta Destino para el anticipo.");
+        }
       }
     }
 
@@ -295,6 +371,53 @@ export default function VercelActionForm() {
           });
         } catch (logErr) {
           console.error("Error registrando log de reserva/bloqueo:", logErr);
+        }
+
+        // Registrar en Supabase finances y actualizar balance de cuenta si hay anticipo
+        if (!isBlock && depositPerRoom > 0) {
+          try {
+            const beds24BookingId = responseData.data?.data?.[0]?.id || '';
+            const baseDesc = `Anticipo de ${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name}`;
+            const currentDayStr = getLocalDateStr(new Date());
+
+            const { error: financeErr } = await supabase.from('finances').insert({
+              type: 'ingreso',
+              amount: depositPerRoom,
+              category: 'Alojamiento',
+              description: baseDesc,
+              payment_method: formPaymentMethod,
+              account_id: formAccountId,
+              date: currentDayStr
+            });
+
+            if (financeErr) {
+              console.error("Error al registrar finanzas para anticipo:", financeErr);
+              alert(`⚠️ Se guardó la reserva, pero hubo un error al registrar el anticipo de $${depositPerRoom} en Finanzas: ${financeErr.message}`);
+            } else {
+              // Obtener saldo fresco de la cuenta para evitar sobreescrituras en bucle
+              const { data: latestAcc, error: latestAccErr } = await supabase
+                .from('accounts')
+                .select('balance')
+                .eq('id', formAccountId)
+                .single();
+              
+              if (!latestAccErr && latestAcc) {
+                const newBalance = latestAcc.balance + depositPerRoom;
+                const { error: accErr } = await supabase
+                  .from('accounts')
+                  .update({ balance: newBalance })
+                  .eq('id', formAccountId);
+                
+                if (accErr) {
+                  console.error("Error al actualizar balance de la cuenta:", accErr);
+                } else {
+                  setAccounts(prev => prev.map(a => a.id === formAccountId ? { ...a, balance: newBalance } : a));
+                }
+              }
+            }
+          } catch (dbErr: any) {
+            console.error("Error interactuando con la base de datos para registrar anticipo:", dbErr);
+          }
         }
       }
 
@@ -686,6 +809,80 @@ export default function VercelActionForm() {
                     </div>
                   </div>
                 </div>
+
+                {Number(form.deposit || 0) > 0 && (
+                  <div className="grid grid-cols-2 gap-3.5 p-4 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
+                    <div className="space-y-1.5 col-span-2 md:col-span-1">
+                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5 block">Método de Pago del Anticipo</label>
+                      <div className="flex gap-2 h-14 items-center">
+                        {[
+                          { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                          { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                          { id: 'transferencia', label: 'Transf.', icon: Send }
+                        ].map(m => (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setFormPaymentMethod(m.id as any)}
+                            className={`flex-1 h-full border rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                              formPaymentMethod === m.id
+                                ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50'
+                            }`}
+                          >
+                            <m.icon size={16} />
+                            <span className="text-[13px] font-bold">{m.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 col-span-2 md:col-span-1">
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">
+                        Sobre / Cuenta Destino
+                      </label>
+                      <select
+                        value={formAccountId}
+                        onChange={e => setFormAccountId(e.target.value)}
+                        required
+                        className="w-full h-14 bg-white border border-zinc-200 rounded-xl px-3.5 text-[16px] font-semibold text-zinc-900 focus:border-zinc-400 transition-all outline-none cursor-pointer"
+                      >
+                        <option value="" disabled>Selecciona un sobre...</option>
+                        {accounts
+                          .filter(acc => {
+                            const isUSD = form.guestName?.toUpperCase().includes('(US DOLLARS)');
+                            if (isUSD) {
+                              const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                              if (!isUSDAcc) return false;
+                              
+                              const name = acc.name.trim().toUpperCase();
+                              if (formPaymentMethod === 'efectivo') {
+                                return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                              }
+                              return !name.includes('EFE') && !name.includes('CASH');
+                            } else {
+                              const name = acc.name.trim().toUpperCase();
+                              if (formPaymentMethod === 'efectivo') {
+                                return name === 'EFECTIVO';
+                              }
+                              if (formPaymentMethod === 'tarjeta') {
+                                return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                              }
+                              if (formPaymentMethod === 'transferencia') {
+                                return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                              }
+                              return false;
+                            }
+                          })
+                          .map(acc => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.name} (${acc.balance})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </>
             )}
 

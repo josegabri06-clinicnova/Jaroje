@@ -1475,11 +1475,34 @@ export default function ReservasList() {
                               <input
                                 type="number"
                                 value={abonoAmount}
-                                onChange={e => setAbonoAmount(e.target.value)}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setAbonoAmount('');
+                                    return;
+                                  }
+                                  const bal = selectedRes.balance !== undefined
+                                    ? selectedRes.balance
+                                    : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+                                  const maxVal = Math.max(0, bal);
+                                  if (Number(val) > maxVal) {
+                                    setAbonoAmount(String(maxVal));
+                                  } else {
+                                    setAbonoAmount(val);
+                                  }
+                                }}
                                 placeholder="0.00"
                                 className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
                               />
                             </div>
+                            <span className="text-[10px] text-zinc-500 mt-1 block pl-0.5 font-medium">
+                              * Monto máximo: {fmtCurrency(
+                                Math.max(0, selectedRes.balance !== undefined
+                                  ? selectedRes.balance
+                                  : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0)),
+                                selectedRes.guest_name
+                              )}
+                            </span>
                           </div>
 
                           <div className="space-y-1.5">
@@ -1557,7 +1580,7 @@ export default function ReservasList() {
                           <button
                             onClick={handleRegisterAbono}
                             disabled={abonoLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoPaymentMethod || !abonoAccountId}
-                            className="w-full py-3 bg-emerald-655 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                           >
                             {abonoLoading ? 'Procesando...' : 'Confirmar Registro de Anticipo'}
                           </button>
@@ -1565,15 +1588,12 @@ export default function ReservasList() {
                       ) : (
                         <button
                           onClick={() => {
-                            const balance = selectedRes.balance !== undefined
-                              ? selectedRes.balance
-                              : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
-                            setAbonoAmount(balance > 0 ? String(balance) : '');
+                            setAbonoAmount('');
                             setAbonoPaymentMethod(null);
                             setAbonoAccountId('');
                             setShowAbonoFlow(true);
                           }}
-                          className="w-full py-3 bg-emerald-650 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
+                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
                         >
                           💰 Registrar Anticipo
                         </button>

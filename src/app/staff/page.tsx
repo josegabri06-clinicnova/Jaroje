@@ -175,7 +175,14 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' {
-  const isUpdatedToday = lastUpdatedAt && lastUpdatedAt.startsWith(todayStr);
+  let isUpdatedToday = false;
+  if (lastUpdatedAt) {
+    try {
+      isUpdatedToday = getLocalDateStr(new Date(lastUpdatedAt)) === todayStr;
+    } catch (e) {
+      isUpdatedToday = lastUpdatedAt.startsWith(todayStr);
+    }
+  }
 
   const hasResToday = activeReservations.some(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
@@ -245,6 +252,16 @@ export default function StaffPage() {
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [todayStr, setTodayStr] = useState('');
+
+  const isDateToday = (dStr?: string) => {
+    if (!dStr) return false;
+    try {
+      return getLocalDateStr(new Date(dStr)) === todayStr;
+    } catch (e) {
+      return dStr.startsWith(todayStr);
+    }
+  };
+
   const [inventory, setInventory] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
   const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping'>('tareas');
@@ -524,7 +541,7 @@ export default function StaffPage() {
           guestName: salidaRes.guest_name,
           keysReturned: dbStatus === 'sucio_checkout' || salidaRes.checked_out || false,
           reserva: salidaRes,
-          isUpdatedToday: !!(dbStatusObj?.updated_at && dbStatusObj.updated_at.startsWith(todayStr))
+          isUpdatedToday: isDateToday(dbStatusObj?.updated_at)
         });
         return;
       }
@@ -561,7 +578,7 @@ export default function StaffPage() {
             guestName: stayoverRes.guest_name,
             keysReturned: false,
             reserva: stayoverRes,
-            isUpdatedToday: !!(dbStatusObj?.updated_at && dbStatusObj.updated_at.startsWith(todayStr))
+            isUpdatedToday: isDateToday(dbStatusObj?.updated_at)
           });
         }
       }
@@ -584,7 +601,7 @@ export default function StaffPage() {
           guestName: operStatus === 'sucio_checkout' ? 'Check-Out' : 'Limpieza Programada',
           keysReturned: operStatus === 'sucio_checkout',
           reserva: null,
-          isUpdatedToday: !!(dbStatusObj?.updated_at && dbStatusObj.updated_at.startsWith(todayStr))
+          isUpdatedToday: isDateToday(dbStatusObj?.updated_at)
         });
       }
     });
@@ -859,7 +876,7 @@ export default function StaffPage() {
     if (dbStatus) {
       return dbStatus.status === 'limpia' || dbStatus.status === 'disponible';
     }
-    return tasks.some(t => t.room.includes(roomNum) && t.type === 'limpieza' && t.status === 'resuelta' && t.created_at.startsWith(todayStr));
+    return tasks.some(t => t.room.includes(roomNum) && t.type === 'limpieza' && t.status === 'resuelta' && isDateToday(t.created_at));
   };
 
   const handleImage = async (e: React.ChangeEvent<HTMLInputElement>) => {

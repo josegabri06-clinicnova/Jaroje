@@ -228,7 +228,14 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' {
-  const isUpdatedToday = lastUpdatedAt && lastUpdatedAt.startsWith(todayStr);
+  let isUpdatedToday = false;
+  if (lastUpdatedAt) {
+    try {
+      isUpdatedToday = getLocalDateStr(new Date(lastUpdatedAt)) === todayStr;
+    } catch (e) {
+      isUpdatedToday = lastUpdatedAt.startsWith(todayStr);
+    }
+  }
 
   const hasResToday = activeReservations.some(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
@@ -2994,7 +3001,7 @@ export default function RecepcionPage() {
                       {showAbonoFlow ? (
                         <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 text-left">
                           <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
-                            <h4 className="text-[12px] font-extrabold text-zinc-850 uppercase tracking-wider">💰 Registrar Nuevo Anticipo</h4>
+                            <h4 className="text-[12px] font-extrabold text-zinc-855 uppercase tracking-wider">💰 Registrar Nuevo Anticipo</h4>
                             <button 
                               onClick={() => setShowAbonoFlow(false)}
                               className="text-[11px] font-bold text-zinc-500 hover:text-zinc-755"
@@ -3010,11 +3017,30 @@ export default function RecepcionPage() {
                               <input
                                 type="number"
                                 value={abonoAmount}
-                                onChange={e => setAbonoAmount(e.target.value)}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setAbonoAmount('');
+                                    return;
+                                  }
+                                  const bal = Number(editedPrice || 0) - Number(editedDeposit || 0);
+                                  const maxVal = Math.max(0, bal);
+                                  if (Number(val) > maxVal) {
+                                    setAbonoAmount(String(maxVal));
+                                  } else {
+                                    setAbonoAmount(val);
+                                  }
+                                }}
                                 placeholder="0.00"
                                 className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
                               />
                             </div>
+                            <span className="text-[10px] text-zinc-500 mt-1 block pl-0.5 font-medium">
+                              * Monto máximo: {fmtCurrency(
+                                Math.max(0, Number(editedPrice || 0) - Number(editedDeposit || 0)),
+                                selectedReserva.guest_name
+                              )}
+                            </span>
                           </div>
 
                           <div className="space-y-1.5">
@@ -3092,7 +3118,7 @@ export default function RecepcionPage() {
                           <button
                             onClick={handleRegisterAbono}
                             disabled={abonoFlowLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoFlowPaymentMethod || !abonoFlowAccountId}
-                            className="w-full py-3 bg-emerald-655 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
                           >
                             {abonoFlowLoading ? 'Procesando...' : 'Confirmar Registro de Anticipo'}
                           </button>
@@ -3100,8 +3126,7 @@ export default function RecepcionPage() {
                       ) : (
                         <button
                           onClick={() => {
-                            const balance = (Number(editedPrice || 0) - Number(editedDeposit || 0));
-                            setAbonoAmount(balance > 0 ? String(balance) : '');
+                            setAbonoAmount('');
                             setAbonoFlowPaymentMethod(null);
                             setAbonoFlowAccountId('');
                             setShowAbonoFlow(true);

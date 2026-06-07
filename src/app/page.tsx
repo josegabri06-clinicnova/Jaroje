@@ -68,7 +68,14 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' {
-  const isUpdatedToday = lastUpdatedAt && lastUpdatedAt.startsWith(todayStr);
+  let isUpdatedToday = false;
+  if (lastUpdatedAt) {
+    try {
+      isUpdatedToday = getLocalDateStr(new Date(lastUpdatedAt)) === todayStr;
+    } catch (e) {
+      isUpdatedToday = lastUpdatedAt.startsWith(todayStr);
+    }
+  }
 
   const hasResToday = activeReservations.some(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
