@@ -111,8 +111,8 @@ export default function PreciosPage() {
   const [discNights15, setDiscNights15] = useState('25');
   const [discNights30, setDiscNights30] = useState('40');
 
-  const [multAirbnb, setMultAirbnb] = useState('1.25');
-  const [multBooking, setMultBooking] = useState('1.10');
+  const [multAirbnb, setMultAirbnb] = useState('1.20');
+  const [multBooking, setMultBooking] = useState('1.30');
   const [multDirecto, setMultDirecto] = useState('1.00');
 
   // Fetch Pricing Settings (JSON) from DB
@@ -201,8 +201,8 @@ export default function PreciosPage() {
     setDiscNights15(unitConf.discounts?.nights15 !== undefined ? String(unitConf.discounts.nights15) : '25');
     setDiscNights30(unitConf.discounts?.nights30 !== undefined ? String(unitConf.discounts.nights30) : '40');
 
-    setMultAirbnb(unitConf.multipliers?.airbnb !== undefined ? String(unitConf.multipliers.airbnb) : '1.25');
-    setMultBooking(unitConf.multipliers?.booking !== undefined ? String(unitConf.multipliers.booking) : '1.10');
+    setMultAirbnb(unitConf.multipliers?.airbnb !== undefined ? String(unitConf.multipliers.airbnb) : '1.20');
+    setMultBooking(unitConf.multipliers?.booking !== undefined ? String(unitConf.multipliers.booking) : '1.30');
     setMultDirecto(unitConf.multipliers?.directo !== undefined ? String(unitConf.multipliers.directo) : '1.00');
 
     const baseRule = rules.find(r => r.room_type_id === configRoomId && r.rule_type === 'base');
@@ -497,7 +497,7 @@ export default function PreciosPage() {
     const customMultipliers = pricingSettings?.[simRoomId]?.multipliers;
     const customMultVal = customMultipliers?.[simChannelId] !== undefined
       ? Number(customMultipliers[simChannelId])
-      : (simChannelId === 'airbnb' ? 1.25 : simChannelId === 'booking' ? 1.10 : 1.00);
+      : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.30 : 1.00);
 
     const discountedBaseSum = Math.round(totalBaseWithoutSurcharge * discountMult);
     const subtotalWithSurcharge = discountedBaseSum + totalSurcharges;
@@ -1398,7 +1398,7 @@ export default function PreciosPage() {
                         const customMultipliers = pricingSettings?.[r.id]?.multipliers;
                         const mult = customMultipliers?.[simChannelId] !== undefined
                           ? Number(customMultipliers[simChannelId])
-                          : (simChannelId === 'airbnb' ? 1.25 : simChannelId === 'booking' ? 1.10 : 1.00);
+                          : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.30 : 1.00);
 
                         return (
                           <tr key={r.id} className="hover:bg-zinc-50/50">

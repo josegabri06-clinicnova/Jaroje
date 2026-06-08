@@ -115,8 +115,8 @@ export default function VercelActionForm() {
       const computedNights = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
       
       let multiplier = 1;
-      if (form.channel === 'Airbnb') multiplier = 1.25;
-      if (form.channel === 'Booking.com') multiplier = 1.10;
+      if (form.channel === 'Airbnb') multiplier = 1.20;
+      if (form.channel === 'Booking.com') multiplier = 1.30;
 
       let calculatedDailyRate = 0;
       const group = form.groupRooms || [];

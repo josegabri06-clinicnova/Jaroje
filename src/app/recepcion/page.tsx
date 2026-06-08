@@ -359,18 +359,18 @@ function computeOtaSplit(
 } {
   const ch = (channel || '').toLowerCase();
   if (ch.includes('airbnb')) {
-    const multiplier = customMultipliers?.airbnb ?? 1.25;
+    const multiplier = customMultipliers?.airbnb ?? 1.20;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Airbnb', multiplier };
   }
   if (ch.includes('booking')) {
-    const multiplier = customMultipliers?.booking ?? 1.10;
+    const multiplier = customMultipliers?.booking ?? 1.30;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Booking.com', multiplier };
   }
   if (ch.includes('expedia')) {
     // Expedia usa el mismo multiplicador que Booking como referencia
-    const multiplier = customMultipliers?.booking ?? 1.10;
+    const multiplier = customMultipliers?.booking ?? 1.30;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Expedia', multiplier };
   }
