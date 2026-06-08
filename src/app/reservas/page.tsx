@@ -364,17 +364,18 @@ export default function ReservasList() {
       const params = new URLSearchParams(window.location.search);
       const searchId = params.get('id');
       if (searchId) {
-        // Evitar sobrescribir si ya está seleccionada y es el mismo ID para evitar el lag de sincronización (Beds24)
-        if (selectedRes && String(selectedRes.id) === String(searchId)) {
-          return;
-        }
         const found = reservas.find(r => r.id.toString() === searchId);
         if (found) {
           setSelectedRes(found);
         }
+        // Limpiar el parámetro de la URL inmediatamente para evitar que
+        // el efecto vuelva a ejecutarse y reabra el modal al cerrarlo
+        window.history.replaceState(null, '', '/reservas');
       }
     }
-  }, [reservas, selectedRes]);
+  // Solo depende de 'reservas': se ejecuta una vez al cargar los datos
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservas]);
 
   const handleConfirmCheckIn = async () => {
     setCheckInLoading(true);
@@ -1135,6 +1136,11 @@ export default function ReservasList() {
                     setPaymentMethod('efectivo');
                     setPaymentReference('');
                     setPaymentAmount('');
+                    setPaymentDescription('');
+                    // Asegurarse de que la URL no tenga ?id= para no reabrir el modal
+                    if (window.location.search.includes('id=')) {
+                      window.history.replaceState(null, '', '/reservas');
+                    }
                   }}
                   className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95 animate-in fade-in duration-200"
                 >
