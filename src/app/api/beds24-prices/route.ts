@@ -9,73 +9,116 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// ── IDs de habitaciones padre (tipos de alojamiento canónicos en Beds24) ────────
+// IDs padres de Beds24 (un ID por tipo de alojamiento)
 const PARENT_ROOM_IDS = ['679077', '679087', '679091', '679092', '679093'];
 
-// ── Mapeo de nombre de tarifa (de Beds24) → clave de temporada interna ──────────
-// Beds24 guarda los "fixed prices" con un campo `name` libre que nosotros definimos.
-// Si tus tarifas en Beds24 se llaman de otra forma ajusta este mapa.
-function resolveSeasonKey(name: string): string | null {
-  const n = (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  if (n.includes('baja'))           return 'baja';
-  if (n.includes('media alta') || n.includes('media-alta') || n.includes('mediaalta')) return 'media_alta';
-  if (n.includes('media'))          return 'media';
-  if (n.includes('alta'))           return 'alta';
-  return null;
-}
+// Factor de impuestos: IVA 16% + ISH 3% = 19%
+const TAX_FACTOR = 1.19;
+
+// Nombre legible de cada room ID
+const ROOM_NAMES: Record<string, string> = {
+  '679077': 'Habitación DOBLE',
+  '679087': 'Apartamento Premier 1 dorm',
+  '679091': 'Apartamento Premier 2 dorm',
+  '679092': 'Apartamento Premier 3 dorm',
+  '679093': 'Casa Vacacional 3 dorm',
+};
 
 /**
  * GET /api/beds24-prices
- * Devuelve:
- * - prices: { roomId: { baja, media, media_alta, alta } }  (leídos desde Beds24 fixedPrices)
- * - multipliers: { airbnb, booking }  (leídos desde Supabase settings)
+ *
+ * Lee el calendario de precios de Beds24 para los próximos 365 días,
+ * detecta el rango de precios de cada habitación y devuelve:
+ *  - pricesByRoom: { roomId: { min, max, p25, p75, samples } }
+ *  - multipliers: { airbnb, booking }  (desde Supabase settings)
+ *  - rawCalendar: datos crudos de Beds24 (para debug)
+ *
+ * Los precios de Beds24 vienen SIN impuestos → se multiplican × 1.19
+ * para devolver el precio FINAL al cliente.
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const token = await getBeds24Token();
+    const { searchParams } = new URL(req.url);
 
-    // ── 1. Llamar a Beds24 /inventory/fixedPrices ────────────────────────────
+    // Rango: desde hoy hasta 365 días adelante (cubre todas las temporadas)
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(today.getDate() + 365);
+
+    const startStr = today.toISOString().split('T')[0];
+    const endStr = endDate.toISOString().split('T')[0];
+
     const roomIdParams = PARENT_ROOM_IDS.map(id => `roomId=${id}`).join('&');
-    const fpRes = await fetch(
-      `https://api.beds24.com/v2/inventory/fixedPrices?${roomIdParams}`,
+
+    // ── Llamar al calendario de Beds24 ────────────────────────────────────────
+    const calRes = await fetch(
+      `https://api.beds24.com/v2/inventory/rooms/calendar?startDate=${startStr}&endDate=${endStr}&${roomIdParams}&includePrices=true`,
       {
         headers: { token },
         cache: 'no-store',
       }
     );
 
-    if (!fpRes.ok) {
-      const errText = await fpRes.text();
+    if (!calRes.ok) {
+      const errText = await calRes.text();
       return NextResponse.json(
-        { success: false, error: `Beds24 error ${fpRes.status}: ${errText}` },
+        { success: false, error: `Beds24 calendar error ${calRes.status}: ${errText}` },
         { status: 502 }
       );
     }
 
-    const fpJson = await fpRes.json();
-    const fixedPrices: any[] = fpJson.data || [];
+    const calJson = await calRes.json();
+    const calData: any[] = calJson.data || [];
 
-    // ── 2. Mapear a estructura interna ───────────────────────────────────────
-    // Beds24 devuelve: [ { id, roomId, name, price1, from, to, ... }, ... ]
-    // price1 = precio base por noche (1 persona/grupo hasta capacidad base)
-    const prices: Record<string, Record<string, number>> = {};
+    // ── Analizar precios por habitación ───────────────────────────────────────
+    // Para cada habitación recogemos todos los precios y calculamos estadísticas
+    const pricesByRoom: Record<string, {
+      min: number;
+      max: number;
+      p25: number;   // percentil 25 ≈ temporada baja
+      p50: number;   // mediana ≈ temporada media
+      p75: number;   // percentil 75 ≈ temporada media-alta
+      p90: number;   // percentil 90 ≈ temporada alta
+      name: string;
+      samples: number;
+    }> = {};
 
-    for (const fp of fixedPrices) {
-      const roomId = String(fp.roomId);
-      const seasonKey = resolveSeasonKey(fp.name || '');
-      if (!seasonKey) continue; // ignorar tarifas sin nombre de temporada reconocible
+    for (const roomData of calData) {
+      const roomId = String(roomData.roomId);
+      if (!PARENT_ROOM_IDS.includes(roomId)) continue;
 
-      const priceValue = fp.price1 ?? fp.price;
-      if (priceValue == null || isNaN(Number(priceValue))) continue;
+      const prices: number[] = [];
 
-      if (!prices[roomId]) prices[roomId] = {};
-      // Si hay varias con el mismo nombre, guardamos la primera (o el menor valor = base)
-      if (prices[roomId][seasonKey] === undefined) {
-        prices[roomId][seasonKey] = Number(priceValue);
+      if (Array.isArray(roomData.calendar)) {
+        for (const day of roomData.calendar) {
+          // price1 es el precio base del día (sin impuestos)
+          const raw = day.price1 ?? day.price;
+          if (raw != null && Number(raw) > 0) {
+            // Aplicar impuestos para obtener el precio FINAL al cliente
+            prices.push(Math.round(Number(raw) * TAX_FACTOR));
+          }
+        }
       }
+
+      if (prices.length === 0) continue;
+
+      prices.sort((a, b) => a - b);
+      const n = prices.length;
+
+      pricesByRoom[roomId] = {
+        name: ROOM_NAMES[roomId] || roomId,
+        samples: n,
+        min: prices[0],
+        max: prices[n - 1],
+        p25: prices[Math.floor(n * 0.25)],
+        p50: prices[Math.floor(n * 0.50)],
+        p75: prices[Math.floor(n * 0.75)],
+        p90: prices[Math.floor(n * 0.90)],
+      };
     }
 
-    // ── 3. Leer multiplicadores de Supabase ──────────────────────────────────
+    // ── Leer multiplicadores OTA desde Supabase ───────────────────────────────
     const { data: settingsRow } = await supabase
       .from('settings')
       .select('value')
@@ -88,9 +131,14 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      prices,
+      pricesByRoom,
       multipliers,
-      raw: fixedPrices, // útil para debug
+      meta: {
+        startDate: startStr,
+        endDate: endStr,
+        taxFactor: TAX_FACTOR,
+        roomsReturned: calData.length,
+      },
     });
 
   } catch (err: any) {
@@ -113,14 +161,15 @@ export async function POST(req: Request) {
     const { airbnb, booking } = body;
 
     if (typeof airbnb !== 'number' || typeof booking !== 'number') {
-      return NextResponse.json({ success: false, error: 'Parámetros inválidos. Se esperan: airbnb (number), booking (number)' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: 'Se esperan: airbnb (number), booking (number)' },
+        { status: 400 }
+      );
     }
-
-    const value = JSON.stringify({ airbnb, booking });
 
     const { error } = await supabase
       .from('settings')
-      .upsert({ key: 'ota_multipliers', value }, { onConflict: 'key' });
+      .upsert({ key: 'ota_multipliers', value: JSON.stringify({ airbnb, booking }) }, { onConflict: 'key' });
 
     if (error) throw error;
 

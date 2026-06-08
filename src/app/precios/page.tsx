@@ -401,30 +401,37 @@ export default function PreciosPage() {
         return;
       }
 
-      const { prices, multipliers } = json;
+      const { pricesByRoom, multipliers } = json;
 
-      // 1️⃣ Actualizar multiplicadores desde Beds24 (si se devuelven)
+      // 1️⃣ Actualizar multiplicadores OTA en los campos del formulario
       if (multipliers) {
         if (multipliers.airbnb !== undefined) setMultAirbnb(String(multipliers.airbnb));
         if (multipliers.booking !== undefined) setMultBooking(String(multipliers.booking));
       }
 
-      // 2️⃣ Actualizar pricing_rules en Supabase con las tarifas de Beds24
-      if (prices && Object.keys(prices).length > 0) {
-        const seasonMap: Record<string, string> = {
-          baja: 'Temporada Baja',
-          media: 'Temporada Media',
-          media_alta: 'Temporada Media-Alta',
-          alta: 'Temporada Alta',
-        };
+      // 2️⃣ Mapear percentiles → temporadas y upsertear en pricing_rules
+      // p25 = tarifa baja (25% de los días son más baratos)
+      // p50 = tarifa media (mediana)
+      // p75 = tarifa media-alta
+      // p90 = tarifa alta (solo el 10% de los días son más caros)
+      const seasonMapping = [
+        { key: 'p25', name: 'Temporada Baja' },
+        { key: 'p50', name: 'Temporada Media' },
+        { key: 'p75', name: 'Temporada Media-Alta' },
+        { key: 'p90', name: 'Temporada Alta' },
+      ];
 
+      if (pricesByRoom && Object.keys(pricesByRoom).length > 0) {
         let rulesUpdated = 0;
-        for (const [roomId, seasons] of Object.entries(prices as Record<string, Record<string, number>>)) {
-          for (const [seasonKey, price] of Object.entries(seasons)) {
-            const name = seasonMap[seasonKey];
-            if (!name || !price) continue;
+        const summary: string[] = [];
 
-            // Buscar regla existente para actualizar, o crear una nueva
+        for (const [roomId, stats] of Object.entries(pricesByRoom as Record<string, any>)) {
+          summary.push(`\n${stats.name}: Baja $${stats.p25} | Media $${stats.p50} | M-Alta $${stats.p75} | Alta $${stats.p90}`);
+
+          for (const { key, name } of seasonMapping) {
+            const price = (stats as any)[key];
+            if (!price || price <= 0) continue;
+
             const existingRule = rules.find(
               r => r.room_type_id === roomId && r.name === name
             );
@@ -437,19 +444,25 @@ export default function PreciosPage() {
                 room_type_id: roomId,
                 rule_type: 'seasonal',
                 name,
-                price: Number(price),
+                price: Math.round(price),
               }),
             });
             rulesUpdated++;
           }
         }
 
-        // Recargar reglas actualizadas
         await fetchRules();
-        alert(`✅ Sincronización exitosa: ${rulesUpdated} tarifas importadas desde Beds24.\n\nLos multiplicadores de canal (Airbnb / Booking) se gestionan manualmente aquí y ya están actualizados.`);
+        alert(
+          `✅ Sincronización exitosa desde Beds24\n` +
+          `📊 Precios importados (con impuestos incluidos):` +
+          summary.join('') +
+          `\n\n${rulesUpdated} reglas actualizadas en Supabase.`
+        );
       } else {
-        // Beds24 no devolvió precios con nombres de temporada reconocibles
-        alert(`⚠️ Beds24 no devolvió tarifas con nombres de temporada reconocibles.\n\nAsegúrate de que tus Fixed Prices en Beds24 tengan nombres como:\n• "Temporada Baja"\n• "Temporada Media"\n• "Temporada Alta"\n• "Temporada Media-Alta"\n\nPuedes ver los datos crudos en la consola del servidor.`);
+        alert(
+          `⚠️ Beds24 no devolvió precios del calendario.\n\n` +
+          `Revisa que:\n• Las habitaciones tengan precios en Beds24\n• El token tiene scope "inventory"\n• Hay precios activos para los próximos 365 días`
+        );
       }
     } catch (err: any) {
       alert(`Error de red: ${err.message}`);
