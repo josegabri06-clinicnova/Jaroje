@@ -422,6 +422,7 @@ export default function RecepcionPage() {
       if (selectedReserva.id === 'walkin') {
         setPaymentAmount('0');
       }
+      setPaymentDescription('');
       setEditedPhone(selectedReserva.guest_phone || '');
       setEditedAdults(Number(selectedReserva.num_adult || 1));
       setEditedChildren(Number(selectedReserva.num_child || 0));
@@ -443,6 +444,7 @@ export default function RecepcionPage() {
       setAbonoFlowAccountId('');
     } else {
       setPaymentAmount('');
+      setPaymentDescription('');
       setEditedPhone('');
       setEditedAdults(1);
       setEditedChildren(0);
@@ -901,6 +903,7 @@ export default function RecepcionPage() {
   const [dniFile, setDniFile] = useState<File | null>(null);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDescription, setPaymentDescription] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
   const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
@@ -1580,7 +1583,7 @@ export default function RecepcionPage() {
             type: 'ingreso',
             amount: totalPayment,
             category: 'Reserva Directa',
-            description: `${baseDesc} [Pending Sync: B24]`,
+            description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
             payment_method: paymentMode,
             account_id: selectedAccountId || null,
             date: todayStr
@@ -1613,7 +1616,8 @@ export default function RecepcionPage() {
                   bookId: bookId,
                   amount: splitAmount,
                   paymentMethod: paymentMode,
-                  employeeNum: emp?.employee_num || null
+                  employeeNum: emp?.employee_num || null,
+                  description: paymentDescription || null
                 })
               });
               const payData = await b24PayRes.json();
@@ -1629,7 +1633,7 @@ export default function RecepcionPage() {
 
           if (allSynced && insertedRecordId) {
             await supabase.from('finances').update({
-              description: `${baseDesc} [Synced: B24]`
+              description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
             }).eq('id', insertedRecordId);
           } else {
             alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
@@ -1714,7 +1718,7 @@ export default function RecepcionPage() {
           type: 'ingreso',
           amount: amountNum,
           category: 'Reserva Directa',
-          description: `${baseDesc} [Pending Sync: B24]`,
+          description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
           payment_method: paymentMode,
           account_id: selectedAccountId || null,
           date: todayStr
@@ -1739,7 +1743,8 @@ export default function RecepcionPage() {
               bookId: selectedReserva.id,
               amount: amountNum,
               paymentMethod: paymentMode,
-              employeeNum: emp?.employee_num || null
+              employeeNum: emp?.employee_num || null,
+              description: paymentDescription || null
             })
           });
           const payData = await b24PayRes.json();
@@ -1756,7 +1761,7 @@ export default function RecepcionPage() {
 
         if (syncedSuccess && insertedRecordId) {
           await supabase.from('finances').update({
-            description: `${baseDesc} [Synced: B24]`
+            description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
           }).eq('id', insertedRecordId);
         }
 
@@ -1785,6 +1790,7 @@ export default function RecepcionPage() {
     setDniFile(null);
     setPaymentMode(null);
     setPaymentAmount('');
+    setPaymentDescription('');
     setSelectedAccountId('');
     setSubmitting(false);
     fetchData();
@@ -3342,6 +3348,20 @@ export default function RecepcionPage() {
                                 </option>
                               ))}
                           </select>
+                        </div>
+
+                        {/* Descripción opcional */}
+                        <div className="space-y-1.5 pt-1 text-left">
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                            Descripción (opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentDescription}
+                            onChange={e => setPaymentDescription(e.target.value)}
+                            placeholder="Ej. S07 -EP, referencia de transferencia..."
+                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                          />
                         </div>
                       </div>
                     )}

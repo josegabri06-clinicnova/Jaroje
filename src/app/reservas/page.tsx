@@ -106,6 +106,7 @@ export default function ReservasList() {
   const [paymentMethod, setPaymentMethod] = useState('efectivo');
   const [paymentReference, setPaymentReference] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDescription, setPaymentDescription] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -431,7 +432,9 @@ export default function ReservasList() {
           type: 'ingreso',
           amount: paymentAmountNum,
           category: 'Alojamiento',
-          description: `Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail} [Pending Sync: B24]`,
+          description: paymentDescription
+            ? `${paymentDescription} - Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail} [Pending Sync: B24]`
+            : `Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail} [Pending Sync: B24]`,
           payment_method: paymentMethod,
           account_id: paymentReference,
           date: new Date().toISOString().split('T')[0]
@@ -452,7 +455,8 @@ export default function ReservasList() {
                 bookId: selectedRes.id,
                 amount: paymentAmountNum,
                 paymentMethod: paymentMethod,
-                employeeNum: '999' // Admin
+                employeeNum: '999', // Admin
+                description: paymentDescription || null
               })
             });
           } catch (payB24Err) {
@@ -469,6 +473,7 @@ export default function ReservasList() {
       setDniPreview(null);
       setPaymentReference('');
       setPaymentAmount('');
+      setPaymentDescription('');
       
       // Actualizar estado local
       setReservas(prev => prev.map(r => r.id === selectedRes.id ? { 
@@ -1840,6 +1845,20 @@ export default function ReservasList() {
                               ))}
                           </select>
                         </div>
+
+                        {/* Descripción opcional */}
+                        <div className="mb-4">
+                          <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
+                            Descripción (opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentDescription}
+                            onChange={e => setPaymentDescription(e.target.value)}
+                            placeholder="Ej. S07 -EP, referencia de transferencia..."
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900"
+                          />
+                        </div>
                       </div>
                     );
                   })()}
@@ -1853,6 +1872,7 @@ export default function ReservasList() {
                         setPaymentMethod('efectivo');
                         setPaymentReference('');
                         setPaymentAmount('');
+                        setPaymentDescription('');
                       }} 
                       className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[13px] transition-colors"
                     >

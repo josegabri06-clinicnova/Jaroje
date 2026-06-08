@@ -245,6 +245,7 @@ export default function CalendarPage() {
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDescription, setPaymentDescription] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
@@ -909,7 +910,7 @@ export default function CalendarPage() {
         type: 'ingreso',
         amount: amountNum,
         category: 'Reserva Directa',
-        description: `${baseDesc} [Pending Sync: B24]`,
+        description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
         payment_method: paymentMode,
         account_id: selectedAccountId || null,
         date: todayStr
@@ -934,7 +935,8 @@ export default function CalendarPage() {
             bookId: selectedReserva.id,
             amount: amountNum,
             paymentMethod: paymentMode,
-            employeeNum: emp?.employee_num || null
+            employeeNum: emp?.employee_num || null,
+            description: paymentDescription || null
           })
         });
         const payData = await b24PayRes.json();
@@ -951,7 +953,7 @@ export default function CalendarPage() {
 
       if (syncedSuccess && insertedRecordId) {
         await supabase.from('finances').update({
-          description: `${baseDesc} [Synced: B24]`
+          description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
         }).eq('id', insertedRecordId);
       }
 
@@ -979,6 +981,7 @@ export default function CalendarPage() {
     setDniFile(null);
     setPaymentMode(null);
     setPaymentAmount('');
+    setPaymentDescription('');
     setSelectedAccountId('');
     setSubmitting(false);
     fetchData();
@@ -1999,6 +2002,20 @@ export default function CalendarPage() {
                                     </option>
                                   ))}
                               </select>
+                            </div>
+
+                            {/* Descripción opcional */}
+                            <div className="space-y-1.5 pt-1 text-left">
+                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                Descripción (opcional)
+                              </label>
+                              <input
+                                type="text"
+                                value={paymentDescription}
+                                onChange={e => setPaymentDescription(e.target.value)}
+                                placeholder="Ej. S07 -EP, referencia de transferencia..."
+                                className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                              />
                             </div>
                           </div>
                         )}
