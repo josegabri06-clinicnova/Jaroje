@@ -11,7 +11,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TABS = ['Todas', 'Hoy', 'Próximas', 'Directas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
+const TABS = ['Todas', 'Nuevas', 'Próximas', 'Directas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -102,6 +102,7 @@ export default function ReservasList() {
   const [exportLoading, setExportLoading] = useState(false);
   const [isCheckedIn, setIsCheckedIn] = useState(false);
   const [checkInLoading, setCheckInLoading] = useState(false);
+  const [ackLoading, setAckLoading] = useState(false);
   const [showPaymentFlow, setShowPaymentFlow] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('efectivo');
   const [paymentReference, setPaymentReference] = useState('');
@@ -518,6 +519,7 @@ export default function ReservasList() {
           ...r,
           is_checked_in: checkinMap[String(r.id)]?.status === 'checked_in',
           is_checked_out: checkinMap[String(r.id)]?.status === 'checked_out',
+          is_acknowledged: checkinMap[String(r.id)]?.status === 'acknowledged' || checkinMap[String(r.id)]?.status === 'checked_in' || checkinMap[String(r.id)]?.status === 'checked_out',
           document_url: checkinMap[String(r.id)]?.document_url
         })).sort((a: any, b: any) => 
           new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
@@ -757,6 +759,61 @@ export default function ReservasList() {
 
   const [cancelLoading, setCancelLoading] = useState(false);
 
+  const handleAcknowledgeReserva = async () => {
+    if (!selectedRes) return;
+    setAckLoading(true);
+    try {
+      const { error } = await supabase.from('checkins').upsert({
+        reservation_id: selectedRes.id.toString(),
+        guest_name: selectedRes.guest_name,
+        room: selectedRes.room_name,
+        check_in_date: selectedRes.check_in,
+        check_out_date: selectedRes.check_out,
+        status: 'acknowledged',
+        checked_in_by: 'Admin'
+      }, { onConflict: 'reservation_id' });
+
+      if (error) throw error;
+
+      setSelectedRes((prev: any) => ({ ...prev, is_acknowledged: true }));
+      setReservas(prev => prev.map(r => r.id === selectedRes.id ? { ...r, is_acknowledged: true } : r));
+
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'reserva_enterado',
+            room: selectedRes.room_name || 'General',
+            details: JSON.stringify({
+              text: `Marcó como enterado la reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id})`,
+              bookingId: selectedRes.id,
+              guestName: selectedRes.guest_name
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de enterado:", logErr);
+      }
+
+      alert('✅ Reserva marcada como enterado.');
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al marcar como enterado:\n\n${err.message}`);
+    } finally {
+      setAckLoading(false);
+    }
+  };
+
   const handleCancelReserva = async () => {
     if (!selectedRes) return;
     const confirmCancel = confirm(`⚠️ ¿Estás seguro de que deseas cancelar permanentemente la reserva de ${selectedRes.guest_name}?\n\nEsta acción eliminará el check-in local y sincronizará la cancelación en Beds24 de inmediato.`);
@@ -879,7 +936,7 @@ export default function ReservasList() {
       r.id?.toString().includes(search);
     
     let matchTab = true;
-    if (activeTab === 'Hoy') matchTab = r.check_in === todayStr || r.check_out === todayStr;
+    if (activeTab === 'Nuevas') matchTab = !r.is_acknowledged;
     else if (activeTab === 'Próximas') matchTab = r.check_in >= todayStr;
     else if (activeTab === 'Directas') matchTab = r.channel === 'Directo' || r.channel === 'WhatsApp Bot' || r.channel === 'Beds24';
     else if (activeTab !== 'Todas' && activeTab !== 'Completadas') matchTab = r.channel === activeTab;
@@ -986,19 +1043,27 @@ export default function ReservasList() {
 
       {/* Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {TABS.map(t => (
-          <button
-            key={t}
-            onClick={() => setActiveTab(t)}
-            className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-[0.98] ${
-              activeTab === t
-                ? 'bg-zinc-900 text-white shadow-sm'
-                : 'bg-white text-zinc-600 border border-zinc-200/80 hover:bg-zinc-50'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
+        {TABS.map(t => {
+          const isNuevas = t === 'Nuevas';
+          const nuevasCount = activeReservas.filter(r => !r.is_acknowledged).length;
+          const displayLabel = isNuevas && nuevasCount > 0 ? `Nuevas (${nuevasCount})` : t;
+          return (
+            <button
+              key={t}
+              onClick={() => setActiveTab(t)}
+              className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-[0.98] flex items-center gap-1.5 ${
+                activeTab === t
+                  ? 'bg-zinc-900 text-white shadow-sm'
+                  : 'bg-white text-zinc-650 border border-zinc-200/80 hover:bg-zinc-50'
+              }`}
+            >
+              <span>{displayLabel}</span>
+              {isNuevas && nuevasCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse inline-block" />
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* Token Error Banner */}
@@ -1054,6 +1119,11 @@ export default function ReservasList() {
                         <h3 className="font-semibold text-zinc-900 text-[14px] leading-tight">
                           {r.guest_name} <span className="text-zinc-500 font-medium text-[11px]">({r.num_adult || 1}A{Number(r.num_child) > 0 ? ` / ${r.num_child}N` : ''})</span>
                         </h3>
+                        {!r.is_acknowledged && r.status !== 'cancelled' && (
+                          <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-150 animate-pulse">
+                            NUEVA 🆕
+                          </span>
+                        )}
                         {isArrival && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">HOY LLEGA</span>}
                         {isDeparture && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">HOY SALE</span>}
                       </div>
@@ -1698,6 +1768,19 @@ export default function ReservasList() {
             
             {/* Acción Botón */}
             <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
+              {selectedRes.status !== 'cancelled' && !selectedRes.is_acknowledged && (
+                <button
+                  onClick={handleAcknowledgeReserva}
+                  disabled={ackLoading}
+                  className="w-full bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-[14px] py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-md shadow-indigo-600/10 flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {ackLoading ? (
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <span>✓ Marcar como Enterado</span>
+                  )}
+                </button>
+              )}
               {isCheckedIn ? (
                 <div className="flex flex-col gap-2">
                   <div className="w-full bg-emerald-50 text-emerald-700 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-emerald-200">
