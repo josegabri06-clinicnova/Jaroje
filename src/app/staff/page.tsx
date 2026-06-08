@@ -174,7 +174,7 @@ function getRoomOperationalStatus(
   activeReservations: any[],
   todayStr: string,
   lastUpdatedAt?: string
-): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' {
+): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
   let isUpdatedToday = false;
   if (lastUpdatedAt) {
     try {
@@ -236,7 +236,7 @@ function getRoomOperationalStatus(
   });
 
   if (isSalidaHoy) {
-    return 'limpieza_programada'; // Amarillo automático por checkout programado hoy
+    return 'salida_hoy'; // Rojo muy tenue por checkout programado hoy
   }
 
   if (hasResToday) {
@@ -1161,6 +1161,9 @@ export default function StaffPage() {
                         } else if (operStatus === 'sucio_checkout') {
                           colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
                           dotClass = 'bg-rose-250';
+                        } else if (operStatus === 'salida_hoy') {
+                          colorClasses = 'bg-rose-50 text-rose-700 border-rose-200 shadow-rose-50/20';
+                          dotClass = 'bg-rose-455';
                         } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
                           colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
                           dotClass = 'bg-amber-250';
@@ -1681,7 +1684,7 @@ export default function StaffPage() {
 
         const isCleanTerminated = operStatus === 'limpia';
         const isAvailable = operStatus === 'disponible';
-        const isDirty = operStatus === 'sucio_checkout' || operStatus === 'en_limpieza' || operStatus === 'limpieza_programada';
+        const isDirty = operStatus === 'sucio_checkout' || operStatus === 'en_limpieza' || operStatus === 'limpieza_programada' || operStatus === 'salida_hoy';
 
         return (
           <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1708,31 +1711,49 @@ export default function StaffPage() {
               {isDirty ? (
                 // CASO DIRTY: Botón Único de "Finalizar Limpieza"
                 <div className="space-y-5">
-                  <div className="bg-amber-50 border border-amber-250 rounded-2xl p-4 space-y-3.5 shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center font-bold">
-                        ⚠️
+                  {(() => {
+                    let containerClass = "bg-amber-50 border border-amber-250 text-amber-550";
+                    let textClass = "text-amber-850";
+                    let subTextClass = "text-amber-650";
+                    let label = "Limpieza Programada";
+                    let desc = "Servicio ordinario (Stayover diario o stayover cada 3er día) según calendario Beds24.";
+
+                    if (operStatus === 'sucio_checkout') {
+                      containerClass = "bg-rose-50 border border-rose-250 text-rose-550";
+                      textClass = "text-rose-850";
+                      subTextClass = "text-rose-650";
+                      label = "Check-Out (Pendiente Limpieza)";
+                      desc = "Huésped entregó llaves en Recepción. Por favor realiza la limpieza profunda de salida antes de reportar la finalización.";
+                    } else if (operStatus === 'salida_hoy') {
+                      containerClass = "bg-rose-50/50 border border-rose-200 text-rose-450";
+                      textClass = "text-rose-850";
+                      subTextClass = "text-rose-650";
+                      label = "Esperando Salida (Check-Out Hoy)";
+                      desc = "El huésped tiene salida programada para hoy. En espera de confirmar Check-Out en Recepción para iniciar la limpieza de salida.";
+                    }
+
+                    return (
+                      <div className={`rounded-2xl p-4 space-y-3.5 shadow-sm border ${containerClass}`}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold bg-white/80`}>
+                            ⚠️
+                          </div>
+                          <div>
+                            <p className={`text-[12px] font-black uppercase tracking-wider ${textClass}`}>
+                              {label}
+                            </p>
+                            <p className={`text-[10px] font-bold ${subTextClass}`}>Se requiere servicio físico para habilitar la habitación.</p>
+                          </div>
+                        </div>
+                        
+                        <div className="border-t border-black/5 pt-3 space-y-1.5 text-[12px] text-zinc-650 font-semibold">
+                          <p className="leading-relaxed">
+                            {desc}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[12px] font-black text-amber-800 uppercase tracking-wider">
-                          {operStatus === 'sucio_checkout' ? 'Check-Out (Pendiente Limpieza)' : 'Limpieza Programada'}
-                        </p>
-                        <p className="text-[10px] text-amber-600 font-bold">Se requiere servicio físico para habilitar la habitación.</p>
-                      </div>
-                    </div>
-                    
-                    <div className="border-t border-amber-200/40 pt-3 space-y-1.5 text-[12px] text-zinc-650 font-semibold">
-                      {operStatus === 'sucio_checkout' ? (
-                        <p className="leading-relaxed">
-                          Huésped entregó llaves en Recepción. Por favor realiza la **limpieza profunda de salida** antes de reportar la finalización.
-                        </p>
-                      ) : (
-                        <p className="leading-relaxed">
-                          Servicio ordinario (Stayover diario o stayover cada 3er día) según calendario Beds24.
-                        </p>
-                      )}
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   <div className="flex flex-col gap-2.5 pt-2">
                     <button

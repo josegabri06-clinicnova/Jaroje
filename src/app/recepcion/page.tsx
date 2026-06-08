@@ -231,7 +231,7 @@ function getRoomOperationalStatus(
   activeReservations: any[],
   todayStr: string,
   lastUpdatedAt?: string
-): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' {
+): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
   let isUpdatedToday = false;
   if (lastUpdatedAt) {
     try {
@@ -293,7 +293,7 @@ function getRoomOperationalStatus(
   });
 
   if (isSalidaHoy) {
-    return 'limpieza_programada'; // Amarillo automático por checkout programado hoy
+    return 'salida_hoy'; // Rojo muy tenue por checkout programado hoy
   }
 
   // Si no necesita limpieza, y está reservada/ocupada hoy, se muestra sin color (ocupada)
@@ -2427,6 +2427,9 @@ export default function RecepcionPage() {
                         } else if (operStatus === 'sucio_checkout') {
                           colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
                           dotClass = 'bg-rose-250';
+                        } else if (operStatus === 'salida_hoy') {
+                          colorClasses = 'bg-rose-50/90 text-rose-700 border-rose-200 shadow-rose-50/20';
+                          dotClass = 'bg-rose-400';
                         } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
                           colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
                           dotClass = 'bg-amber-250';
@@ -3816,6 +3819,10 @@ export default function RecepcionPage() {
                         bg = 'bg-zinc-100 text-zinc-500 border-zinc-200';
                         label = '⚪ Ocupada / Reservada';
                         desc = 'La habitación cuenta con una estancia activa o una llegada programada para el día de hoy, por lo que no está disponible para nuevos walk-ins.';
+                      } else if (operStatus === 'salida_hoy') {
+                        bg = 'bg-rose-50/90 text-rose-700 border-rose-200';
+                        label = '🔴 Esperando Salida (Check-Out Hoy)';
+                        desc = 'El huésped tiene salida programada para hoy. En espera de confirmar Check-Out en Recepción para iniciar la limpieza profunda de salida.';
                       } else if (operStatus === 'sucio_checkout') {
                         bg = 'bg-rose-500 text-white border-rose-600 shadow-lg shadow-rose-500/10';
                         label = '🔴 Check Out';
