@@ -116,7 +116,7 @@ export default function VercelActionForm() {
       
       let multiplier = 1;
       if (form.channel === 'Airbnb') multiplier = 1.20;
-      if (form.channel === 'Booking.com') multiplier = 1.30;
+      if (form.channel === 'Booking.com') multiplier = 1.35;
 
       let calculatedDailyRate = 0;
       const group = form.groupRooms || [];

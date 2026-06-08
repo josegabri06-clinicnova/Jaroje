@@ -209,12 +209,12 @@ function computeOtaSplit(
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Airbnb', multiplier };
   }
   if (ch.includes('booking')) {
-    const multiplier = customMultipliers?.booking ?? 1.30;
+    const multiplier = customMultipliers?.booking ?? 1.35;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Booking.com', multiplier };
   }
   if (ch.includes('expedia')) {
-    const multiplier = customMultipliers?.booking ?? 1.30;
+    const multiplier = customMultipliers?.booking ?? 1.35;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Expedia', multiplier };
   }

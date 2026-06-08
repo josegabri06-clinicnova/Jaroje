@@ -112,8 +112,9 @@ export default function PreciosPage() {
   const [discNights30, setDiscNights30] = useState('40');
 
   const [multAirbnb, setMultAirbnb] = useState('1.20');
-  const [multBooking, setMultBooking] = useState('1.30');
+  const [multBooking, setMultBooking] = useState('1.35');
   const [multDirecto, setMultDirecto] = useState('1.00');
+  const [syncingBeds24, setSyncingBeds24] = useState(false);
 
   // Fetch Pricing Settings (JSON) from DB
   const fetchPricingSettings = async () => {
@@ -202,7 +203,7 @@ export default function PreciosPage() {
     setDiscNights30(unitConf.discounts?.nights30 !== undefined ? String(unitConf.discounts.nights30) : '40');
 
     setMultAirbnb(unitConf.multipliers?.airbnb !== undefined ? String(unitConf.multipliers.airbnb) : '1.20');
-    setMultBooking(unitConf.multipliers?.booking !== undefined ? String(unitConf.multipliers.booking) : '1.30');
+    setMultBooking(unitConf.multipliers?.booking !== undefined ? String(unitConf.multipliers.booking) : '1.35');
     setMultDirecto(unitConf.multipliers?.directo !== undefined ? String(unitConf.multipliers.directo) : '1.00');
 
     const baseRule = rules.find(r => r.room_type_id === configRoomId && r.rule_type === 'base');
@@ -384,6 +385,79 @@ export default function PreciosPage() {
     }
   };
 
+  // ── Sincronización de precios y multiplicadores desde Beds24 API ─────────────
+  const handleSyncFromBeds24 = async () => {
+    setSyncingBeds24(true);
+    try {
+      const res = await fetch('/api/beds24-prices?t=' + Date.now());
+      const json = await res.json();
+
+      if (!json.success) {
+        if (json.error === 'TOKEN_EXPIRED') {
+          alert('Token de Beds24 caducado. Genera uno nuevo en Beds24 > Marketplace > API.');
+          return;
+        }
+        alert(`Error al sincronizar con Beds24: ${json.error}`);
+        return;
+      }
+
+      const { prices, multipliers } = json;
+
+      // 1️⃣ Actualizar multiplicadores desde Beds24 (si se devuelven)
+      if (multipliers) {
+        if (multipliers.airbnb !== undefined) setMultAirbnb(String(multipliers.airbnb));
+        if (multipliers.booking !== undefined) setMultBooking(String(multipliers.booking));
+      }
+
+      // 2️⃣ Actualizar pricing_rules en Supabase con las tarifas de Beds24
+      if (prices && Object.keys(prices).length > 0) {
+        const seasonMap: Record<string, string> = {
+          baja: 'Temporada Baja',
+          media: 'Temporada Media',
+          media_alta: 'Temporada Media-Alta',
+          alta: 'Temporada Alta',
+        };
+
+        let rulesUpdated = 0;
+        for (const [roomId, seasons] of Object.entries(prices as Record<string, Record<string, number>>)) {
+          for (const [seasonKey, price] of Object.entries(seasons)) {
+            const name = seasonMap[seasonKey];
+            if (!name || !price) continue;
+
+            // Buscar regla existente para actualizar, o crear una nueva
+            const existingRule = rules.find(
+              r => r.room_type_id === roomId && r.name === name
+            );
+
+            await fetch('/api/precios', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...(existingRule ? { id: existingRule.id } : {}),
+                room_type_id: roomId,
+                rule_type: 'seasonal',
+                name,
+                price: Number(price),
+              }),
+            });
+            rulesUpdated++;
+          }
+        }
+
+        // Recargar reglas actualizadas
+        await fetchRules();
+        alert(`✅ Sincronización exitosa: ${rulesUpdated} tarifas importadas desde Beds24.\n\nLos multiplicadores de canal (Airbnb / Booking) se gestionan manualmente aquí y ya están actualizados.`);
+      } else {
+        // Beds24 no devolvió precios con nombres de temporada reconocibles
+        alert(`⚠️ Beds24 no devolvió tarifas con nombres de temporada reconocibles.\n\nAsegúrate de que tus Fixed Prices en Beds24 tengan nombres como:\n• "Temporada Baja"\n• "Temporada Media"\n• "Temporada Alta"\n• "Temporada Media-Alta"\n\nPuedes ver los datos crudos en la consola del servidor.`);
+      }
+    } catch (err: any) {
+      alert(`Error de red: ${err.message}`);
+    } finally {
+      setSyncingBeds24(false);
+    }
+  };
+
   // Sync simulator guests physical limit
   const selectedRoomMetadata = useMemo(() => {
     return ROOMS.find(r => r.id === simRoomId) || ROOMS[0];
@@ -497,7 +571,7 @@ export default function PreciosPage() {
     const customMultipliers = pricingSettings?.[simRoomId]?.multipliers;
     const customMultVal = customMultipliers?.[simChannelId] !== undefined
       ? Number(customMultipliers[simChannelId])
-      : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.30 : 1.00);
+      : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.35 : 1.00);
 
     const discountedBaseSum = Math.round(totalBaseWithoutSurcharge * discountMult);
     const subtotalWithSurcharge = discountedBaseSum + totalSurcharges;
@@ -989,7 +1063,18 @@ export default function PreciosPage() {
 
                     </div>
 
-                    <div className="pt-4 border-t border-zinc-100 flex justify-end">
+                    <div className="pt-4 border-t border-zinc-100 flex items-center justify-between gap-3">
+                      {/* Botón sincronizar Beds24 */}
+                      <button
+                        onClick={handleSyncFromBeds24}
+                        disabled={syncingBeds24}
+                        title="Importar tarifas base y multiplicadores directamente desde la API de Beds24"
+                        className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+                      >
+                        {syncingBeds24 ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                        Sincronizar desde Beds24
+                      </button>
+
                       <button
                         onClick={handleSaveDiscountsAndMultipliers}
                         disabled={savingSettings}
@@ -1398,7 +1483,7 @@ export default function PreciosPage() {
                         const customMultipliers = pricingSettings?.[r.id]?.multipliers;
                         const mult = customMultipliers?.[simChannelId] !== undefined
                           ? Number(customMultipliers[simChannelId])
-                          : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.30 : 1.00);
+                          : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.35 : 1.00);
 
                         return (
                           <tr key={r.id} className="hover:bg-zinc-50/50">

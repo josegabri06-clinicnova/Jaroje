@@ -276,7 +276,7 @@ export function getLengthOfStayMultiplier(nights: number, customDiscounts?: { ni
 export function getChannelMultiplier(referer: string, customMultipliers?: { airbnb?: number; booking?: number; directo?: number }): number {
   const r = (referer || '').toLowerCase();
   const multAirbnb = customMultipliers?.airbnb !== undefined ? customMultipliers.airbnb : 1.20;
-  const multBooking = customMultipliers?.booking !== undefined ? customMultipliers.booking : 1.30;
+  const multBooking = customMultipliers?.booking !== undefined ? customMultipliers.booking : 1.35;
   const multDirecto = customMultipliers?.directo !== undefined ? customMultipliers.directo : 1.00;
 
   if (r.includes('airbnb')) return multAirbnb;
