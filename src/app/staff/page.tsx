@@ -946,28 +946,29 @@ export default function StaffPage() {
   };
 
   const handleCopyReport = () => {
-    const pendingRooms = getScheduledCleanings().filter(task => {
-      const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
-      return !isFinished;
-    });
+    const allRooms = getScheduledCleanings();
 
-    if (pendingRooms.length === 0) {
-      alert("No hay limpiezas pendientes para reportar hoy.");
+    if (allRooms.length === 0) {
+      alert("No hay limpiezas programadas para hoy.");
       return;
     }
 
     const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
     let text = `📋 *REPORTE DIARIO DE LIMPIEZA*\n🏨 *Jaroje Condominios*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
-    pendingRooms.forEach((task, idx) => {
-      const stateLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
+    allRooms.forEach((task, idx) => {
+      const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
+      const typeLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
+      const statusLabel = isFinished ? 'Limpia ✅' : task.operStatus === 'en_limpieza' ? 'En limpieza ⚡' : 'Pendiente ❌';
+      
       const assignment = assignments[task.room];
       const empNum = assignment?.employeeNum || '';
       const empName = getOfficialEmployees().find(e => e.employee_num === empNum)?.full_name || 'Sin asignar ❌';
       const notes = assignment?.notes?.trim() || 'Sin observaciones';
 
       text += `${idx + 1}. *Hab. ${task.room}*\n`;
-      text += `   • *Estado:* ${stateLabel}\n`;
+      text += `   • *Tipo:* ${typeLabel}\n`;
+      text += `   • *Estado:* ${statusLabel}\n`;
       text += `   • *Asignado:* ${empName}\n`;
       text += `   • *Observaciones:* ${notes}\n\n`;
     });
@@ -1225,12 +1226,9 @@ export default function StaffPage() {
               </div>
 
               {(() => {
-                const pendingRooms = getScheduledCleanings().filter(task => {
-                  const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
-                  return !isFinished;
-                });
+                const allRooms = getScheduledCleanings();
 
-                if (pendingRooms.length === 0) {
+                if (allRooms.length === 0) {
                   return (
                     <div className="p-6 text-center bg-zinc-50/50 border border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center gap-1.5">
                       <CheckCircle2 className="text-emerald-500" size={22} />
@@ -1252,9 +1250,10 @@ export default function StaffPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-zinc-100">
-                          {pendingRooms.map(task => {
+                          {allRooms.map(task => {
                             const assignment = assignments[task.room] || { employeeNum: '', notes: '' };
                             const isCheckout = task.type === 'checkout';
+                            const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
 
                             return (
                               <tr key={task.room} className="align-middle">
@@ -1267,13 +1266,28 @@ export default function StaffPage() {
 
                                 {/* ESTADO */}
                                 <td className="py-2.5 pr-2">
-                                  <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border select-none ${
-                                    isCheckout 
-                                      ? 'bg-rose-50 text-rose-700 border-rose-100' 
-                                      : 'bg-amber-50 text-amber-700 border-amber-100'
-                                  }`}>
-                                    {isCheckout ? 'Check Out' : 'Servicio'}
-                                  </span>
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border select-none ${
+                                      isCheckout 
+                                        ? 'bg-rose-50 text-rose-700 border-rose-100' 
+                                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                                    }`}>
+                                      {isCheckout ? 'Check Out' : 'Servicio'}
+                                    </span>
+                                    {isFinished ? (
+                                      <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-150 select-none">
+                                        Limpia ✓
+                                      </span>
+                                    ) : task.operStatus === 'en_limpieza' ? (
+                                      <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-150 select-none animate-pulse">
+                                        Aseo ⚡
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-500 border border-zinc-200 select-none">
+                                        Pendiente
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
 
                                 {/* ASIGNADO */}
