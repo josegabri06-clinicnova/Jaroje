@@ -201,6 +201,41 @@ export function getParentMapping(roomId: string | null | undefined, unitId: stri
   return childToParent[id] || { roomId: id, unitId: uId };
 }
 
+// Resolver el ID de habitación hijo específico de Beds24 a partir del ID padre y el unitId
+export function getChildRoomId(parentId: string | null | undefined, unitId: string | null | undefined): string | null {
+  const pId = String(parentId || '');
+  const uId = String(unitId || '1');
+
+  const parentToChild: Record<string, Record<string, string>> = {
+    // --- 101 a 107 -> Padre: 679092 ---
+    '679092': {
+      '1': '685321', '2': '685322', '3': '685323', '4': '685324', '5': '685325', '6': '685326', '7': '685327'
+    },
+    // --- 201 a 206 -> Padre: 679091 ---
+    '679091': {
+      '1': '685312', '2': '685318', '3': '685314', '4': '685315', '5': '685316', '6': '685317'
+    },
+    // --- 301 a 306 -> Padre: 679077 ---
+    '679077': {
+      '1': '685531', '2': '685532', '3': '685533', '4': '685534', '5': '685535', '6': '685536'
+    },
+    // --- 401 -> Padre: 679093 ---
+    '679093': {
+      '1': '679008'
+    },
+    // --- 402 -> Padre: 679087 ---
+    '679087': {
+      '1': '679087'
+    },
+    // --- 500 -> Padre: 685542 ---
+    '685542': {
+      '1': '685542'
+    }
+  };
+
+  return parentToChild[pId]?.[uId] || null;
+}
+
 // Detección de temporada (Huatulco/México)
 export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' | 'media_alta' | 'alta' {
   if (!dateStr) return 'media';
@@ -238,9 +273,18 @@ export function getRealPrice(
   roomId: string | null | undefined, 
   dateStr: string | null | undefined, 
   referer: string,
-  beds24RatesMap?: Record<string, Record<string, number>>
+  beds24RatesMap?: Record<string, Record<string, number>>,
+  unitId?: string | null | undefined
 ): number {
-  const id = String(roomId || '');
+  let id = String(roomId || '');
+
+  // Si nos pasan un ID padre y un unitId, intentar resolver al ID hijo específico
+  if (unitId) {
+    const childId = getChildRoomId(id, unitId);
+    if (childId) {
+      id = childId;
+    }
+  }
   
   // 1. Intentar obtener tarifa dinámica de Beds24
   if (beds24RatesMap && dateStr && beds24RatesMap[id] && beds24RatesMap[id][dateStr]) {
@@ -249,9 +293,29 @@ export function getRealPrice(
     return Math.round(dynamicPrice * multiplier);
   }
 
+  // Si no se encuentra tarifa en el ID de la unidad hijo, intentar buscar en el ID del padre
+  if (beds24RatesMap && dateStr) {
+    const parentMapping = getParentMapping(id, unitId);
+    const parentId = parentMapping.roomId;
+    if (parentId !== id && beds24RatesMap[parentId] && beds24RatesMap[parentId][dateStr]) {
+      const dynamicPrice = beds24RatesMap[parentId][dateStr];
+      const multiplier = getChannelMultiplier(referer);
+      return Math.round(dynamicPrice * multiplier);
+    }
+  }
+
   // 2. Fallback al catálogo estático si no hay tarifa dinámica o falla la conexión
   const prices = JAROJE_PRICES[id];
   if (!prices) {
+    // Si es un ID de unidad hijo y no tiene precio estático propio, usar el del padre
+    const parentMapping = getParentMapping(id, unitId);
+    const parentPrices = JAROJE_PRICES[parentMapping.roomId];
+    if (parentPrices) {
+      const season = getSeason(dateStr);
+      const base = parentPrices[season];
+      const multiplier = getChannelMultiplier(referer);
+      return Math.round(base * multiplier);
+    }
     return 2000;
   }
   const season = getSeason(dateStr);
@@ -450,10 +514,11 @@ export function getAverageRatesForDates(
   arrival: string | null | undefined,
   departure: string | null | undefined,
   referer: string,
-  beds24RatesMap: Record<string, Record<string, number>>
+  beds24RatesMap: Record<string, Record<string, number>>,
+  unitId?: string | null | undefined
 ): number {
   if (!arrival || !departure) {
-    return getRealPrice(roomId, arrival, referer, beds24RatesMap);
+    return getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
   }
 
   const id = String(roomId || '');
@@ -461,7 +526,7 @@ export function getAverageRatesForDates(
   const end = new Date(departure);
 
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start.getTime() >= end.getTime()) {
-    return getRealPrice(roomId, arrival, referer, beds24RatesMap);
+    return getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
   }
 
   let totalSum = 0;
@@ -470,13 +535,13 @@ export function getAverageRatesForDates(
   const current = new Date(start);
   while (current < end) {
     const currentDateStr = current.toISOString().split('T')[0];
-    const dailyPrice = getRealPrice(id, currentDateStr, referer, beds24RatesMap);
+    const dailyPrice = getRealPrice(id, currentDateStr, referer, beds24RatesMap, unitId);
     totalSum += dailyPrice;
     daysCount++;
     current.setDate(current.getDate() + 1);
   }
 
-  return daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap);
+  return daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
 }
 
 // Obtener y mapear reservas activas (Backend Server-Side)
@@ -540,7 +605,7 @@ export async function getBeds24Bookings(): Promise<any[]> {
       const roomData = getRoomMetadata(b.roomId, b.roomName);
       let pricePerNight = b.price ? (Number(b.price) / nights) : null;
       if (!isOTA && (!pricePerNight || pricePerNight < 10)) {
-        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap);
+        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap, String(b.unitId || ''));
       } else if (isOTA && !pricePerNight) {
         pricePerNight = 0;
       }

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, CheckCircle2, Lock, Unlock, X, Wallet, BedDouble, Send, Minus, Plus } from 'lucide-react';
 import { getActiveEmployee, getAdminPin } from '@/lib/auth';
-import { getUnitName, getRoomMetadata } from '@/lib/beds24';
+import { getUnitName, getRoomMetadata, getParentMapping } from '@/lib/beds24';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
@@ -122,17 +122,49 @@ export default function VercelActionForm() {
       const group = form.groupRooms || [];
       const totalRooms = group.length > 0 ? group.length : 1;
 
+      // Intentar buscar el precio dinámico de la API en el inventario actual
+      let foundDynamicPrice = false;
+      let dynamicPriceSum = 0;
+
       if (group.length > 0) {
-        const gr = group[0];
-        const basePrice = PRICES[gr.roomId]?.[season] || 2000;
+        group.forEach(gr => {
+          const roomGroup = inventory.find(g => g.roomId === gr.roomId);
+          const unit = roomGroup?.units?.find((u: any) => u.unitId === gr.unitId);
+          if (unit && unit.price !== undefined && unit.price > 0) {
+            dynamicPriceSum += unit.price;
+            foundDynamicPrice = true;
+          }
+        });
+      } else if (form.roomId && form.unitId) {
+        const roomGroup = inventory.find(g => g.roomId === form.roomId);
+        const unit = roomGroup?.units?.find((u: any) => u.unitId === form.unitId);
+        if (unit && unit.price !== undefined && unit.price > 0) {
+          dynamicPriceSum += unit.price;
+          foundDynamicPrice = true;
+        }
+      }
+
+      if (foundDynamicPrice && totalRooms > 0) {
+        const basePrice = Math.round(dynamicPriceSum / totalRooms);
         const priceWithChannel = Math.round(basePrice * multiplier);
         const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
         calculatedDailyRate = priceWithChannel + tax;
-      } else if (form.roomId) {
-        const basePrice = PRICES[form.roomId]?.[season] || 2000;
-        const priceWithChannel = Math.round(basePrice * multiplier);
-        const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
-        calculatedDailyRate = priceWithChannel + tax;
+      } else {
+        // Fallback al catálogo estático
+        if (group.length > 0) {
+          const gr = group[0];
+          const parentRoom = getParentMapping(gr.roomId, gr.unitId);
+          const basePrice = PRICES[parentRoom.roomId]?.[season] || 2000;
+          const priceWithChannel = Math.round(basePrice * multiplier);
+          const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
+          calculatedDailyRate = priceWithChannel + tax;
+        } else if (form.roomId) {
+          const parentRoom = getParentMapping(form.roomId, form.unitId);
+          const basePrice = PRICES[parentRoom.roomId]?.[season] || 2000;
+          const priceWithChannel = Math.round(basePrice * multiplier);
+          const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
+          calculatedDailyRate = priceWithChannel + tax;
+        }
       }
 
       const activeDailyRate = isDailyRateEdited ? Number(form.dailyRate) || 0 : calculatedDailyRate;
@@ -150,7 +182,7 @@ export default function VercelActionForm() {
         return nextState;
       });
     }
-  }, [form.roomId, form.groupRooms, form.checkIn, form.checkOut, form.channel, form.dailyRate, isDailyRateEdited, isDepositEdited]);
+  }, [form.roomId, form.groupRooms, form.checkIn, form.checkOut, form.channel, form.dailyRate, isDailyRateEdited, isDepositEdited, inventory]);
 
   // Resetear ediciones manuales cuando cambien las habitaciones seleccionadas
   useEffect(() => {

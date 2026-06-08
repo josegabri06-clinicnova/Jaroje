@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { fetchAllRawBeds24Bookings, getParentMapping } from '@/lib/beds24';
+import { 
+  fetchAllRawBeds24Bookings, 
+  getParentMapping,
+  getBeds24Token,
+  fetchBeds24RatesMap,
+  getAverageRatesForDates,
+  getChildRoomId
+} from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,6 +99,15 @@ export async function GET(req: Request) {
     const bookingsRaw = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
     const bookingsData = { data: bookingsRaw };
 
+    // Obtener las tarifas del calendario de Beds24 para el rango solicitado
+    let beds24RatesMap: Record<string, Record<string, number>> = {};
+    try {
+      const BEDS24_TOKEN = await getBeds24Token();
+      beds24RatesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, checkIn, checkOut);
+    } catch (tokenErr) {
+      console.warn("[Availability API] Failed to fetch Beds24 token or calendar rates:", tokenErr);
+    }
+
     // Calcular ocupación cruzada
     const occupiedUnits = new Set<string>();
     const reqIn = new Date(checkIn);
@@ -115,16 +131,26 @@ export async function GET(req: Request) {
       }
     });
 
-    // Construir el inventario final con disponibilidad
+    // Construir el inventario final con disponibilidad y tarifas dinámicas
     const inventory = ROOM_MAP.map(r => {
       return {
         roomId: r.roomId,
         name: r.name,
         units: r.units.map(u => {
+          const childId = getChildRoomId(r.roomId, u.unitId) || r.roomId;
+          const averageRate = getAverageRatesForDates(
+            childId, 
+            checkIn, 
+            checkOut, 
+            'Directo', 
+            beds24RatesMap, 
+            u.unitId
+          );
           return {
             unitId: u.unitId,
             name: u.name,
-            isAvailable: !occupiedUnits.has(`${r.roomId}_${u.unitId}`)
+            isAvailable: !occupiedUnits.has(`${r.roomId}_${u.unitId}`),
+            price: averageRate // Tarifa dinámica real por noche
           };
         })
       };

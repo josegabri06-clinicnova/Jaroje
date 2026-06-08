@@ -14,6 +14,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import InventarioPage from '../inventario/page';
+import { getParentMapping } from '@/lib/beds24';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -1159,6 +1160,11 @@ export default function RecepcionPage() {
       const capRules = getCapacityRules(rm.roomId);
       const extraGuests = Math.max(0, numGuests - capRules.base);
       const surchargePerNight = extraGuests * 200;
+
+      // Buscar tarifa dinámica en roomInventory
+      const roomGroup = roomInventory.find(g => g.roomId === rm.roomId);
+      const unit = roomGroup?.units?.find((u: any) => u.unitId === rm.unitId);
+      const dynamicPrice = (unit && unit.price !== undefined && unit.price > 0) ? unit.price : 0;
       
       let suggestedTotalRoom = 0;
       for (let i = 0; i < computedNights; i++) {
@@ -1192,9 +1198,12 @@ export default function RecepcionPage() {
           priceUsed = Number(seasonalRule.price);
         } else if (baseRule) {
           priceUsed = Number(baseRule.price);
+        } else if (dynamicPrice > 0) {
+          priceUsed = dynamicPrice;
         } else {
           const fallbackSeason = getSeason(dateStr);
-          priceUsed = PRICES[rm.roomId]?.[fallbackSeason] || 2000;
+          const parentRoom = getParentMapping(rm.roomId, rm.unitId);
+          priceUsed = PRICES[parentRoom.roomId]?.[fallbackSeason] || 2000;
         }
         
         const nightBase = priceUsed + surchargePerNight;
