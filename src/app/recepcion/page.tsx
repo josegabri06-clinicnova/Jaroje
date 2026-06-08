@@ -905,6 +905,7 @@ export default function RecepcionPage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [checkInNotes, setCheckInNotes] = useState('');
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
   const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -918,6 +919,13 @@ export default function RecepcionPage() {
       setTypedNights('');
     }
   }, [selectedReserva?.check_in, selectedReserva?.check_out]);
+
+  // Inicializar notas editables al abrir el modal de check-in
+  useEffect(() => {
+    if (selectedReserva) {
+      setCheckInNotes(selectedReserva.notes || '');
+    }
+  }, [selectedReserva?.id]);
 
   // Modal Mtto
   const [showForm, setShowForm] = useState(false);
@@ -1682,7 +1690,8 @@ export default function RecepcionPage() {
         check_out_date: selectedReserva.check_out,
         status: 'checked_in',
         checked_in_by: operatorName,
-        document_url: finalDniUrl || null
+        document_url: finalDniUrl || null,
+        notes: checkInNotes || null
       }, { onConflict: 'reservation_id' });
 
       if (upsertErr) {
@@ -1692,7 +1701,28 @@ export default function RecepcionPage() {
         return;
       }
 
-      setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined } : r));
+      // Sincronizar notas editadas a Beds24 si fueron modificadas
+      if (checkInNotes !== (selectedReserva.notes || '')) {
+        try {
+          await fetch('/api/reservas', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: selectedReserva.id,
+              phone: selectedReserva.guest_phone || '',
+              numAdult: selectedReserva.num_adult || 1,
+              numChild: selectedReserva.num_child || 0,
+              price: selectedReserva.price_estimate || 0,
+              deposit: selectedReserva.deposit || 0,
+              notes: checkInNotes
+            })
+          });
+        } catch (notesErr) {
+          console.error('No se pudieron sincronizar notas a Beds24:', notesErr);
+        }
+      }
+
+      setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined, notes: checkInNotes } : r));
 
       if (emp) {
         await fetch('/api/employee-logs', {
@@ -1791,6 +1821,7 @@ export default function RecepcionPage() {
     setPaymentMode(null);
     setPaymentAmount('');
     setPaymentDescription('');
+    setCheckInNotes('');
     setSelectedAccountId('');
     setSubmitting(false);
     fetchData();
@@ -3024,10 +3055,17 @@ export default function RecepcionPage() {
                   </div>
 
                   {/* Notas del Huésped */}
-                  {selectedReserva.notes && (
+                  {/* Notas del Huésped — editable durante el check-in */}
+                  {selectedReserva.id !== 'walkin' && (
                     <div className="bg-amber-50/40 border border-amber-100 p-4 rounded-2xl mt-1">
-                      <span className="text-[10px] font-bold text-amber-850 uppercase tracking-widest block mb-1">Notas / Observaciones</span>
-                      <p className="text-[13px] text-zinc-700 italic leading-relaxed">"{selectedReserva.notes}"</p>
+                      <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest block mb-2">Notas / Observaciones</span>
+                      <textarea
+                        value={checkInNotes}
+                        onChange={e => setCheckInNotes(e.target.value)}
+                        rows={3}
+                        placeholder="Agrega observaciones del huésped, solicitudes especiales, etc."
+                        className="w-full bg-white/70 border border-amber-200 rounded-xl p-3 text-[13px] text-zinc-700 font-medium leading-relaxed resize-none focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 transition-all placeholder:text-zinc-400 placeholder:italic"
+                      />
                     </div>
                   )}
 
