@@ -141,10 +141,13 @@ function getSeason(dateStr: string): string {
   const d = new Date(dateStr + 'T12:00:00');
   const month = d.getMonth() + 1;
   const day = d.getDate();
-  if (month === 12 && day >= 20) return 'alta';
-  if (month === 1 && day <= 10) return 'alta';
-  if (month === 3 || month === 4) return 'media_alta';
-  if (month === 7 || month === 8) return 'media';
+  if ((month === 12 && day >= 20) || (month === 1 && day <= 6)) return 'alta';
+  if (month === 4 && day <= 14) return 'alta'; // Semana Santa / Pascua
+  if ((month === 7 && day >= 16) || month === 8) return 'media_alta';
+  if (month === 11 && day <= 5) return 'media_alta'; // Día de Muertos
+  if (month === 12 && day < 20) return 'media_alta'; // Pre-navidad
+  if (month === 2 || month === 3 || month === 10 || month === 11) return 'media';
+  if (month === 1 && day > 6) return 'media';
   return 'baja';
 }
 
@@ -1206,7 +1209,12 @@ export default function RecepcionPage() {
           priceUsed = PRICES[parentRoom.roomId]?.[fallbackSeason] || 2000;
         }
         
-        const nightBase = priceUsed + surchargePerNight;
+        let discountMult = 1.0;
+        if (computedNights >= 30) discountMult = 0.60;
+        else if (computedNights >= 15) discountMult = 0.75;
+        else if (computedNights >= 7) discountMult = 0.85;
+
+        const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
         const nightWithChannel = Math.round(nightBase * 1.0);
         const nightTax = Math.round(nightWithChannel * 0.19);
         suggestedTotalRoom += (nightWithChannel + nightTax);

@@ -6,6 +6,7 @@ import {
   Plus, Trash2, Edit2, Info, Check, AlertCircle, RefreshCw, Users, Shield, ArrowRight, X
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
+import { getLengthOfStayMultiplier } from '@/lib/beds24';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -51,7 +52,7 @@ function getSeason(dateStr: string): string {
   const day = d.getDate();
   if ((month === 12 && day >= 20) || (month === 1 && day <= 6)) return 'alta';
   if (month === 4 && day <= 14) return 'alta';
-  if (month === 7 || month === 8) return 'media_alta';
+  if ((month === 7 && day >= 16) || month === 8) return 'media_alta';
   if (month === 11 && day <= 5) return 'media_alta';
   if (month === 12 && day < 20) return 'media_alta';
   if (month === 2 || month === 3 || month === 10 || month === 11) return 'media';
@@ -146,6 +147,8 @@ export default function PreciosPage() {
       nights: 0,
       breakdown: [] as any[],
       totalBaseWithoutSurcharge: 0,
+      discountMult: 1.00,
+      discountedBaseSum: 0,
       totalSurcharges: 0,
       subtotalWithSurcharge: 0,
       totalWithChannel: 0,
@@ -167,6 +170,7 @@ export default function PreciosPage() {
     const capacityBase = selectedRoomMetadata.baseCapacity;
     const extraGuests = Math.max(0, simGuests - capacityBase);
     const surchargePerNight = extraGuests * 200; // $200 por persona adicional
+    const discountMult = getLengthOfStayMultiplier(nights);
 
     for (let i = 0; i < nights; i++) {
       const curr = new Date(dStart);
@@ -221,18 +225,22 @@ export default function PreciosPage() {
       totalBaseWithoutSurcharge += priceUsed;
       totalSurcharges += surchargePerNight;
 
+      const discountedBasePrice = Math.round(priceUsed * discountMult);
+
       breakdown.push({
         date: dateStr,
         basePrice: priceUsed,
+        discountedBasePrice,
         surcharge: surchargePerNight,
-        totalNight: priceUsed + surchargePerNight,
+        totalNight: discountedBasePrice + surchargePerNight,
         ruleName,
         ruleSource
       });
     }
 
     const channel = CHANNELS.find(c => c.id === simChannelId) || CHANNELS[0];
-    const subtotalWithSurcharge = totalBaseWithoutSurcharge + totalSurcharges;
+    const discountedBaseSum = Math.round(totalBaseWithoutSurcharge * discountMult);
+    const subtotalWithSurcharge = discountedBaseSum + totalSurcharges;
     const totalWithChannel = Math.round(subtotalWithSurcharge * channel.multiplier);
     const taxAmount = Math.round(totalWithChannel * TAX);
     const finalTotal = totalWithChannel + taxAmount;
@@ -241,6 +249,8 @@ export default function PreciosPage() {
       nights,
       breakdown,
       totalBaseWithoutSurcharge,
+      discountMult,
+      discountedBaseSum,
       totalSurcharges,
       subtotalWithSurcharge,
       totalWithChannel,
@@ -652,8 +662,10 @@ export default function PreciosPage() {
                               </div>
                               <div className="text-right">
                                 <span className="font-black text-white">{fmt(day.totalNight)}</span>
-                                {day.surcharge > 0 && (
-                                  <span className="block text-[8.5px] text-rose-350 font-bold">Base: {fmt(day.basePrice)} + Surch.</span>
+                                {(day.surcharge > 0 || quote.discountMult < 1.0) && (
+                                  <span className="block text-[8.5px] text-indigo-300 font-bold">
+                                    Base: {fmt(day.discountedBasePrice)} {day.surcharge > 0 ? `+ Surch. (${fmt(day.surcharge)})` : ''}
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -669,6 +681,13 @@ export default function PreciosPage() {
                         <span>Suma de Tarifas Base</span>
                         <span className="text-white font-bold">{fmt(quote.totalBaseWithoutSurcharge)}</span>
                       </div>
+
+                      {quote.discountMult < 1.0 && (
+                        <div className="flex justify-between text-emerald-400">
+                          <span>Descuento Larga Estancia ({Math.round((1 - quote.discountMult) * 100)}%)</span>
+                          <span className="font-bold">-{fmt(quote.totalBaseWithoutSurcharge - quote.discountedBaseSum)}</span>
+                        </div>
+                      )}
 
                       {quote.totalSurcharges > 0 && (
                         <div className="flex justify-between text-rose-300">
@@ -864,11 +883,19 @@ export default function PreciosPage() {
                   </table>
                 </div>
 
-                <div className="bg-zinc-50 border border-zinc-200/50 p-4 rounded-2xl flex items-start gap-2.5 text-[11.5px] leading-relaxed text-zinc-500 font-medium">
-                  <Info size={14} className="text-zinc-400 shrink-0 mt-0.5" />
-                  <div>
-                    Los precios en la tabla muestran la tarifa neta por noche según las reglas en base de datos.
-                    Se muestra en formato de letra chica el impuesto del <strong>19% (16% IVA + 3% ISH)</strong> que se añadirá en la cotización final de forma automática.
+                <div className="bg-zinc-50 border border-zinc-200/50 p-4 rounded-2xl flex flex-col gap-1 text-[11.5px] leading-relaxed text-zinc-500 font-medium">
+                  <div className="flex items-start gap-2.5">
+                    <Info size={14} className="text-zinc-400 shrink-0 mt-0.5" />
+                    <div>
+                      Los precios en la tabla muestran la tarifa neta por noche según las reglas en base de datos.
+                      Se muestra en formato de letra chica el impuesto del <strong>19% (16% IVA + 3% ISH)</strong> que se añadirá en la cotización final de forma automática.
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2.5 pt-1.5 border-t border-zinc-200/40 mt-1">
+                    <Zap size={14} className="text-indigo-400 shrink-0 mt-0.5" />
+                    <div>
+                      Se aplican automáticamente descuentos por estadías prolongadas: <strong>7-14 noches (15% desc.)</strong>, <strong>15-29 noches (25% desc.)</strong> y <strong>30+ noches (40% desc.)</strong>.
+                    </div>
                   </div>
                 </div>
 

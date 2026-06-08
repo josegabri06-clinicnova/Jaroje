@@ -24,7 +24,7 @@ function getSeason(dateStr: string): string {
   const day = d.getDate();
   if ((month === 12 && day >= 20) || (month === 1 && day <= 6)) return 'alta';
   if (month === 4 && day <= 14) return 'alta';
-  if (month === 7 || month === 8) return 'media_alta';
+  if ((month === 7 && day >= 16) || month === 8) return 'media_alta';
   if (month === 11 && day <= 5) return 'media_alta';
   if (month === 12 && day < 20) return 'media_alta';
   if (month === 2 || month === 3 || month === 10 || month === 11) return 'media';
@@ -150,17 +150,22 @@ export default function VercelActionForm() {
         const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
         calculatedDailyRate = priceWithChannel + tax;
       } else {
-        // Fallback al catálogo estático
+        // Fallback al catálogo estático aplicando el descuento por longitud de estancia
+        let discountMult = 1.0;
+        if (computedNights >= 30) discountMult = 0.60;
+        else if (computedNights >= 15) discountMult = 0.75;
+        else if (computedNights >= 7) discountMult = 0.85;
+
         if (group.length > 0) {
           const gr = group[0];
           const parentRoom = getParentMapping(gr.roomId, gr.unitId);
-          const basePrice = PRICES[parentRoom.roomId]?.[season] || 2000;
+          const basePrice = Math.round((PRICES[parentRoom.roomId]?.[season] || 2000) * discountMult);
           const priceWithChannel = Math.round(basePrice * multiplier);
           const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
           calculatedDailyRate = priceWithChannel + tax;
         } else if (form.roomId) {
           const parentRoom = getParentMapping(form.roomId, form.unitId);
-          const basePrice = PRICES[parentRoom.roomId]?.[season] || 2000;
+          const basePrice = Math.round((PRICES[parentRoom.roomId]?.[season] || 2000) * discountMult);
           const priceWithChannel = Math.round(basePrice * multiplier);
           const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
           calculatedDailyRate = priceWithChannel + tax;

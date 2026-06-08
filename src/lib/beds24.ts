@@ -239,7 +239,7 @@ export function getChildRoomId(parentId: string | null | undefined, unitId: stri
 // Detección de temporada (Huatulco/México)
 export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' | 'media_alta' | 'alta' {
   if (!dateStr) return 'media';
-  const d = new Date(dateStr);
+  const d = new Date(dateStr + 'T12:00:00');
   const month = d.getMonth() + 1; // 1-12
   const day = d.getDate();
 
@@ -247,8 +247,8 @@ export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' 
   if ((month === 12 && day >= 20) || (month === 1 && day <= 6)) return 'alta';
   if (month === 4 && day <= 14) return 'alta'; // Semana Santa / Pascua
 
-  // Temporada Media-Alta: Julio-Agosto (vacaciones verano), Puentes largos noviembre
-  if (month === 7 || month === 8) return 'media_alta';
+  // Temporada Media-Alta: Julio 16 - Agosto (vacaciones verano), Puentes largos noviembre
+  if ((month === 7 && day >= 16) || month === 8) return 'media_alta';
   if (month === 11 && day >= 1 && day <= 5) return 'media_alta'; // Día de Muertos
   if (month === 12 && day < 20) return 'media_alta'; // Pre-navidad
 
@@ -256,8 +256,16 @@ export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' 
   if (month === 2 || month === 3 || month === 10 || month === 11) return 'media';
   if (month === 1 && day > 6) return 'media'; // Post-Año Nuevo
 
-  // Temporada Baja: May, Jun, Sep
+  // Temporada Baja: May, Jun, Sep, y Julio 1-15
   return 'baja';
+}
+
+// Descuento por longitud de estancia (Length of Stay) en Beds24
+export function getLengthOfStayMultiplier(nights: number): number {
+  if (nights >= 30) return 0.60; // 40% descuento (+29 noches)
+  if (nights >= 15) return 0.75; // 25% descuento (15-29 noches)
+  if (nights >= 7) return 0.85;  // 15% descuento (7-14 noches)
+  return 1.00;                   // Sin descuento (1-6 noches)
 }
 
 // Modificador por canal
@@ -541,7 +549,9 @@ export function getAverageRatesForDates(
     current.setDate(current.getDate() + 1);
   }
 
-  return daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
+  const averageBase = daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
+  const discountMultiplier = getLengthOfStayMultiplier(daysCount);
+  return Math.round(averageBase * discountMultiplier);
 }
 
 // Obtener y mapear reservas activas (Backend Server-Side)
