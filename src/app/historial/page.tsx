@@ -221,6 +221,11 @@ const resolveDeepLink = (log: any) => {
     return null;
   }
 
+  // SI TIENE UN ID DE RESERVA, PRIORIZAR ABRIR LA RESERVA ESPECÍFICA
+  if (idMatch && idMatch[1]) {
+    return `/reservas?id=${idMatch[1]}`;
+  }
+
   // Detección robusta de incidencias de mantenimiento técnica o limpieza de mantenimiento
   if (
     moduleLower === 'mantenimiento' || 
@@ -235,9 +240,18 @@ const resolveDeepLink = (log: any) => {
     return '/mantenimiento';
   }
 
-  if (moduleLower === 'finanzas' || actionLower.includes('finan') || actionLower.includes('pago') || actionLower.includes('transac')) {
+  // Detección de Finanzas (se agrega 'payment' y 'abono')
+  if (
+    moduleLower === 'finanzas' || 
+    actionLower.includes('finan') || 
+    actionLower.includes('pago') || 
+    actionLower.includes('payment') || 
+    actionLower.includes('abono') || 
+    actionLower.includes('transac')
+  ) {
     return '/finanzas';
   }
+
   if (moduleLower === 'limpieza' || actionLower.includes('limpieza') || actionLower.includes('cambio_estado')) {
     return '/recepcion'; // Los logs de limpieza de habitaciones redirigen a Recepción como recomendado
   }
@@ -253,9 +267,6 @@ const resolveDeepLink = (log: any) => {
   
   // checkin/checkout/reserva general
   if (actionLower.includes('check') || actionLower.includes('reserv') || moduleLower === 'recepcion') {
-    if (idMatch && idMatch[1]) {
-      return `/reservas?id=${idMatch[1]}`;
-    }
     return '/reservas';
   }
   

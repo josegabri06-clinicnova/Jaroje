@@ -181,7 +181,9 @@ export default function VercelActionForm() {
           nextState.dailyRate = calculatedDailyRate.toString();
         }
         nextState.price = totalStay.toString();
-        if (!isDepositEdited) {
+        if (prev.channel === 'Recepción') {
+          nextState.deposit = totalStay.toString(); // Forzar el pago total para walk-ins
+        } else if (!isDepositEdited) {
           nextState.deposit = totalStay.toString();
         }
         return nextState;
@@ -390,7 +392,7 @@ export default function VercelActionForm() {
               details: JSON.stringify({
                 text: isBlock 
                   ? `Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}. Motivo: ${form.guestName || 'Mantenimiento'}`
-                  : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${pricePerRoom} (Anticipo: $${depositPerRoom}) vía ${form.channel}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`,
+                  : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${pricePerRoom} (Anticipo: $${depositPerRoom}) vía ${form.channel}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''} [ID: ${responseData.data?.data?.[0]?.id || ''}]`,
                 reserva: {
                   guestName: form.guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
                   roomId: room.roomId,
@@ -401,7 +403,8 @@ export default function VercelActionForm() {
                   price: pricePerRoom,
                   deposit: depositPerRoom,
                   channel: form.channel,
-                  isBlock
+                  isBlock,
+                  bookingId: responseData.data?.data?.[0]?.id || ''
                 }
               })
             })
@@ -410,12 +413,17 @@ export default function VercelActionForm() {
           console.error("Error registrando log de reserva/bloqueo:", logErr);
         }
 
-        // Registrar en Supabase finances y actualizar balance de cuenta si hay anticipo
+        // Registrar en Supabase finances y actualizar balance de cuenta si hay anticipo/pago
         if (!isBlock && depositPerRoom > 0) {
           try {
             const beds24BookingId = responseData.data?.data?.[0]?.id || '';
-            const baseDesc = `Anticipo de ${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name}`;
+            const baseDesc = form.channel === 'Recepción'
+              ? `Pago Walk-in de ${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name}`
+              : `Anticipo de ${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name}`;
+            
             const currentDayStr = getLocalDateStr(new Date());
+            // Si el check-in es retroactivo, registrar en esa fecha de check-in, si no, registrar hoy
+            const financeDate = form.checkIn && form.checkIn < currentDayStr ? form.checkIn : currentDayStr;
 
             const { error: financeErr } = await supabase.from('finances').insert({
               type: 'ingreso',
@@ -424,7 +432,7 @@ export default function VercelActionForm() {
               description: baseDesc,
               payment_method: formPaymentMethod,
               account_id: formAccountId,
-              date: currentDayStr
+              date: financeDate
             });
 
             if (financeErr) {
@@ -527,14 +535,10 @@ export default function VercelActionForm() {
               key={todayStr ? `checkin-${todayStr}` : 'checkin-loading'}
               type="date" 
               required
-              min={todayStr}
               className="w-full min-w-0 h-14 px-3.5 py-0 bg-[#fafafa] border border-zinc-200/80 rounded-xl text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none block appearance-none"
               value={form.checkIn}
               onChange={e => {
-                let newCheckIn = e.target.value;
-                if (newCheckIn && newCheckIn < todayStr) {
-                  newCheckIn = todayStr;
-                }
+                const newCheckIn = e.target.value;
                 const newCheckOut = addDaysToDateStr(newCheckIn, Number(nights) || 1);
                 setForm({...form, checkIn: newCheckIn, checkOut: newCheckOut, roomId: '', unitId: '', groupRooms: []});
               }}
@@ -795,8 +799,13 @@ export default function VercelActionForm() {
                         className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none appearance-none cursor-pointer"
                         value={form.channel}
                         onChange={e => {
-                          setForm({...form, channel: e.target.value});
-                          if (e.target.value === 'Recepción') {
+                          const channelVal = e.target.value;
+                          setForm(prev => ({
+                            ...prev,
+                            channel: channelVal,
+                            ...(channelVal === 'Recepción' ? { deposit: prev.price } : {})
+                          }));
+                          if (channelVal === 'Recepción') {
                             setIsPriceUnlocked(false);
                           }
                         }}
@@ -847,13 +856,20 @@ export default function VercelActionForm() {
 
                   {/* Anticipo */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Anticipo</label>
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">
+                      {form.channel === 'Recepción' ? 'Pago Total Recibido' : 'Anticipo'}
+                    </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
                       <input 
                         type="number" 
                         placeholder="0.00"
-                        className="w-full bg-white border border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                        readOnly={form.channel === 'Recepción'}
+                        className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                          form.channel === 'Recepción'
+                            ? 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
+                            : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm'
+                        }`}
                         value={form.deposit}
                         onChange={e => {
                           setIsDepositEdited(true);
@@ -882,7 +898,9 @@ export default function VercelActionForm() {
                 {Number(form.deposit || 0) > 0 && (
                   <div className="grid grid-cols-2 gap-3.5 p-4 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
                     <div className="space-y-1.5 col-span-2 md:col-span-1">
-                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5 block">Método de Pago del Anticipo</label>
+                      <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5 block">
+                        {form.channel === 'Recepción' ? 'Método de Pago (Total)' : 'Método de Pago del Anticipo'}
+                      </label>
                       <div className="flex gap-2 h-14 items-center">
                         {[
                           { id: 'efectivo', label: 'Efectivo', icon: Wallet },

@@ -1599,7 +1599,7 @@ export default function RecepcionPage() {
                 module: 'recepcion',
                 action: 'walk_in',
                 room: roomNameHuman,
-                details: `Registró Walk-In de ${selectedReserva.guest_name || 'Huésped'} (Grupo: ${roomNamesList})`
+                details: `Registró Walk-In de ${selectedReserva.guest_name || 'Huésped'} (Grupo: ${roomNamesList}) [ID: ${beds24AssignedId}]`
               })
             });
           }
@@ -1682,7 +1682,7 @@ export default function RecepcionPage() {
                 module: 'recepcion',
                 action: 'payment_received',
                 room: `Grupo: ${roomNamesList}`,
-                details: `Recibió pago total de $${totalPayment} vía ${paymentMode} para Grupo Habs ${roomNamesList} (Depositado en sobre: ${matchedAccName})`
+                details: `Recibió pago total de $${totalPayment} vía ${paymentMode} para Grupo Habs ${roomNamesList} (Depositado en sobre: ${matchedAccName}) [ID: ${bookedBeds24Ids.join(', ')}]`
               })
             });
           }
@@ -1758,7 +1758,7 @@ export default function RecepcionPage() {
             module: 'recepcion',
             action: 'check_in',
             room: selectedReserva.room,
-            details: `Registró Check-In de ${selectedReserva.guest_name || 'Huésped'}`
+            details: `Registró Check-In de ${selectedReserva.guest_name || 'Huésped'} [ID: ${selectedReserva.id}]`
           })
         });
       }
@@ -1830,7 +1830,7 @@ export default function RecepcionPage() {
               module: 'recepcion',
               action: 'payment_received',
               room: selectedReserva.room,
-              details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName})`
+              details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName}) [ID: ${selectedReserva.id}]`
             })
           });
         }
@@ -1920,7 +1920,7 @@ export default function RecepcionPage() {
           module: 'recepcion',
           action: 'check_out',
           room: r.room,
-          details: `Procesó Check-Out de ${r.guest_name || 'Huésped'}. Habitación ${roomNumber} marcada en limpieza.`
+          details: `Procesó Check-Out de ${r.guest_name || 'Huésped'} [ID: ${r.id}]. Habitación ${roomNumber} marcada en limpieza.`
         })
       });
     }

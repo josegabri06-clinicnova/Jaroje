@@ -897,7 +897,7 @@ export default function CalendarPage() {
           module: 'recepcion',
           action: 'check_in',
           room: selectedReserva.room,
-          details: `Registró Check-In de ${selectedReserva.guest_name || 'Huésped'}`
+          details: `Registró Check-In de ${selectedReserva.guest_name || 'Huésped'} [ID: ${selectedReserva.id}]`
         })
       });
     }
@@ -969,7 +969,7 @@ export default function CalendarPage() {
             module: 'recepcion',
             action: 'payment_received',
             room: selectedReserva.room,
-            details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName})`
+            details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName}) [ID: ${selectedReserva.id}]`
           })
         });
       }
