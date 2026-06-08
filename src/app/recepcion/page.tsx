@@ -340,6 +340,37 @@ function fmtCurrency(amount: number, guestName?: string) {
   return (isUSD ? 'USD$' : 'MX$') + Math.round(amount || 0).toLocaleString('es-MX');
 }
 
+/** Retorna el desglose neto + comisión OTA para una reserva Airbnb/Booking.
+ *  - netRevenue: monto que queda para el negocio (sin comisión)
+ *  - commission: monto que se debe registrar como gasto de comisión OTA
+ *  - channelLabel: nombre legible del canal (para buscar la cuenta de comisión)
+ */
+function computeOtaSplit(totalAmount: number, channel: string): {
+  isOTA: boolean;
+  netRevenue: number;
+  commission: number;
+  channelLabel: string;
+  multiplier: number;
+} {
+  const ch = (channel || '').toLowerCase();
+  if (ch.includes('airbnb')) {
+    const multiplier = 1.25;
+    const netRevenue = Math.round(totalAmount / multiplier);
+    return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Airbnb', multiplier };
+  }
+  if (ch.includes('booking')) {
+    const multiplier = 1.10;
+    const netRevenue = Math.round(totalAmount / multiplier);
+    return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Booking.com', multiplier };
+  }
+  if (ch.includes('expedia')) {
+    const multiplier = 1.20;
+    const netRevenue = Math.round(totalAmount / multiplier);
+    return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Expedia', multiplier };
+  }
+  return { isOTA: false, netRevenue: totalAmount, commission: 0, channelLabel: '', multiplier: 1.0 };
+}
+
 export default function RecepcionPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -1767,72 +1798,169 @@ export default function RecepcionPage() {
         const amountNum = Number(paymentAmount);
         const baseDesc = `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName}) [Reserva B24: ${selectedReserva.id}]`;
 
-        const { data: insertedRows } = await supabase.from('finances').insert({
-          type: 'ingreso',
-          amount: amountNum,
-          category: 'Reserva Directa',
-          description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
-          payment_method: paymentMode,
-          account_id: selectedAccountId || null,
-          date: todayStr
-        }).select();
+        // ── OTA Commission Split ──────────────────────────────────────────
+        const otaSplit = computeOtaSplit(amountNum, selectedReserva.channel || '');
 
-        const insertedRecordId = insertedRows?.[0]?.id;
+        if (otaSplit.isOTA) {
+          // 1. Ingreso neto para el negocio (sin comisión OTA)
+          const netDesc = `${baseDesc} | Ingreso Neto (sin comisión ${otaSplit.channelLabel})`;
+          const { data: netRows } = await supabase.from('finances').insert({
+            type: 'ingreso',
+            amount: otaSplit.netRevenue,
+            category: 'Reserva Directa',
+            description: paymentDescription ? `${paymentDescription} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
+            payment_method: 'transferencia',
+            account_id: selectedAccountId || null,
+            date: todayStr
+          }).select();
 
-        if (selectedAccountId) {
-          const matchedAcc = accounts.find(a => a.id === selectedAccountId);
-          if (matchedAcc) {
-            const newBalance = matchedAcc.balance + amountNum;
-            await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+          const netRecordId = netRows?.[0]?.id;
+
+          // Actualizar balance del sobre de transferencia
+          if (selectedAccountId) {
+            const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+            if (matchedAcc) {
+              const newBalance = matchedAcc.balance + otaSplit.netRevenue;
+              await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+            }
           }
-        }
 
-        let syncedSuccess = false;
-        try {
-          const b24PayRes = await fetch('/api/reservas/payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookId: selectedReserva.id,
-              amount: amountNum,
-              paymentMethod: paymentMode,
-              employeeNum: emp?.employee_num || null,
-              description: paymentDescription || null
-            })
-          });
-          const payData = await b24PayRes.json();
-          if (b24PayRes.ok && payData.success) {
-            syncedSuccess = true;
-          } else {
-            console.error("Fallo de sincronización Beds24 de pago:", payData.error || 'Error desconocido');
-            alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar el pago.\nDetalle: ${payData.error || 'Error desconocido'}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+          // 2. Egreso de comisión OTA
+          const commissionAccName = `COMISIÓN ${otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '')}`;
+          const commissionAcc = accounts.find(a =>
+            a.name.toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
+          );
+
+          if (otaSplit.commission > 0) {
+            await supabase.from('finances').insert({
+              type: 'egreso',
+              amount: otaSplit.commission,
+              category: 'Comisiones',
+              description: `Comisión ${otaSplit.channelLabel} - ${selectedReserva.guest_name || 'Huésped'} Hab ${selectedReserva.room} [B24: ${selectedReserva.id}]`,
+              payment_method: 'transferencia',
+              account_id: commissionAcc?.id || null,
+              date: todayStr
+            });
           }
-        } catch (payErr: any) {
-          console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
-          alert(`⚠️ Error de Red / Conexión Beds24:\nEl cobro local se registró correctamente en Supabase, pero falló el envío a Beds24 debido a problemas de red.\nDetalle: ${payErr.message || payErr}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
-        }
 
-        if (syncedSuccess && insertedRecordId) {
-          await supabase.from('finances').update({
-            description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
-          }).eq('id', insertedRecordId);
-        }
+          // Sincronizar con Beds24
+          let syncedSuccess = false;
+          try {
+            const b24PayRes = await fetch('/api/reservas/payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookId: selectedReserva.id,
+                amount: amountNum,
+                paymentMethod: paymentMode,
+                employeeNum: emp?.employee_num || null,
+                description: paymentDescription || null
+              })
+            });
+            const payData = await b24PayRes.json();
+            if (b24PayRes.ok && payData.success) {
+              syncedSuccess = true;
+            } else {
+              console.error("Fallo de sincronización Beds24 de pago:", payData.error || 'Error desconocido');
+              alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar el pago.\nDetalle: ${payData.error || 'Error desconocido'}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+            }
+          } catch (payErr: any) {
+            console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
+            alert(`⚠️ Error de Red / Conexión Beds24:\nEl cobro local se registró correctamente en Supabase, pero falló el envío a Beds24 debido a problemas de red.\nDetalle: ${payErr.message || payErr}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+          }
 
-        if (emp) {
-          const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
-          await fetch('/api/employee-logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              employee_num: emp.employee_num,
-              employee_name: emp.full_name,
-              department: emp.department,
-              module: 'recepcion',
-              action: 'payment_received',
-              room: selectedReserva.room,
-              details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName}) [ID: ${selectedReserva.id}]`
-            })
-          });
+          if (syncedSuccess && netRecordId) {
+            await supabase.from('finances').update({
+              description: paymentDescription ? `${paymentDescription} - ${netDesc} [Synced: B24]` : `${netDesc} [Synced: B24]`
+            }).eq('id', netRecordId);
+          }
+
+          if (emp) {
+            const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: emp.employee_num,
+                employee_name: emp.full_name,
+                department: emp.department,
+                module: 'recepcion',
+                action: 'payment_received',
+                room: selectedReserva.room,
+                details: `Recibió pago OTA (${otaSplit.channelLabel}) de $${amountNum} para Hab ${selectedReserva.room}. Neto negocio: $${otaSplit.netRevenue}, Comisión ${otaSplit.channelLabel}: $${otaSplit.commission}. Cuenta: ${matchedAccName} [ID: ${selectedReserva.id}]`
+              })
+            });
+          }
+
+        } else {
+          // ── Reserva DIRECTA (sin OTA) ─────────────────────────────────────
+          const { data: insertedRows } = await supabase.from('finances').insert({
+            type: 'ingreso',
+            amount: amountNum,
+            category: 'Reserva Directa',
+            description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+            payment_method: paymentMode,
+            account_id: selectedAccountId || null,
+            date: todayStr
+          }).select();
+
+          const insertedRecordId = insertedRows?.[0]?.id;
+
+          if (selectedAccountId) {
+            const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+            if (matchedAcc) {
+              const newBalance = matchedAcc.balance + amountNum;
+              await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+            }
+          }
+
+          let syncedSuccess = false;
+          try {
+            const b24PayRes = await fetch('/api/reservas/payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bookId: selectedReserva.id,
+                amount: amountNum,
+                paymentMethod: paymentMode,
+                employeeNum: emp?.employee_num || null,
+                description: paymentDescription || null
+              })
+            });
+            const payData = await b24PayRes.json();
+            if (b24PayRes.ok && payData.success) {
+              syncedSuccess = true;
+            } else {
+              console.error("Fallo de sincronización Beds24 de pago:", payData.error || 'Error desconocido');
+              alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar el pago.\nDetalle: ${payData.error || 'Error desconocido'}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+            }
+          } catch (payErr: any) {
+            console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
+            alert(`⚠️ Error de Red / Conexión Beds24:\nEl cobro local se registró correctamente en Supabase, pero falló el envío a Beds24 debido a problemas de red.\nDetalle: ${payErr.message || payErr}.\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+          }
+
+          if (syncedSuccess && insertedRecordId) {
+            await supabase.from('finances').update({
+              description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+            }).eq('id', insertedRecordId);
+          }
+
+          if (emp) {
+            const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: emp.employee_num,
+                employee_name: emp.full_name,
+                department: emp.department,
+                module: 'recepcion',
+                action: 'payment_received',
+                room: selectedReserva.room,
+                details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName}) [ID: ${selectedReserva.id}]`
+              })
+            });
+          }
         }
       }
     }
