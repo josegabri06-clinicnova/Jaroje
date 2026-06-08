@@ -740,8 +740,8 @@ export default function AdminDashboard() {
           <Link href="/precios" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
             <TrendingUp size={20} className="text-zinc-700" />
             <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">PRECIO DINÁMICO</p>
-              <p className="text-[11px] font-bold text-emerald-500 mt-0.5">Algoritmo Activo</p>
+              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">Manipulador de precios</p>
+              <p className="text-[11px] font-bold text-emerald-500 mt-0.5">Sincronizador Beds24</p>
             </div>
           </Link>
           {/* DEPURACIÓN DE DATOS */}

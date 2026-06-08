@@ -73,6 +73,7 @@ export default function PreciosPage() {
   const [rules, setRules] = useState<any[]>([]);
   const [loadingRules, setLoadingRules] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Form State
   const [showFormModal, setShowFormModal] = useState(false);
@@ -104,6 +105,23 @@ export default function PreciosPage() {
       console.error("Error cargando reglas de precio:", err);
     } finally {
       setLoadingRules(false);
+    }
+  };
+
+  const handleSyncToBeds24 = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/precios/sync', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        alert('Tarifas sincronizadas exitosamente en Beds24.');
+      } else {
+        throw new Error(json.error || 'Fallo al sincronizar tarifas');
+      }
+    } catch (err: any) {
+      alert(`Error al sincronizar tarifas con Beds24: ${err.message}`);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -297,6 +315,14 @@ export default function PreciosPage() {
       setShowFormModal(false);
       resetForm();
       fetchRules();
+
+      // Sincronización silenciosa en segundo plano con Beds24
+      fetch('/api/precios/sync', { method: 'POST' })
+        .then(res => res.json())
+        .then(json => {
+          if (!json.success) console.error("Error en sincronización automática de Beds24:", json.error);
+        })
+        .catch(err => console.error("Fallo de red en sincronización automática de Beds24:", err));
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -339,6 +365,14 @@ export default function PreciosPage() {
 
       alert("Regla eliminada.");
       fetchRules();
+
+      // Sincronización silenciosa en segundo plano con Beds24
+      fetch('/api/precios/sync', { method: 'POST' })
+        .then(res => res.json())
+        .then(json => {
+          if (!json.success) console.error("Error en sincronización automática de Beds24:", json.error);
+        })
+        .catch(err => console.error("Fallo de red en sincronización automática de Beds24:", err));
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -405,13 +439,21 @@ export default function PreciosPage() {
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-indigo-950 to-indigo-900 px-6 py-8 rounded-b-[24px] shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">
         <div>
-          <span className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-widest block mb-1">Cálculo en Cascada & Inteligente</span>
-          <h2 className="text-[24px] font-black tracking-tight leading-none">Precios Dinámicos</h2>
+          <span className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-widest block mb-1">Cálculo en Cascada & Sincronización Beds24</span>
+          <h2 className="text-[24px] font-black tracking-tight leading-none">Manipulador de precios</h2>
           <p className="text-[13px] text-indigo-200 mt-1.5 font-medium">
-            Tarifas base, temporales y reglas especiales configuradas en tiempo real.
+            Tarifas base, temporales y reglas especiales sincronizadas automáticamente con Beds24.
           </p>
         </div>
-        <div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleSyncToBeds24}
+            disabled={syncing}
+            className="px-4.5 py-3 bg-indigo-650/40 hover:bg-indigo-600/55 text-white border border-indigo-500/50 font-black text-[12px] rounded-2xl flex items-center gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw size={15} className={`stroke-[3px] ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'SINCRONIZANDO...' : 'SINCRONIZAR A BEDS24'}
+          </button>
           <button
             onClick={() => { resetForm(); setShowFormModal(true); }}
             className="px-4.5 py-3 bg-white hover:bg-zinc-50 text-indigo-950 font-black text-[12px] rounded-2xl flex items-center gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"

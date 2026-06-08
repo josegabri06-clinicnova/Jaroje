@@ -641,3 +641,26 @@ export async function getBeds24Bookings(): Promise<any[]> {
       };
     });
 }
+
+// Enviar tarifas actualizadas directamente al calendario de Beds24
+export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
+  const token = await getBeds24Token();
+  
+  const res = await fetch('https://api.beds24.com/v2/inventory/calendar', {
+    method: 'POST',
+    headers: {
+      'token': token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(ratesPayload),
+    cache: 'no-store'
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Beds24 rechazó la actualización de tarifas: ${errText}`);
+  }
+
+  const json = await res.json();
+  return json;
+}
