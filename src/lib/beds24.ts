@@ -361,6 +361,8 @@ export function getRoomMetadata(roomId: string | null | undefined, roomName: str
 export async function getBeds24Token(): Promise<string> {
   let tempToken: string | null = null;
   let refreshToken: string | null = null;
+  const envRefreshToken = process.env.BEDS24_REFRESH_TOKEN || null;
+  const envTempToken = process.env.BEDS24_TEMP_TOKEN || null;
 
   // 1. Intentar leer los tokens desde la base de datos en Supabase
   try {
@@ -378,10 +380,16 @@ export async function getBeds24Token(): Promise<string> {
     console.error("Error al leer tokens de Supabase:", err);
   }
 
-  // Fallback a variables de entorno locales si no hay nada en la base de datos
-  if (!refreshToken) {
-    tempToken = process.env.BEDS24_TEMP_TOKEN || null;
-    refreshToken = process.env.BEDS24_REFRESH_TOKEN || null;
+  // Si hay un refresh token en las variables de entorno y es diferente al de la base de datos,
+  // priorizamos el del entorno (por ejemplo, si el administrador lo actualizó en Vercel o en el .env)
+  if (envRefreshToken && envRefreshToken !== refreshToken) {
+    console.log("[Beds24 Auth] Se detectó un nuevo BEDS24_REFRESH_TOKEN en las variables de entorno. Sobrescribiendo token de base de datos...");
+    refreshToken = envRefreshToken;
+    tempToken = envTempToken;
+  } else if (!refreshToken) {
+    // Fallback si la base de datos está vacía o falló la consulta
+    tempToken = envTempToken;
+    refreshToken = envRefreshToken;
   }
 
   // 2. Si hay un tempToken, validar si sigue activo con un probe rápido de red

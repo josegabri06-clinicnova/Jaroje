@@ -1,41 +1,5 @@
 import { NextResponse } from 'next/server';
-
-// ─── AUTO-REFRESH DE TOKEN BEDS24 ─────────────────────────────────────────
-async function getBeds24Token(): Promise<string> {
-  const tempToken = process.env.BEDS24_TEMP_TOKEN;
-  const refreshToken = process.env.BEDS24_REFRESH_TOKEN;
-
-  if (!refreshToken) throw new Error('Falta BEDS24_REFRESH_TOKEN en .env');
-
-  // Primero intenta el token temporal actual
-  if (tempToken) {
-    const probe = await fetch('https://api.beds24.com/v2/bookings?limit=1', {
-      headers: { 'token': tempToken },
-      cache: 'no-store'
-    });
-    if (probe.ok || probe.status === 404) return tempToken; // funciona
-  }
-
-  // Si está caducado o no existe, usa el refresh token para obtener uno nuevo
-  const refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
-    method: 'GET',
-    headers: { 'refreshToken': refreshToken },
-    cache: 'no-store'
-  });
-  const refreshData = await refreshRes.json();
-
-  if (!refreshData.token) {
-    throw new Error('TOKEN_EXPIRED');
-  }
-
-  // Actualizar en memoria para esta instancia del servidor
-  process.env.BEDS24_TEMP_TOKEN = refreshData.token;
-  if (refreshData.refreshToken) {
-    process.env.BEDS24_REFRESH_TOKEN = refreshData.refreshToken;
-  }
-
-  return refreshData.token;
-}
+import { getBeds24Token } from '@/lib/beds24';
 
 // POST: Registrar un cobro/pago en Beds24 asociado a una reserva
 export async function POST(req: Request) {
