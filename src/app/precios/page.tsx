@@ -68,7 +68,7 @@ const todayStr = new Date().toISOString().split('T')[0];
 const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })();
 
 export default function PreciosPage() {
-  const [activeTab, setActiveTab] = useState<'simulador' | 'reglas' | 'tabla' | 'temporadas'>('simulador');
+  const [activeTab, setActiveTab] = useState<'simulador' | 'configuracion' | 'reglas' | 'tabla' | 'temporadas'>('simulador');
   
   // API State
   const [rules, setRules] = useState<any[]>([]);
@@ -92,6 +92,69 @@ export default function PreciosPage() {
   const [simCheckOut, setSimCheckOut] = useState(tomorrowStr);
   const [simGuests, setSimGuests] = useState(2);
   const [simChannelId, setSimChannelId] = useState('directo');
+
+  // Dynamic Settings (Discounts & Multipliers) State
+  const [pricingSettings, setPricingSettings] = useState<Record<string, any>>({});
+  const [loadingSettings, setLoadingSettings] = useState(true);
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Unit Config Tab States
+  const [configRoomId, setConfigRoomId] = useState('679091');
+  
+  const [configBasePrice, setConfigBasePrice] = useState('');
+  const [configSeasonName, setConfigSeasonName] = useState('');
+  const [configSeasonPrice, setConfigSeasonPrice] = useState('');
+  const [configSeasonStart, setConfigSeasonStart] = useState('');
+  const [configSeasonEnd, setConfigSeasonEnd] = useState('');
+
+  const [discNights7, setDiscNights7] = useState('15');
+  const [discNights15, setDiscNights15] = useState('25');
+  const [discNights30, setDiscNights30] = useState('40');
+
+  const [multAirbnb, setMultAirbnb] = useState('1.25');
+  const [multBooking, setMultBooking] = useState('1.10');
+  const [multDirecto, setMultDirecto] = useState('1.00');
+
+  // Fetch Pricing Settings (JSON) from DB
+  const fetchPricingSettings = async () => {
+    setLoadingSettings(true);
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'pricing_unit_settings')
+        .maybeSingle();
+
+      if (error) {
+        console.error("Error al cargar pricing_unit_settings:", error.message);
+      } else if (data && data.value) {
+        const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        setPricingSettings(parsed || {});
+      }
+    } catch (err) {
+      console.error("Excepción al cargar pricing_unit_settings:", err);
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  // Save Pricing Settings helper
+  const savePricingSettings = async (newSettings: Record<string, any>) => {
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert(
+          { key: 'pricing_unit_settings', value: JSON.stringify(newSettings) },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+      setPricingSettings(newSettings);
+      return true;
+    } catch (err: any) {
+      alert(`Error al guardar configuración: ${err.message}`);
+      return false;
+    }
+  };
 
   // Fetch Rules from DB
   const fetchRules = async () => {
@@ -128,7 +191,198 @@ export default function PreciosPage() {
 
   useEffect(() => {
     fetchRules();
+    fetchPricingSettings();
   }, []);
+
+  // Update inputs whenever selected unit config changes or dynamic pricing settings change
+  useEffect(() => {
+    const unitConf = pricingSettings[configRoomId] || {};
+    setDiscNights7(unitConf.discounts?.nights7 !== undefined ? String(unitConf.discounts.nights7) : '15');
+    setDiscNights15(unitConf.discounts?.nights15 !== undefined ? String(unitConf.discounts.nights15) : '25');
+    setDiscNights30(unitConf.discounts?.nights30 !== undefined ? String(unitConf.discounts.nights30) : '40');
+
+    setMultAirbnb(unitConf.multipliers?.airbnb !== undefined ? String(unitConf.multipliers.airbnb) : '1.25');
+    setMultBooking(unitConf.multipliers?.booking !== undefined ? String(unitConf.multipliers.booking) : '1.10');
+    setMultDirecto(unitConf.multipliers?.directo !== undefined ? String(unitConf.multipliers.directo) : '1.00');
+
+    const baseRule = rules.find(r => r.room_type_id === configRoomId && r.rule_type === 'base');
+    setConfigBasePrice(baseRule ? String(baseRule.price) : String(FALLBACK_PRICES[configRoomId]?.baja || 2000));
+  }, [configRoomId, pricingSettings, rules]);
+
+  // Save base price to pricing_rules
+  const handleSaveBasePrice = async () => {
+    if (!configBasePrice || isNaN(Number(configBasePrice))) {
+      alert("Por favor ingresa un precio base válido.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const existingBaseRule = rules.find(r => r.room_type_id === configRoomId && r.rule_type === 'base');
+      const payload: any = {
+        room_type_id: configRoomId,
+        rule_type: 'base',
+        name: 'Tarifa Base',
+        price: Number(configBasePrice)
+      };
+      if (existingBaseRule) {
+        payload.id = existingBaseRule.id;
+      }
+      
+      const res = await fetch('/api/precios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Fallo al guardar la tarifa base");
+      
+      // Log audit
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: '999',
+            employee_name: 'Administrador',
+            department: 'admin',
+            module: 'precios',
+            action: 'precio_base_actualizado',
+            details: JSON.stringify({
+              text: `Actualizó tarifa base para ${ROOMS.find(r => r.id === configRoomId)?.name || configRoomId} a MX$${configBasePrice}`
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error log audit:", logErr);
+      }
+
+      alert("Tarifa base guardada con éxito.");
+      fetchRules();
+      
+      // Sincronización automática de Beds24
+      fetch('/api/precios/sync', { method: 'POST' });
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Add seasonal rate to pricing_rules
+  const handleSaveSeasonPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!configSeasonName || !configSeasonPrice || !configSeasonStart || !configSeasonEnd) {
+      alert("Por favor completa todos los campos de la tarifa de temporada.");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const payload = {
+        room_type_id: configRoomId,
+        rule_type: 'seasonal',
+        name: configSeasonName,
+        price: Number(configSeasonPrice),
+        start_date: configSeasonStart,
+        end_date: configSeasonEnd
+      };
+      
+      const res = await fetch('/api/precios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Fallo al guardar tarifa de temporada");
+
+      // Log audit
+      try {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: '999',
+            employee_name: 'Administrador',
+            department: 'admin',
+            module: 'precios',
+            action: 'precio_temporada_creado',
+            details: JSON.stringify({
+              text: `Creó tarifa de temporada "${configSeasonName}" (MX$${configSeasonPrice}) de ${configSeasonStart} a ${configSeasonEnd} para ${ROOMS.find(r => r.id === configRoomId)?.name || configRoomId}`
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error log audit:", logErr);
+      }
+
+      alert("Tarifa de temporada agregada con éxito.");
+      setConfigSeasonName('');
+      setConfigSeasonPrice('');
+      setConfigSeasonStart('');
+      setConfigSeasonEnd('');
+      
+      fetchRules();
+      fetch('/api/precios/sync', { method: 'POST' });
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Save Custom discounts & multipliers to settings table
+  const handleSaveDiscountsAndMultipliers = async () => {
+    if (isNaN(Number(discNights7)) || isNaN(Number(discNights15)) || isNaN(Number(discNights30)) ||
+        isNaN(Number(multAirbnb)) || isNaN(Number(multBooking)) || isNaN(Number(multDirecto))) {
+      alert("Por favor ingresa valores numéricos válidos para los descuentos y multiplicadores.");
+      return;
+    }
+    setSavingSettings(true);
+    try {
+      const updatedSettings = {
+        ...pricingSettings,
+        [configRoomId]: {
+          discounts: {
+            nights7: Number(discNights7),
+            nights15: Number(discNights15),
+            nights30: Number(discNights30)
+          },
+          multipliers: {
+            airbnb: Number(multAirbnb),
+            booking: Number(multBooking),
+            directo: Number(multDirecto)
+          }
+        }
+      };
+
+      const success = await savePricingSettings(updatedSettings);
+      if (success) {
+        // Log audit
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: '999',
+              employee_name: 'Administrador',
+              department: 'admin',
+              module: 'precios',
+              action: 'ajustes_unidad_actualizados',
+              details: JSON.stringify({
+                text: `Actualizó multiplicadores/descuentos para ${ROOMS.find(r => r.id === configRoomId)?.name || configRoomId}`
+              })
+            })
+          });
+        } catch (logErr) {
+          console.error("Error log audit:", logErr);
+        }
+        alert("Descuentos y multiplicadores guardados correctamente.");
+      }
+    } catch (err: any) {
+      alert(`Error al guardar: ${err.message}`);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   // Sync simulator guests physical limit
   const selectedRoomMetadata = useMemo(() => {
@@ -170,7 +424,9 @@ export default function PreciosPage() {
     const capacityBase = selectedRoomMetadata.baseCapacity;
     const extraGuests = Math.max(0, simGuests - capacityBase);
     const surchargePerNight = extraGuests * 200; // $200 por persona adicional
-    const discountMult = getLengthOfStayMultiplier(nights);
+
+    const customDiscounts = pricingSettings?.[simRoomId]?.discounts;
+    const discountMult = getLengthOfStayMultiplier(nights, customDiscounts);
 
     for (let i = 0; i < nights; i++) {
       const curr = new Date(dStart);
@@ -238,10 +494,14 @@ export default function PreciosPage() {
       });
     }
 
-    const channel = CHANNELS.find(c => c.id === simChannelId) || CHANNELS[0];
+    const customMultipliers = pricingSettings?.[simRoomId]?.multipliers;
+    const customMultVal = customMultipliers?.[simChannelId] !== undefined
+      ? Number(customMultipliers[simChannelId])
+      : (simChannelId === 'airbnb' ? 1.25 : simChannelId === 'booking' ? 1.10 : 1.00);
+
     const discountedBaseSum = Math.round(totalBaseWithoutSurcharge * discountMult);
     const subtotalWithSurcharge = discountedBaseSum + totalSurcharges;
-    const totalWithChannel = Math.round(subtotalWithSurcharge * channel.multiplier);
+    const totalWithChannel = Math.round(subtotalWithSurcharge * customMultVal);
     const taxAmount = Math.round(totalWithChannel * TAX);
     const finalTotal = totalWithChannel + taxAmount;
 
@@ -257,9 +517,9 @@ export default function PreciosPage() {
       taxAmount,
       finalTotal,
       extraGuests,
-      channelMultiplier: channel.multiplier
+      channelMultiplier: customMultVal
     };
-  }, [simRoomId, simCheckIn, simCheckOut, simGuests, simChannelId, rules, selectedRoomMetadata]);
+  }, [simRoomId, simCheckIn, simCheckOut, simGuests, simChannelId, rules, selectedRoomMetadata, pricingSettings]);
 
   // Save Rule
   const handleSaveRule = async (e: React.FormEvent) => {
@@ -478,6 +738,7 @@ export default function PreciosPage() {
       <div className="px-6 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
         {[
           { id: 'simulador', label: 'Simulador de Cotizaciones', icon: <Calculator size={14} /> },
+          { id: 'configuracion', label: 'Configuración por Unidad', icon: <Shield size={14} /> },
           { id: 'reglas', label: 'Reglas Activas (DB)', icon: <TrendingUp size={14} /> },
           { id: 'tabla', label: 'Tabla de Tarifas', icon: <Tag size={14} /> },
           { id: 'temporadas', label: 'Calendario Temporadas', icon: <Calendar size={14} /> }
@@ -506,8 +767,288 @@ export default function PreciosPage() {
           </div>
         )}
 
-        {!loadingRules && (
+        {(!loadingRules && !loadingSettings) ? (
           <>
+            {/* ── CONFIGURACION TAB ── */}
+            {activeTab === 'configuracion' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-200">
+                
+                {/* Selector de Unidad */}
+                <div className="lg:col-span-4 bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-3.5">
+                  <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest">Tipo de Unidad</h3>
+                  <div className="space-y-2">
+                    {ROOMS.map(r => (
+                      <button
+                        key={r.id}
+                        onClick={() => setConfigRoomId(r.id)}
+                        className={`w-full text-left p-3.5 rounded-2xl border flex items-center justify-between transition-all cursor-pointer ${
+                          configRoomId === r.id
+                            ? 'bg-indigo-50/50 border-indigo-200 text-indigo-950 shadow-sm'
+                            : 'bg-zinc-50/20 border-zinc-200 hover:border-zinc-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{r.icon}</span>
+                          <div>
+                            <p className={`text-[13px] font-bold ${configRoomId === r.id ? 'text-indigo-950' : 'text-zinc-900'}`}>{r.name}</p>
+                            <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">Capacidad Base: {r.baseCapacity} pax</p>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Formulario de Configuración */}
+                <div className="lg:col-span-8 space-y-6">
+                  
+                  {/* Fila superior: Tarifa Base y de Temporada */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* Tarifa Base */}
+                    <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
+                      <div className="space-y-3">
+                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                          <Tag size={12} className="text-indigo-500" />
+                          Tarifa Base Anual
+                        </h3>
+                        <p className="text-[11.5px] text-zinc-400 leading-relaxed font-semibold">
+                          Se aplica a todo el año, excepto cuando hay tarifas de temporada o especiales activas.
+                        </p>
+                        <div className="relative pt-2">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400">$</span>
+                          <input
+                            type="number"
+                            value={configBasePrice}
+                            onChange={e => setConfigBasePrice(e.target.value)}
+                            className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl py-3 pl-8 pr-4 outline-none text-[13.5px] font-extrabold text-zinc-900 focus:bg-white focus:border-zinc-400"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleSaveBasePrice}
+                        disabled={actionLoading}
+                        className="w-full bg-zinc-900 hover:bg-black text-white font-extrabold py-3.5 text-[11px] uppercase tracking-wider rounded-xl shadow-md mt-6 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Check size={13} strokeWidth={3} />
+                        Guardar Tarifa Base
+                      </button>
+                    </div>
+
+                    {/* Agregar Tarifa Temporada */}
+                    <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm">
+                      <form onSubmit={handleSaveSeasonPrice} className="space-y-3">
+                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                          <Calendar size={12} className="text-amber-500" />
+                          Tarifa de Temporada
+                        </h3>
+                        
+                        <div>
+                          <input
+                            type="text"
+                            required
+                            value={configSeasonName}
+                            onChange={e => setConfigSeasonName(e.target.value)}
+                            placeholder="Nombre (ej: Temporada Alta de Invierno)"
+                            className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-semibold text-zinc-900 focus:bg-white focus:border-zinc-400"
+                          />
+                        </div>
+                        
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-[11px]">$</span>
+                          <input
+                            type="number"
+                            required
+                            value={configSeasonPrice}
+                            onChange={e => setConfigSeasonPrice(e.target.value)}
+                            placeholder="Precio por noche (sin impuestos)"
+                            className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl py-2.5 pl-6 pr-3 outline-none text-[12.5px] font-extrabold text-zinc-900 focus:bg-white focus:border-zinc-400"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[9px] font-bold text-zinc-450 uppercase mb-0.5">Fecha Inicio</label>
+                            <input
+                              type="date"
+                              required
+                              value={configSeasonStart}
+                              onChange={e => setConfigSeasonStart(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2 text-[11px] font-semibold text-zinc-800 cursor-pointer"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-zinc-450 uppercase mb-0.5">Fecha Fin</label>
+                            <input
+                              type="date"
+                              required
+                              value={configSeasonEnd}
+                              onChange={e => setConfigSeasonEnd(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2 text-[11px] font-semibold text-zinc-800 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={actionLoading}
+                          className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-3 text-[11px] uppercase tracking-wider rounded-xl shadow-md mt-4 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <Plus size={13} strokeWidth={3} />
+                          Añadir Temporada
+                        </button>
+                      </form>
+                    </div>
+
+                  </div>
+
+                  {/* Fila intermedia: Descuentos y Multiplicadores */}
+                  <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm space-y-6">
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      
+                      {/* Descuentos por Estancia */}
+                      <div className="space-y-4">
+                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                          <TrendingUp size={12} className="text-emerald-500" />
+                          Descuentos de Estadía Prolongada (%)
+                        </h3>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">7 a 14 noches (%)</label>
+                            <input
+                              type="number"
+                              value={discNights7}
+                              onChange={e => setDiscNights7(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">15 a 29 noches (%)</label>
+                            <input
+                              type="number"
+                              value={discNights15}
+                              onChange={e => setDiscNights15(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">30+ noches (%)</label>
+                            <input
+                              type="number"
+                              value={discNights30}
+                              onChange={e => setDiscNights30(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Multiplicadores por Canal */}
+                      <div className="space-y-4">
+                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
+                          <Zap size={12} className="text-indigo-500" />
+                          Multiplicador de Canal (OTAs)
+                        </h3>
+                        
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">Airbnb (ej: 1.25)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={multAirbnb}
+                              onChange={e => setMultAirbnb(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">Booking.com (ej: 1.10)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={multBooking}
+                              onChange={e => setMultBooking(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">Directo / WhatsApp (ej: 1.00)</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={multDirecto}
+                              onChange={e => setMultDirecto(e.target.value)}
+                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    <div className="pt-4 border-t border-zinc-100 flex justify-end">
+                      <button
+                        onClick={handleSaveDiscountsAndMultipliers}
+                        disabled={savingSettings}
+                        className="px-6 py-3.5 bg-zinc-900 hover:bg-black text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {savingSettings ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} strokeWidth={3} />}
+                        Guardar Ajustes
+                      </button>
+                    </div>
+
+                  </div>
+
+                  {/* Listado de tarifas de temporada existentes */}
+                  <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-4">
+                    <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest">
+                      Temporadas y Fechas Especiales Activas
+                    </h3>
+                    
+                    {rules.filter(rule => rule.room_type_id === configRoomId && rule.rule_type !== 'base').length === 0 ? (
+                      <p className="text-[12px] text-zinc-400 font-semibold italic text-center py-4 bg-zinc-50/50 rounded-2xl border border-dashed border-zinc-200">
+                        No hay tarifas de temporada configuradas para esta unidad.
+                      </p>
+                    ) : (
+                      <div className="divide-y divide-zinc-100">
+                        {rules.filter(rule => rule.room_type_id === configRoomId && rule.rule_type !== 'base').map(rule => (
+                          <div key={rule.id} className="py-3 flex justify-between items-center text-[12.5px] hover:bg-zinc-50/30 px-1 rounded-lg">
+                            <div>
+                              <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded border mr-2 ${
+                                rule.rule_type === 'seasonal' ? 'bg-amber-50 border-amber-150 text-amber-700' : 'bg-rose-50 border-rose-150 text-rose-700'
+                              }`}>
+                                {rule.rule_type === 'seasonal' ? 'Temporada' : 'Especial'}
+                              </span>
+                              <strong className="text-zinc-800">{rule.name}</strong>
+                              <span className="block text-[10.5px] text-zinc-400 font-semibold mt-0.5">
+                                📅 {rule.start_date.split('-').reverse().join('/')} al {rule.end_date.split('-').reverse().join('/')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="font-extrabold text-zinc-950">{fmt(rule.price)}</span>
+                              <button
+                                onClick={() => handleDeleteRule(rule.id, rule.name)}
+                                disabled={actionLoading}
+                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-colors cursor-pointer disabled:opacity-50"
+                                title="Eliminar regla"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+              </div>
+            )}
+
             {/* ── SIMULADOR TAB ── */}
             {activeTab === 'simulador' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -854,7 +1395,10 @@ export default function PreciosPage() {
                     <tbody className="divide-y divide-zinc-50 font-medium">
                       {ROOMS.map(r => {
                         const pricesObj = dynamicBasePriceGrid[r.id] || FALLBACK_PRICES[r.id];
-                        const mult = CHANNELS.find(c => c.id === simChannelId)?.multiplier || 1.0;
+                        const customMultipliers = pricingSettings?.[r.id]?.multipliers;
+                        const mult = customMultipliers?.[simChannelId] !== undefined
+                          ? Number(customMultipliers[simChannelId])
+                          : (simChannelId === 'airbnb' ? 1.25 : simChannelId === 'booking' ? 1.10 : 1.00);
 
                         return (
                           <tr key={r.id} className="hover:bg-zinc-50/50">
@@ -934,6 +1478,11 @@ export default function PreciosPage() {
               </div>
             )}
           </>
+        ) : (
+          <div className="bg-white border border-zinc-200 rounded-3xl p-10 flex flex-col items-center justify-center gap-3 shadow-sm">
+            <RefreshCw size={24} className="text-indigo-650 animate-spin" />
+            <span className="text-[13px] font-semibold text-zinc-500">Cargando configuraciones de tarifas...</span>
+          </div>
         )}
       </div>
 

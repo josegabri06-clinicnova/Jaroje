@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { fetchAllRawBeds24Bookings, getUnitName, getRealPrice, getRoomMetadata } from '@/lib/beds24';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ async function fetchBeds24Bookings() {
   return fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
 }
 
-function mapBooking(b: any) {
+function mapBooking(b: any, dynamicSettings?: any) {
   const arrival   = b.arrival   ? new Date(b.arrival)   : null;
   const departure = b.departure ? new Date(b.departure) : null;
   const nights = (arrival && departure)
@@ -45,7 +46,7 @@ function mapBooking(b: any) {
   const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
   let pricePerNight = b.price ? (Number(b.price) / nights) : null;
   if (!isOTA && (!pricePerNight || pricePerNight <= 0)) {
-    pricePerNight = getRealPrice(String(b.roomId), b.arrival, rawSource);
+    pricePerNight = getRealPrice(String(b.roomId), b.arrival, rawSource, undefined, undefined, dynamicSettings);
   } else if (isOTA && !pricePerNight) {
     pricePerNight = 0;
   }
@@ -85,10 +86,25 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const format = searchParams.get('format') ?? 'json'; // 'json' | 'csv'
 
+    // Cargar dynamicSettings
+    let dynamicSettings: any = null;
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'pricing_unit_settings')
+        .maybeSingle();
+      if (!error && data && data.value) {
+        dynamicSettings = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+      }
+    } catch (err) {
+      console.error("Error al obtener dynamicSettings en API export:", err);
+    }
+
     const raw      = await fetchBeds24Bookings();
     const bookings = raw
       .filter((b: any) => String(b.status) !== '0' && b.status !== 'cancelled')
-      .map(mapBooking);
+      .map((b: any) => mapBooking(b, dynamicSettings));
 
     // ── JSON (para Power Query "From Web" o SQL directo) ──────────────────
     if (format === 'json') {

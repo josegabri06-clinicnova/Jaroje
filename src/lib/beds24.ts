@@ -261,19 +261,27 @@ export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' 
 }
 
 // Descuento por longitud de estancia (Length of Stay) en Beds24
-export function getLengthOfStayMultiplier(nights: number): number {
-  if (nights >= 30) return 0.60; // 40% descuento (+29 noches)
-  if (nights >= 15) return 0.75; // 25% descuento (15-29 noches)
-  if (nights >= 7) return 0.85;  // 15% descuento (7-14 noches)
+export function getLengthOfStayMultiplier(nights: number, customDiscounts?: { nights7?: number; nights15?: number; nights30?: number }): number {
+  const d7 = customDiscounts?.nights7 !== undefined ? (1 - customDiscounts.nights7 / 100) : 0.85;
+  const d15 = customDiscounts?.nights15 !== undefined ? (1 - customDiscounts.nights15 / 100) : 0.75;
+  const d30 = customDiscounts?.nights30 !== undefined ? (1 - customDiscounts.nights30 / 100) : 0.60;
+
+  if (nights >= 30) return d30;
+  if (nights >= 15) return d15;
+  if (nights >= 7) return d7;
   return 1.00;                   // Sin descuento (1-6 noches)
 }
 
 // Modificador por canal
-export function getChannelMultiplier(referer: string): number {
+export function getChannelMultiplier(referer: string, customMultipliers?: { airbnb?: number; booking?: number; directo?: number }): number {
   const r = (referer || '').toLowerCase();
-  if (r.includes('booking')) return 1.10;
-  if (r.includes('airbnb')) return 1.25;
-  return 1.0; // Directo / WhatsApp / API
+  const multAirbnb = customMultipliers?.airbnb !== undefined ? customMultipliers.airbnb : 1.25;
+  const multBooking = customMultipliers?.booking !== undefined ? customMultipliers.booking : 1.10;
+  const multDirecto = customMultipliers?.directo !== undefined ? customMultipliers.directo : 1.00;
+
+  if (r.includes('airbnb')) return multAirbnb;
+  if (r.includes('booking')) return multBooking;
+  return multDirecto; // Directo / WhatsApp / API
 }
 
 // Calcular precio real estimado
@@ -282,7 +290,8 @@ export function getRealPrice(
   dateStr: string | null | undefined, 
   referer: string,
   beds24RatesMap?: Record<string, Record<string, number>>,
-  unitId?: string | null | undefined
+  unitId?: string | null | undefined,
+  dynamicSettings?: any
 ): number {
   let id = String(roomId || '');
 
@@ -297,7 +306,8 @@ export function getRealPrice(
   // 1. Intentar obtener tarifa dinámica de Beds24
   if (beds24RatesMap && dateStr && beds24RatesMap[id] && beds24RatesMap[id][dateStr]) {
     const dynamicPrice = beds24RatesMap[id][dateStr];
-    const multiplier = getChannelMultiplier(referer);
+    const customMultipliers = dynamicSettings?.[id]?.multipliers;
+    const multiplier = getChannelMultiplier(referer, customMultipliers);
     return Math.round(dynamicPrice * multiplier);
   }
 
@@ -307,7 +317,8 @@ export function getRealPrice(
     const parentId = parentMapping.roomId;
     if (parentId !== id && beds24RatesMap[parentId] && beds24RatesMap[parentId][dateStr]) {
       const dynamicPrice = beds24RatesMap[parentId][dateStr];
-      const multiplier = getChannelMultiplier(referer);
+      const customMultipliers = dynamicSettings?.[parentId]?.multipliers;
+      const multiplier = getChannelMultiplier(referer, customMultipliers);
       return Math.round(dynamicPrice * multiplier);
     }
   }
@@ -321,14 +332,16 @@ export function getRealPrice(
     if (parentPrices) {
       const season = getSeason(dateStr);
       const base = parentPrices[season];
-      const multiplier = getChannelMultiplier(referer);
+      const customMultipliers = dynamicSettings?.[parentMapping.roomId]?.multipliers;
+      const multiplier = getChannelMultiplier(referer, customMultipliers);
       return Math.round(base * multiplier);
     }
     return 2000;
   }
   const season = getSeason(dateStr);
   const base = prices[season];
-  const multiplier = getChannelMultiplier(referer);
+  const customMultipliers = dynamicSettings?.[id]?.multipliers;
+  const multiplier = getChannelMultiplier(referer, customMultipliers);
   return Math.round(base * multiplier);
 }
 
@@ -523,10 +536,11 @@ export function getAverageRatesForDates(
   departure: string | null | undefined,
   referer: string,
   beds24RatesMap: Record<string, Record<string, number>>,
-  unitId?: string | null | undefined
+  unitId?: string | null | undefined,
+  dynamicSettings?: any
 ): number {
   if (!arrival || !departure) {
-    return getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
+    return getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
   }
 
   const id = String(roomId || '');
@@ -534,7 +548,7 @@ export function getAverageRatesForDates(
   const end = new Date(departure);
 
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start.getTime() >= end.getTime()) {
-    return getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
+    return getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
   }
 
   let totalSum = 0;
@@ -543,14 +557,15 @@ export function getAverageRatesForDates(
   const current = new Date(start);
   while (current < end) {
     const currentDateStr = current.toISOString().split('T')[0];
-    const dailyPrice = getRealPrice(id, currentDateStr, referer, beds24RatesMap, unitId);
+    const dailyPrice = getRealPrice(id, currentDateStr, referer, beds24RatesMap, unitId, dynamicSettings);
     totalSum += dailyPrice;
     daysCount++;
     current.setDate(current.getDate() + 1);
   }
 
-  const averageBase = daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId);
-  const discountMultiplier = getLengthOfStayMultiplier(daysCount);
+  const averageBase = daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
+  const customDiscounts = dynamicSettings?.[id]?.discounts;
+  const discountMultiplier = getLengthOfStayMultiplier(daysCount, customDiscounts);
   return Math.round(averageBase * discountMultiplier);
 }
 
@@ -628,6 +643,21 @@ export async function getBeds24Bookings(): Promise<any[]> {
   const token = await getBeds24Token();
   const bookingsArray = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
 
+  // Cargar dynamicSettings de precios
+  let dynamicSettings: any = null;
+  try {
+    const { data: settingsData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'pricing_unit_settings')
+      .maybeSingle();
+    if (settingsData && settingsData.value) {
+      dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+    }
+  } catch (err) {
+    console.error("Error al obtener dynamicSettings en getBeds24Bookings:", err);
+  }
+
   // 2. Obtener tarifas de calendario dinámicas de Beds24 (de hoy a 365 días en adelante)
   const ratesToDate = new Date(today);
   ratesToDate.setDate(today.getDate() + 365);
@@ -674,7 +704,7 @@ export async function getBeds24Bookings(): Promise<any[]> {
       const roomData = getRoomMetadata(b.roomId, b.roomName);
       let pricePerNight = b.price ? (Number(b.price) / nights) : null;
       if (!isOTA && (!pricePerNight || pricePerNight < 10)) {
-        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap, String(b.unitId || ''));
+        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap, String(b.unitId || ''), dynamicSettings);
       } else if (isOTA && !pricePerNight) {
         pricePerNight = 0;
       }
