@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, getAdminPin, getRole } from '@/lib/auth';
+import { getBeds24RoomIdAndUnit } from '@/lib/beds24';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -187,8 +188,14 @@ function fmtCurrency(amount: number, guestName?: string) {
   return (isUSD ? 'USD$' : 'MX$') + Math.round(amount || 0).toLocaleString('es-MX');
 }
 
-/** Retorna el desglose neto + comisión OTA para una reserva Airbnb/Booking. */
-function computeOtaSplit(totalAmount: number, channel: string): {
+/** Retorna el desglose neto + comisión OTA para una reserva Airbnb/Booking.
+ *  Los multiplicadores se leen de pricingSettings (Beds24/Supabase) para cada tipo de habitación.
+ */
+function computeOtaSplit(
+  totalAmount: number,
+  channel: string,
+  customMultipliers?: { airbnb?: number; booking?: number; directo?: number }
+): {
   isOTA: boolean;
   netRevenue: number;
   commission: number;
@@ -197,17 +204,17 @@ function computeOtaSplit(totalAmount: number, channel: string): {
 } {
   const ch = (channel || '').toLowerCase();
   if (ch.includes('airbnb')) {
-    const multiplier = 1.25;
+    const multiplier = customMultipliers?.airbnb ?? 1.25;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Airbnb', multiplier };
   }
   if (ch.includes('booking')) {
-    const multiplier = 1.10;
+    const multiplier = customMultipliers?.booking ?? 1.10;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Booking.com', multiplier };
   }
   if (ch.includes('expedia')) {
-    const multiplier = 1.20;
+    const multiplier = customMultipliers?.booking ?? 1.10;
     const netRevenue = Math.round(totalAmount / multiplier);
     return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Expedia', multiplier };
   }
@@ -267,6 +274,7 @@ export default function CalendarPage() {
   const [panelRoom, setPanelRoom] = useState<{ room: string; date: Date } | null>(null);
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [pricingSettings, setPricingSettings] = useState<Record<string, any>>({}); // Multiplicadores por roomId desde Beds24/Supabase
 
   // Modal Check-In / Detalles states
   const [showCheckInModal, setShowCheckInModal] = useState(false);
@@ -323,10 +331,11 @@ export default function CalendarPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [r, chk, acc] = await Promise.all([
+      const [r, chk, acc, psRes] = await Promise.all([
         fetch('/api/reservas?t=' + Date.now()),
         supabase.from('checkins').select('*'),
-        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true })
+        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
+        supabase.from('settings').select('value').eq('key', 'pricing_unit_settings').maybeSingle()
       ]);
       const json = await r.json();
 
@@ -351,6 +360,15 @@ export default function CalendarPage() {
       }
       if (acc.data) {
         setAccounts(acc.data);
+      }
+      // Cargar multiplicadores de canal desde Supabase (configurados en módulo de Precios)
+      if (psRes.data && psRes.data.value) {
+        try {
+          const parsed = typeof psRes.data.value === 'string' ? JSON.parse(psRes.data.value) : psRes.data.value;
+          setPricingSettings(parsed || {});
+        } catch (e) {
+          console.error('Error al parsear pricing_unit_settings:', e);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -934,7 +952,10 @@ export default function CalendarPage() {
       const baseDesc = `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName}) [Reserva B24: ${selectedReserva.id}]`;
 
       // ── OTA Commission Split ──────────────────────────────────────────
-      const otaSplit = computeOtaSplit(amountNum, selectedReserva.channel || '');
+      // Resolver multiplicadores reales desde pricingSettings (Beds24/Supabase)
+      const roomB24 = getBeds24RoomIdAndUnit(selectedReserva.room);
+      const roomMultipliers = roomB24 ? pricingSettings?.[roomB24.roomId]?.multipliers : undefined;
+      const otaSplit = computeOtaSplit(amountNum, selectedReserva.channel || '', roomMultipliers);
 
       if (otaSplit.isOTA) {
         // 1. Ingreso neto para el negocio (sin comisión OTA)
