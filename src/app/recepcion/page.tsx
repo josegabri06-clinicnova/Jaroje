@@ -44,6 +44,12 @@ interface Reserva {
   groupRooms?: { roomId: string; unitId: string; name: string }[];
   channel?: string;
   status?: string;
+  taxes?: {
+    iva: number;
+    ish: number;
+    otros: number;
+    total: number;
+  };
 }
 
 interface Task {
@@ -3039,6 +3045,43 @@ export default function RecepcionPage() {
                       </p>
                     </div>
                   </div>
+
+                  {/* Desglose de Impuestos (Mapeado desde Invoice Beds24) */}
+                  {selectedReserva.taxes && selectedReserva.taxes.total > 0 && (
+                    <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2.5">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Impuestos (Factura Beds24)</span>
+                      
+                      <div className="flex justify-between items-center text-[13px]">
+                        <span className="text-zinc-500 font-semibold">IVA (16%):</span>
+                        <span className="font-extrabold text-zinc-900">
+                          {fmtCurrency(selectedReserva.taxes.iva, selectedReserva.guest_name)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[13px]">
+                        <span className="text-zinc-500 font-semibold">ISH (3%):</span>
+                        <span className="font-extrabold text-zinc-900">
+                          {fmtCurrency(selectedReserva.taxes.ish, selectedReserva.guest_name)}
+                        </span>
+                      </div>
+
+                      {selectedReserva.taxes.otros > 0 && (
+                        <div className="flex justify-between items-center text-[13px]">
+                          <span className="text-zinc-500 font-semibold">Otros Impuestos:</span>
+                          <span className="font-extrabold text-zinc-900">
+                            {fmtCurrency(selectedReserva.taxes.otros, selectedReserva.guest_name)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="border-t border-zinc-200/60 pt-2.5 flex justify-between items-center text-[13px] font-black">
+                        <span className="text-zinc-700">Total Impuestos:</span>
+                        <span className="text-zinc-950">
+                          {fmtCurrency(selectedReserva.taxes.total, selectedReserva.guest_name)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* 7. Anticipo depositado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">

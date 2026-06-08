@@ -438,7 +438,7 @@ export async function getBeds24Token(): Promise<string> {
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
 export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string): Promise<any[]> {
   const BEDS24_TOKEN = await getBeds24Token();
-  let url = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=100`;
+  let url = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
   let bookingsArray: any[] = [];
   let hasNextPage = true;
 
@@ -554,6 +554,65 @@ export function getAverageRatesForDates(
   return Math.round(averageBase * discountMultiplier);
 }
 
+export interface TaxInfo {
+  iva: number;
+  ish: number;
+  otros: number;
+  total: number;
+}
+
+export function extractTaxesFromInvoice(invoiceItems: any[]): TaxInfo {
+  let iva = 0;
+  let ish = 0;
+  let otros = 0;
+
+  if (!invoiceItems || !Array.isArray(invoiceItems)) {
+    return { iva, ish, otros, total: 0 };
+  }
+
+  invoiceItems.forEach(item => {
+    const qty = Number(item.qty || 0);
+    const price = Number(item.price || 0);
+    const lineTotal = qty * price;
+    const desc = (item.description || '').toLowerCase();
+    
+    // Solo procesar cargos (qty > 0)
+    if (qty > 0) {
+      // 1. Detección por descripción de línea (impuestos separados)
+      if (desc.includes('iva') || desc.includes('vat')) {
+        iva += lineTotal;
+      } else if (desc.includes('ish') || desc.includes('hospedaje') || desc.includes('lodging')) {
+        ish += lineTotal;
+      } else if (desc.includes('tax') || desc.includes('impuesto')) {
+        if (desc.includes('16')) {
+          iva += lineTotal;
+        } else if (desc.includes('3')) {
+          ish += lineTotal;
+        } else {
+          otros += lineTotal;
+        }
+      } else {
+        // 2. Detección por tasa de impuesto (VAT/Tax Rate en la misma línea del cargo)
+        const vatRate = Number(item.vatRate || item.taxRate || 0);
+        if (vatRate === 16) {
+          iva += lineTotal - (lineTotal / 1.16);
+        } else if (vatRate === 3) {
+          ish += lineTotal - (lineTotal / 1.03);
+        } else if (vatRate > 0) {
+          otros += lineTotal - (lineTotal / (1 + vatRate / 100));
+        }
+      }
+    }
+  });
+
+  return {
+    iva: Math.round(iva),
+    ish: Math.round(ish),
+    otros: Math.round(otros),
+    total: Math.round(iva + ish + otros)
+  };
+}
+
 // Obtener y mapear reservas activas (Backend Server-Side)
 export async function getBeds24Bookings(): Promise<any[]> {
   const today = new Date();
@@ -627,6 +686,8 @@ export async function getBeds24Bookings(): Promise<any[]> {
         ? (roomData.nombre.includes(unitName) ? roomData.nombre : `${roomData.nombre} (${unitName})`)
         : roomData.nombre;
 
+      const taxInfo = extractTaxesFromInvoice(b.invoiceItems);
+
       return {
         id: b.id || Math.random().toString(),
         check_in: b.arrival,
@@ -647,7 +708,8 @@ export async function getBeds24Bookings(): Promise<any[]> {
         notes: b.info || b.notes || null,
         num_adult: b.numAdult ? Number(b.numAdult) : 1,
         num_child: b.numChild ? Number(b.numChild) : 0,
-        rooms: { name: roomData.nombre }
+        rooms: { name: roomData.nombre },
+        taxes: taxInfo
       };
     });
 }

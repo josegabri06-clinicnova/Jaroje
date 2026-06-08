@@ -1465,6 +1465,43 @@ export default function ReservasList() {
                     </div>
                   </div>
 
+                  {/* Desglose de Impuestos (Mapeado desde Invoice Beds24) */}
+                  {selectedRes.taxes && selectedRes.taxes.total > 0 && (
+                    <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2.5">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Impuestos (Factura Beds24)</span>
+                      
+                      <div className="flex justify-between items-center text-[13px]">
+                        <span className="text-zinc-500 font-semibold">IVA (16%):</span>
+                        <span className="font-extrabold text-zinc-900">
+                          {fmtCurrency(selectedRes.taxes.iva, selectedRes.guest_name)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[13px]">
+                        <span className="text-zinc-500 font-semibold">ISH (3%):</span>
+                        <span className="font-extrabold text-zinc-900">
+                          {fmtCurrency(selectedRes.taxes.ish, selectedRes.guest_name)}
+                        </span>
+                      </div>
+
+                      {selectedRes.taxes.otros > 0 && (
+                        <div className="flex justify-between items-center text-[13px]">
+                          <span className="text-zinc-500 font-semibold">Otros Impuestos:</span>
+                          <span className="font-extrabold text-zinc-900">
+                            {fmtCurrency(selectedRes.taxes.otros, selectedRes.guest_name)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="border-t border-zinc-200/60 pt-2.5 flex justify-between items-center text-[13px] font-black">
+                        <span className="text-zinc-700">Total Impuestos:</span>
+                        <span className="text-zinc-950">
+                          {fmtCurrency(selectedRes.taxes.total, selectedRes.guest_name)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 7. Anticipo depositado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
