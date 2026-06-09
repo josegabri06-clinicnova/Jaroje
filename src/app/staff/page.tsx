@@ -586,22 +586,22 @@ export default function StaffPage() {
       // 3. Fallback Unificador: Si la habitación está en estado sucio o limpieza y no tiene una reserva activa hoy
       // registrada en la lista, se agrega de forma automática para mantener una sincronización visual del 100%.
       const alreadyAdded = list.some(item => item.room === r);
+      const isDbStatusUpdatedToday = dbStatusObj?.updated_at ? isDateToday(dbStatusObj.updated_at) : false;
       if (!alreadyAdded && (
         operStatus === 'sucio_checkout' || 
         operStatus === 'en_limpieza' || 
         operStatus === 'limpieza_programada' ||
-        dbStatus === 'sucio_checkout' ||
-        dbStatus === 'en_limpieza'
+        ((dbStatus === 'sucio_checkout' || dbStatus === 'en_limpieza') && isDbStatusUpdatedToday)
       )) {
         list.push({
           room: r,
-          type: operStatus === 'sucio_checkout' ? 'checkout' : 'stayover',
+          type: (operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'checkout' : 'stayover',
           dbStatus,
           operStatus,
-          guestName: operStatus === 'sucio_checkout' ? 'Check-Out' : 'Limpieza Programada',
-          keysReturned: operStatus === 'sucio_checkout',
+          guestName: (operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'Check-Out' : 'Limpieza Programada',
+          keysReturned: operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout',
           reserva: null,
-          isUpdatedToday: isDateToday(dbStatusObj?.updated_at)
+          isUpdatedToday: isDbStatusUpdatedToday
         });
       }
     });
@@ -957,9 +957,15 @@ export default function StaffPage() {
     let text = `📋 *REPORTE DIARIO DE LIMPIEZA*\n🏨 *Jaroje Condominios*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
     allRooms.forEach((task, idx) => {
-      const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
+      const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
       const typeLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
-      const statusLabel = isFinished ? 'Limpia ✅' : task.operStatus === 'en_limpieza' ? 'En limpieza ⚡' : 'Pendiente ❌';
+      const statusLabel = isFinished 
+        ? 'Limpia ✅' 
+        : (task.type === 'checkout' && !task.keysReturned)
+          ? 'Huésped en Hab. ⏳'
+          : task.operStatus === 'en_limpieza' 
+            ? 'En limpieza ⚡' 
+            : 'Pendiente ❌';
       
       const assignment = assignments[task.room];
       const empNum = assignment?.employeeNum || '';
@@ -1253,7 +1259,7 @@ export default function StaffPage() {
                           {allRooms.map(task => {
                             const assignment = assignments[task.room] || { employeeNum: '', notes: '' };
                             const isCheckout = task.type === 'checkout';
-                            const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
+                            const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
 
                             return (
                               <tr key={task.room} className="align-middle">
@@ -1274,6 +1280,11 @@ export default function StaffPage() {
                                     }`}>
                                       {isCheckout ? 'Check Out' : 'Servicio'}
                                     </span>
+                                    {isCheckout && !task.keysReturned && (
+                                      <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-750 border border-amber-200/60 select-none">
+                                        En Habitación 👤
+                                      </span>
+                                    )}
                                     {isFinished ? (
                                       <span className="inline-flex items-center gap-0.5 text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-150 select-none">
                                         Limpia ✓
