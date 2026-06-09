@@ -11,7 +11,7 @@ const supabase = createClient(
 
 const TAX_FACTOR = 1.19; // IVA 16% + ISH 3%
 
-// Rooms principales de Beds24 (IDs padre)
+// Rooms principales de Beds24
 const ROOMS: { id: string; name: string; icon: string }[] = [
   { id: '679077', name: 'Habitación DOBLE', icon: '🛏️' },
   { id: '679087', name: 'Apartamento Premier 1 dorm.', icon: '🏠' },
@@ -21,32 +21,35 @@ const ROOMS: { id: string; name: string; icon: string }[] = [
 ];
 
 /**
+ * Estructura de un tier de precio por estancia
+ */
+interface PriceTier {
+  name: string;
+  minStay: number;
+  maxStay: number;
+  offsetPct: number;      // Porcentaje sobre el precio base (0 = base, -15 = -15%, etc.)
+  priceRaw: number;       // Sin impuestos
+  priceDirecto: number;   // Con impuestos, sin OTA
+  priceAirbnb: number;
+  priceBooking: number;
+}
+
+/**
  * GET /api/beds24-prices
  *
- * Lee el CALENDARIO de precios diarios de Beds24 (pantalla "Daily Prices").
- * 
- * NOTA IMPORTANTE sobre la API de Beds24:
- *   - El endpoint es: GET /inventory/rooms/calendar
- *   - Los params son: startDate / endDate (NO from/to)
- *   - SIN includeX params, devuelve array vacío → necesario: includePrices=true
- *   - El response es: { data: [{ roomId, calendar: [{ from, to, price1 }] }] }
- *   - calendar[] son RANGOS de fechas (no un entry por día)
- * 
- * Los precios en Beds24 son SIN impuestos.
- * Precio final al huésped = precio_beds24 × multiplicador_OTA × 1.19
+ * Lee:
+ * 1. El precio base (price1) del calendario de Beds24 para cada habitación
+ * 2. Las reglas de precio por estancia (Daily Price Rules / fixedPrices)
+ *    para construir los tiers de descuento por duración
+ *
+ * Fórmula de precio al huésped:
+ *   precio_base × (1 + offsetPct/100) × multiplicador_OTA × 1.19
  */
 export async function GET() {
   try {
     const token = await getBeds24Token();
 
-    // Rango: hoy → 90 días
-    const today = new Date();
-    const startDate = today.toISOString().split('T')[0];
-    const toDate = new Date(today);
-    toDate.setDate(today.getDate() + 90);
-    const endDate = toDate.toISOString().split('T')[0];
-
-    // Multiplicadores OTA desde Supabase
+    // 1. Obtener multiplicadores OTA desde Supabase
     const { data: settingsRow } = await supabase
       .from('settings')
       .select('value')
@@ -59,76 +62,162 @@ export async function GET() {
           : settingsRow.value)
       : { airbnb: 1.20, booking: 1.35 };
 
-    // Params correctos según spec de Beds24 v2:
-    //   startDate, endDate, roomId (array), includePrices=true
+    // 2. Obtener precio base del calendario (próximos 90 días)
+    const today = new Date();
+    const startDate = today.toISOString().split('T')[0];
+    const endDate90 = new Date(today);
+    endDate90.setDate(today.getDate() + 90);
+    const endDate = endDate90.toISOString().split('T')[0];
+
     const roomIdParams = ROOMS.map(r => `roomId=${r.id}`).join('&');
-    const url = `https://api.beds24.com/v2/inventory/rooms/calendar?startDate=${startDate}&endDate=${endDate}&${roomIdParams}&includePrices=true`;
 
-    console.log('[beds24-prices] GET', url);
-
-    const calRes = await fetch(url, {
-      headers: { token },
-      cache: 'no-store',
-    });
+    const [calRes, fixedRes] = await Promise.all([
+      // Calendar: precios diarios (base price)
+      fetch(
+        `https://api.beds24.com/v2/inventory/rooms/calendar?startDate=${startDate}&endDate=${endDate}&${roomIdParams}&includePrices=true`,
+        { headers: { token }, cache: 'no-store' }
+      ),
+      // FixedPrices: reglas de precio por estancia (Daily Price Rules)
+      fetch(
+        `https://api.beds24.com/v2/inventory/fixedPrices?${roomIdParams}`,
+        { headers: { token }, cache: 'no-store' }
+      ),
+    ]);
 
     if (!calRes.ok) {
-      const errText = await calRes.text();
-      console.error(`[beds24-prices] Calendar error ${calRes.status}: ${errText}`);
-      return NextResponse.json(
-        { success: false, error: `Beds24 error ${calRes.status}: ${errText}` },
-        { status: 502 }
-      );
+      const t = await calRes.text();
+      return NextResponse.json({ success: false, error: `Calendar error ${calRes.status}: ${t}` }, { status: 502 });
     }
 
     const calJson = await calRes.json();
-
-    // El response es: { success, data: Array<{ roomId, calendar: Array<{ from, to, price1, ... }> }> }
     const calData: any[] = Array.isArray(calJson) ? calJson : (calJson.data || []);
 
-    console.log('[beds24-prices] Received entries:', calData.length);
-    if (calData.length > 0) {
-      console.log('[beds24-prices] First entry sample:', JSON.stringify(calData[0]).substring(0, 400));
-    }
-
-    // Construir mapa roomId → primer price1 encontrado en los rangos del calendario
-    // El calendario devuelve rangos consolidados: { from, to, price1 }
-    // Tomamos el price1 del primer rango activo (más cercano a hoy)
-    const priceByRoom: Record<string, number> = {};
-
+    // Extraer precio base (price1) del primer rango del calendario para cada habitación
+    const basePriceByRoom: Record<string, number> = {};
     for (const entry of calData) {
       const roomId = String(entry.roomId || '');
-      if (!ROOMS.find(r => r.id === roomId)) continue;
-
-      const calendarRanges: any[] = entry.calendar || [];
-      
-      // Buscar el primer rango con price1 válido
-      for (const range of calendarRanges) {
+      const ranges: any[] = entry.calendar || [];
+      for (const range of ranges) {
         const p = Number(range.price1 ?? 0);
-        if (p > 0 && !priceByRoom[roomId]) {
-          priceByRoom[roomId] = p;
+        if (p > 0 && !basePriceByRoom[roomId]) {
+          basePriceByRoom[roomId] = p;
           break;
         }
       }
     }
 
-    console.log('[beds24-prices] Price map:', priceByRoom);
+    // Extraer reglas de precio por estancia (fixedPrices)
+    // Estructura: { roomId, name, minStay, maxStay, priceOffset, priceFromId }
+    let fixedPricesData: any[] = [];
+    if (fixedRes.ok) {
+      const fixedJson = await fixedRes.json();
+      fixedPricesData = Array.isArray(fixedJson) ? fixedJson : (fixedJson.data || []);
+    } else {
+      console.warn(`[beds24-prices] fixedPrices endpoint returned ${fixedRes.status} — using fallback discounts`);
+    }
 
-    // Construir resultado por habitación
+    // Agrupar fixedPrices por roomId
+    const rulesByRoom: Record<string, any[]> = {};
+    for (const fp of fixedPricesData) {
+      const roomId = String(fp.roomId || '');
+      if (!rulesByRoom[roomId]) rulesByRoom[roomId] = [];
+      rulesByRoom[roomId].push(fp);
+    }
+
+    // Fallback de descuentos si fixedPrices no devuelve datos
+    // Basado en las Daily Price Rules visibles en Beds24
+    const FALLBACK_TIERS: Record<string, { minStay: number; maxStay: number; offsetPct: number; name: string }[]> = {
+      '679077': [ // Habitación DOBLE — tiene -10.8% en 7-14 noches (diferente al resto)
+        { name: 'Estándar 1-6 noches',  minStay: 1,  maxStay: 6,   offsetPct: 0    },
+        { name: 'Estándar 7-14 noches', minStay: 7,  maxStay: 14,  offsetPct: -10.8 },
+        { name: 'Estándar 15-29 noch',  minStay: 15, maxStay: 29,  offsetPct: -25  },
+        { name: 'Estándar +29 noches',  minStay: 30, maxStay: 100, offsetPct: -40  },
+      ],
+      '679087': [
+        { name: 'Condo 1R 1-6 noches',  minStay: 1,  maxStay: 6,   offsetPct: 0   },
+        { name: 'Condo 1R 7-14 noches', minStay: 7,  maxStay: 14,  offsetPct: -15 },
+        { name: 'Condo 1R 15-29 noch',  minStay: 15, maxStay: 29,  offsetPct: -25 },
+        { name: 'Condo 1R +29 noches',  minStay: 30, maxStay: 100, offsetPct: -40 },
+      ],
+      '679091': [
+        { name: 'Condo 2R 1-6 noches',  minStay: 1,  maxStay: 6,   offsetPct: 0   },
+        { name: 'Condo 2R 7-14 noches', minStay: 7,  maxStay: 14,  offsetPct: -15 },
+        { name: 'Condo 2R 15-29 noch',  minStay: 15, maxStay: 29,  offsetPct: -25 },
+        { name: 'Condo 2R +29 noches',  minStay: 30, maxStay: 100, offsetPct: -40 },
+      ],
+      '679092': [
+        { name: 'Condo 3R 1-6 noches',  minStay: 1,  maxStay: 6,   offsetPct: 0   },
+        { name: 'Condo 3R 7-14 noches', minStay: 7,  maxStay: 14,  offsetPct: -15 },
+        { name: 'Condo 3R 15-29 noch',  minStay: 15, maxStay: 29,  offsetPct: -25 },
+        { name: 'Condo 3R +29 noches',  minStay: 30, maxStay: 100, offsetPct: -40 },
+      ],
+      '679093': [
+        { name: 'Casa Lujo 1-6 noches',  minStay: 1,  maxStay: 6,   offsetPct: 0   },
+        { name: 'Casa Lujo 7-14 noch',   minStay: 7,  maxStay: 14,  offsetPct: -15 },
+        { name: 'Casa Lujo 15-29 noch',  minStay: 15, maxStay: 29,  offsetPct: -25 },
+        { name: 'Casa Lujo +29 noches',  minStay: 30, maxStay: 100, offsetPct: -40 },
+      ],
+    };
+
+    // Construir resultado final por habitación
     const rooms = ROOMS.map(room => {
-      const priceRaw = priceByRoom[room.id] ?? 0;
-      // Contar cuántos rangos de calendario se encontraron para esta habitación
-      const entry = calData.find((e: any) => String(e.roomId) === room.id);
-      const sampledRanges = entry ? (entry.calendar || []).length : 0;
+      const baseRaw = basePriceByRoom[room.id] ?? 0;
+
+      // Intentar usar reglas de fixedPrices (si vinieron de Beds24)
+      // Si no, usar fallback hardcodeado de las capturas del usuario
+      const apiRules = rulesByRoom[room.id] || [];
+      const fallbackTiers = FALLBACK_TIERS[room.id] || [];
+
+      let tiers: PriceTier[];
+
+      if (apiRules.length > 0) {
+        // Ordenar por minStay
+        const sorted = [...apiRules].sort((a, b) => (a.minStay ?? 1) - (b.minStay ?? 1));
+
+        // Encontrar la regla base (sin priceFromId o la de menor minStay)
+        const baseRule = sorted.find(r => !r.priceFromId) || sorted[0];
+
+        tiers = sorted.map(rule => {
+          const offsetPct = rule.priceOffset ?? 0; // ya viene como -15, -25, etc.
+          const tierRaw = baseRaw > 0 ? baseRaw * (1 + offsetPct / 100) : 0;
+          return {
+            name: rule.name || `${rule.minStay}-${rule.maxStay} noches`,
+            minStay: rule.minStay ?? 1,
+            maxStay: rule.maxStay ?? 999,
+            offsetPct,
+            priceRaw: Math.round(tierRaw * 100) / 100,
+            priceDirecto: tierRaw > 0 ? Math.round(tierRaw * TAX_FACTOR) : 0,
+            priceAirbnb:  tierRaw > 0 ? Math.round(tierRaw * multipliers.airbnb * TAX_FACTOR) : 0,
+            priceBooking: tierRaw > 0 ? Math.round(tierRaw * multipliers.booking * TAX_FACTOR) : 0,
+          };
+        });
+      } else {
+        // Usar fallback con los descuentos hardcodeados de las capturas
+        tiers = fallbackTiers.map(ft => {
+          const tierRaw = baseRaw > 0 ? baseRaw * (1 + ft.offsetPct / 100) : 0;
+          return {
+            name: ft.name,
+            minStay: ft.minStay,
+            maxStay: ft.maxStay,
+            offsetPct: ft.offsetPct,
+            priceRaw: Math.round(tierRaw * 100) / 100,
+            priceDirecto: tierRaw > 0 ? Math.round(tierRaw * TAX_FACTOR) : 0,
+            priceAirbnb:  tierRaw > 0 ? Math.round(tierRaw * multipliers.airbnb * TAX_FACTOR) : 0,
+            priceBooking: tierRaw > 0 ? Math.round(tierRaw * multipliers.booking * TAX_FACTOR) : 0,
+          };
+        });
+      }
 
       return {
         id: room.id,
         name: room.name,
         icon: room.icon,
-        priceRaw,                                                             // Sin impuestos (en Beds24)
-        priceDirecto: priceRaw > 0 ? Math.round(priceRaw * TAX_FACTOR) : 0, // × 1.19
-        priceAirbnb:  priceRaw > 0 ? Math.round(priceRaw * multipliers.airbnb * TAX_FACTOR) : 0,
-        priceBooking: priceRaw > 0 ? Math.round(priceRaw * multipliers.booking * TAX_FACTOR) : 0,
-        sampledDays: sampledRanges,
+        priceRaw: baseRaw,                                                              // Precio base s/imp editable
+        priceDirecto: baseRaw > 0 ? Math.round(baseRaw * TAX_FACTOR) : 0,
+        priceAirbnb:  baseRaw > 0 ? Math.round(baseRaw * multipliers.airbnb * TAX_FACTOR) : 0,
+        priceBooking: baseRaw > 0 ? Math.round(baseRaw * multipliers.booking * TAX_FACTOR) : 0,
+        tiers,                                                                          // Tiers con descuentos LOS
+        rulesSource: apiRules.length > 0 ? 'beds24' : 'fallback',
       };
     });
 
@@ -138,7 +227,6 @@ export async function GET() {
       multipliers,
       startDate,
       endDate,
-      rawSample: calData.length > 0 ? calData[0] : null, // para debugging
     });
 
   } catch (err: any) {
@@ -152,10 +240,7 @@ export async function GET() {
 
 /**
  * PUT /api/beds24-prices
- *
- * Actualiza el precio base de una habitación en Beds24 para un rango de fechas.
- * El precio que llega en el body es SIN impuestos (precio Beds24 directo).
- * 
+ * Actualiza el precio base (price1) de una habitación en el calendario de Beds24.
  * Body: { roomId: string, priceRaw: number, from?: string, to?: string }
  */
 export async function PUT(req: Request) {
@@ -170,7 +255,6 @@ export async function PUT(req: Request) {
       );
     }
 
-    // Rango de aplicación: desde hoy hasta 365 días
     const fromDate = body.from || new Date().toISOString().split('T')[0];
     const toDate = body.to || (() => {
       const d = new Date();
@@ -180,8 +264,6 @@ export async function PUT(req: Request) {
 
     const token = await getBeds24Token();
 
-    // POST /inventory/rooms/calendar — formato correcto según spec:
-    // [{ roomId, calendar: [{ from, to, price1 }] }]
     const payload = [{
       roomId: Number(roomId),
       calendar: [{
@@ -200,14 +282,11 @@ export async function PUT(req: Request) {
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error(`[beds24-prices] PUT error ${res.status}: ${errText}`);
       return NextResponse.json(
         { success: false, error: `Beds24 error ${res.status}: ${errText}` },
         { status: 502 }
       );
     }
-
-    const resJson = await res.json().catch(() => ({}));
 
     return NextResponse.json({
       success: true,
@@ -215,7 +294,6 @@ export async function PUT(req: Request) {
       priceRaw,
       from: fromDate,
       to: toDate,
-      beds24Response: resJson,
     });
 
   } catch (err: any) {

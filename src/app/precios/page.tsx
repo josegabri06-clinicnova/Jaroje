@@ -982,7 +982,7 @@ export default function PreciosPage() {
                           const previewBooking = rawValue > 0 ? Math.round(rawValue * beds24Multipliers.booking * 1.19) : 0;
 
                           return (
-                            <div
+                       <div
                               key={room.id}
                               className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all ${
                                 isEditing ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-zinc-200'
@@ -1002,7 +1002,7 @@ export default function PreciosPage() {
                                       className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                                     >
                                       {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} strokeWidth={3} />}
-                                      {isSaving ? 'Guardando...' : 'Guardar'}
+                                      {isSaving ? 'Guardando...' : 'Guardar en Beds24'}
                                     </button>
                                     <button
                                       onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[room.id]; return n; })}
@@ -1012,81 +1012,95 @@ export default function PreciosPage() {
                                     </button>
                                   </div>
                                 ) : (
-                                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Beds24 base</span>
+                                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Beds24 live</span>
                                 )}
                               </div>
 
-                              {/* Cuerpo de la tarjeta */}
-                              <div className="px-4 py-3 space-y-3">
-
-                                {/* Precio editable (SIN impuestos — exactamente como está en Beds24) */}
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Precio Beds24</p>
-                                    <p className="text-[9px] text-zinc-400 font-medium">Sin impuestos · editable</p>
-                                  </div>
-                                  <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400 pointer-events-none">$</span>
-                                    <input
-                                      type="number"
-                                      value={rawDisplay}
-                                      placeholder="0"
-                                      onChange={e => setEditedPrices(prev => ({ ...prev, [room.id]: e.target.value }))}
-                                      className={`w-32 pl-7 pr-3 py-2 text-[15px] font-black rounded-xl border outline-none transition-all text-right ${
-                                        isEditing
-                                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900 ring-2 ring-indigo-200'
-                                          : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-indigo-300 focus:bg-white'
-                                      }`}
-                                    />
-                                  </div>
+                              {/* Precio base editable */}
+                              <div className={`px-4 py-3 flex items-center justify-between ${isEditing ? 'bg-indigo-50/60' : 'bg-zinc-50/60'} border-b border-zinc-100`}>
+                                <div>
+                                  <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Precio base Beds24</p>
+                                  <p className="text-[9px] text-zinc-400 font-medium">1-6 noches · sin impuestos · toca para editar</p>
                                 </div>
-
-                                {/* Línea separadora */}
-                                <div className="border-t border-dashed border-zinc-100" />
-
-                                {/* Precio Directo */}
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
-                                    <div>
-                                      <p className="text-[11px] font-extrabold text-zinc-600">Directo / WhatsApp</p>
-                                      <p className="text-[9px] text-zinc-400 font-medium">× 1.00 × 1.19</p>
-                                    </div>
-                                  </div>
-                                  <span className={`text-[16px] font-black ${isEditing ? 'text-zinc-800' : 'text-zinc-700'}`}>
-                                    ${previewDirecto.toLocaleString('es-MX')}
-                                  </span>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400 pointer-events-none">$</span>
+                                  <input
+                                    type="number"
+                                    value={rawDisplay}
+                                    placeholder="0"
+                                    onChange={e => setEditedPrices(prev => ({ ...prev, [room.id]: e.target.value }))}
+                                    className={`w-28 pl-7 pr-2 py-1.5 text-[14px] font-black rounded-xl border outline-none transition-all text-right ${
+                                      isEditing
+                                        ? 'border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200'
+                                        : 'border-zinc-200 bg-white text-zinc-900 focus:border-indigo-300'
+                                    }`}
+                                  />
                                 </div>
-
-                                {/* Precio Airbnb */}
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
-                                    <div>
-                                      <p className="text-[11px] font-extrabold text-rose-600">Airbnb</p>
-                                      <p className="text-[9px] text-zinc-400 font-medium">× {beds24Multipliers.airbnb} × 1.19</p>
-                                    </div>
-                                  </div>
-                                  <span className={`text-[16px] font-black ${isEditing ? 'text-rose-700' : 'text-rose-600'}`}>
-                                    ${previewAirbnb.toLocaleString('es-MX')}
-                                  </span>
-                                </div>
-
-                                {/* Precio Booking */}
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
-                                    <div>
-                                      <p className="text-[11px] font-extrabold text-sky-600">Booking.com</p>
-                                      <p className="text-[9px] text-zinc-400 font-medium">× {beds24Multipliers.booking} × 1.19</p>
-                                    </div>
-                                  </div>
-                                  <span className={`text-[16px] font-black ${isEditing ? 'text-sky-700' : 'text-sky-600'}`}>
-                                    ${previewBooking.toLocaleString('es-MX')}
-                                  </span>
-                                </div>
-
                               </div>
+
+                              {/* Tabla de tiers por estancia */}
+                              {(room.tiers && room.tiers.length > 0) && (
+                                <div className="px-4 py-3 space-y-0">
+                                  {/* Header de columnas */}
+                                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr] gap-1 pb-1.5 mb-1.5 border-b border-zinc-100">
+                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">Estancia</span>
+                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest text-right">Directo</span>
+                                    <span className="text-[9px] font-extrabold text-rose-400 uppercase tracking-widest text-right">Airbnb</span>
+                                    <span className="text-[9px] font-extrabold text-sky-400 uppercase tracking-widest text-right">Booking</span>
+                                  </div>
+
+                                  {/* Una fila por tier */}
+                                  {(room.tiers as any[]).map((tier: any, idx: number) => {
+                                    // Si está editando, recalcular en tiempo real desde el rawValue
+                                    const tierFactor = 1 + (tier.offsetPct / 100);
+                                    const tierRaw = rawValue > 0 ? rawValue * tierFactor : 0;
+                                    const tierDirecto  = tierRaw > 0 ? Math.round(tierRaw * 1.19) : 0;
+                                    const tierAirbnb   = tierRaw > 0 ? Math.round(tierRaw * beds24Multipliers.airbnb * 1.19) : 0;
+                                    const tierBooking  = tierRaw > 0 ? Math.round(tierRaw * beds24Multipliers.booking * 1.19) : 0;
+
+                                    const isBase = tier.offsetPct === 0;
+                                    const stayLabel = tier.maxStay >= 100
+                                      ? `${tier.minStay}+ noches`
+                                      : `${tier.minStay}-${tier.maxStay} noch.`;
+
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className={`grid grid-cols-[1fr_1fr_1fr_1fr] gap-1 py-1.5 rounded-lg px-1 ${
+                                          isBase ? 'bg-zinc-50/80' : ''
+                                        } border-b border-zinc-50 last:border-0`}
+                                      >
+                                        {/* Estancia */}
+                                        <div className="flex items-center gap-1.5">
+                                          {!isBase && (
+                                            <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-1 rounded">
+                                              {tier.offsetPct}%
+                                            </span>
+                                          )}
+                                          <span className={`text-[10px] font-bold ${isBase ? 'text-zinc-700' : 'text-zinc-500'}`}>
+                                            {stayLabel}
+                                          </span>
+                                        </div>
+
+                                        {/* Directo */}
+                                        <span className={`text-right text-[11px] font-extrabold ${isBase ? 'text-zinc-800' : 'text-zinc-500'}`}>
+                                          {tierDirecto > 0 ? `$${tierDirecto.toLocaleString('es-MX')}` : '—'}
+                                        </span>
+
+                                        {/* Airbnb */}
+                                        <span className={`text-right text-[11px] font-extrabold ${isBase ? 'text-rose-600' : 'text-rose-400'}`}>
+                                          {tierAirbnb > 0 ? `$${tierAirbnb.toLocaleString('es-MX')}` : '—'}
+                                        </span>
+
+                                        {/* Booking */}
+                                        <span className={`text-right text-[11px] font-extrabold ${isBase ? 'text-sky-600' : 'text-sky-400'}`}>
+                                          {tierBooking > 0 ? `$${tierBooking.toLocaleString('es-MX')}` : '—'}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
