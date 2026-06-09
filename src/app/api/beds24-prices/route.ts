@@ -21,43 +21,30 @@ const ROOMS: { id: string; name: string; icon: string }[] = [
 ];
 
 /**
- * Calcula la mediana de un array de números.
- * Usamos mediana (no promedio) para evitar que precios de pico distorsionen la "tarifa base".
- */
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 !== 0
-    ? sorted[mid]
-    : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
-}
-
-/**
  * GET /api/beds24-prices
+ *
+ * Lee el CALENDARIO de precios diarios de Beds24 (pantalla "Daily Prices").
  * 
- * Lee el CALENDARIO de precios diarios de Beds24 (pantalla "Daily Prices")
- * para los próximos 90 días. Extrae la mediana por habitación como "tarifa base".
+ * NOTA IMPORTANTE sobre la API de Beds24:
+ *   - El endpoint es: GET /inventory/rooms/calendar
+ *   - Los params son: startDate / endDate (NO from/to)
+ *   - SIN includeX params, devuelve array vacío → necesario: includePrices=true
+ *   - El response es: { data: [{ roomId, calendar: [{ from, to, price1 }] }] }
+ *   - calendar[] son RANGOS de fechas (no un entry por día)
  * 
  * Los precios en Beds24 son SIN impuestos.
- * Para calcular el precio final al huésped:
- *   precio_beds24 × multiplicador_OTA × 1.19
- * 
- * Respuesta:
- *   rooms: [ { id, name, icon, priceRaw, priceBase (con impuestos directo), 
- *              priceAirbnb, priceBooking, sampleDate } ]
- *   multipliers: { airbnb, booking }
+ * Precio final al huésped = precio_beds24 × multiplicador_OTA × 1.19
  */
 export async function GET() {
   try {
     const token = await getBeds24Token();
 
-    // Rango: desde hoy hasta 90 días (suficiente para capturar temporadas)
+    // Rango: hoy → 90 días
     const today = new Date();
-    const from = today.toISOString().split('T')[0];
+    const startDate = today.toISOString().split('T')[0];
     const toDate = new Date(today);
     toDate.setDate(today.getDate() + 90);
-    const to = toDate.toISOString().split('T')[0];
+    const endDate = toDate.toISOString().split('T')[0];
 
     // Multiplicadores OTA desde Supabase
     const { data: settingsRow } = await supabase
@@ -72,17 +59,21 @@ export async function GET() {
           : settingsRow.value)
       : { airbnb: 1.20, booking: 1.35 };
 
-    // Llamar a /inventory/rooms/calendar (incluye precios)
-    // Beds24 API v2: GET /inventory/rooms/calendar?from=YYYY-MM-DD&to=YYYY-MM-DD
+    // Params correctos según spec de Beds24 v2:
+    //   startDate, endDate, roomId (array), includePrices=true
     const roomIdParams = ROOMS.map(r => `roomId=${r.id}`).join('&');
-    const calRes = await fetch(
-      `https://api.beds24.com/v2/inventory/rooms/calendar?from=${from}&to=${to}&${roomIdParams}`,
-      { headers: { token }, cache: 'no-store' }
-    );
+    const url = `https://api.beds24.com/v2/inventory/rooms/calendar?startDate=${startDate}&endDate=${endDate}&${roomIdParams}&includePrices=true`;
+
+    console.log('[beds24-prices] GET', url);
+
+    const calRes = await fetch(url, {
+      headers: { token },
+      cache: 'no-store',
+    });
 
     if (!calRes.ok) {
       const errText = await calRes.text();
-      console.error(`[beds24-prices] Calendar API error ${calRes.status}: ${errText}`);
+      console.error(`[beds24-prices] Calendar error ${calRes.status}: ${errText}`);
       return NextResponse.json(
         { success: false, error: `Beds24 error ${calRes.status}: ${errText}` },
         { status: 502 }
@@ -90,49 +81,65 @@ export async function GET() {
     }
 
     const calJson = await calRes.json();
+
+    // El response es: { success, data: Array<{ roomId, calendar: Array<{ from, to, price1, ... }> }> }
     const calData: any[] = Array.isArray(calJson) ? calJson : (calJson.data || []);
 
-    // Construir mapa roomId → lista de precios diarios
-    const pricesByRoom: Record<string, number[]> = {};
-    for (const dayEntry of calData) {
-      // El formato puede variar entre versiones:
-      // { roomId, date, price1, price2, ... } o { roomId, calendar: [{ date, price1 }] }
-      const roomId = String(dayEntry.roomId || '');
+    console.log('[beds24-prices] Received entries:', calData.length);
+    if (calData.length > 0) {
+      console.log('[beds24-prices] First entry sample:', JSON.stringify(calData[0]).substring(0, 400));
+    }
+
+    // Construir mapa roomId → primer price1 encontrado en los rangos del calendario
+    // El calendario devuelve rangos consolidados: { from, to, price1 }
+    // Tomamos el price1 del primer rango activo (más cercano a hoy)
+    const priceByRoom: Record<string, number> = {};
+
+    for (const entry of calData) {
+      const roomId = String(entry.roomId || '');
       if (!ROOMS.find(r => r.id === roomId)) continue;
 
-      if (!pricesByRoom[roomId]) pricesByRoom[roomId] = [];
-
-      // Formato flat (un entry por día)
-      const p = Number(dayEntry.price1 ?? dayEntry.price ?? 0);
-      if (p > 0) pricesByRoom[roomId].push(p);
-
-      // Formato con sub-array calendar
-      if (Array.isArray(dayEntry.calendar)) {
-        for (const cal of dayEntry.calendar) {
-          const cp = Number(cal.price1 ?? cal.price ?? 0);
-          if (cp > 0) pricesByRoom[roomId].push(cp);
+      const calendarRanges: any[] = entry.calendar || [];
+      
+      // Buscar el primer rango con price1 válido
+      for (const range of calendarRanges) {
+        const p = Number(range.price1 ?? 0);
+        if (p > 0 && !priceByRoom[roomId]) {
+          priceByRoom[roomId] = p;
+          break;
         }
       }
     }
 
+    console.log('[beds24-prices] Price map:', priceByRoom);
+
     // Construir resultado por habitación
     const rooms = ROOMS.map(room => {
-      const prices = pricesByRoom[room.id] || [];
-      const priceRaw = median(prices); // precio sin impuestos (como está en Beds24)
+      const priceRaw = priceByRoom[room.id] ?? 0;
+      // Contar cuántos rangos de calendario se encontraron para esta habitación
+      const entry = calData.find((e: any) => String(e.roomId) === room.id);
+      const sampledRanges = entry ? (entry.calendar || []).length : 0;
 
       return {
         id: room.id,
         name: room.name,
         icon: room.icon,
-        priceRaw,                                                   // Precio sin impuestos (editable)
-        priceDirecto: Math.round(priceRaw * TAX_FACTOR),           // × 1.19 (directo)
-        priceAirbnb: Math.round(priceRaw * multipliers.airbnb * TAX_FACTOR), // × OTA × 1.19
-        priceBooking: Math.round(priceRaw * multipliers.booking * TAX_FACTOR),
-        sampledDays: prices.length,
+        priceRaw,                                                             // Sin impuestos (en Beds24)
+        priceDirecto: priceRaw > 0 ? Math.round(priceRaw * TAX_FACTOR) : 0, // × 1.19
+        priceAirbnb:  priceRaw > 0 ? Math.round(priceRaw * multipliers.airbnb * TAX_FACTOR) : 0,
+        priceBooking: priceRaw > 0 ? Math.round(priceRaw * multipliers.booking * TAX_FACTOR) : 0,
+        sampledDays: sampledRanges,
       };
     });
 
-    return NextResponse.json({ success: true, rooms, multipliers, from, to });
+    return NextResponse.json({
+      success: true,
+      rooms,
+      multipliers,
+      startDate,
+      endDate,
+      rawSample: calData.length > 0 ? calData[0] : null, // para debugging
+    });
 
   } catch (err: any) {
     if (err.message === 'TOKEN_EXPIRED') {
@@ -145,13 +152,11 @@ export async function GET() {
 
 /**
  * PUT /api/beds24-prices
- * 
+ *
  * Actualiza el precio base de una habitación en Beds24 para un rango de fechas.
  * El precio que llega en el body es SIN impuestos (precio Beds24 directo).
  * 
  * Body: { roomId: string, priceRaw: number, from?: string, to?: string }
- * 
- * Si no se especifica rango, actualiza los próximos 365 días.
  */
 export async function PUT(req: Request) {
   try {
@@ -165,7 +170,7 @@ export async function PUT(req: Request) {
       );
     }
 
-    // Rango: desde hoy hasta 365 días si no se especifica
+    // Rango de aplicación: desde hoy hasta 365 días
     const fromDate = body.from || new Date().toISOString().split('T')[0];
     const toDate = body.to || (() => {
       const d = new Date();
@@ -175,14 +180,14 @@ export async function PUT(req: Request) {
 
     const token = await getBeds24Token();
 
-    // Beds24 API v2: POST /inventory/rooms/calendar para actualizar precios
-    // Formato: [{ roomId, calendar: [{ from, to, price1 }] }]
+    // POST /inventory/rooms/calendar — formato correcto según spec:
+    // [{ roomId, calendar: [{ from, to, price1 }] }]
     const payload = [{
       roomId: Number(roomId),
       calendar: [{
         from: fromDate,
         to: toDate,
-        price1: Math.round(priceRaw * 100) / 100, // máximo 2 decimales
+        price1: Math.round(priceRaw * 100) / 100,
       }]
     }];
 
@@ -195,7 +200,7 @@ export async function PUT(req: Request) {
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error(`[beds24-prices] Calendar PUT error ${res.status}: ${errText}`);
+      console.error(`[beds24-prices] PUT error ${res.status}: ${errText}`);
       return NextResponse.json(
         { success: false, error: `Beds24 error ${res.status}: ${errText}` },
         { status: 502 }
@@ -225,7 +230,6 @@ export async function PUT(req: Request) {
 /**
  * POST /api/beds24-prices
  * Guarda los multiplicadores OTA en Supabase settings.
- * Body: { airbnb: number, booking: number }
  */
 export async function POST(req: Request) {
   try {
