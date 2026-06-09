@@ -932,116 +932,144 @@ export default function PreciosPage() {
                   </div>
                 )}
 
-                {/* Tabla principal de precios */}
+                {/* Tarjetas de precios por habitación */}
                 {!beds24Error && (
-                  <div className="bg-white border border-zinc-200 rounded-3xl shadow-sm overflow-hidden">
-                    {/* Cabecera de columnas */}
-                    <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-200 grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center">
-                      <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Unidad</span>
-                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest w-28 text-center">Beds24 (s/imp)</span>
-                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest w-24 text-center">Directo</span>
-                      <span className="text-[10px] font-extrabold text-indigo-500 uppercase tracking-widest w-24 text-center">Airbnb</span>
-                      <span className="text-[10px] font-extrabold text-sky-600 uppercase tracking-widest w-24 text-center">Booking</span>
-                    </div>
-
+                  <>
                     {beds24Loading && beds24Rooms.length === 0 ? (
-                      <div className="p-12 flex flex-col items-center gap-3">
+                      <div className="bg-white border border-zinc-200 rounded-3xl p-12 flex flex-col items-center gap-3 shadow-sm">
                         <RefreshCw size={24} className="text-indigo-500 animate-spin" />
                         <span className="text-[13px] font-semibold text-zinc-500">Leyendo calendario de Beds24...</span>
                       </div>
                     ) : beds24Rooms.length === 0 && !beds24Loading ? (
-                      <div className="p-10 flex flex-col items-center gap-3 text-center">
+                      <div className="bg-white border border-zinc-200 rounded-3xl p-10 flex flex-col items-center gap-3 text-center shadow-sm">
                         <AlertCircle size={28} className="text-zinc-300" />
                         <p className="text-[13px] font-semibold text-zinc-500">No se obtuvieron precios del calendario.</p>
                         <p className="text-[12px] text-zinc-400 max-w-xs">Presiona <strong>Actualizar</strong> o verifica que el token de Beds24 sea válido.</p>
                       </div>
                     ) : (
-                      <div className="divide-y divide-zinc-100">
+                      <div className="space-y-3">
                         {beds24Rooms.map(room => {
                           const isEditing = editedPrices[room.id] !== undefined;
                           const rawDisplay = isEditing ? editedPrices[room.id] : String(room.priceRaw || '');
-                          const rawValue = isEditing ? Number(editedPrices[room.id]) : room.priceRaw;
+                          const rawValue = isEditing ? Number(editedPrices[room.id]) : (room.priceRaw || 0);
                           const isSaving = savingPriceId === room.id;
 
-                          // Calcular precios con la fórmula correcta en tiempo real
-                          const previewDirecto = Math.round(rawValue * 1.19);
-                          const previewAirbnb = Math.round(rawValue * beds24Multipliers.airbnb * 1.19);
-                          const previewBooking = Math.round(rawValue * beds24Multipliers.booking * 1.19);
+                          const previewDirecto = rawValue > 0 ? Math.round(rawValue * 1.19) : 0;
+                          const previewAirbnb  = rawValue > 0 ? Math.round(rawValue * beds24Multipliers.airbnb * 1.19) : 0;
+                          const previewBooking = rawValue > 0 ? Math.round(rawValue * beds24Multipliers.booking * 1.19) : 0;
 
                           return (
-                            <div key={room.id} className={`grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-5 py-3.5 hover:bg-zinc-50/60 transition-colors ${isEditing ? 'bg-indigo-50/30' : ''}`}>
-                              {/* Nombre unidad */}
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <span className="text-lg shrink-0">{room.icon}</span>
-                                <div className="min-w-0">
-                                  <p className="text-[12.5px] font-extrabold text-zinc-900 truncate">{room.name}</p>
-                                  {room.sampledDays > 0 && (
-                                    <p className="text-[9px] text-zinc-400 font-semibold">mediana de {room.sampledDays} días</p>
-                                  )}
+                            <div
+                              key={room.id}
+                              className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all ${
+                                isEditing ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-zinc-200'
+                              }`}
+                            >
+                              {/* Cabecera de la tarjeta */}
+                              <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-100">
+                                <div className="flex items-center gap-2.5">
+                                  <span className="text-xl">{room.icon}</span>
+                                  <p className="text-[13px] font-extrabold text-zinc-900">{room.name}</p>
                                 </div>
-                              </div>
-
-                              {/* Precio editable SIN impuestos (como está en Beds24) */}
-                              <div className="relative w-28">
-                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 pointer-events-none">$</span>
-                                <input
-                                  type="number"
-                                  value={rawDisplay}
-                                  placeholder="0"
-                                  onChange={e => setEditedPrices(prev => ({ ...prev, [room.id]: e.target.value }))}
-                                  className={`w-full pl-5 pr-2 py-2 text-[12px] font-extrabold rounded-xl border outline-none transition-all text-center ${
-                                    isEditing
-                                      ? 'border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200'
-                                      : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-indigo-300 focus:bg-white'
-                                  }`}
-                                />
-                              </div>
-
-                              {/* Directo (× 1.19) */}
-                              <div className="w-24 text-center">
-                                <span className={`text-[12px] font-extrabold ${isEditing ? 'text-zinc-700' : 'text-zinc-600'}`}>
-                                  ${previewDirecto.toLocaleString('es-MX')}
-                                </span>
-                              </div>
-
-                              {/* Airbnb (× 1.20 × 1.19) */}
-                              <div className="w-24 text-center">
-                                <span className={`text-[12px] font-extrabold ${isEditing ? 'text-indigo-700' : 'text-indigo-600'}`}>
-                                  ${previewAirbnb.toLocaleString('es-MX')}
-                                </span>
-                              </div>
-
-                              {/* Booking (× 1.35 × 1.19) */}
-                              <div className="w-24 flex items-center justify-center gap-1.5">
-                                <span className={`text-[12px] font-extrabold ${isEditing ? 'text-sky-700' : 'text-sky-600'}`}>
-                                  ${previewBooking.toLocaleString('es-MX')}
-                                </span>
-                                {isEditing && (
-                                  <>
+                                {isEditing ? (
+                                  <div className="flex items-center gap-1.5">
                                     <button
                                       onClick={() => handleSavePriceToBeds24(room)}
                                       disabled={isSaving}
-                                      className="ml-1 p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
-                                      title="Guardar en Beds24"
+                                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
                                     >
                                       {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} strokeWidth={3} />}
+                                      {isSaving ? 'Guardando...' : 'Guardar'}
                                     </button>
                                     <button
                                       onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[room.id]; return n; })}
-                                      className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
-                                      title="Cancelar"
+                                      className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg cursor-pointer transition-colors"
                                     >
-                                      <X size={11} />
+                                      <X size={13} />
                                     </button>
-                                  </>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Beds24 base</span>
                                 )}
+                              </div>
+
+                              {/* Cuerpo de la tarjeta */}
+                              <div className="px-4 py-3 space-y-3">
+
+                                {/* Precio editable (SIN impuestos — exactamente como está en Beds24) */}
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Precio Beds24</p>
+                                    <p className="text-[9px] text-zinc-400 font-medium">Sin impuestos · editable</p>
+                                  </div>
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400 pointer-events-none">$</span>
+                                    <input
+                                      type="number"
+                                      value={rawDisplay}
+                                      placeholder="0"
+                                      onChange={e => setEditedPrices(prev => ({ ...prev, [room.id]: e.target.value }))}
+                                      className={`w-32 pl-7 pr-3 py-2 text-[15px] font-black rounded-xl border outline-none transition-all text-right ${
+                                        isEditing
+                                          ? 'border-indigo-400 bg-indigo-50 text-indigo-900 ring-2 ring-indigo-200'
+                                          : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-indigo-300 focus:bg-white'
+                                      }`}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Línea separadora */}
+                                <div className="border-t border-dashed border-zinc-100" />
+
+                                {/* Precio Directo */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
+                                    <div>
+                                      <p className="text-[11px] font-extrabold text-zinc-600">Directo / WhatsApp</p>
+                                      <p className="text-[9px] text-zinc-400 font-medium">× 1.00 × 1.19</p>
+                                    </div>
+                                  </div>
+                                  <span className={`text-[16px] font-black ${isEditing ? 'text-zinc-800' : 'text-zinc-700'}`}>
+                                    ${previewDirecto.toLocaleString('es-MX')}
+                                  </span>
+                                </div>
+
+                                {/* Precio Airbnb */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-400 shrink-0" />
+                                    <div>
+                                      <p className="text-[11px] font-extrabold text-rose-600">Airbnb</p>
+                                      <p className="text-[9px] text-zinc-400 font-medium">× {beds24Multipliers.airbnb} × 1.19</p>
+                                    </div>
+                                  </div>
+                                  <span className={`text-[16px] font-black ${isEditing ? 'text-rose-700' : 'text-rose-600'}`}>
+                                    ${previewAirbnb.toLocaleString('es-MX')}
+                                  </span>
+                                </div>
+
+                                {/* Precio Booking */}
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 shrink-0" />
+                                    <div>
+                                      <p className="text-[11px] font-extrabold text-sky-600">Booking.com</p>
+                                      <p className="text-[9px] text-zinc-400 font-medium">× {beds24Multipliers.booking} × 1.19</p>
+                                    </div>
+                                  </div>
+                                  <span className={`text-[16px] font-black ${isEditing ? 'text-sky-700' : 'text-sky-600'}`}>
+                                    ${previewBooking.toLocaleString('es-MX')}
+                                  </span>
+                                </div>
+
                               </div>
                             </div>
                           );
                         })}
                       </div>
                     )}
-                  </div>
+                  </>
                 )}
 
                 {/* Multiplicadores OTA */}
