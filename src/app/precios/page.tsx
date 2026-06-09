@@ -74,7 +74,15 @@ export default function PreciosPage() {
   const [rules, setRules] = useState<any[]>([]);
   const [loadingRules, setLoadingRules] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+
+  // Beds24 direct pricing state
+  const [beds24Loading, setBeds24Loading] = useState(false);
+  const [beds24FixedPrices, setBeds24FixedPrices] = useState<any[]>([]);
+  const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35 });
+  const [beds24Error, setBeds24Error] = useState<string | null>(null);
+  const [savingPriceId, setSavingPriceId] = useState<number | null>(null);
+  const [editedPrices, setEditedPrices] = useState<Record<number, string>>({});
+  const [savingMultipliers, setSavingMultipliers] = useState(false);
 
   // Form State
   const [showFormModal, setShowFormModal] = useState(false);
@@ -173,26 +181,78 @@ export default function PreciosPage() {
     }
   };
 
-  const handleSyncToBeds24 = async () => {
-    setSyncing(true);
+  // Load Beds24 fixed prices directly from Beds24 API
+  const loadBeds24Prices = async () => {
+    setBeds24Loading(true);
+    setBeds24Error(null);
     try {
-      const res = await fetch('/api/precios/sync', { method: 'POST' });
+      const res = await fetch('/api/beds24-prices?t=' + Date.now());
       const json = await res.json();
-      if (json.success) {
-        alert('Tarifas sincronizadas exitosamente en Beds24.');
-      } else {
-        throw new Error(json.error || 'Fallo al sincronizar tarifas');
+      if (!json.success) {
+        setBeds24Error(json.error === 'TOKEN_EXPIRED'
+          ? 'Token de Beds24 caducado. Regenera uno en Beds24 > Marketplace > API.'
+          : json.error || 'Error al cargar precios de Beds24');
+        return;
       }
+      setBeds24FixedPrices(json.fixedPrices || []);
+      if (json.multipliers) setBeds24Multipliers(json.multipliers);
     } catch (err: any) {
-      alert(`Error al sincronizar tarifas con Beds24: ${err.message}`);
+      setBeds24Error('Error de red: ' + err.message);
     } finally {
-      setSyncing(false);
+      setBeds24Loading(false);
+    }
+  };
+
+  // Save a single fixed price back to Beds24
+  const handleSavePriceToBeds24 = async (fp: any) => {
+    const newPriceWithTax = Number(editedPrices[fp.id]);
+    if (!newPriceWithTax || isNaN(newPriceWithTax) || newPriceWithTax <= 0) {
+      alert('Ingresa un precio válido mayor que 0.');
+      return;
+    }
+    setSavingPriceId(fp.id);
+    try {
+      const res = await fetch('/api/beds24-prices', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: fp.id, roomId: fp.roomId, priceWithTax: newPriceWithTax }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      // Refrescar precios
+      await loadBeds24Prices();
+      setEditedPrices(prev => { const n = { ...prev }; delete n[fp.id]; return n; });
+      alert(`✅ Precio actualizado en Beds24: ${fp.name} → MX$${newPriceWithTax}`);
+    } catch (err: any) {
+      alert('Error al guardar en Beds24: ' + err.message);
+    } finally {
+      setSavingPriceId(null);
+    }
+  };
+
+  // Save OTA multipliers to Supabase
+  const handleSaveMultipliers = async () => {
+    setSavingMultipliers(true);
+    try {
+      const res = await fetch('/api/beds24-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(beds24Multipliers),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      alert('✅ Multiplicadores guardados correctamente.');
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    } finally {
+      setSavingMultipliers(false);
     }
   };
 
   useEffect(() => {
     fetchRules();
     fetchPricingSettings();
+    loadBeds24Prices();
   }, []);
 
   // Update inputs whenever selected unit config changes or dynamic pricing settings change
@@ -648,38 +708,24 @@ export default function PreciosPage() {
 
       if (!res.ok) throw new Error(json.error || "Fallo al guardar la regla");
 
-      // Log action for audit trail
+      // Log action
       try {
         await fetch('/api/employee-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            employee_num: '999',
-            employee_name: 'Administrador',
-            department: 'admin',
-            module: 'precios',
+            employee_num: '999', employee_name: 'Administrador',
+            department: 'admin', module: 'precios',
             action: editingRuleId ? 'precio_regla_actualizada' : 'precio_regla_creada',
-            details: JSON.stringify({
-              text: `${editingRuleId ? 'Actualizó' : 'Creó'} regla de precio "${formName}" para ${ROOMS.find(r => r.id === formRoomTypeId)?.name || formRoomTypeId}. Tipo: ${formRuleType}, Precio: MX$${formPrice}`
-            })
+            details: JSON.stringify({ text: `${editingRuleId ? 'Actualizó' : 'Creó'} regla "${formName}" — ${formRuleType} MX$${formPrice}` })
           })
         });
-      } catch (logErr) {
-        console.error("Error log audit:", logErr);
-      }
+      } catch (logErr) { console.error('Error log audit:', logErr); }
 
-      alert("Regla guardada con éxito.");
+      alert('Regla guardada con éxito.');
       setShowFormModal(false);
       resetForm();
       fetchRules();
-
-      // Sincronización silenciosa en segundo plano con Beds24
-      fetch('/api/precios/sync', { method: 'POST' })
-        .then(res => res.json())
-        .then(json => {
-          if (!json.success) console.error("Error en sincronización automática de Beds24:", json.error);
-        })
-        .catch(err => console.error("Fallo de red en sincronización automática de Beds24:", err));
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -720,16 +766,8 @@ export default function PreciosPage() {
         console.error("Error log audit:", logErr);
       }
 
-      alert("Regla eliminada.");
+      alert('Regla eliminada.');
       fetchRules();
-
-      // Sincronización silenciosa en segundo plano con Beds24
-      fetch('/api/precios/sync', { method: 'POST' })
-        .then(res => res.json())
-        .then(json => {
-          if (!json.success) console.error("Error en sincronización automática de Beds24:", json.error);
-        })
-        .catch(err => console.error("Fallo de red en sincronización automática de Beds24:", err));
     } catch (err: any) {
       alert(`Error: ${err.message}`);
     } finally {
@@ -796,21 +834,13 @@ export default function PreciosPage() {
       {/* Header Banner */}
       <div className="bg-gradient-to-r from-indigo-950 to-indigo-900 px-6 py-8 rounded-b-[24px] shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">
         <div>
-          <span className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-widest block mb-1">Cálculo en Cascada & Sincronización Beds24</span>
+          <span className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-widest block mb-1">Sincronización Beds24 · Bidirecional</span>
           <h2 className="text-[24px] font-black tracking-tight leading-none">Manipulador de precios</h2>
           <p className="text-[13px] text-indigo-200 mt-1.5 font-medium">
-            Tarifas base, temporales y reglas especiales sincronizadas automáticamente con Beds24.
+            Edita las tarifas de Beds24 directamente desde la app. Los cambios se sincronizan automáticamente.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={handleSyncToBeds24}
-            disabled={syncing}
-            className="px-4.5 py-3 bg-indigo-650/40 hover:bg-indigo-600/55 text-white border border-indigo-500/50 font-black text-[12px] rounded-2xl flex items-center gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50"
-          >
-            <RefreshCw size={15} className={`stroke-[3px] ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'SINCRONIZANDO...' : 'SINCRONIZAR A BEDS24'}
-          </button>
           <button
             onClick={() => { resetForm(); setShowFormModal(true); }}
             className="px-4.5 py-3 bg-white hover:bg-zinc-50 text-indigo-950 font-black text-[12px] rounded-2xl flex items-center gap-2 shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
@@ -825,7 +855,7 @@ export default function PreciosPage() {
       <div className="px-6 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
         {[
           { id: 'simulador', label: 'Simulador de Cotizaciones', icon: <Calculator size={14} /> },
-          { id: 'configuracion', label: 'Configuración por Unidad', icon: <Shield size={14} /> },
+          { id: 'configuracion', label: 'Tarifas Beds24', icon: <RefreshCw size={14} /> },
           { id: 'reglas', label: 'Reglas Activas (DB)', icon: <TrendingUp size={14} /> },
           { id: 'tabla', label: 'Tabla de Tarifas', icon: <Tag size={14} /> },
           { id: 'temporadas', label: 'Calendario Temporadas', icon: <Calendar size={14} /> }
@@ -856,297 +886,217 @@ export default function PreciosPage() {
 
         {(!loadingRules && !loadingSettings) ? (
           <>
-            {/* ── CONFIGURACION TAB ── */}
+            {/* ── CONFIGURACION / BEDS24 TAB ── */}
             {activeTab === 'configuracion' && (
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-200">
-                
-                {/* Selector de Unidad */}
-                <div className="lg:col-span-4 bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-3.5">
-                  <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest">Tipo de Unidad</h3>
-                  <div className="space-y-2">
-                    {ROOMS.map(r => (
-                      <button
-                        key={r.id}
-                        onClick={() => setConfigRoomId(r.id)}
-                        className={`w-full text-left p-3.5 rounded-2xl border flex items-center justify-between transition-all cursor-pointer ${
-                          configRoomId === r.id
-                            ? 'bg-indigo-50/50 border-indigo-200 text-indigo-950 shadow-sm'
-                            : 'bg-zinc-50/20 border-zinc-200 hover:border-zinc-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{r.icon}</span>
-                          <div>
-                            <p className={`text-[13px] font-bold ${configRoomId === r.id ? 'text-indigo-950' : 'text-zinc-900'}`}>{r.name}</p>
-                            <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">Capacidad Base: {r.baseCapacity} pax</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+              <div className="space-y-6 animate-in fade-in duration-200">
+
+                {/* Header con botón de recarga */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-[15px] font-black text-zinc-900">Tarifas Beds24 · Edición Directa</h3>
+                    <p className="text-[12px] text-zinc-400 font-semibold mt-0.5">
+                      Los precios que ves aquí son los mismos que están en Beds24. Edítalos y guarda para actualizarlos automáticamente.
+                    </p>
                   </div>
+                  <button
+                    onClick={loadBeds24Prices}
+                    disabled={beds24Loading}
+                    className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl flex items-center gap-2 shadow cursor-pointer disabled:opacity-50 transition-colors"
+                  >
+                    <RefreshCw size={13} className={beds24Loading ? 'animate-spin' : ''} />
+                    {beds24Loading ? 'Cargando...' : 'Recargar de Beds24'}
+                  </button>
                 </div>
 
-                {/* Formulario de Configuración */}
-                <div className="lg:col-span-8 space-y-6">
-                  
-                  {/* Fila superior: Tarifa Base y de Temporada */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    
-                    {/* Tarifa Base */}
-                    <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
-                      <div className="space-y-3">
-                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                          <Tag size={12} className="text-indigo-500" />
-                          Tarifa Base Anual
-                        </h3>
-                        <p className="text-[11.5px] text-zinc-400 leading-relaxed font-semibold">
-                          Se aplica a todo el año, excepto cuando hay tarifas de temporada o especiales activas.
+                {/* Error state */}
+                {beds24Error && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-3">
+                    <AlertCircle size={18} className="text-rose-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-[13px] font-bold text-rose-800">Error al conectar con Beds24</p>
+                      <p className="text-[12px] text-rose-600 mt-0.5">{beds24Error}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tabla de tarifas por habitación */}
+                {!beds24Error && (
+                  <div className="bg-white border border-zinc-200 rounded-3xl shadow-sm overflow-hidden">
+                    {beds24Loading && beds24FixedPrices.length === 0 ? (
+                      <div className="p-12 flex flex-col items-center gap-3">
+                        <RefreshCw size={24} className="text-indigo-500 animate-spin" />
+                        <span className="text-[13px] font-semibold text-zinc-500">Cargando tarifas de Beds24...</span>
+                      </div>
+                    ) : beds24FixedPrices.length === 0 ? (
+                      <div className="p-12 flex flex-col items-center gap-3 text-center">
+                        <AlertCircle size={28} className="text-zinc-300" />
+                        <p className="text-[14px] font-semibold text-zinc-500">No se encontraron tarifas fijas en Beds24.</p>
+                        <p className="text-[12px] text-zinc-400 max-w-sm">
+                          Asegúrate de tener "Fixed Prices" configurados en Beds24 en la pestaña <strong>Daily Price Rules</strong>.
                         </p>
-                        <div className="relative pt-2">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400">$</span>
-                          <input
-                            type="number"
-                            value={configBasePrice}
-                            onChange={e => setConfigBasePrice(e.target.value)}
-                            className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl py-3 pl-8 pr-4 outline-none text-[13.5px] font-extrabold text-zinc-900 focus:bg-white focus:border-zinc-400"
-                            placeholder="0.00"
-                          />
-                        </div>
                       </div>
-                      <button
-                        onClick={handleSaveBasePrice}
-                        disabled={actionLoading}
-                        className="w-full bg-zinc-900 hover:bg-black text-white font-extrabold py-3.5 text-[11px] uppercase tracking-wider rounded-xl shadow-md mt-6 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        <Check size={13} strokeWidth={3} />
-                        Guardar Tarifa Base
-                      </button>
-                    </div>
-
-                    {/* Agregar Tarifa Temporada */}
-                    <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm">
-                      <form onSubmit={handleSaveSeasonPrice} className="space-y-3">
-                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                          <Calendar size={12} className="text-amber-500" />
-                          Tarifa de Temporada
-                        </h3>
-                        
-                        <div>
-                          <input
-                            type="text"
-                            required
-                            value={configSeasonName}
-                            onChange={e => setConfigSeasonName(e.target.value)}
-                            placeholder="Nombre (ej: Temporada Alta de Invierno)"
-                            className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-semibold text-zinc-900 focus:bg-white focus:border-zinc-400"
-                          />
-                        </div>
-                        
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-[11px]">$</span>
-                          <input
-                            type="number"
-                            required
-                            value={configSeasonPrice}
-                            onChange={e => setConfigSeasonPrice(e.target.value)}
-                            placeholder="Precio por noche (sin impuestos)"
-                            className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl py-2.5 pl-6 pr-3 outline-none text-[12.5px] font-extrabold text-zinc-900 focus:bg-white focus:border-zinc-400"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-[9px] font-bold text-zinc-450 uppercase mb-0.5">Fecha Inicio</label>
-                            <input
-                              type="date"
-                              required
-                              value={configSeasonStart}
-                              onChange={e => setConfigSeasonStart(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2 text-[11px] font-semibold text-zinc-800 cursor-pointer"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[9px] font-bold text-zinc-450 uppercase mb-0.5">Fecha Fin</label>
-                            <input
-                              type="date"
-                              required
-                              value={configSeasonEnd}
-                              onChange={e => setConfigSeasonEnd(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2 text-[11px] font-semibold text-zinc-800 cursor-pointer"
-                            />
-                          </div>
-                        </div>
-
-                        <button
-                          type="submit"
-                          disabled={actionLoading}
-                          className="w-full bg-amber-600 hover:bg-amber-700 text-white font-extrabold py-3 text-[11px] uppercase tracking-wider rounded-xl shadow-md mt-4 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        >
-                          <Plus size={13} strokeWidth={3} />
-                          Añadir Temporada
-                        </button>
-                      </form>
-                    </div>
-
-                  </div>
-
-                  {/* Fila intermedia: Descuentos y Multiplicadores */}
-                  <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm space-y-6">
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      
-                      {/* Descuentos por Estancia */}
-                      <div className="space-y-4">
-                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                          <TrendingUp size={12} className="text-emerald-500" />
-                          Descuentos de Estadía Prolongada (%)
-                        </h3>
-                        
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">7 a 14 noches (%)</label>
-                            <input
-                              type="number"
-                              value={discNights7}
-                              onChange={e => setDiscNights7(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">15 a 29 noches (%)</label>
-                            <input
-                              type="number"
-                              value={discNights15}
-                              onChange={e => setDiscNights15(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">30+ noches (%)</label>
-                            <input
-                              type="number"
-                              value={discNights30}
-                              onChange={e => setDiscNights30(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Multiplicadores por Canal */}
-                      <div className="space-y-4">
-                        <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest flex items-center gap-1">
-                          <Zap size={12} className="text-indigo-500" />
-                          Multiplicador de Canal (OTAs)
-                        </h3>
-                        
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">Airbnb (ej: 1.25)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={multAirbnb}
-                              onChange={e => setMultAirbnb(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">Booking.com (ej: 1.10)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={multBooking}
-                              onChange={e => setMultBooking(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-zinc-450 uppercase tracking-wider mb-1">Directo / WhatsApp (ej: 1.00)</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={multDirecto}
-                              onChange={e => setMultDirecto(e.target.value)}
-                              className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-2.5 outline-none text-[12.5px] font-bold text-zinc-800 focus:bg-white focus:border-zinc-400"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-
-                    <div className="pt-4 border-t border-zinc-100 flex items-center justify-between gap-3">
-                      {/* Botón sincronizar Beds24 */}
-                      <button
-                        onClick={handleSyncFromBeds24}
-                        disabled={syncingBeds24}
-                        title="Importar tarifas base y multiplicadores directamente desde la API de Beds24"
-                        className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
-                      >
-                        {syncingBeds24 ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                        Sincronizar desde Beds24
-                      </button>
-
-                      <button
-                        onClick={handleSaveDiscountsAndMultipliers}
-                        disabled={savingSettings}
-                        className="px-6 py-3.5 bg-zinc-900 hover:bg-black text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl shadow-md flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        {savingSettings ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} strokeWidth={3} />}
-                        Guardar Ajustes
-                      </button>
-                    </div>
-
-                  </div>
-
-                  {/* Listado de tarifas de temporada existentes */}
-                  <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-4">
-                    <h3 className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-widest">
-                      Temporadas y Fechas Especiales Activas
-                    </h3>
-                    
-                    {rules.filter(rule => rule.room_type_id === configRoomId && rule.rule_type !== 'base').length === 0 ? (
-                      <p className="text-[12px] text-zinc-400 font-semibold italic text-center py-4 bg-zinc-50/50 rounded-2xl border border-dashed border-zinc-200">
-                        No hay tarifas de temporada configuradas para esta unidad.
-                      </p>
                     ) : (
-                      <div className="divide-y divide-zinc-100">
-                        {rules.filter(rule => rule.room_type_id === configRoomId && rule.rule_type !== 'base').map(rule => (
-                          <div key={rule.id} className="py-3 flex justify-between items-center text-[12.5px] hover:bg-zinc-50/30 px-1 rounded-lg">
-                            <div>
-                              <span className={`text-[8.5px] font-black uppercase px-1.5 py-0.5 rounded border mr-2 ${
-                                rule.rule_type === 'seasonal' ? 'bg-amber-50 border-amber-150 text-amber-700' : 'bg-rose-50 border-rose-150 text-rose-700'
-                              }`}>
-                                {rule.rule_type === 'seasonal' ? 'Temporada' : 'Especial'}
-                              </span>
-                              <strong className="text-zinc-800">{rule.name}</strong>
-                              <span className="block text-[10.5px] text-zinc-400 font-semibold mt-0.5">
-                                📅 {rule.start_date.split('-').reverse().join('/')} al {rule.end_date.split('-').reverse().join('/')}
-                              </span>
+                      <>
+                        {/* Agrupar por habitación */}
+                        {ROOMS.map(room => {
+                          const roomPrices = beds24FixedPrices.filter(fp => fp.roomId === room.id);
+                          if (roomPrices.length === 0) return null;
+                          return (
+                            <div key={room.id} className="border-b border-zinc-100 last:border-0">
+                              {/* Room header */}
+                              <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center gap-3">
+                                <span className="text-xl">{room.icon}</span>
+                                <div>
+                                  <span className="text-[13px] font-extrabold text-zinc-900">{room.name}</span>
+                                  <span className="text-[10px] text-zinc-400 font-semibold ml-2">· {roomPrices.length} tarifas</span>
+                                </div>
+                              </div>
+                              {/* Price rows */}
+                              <div className="divide-y divide-zinc-50">
+                                {roomPrices.map(fp => {
+                                  const isEditing = editedPrices[fp.id] !== undefined;
+                                  const displayValue = isEditing ? editedPrices[fp.id] : String(fp.priceWithTax);
+                                  const isSaving = savingPriceId === fp.id;
+                                  return (
+                                    <div key={fp.id} className="px-5 py-3.5 flex items-center justify-between gap-4 hover:bg-zinc-50/50 transition-colors">
+                                      <div className="flex-1 min-w-0">
+                                        <span className="text-[13px] font-bold text-zinc-800 block truncate">{fp.name || 'Sin nombre'}</span>
+                                        {fp.from && fp.to && (
+                                          <span className="text-[10px] text-zinc-400 font-semibold">
+                                            📅 {fp.from} → {fp.to}
+                                          </span>
+                                        )}
+                                        <span className="text-[9px] text-zinc-400 font-medium block">
+                                          (Sin impuesto: MX${fp.priceRaw.toFixed(0)})
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 shrink-0">
+                                        {/* Precio editable */}
+                                        <div className="relative">
+                                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">$</span>
+                                          <input
+                                            type="number"
+                                            value={displayValue}
+                                            onChange={e => setEditedPrices(prev => ({ ...prev, [fp.id]: e.target.value }))}
+                                            className={`w-28 pl-6 pr-3 py-2 text-[13px] font-extrabold rounded-xl border outline-none transition-all ${
+                                              isEditing
+                                                ? 'border-indigo-400 bg-indigo-50 text-indigo-900 ring-2 ring-indigo-200'
+                                                : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-zinc-400 focus:bg-white'
+                                            }`}
+                                          />
+                                        </div>
+                                        {/* Botón guardar (solo visible si editó) */}
+                                        {isEditing && (
+                                          <button
+                                            onClick={() => handleSavePriceToBeds24(fp)}
+                                            disabled={isSaving}
+                                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50 transition-colors"
+                                          >
+                                            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} strokeWidth={3} />}
+                                            {isSaving ? '...' : 'Guardar'}
+                                          </button>
+                                        )}
+                                        {isEditing && (
+                                          <button
+                                            onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[fp.id]; return n; })}
+                                            className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
+                                          >
+                                            <X size={13} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <span className="font-extrabold text-zinc-950">{fmt(rule.price)}</span>
-                              <button
-                                onClick={() => handleDeleteRule(rule.id, rule.name)}
-                                disabled={actionLoading}
-                                className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-colors cursor-pointer disabled:opacity-50"
-                                title="Eliminar regla"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
+                )}
 
+                {/* Nota explicativa */}
+                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3">
+                  <Info size={15} className="text-indigo-500 shrink-0 mt-0.5" />
+                  <p className="text-[12px] text-indigo-700 font-semibold leading-relaxed">
+                    <strong>¿Cómo funciona?</strong> Los precios se muestran <strong>con impuestos (IVA 16% + ISH 3%)</strong> igual que en la pantalla de Daily Prices de Beds24.
+                    Al guardar, se convierte automáticamente al precio sin impuestos antes de enviarlo a Beds24. El cambio se refleja inmediatamente en todos los canales.
+                  </p>
+                </div>
+
+                {/* Multiplicadores OTA */}
+                <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm space-y-5">
+                  <div>
+                    <h3 className="text-[13px] font-extrabold text-zinc-900 flex items-center gap-2">
+                      <Zap size={15} className="text-indigo-500" />
+                      Multiplicadores de Canal (OTAs)
+                    </h3>
+                    <p className="text-[11.5px] text-zinc-400 font-semibold mt-1">
+                      Estos factores se aplican sobre la tarifa base cuando llega una reserva por OTA. No son datos de Beds24, se gestionan aquí.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider mb-1.5">Airbnb</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
+                        <input
+                          type="number" step="0.01" min="1"
+                          value={beds24Multipliers.airbnb}
+                          onChange={e => setBeds24Multipliers(prev => ({ ...prev, airbnb: parseFloat(e.target.value) || 1 }))}
+                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-zinc-400"
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-400 font-semibold mt-1">
+                        = +{Math.round((beds24Multipliers.airbnb - 1) * 100)}% sobre tarifa base
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider mb-1.5">Booking.com</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
+                        <input
+                          type="number" step="0.01" min="1"
+                          value={beds24Multipliers.booking}
+                          onChange={e => setBeds24Multipliers(prev => ({ ...prev, booking: parseFloat(e.target.value) || 1 }))}
+                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-zinc-400"
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-400 font-semibold mt-1">
+                        = +{Math.round((beds24Multipliers.booking - 1) * 100)}% sobre tarifa base
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider mb-1.5">Directo / WhatsApp</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
+                        <input
+                          type="number" step="0.01" min="1"
+                          value={1.00}
+                          readOnly
+                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-500 outline-none cursor-not-allowed"
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-400 font-semibold mt-1">Sin recargo (precio base)</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end pt-2 border-t border-zinc-100">
+                    <button
+                      onClick={handleSaveMultipliers}
+                      disabled={savingMultipliers}
+                      className="px-6 py-3 bg-zinc-900 hover:bg-black text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl flex items-center gap-2 shadow cursor-pointer disabled:opacity-50 transition-colors"
+                    >
+                      {savingMultipliers ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} strokeWidth={3} />}
+                      Guardar Multiplicadores
+                    </button>
+                  </div>
                 </div>
 
               </div>
             )}
-
+                
             {/* ── SIMULADOR TAB ── */}
             {activeTab === 'simulador' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
