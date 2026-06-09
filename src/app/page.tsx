@@ -331,10 +331,29 @@ export default function AdminDashboard() {
       {tokenError && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
           <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1">
             <p className="text-[13px] font-semibold text-amber-800">⚠️ Token Beds24 caducado</p>
             <p className="text-[11px] text-amber-700 mt-0.5">Genera uno nuevo en Beds24 › Marketplace › API</p>
           </div>
+          <button
+            onClick={async () => {
+              try {
+                const res = await fetch('/api/beds24-auth/refresh', { method: 'POST' });
+                const json = await res.json();
+                if (json.success) {
+                  setTokenError(false);
+                  fetchAll();
+                } else {
+                  alert('No se pudo refrescar el token.\n\n' + json.error);
+                }
+              } catch (e) {
+                alert('Error de red al intentar refrescar el token.');
+              }
+            }}
+            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-extrabold rounded-xl shrink-0 cursor-pointer transition-colors"
+          >
+            Reintentar
+          </button>
         </div>
       )}
 

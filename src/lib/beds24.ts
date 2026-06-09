@@ -357,61 +357,86 @@ export function getRoomMetadata(roomId: string | null | undefined, roomName: str
   return JAROJE_CATALOG['default_2'];
 }
 
-// Auto-refresh del token de autenticación Beds24 con persistencia en Supabase (B2B SaaS Ready)
+// ─── TOKEN CACHE (en memoria, previene race conditions en serverless) ────────
+// En Vercel cada función serverless tiene su propia instancia,
+// pero dentro de la MISMA instancia esto evita llamadas simultáneas.
+let _cachedToken: string | null = null;
+let _cachedTokenExpiry: number = 0; // timestamp en ms
+let _refreshPromise: Promise<string> | null = null; // mutex de refresh
+
+// Auto-refresh del token de autenticación Beds24 con persistencia en Supabase
 export async function getBeds24Token(): Promise<string> {
+  // Si ya tenemos un refresh en curso, esperar a que termine (previene race conditions)
+  if (_refreshPromise) {
+    return _refreshPromise;
+  }
+
+  // Si el token en caché sigue válido (con 5 min de margen), devolverlo directamente
+  const now = Date.now();
+  if (_cachedToken && _cachedTokenExpiry > now + 5 * 60 * 1000) {
+    return _cachedToken;
+  }
+
+  // Iniciar refresh (con mutex para evitar llamadas paralelas)
+  _refreshPromise = _doRefresh().finally(() => {
+    _refreshPromise = null;
+  });
+  return _refreshPromise;
+}
+
+async function _doRefresh(): Promise<string> {
   let tempToken: string | null = null;
   let refreshToken: string | null = null;
-  const envRefreshToken = process.env.BEDS24_REFRESH_TOKEN || null;
-  const envTempToken = process.env.BEDS24_TEMP_TOKEN || null;
 
-  // 1. Intentar leer los tokens desde la base de datos en Supabase
+  // 1. Leer tokens desde Supabase
   try {
     const { data, error } = await supabase
       .from('beds24_auth')
-      .select('temp_token, refresh_token')
+      .select('temp_token, refresh_token, updated_at')
       .eq('id', 1)
       .single();
 
     if (!error && data) {
       tempToken = data.temp_token;
       refreshToken = data.refresh_token;
+
+      // Si el token en DB fue actualizado en los últimos 20 minutos, probablemente sigue válido
+      // (los tokens de Beds24 duran típicamente 24h, pero el timestamp nos da un hint)
+      if (tempToken && data.updated_at) {
+        const updatedAt = new Date(data.updated_at).getTime();
+        const minutesSinceUpdate = (Date.now() - updatedAt) / (1000 * 60);
+        if (minutesSinceUpdate < 60) {
+          // Cachear en memoria y devolver sin hacer probe
+          _cachedToken = tempToken;
+          _cachedTokenExpiry = Date.now() + (60 - minutesSinceUpdate) * 60 * 1000;
+          console.log(`[Beds24 Auth] Token en caché válido (actualizado hace ${Math.round(minutesSinceUpdate)} min)`);
+          return tempToken;
+        }
+      }
     }
   } catch (err) {
-    console.error("Error al leer tokens de Supabase:", err);
+    console.error('[Beds24 Auth] Error al leer tokens de Supabase:', err);
   }
 
-  // Si hay un refresh token en las variables de entorno y es diferente al de la base de datos,
-  // priorizamos el del entorno (por ejemplo, si el administrador lo actualizó en Vercel o en el .env)
+  // 2. Fallback a variables de entorno si Supabase falló o está vacío
+  const envRefreshToken = process.env.BEDS24_REFRESH_TOKEN || null;
+  const envTempToken = process.env.BEDS24_TEMP_TOKEN || null;
+
   if (envRefreshToken && envRefreshToken !== refreshToken) {
-    console.log("[Beds24 Auth] Se detectó un nuevo BEDS24_REFRESH_TOKEN en las variables de entorno. Sobrescribiendo token de base de datos...");
+    console.log('[Beds24 Auth] Usando BEDS24_REFRESH_TOKEN de variables de entorno.');
     refreshToken = envRefreshToken;
     tempToken = envTempToken;
   } else if (!refreshToken) {
-    // Fallback si la base de datos está vacía o falló la consulta
     tempToken = envTempToken;
     refreshToken = envRefreshToken;
   }
 
-  // 2. Si hay un tempToken, validar si sigue activo con un probe rápido de red
-  if (tempToken) {
-    try {
-      const probe = await fetch('https://api.beds24.com/v2/bookings?limit=1', {
-        headers: { 'token': tempToken },
-        cache: 'no-store'
-      });
-      if (probe.ok || probe.status === 404) {
-        return tempToken;
-      }
-    } catch (e) {
-      console.warn("Probe de token de Beds24 falló, intentando refrescar...");
-    }
-  }
-
   if (!refreshToken) {
-    throw new Error('Falta BEDS24_REFRESH_TOKEN en la base de datos y variables de entorno.');
+    throw new Error('TOKEN_EXPIRED');
   }
 
-  // 3. Si el tempToken venció o no existe, refrescar usando el refreshToken
+  // 3. Refrescar el token usando el refreshToken
+  console.log('[Beds24 Auth] Solicitando nuevo token a Beds24...');
   const refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
     method: 'GET',
     headers: { 'refreshToken': refreshToken },
@@ -419,19 +444,24 @@ export async function getBeds24Token(): Promise<string> {
   });
 
   if (!refreshRes.ok) {
+    const errText = await refreshRes.text().catch(() => String(refreshRes.status));
+    console.error(`[Beds24 Auth] Refresh falló ${refreshRes.status}: ${errText}`);
     throw new Error('TOKEN_EXPIRED');
   }
 
   const refreshData = await refreshRes.json();
 
   if (!refreshData.token) {
+    console.error('[Beds24 Auth] Refresh no devolvió token:', JSON.stringify(refreshData));
     throw new Error('TOKEN_EXPIRED');
   }
 
-  const newTempToken = refreshData.token;
-  const newRefreshToken = refreshData.refreshToken || refreshToken;
+  const newTempToken = refreshData.token as string;
+  const newRefreshToken = (refreshData.refreshToken || refreshToken) as string;
 
-  // 4. Guardar los nuevos tokens de vuelta en Supabase (upsert en id = 1)
+  console.log('[Beds24 Auth] ✅ Token refrescado exitosamente.');
+
+  // 4. Guardar en Supabase inmediatamente
   try {
     const { error: upsertError } = await supabase
       .from('beds24_auth')
@@ -443,18 +473,25 @@ export async function getBeds24Token(): Promise<string> {
       });
 
     if (upsertError) {
-      console.error("Error al persistir nuevos tokens en Supabase:", upsertError.message);
+      console.error('[Beds24 Auth] Error al guardar en Supabase:', upsertError.message);
+    } else {
+      console.log('[Beds24 Auth] Tokens guardados en Supabase.');
     }
   } catch (err) {
-    console.error("Error crítico al guardar tokens en base de datos:", err);
+    console.error('[Beds24 Auth] Excepción al guardar en Supabase:', err);
   }
 
-  // Actualizar también en variables de proceso en memoria como respaldo secundario
+  // 5. Actualizar caché en memoria (válido 23 horas para tokens de Beds24 que duran 24h)
+  _cachedToken = newTempToken;
+  _cachedTokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
+
+  // Actualizar variables de proceso como respaldo adicional
   process.env.BEDS24_TEMP_TOKEN = newTempToken;
   process.env.BEDS24_REFRESH_TOKEN = newRefreshToken;
 
   return newTempToken;
 }
+
 
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
 export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string): Promise<any[]> {
