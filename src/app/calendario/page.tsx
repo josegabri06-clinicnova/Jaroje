@@ -165,20 +165,23 @@ async function compressImage(file: File): Promise<string> {
 
 const getCapacityRules = (roomName: string) => {
   const r = (roomName || '').toLowerCase();
-  if (r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
     return { base: 2, max: 2 };
+  }
+  if (r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+    return { base: 2, max: 4 };
   }
   if (r.includes('1 dormitorio') || r.includes('402')) {
     return { base: 2, max: 4 };
   }
   if (r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 4, max: 6 };
+    return { base: 4, max: 8 };
   }
   if (r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 6, max: 8 };
+    return { base: 6, max: 12 };
   }
-  if (r.includes('casa') || r.includes('401') || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506')) {
-    return { base: 8, max: 12 };
+  if (r.includes('casa') || r.includes('401')) {
+    return { base: 8, max: 16 };
   }
   return { base: 6, max: 8 };
 };

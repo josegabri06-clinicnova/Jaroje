@@ -32,6 +32,29 @@ const PHYSICAL_ROOM_GROUPS = [
   }
 ];
 
+const getCapacityRules = (roomName: string) => {
+  const r = (roomName || '').toLowerCase();
+  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
+    return { base: 2, max: 2 };
+  }
+  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+    return { base: 2, max: 4 };
+  }
+  if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
+    return { base: 2, max: 4 };
+  }
+  if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
+    return { base: 4, max: 8 };
+  }
+  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
+    return { base: 6, max: 12 };
+  }
+  if (r === '679093' || r.includes('casa') || r.includes('401')) {
+    return { base: 8, max: 16 };
+  }
+  return { base: 6, max: 8 }; // default fallback
+};
+
 function StatusBadge({ status, isCheckedIn, isCheckedOut }: { status: string, isCheckedIn?: boolean, isCheckedOut?: boolean }) {
   if (isCheckedOut) return (
     <span className="flex items-center gap-1 text-[11px] font-semibold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-md border border-zinc-200">
@@ -288,6 +311,14 @@ export default function ReservasList() {
 
   const handleReassignRoom = async () => {
     if (!selectedRes || !targetRoomName) return;
+
+    // Validar capacidad máxima de la nueva habitación
+    const totalGuests = Number(selectedRes.num_adult || 1) + Number(selectedRes.num_child || 0);
+    const rules = getCapacityRules(targetRoomName);
+    if (totalGuests > rules.max) {
+      alert(`⚠️ No se puede reasignar a la habitación ${targetRoomName} porque la capacidad máxima es de ${rules.max} personas y la reserva tiene ${totalGuests} huéspedes.`);
+      return;
+    }
     
     const confirmChange = confirm(`⚠️ ¿Estás seguro de que deseas reasignar la reserva de ${selectedRes.guest_name} a la habitación ${targetRoomName}?\n\nEsto actualizará la asignación en Beds24 y sincronizará la habitación en tu registro local de Supabase.`);
     if (!confirmChange) return;
@@ -535,6 +566,15 @@ export default function ReservasList() {
 
   const handleSaveReservationEdit = async () => {
     if (!selectedRes) return;
+
+    // Validar capacidad máxima de la habitación
+    const rules = getCapacityRules(selectedRes.room);
+    const totalGuests = Number(editAdults) + Number(editChildren);
+    if (totalGuests > rules.max) {
+      alert(`⚠️ La capacidad máxima de la habitación ${selectedRes.room} es de ${rules.max} personas. Has ingresado ${totalGuests} huéspedes.`);
+      return;
+    }
+
     setSaveEditLoading(true);
     try {
       const res = await fetch('/api/reservas', {
@@ -1262,6 +1302,20 @@ export default function ReservasList() {
                         </select>
                       </div>
                     </div>
+
+                    {selectedRes && (() => {
+                      const rules = getCapacityRules(selectedRes.room);
+                      const total = editAdults + editChildren;
+                      const isOver = total > rules.max;
+                      return (
+                        <div className={`text-[11px] font-bold mt-1 pl-0.5 ${isOver ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`}>
+                          {isOver 
+                            ? `⚠️ Límite excedido. Máximo permitido para la habitación ${selectedRes.room}: ${rules.max} personas.` 
+                            : `✓ Capacidad permitida. Máximo: ${rules.max} personas.`}
+                        </div>
+                      );
+                    })()}
+
                   </div>
 
                   {/* 2. Teléfono */}

@@ -125,20 +125,23 @@ const PHYSICAL_ROOM_GROUPS = [
 
 const getCapacityRules = (roomName: string) => {
   const r = (roomName || '').toLowerCase();
-  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
     return { base: 2, max: 2 };
+  }
+  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+    return { base: 2, max: 4 };
   }
   if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
     return { base: 2, max: 4 };
   }
   if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 4, max: 6 };
+    return { base: 4, max: 8 };
   }
   if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 6, max: 8 };
+    return { base: 6, max: 12 };
   }
-  if (r === '679093' || r.includes('casa') || r.includes('401') || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506')) {
-    return { base: 8, max: 12 };
+  if (r === '679093' || r.includes('casa') || r.includes('401')) {
+    return { base: 8, max: 16 };
   }
   return { base: 6, max: 8 }; // default fallback
 };
@@ -615,7 +618,7 @@ export default function RecepcionPage() {
     const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room).base);
     const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room).base);
     const diffExtra = newExtraGuests - originalExtraGuests;
-    const priceAdjustment = diffExtra * 200 * (selectedReserva.nights || 1);
+    const priceAdjustment = 0; // Desactivado: tarifa plana por habitación (anteriormente diffExtra * 200 * (selectedReserva.nights || 1))
     return Math.round(Number(selectedReserva.price_estimate || 0) + priceAdjustment);
   }, [selectedReserva, editedAdults, editedChildren]);
 
@@ -654,6 +657,15 @@ export default function RecepcionPage() {
 
   const handleSaveChanges = async () => {
     if (!selectedReserva) return;
+
+    // Validar capacidad máxima de la habitación
+    const rules = getCapacityRules(selectedReserva.room);
+    const totalGuests = Number(editedAdults) + Number(editedChildren);
+    if (totalGuests > rules.max) {
+      alert(`⚠️ La capacidad máxima de la habitación ${selectedReserva.room} es de ${rules.max} personas. Has ingresado ${totalGuests} personas. Por favor, ajusta la cantidad de huéspedes.`);
+      return;
+    }
+
     setIsSavingChanges(true);
     try {
       const res = await fetch('/api/reservas', {
@@ -878,6 +890,14 @@ export default function RecepcionPage() {
 
   const handleReassignRoom = async () => {
     if (!selectedReserva || !targetRoomName) return;
+
+    // Validar capacidad máxima de la nueva habitación
+    const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
+    const rules = getCapacityRules(targetRoomName);
+    if (totalGuests > rules.max) {
+      alert(`⚠️ No se puede reasignar a la habitación ${targetRoomName} porque la capacidad máxima es de ${rules.max} personas y la reserva tiene ${totalGuests} huéspedes.`);
+      return;
+    }
     
     const confirmChange = confirm(`⚠️ ¿Estás seguro de que deseas reasignar la reserva de ${selectedReserva.guest_name} a la habitación ${targetRoomName}?\n\nEsto actualizará la asignación en Beds24 y sincronizará la habitación en tu registro local de Supabase.`);
     if (!confirmChange) return;
@@ -974,6 +994,21 @@ export default function RecepcionPage() {
       setCheckInNotes(selectedReserva.notes || '');
     }
   }, [selectedReserva?.id]);
+
+  const walkinMaxCapacity = useMemo(() => {
+    if (!selectedReserva || selectedReserva.id !== 'walkin') return 0;
+    const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
+      ? selectedReserva.groupRooms
+      : [{ roomId: selectedReserva.room, unitId: selectedReserva.unit_id || '', name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) }];
+    
+    let totalMax = 0;
+    group.forEach((rm: any) => {
+      if (!rm.roomId && !rm.room) return;
+      const cap = getCapacityRules(rm.roomId || rm.room);
+      totalMax += cap.max;
+    });
+    return totalMax;
+  }, [selectedReserva?.groupRooms, selectedReserva?.room, selectedReserva?.unit_id, roomInventory]);
 
   // Modal Mtto
   const [showForm, setShowForm] = useState(false);
@@ -1206,7 +1241,7 @@ export default function RecepcionPage() {
       
       const capRules = getCapacityRules(rm.roomId);
       const extraGuests = Math.max(0, numGuests - capRules.base);
-      const surchargePerNight = extraGuests * 200;
+      const surchargePerNight = 0; // Desactivado: tarifa plana por habitación (anteriormente extraGuests * 200)
 
       // Buscar tarifa dinámica en roomInventory
       const roomGroup = roomInventory.find(g => g.roomId === rm.roomId);
@@ -1552,6 +1587,24 @@ export default function RecepcionPage() {
 
     if (selectedReserva.id === 'walkin') {
       try {
+        const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
+          ? selectedReserva.groupRooms
+          : [{ roomId: selectedReserva.room, unitId: selectedReserva.unit_id || '', name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) }];
+        
+        let totalMaxCapacity = 0;
+        group.forEach((rm: any) => {
+          if (!rm.roomId && !rm.room) return;
+          const cap = getCapacityRules(rm.roomId || rm.room);
+          totalMaxCapacity += cap.max;
+        });
+
+        const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
+        if (totalGuests > totalMaxCapacity) {
+          alert(`⚠️ No se puede registrar la reserva porque la capacidad máxima total de las habitaciones seleccionadas es de ${totalMaxCapacity} personas. Has ingresado ${totalGuests} personas.`);
+          setSubmitting(false);
+          return;
+        }
+
         const { totalStay, roomDetails } = calculateWalkinPrices(selectedReserva);
         const totalRooms = roomDetails.length;
         const totalPayment = Number(paymentAmount || 0);
@@ -2908,6 +2961,19 @@ export default function RecepcionPage() {
                           />
                         </div>
                       </div>
+
+                      {walkinMaxCapacity > 0 && (
+                        <div className={`text-[12px] font-bold mt-1.5 pl-0.5 ${
+                          (Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0)) > walkinMaxCapacity
+                            ? 'text-rose-600 animate-pulse'
+                            : 'text-emerald-600'
+                        }`}>
+                          {(Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0)) > walkinMaxCapacity
+                            ? `⚠️ Límite de capacidad excedido. Máximo permitido: ${walkinMaxCapacity} personas.`
+                            : `✓ Capacidad permitida. Máximo total: ${walkinMaxCapacity} personas.`}
+                        </div>
+                      )}
+
                       <div>
                         <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nota / Comentarios (Opcional)</label>
                         <textarea

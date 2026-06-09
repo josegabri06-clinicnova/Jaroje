@@ -14,11 +14,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ─── CONFIGURACIONES DE HABITACIONES ──────────────────────────────────────────
 const ROOMS = [
-  { id: '679077', name: 'Habitación DOBLE - 2 camas dobles', icon: '🛏️', capacity: 2, baseCapacity: 2 },
+  { id: '679077', name: 'Habitación DOBLE - 2 camas dobles', icon: '🛏️', capacity: 4, baseCapacity: 2 },
   { id: '679087', name: 'Apartamento Premier de 1 dormitorio', icon: '🏠', capacity: 4, baseCapacity: 2 },
-  { id: '679091', name: 'Apartamento Premier de 2 dormitorios', icon: '🏡', capacity: 6, baseCapacity: 4 },
-  { id: '679092', name: 'Apartamento Premier de 3 dormitorios', icon: '🏘️', capacity: 8, baseCapacity: 6 },
-  { id: '679093', name: 'Casa Vacacional de 3 dormitorios', icon: '💎', capacity: 12, baseCapacity: 8 },
+  { id: '679091', name: 'Apartamento Premier de 2 dormitorios', icon: '🏡', capacity: 8, baseCapacity: 4 },
+  { id: '679092', name: 'Apartamento Premier de 3 dormitorios', icon: '🏘️', capacity: 12, baseCapacity: 6 },
+  { id: '679093', name: 'Casa Vacacional de 3 dormitorios', icon: '💎', capacity: 16, baseCapacity: 8 },
 ];
 
 const CHANNELS = [
@@ -612,7 +612,7 @@ export default function PreciosPage() {
 
     const capacityBase = selectedRoomMetadata.baseCapacity;
     const extraGuests = Math.max(0, simGuests - capacityBase);
-    const surchargePerNight = extraGuests * 200; // $200 por persona adicional
+    const surchargePerNight = 0; // Desactivado: tarifa plana por habitación (anteriormente extraGuests * 200)
 
     const customDiscounts = pricingSettings?.[simRoomId]?.discounts;
     const discountMult = getLengthOfStayMultiplier(nights, customDiscounts);
@@ -1314,15 +1314,7 @@ export default function PreciosPage() {
                     </div>
 
                     <div className="pt-2">
-                      <div className="flex justify-between items-center mb-1.5 pl-0.5">
-                        <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huéspedes</label>
-                        {simGuests > selectedRoomMetadata.baseCapacity && (
-                          <span className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100 uppercase">
-                            Cargo Adicional Aplicado (+{simGuests - selectedRoomMetadata.baseCapacity} pax)
-                          </span>
-                        )}
-                      </div>
-                      
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5 pl-0.5">Huéspedes</label>
                       <div className="flex items-center gap-3">
                         <Users size={16} className="text-zinc-400 shrink-0" />
                         <select
@@ -1332,7 +1324,7 @@ export default function PreciosPage() {
                         >
                           {Array.from({ length: selectedRoomMetadata.capacity }, (_, i) => i + 1).map(n => (
                             <option key={n} value={n}>
-                              {n} Persona{n !== 1 ? 's' : ''} {n > selectedRoomMetadata.baseCapacity ? '(Tarifa Adicional)' : ''}
+                              {n} Persona{n !== 1 ? 's' : ''}
                             </option>
                           ))}
                         </select>

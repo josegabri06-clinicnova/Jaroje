@@ -63,6 +63,29 @@ function addDaysToDateStr(dateStr: string, days: number): string {
   return getLocalDateStr(d);
 }
 
+const getCapacityRules = (roomIdOrName: string) => {
+  const r = (roomIdOrName || '').toLowerCase();
+  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
+    return { base: 2, max: 2 };
+  }
+  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+    return { base: 2, max: 4 };
+  }
+  if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
+    return { base: 2, max: 4 };
+  }
+  if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
+    return { base: 4, max: 8 };
+  }
+  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
+    return { base: 6, max: 12 };
+  }
+  if (r === '679093' || r.includes('casa') || r.includes('401')) {
+    return { base: 8, max: 16 };
+  }
+  return { base: 6, max: 8 }; // default fallback
+};
+
 export default function VercelActionForm() {
   const router = useRouter();
   const [mode, setMode] = useState<'reserva' | 'bloqueo'>('reserva');
@@ -92,6 +115,20 @@ export default function VercelActionForm() {
   });
 
   const [nights, setNights] = useState<number | ''>(1);
+
+  const maxCapacity = useMemo(() => {
+    const roomsToBook = form.groupRooms && form.groupRooms.length > 0
+      ? form.groupRooms
+      : (form.roomId && form.unitId ? [{ roomId: form.roomId, unitId: form.unitId, name: getUnitName(form.roomId, form.unitId) || form.unitId }] : []);
+    
+    let totalMax = 0;
+    roomsToBook.forEach(r => {
+      const parentMapping = getParentMapping(r.roomId, r.unitId);
+      const rules = getCapacityRules(parentMapping.roomId || r.roomId || r.name);
+      totalMax += rules.max;
+    });
+    return totalMax;
+  }, [form.roomId, form.unitId, form.groupRooms]);
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
@@ -311,6 +348,27 @@ export default function VercelActionForm() {
     if (mode === 'reserva') {
       if (!form.guestName || !form.phone || !form.numAdult || Number(form.numAdult) < 1) {
         return alert("Por favor, rellene todos los campos obligatorios: Nombre del Huésped, N. Móvil y Adultos.");
+      }
+
+      // Validar capacidad máxima de la habitación o habitaciones seleccionadas
+      const roomsToBook = form.groupRooms && form.groupRooms.length > 0
+        ? form.groupRooms
+        : [{
+            roomId: form.roomId,
+            unitId: form.unitId,
+            name: getUnitName(form.roomId, form.unitId) || form.unitId
+          }];
+      
+      let totalMaxCapacity = 0;
+      roomsToBook.forEach(r => {
+        const parentMapping = getParentMapping(r.roomId, r.unitId);
+        const rules = getCapacityRules(parentMapping.roomId || r.roomId || r.name);
+        totalMaxCapacity += rules.max;
+      });
+
+      const totalGuests = Number(form.numAdult) + Number(form.numChild || 0);
+      if (totalGuests > totalMaxCapacity) {
+        return alert(`⚠️ La capacidad máxima de la(s) habitación(es) seleccionada(s) es de ${totalMaxCapacity} personas en total. Has ingresado ${totalGuests} personas. Por favor, reduce el número de huéspedes o selecciona más habitaciones.`);
       }
       if (Number(form.deposit || 0) > 0) {
         if (!formPaymentMethod || !formAccountId) {
@@ -779,6 +837,18 @@ export default function VercelActionForm() {
                     />
                   </div>
                 </div>
+
+                {maxCapacity > 0 && (
+                  <div className={`text-[12px] font-bold mt-1.5 pl-0.5 ${
+                    (Number(form.numAdult || 1) + Number(form.numChild || 0)) > maxCapacity
+                      ? 'text-rose-600 animate-pulse'
+                      : 'text-emerald-600'
+                  }`}>
+                    {(Number(form.numAdult || 1) + Number(form.numChild || 0)) > maxCapacity
+                      ? `⚠️ Límite de capacidad excedido. Máximo permitido: ${maxCapacity} personas.`
+                      : `✓ Capacidad permitida. Máximo total: ${maxCapacity} personas.`}
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Nota / Comentarios (Opcional)</label>
