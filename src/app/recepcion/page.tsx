@@ -995,21 +995,6 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva?.id]);
 
-  const walkinMaxCapacity = useMemo(() => {
-    if (!selectedReserva || selectedReserva.id !== 'walkin') return 0;
-    const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
-      ? selectedReserva.groupRooms
-      : [{ roomId: selectedReserva.room, unitId: selectedReserva.unit_id || '', name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) }];
-    
-    let totalMax = 0;
-    group.forEach((rm: any) => {
-      if (!rm.roomId && !rm.room) return;
-      const cap = getCapacityRules(rm.roomId || rm.room);
-      totalMax += cap.max;
-    });
-    return totalMax;
-  }, [selectedReserva?.groupRooms, selectedReserva?.room, selectedReserva?.unit_id, roomInventory]);
-
   // Modal Mtto
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ type: 'mantenimiento', room: 'General', description: '' });
@@ -1026,6 +1011,21 @@ export default function RecepcionPage() {
   // Availability check for Walk-In
   const [roomInventory, setRoomInventory] = useState<any[]>([]);
   const [checkingAvail, setCheckingAvail] = useState(false);
+
+  const walkinMaxCapacity = useMemo(() => {
+    if (!selectedReserva || selectedReserva.id !== 'walkin') return 0;
+    const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
+      ? selectedReserva.groupRooms
+      : [{ roomId: selectedReserva.room, unitId: selectedReserva.unit_id || '', name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) }];
+    
+    let totalMax = 0;
+    group.forEach((rm: any) => {
+      if (!rm.roomId && !rm.room) return;
+      const cap = getCapacityRules(rm.roomId || rm.room);
+      totalMax += cap.max;
+    });
+    return totalMax;
+  }, [selectedReserva?.groupRooms, selectedReserva?.room, selectedReserva?.unit_id, roomInventory]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const mttoPhotoRef = useRef<HTMLInputElement>(null);
