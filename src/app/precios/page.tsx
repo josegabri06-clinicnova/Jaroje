@@ -77,11 +77,11 @@ export default function PreciosPage() {
 
   // Beds24 direct pricing state
   const [beds24Loading, setBeds24Loading] = useState(false);
-  const [beds24FixedPrices, setBeds24FixedPrices] = useState<any[]>([]);
+  const [beds24Rooms, setBeds24Rooms] = useState<any[]>([]); // rooms con precios del calendario
   const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35 });
   const [beds24Error, setBeds24Error] = useState<string | null>(null);
-  const [savingPriceId, setSavingPriceId] = useState<number | null>(null);
-  const [editedPrices, setEditedPrices] = useState<Record<number, string>>({});
+  const [savingPriceId, setSavingPriceId] = useState<string | null>(null); // roomId en edición
+  const [editedPrices, setEditedPrices] = useState<Record<string, string>>({});  // roomId → nuevo precio raw
   const [savingMultipliers, setSavingMultipliers] = useState(false);
 
   // Form State
@@ -181,7 +181,7 @@ export default function PreciosPage() {
     }
   };
 
-  // Load Beds24 fixed prices directly from Beds24 API
+  // Cargar precios del calendario de Beds24 (Daily Prices)
   const loadBeds24Prices = async () => {
     setBeds24Loading(true);
     setBeds24Error(null);
@@ -194,7 +194,7 @@ export default function PreciosPage() {
           : json.error || 'Error al cargar precios de Beds24');
         return;
       }
-      setBeds24FixedPrices(json.fixedPrices || []);
+      setBeds24Rooms(json.rooms || []);
       if (json.multipliers) setBeds24Multipliers(json.multipliers);
     } catch (err: any) {
       setBeds24Error('Error de red: ' + err.message);
@@ -203,26 +203,25 @@ export default function PreciosPage() {
     }
   };
 
-  // Save a single fixed price back to Beds24
-  const handleSavePriceToBeds24 = async (fp: any) => {
-    const newPriceWithTax = Number(editedPrices[fp.id]);
-    if (!newPriceWithTax || isNaN(newPriceWithTax) || newPriceWithTax <= 0) {
+  // Guardar precio base de habitación en Beds24 (precio SIN impuestos)
+  const handleSavePriceToBeds24 = async (room: any) => {
+    const newPriceRaw = Number(editedPrices[room.id]);
+    if (!newPriceRaw || isNaN(newPriceRaw) || newPriceRaw <= 0) {
       alert('Ingresa un precio válido mayor que 0.');
       return;
     }
-    setSavingPriceId(fp.id);
+    setSavingPriceId(room.id);
     try {
       const res = await fetch('/api/beds24-prices', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: fp.id, roomId: fp.roomId, priceWithTax: newPriceWithTax }),
+        body: JSON.stringify({ roomId: room.id, priceRaw: newPriceRaw }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
-      // Refrescar precios
+      // Refrescar precios desde Beds24
       await loadBeds24Prices();
-      setEditedPrices(prev => { const n = { ...prev }; delete n[fp.id]; return n; });
-      alert(`✅ Precio actualizado en Beds24: ${fp.name} → MX$${newPriceWithTax}`);
+      setEditedPrices(prev => { const n = { ...prev }; delete n[room.id]; return n; });
     } catch (err: any) {
       alert('Error al guardar en Beds24: ' + err.message);
     } finally {
@@ -890,12 +889,12 @@ export default function PreciosPage() {
             {activeTab === 'configuracion' && (
               <div className="space-y-6 animate-in fade-in duration-200">
 
-                {/* Header con botón de recarga */}
+                {/* Header */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-[15px] font-black text-zinc-900">Tarifas Beds24 · Edición Directa</h3>
+                    <h3 className="text-[15px] font-black text-zinc-900">Tarifas Beds24 · Daily Prices</h3>
                     <p className="text-[12px] text-zinc-400 font-semibold mt-0.5">
-                      Los precios que ves aquí son los mismos que están en Beds24. Edítalos y guarda para actualizarlos automáticamente.
+                      Tarifas base del calendario (sin impuestos). Edita y guarda para actualizar en Beds24.
                     </p>
                   </div>
                   <button
@@ -904,8 +903,22 @@ export default function PreciosPage() {
                     className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl flex items-center gap-2 shadow cursor-pointer disabled:opacity-50 transition-colors"
                   >
                     <RefreshCw size={13} className={beds24Loading ? 'animate-spin' : ''} />
-                    {beds24Loading ? 'Cargando...' : 'Recargar de Beds24'}
+                    {beds24Loading ? 'Cargando...' : 'Actualizar'}
                   </button>
+                </div>
+
+                {/* Fórmula visual */}
+                <div className="bg-zinc-900 rounded-2xl px-5 py-4 flex items-center gap-3 flex-wrap">
+                  <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Fórmula:</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1.5 bg-zinc-800 rounded-lg text-[11px] font-extrabold text-white">Precio Beds24</span>
+                    <span className="text-zinc-500 font-black text-sm">×</span>
+                    <span className="px-2.5 py-1.5 bg-indigo-900/60 rounded-lg text-[11px] font-extrabold text-indigo-300">Multiplicador OTA</span>
+                    <span className="text-zinc-500 font-black text-sm">×</span>
+                    <span className="px-2.5 py-1.5 bg-amber-900/60 rounded-lg text-[11px] font-extrabold text-amber-300">1.19 impuestos</span>
+                    <span className="text-zinc-500 font-black text-sm">=</span>
+                    <span className="px-2.5 py-1.5 bg-emerald-900/60 rounded-lg text-[11px] font-extrabold text-emerald-300">Precio al huésped</span>
+                  </div>
                 </div>
 
                 {/* Error state */}
@@ -919,170 +932,166 @@ export default function PreciosPage() {
                   </div>
                 )}
 
-                {/* Tabla de tarifas por habitación */}
+                {/* Tabla principal de precios */}
                 {!beds24Error && (
                   <div className="bg-white border border-zinc-200 rounded-3xl shadow-sm overflow-hidden">
-                    {beds24Loading && beds24FixedPrices.length === 0 ? (
+                    {/* Cabecera de columnas */}
+                    <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-200 grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center">
+                      <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Unidad</span>
+                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest w-28 text-center">Beds24 (s/imp)</span>
+                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest w-24 text-center">Directo</span>
+                      <span className="text-[10px] font-extrabold text-indigo-500 uppercase tracking-widest w-24 text-center">Airbnb</span>
+                      <span className="text-[10px] font-extrabold text-sky-600 uppercase tracking-widest w-24 text-center">Booking</span>
+                    </div>
+
+                    {beds24Loading && beds24Rooms.length === 0 ? (
                       <div className="p-12 flex flex-col items-center gap-3">
                         <RefreshCw size={24} className="text-indigo-500 animate-spin" />
-                        <span className="text-[13px] font-semibold text-zinc-500">Cargando tarifas de Beds24...</span>
+                        <span className="text-[13px] font-semibold text-zinc-500">Leyendo calendario de Beds24...</span>
                       </div>
-                    ) : beds24FixedPrices.length === 0 ? (
-                      <div className="p-12 flex flex-col items-center gap-3 text-center">
+                    ) : beds24Rooms.length === 0 && !beds24Loading ? (
+                      <div className="p-10 flex flex-col items-center gap-3 text-center">
                         <AlertCircle size={28} className="text-zinc-300" />
-                        <p className="text-[14px] font-semibold text-zinc-500">No se encontraron tarifas fijas en Beds24.</p>
-                        <p className="text-[12px] text-zinc-400 max-w-sm">
-                          Asegúrate de tener "Fixed Prices" configurados en Beds24 en la pestaña <strong>Daily Price Rules</strong>.
-                        </p>
+                        <p className="text-[13px] font-semibold text-zinc-500">No se obtuvieron precios del calendario.</p>
+                        <p className="text-[12px] text-zinc-400 max-w-xs">Presiona <strong>Actualizar</strong> o verifica que el token de Beds24 sea válido.</p>
                       </div>
                     ) : (
-                      <>
-                        {/* Agrupar por habitación */}
-                        {ROOMS.map(room => {
-                          const roomPrices = beds24FixedPrices.filter(fp => fp.roomId === room.id);
-                          if (roomPrices.length === 0) return null;
+                      <div className="divide-y divide-zinc-100">
+                        {beds24Rooms.map(room => {
+                          const isEditing = editedPrices[room.id] !== undefined;
+                          const rawDisplay = isEditing ? editedPrices[room.id] : String(room.priceRaw || '');
+                          const rawValue = isEditing ? Number(editedPrices[room.id]) : room.priceRaw;
+                          const isSaving = savingPriceId === room.id;
+
+                          // Calcular precios con la fórmula correcta en tiempo real
+                          const previewDirecto = Math.round(rawValue * 1.19);
+                          const previewAirbnb = Math.round(rawValue * beds24Multipliers.airbnb * 1.19);
+                          const previewBooking = Math.round(rawValue * beds24Multipliers.booking * 1.19);
+
                           return (
-                            <div key={room.id} className="border-b border-zinc-100 last:border-0">
-                              {/* Room header */}
-                              <div className="px-5 py-3 bg-zinc-50 border-b border-zinc-100 flex items-center gap-3">
-                                <span className="text-xl">{room.icon}</span>
-                                <div>
-                                  <span className="text-[13px] font-extrabold text-zinc-900">{room.name}</span>
-                                  <span className="text-[10px] text-zinc-400 font-semibold ml-2">· {roomPrices.length} tarifas</span>
+                            <div key={room.id} className={`grid grid-cols-[1fr_auto_auto_auto_auto] gap-3 items-center px-5 py-3.5 hover:bg-zinc-50/60 transition-colors ${isEditing ? 'bg-indigo-50/30' : ''}`}>
+                              {/* Nombre unidad */}
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="text-lg shrink-0">{room.icon}</span>
+                                <div className="min-w-0">
+                                  <p className="text-[12.5px] font-extrabold text-zinc-900 truncate">{room.name}</p>
+                                  {room.sampledDays > 0 && (
+                                    <p className="text-[9px] text-zinc-400 font-semibold">mediana de {room.sampledDays} días</p>
+                                  )}
                                 </div>
                               </div>
-                              {/* Price rows */}
-                              <div className="divide-y divide-zinc-50">
-                                {roomPrices.map(fp => {
-                                  const isEditing = editedPrices[fp.id] !== undefined;
-                                  const displayValue = isEditing ? editedPrices[fp.id] : String(fp.priceWithTax);
-                                  const isSaving = savingPriceId === fp.id;
-                                  return (
-                                    <div key={fp.id} className="px-5 py-3.5 flex items-center justify-between gap-4 hover:bg-zinc-50/50 transition-colors">
-                                      <div className="flex-1 min-w-0">
-                                        <span className="text-[13px] font-bold text-zinc-800 block truncate">{fp.name || 'Sin nombre'}</span>
-                                        {fp.from && fp.to && (
-                                          <span className="text-[10px] text-zinc-400 font-semibold">
-                                            📅 {fp.from} → {fp.to}
-                                          </span>
-                                        )}
-                                        <span className="text-[9px] text-zinc-400 font-medium block">
-                                          (Sin impuesto: MX${fp.priceRaw.toFixed(0)})
-                                        </span>
-                                      </div>
-                                      <div className="flex items-center gap-2 shrink-0">
-                                        {/* Precio editable */}
-                                        <div className="relative">
-                                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">$</span>
-                                          <input
-                                            type="number"
-                                            value={displayValue}
-                                            onChange={e => setEditedPrices(prev => ({ ...prev, [fp.id]: e.target.value }))}
-                                            className={`w-28 pl-6 pr-3 py-2 text-[13px] font-extrabold rounded-xl border outline-none transition-all ${
-                                              isEditing
-                                                ? 'border-indigo-400 bg-indigo-50 text-indigo-900 ring-2 ring-indigo-200'
-                                                : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-zinc-400 focus:bg-white'
-                                            }`}
-                                          />
-                                        </div>
-                                        {/* Botón guardar (solo visible si editó) */}
-                                        {isEditing && (
-                                          <button
-                                            onClick={() => handleSavePriceToBeds24(fp)}
-                                            disabled={isSaving}
-                                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50 transition-colors"
-                                          >
-                                            {isSaving ? <RefreshCw size={12} className="animate-spin" /> : <Check size={12} strokeWidth={3} />}
-                                            {isSaving ? '...' : 'Guardar'}
-                                          </button>
-                                        )}
-                                        {isEditing && (
-                                          <button
-                                            onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[fp.id]; return n; })}
-                                            className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer"
-                                          >
-                                            <X size={13} />
-                                          </button>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+
+                              {/* Precio editable SIN impuestos (como está en Beds24) */}
+                              <div className="relative w-28">
+                                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 pointer-events-none">$</span>
+                                <input
+                                  type="number"
+                                  value={rawDisplay}
+                                  placeholder="0"
+                                  onChange={e => setEditedPrices(prev => ({ ...prev, [room.id]: e.target.value }))}
+                                  className={`w-full pl-5 pr-2 py-2 text-[12px] font-extrabold rounded-xl border outline-none transition-all text-center ${
+                                    isEditing
+                                      ? 'border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200'
+                                      : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-indigo-300 focus:bg-white'
+                                  }`}
+                                />
+                              </div>
+
+                              {/* Directo (× 1.19) */}
+                              <div className="w-24 text-center">
+                                <span className={`text-[12px] font-extrabold ${isEditing ? 'text-zinc-700' : 'text-zinc-600'}`}>
+                                  ${previewDirecto.toLocaleString('es-MX')}
+                                </span>
+                              </div>
+
+                              {/* Airbnb (× 1.20 × 1.19) */}
+                              <div className="w-24 text-center">
+                                <span className={`text-[12px] font-extrabold ${isEditing ? 'text-indigo-700' : 'text-indigo-600'}`}>
+                                  ${previewAirbnb.toLocaleString('es-MX')}
+                                </span>
+                              </div>
+
+                              {/* Booking (× 1.35 × 1.19) */}
+                              <div className="w-24 flex items-center justify-center gap-1.5">
+                                <span className={`text-[12px] font-extrabold ${isEditing ? 'text-sky-700' : 'text-sky-600'}`}>
+                                  ${previewBooking.toLocaleString('es-MX')}
+                                </span>
+                                {isEditing && (
+                                  <>
+                                    <button
+                                      onClick={() => handleSavePriceToBeds24(room)}
+                                      disabled={isSaving}
+                                      className="ml-1 p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
+                                      title="Guardar en Beds24"
+                                    >
+                                      {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} strokeWidth={3} />}
+                                    </button>
+                                    <button
+                                      onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[room.id]; return n; })}
+                                      className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
+                                      title="Cancelar"
+                                    >
+                                      <X size={11} />
+                                    </button>
+                                  </>
+                                )}
                               </div>
                             </div>
                           );
                         })}
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
-
-                {/* Nota explicativa */}
-                <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex items-start gap-3">
-                  <Info size={15} className="text-indigo-500 shrink-0 mt-0.5" />
-                  <p className="text-[12px] text-indigo-700 font-semibold leading-relaxed">
-                    <strong>¿Cómo funciona?</strong> Los precios se muestran <strong>con impuestos (IVA 16% + ISH 3%)</strong> igual que en la pantalla de Daily Prices de Beds24.
-                    Al guardar, se convierte automáticamente al precio sin impuestos antes de enviarlo a Beds24. El cambio se refleja inmediatamente en todos los canales.
-                  </p>
-                </div>
 
                 {/* Multiplicadores OTA */}
                 <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm space-y-5">
                   <div>
                     <h3 className="text-[13px] font-extrabold text-zinc-900 flex items-center gap-2">
                       <Zap size={15} className="text-indigo-500" />
-                      Multiplicadores de Canal (OTAs)
+                      Multiplicadores de Canal
                     </h3>
-                    <p className="text-[11.5px] text-zinc-400 font-semibold mt-1">
-                      Estos factores se aplican sobre la tarifa base cuando llega una reserva por OTA. No son datos de Beds24, se gestionan aquí.
+                    <p className="text-[11px] text-zinc-400 font-semibold mt-1">
+                      Cambiar estos valores actualiza la vista de precios en tiempo real. Guarda para persistir.
                     </p>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider mb-1.5">Airbnb</label>
+                      <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Airbnb</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
-                        <input
-                          type="number" step="0.01" min="1"
+                        <input type="number" step="0.01" min="1"
                           value={beds24Multipliers.airbnb}
                           onChange={e => setBeds24Multipliers(prev => ({ ...prev, airbnb: parseFloat(e.target.value) || 1 }))}
-                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-zinc-400"
+                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-indigo-300"
                         />
                       </div>
-                      <p className="text-[10px] text-zinc-400 font-semibold mt-1">
-                        = +{Math.round((beds24Multipliers.airbnb - 1) * 100)}% sobre tarifa base
-                      </p>
+                      <p className="text-[9px] text-zinc-400 font-semibold mt-0.5">+{Math.round((beds24Multipliers.airbnb - 1) * 100)}% comisión OTA</p>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider mb-1.5">Booking.com</label>
+                      <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Booking.com</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
-                        <input
-                          type="number" step="0.01" min="1"
+                        <input type="number" step="0.01" min="1"
                           value={beds24Multipliers.booking}
                           onChange={e => setBeds24Multipliers(prev => ({ ...prev, booking: parseFloat(e.target.value) || 1 }))}
-                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-zinc-400"
+                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-sky-300"
                         />
                       </div>
-                      <p className="text-[10px] text-zinc-400 font-semibold mt-1">
-                        = +{Math.round((beds24Multipliers.booking - 1) * 100)}% sobre tarifa base
-                      </p>
+                      <p className="text-[9px] text-zinc-400 font-semibold mt-0.5">+{Math.round((beds24Multipliers.booking - 1) * 100)}% comisión OTA</p>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider mb-1.5">Directo / WhatsApp</label>
+                      <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Directo</label>
                       <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
-                        <input
-                          type="number" step="0.01" min="1"
-                          value={1.00}
-                          readOnly
-                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-500 outline-none cursor-not-allowed"
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-300">×</span>
+                        <input type="number" value={1.00} readOnly
+                          className="w-full pl-7 pr-3 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-400 outline-none cursor-not-allowed"
                         />
                       </div>
-                      <p className="text-[10px] text-zinc-400 font-semibold mt-1">Sin recargo (precio base)</p>
+                      <p className="text-[9px] text-zinc-400 font-semibold mt-0.5">Sin recargo</p>
                     </div>
                   </div>
-                  <div className="flex justify-end pt-2 border-t border-zinc-100">
+                  <div className="flex justify-end pt-3 border-t border-zinc-100">
                     <button
                       onClick={handleSaveMultipliers}
                       disabled={savingMultipliers}
@@ -1096,7 +1105,6 @@ export default function PreciosPage() {
 
               </div>
             )}
-                
             {/* ── SIMULADOR TAB ── */}
             {activeTab === 'simulador' && (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
