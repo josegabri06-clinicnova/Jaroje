@@ -210,6 +210,27 @@ export default function PreciosPage() {
       alert('Ingresa un precio válido mayor que 0.');
       return;
     }
+
+    // Calcular lo que verá el usuario en cada canal (con impuestos)
+    const precioDirecto = Math.round(newPriceRaw * 1.19).toLocaleString('es-MX');
+    const precioAirbnb  = Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19).toLocaleString('es-MX');
+    const precioBooking = Math.round(newPriceRaw * beds24Multipliers.booking * 1.19).toLocaleString('es-MX');
+
+    const confirmed = window.confirm(
+      `⚠️ CONFIRMAR CAMBIO EN BEDS24\n\n` +
+      `Habitación: ${room.name}\n` +
+      `Nuevo precio base: $${newPriceRaw.toLocaleString('es-MX')} (sin impuestos)\n\n` +
+      `Los huéspedes verán:\n` +
+      `  · Directo:  $${precioDirecto}\n` +
+      `  · Airbnb:   $${precioAirbnb}\n` +
+      `  · Booking:  $${precioBooking}\n\n` +
+      `⚠️ Esto sobreescribirá el precio en el calendario de Beds24 para los próximos 365 días.\n` +
+      `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
+      `¿Continuar?`
+    );
+
+    if (!confirmed) return;
+
     setSavingPriceId(room.id);
     try {
       const res = await fetch('/api/beds24-prices', {
@@ -222,12 +243,14 @@ export default function PreciosPage() {
       // Refrescar precios desde Beds24
       await loadBeds24Prices();
       setEditedPrices(prev => { const n = { ...prev }; delete n[room.id]; return n; });
+      alert(`✅ Precio actualizado en Beds24.\n${room.name} → $${newPriceRaw.toLocaleString('es-MX')} (sin imp.) aplicado desde hoy a los próximos 365 días.`);
     } catch (err: any) {
       alert('Error al guardar en Beds24: ' + err.message);
     } finally {
       setSavingPriceId(null);
     }
   };
+
 
   // Save OTA multipliers to Supabase
   const handleSaveMultipliers = async () => {
