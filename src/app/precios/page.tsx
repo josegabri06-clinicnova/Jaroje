@@ -80,8 +80,10 @@ export default function PreciosPage() {
   const [beds24Rooms, setBeds24Rooms] = useState<any[]>([]); // rooms con precios del calendario
   const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35 });
   const [beds24Error, setBeds24Error] = useState<string | null>(null);
-  const [savingPriceId, setSavingPriceId] = useState<string | null>(null); // roomId en edición
-  const [editedPrices, setEditedPrices] = useState<Record<string, string>>({});  // roomId → nuevo precio raw
+  // Key format: `${roomId}_${fromDate}` — permite editar cada bloque de temporada por separado
+  const [savingPriceKey, setSavingPriceKey] = useState<string | null>(null);
+  const [editedPrices, setEditedPrices] = useState<Record<string, string>>({});  
+  const [expandedLos, setExpandedLos] = useState<Record<string, boolean>>({}); // roomId → expandido
   const [savingMultipliers, setSavingMultipliers] = useState(false);
 
   // Form State
@@ -204,54 +206,72 @@ export default function PreciosPage() {
   };
 
   // Guardar precio base de habitación en Beds24 (precio SIN impuestos)
-  const handleSavePriceToBeds24 = async (room: any) => {
-    const newPriceRaw = Number(editedPrices[room.id]);
+  /**
+   * Guarda el precio de un bloque de temporada específico en Beds24.
+   * block = { roomId, roomName, from, to, fromLabel, toLabel, seasonLabel, priceRaw }
+   */
+  const handleSaveBlockPrice = async (block: {
+    roomId: string;
+    roomName: string;
+    from: string;
+    to: string;
+    fromLabel: string;
+    toLabel: string;
+    seasonLabel: string;
+    currentPriceRaw: number;
+  }) => {
+    const priceKey = `${block.roomId}_${block.from}`;
+    const rawInput = editedPrices[priceKey];
+    const newPriceRaw = Number(rawInput);
+
     if (!newPriceRaw || isNaN(newPriceRaw) || newPriceRaw <= 0) {
       alert('Ingresa un precio válido mayor que 0.');
       return;
     }
 
-    // Calcular lo que verá el usuario en cada canal (con impuestos)
     const precioDirecto = Math.round(newPriceRaw * 1.19).toLocaleString('es-MX');
     const precioAirbnb  = Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19).toLocaleString('es-MX');
     const precioBooking = Math.round(newPriceRaw * beds24Multipliers.booking * 1.19).toLocaleString('es-MX');
 
     const confirmed = window.confirm(
       `⚠️ CONFIRMAR CAMBIO EN BEDS24\n\n` +
-      `Habitación: ${room.name}\n` +
+      `Habitación: ${block.roomName}\n` +
+      `Temporada: ${block.seasonLabel}\n` +
+      `Periodo: ${block.fromLabel} — ${block.toLabel}\n` +
       `Nuevo precio base: $${newPriceRaw.toLocaleString('es-MX')} (sin impuestos)\n\n` +
-      `Los huéspedes verán:\n` +
+      `Los huéspedes verán (1-6 noches):\n` +
       `  · Directo:  $${precioDirecto}\n` +
       `  · Airbnb:   $${precioAirbnb}\n` +
       `  · Booking:  $${precioBooking}\n\n` +
-      `⚠️ Esto sobreescribirá el precio en el calendario de Beds24 para los próximos 365 días.\n` +
+      `Solo se modifica ESTE periodo en Beds24.\n` +
       `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
       `¿Continuar?`
     );
-
     if (!confirmed) return;
 
-    setSavingPriceId(room.id);
+    setSavingPriceKey(priceKey);
     try {
       const res = await fetch('/api/beds24-prices', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomId: room.id, priceRaw: newPriceRaw }),
+        body: JSON.stringify({
+          roomId: block.roomId,
+          priceRaw: newPriceRaw,
+          from: block.from,
+          to: block.to,
+        }),
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
-      // Refrescar precios desde Beds24
       await loadBeds24Prices();
-      setEditedPrices(prev => { const n = { ...prev }; delete n[room.id]; return n; });
-      alert(`✅ Precio actualizado en Beds24.\n${room.name} → $${newPriceRaw.toLocaleString('es-MX')} (sin imp.) aplicado desde hoy a los próximos 365 días.`);
+      setEditedPrices(prev => { const n = { ...prev }; delete n[priceKey]; return n; });
+      alert(`✅ Precio actualizado en Beds24.\n${block.seasonLabel} → $${newPriceRaw.toLocaleString('es-MX')} (sin imp.)`);
     } catch (err: any) {
       alert('Error al guardar en Beds24: ' + err.message);
     } finally {
-      setSavingPriceId(null);
+      setSavingPriceKey(null);
     }
   };
-
-
   // Save OTA multipliers to Supabase
   const handleSaveMultipliers = async () => {
     setSavingMultipliers(true);
@@ -972,133 +992,195 @@ export default function PreciosPage() {
                     ) : (
                       <div className="space-y-3">
                         {beds24Rooms.map(room => {
-                          const isEditing = editedPrices[room.id] !== undefined;
-                          const rawDisplay = isEditing ? editedPrices[room.id] : String(room.priceRaw || '');
-                          const rawValue = isEditing ? Number(editedPrices[room.id]) : (room.priceRaw || 0);
-                          const isSaving = savingPriceId === room.id;
+                          const losExpanded = expandedLos[room.id] ?? false;
+                          const seasonBlocks: any[] = room.seasonBlocks || [];
 
-                          const previewDirecto = rawValue > 0 ? Math.round(rawValue * 1.19) : 0;
-                          const previewAirbnb  = rawValue > 0 ? Math.round(rawValue * beds24Multipliers.airbnb * 1.19) : 0;
-                          const previewBooking = rawValue > 0 ? Math.round(rawValue * beds24Multipliers.booking * 1.19) : 0;
+                          // Color maps para cada temporada
+                          const badgeStyles: Record<string, { badge: string; ring: string; bg: string; text: string }> = {
+                            rose:   { badge: 'bg-rose-100 text-rose-700',   ring: 'ring-rose-200',   bg: 'bg-rose-50/40',   text: 'text-rose-700'   },
+                            orange: { badge: 'bg-orange-100 text-orange-700',ring: 'ring-orange-200', bg: 'bg-orange-50/40', text: 'text-orange-700' },
+                            amber:  { badge: 'bg-amber-100 text-amber-700', ring: 'ring-amber-200',  bg: 'bg-amber-50/40',  text: 'text-amber-700'  },
+                            sky:    { badge: 'bg-sky-100 text-sky-700',     ring: 'ring-sky-200',    bg: 'bg-sky-50/40',    text: 'text-sky-700'    },
+                            zinc:   { badge: 'bg-zinc-100 text-zinc-600',   ring: 'ring-zinc-200',   bg: 'bg-zinc-50',      text: 'text-zinc-600'   },
+                          };
 
                           return (
-                       <div
-                              key={room.id}
-                              className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all ${
-                                isEditing ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-zinc-200'
-                              }`}
-                            >
-                              {/* Cabecera de la tarjeta */}
-                              <div className="px-4 py-3 flex items-center justify-between border-b border-zinc-100">
+                            <div key={room.id} className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+
+                              {/* Cabecera del room */}
+                              <div className="px-4 py-3 flex items-center justify-between bg-zinc-50/80 border-b border-zinc-100">
                                 <div className="flex items-center gap-2.5">
                                   <span className="text-xl">{room.icon}</span>
                                   <p className="text-[13px] font-extrabold text-zinc-900">{room.name}</p>
                                 </div>
-                                {isEditing ? (
-                                  <div className="flex items-center gap-1.5">
-                                    <button
-                                      onClick={() => handleSavePriceToBeds24(room)}
-                                      disabled={isSaving}
-                                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
-                                    >
-                                      {isSaving ? <RefreshCw size={11} className="animate-spin" /> : <Check size={11} strokeWidth={3} />}
-                                      {isSaving ? 'Guardando...' : 'Guardar en Beds24'}
-                                    </button>
-                                    <button
-                                      onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[room.id]; return n; })}
-                                      className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg cursor-pointer transition-colors"
-                                    >
-                                      <X size={13} />
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Beds24 live</span>
-                                )}
+                                <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+                                  {room.hasCalendarData ? '🟢 Beds24 live' : '⚪ Sin datos'}
+                                </span>
                               </div>
 
-                              {/* Precio base editable */}
-                              <div className={`px-4 py-3 flex items-center justify-between ${isEditing ? 'bg-indigo-50/60' : 'bg-zinc-50/60'} border-b border-zinc-100`}>
-                                <div>
-                                  <p className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Precio base Beds24</p>
-                                  <p className="text-[9px] text-zinc-400 font-medium">1-6 noches · sin impuestos · toca para editar</p>
+                              {/* Bloques de temporada */}
+                              {seasonBlocks.length === 0 ? (
+                                <div className="px-4 py-5 text-center">
+                                  <p className="text-[12px] text-zinc-400">Sin rangos de precios en el calendario</p>
                                 </div>
-                                <div className="relative">
-                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400 pointer-events-none">$</span>
-                                  <input
-                                    type="number"
-                                    value={rawDisplay}
-                                    placeholder="0"
-                                    onChange={e => setEditedPrices(prev => ({ ...prev, [room.id]: e.target.value }))}
-                                    className={`w-28 pl-7 pr-2 py-1.5 text-[14px] font-black rounded-xl border outline-none transition-all text-right ${
-                                      isEditing
-                                        ? 'border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200'
-                                        : 'border-zinc-200 bg-white text-zinc-900 focus:border-indigo-300'
-                                    }`}
-                                  />
-                                </div>
-                              </div>
-
-                              {/* Tabla de tiers por estancia */}
-                              {(room.tiers && room.tiers.length > 0) && (
-                                <div className="px-4 py-3 space-y-0">
+                              ) : (
+                                <div className="divide-y divide-zinc-100">
                                   {/* Header de columnas */}
-                                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr] gap-1 pb-1.5 mb-1.5 border-b border-zinc-100">
-                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">Estancia</span>
-                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest text-right">Directo</span>
-                                    <span className="text-[9px] font-extrabold text-rose-400 uppercase tracking-widest text-right">Airbnb</span>
-                                    <span className="text-[9px] font-extrabold text-sky-400 uppercase tracking-widest text-right">Booking</span>
+                                  <div className="grid grid-cols-[1fr_auto] gap-2 px-4 py-1.5 bg-zinc-50">
+                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">Temporada · Periodo</span>
+                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest text-right">Precio base s/imp.</span>
                                   </div>
 
-                                  {/* Una fila por tier */}
-                                  {(room.tiers as any[]).map((tier: any, idx: number) => {
-                                    // Si está editando, recalcular en tiempo real desde el rawValue
-                                    const tierFactor = 1 + (tier.offsetPct / 100);
-                                    const tierRaw = rawValue > 0 ? rawValue * tierFactor : 0;
-                                    const tierDirecto  = tierRaw > 0 ? Math.round(tierRaw * 1.19) : 0;
-                                    const tierAirbnb   = tierRaw > 0 ? Math.round(tierRaw * beds24Multipliers.airbnb * 1.19) : 0;
-                                    const tierBooking  = tierRaw > 0 ? Math.round(tierRaw * beds24Multipliers.booking * 1.19) : 0;
+                                  {seasonBlocks.map((block: any) => {
+                                    const priceKey = `${room.id}_${block.from}`;
+                                    const isBlockEditing = editedPrices[priceKey] !== undefined;
+                                    const isSavingBlock = savingPriceKey === priceKey;
+                                    const styles = badgeStyles[block.badge] || badgeStyles.zinc;
 
-                                    const isBase = tier.offsetPct === 0;
-                                    const stayLabel = tier.maxStay >= 100
-                                      ? `${tier.minStay}+ noches`
-                                      : `${tier.minStay}-${tier.maxStay} noch.`;
+                                    const rawInput = isBlockEditing ? editedPrices[priceKey] : String(block.priceRaw || '');
+                                    const rawVal = isBlockEditing ? Number(editedPrices[priceKey]) : (block.priceRaw || 0);
+
+                                    // Preview de precios al huésped (con impuestos)
+                                    const pDirecto  = rawVal > 0 ? Math.round(rawVal * 1.19) : 0;
+                                    const pAirbnb   = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.airbnb * 1.19) : 0;
+                                    const pBooking  = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.booking * 1.19) : 0;
 
                                     return (
-                                      <div
-                                        key={idx}
-                                        className={`grid grid-cols-[1fr_1fr_1fr_1fr] gap-1 py-1.5 rounded-lg px-1 ${
-                                          isBase ? 'bg-zinc-50/80' : ''
-                                        } border-b border-zinc-50 last:border-0`}
-                                      >
-                                        {/* Estancia */}
-                                        <div className="flex items-center gap-1.5">
-                                          {!isBase && (
-                                            <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-1 rounded">
-                                              {tier.offsetPct}%
-                                            </span>
-                                          )}
-                                          <span className={`text-[10px] font-bold ${isBase ? 'text-zinc-700' : 'text-zinc-500'}`}>
-                                            {stayLabel}
-                                          </span>
+                                      <div key={priceKey} className={`px-4 py-3 space-y-2 ${isBlockEditing ? styles.bg : ''}`}>
+                                        {/* Fila principal: badge + precio input */}
+                                        <div className="flex items-center gap-2.5">
+                                          {/* Badge de temporada */}
+                                          <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${styles.badge}`}>
+                                                {block.seasonLabel}
+                                              </span>
+                                              <span className="text-[10px] text-zinc-500 font-medium">
+                                                {block.fromLabel} — {block.toLabel}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          {/* Input precio base */}
+                                          <div className="flex items-center gap-1.5 shrink-0">
+                                            <div className="relative">
+                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 pointer-events-none">$</span>
+                                              <input
+                                                type="number"
+                                                value={rawInput}
+                                                placeholder="0"
+                                                onChange={e => setEditedPrices(prev => ({ ...prev, [priceKey]: e.target.value }))}
+                                                className={`w-24 pl-6 pr-2 py-1.5 text-[13px] font-black rounded-xl border outline-none transition-all text-right ${
+                                                  isBlockEditing
+                                                    ? `border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200`
+                                                    : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-indigo-300 focus:bg-white'
+                                                }`}
+                                              />
+                                            </div>
+
+                                            {isBlockEditing ? (
+                                              <>
+                                                <button
+                                                  onClick={() => handleSaveBlockPrice({
+                                                    roomId: room.id,
+                                                    roomName: room.name,
+                                                    from: block.from,
+                                                    to: block.to,
+                                                    fromLabel: block.fromLabel,
+                                                    toLabel: block.toLabel,
+                                                    seasonLabel: block.seasonLabel,
+                                                    currentPriceRaw: block.priceRaw,
+                                                  })}
+                                                  disabled={isSavingBlock}
+                                                  className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
+                                                >
+                                                  {isSavingBlock
+                                                    ? <RefreshCw size={11} className="animate-spin" />
+                                                    : <Check size={11} strokeWidth={3} />}
+                                                </button>
+                                                <button
+                                                  onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[priceKey]; return n; })}
+                                                  className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg cursor-pointer transition-colors"
+                                                >
+                                                  <X size={11} />
+                                                </button>
+                                              </>
+                                            ) : null}
+                                          </div>
                                         </div>
 
-                                        {/* Directo */}
-                                        <span className={`text-right text-[11px] font-extrabold ${isBase ? 'text-zinc-800' : 'text-zinc-500'}`}>
-                                          {tierDirecto > 0 ? `$${tierDirecto.toLocaleString('es-MX')}` : '—'}
-                                        </span>
-
-                                        {/* Airbnb */}
-                                        <span className={`text-right text-[11px] font-extrabold ${isBase ? 'text-rose-600' : 'text-rose-400'}`}>
-                                          {tierAirbnb > 0 ? `$${tierAirbnb.toLocaleString('es-MX')}` : '—'}
-                                        </span>
-
-                                        {/* Booking */}
-                                        <span className={`text-right text-[11px] font-extrabold ${isBase ? 'text-sky-600' : 'text-sky-400'}`}>
-                                          {tierBooking > 0 ? `$${tierBooking.toLocaleString('es-MX')}` : '—'}
-                                        </span>
+                                        {/* Preview precios al huésped (siempre visible, pequeño) */}
+                                        <div className="grid grid-cols-3 gap-1">
+                                          <div className="text-center">
+                                            <p className="text-[8px] font-bold text-zinc-400 uppercase">Directo</p>
+                                            <p className={`text-[11px] font-extrabold ${isBlockEditing ? 'text-zinc-800' : 'text-zinc-600'}`}>
+                                              ${pDirecto > 0 ? pDirecto.toLocaleString('es-MX') : '—'}
+                                            </p>
+                                          </div>
+                                          <div className="text-center">
+                                            <p className="text-[8px] font-bold text-rose-400 uppercase">Airbnb</p>
+                                            <p className={`text-[11px] font-extrabold ${isBlockEditing ? 'text-rose-700' : 'text-rose-500'}`}>
+                                              ${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}
+                                            </p>
+                                          </div>
+                                          <div className="text-center">
+                                            <p className="text-[8px] font-bold text-sky-400 uppercase">Booking</p>
+                                            <p className={`text-[11px] font-extrabold ${isBlockEditing ? 'text-sky-700' : 'text-sky-500'}`}>
+                                              ${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}
+                                            </p>
+                                          </div>
+                                        </div>
                                       </div>
                                     );
                                   })}
+                                </div>
+                              )}
+
+                              {/* Descuentos por estancia (colapsable) */}
+                              {room.tiers && room.tiers.length > 0 && (
+                                <div className="border-t border-zinc-100">
+                                  <button
+                                    onClick={() => setExpandedLos(prev => ({ ...prev, [room.id]: !prev[room.id] }))}
+                                    className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-zinc-50 transition-colors"
+                                  >
+                                    <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
+                                      Descuentos por estancia (Daily Price Rules)
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400">{losExpanded ? '▲' : '▼'}</span>
+                                  </button>
+
+                                  {losExpanded && (
+                                    <div className="px-4 pb-3 space-y-0">
+                                      <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 pb-1.5 mb-1 border-b border-zinc-100">
+                                        <span className="text-[8px] font-extrabold text-zinc-400 uppercase">Estancia</span>
+                                        <span className="text-[8px] font-extrabold text-zinc-400 uppercase text-right">Directo</span>
+                                        <span className="text-[8px] font-extrabold text-rose-400 uppercase text-right">Airbnb</span>
+                                        <span className="text-[8px] font-extrabold text-sky-400 uppercase text-right">Booking</span>
+                                      </div>
+                                      {(room.tiers as any[]).map((tier: any, idx: number) => {
+                                        const isBase = tier.offsetPct === 0;
+                                        const stayLabel = tier.maxStay >= 100 ? `${tier.minStay}+ n.` : `${tier.minStay}-${tier.maxStay} n.`;
+                                        return (
+                                          <div key={idx} className={`grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 py-1 ${isBase ? 'font-extrabold' : ''}`}>
+                                            <div className="flex items-center gap-1">
+                                              {!isBase && <span className="text-[8px] text-emerald-600 font-bold">{tier.offsetPct}%</span>}
+                                              <span className={`text-[9px] ${isBase ? 'text-zinc-700 font-bold' : 'text-zinc-500'}`}>{stayLabel}</span>
+                                            </div>
+                                            <span className={`text-right text-[10px] ${isBase ? 'text-zinc-800 font-extrabold' : 'text-zinc-500'}`}>
+                                              {tier.priceDirecto > 0 ? `$${tier.priceDirecto.toLocaleString('es-MX')}` : '—'}
+                                            </span>
+                                            <span className={`text-right text-[10px] ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-400'}`}>
+                                              {tier.priceAirbnb > 0 ? `$${tier.priceAirbnb.toLocaleString('es-MX')}` : '—'}
+                                            </span>
+                                            <span className={`text-right text-[10px] ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-400'}`}>
+                                              {tier.priceBooking > 0 ? `$${tier.priceBooking.toLocaleString('es-MX')}` : '—'}
+                                            </span>
+                                          </div>
+                                        );
+                                      })}
+                                      <p className="text-[8px] text-zinc-300 pt-1">* Calculado sobre la 1ª temporada como referencia</p>
+                                    </div>
+                                  )}
                                 </div>
                               )}
                             </div>
