@@ -148,7 +148,9 @@ export default function AdminDashboard() {
   const [roomStatuses, setRoomStatuses] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [tokenError, setTokenError] = useState(false);
+  const [tokenError, setTokenError] = useState<false | 'TOKEN_EXPIRED' | 'REFRESH_TOKEN_EXPIRED'>(false);
+  const [newRefreshToken, setNewRefreshToken] = useState('');
+  const [savingToken, setSavingToken] = useState(false);
   const [hoy, setHoy] = useState('');
   const [todayStr, setTodayStr] = useState('');
   const [financeBalance, setFinanceBalance] = useState(0);
@@ -179,8 +181,10 @@ export default function AdminDashboard() {
 
       if (resRes) {
         const resJson = await resRes.json();
-        if (resJson.error === 'TOKEN_EXPIRED') {
-          setTokenError(true);
+        if (resJson.error === 'REFRESH_TOKEN_EXPIRED') {
+          setTokenError('REFRESH_TOKEN_EXPIRED');
+        } else if (resJson.error === 'TOKEN_EXPIRED') {
+          setTokenError('TOKEN_EXPIRED');
         } else if (resJson.success) {
           const sorted = resJson.data.sort((a: any, b: any) =>
             new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
@@ -327,33 +331,100 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* Token error */}
+      {/* Token error banner */}
       {tokenError && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3">
-          <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-[13px] font-semibold text-amber-800">⚠️ Token Beds24 caducado</p>
-            <p className="text-[11px] text-amber-700 mt-0.5">Genera uno nuevo en Beds24 › Marketplace › API</p>
+        <div className={`border rounded-2xl p-4 space-y-3 ${
+          tokenError === 'REFRESH_TOKEN_EXPIRED'
+            ? 'bg-rose-50 border-rose-200'
+            : 'bg-amber-50 border-amber-200'
+        }`}>
+          <div className="flex items-start gap-3">
+            <AlertCircle size={16} className={`shrink-0 mt-0.5 ${tokenError === 'REFRESH_TOKEN_EXPIRED' ? 'text-rose-600' : 'text-amber-600'}`} />
+            <div className="flex-1">
+              {tokenError === 'REFRESH_TOKEN_EXPIRED' ? (
+                <>
+                  <p className="text-[13px] font-bold text-rose-800">🔴 Refresh token de Beds24 caducado</p>
+                  <p className="text-[11px] text-rose-700 mt-1">
+                    El token de renovación automática ha expirado. Necesitas generar uno nuevo en Beds24:
+                  </p>
+                  <ol className="text-[11px] text-rose-700 mt-1.5 space-y-0.5 list-decimal list-inside">
+                    <li>Ve a <strong>Beds24 → Marketplace → API</strong></li>
+                    <li>Genera un nuevo <strong>Refresh Token</strong></li>
+                    <li>Pégalo aquí abajo y guarda</li>
+                  </ol>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13px] font-bold text-amber-800">⚠️ Token Beds24 caducado</p>
+                  <p className="text-[11px] text-amber-700 mt-0.5">Intentando renovar automáticamente...</p>
+                </>
+              )}
+            </div>
+            {tokenError === 'TOKEN_EXPIRED' && (
+              <button
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/beds24-auth/refresh', { method: 'POST' });
+                    const json = await res.json();
+                    if (json.success) {
+                      setTokenError(false);
+                      fetchAll();
+                    } else if (json.error?.includes('REFRESH')) {
+                      setTokenError('REFRESH_TOKEN_EXPIRED');
+                    } else {
+                      setTokenError('REFRESH_TOKEN_EXPIRED');
+                    }
+                  } catch (e) {
+                    setTokenError('REFRESH_TOKEN_EXPIRED');
+                  }
+                }}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-extrabold rounded-xl shrink-0 cursor-pointer transition-colors"
+              >
+                Reintentar
+              </button>
+            )}
           </div>
-          <button
-            onClick={async () => {
-              try {
-                const res = await fetch('/api/beds24-auth/refresh', { method: 'POST' });
-                const json = await res.json();
-                if (json.success) {
-                  setTokenError(false);
-                  fetchAll();
-                } else {
-                  alert('No se pudo refrescar el token.\n\n' + json.error);
-                }
-              } catch (e) {
-                alert('Error de red al intentar refrescar el token.');
-              }
-            }}
-            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-extrabold rounded-xl shrink-0 cursor-pointer transition-colors"
-          >
-            Reintentar
-          </button>
+
+          {/* Campo para pegar nuevo refresh token */}
+          {tokenError === 'REFRESH_TOKEN_EXPIRED' && (
+            <div className="space-y-2">
+              <input
+                type="text"
+                placeholder="Pega aquí el nuevo Refresh Token de Beds24..."
+                value={newRefreshToken}
+                onChange={e => setNewRefreshToken(e.target.value)}
+                className="w-full px-3 py-2.5 text-[12px] font-mono border border-rose-200 bg-white rounded-xl outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100 placeholder:text-zinc-300"
+              />
+              <button
+                disabled={!newRefreshToken.trim() || savingToken}
+                onClick={async () => {
+                  setSavingToken(true);
+                  try {
+                    const res = await fetch('/api/beds24-auth/update-token', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ refreshToken: newRefreshToken.trim() }),
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                      setTokenError(false);
+                      setNewRefreshToken('');
+                      fetchAll();
+                    } else {
+                      alert('Error al guardar el token:\n' + json.error);
+                    }
+                  } catch (e) {
+                    alert('Error de red al guardar el token.');
+                  } finally {
+                    setSavingToken(false);
+                  }
+                }}
+                className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-40 text-white text-[12px] font-extrabold rounded-xl cursor-pointer disabled:cursor-not-allowed transition-colors"
+              >
+                {savingToken ? 'Guardando...' : '💾 Guardar nuevo token y reconectar'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

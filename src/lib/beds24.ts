@@ -405,13 +405,17 @@ async function _doRefresh(): Promise<string> {
       if (tempToken && data.updated_at) {
         const updatedAt = new Date(data.updated_at).getTime();
         const minutesSinceUpdate = (Date.now() - updatedAt) / (1000 * 60);
-        if (minutesSinceUpdate < 60) {
-          // Cachear en memoria y devolver sin hacer probe
+        // Los tokens de Beds24 duran 24h. Si tiene menos de 20h de antigüedad, usarlo directamente
+        // sin llamar al endpoint de refresh (el refresh token también puede caducar).
+        if (minutesSinceUpdate < 20 * 60) {
           _cachedToken = tempToken;
-          _cachedTokenExpiry = Date.now() + (60 - minutesSinceUpdate) * 60 * 1000;
-          console.log(`[Beds24 Auth] Token en caché válido (actualizado hace ${Math.round(minutesSinceUpdate)} min)`);
+          // Calcular cuánto tiempo queda (máx 23h desde la actualización)
+          const remainingMs = Math.max(0, (23 * 60 - minutesSinceUpdate) * 60 * 1000);
+          _cachedTokenExpiry = Date.now() + remainingMs;
+          console.log(`[Beds24 Auth] Token de Supabase válido (actualizado hace ${Math.round(minutesSinceUpdate)} min)`);
           return tempToken;
         }
+        console.log(`[Beds24 Auth] Token de Supabase tiene ${Math.round(minutesSinceUpdate / 60)}h — intentando refrescar.`);
       }
     }
   } catch (err) {
@@ -446,6 +450,11 @@ async function _doRefresh(): Promise<string> {
   if (!refreshRes.ok) {
     const errText = await refreshRes.text().catch(() => String(refreshRes.status));
     console.error(`[Beds24 Auth] Refresh falló ${refreshRes.status}: ${errText}`);
+    // 401/403 = el refresh token en sí mismo ha caducado → requiere acción manual
+    // Cualquier otro error puede ser temporal
+    if (refreshRes.status === 401 || refreshRes.status === 403) {
+      throw new Error('REFRESH_TOKEN_EXPIRED');
+    }
     throw new Error('TOKEN_EXPIRED');
   }
 
@@ -453,6 +462,10 @@ async function _doRefresh(): Promise<string> {
 
   if (!refreshData.token) {
     console.error('[Beds24 Auth] Refresh no devolvió token:', JSON.stringify(refreshData));
+    // Si la respuesta es exitosa pero no tiene token, el refresh token pudo haber caducado
+    if (refreshData.error || refreshData.message?.toLowerCase().includes('expired')) {
+      throw new Error('REFRESH_TOKEN_EXPIRED');
+    }
     throw new Error('TOKEN_EXPIRED');
   }
 
