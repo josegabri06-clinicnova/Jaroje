@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Bell, X, ArrowRight } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -8,6 +8,9 @@ import { useRouter } from 'next/navigation';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// AudioContext único compartido a nivel de módulo para evitar bloqueos del navegador
+let sharedAudioContext: AudioContext | null = null;
 
 interface ActiveNotification {
   id: string;
@@ -20,16 +23,21 @@ interface ActiveNotification {
 export default function RealtimeLogNotifier() {
   const [notification, setNotification] = useState<ActiveNotification | null>(null);
   const router = useRouter();
+  
+  // Set en memoria para rastrear notificaciones ya reproducidas y evitar bucles
+  const notifiedKeys = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    // Desbloquear Web Audio API ante la primera interacción del usuario en la pantalla
+    // Inicializar y desbloquear Web Audio API en la primera interacción del usuario
     const unlockAudio = () => {
       try {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (AudioContext) {
-          const ctx = new AudioContext();
-          if (ctx.state === 'suspended') {
-            ctx.resume();
+          if (!sharedAudioContext) {
+            sharedAudioContext = new AudioContext();
+          }
+          if (sharedAudioContext.state === 'suspended') {
+            sharedAudioContext.resume();
           }
         }
       } catch (e) {
@@ -58,6 +66,12 @@ export default function RealtimeLogNotifier() {
           console.log('Nuevo log de empleado detectado en tiempo real:', payload.new);
           
           const newLog = payload.new;
+          const logKey = `log_${newLog.id}`;
+
+          // Evitar notificaciones duplicadas
+          if (notifiedKeys.current.has(logKey)) return;
+          notifiedKeys.current.add(logKey);
+
           const employeeName = newLog.employee_name || 'Alguien';
           const actionText = newLog.action || 'realizó una acción';
           const moduleName = newLog.module || 'Sistema';
@@ -107,10 +121,12 @@ export default function RealtimeLogNotifier() {
 
           const lastMsg = newConv.messages[newConv.messages.length - 1];
           if (lastMsg && lastMsg.role_guest) {
-            // Verificar que sea un mensaje nuevo y reciente (dentro de los últimos 15 segundos)
             const msgTime = new Date(lastMsg.timestamp).getTime();
-            const now = Date.now();
-            if (now - msgTime < 15000) {
+            const messageKey = `wa_${newConv.id}_${msgTime}`;
+
+            // Evitar duplicados y verificar que sea reciente (últimos 5 minutos para tolerar descalibración horaria)
+            if (!notifiedKeys.current.has(messageKey) && Math.abs(Date.now() - msgTime) < 5 * 60 * 1000) {
+              notifiedKeys.current.add(messageKey);
               console.log('¡Nuevo mensaje de WhatsApp de huésped detectado!', lastMsg);
               
               // Reproducir el sonido sintético premium
@@ -118,7 +134,7 @@ export default function RealtimeLogNotifier() {
 
               // Activar notificación toast
               setNotification({
-                id: `wa_${newConv.id}_${msgTime}`,
+                id: messageKey,
                 title: `Mensaje de ${newConv.guest_name || 'Huésped'} 💬`,
                 desc: lastMsg.role_guest.length > 60 
                   ? lastMsg.role_guest.slice(0, 60) + '...' 
@@ -152,7 +168,17 @@ export default function RealtimeLogNotifier() {
     try {
       const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContext) return;
-      const ctx = new AudioContext();
+      
+      // Inicializar contexto si no existe
+      if (!sharedAudioContext) {
+        sharedAudioContext = new AudioContext();
+      }
+      
+      const ctx = sharedAudioContext;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      
       const now = ctx.currentTime;
 
       // Nota 1: G5 (783.99 Hz)
@@ -167,21 +193,17 @@ export default function RealtimeLogNotifier() {
       osc1.start(now);
       osc1.stop(now + 0.35);
 
-      // Nota 2: C6 (1046.50 Hz) con un leve retraso
-      setTimeout(() => {
-        try {
-          const osc2 = ctx.createOscillator();
-          const gain2 = ctx.createGain();
-          osc2.type = 'sine';
-          osc2.frequency.setValueAtTime(1046.50, now + 0.08);
-          gain2.gain.setValueAtTime(0.08, now + 0.08);
-          gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-          osc2.connect(gain2);
-          gain2.connect(ctx.destination);
-          osc2.start(now + 0.08);
-          osc2.stop(now + 0.45);
-        } catch (e) {}
-      }, 80);
+      // Nota 2: C6 (1046.50 Hz) con un leve retraso de 80ms programado de forma nativa
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1046.50, now + 0.08);
+      gain2.gain.setValueAtTime(0.08, now + 0.08);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.08);
+      osc2.stop(now + 0.45);
     } catch (err) {
       console.warn("Web Audio API failed", err);
     }

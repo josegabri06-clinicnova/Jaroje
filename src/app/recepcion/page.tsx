@@ -20,6 +20,9 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Contexto de audio global compartido para la página de recepción
+let sharedAudioCtx: AudioContext | null = null;
+
 interface Reserva {
   id: string;
   room: string;
@@ -1543,7 +1546,18 @@ export default function RecepcionPage() {
   // Sintetizador de AudioContext nativo para sonido de notificación premium
   const playPremiumNotificationSound = () => {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      
+      if (!sharedAudioCtx) {
+        sharedAudioCtx = new AudioContextClass();
+      }
+      
+      const ctx = sharedAudioCtx;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      
       const now = ctx.currentTime;
       
       // Nota 1 (C5)
@@ -1586,6 +1600,25 @@ export default function RecepcionPage() {
   }, [cleanToast]);
 
   useEffect(() => {
+    // Desbloquear AudioContext en la primera interacción
+    const unlock = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          if (!sharedAudioCtx) {
+            sharedAudioCtx = new AudioContextClass();
+          }
+          if (sharedAudioCtx.state === 'suspended') {
+            sharedAudioCtx.resume();
+          }
+        }
+      } catch (e) {}
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
+    };
+    window.addEventListener('click', unlock);
+    window.addEventListener('touchstart', unlock);
+
     fetchData();
     const iv = setInterval(fetchData, 15000);
 
@@ -1613,6 +1646,8 @@ export default function RecepcionPage() {
     return () => {
       clearInterval(iv);
       supabase.removeChannel(channel);
+      window.removeEventListener('click', unlock);
+      window.removeEventListener('touchstart', unlock);
     };
   }, []);
 
