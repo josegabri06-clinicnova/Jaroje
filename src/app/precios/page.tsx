@@ -116,7 +116,7 @@ const todayStr = new Date().toISOString().split('T')[0];
 const tomorrowStr = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; })();
 
 export default function PreciosPage() {
-  const [activeTab, setActiveTab] = useState<'simulador' | 'configuracion' | 'reglas' | 'tabla' | 'temporadas'>('simulador');
+  const [activeTab, setActiveTab] = useState<'configuracion' | 'simulador'>('configuracion');
   
   // API State
   const [rules, setRules] = useState<any[]>([]);
@@ -416,6 +416,101 @@ export default function PreciosPage() {
       alert(`✅ Precios de la temporada "${params.seasonLabel}" actualizados en Beds24.`);
     } catch (err: any) {
       alert('Error al guardar en Beds24: ' + err.message);
+    } finally {
+      setSavingSeasonKey(null);
+    }
+  };
+
+  /**
+   * Guarda de forma masiva las tarifas editadas para todos los cuartos de una misma temporada.
+   */
+  const handleSaveBulkSeasonPrices = async (seasonId: string, seasonLabel: string) => {
+    // Filtrar qué habitaciones tienen precio editado y válido para esta temporada
+    const roomsToSave = beds24Rooms.filter(room => {
+      const seasonKey = `${room.id}_${seasonId}`;
+      const val = editedSeasonPrices[seasonKey];
+      return val !== undefined && Number(val) > 0;
+    });
+
+    if (roomsToSave.length === 0) {
+      alert("No hay cambios pendientes de guardar para esta temporada.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `⚠️ CONFIRMAR CAMBIO CONJUNTO EN BEDS24\n\n` +
+      `Temporada: ${seasonLabel}\n` +
+      `Se actualizarán ${roomsToSave.length} unidades simultáneamente con los precios indicados.\n\n` +
+      `¿Desea continuar?`
+    );
+    if (!confirmed) return;
+
+    const bulkKey = `bulk_${seasonId}`;
+    setSavingSeasonKey(bulkKey);
+
+    try {
+      // Guardar de forma secuencial para no saturar la API
+      for (const room of roomsToSave) {
+        const seasonKey = `${room.id}_${seasonId}`;
+        const newPriceRaw = Number(editedSeasonPrices[seasonKey]);
+        const blocksInSeason = (room.seasonBlocks || []).filter((b: any) => b.season === seasonId);
+
+        // Si no hay bloques de Beds24 cargados para este periodo, usamos un rango genérico basado en la configuración
+        const ranges = blocksInSeason.length > 0 
+          ? blocksInSeason.map((b: any) => ({ from: b.from, to: b.to }))
+          : [];
+
+        if (ranges.length === 0) {
+          throw new Error(`No se encontraron rangos de fechas activos para la habitación: ${room.name}`);
+        }
+
+        const res = await fetch('/api/beds24-prices', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId: room.id,
+            priceRaw: newPriceRaw,
+            ranges,
+          }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || `Error desconocido en ${room.name}`);
+      }
+
+      // Actualizar localmente el estado de beds24Rooms
+      setBeds24Rooms(prev => prev.map(room => {
+        const seasonKey = `${room.id}_${seasonId}`;
+        const editedVal = editedSeasonPrices[seasonKey];
+        if (editedVal === undefined) return room;
+
+        const newPriceRaw = Number(editedVal);
+        return {
+          ...room,
+          seasonBlocks: (room.seasonBlocks || []).map((b: any) => {
+            if (b.season !== seasonId) return b;
+            return {
+              ...b,
+              priceRaw: newPriceRaw,
+              priceDirecto: Math.round(newPriceRaw * 1.19),
+              priceAirbnb: Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19),
+              priceBooking: Math.round(newPriceRaw * beds24Multipliers.booking * 1.19),
+            };
+          })
+        };
+      }));
+
+      // Limpiar campos editados de esta temporada
+      setEditedSeasonPrices(prev => {
+        const copy = { ...prev };
+        roomsToSave.forEach(room => {
+          delete copy[`${room.id}_${seasonId}`];
+        });
+        return copy;
+      });
+
+      alert(`✅ Tarifas de la temporada "${seasonLabel}" actualizadas con éxito en Beds24.`);
+    } catch (err: any) {
+      alert('Error al guardar tarifas: ' + err.message);
     } finally {
       setSavingSeasonKey(null);
     }
@@ -1062,11 +1157,8 @@ export default function PreciosPage() {
       {/* Navigation Tabs */}
       <div className="px-6 flex gap-2 overflow-x-auto pb-1 scrollbar-none">
         {[
-          { id: 'simulador', label: 'Simulador de Cotizaciones', icon: <Calculator size={14} /> },
           { id: 'configuracion', label: 'Tarifas Beds24', icon: <RefreshCw size={14} /> },
-          { id: 'reglas', label: 'Reglas Activas (DB)', icon: <TrendingUp size={14} /> },
-          { id: 'tabla', label: 'Tabla de Tarifas', icon: <Tag size={14} /> },
-          { id: 'temporadas', label: 'Calendario Temporadas', icon: <Calendar size={14} /> }
+          { id: 'simulador', label: 'Simulador de Cotizaciones', icon: <Calculator size={14} /> }
         ].map(tab => (
           <button
             key={tab.id}
@@ -1103,7 +1195,7 @@ export default function PreciosPage() {
                   <div>
                     <h3 className="text-[15px] font-black text-zinc-900">Tarifas Beds24 · Daily Prices</h3>
                     <p className="text-[12px] text-zinc-400 font-semibold mt-0.5">
-                      Tarifas base del calendario (sin impuestos). Edita y guarda para actualizar en Beds24.
+                      Tarifas base del calendario (sin impuestos) organizadas por temporada. Edita y guarda para actualizar en Beds24.
                     </p>
                   </div>
                   <button
@@ -1141,7 +1233,7 @@ export default function PreciosPage() {
                   </div>
                 )}
 
-                {/* Tarjetas de precios por habitación */}
+                {/* Tarjetas de precios agrupados por Temporada */}
                 {!beds24Error && (
                   <>
                     {beds24Loading && beds24Rooms.length === 0 ? (
@@ -1156,289 +1248,216 @@ export default function PreciosPage() {
                         <p className="text-[12px] text-zinc-400 max-w-xs">Presiona <strong>Actualizar</strong> o verifica que el token de Beds24 sea válido.</p>
                       </div>
                     ) : (
-                      <div className="space-y-3">
-                        {beds24Rooms.map(room => {
-                          const losExpanded = expandedLos[room.id] ?? false;
-                          const seasonBlocks: any[] = room.seasonBlocks || [];
+                      <div className="space-y-6">
+                        {(() => {
+                          const SEASONS_ORDER = [
+                            { id: 'alta', label: 'TEMPORADA ALTA 2026 - 2027', badgeColor: 'rose' },
+                            { id: 'media_alta', label: 'TEMPORADA MEDIA-ALTA', badgeColor: 'orange' },
+                            { id: 'media', label: 'TEMPORADA MEDIA', badgeColor: 'amber' },
+                            { id: 'baja', label: 'TEMPORADA BAJA (Resto del año)', badgeColor: 'sky' }
+                          ];
 
-                          // Color maps para cada temporada
                           const badgeStyles: Record<string, { badge: string; ring: string; bg: string; text: string }> = {
-                            rose:   { badge: 'bg-rose-100 text-rose-700',   ring: 'ring-rose-200',   bg: 'bg-rose-50/40',   text: 'text-rose-700'   },
-                            orange: { badge: 'bg-orange-100 text-orange-700',ring: 'ring-orange-200', bg: 'bg-orange-50/40', text: 'text-orange-700' },
-                            amber:  { badge: 'bg-amber-100 text-amber-700', ring: 'ring-amber-200',  bg: 'bg-amber-50/40',  text: 'text-amber-700'  },
-                            sky:    { badge: 'bg-sky-100 text-sky-700',     ring: 'ring-sky-200',    bg: 'bg-sky-50/40',    text: 'text-sky-700'    },
-                            zinc:   { badge: 'bg-zinc-100 text-zinc-600',   ring: 'ring-zinc-200',   bg: 'bg-zinc-50',      text: 'text-zinc-600'   },
+                            rose:   { badge: 'bg-rose-100 text-rose-700 ring-rose-200',   ring: 'ring-rose-200',   bg: 'bg-rose-50/40',   text: 'text-rose-700'   },
+                            orange: { badge: 'bg-orange-100 text-orange-700 ring-orange-200',ring: 'ring-orange-200', bg: 'bg-orange-50/40', text: 'text-orange-700' },
+                            amber:  { badge: 'bg-amber-100 text-amber-700 ring-amber-200', ring: 'ring-amber-200',  bg: 'bg-amber-50/40',  text: 'text-amber-700'  },
+                            sky:    { badge: 'bg-sky-100 text-sky-700 ring-sky-200',     ring: 'ring-sky-200',    bg: 'bg-sky-50/40',    text: 'text-sky-700'    },
+                            zinc:   { badge: 'bg-zinc-100 text-zinc-650 ring-zinc-200',   ring: 'ring-zinc-200',   bg: 'bg-zinc-50',      text: 'text-zinc-650'   },
                           };
 
-                          return (
-                            <div key={room.id} className="bg-white border border-zinc-200 rounded-2xl shadow-sm overflow-hidden">
+                          return SEASONS_ORDER.map(sGroup => {
+                            // 1. Obtener todos los periodos únicos de esta temporada en todas las habitaciones
+                            const uniquePeriods: { from: string; to: string; fromLabel: string; toLabel: string }[] = [];
+                            const seenPeriods = new Set<string>();
 
-                              {/* Cabecera del room */}
-                              <div className="px-4 py-3 flex items-center justify-between bg-zinc-50/80 border-b border-zinc-100">
-                                <div className="flex items-center gap-2.5">
-                                  <span className="text-xl">{room.icon}</span>
-                                  <p className="text-[13px] font-extrabold text-zinc-900">{room.name}</p>
-                                </div>
-                                <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
-                                  {room.hasCalendarData ? '🟢 Beds24 live' : '⚪ Sin datos'}
-                                </span>
-                              </div>
-
-                              {/* Bloques de temporada */}
-                              {seasonBlocks.length === 0 ? (
-                                <div className="px-4 py-5 text-center">
-                                  <p className="text-[12px] text-zinc-400">Sin rangos de precios en el calendario</p>
-                                </div>
-                              ) : (
-                                <div className="p-4 space-y-6">
-                                  {(() => {
-                                    const SEASONS_ORDER = [
-                                      { id: 'alta', label: 'TEMPORADA ALTA 2026 - 2027', badgeColor: 'rose' },
-                                      { id: 'media_alta', label: 'TEMPORADA MEDIA-ALTA', badgeColor: 'orange' },
-                                      { id: 'media', label: 'TEMPORADA MEDIA', badgeColor: 'amber' },
-                                      { id: 'baja', label: 'TEMPORADA BAJA', badgeColor: 'sky' }
-                                    ];
-
-                                    return SEASONS_ORDER.map(sGroup => {
-                                      const blocksInSeason = seasonBlocks.filter((b: any) => b.season === sGroup.id);
-                                      if (blocksInSeason.length === 0) return null;
-                                      const styles = badgeStyles[sGroup.badgeColor] || badgeStyles.zinc;
-
-                                      return (
-                                        <div key={sGroup.id} className="space-y-2.5">
-                                          {/* Cabecera de la Temporada */}
-                                          <div className="flex items-center justify-between pb-1.5 border-b border-zinc-100 flex-wrap gap-2">
-                                            <div className="flex items-center gap-2">
-                                              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${styles.badge} shadow-sm`}>
-                                                {sGroup.label}
-                                              </span>
-                                              <span className="text-[10px] font-bold text-zinc-400">
-                                                ({blocksInSeason.length} {blocksInSeason.length === 1 ? 'periodo' : 'periodos'})
-                                              </span>
-                                            </div>
-
-                                            {/* Edición Masiva de la Temporada */}
-                                            {(() => {
-                                              const seasonKey = `${room.id}_${sGroup.id}`;
-                                              const isEditingSeason = editedSeasonPrices[seasonKey] !== undefined;
-                                              const currentVal = editedSeasonPrices[seasonKey] || '';
-
-                                              if (isEditingSeason) {
-                                                return (
-                                                  <div className="flex items-center gap-1.5 shrink-0">
-                                                    <div className="relative">
-                                                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-indigo-400 pointer-events-none">$</span>
-                                                      <input
-                                                        type="number"
-                                                        value={currentVal}
-                                                        placeholder="Precio"
-                                                        onChange={e => setEditedSeasonPrices(prev => ({ ...prev, [seasonKey]: e.target.value }))}
-                                                        className="w-20 pl-5 pr-1.5 py-1 text-[11px] font-black rounded-lg border border-indigo-400 bg-white text-indigo-900 outline-none ring-2 ring-indigo-100 text-right"
-                                                      />
-                                                    </div>
-                                                    <button
-                                                      onClick={() => handleSaveBeds24SeasonPrice({
-                                                        roomId: room.id,
-                                                        roomName: room.name,
-                                                        seasonId: sGroup.id,
-                                                        seasonLabel: sGroup.label,
-                                                        ranges: blocksInSeason.map((b: any) => ({ from: b.from, to: b.to })),
-                                                      })}
-                                                      disabled={savingSeasonKey === seasonKey}
-                                                      className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md cursor-pointer disabled:opacity-50 transition-colors shadow-sm"
-                                                      title="Guardar precio para toda la temporada"
-                                                    >
-                                                      {savingSeasonKey === seasonKey ? (
-                                                        <RefreshCw size={10} className="animate-spin" />
-                                                      ) : (
-                                                        <Check size={10} strokeWidth={3} />
-                                                      )}
-                                                    </button>
-                                                    <button
-                                                      onClick={() => setEditedSeasonPrices(prev => { const n = { ...prev }; delete n[seasonKey]; return n; })}
-                                                      className="p-1 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-md cursor-pointer transition-colors"
-                                                      title="Cancelar"
-                                                    >
-                                                      <X size={10} />
-                                                    </button>
-                                                  </div>
-                                                );
-                                              }
-
-                                              return (
-                                                <button
-                                                  onClick={() => {
-                                                    const referencePrice = blocksInSeason[0]?.priceRaw || 0;
-                                                    setEditedSeasonPrices(prev => ({ ...prev, [seasonKey]: String(referencePrice) }));
-                                                  }}
-                                                  className="px-2.5 py-1 text-[9px] font-black text-indigo-600 hover:text-white hover:bg-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg cursor-pointer flex items-center gap-1 transition-all uppercase tracking-wider"
-                                                >
-                                                  <Edit2 size={9} strokeWidth={2.5} />
-                                                  <span>Editar Temp.</span>
-                                                </button>
-                                              );
-                                            })()}
-                                          </div>
-
-                                          {/* Grid de periodos en esta temporada */}
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            {blocksInSeason.map((block: any) => {
-                                              const priceKey = `${room.id}_${block.from}`;
-                                              const isBlockEditing = editedPrices[priceKey] !== undefined;
-                                              const isSavingBlock = savingPriceKey === priceKey;
-
-                                              const rawInput = isBlockEditing ? editedPrices[priceKey] : String(block.priceRaw || '');
-                                              const rawVal = isBlockEditing ? Number(editedPrices[priceKey]) : (block.priceRaw || 0);
-
-                                              // Preview de precios al huésped (con impuestos)
-                                              const pDirecto  = rawVal > 0 ? Math.round(rawVal * 1.19) : 0;
-                                              const pAirbnb   = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.airbnb * 1.19) : 0;
-                                              const pBooking  = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.booking * 1.19) : 0;
-
-                                              return (
-                                                <div
-                                                  key={priceKey}
-                                                  className={`p-3.5 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 ${
-                                                    isBlockEditing
-                                                      ? `${styles.bg} border-indigo-300 ring-2 ring-indigo-100`
-                                                      : 'border-zinc-200/80 bg-zinc-50/30 hover:bg-zinc-50 hover:shadow-sm'
-                                                  }`}
-                                                >
-                                                  {/* Fila principal: fechas + input de precio */}
-                                                  <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex flex-col min-w-0">
-                                                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Rango de fechas</span>
-                                                      <span className="text-[12px] font-black text-zinc-800 tracking-tight mt-0.5">
-                                                        {block.fromLabel} — {block.toLabel}
-                                                      </span>
-                                                    </div>
-
-                                                    {/* Input precio base */}
-                                                    <div className="flex items-center gap-1 shrink-0">
-                                                      <div className="relative">
-                                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 pointer-events-none">$</span>
-                                                        <input
-                                                          type="number"
-                                                          value={rawInput}
-                                                          placeholder="0"
-                                                          onChange={e => setEditedPrices(prev => ({ ...prev, [priceKey]: e.target.value }))}
-                                                          className={`w-24 pl-6 pr-2 py-1 text-[12px] font-black rounded-lg border outline-none transition-all text-right ${
-                                                            isBlockEditing
-                                                              ? `border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200`
-                                                              : 'border-zinc-200 bg-white text-zinc-900 focus:border-indigo-300 focus:bg-white'
-                                                          }`}
-                                                        />
-                                                      </div>
-
-                                                      {isBlockEditing ? (
-                                                        <div className="flex items-center gap-1 shrink-0">
-                                                          <button
-                                                            onClick={() => handleSaveBlockPrice({
-                                                              roomId: room.id,
-                                                              roomName: room.name,
-                                                              from: block.from,
-                                                              to: block.to,
-                                                              fromLabel: block.fromLabel,
-                                                              toLabel: block.toLabel,
-                                                              seasonLabel: block.seasonLabel,
-                                                              currentPriceRaw: block.priceRaw,
-                                                            })}
-                                                            disabled={isSavingBlock}
-                                                            className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md cursor-pointer disabled:opacity-50 transition-colors shadow-sm"
-                                                            title="Guardar precio"
-                                                          >
-                                                            {isSavingBlock
-                                                              ? <RefreshCw size={10} className="animate-spin" />
-                                                              : <Check size={10} strokeWidth={3} />}
-                                                          </button>
-                                                          <button
-                                                            onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[priceKey]; return n; })}
-                                                            className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-md cursor-pointer transition-colors"
-                                                            title="Cancelar"
-                                                          >
-                                                            <X size={10} />
-                                                          </button>
-                                                        </div>
-                                                      ) : null}
-                                                    </div>
-                                                  </div>
-
-                                                  {/* Precios calculados al huésped */}
-                                                  <div className="grid grid-cols-3 gap-2 bg-zinc-50/50 p-2 rounded-xl border border-zinc-100 text-[10px]">
-                                                    <div>
-                                                      <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">Directo</p>
-                                                      <p className="font-extrabold text-zinc-700 mt-0.5">${pDirecto > 0 ? pDirecto.toLocaleString('es-MX') : '—'}</p>
-                                                    </div>
-                                                    <div>
-                                                      <p className="text-[8px] font-bold text-rose-400 uppercase tracking-widest">Airbnb</p>
-                                                      <p className="font-extrabold text-rose-600 mt-0.5">${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}</p>
-                                                    </div>
-                                                    <div>
-                                                      <p className="text-[8px] font-bold text-sky-400 uppercase tracking-widest">Booking</p>
-                                                      <p className="font-extrabold text-sky-600 mt-0.5">${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}</p>
-                                                    </div>
-                                                  </div>
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      );
+                            beds24Rooms.forEach(room => {
+                              (room.seasonBlocks || []).forEach((b: any) => {
+                                if (b.season === sGroup.id) {
+                                  const key = `${b.from}_${b.to}`;
+                                  if (!seenPeriods.has(key)) {
+                                    seenPeriods.add(key);
+                                    uniquePeriods.push({
+                                      from: b.from,
+                                      to: b.to,
+                                      fromLabel: b.fromLabel,
+                                      toLabel: b.toLabel
                                     });
-                                  })()}
-                                </div>
-                              )}
+                                  }
+                                }
+                              });
+                            });
 
-                              {/* Descuentos por estancia (colapsable) */}
-                              {room.tiers && room.tiers.length > 0 && (
-                                <div className="border-t border-zinc-100">
-                                  <button
-                                    onClick={() => setExpandedLos(prev => ({ ...prev, [room.id]: !prev[room.id] }))}
-                                    className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-zinc-50 transition-colors"
-                                  >
-                                    <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
-                                      Descuentos por estancia (Daily Price Rules)
-                                    </span>
-                                    <span className="text-[10px] text-zinc-400">{losExpanded ? '▲' : '▼'}</span>
-                                  </button>
+                            uniquePeriods.sort((a, b) => a.from.localeCompare(b.from));
+                            
+                            // Si esta temporada no tiene periodos en ninguna habitación en Beds24, no la mostramos
+                            if (uniquePeriods.length === 0) return null;
 
-                                  {losExpanded && (
-                                    <div className="px-4 pb-3 space-y-0">
-                                      <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 pb-1.5 mb-1 border-b border-zinc-100">
-                                        <span className="text-[8px] font-extrabold text-zinc-400 uppercase">Estancia</span>
-                                        <span className="text-[8px] font-extrabold text-zinc-400 uppercase text-right">Directo</span>
-                                        <span className="text-[8px] font-extrabold text-rose-400 uppercase text-right">Airbnb</span>
-                                        <span className="text-[8px] font-extrabold text-sky-400 uppercase text-right">Booking</span>
-                                      </div>
-                                      {(room.tiers as any[]).map((tier: any, idx: number) => {
-                                        const isBase = tier.offsetPct === 0;
-                                        const stayLabel = tier.maxStay >= 100 ? `${tier.minStay}+ n.` : `${tier.minStay}-${tier.maxStay} n.`;
-                                        return (
-                                          <div key={idx} className={`grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 py-1 ${isBase ? 'font-extrabold' : ''}`}>
-                                            <div className="flex items-center gap-1">
-                                              {!isBase && <span className="text-[8px] text-emerald-600 font-bold">{tier.offsetPct}%</span>}
-                                              <span className={`text-[9px] ${isBase ? 'text-zinc-700 font-bold' : 'text-zinc-500'}`}>{stayLabel}</span>
-                                            </div>
-                                            <span className={`text-right text-[10px] ${isBase ? 'text-zinc-800 font-extrabold' : 'text-zinc-500'}`}>
-                                              {tier.priceDirecto > 0 ? `$${tier.priceDirecto.toLocaleString('es-MX')}` : '—'}
-                                            </span>
-                                            <span className={`text-right text-[10px] ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-400'}`}>
-                                              {tier.priceAirbnb > 0 ? `$${tier.priceAirbnb.toLocaleString('es-MX')}` : '—'}
-                                            </span>
-                                            <span className={`text-right text-[10px] ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-400'}`}>
-                                              {tier.priceBooking > 0 ? `$${tier.priceBooking.toLocaleString('es-MX')}` : '—'}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
-                                      <p className="text-[8px] text-zinc-300 pt-1">* Calculado sobre la 1ª temporada como referencia</p>
+                            const styles = badgeStyles[sGroup.badgeColor] || badgeStyles.zinc;
+
+                            // Verificar si hay cambios pendientes de guardar para esta temporada
+                            const isSeasonEdited = beds24Rooms.some(room => {
+                              const seasonKey = `${room.id}_${sGroup.id}`;
+                              return editedSeasonPrices[seasonKey] !== undefined;
+                            });
+
+                            const isSavingBulk = savingSeasonKey === `bulk_${sGroup.id}`;
+
+                            return (
+                              <div key={sGroup.id} className="bg-white border border-zinc-200 rounded-3xl shadow-sm overflow-hidden flex flex-col">
+                                
+                                {/* Cabecera de Temporada */}
+                                <div className="px-5 py-4 border-b border-zinc-100 bg-[#fafafa] flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                  <div className="space-y-2.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-md uppercase tracking-wider ${styles.badge} shadow-sm border border-transparent`}>
+                                        {sGroup.label}
+                                      </span>
                                     </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest mb-1">Periodos aplicables</span>
+                                      <div className="flex flex-wrap gap-2">
+                                        {uniquePeriods.map((p, idx) => (
+                                          <span key={idx} className="bg-white text-zinc-800 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border border-zinc-200/85 shadow-xs">
+                                            📅 {p.fromLabel} — {p.toLabel}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Botón Guardar Conjunto (Bulk Save) */}
+                                  {isSeasonEdited && (
+                                    <button
+                                      onClick={() => handleSaveBulkSeasonPrices(sGroup.id, sGroup.label)}
+                                      disabled={isSavingBulk}
+                                      className="md:self-end px-4.5 py-2.5 bg-indigo-650 hover:bg-indigo-755 disabled:opacity-40 text-white font-extrabold text-[11px] rounded-xl transition-all shadow-md active:scale-[0.96] flex items-center gap-1.5 cursor-pointer uppercase tracking-wider"
+                                    >
+                                      {isSavingBulk ? (
+                                        <RefreshCw size={12} className="animate-spin" />
+                                      ) : (
+                                        <Check size={12} strokeWidth={3} />
+                                      )}
+                                      <span>Guardar Cambios de Temporada</span>
+                                    </button>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                          );
-                        })}
+
+                                {/* Listado de Habitaciones y sus Inputs/Calculos */}
+                                <div className="p-5 divide-y divide-zinc-100 space-y-4">
+                                  {beds24Rooms.map((room, rIdx) => {
+                                    const blocksInSeason = (room.seasonBlocks || []).filter((b: any) => b.season === sGroup.id);
+                                    if (blocksInSeason.length === 0) return null;
+
+                                    const seasonKey = `${room.id}_${sGroup.id}`;
+                                    const isEditing = editedSeasonPrices[seasonKey] !== undefined;
+                                    const referencePrice = blocksInSeason[0]?.priceRaw || 0;
+                                    const currentVal = isEditing ? editedSeasonPrices[seasonKey] : String(referencePrice || '');
+                                    const currentPriceNum = Number(currentVal) || 0;
+
+                                    const isSavingItem = savingSeasonKey === seasonKey;
+
+                                    // Previews de precios calculados
+                                    const pDirecto = currentPriceNum > 0 ? Math.round(currentPriceNum * 1.19) : 0;
+                                    const pAirbnb  = currentPriceNum > 0 ? Math.round(currentPriceNum * beds24Multipliers.airbnb * 1.19) : 0;
+                                    const pBooking = currentPriceNum > 0 ? Math.round(currentPriceNum * beds24Multipliers.booking * 1.19) : 0;
+
+                                    return (
+                                      <div key={room.id} className={`pt-4 ${rIdx === 0 ? 'pt-0' : ''} flex flex-col lg:flex-row lg:items-center justify-between gap-4`}>
+                                        
+                                        {/* Nombre Habitación */}
+                                        <div className="flex items-center gap-2.5 min-w-0 lg:w-[28%] shrink-0">
+                                          <span className="text-xl shrink-0">{room.icon}</span>
+                                          <div className="min-w-0">
+                                            <p className="text-[12.5px] font-black text-zinc-800 leading-snug">{room.name}</p>
+                                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mt-0.5">Beds24 Live</span>
+                                          </div>
+                                        </div>
+
+                                        {/* Input y Precios de Canales */}
+                                        <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 items-center gap-3">
+                                          
+                                          {/* Input Precio Base */}
+                                          <div className="flex flex-col">
+                                            <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Precio Base</span>
+                                            <div className="relative">
+                                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-zinc-450">$</span>
+                                              <input
+                                                type="number"
+                                                value={currentVal}
+                                                placeholder="0"
+                                                onChange={e => setEditedSeasonPrices(prev => ({ ...prev, [seasonKey]: e.target.value }))}
+                                                className={`w-full pl-5.5 pr-2 py-1.5 text-[12px] font-black rounded-lg border outline-none text-right transition-all ${
+                                                  isEditing
+                                                    ? 'border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-100'
+                                                    : 'border-zinc-200 bg-zinc-50/30 text-zinc-900 focus:border-indigo-300'
+                                                }`}
+                                              />
+                                            </div>
+                                          </div>
+
+                                          {/* Directo */}
+                                          <div className="flex flex-col pl-1">
+                                            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Directo (1.19)</span>
+                                            <span className="text-[12.5px] font-black text-zinc-700 mt-1">${pDirecto > 0 ? pDirecto.toLocaleString('es-MX') : '—'}</span>
+                                          </div>
+
+                                          {/* Airbnb */}
+                                          <div className="flex flex-col pl-1">
+                                            <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb ({Math.round((beds24Multipliers.airbnb - 1) * 100)}%)</span>
+                                            <span className="text-[12.5px] font-black text-rose-600 mt-1">${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}</span>
+                                          </div>
+
+                                          {/* Booking */}
+                                          <div className="flex flex-col pl-1">
+                                            <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking ({Math.round((beds24Multipliers.booking - 1) * 100)}%)</span>
+                                            <span className="text-[12.5px] font-black text-sky-600 mt-1">${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}</span>
+                                          </div>
+
+                                        </div>
+
+                                        {/* Botones de Acción Individual */}
+                                        <div className="shrink-0 flex items-center justify-end gap-1.5 w-full lg:w-[15%]">
+                                          {isEditing ? (
+                                            <>
+                                              <button
+                                                onClick={() => handleSaveBeds24SeasonPrice({
+                                                  roomId: room.id,
+                                                  roomName: room.name,
+                                                  seasonId: sGroup.id,
+                                                  seasonLabel: sGroup.label,
+                                                  ranges: blocksInSeason.map((b: any) => ({ from: b.from, to: b.to })),
+                                                })}
+                                                disabled={isSavingItem}
+                                                className="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer disabled:opacity-50 transition-colors shadow-sm flex items-center justify-center"
+                                                title="Guardar tarifa para esta habitación"
+                                              >
+                                                {isSavingItem ? (
+                                                  <RefreshCw size={11} className="animate-spin" />
+                                                ) : (
+                                                  <Check size={11} strokeWidth={3} />
+                                                )}
+                                              </button>
+                                              <button
+                                                onClick={() => setEditedSeasonPrices(prev => { const n = { ...prev }; delete n[seasonKey]; return n; })}
+                                                className="p-2 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-150 rounded-lg cursor-pointer transition-colors"
+                                                title="Deshacer cambios"
+                                              >
+                                                <X size={11} />
+                                              </button>
+                                            </>
+                                          ) : (
+                                            <span className="text-[9.5px] font-bold text-zinc-455 uppercase tracking-wider">Sincronizado</span>
+                                          )}
+                                        </div>
+
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     )}
                   </>
@@ -1503,6 +1522,67 @@ export default function PreciosPage() {
                   </div>
                 </div>
 
+                {/* Sección consolidada de Descuentos por Estancia al pie */}
+                <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-4">
+                  <div>
+                    <h3 className="text-[13px] font-extrabold text-zinc-900 flex items-center gap-2">
+                      <Calculator size={15} className="text-zinc-505" />
+                      Descuentos por Estancia (Beds24 Daily Price Rules)
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 font-semibold mt-1">
+                      Reglas automáticas aplicadas en Beds24 según el número de noches de la reserva.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {beds24Rooms.map(room => {
+                      if (!room.tiers || room.tiers.length === 0) return null;
+                      const losExpanded = expandedLos[room.id] ?? false;
+
+                      return (
+                        <div key={room.id} className="border border-zinc-150 rounded-2xl overflow-hidden bg-zinc-50/20">
+                          <button
+                            onClick={() => setExpandedLos(prev => ({ ...prev, [room.id]: !prev[room.id] }))}
+                            className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-zinc-50 transition-colors border-b border-zinc-150"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{room.icon}</span>
+                              <span className="text-[12px] font-black text-zinc-800">{room.name}</span>
+                            </div>
+                            <span className="text-[10px] text-zinc-450">{losExpanded ? '▲ Colapsar' : '▼ Ver descuentos'}</span>
+                          </button>
+
+                          {losExpanded && (
+                            <div className="p-4 space-y-0">
+                              <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 pb-1.5 mb-1 border-b border-zinc-100 text-[8px] font-extrabold text-zinc-450 uppercase">
+                                <span>Estancia</span>
+                                <span className="text-right">Directo</span>
+                                <span className="text-right text-rose-450">Airbnb</span>
+                                <span className="text-right text-sky-450">Booking</span>
+                              </div>
+                              {(room.tiers as any[]).map((tier: any, idx: number) => {
+                                const isBase = tier.offsetPct === 0;
+                                const stayLabel = tier.maxStay >= 100 ? `${tier.minStay}+ noches` : `${tier.minStay}-${tier.maxStay} noches`;
+                                return (
+                                  <div key={idx} className={`grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 py-1 ${isBase ? 'font-extrabold text-zinc-800' : 'text-zinc-500'} text-[10px]`}>
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      {!isBase && <span className="text-[8px] text-emerald-600 font-black shrink-0">{tier.offsetPct}%</span>}
+                                      <span className="truncate">{stayLabel}</span>
+                                    </div>
+                                    <span className="text-right">{tier.priceDirecto > 0 ? `$${tier.priceDirecto.toLocaleString('es-MX')}` : '—'}</span>
+                                    <span className={`text-right ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-450'}`}>{tier.priceAirbnb > 0 ? `$${tier.priceAirbnb.toLocaleString('es-MX')}` : '—'}</span>
+                                    <span className={`text-right ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-450'}`}>{tier.priceBooking > 0 ? `$${tier.priceBooking.toLocaleString('es-MX')}` : '—'}</span>
+                                  </div>
+                                );
+                              })}
+                              <p className="text-[8px] text-zinc-400 pt-2 italic">* Calculado sobre la tarifa de referencia de la 1ª temporada en Beds24</p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
             {/* ── SIMULADOR TAB ── */}
@@ -1720,222 +1800,6 @@ export default function PreciosPage() {
                   </div>
                 </div>
 
-              </div>
-            )}
-
-            {/* ── REGLAS DE PRECIO TAB (ADMIN DB PANEL) ── */}
-            {activeTab === 'reglas' && (
-              <div className="space-y-4">
-                
-                <div className="flex justify-between items-center flex-wrap gap-2">
-                  <h3 className="text-[14px] font-extrabold text-zinc-500 uppercase tracking-widest">Lista de Reglas en Base de Datos</h3>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleSyncFromBeds24}
-                      disabled={syncingBeds24}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl flex items-center gap-2 shadow cursor-pointer disabled:opacity-50 transition-colors"
-                    >
-                      <RefreshCw size={12} className={syncingBeds24 ? 'animate-spin' : ''} />
-                      {syncingBeds24 ? 'Sincronizando...' : 'Sincronizar desde Beds24'}
-                    </button>
-                    <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 border px-3 py-1 rounded-xl">
-                      {rules.length} Reglas Guardadas
-                    </span>
-                  </div>
-                </div>
-
-                {rules.length === 0 ? (
-                  <div className="bg-white border border-zinc-200/60 border-dashed rounded-3xl p-12 text-center flex flex-col items-center gap-3">
-                    <TrendingUp size={32} className="text-zinc-300" strokeWidth={1.5} />
-                    <p className="text-[14px] font-semibold text-zinc-500">No hay reglas de precios configuradas en Supabase.</p>
-                    <p className="text-[12px] text-zinc-400 max-w-sm">Haz clic en "Nueva Regla" para definir tarifas base por unidad o rangos especiales de fecha.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {rules.map(rule => {
-                      const roomMeta = ROOMS.find(r => r.id === rule.room_type_id);
-                      
-                      let typeColor = 'bg-indigo-50 border-indigo-150 text-indigo-700';
-                      if (rule.rule_type === 'seasonal') typeColor = 'bg-amber-50 border-amber-150 text-amber-700';
-                      if (rule.rule_type === 'special') typeColor = 'bg-rose-50 border-rose-150 text-rose-700';
-
-                      return (
-                        <div key={rule.id} className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-between gap-4 hover:border-zinc-350 transition-all">
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-start">
-                              <span className={`text-[9px] font-extrabold uppercase px-2 py-0.5 rounded border ${typeColor}`}>
-                                {rule.rule_type === 'base' ? 'Base' : rule.rule_type === 'seasonal' ? 'Temporada' : 'Especial'}
-                              </span>
-                              <div className="flex gap-1.5">
-                                <button 
-                                  onClick={() => handleEditRuleClick(rule)}
-                                  className="p-1.5 bg-zinc-50 hover:bg-zinc-100 text-zinc-650 rounded-lg border transition-colors cursor-pointer"
-                                  title="Editar"
-                                >
-                                  <Edit2 size={11} />
-                                </button>
-                                <button 
-                                  onClick={() => handleDeleteRule(rule.id, rule.name)}
-                                  className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg border border-rose-200 transition-colors cursor-pointer"
-                                  title="Eliminar"
-                                >
-                                  <Trash2 size={11} />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div>
-                              <h4 className="font-bold text-[14px] text-zinc-900 leading-tight">{rule.name}</h4>
-                              <p className="text-[11px] text-zinc-400 font-semibold mt-1 flex items-center gap-1">
-                                <span>{roomMeta?.icon || '🏨'}</span>
-                                <span className="truncate max-w-[200px]">{roomMeta?.name || rule.room_type_id}</span>
-                              </p>
-                            </div>
-
-                            {rule.rule_type !== 'base' && rule.start_date && rule.end_date && (
-                              <div className="text-[11.5px] font-semibold text-zinc-500 bg-zinc-50 border p-2 rounded-xl">
-                                📅 {rule.start_date.split('-').reverse().join('/')} al {rule.end_date.split('-').reverse().join('/')}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="border-t border-zinc-100 pt-3 flex items-baseline justify-between">
-                            <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">Tarifa</span>
-                            <span className="text-[17px] font-black text-indigo-950">{fmt(rule.price)} <span className="text-[11px] text-zinc-450 font-bold">/noche</span></span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-              </div>
-            )}
-
-            {/* ── TABLA DE TARIFAS TAB ── */}
-            {activeTab === 'tabla' && (
-              <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-4">
-                
-                {/* Selector de Canal */}
-                <div className="flex justify-between items-center border-b border-zinc-100 pb-3 flex-wrap gap-2">
-                  <div>
-                    <h3 className="text-[14px] font-extrabold text-zinc-900">Tarifas Base por Tipo de Unidad</h3>
-                    <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Valores por noche calculados de forma dinámica y comisionable.</p>
-                  </div>
-                  <div className="flex gap-2">
-                    {CHANNELS.map(ch => (
-                      <button
-                        key={ch.id}
-                        onClick={() => setSimChannelId(ch.id)}
-                        className={`px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${
-                          simChannelId === ch.id
-                            ? `${ch.color} border-transparent shadow-sm`
-                            : 'bg-zinc-50 text-zinc-650 border-zinc-200'
-                        }`}
-                      >
-                        {ch.id === 'directo' ? 'Directo' : ch.id === 'booking' ? 'Booking' : 'Airbnb'}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-[13px] border-collapse">
-                    <thead>
-                      <tr className="border-b border-zinc-100 text-[10px] font-black text-zinc-400 uppercase tracking-widest">
-                        <th className="py-3 pr-4">Habitación / Unidad</th>
-                        <th className="py-3 px-3 text-center">Baja</th>
-                        <th className="py-3 px-3 text-center">Media</th>
-                        <th className="py-3 px-3 text-center">Media-Alta</th>
-                        <th className="py-3 px-3 text-center">Alta</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-50 font-medium">
-                      {ROOMS.map(r => {
-                        const pricesObj = dynamicBasePriceGrid[r.id] || FALLBACK_PRICES[r.id];
-                        const beds24Room = beds24Rooms.find(br => br.id === r.id);
-                        const customMultipliers = pricingSettings?.[r.id]?.multipliers;
-                        const mult = customMultipliers?.[simChannelId] !== undefined
-                          ? Number(customMultipliers[simChannelId])
-                          : (simChannelId === 'airbnb' ? beds24Multipliers.airbnb : simChannelId === 'booking' ? beds24Multipliers.booking : 1.00);
-
-                        return (
-                          <tr key={r.id} className="hover:bg-zinc-50/50">
-                            <td className="py-3.5 pr-4">
-                              <div className="flex items-center gap-2.5">
-                                <span className="text-xl">{r.icon}</span>
-                                <div>
-                                  <span className="font-bold text-zinc-900 block">{r.name}</span>
-                                  <span className="text-[10.5px] text-zinc-400 font-semibold">Max: {r.capacity} pax · Base: {r.baseCapacity} pax</span>
-                                </div>
-                              </div>
-                            </td>
-                            {SEASONS.map(s => {
-                              const b24Block = beds24Room?.seasonBlocks?.find((b: any) => b.season === s.id);
-                              const basePrice = b24Block ? Number(b24Block.priceRaw) : (pricesObj[s.id] || 0);
-                              const calculatedPrice = basePrice * mult;
-                              return (
-                                <td key={s.id} className="py-3.5 px-3 text-center">
-                                  <span className="font-black text-zinc-900 block">{fmt(calculatedPrice)}</span>
-                                  <span className="text-[9.5px] text-zinc-450 font-semibold">+{fmt(calculatedPrice * TAX)} Imp.</span>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="bg-zinc-50 border border-zinc-200/50 p-4 rounded-2xl flex flex-col gap-1 text-[11.5px] leading-relaxed text-zinc-500 font-medium">
-                  <div className="flex items-start gap-2.5">
-                    <Info size={14} className="text-zinc-400 shrink-0 mt-0.5" />
-                    <div>
-                      Los precios en la tabla muestran la tarifa neta por noche según las reglas en base de datos.
-                      Se muestra en formato de letra chica el impuesto del <strong>19% (16% IVA + 3% ISH)</strong> que se añadirá en la cotización final de forma automática.
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-2.5 pt-1.5 border-t border-zinc-200/40 mt-1">
-                    <Zap size={14} className="text-indigo-400 shrink-0 mt-0.5" />
-                    <div>
-                      Se aplican automáticamente descuentos por estadías prolongadas: <strong>7-14 noches (15% desc.)</strong>, <strong>15-29 noches (25% desc.)</strong> y <strong>30+ noches (40% desc.)</strong>.
-                    </div>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {/* ── TEMPORADAS DEFAULT TAB ── */}
-            {activeTab === 'temporadas' && (
-              <div className="space-y-4">
-                <p className="text-[13px] text-zinc-500 font-semibold pl-1">
-                  Seasons del calendario estándar (Huatulco, México) usadas como fallback si no hay regla especial:
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {SEASONS.map(s => (
-                    <div key={s.id} className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm space-y-3.5">
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2">
-                          <div className="w-3.5 h-3.5 rounded-full" style={{ backgroundColor: s.color }} />
-                          <h4 className="font-black text-[14.5px] uppercase tracking-wider" style={{ color: s.color }}>
-                            Temporada {s.label}
-                          </h4>
-                        </div>
-                      </div>
-
-                      <div className="bg-zinc-50 border p-3 rounded-2xl text-[12.5px] font-semibold text-zinc-600">
-                        {s.months}
-                      </div>
-
-                      <div className="text-[11.5px] leading-relaxed text-zinc-400 font-semibold">
-                        Define la temporada automática para las cotizaciones en el simulador según la fecha de Check-in.
-                      </div>
-                    </div>
-                  ))}
-                </div>
               </div>
             )}
           </>
