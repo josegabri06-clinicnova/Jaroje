@@ -643,11 +643,17 @@ export default function BotPage() {
                 <input
                   type="tel"
                   required
-                  placeholder="Ej. +52181828384"
+                  placeholder="Ej. +52 1 81 8283 8485"
                   value={newChatPhone}
                   onChange={e => setNewChatPhone(e.target.value)}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] font-medium focus:ring-2 focus:ring-zinc-900/10 placeholder-zinc-400 transition-all text-zinc-900 font-mono"
                 />
+                <p className="text-[10px] text-zinc-400 mt-1.5 leading-relaxed">
+                  💡 Puedes escribirlo con o sin el signo <strong>+</strong>, espacios o guiones. El sistema lo limpiará automáticamente.<br />
+                  • Si tiene <strong>10 dígitos</strong> se le añadirá <strong>52</strong> (México).<br />
+                  • Si tiene <strong>9 dígitos</strong> se le añadirá <strong>34</strong> (España).<br />
+                  • Para otros países, escribe el prefijo manualmente (ej. <strong>1</strong> para EE.UU., <strong>54</strong> para Argentina, etc.).
+                </p>
               </div>
 
               {/* Vista previa de la Plantilla de Meta */}

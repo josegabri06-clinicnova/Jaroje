@@ -44,6 +44,10 @@ export async function POST(req: Request) {
       if (cleanPhone.length === 10) {
         cleanPhone = '52' + cleanPhone;
       }
+      // Si el número tiene exactamente 9 dígitos (estándar de España), autocompletar lada internacional '34'
+      if (cleanPhone.length === 9) {
+        cleanPhone = '34' + cleanPhone;
+      }
 
       // Enviar plantilla de WhatsApp
       const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
@@ -77,6 +81,14 @@ export async function POST(req: Request) {
 
       if (!waRes.ok) {
         const errBody = await waRes.json();
+        console.error("=== ERROR EN WHATSAPP CLOUD API ===");
+        console.error("Status:", waRes.status);
+        console.error("Payload enviado:", JSON.stringify({
+          to: cleanPhone,
+          phoneId: WHATSAPP_PHONE_ID
+        }));
+        console.error("Token utilizado (primeros 15 chars):", WHATSAPP_TOKEN.substring(0, 15));
+        console.error("Respuesta de Meta:", JSON.stringify(errBody, null, 2));
         return NextResponse.json({ success: false, error: errBody }, { status: 502 });
       }
 
@@ -161,6 +173,10 @@ export async function POST(req: Request) {
 
       if (!waRes.ok) {
         const errBody = await waRes.json();
+        console.error("=== ERROR EN MANUAL REPLY WHATSAPP CLOUD API ===");
+        console.error("Status:", waRes.status);
+        console.error("Token utilizado (primeros 15 chars):", WHATSAPP_TOKEN.substring(0, 15));
+        console.error("Respuesta de Meta:", JSON.stringify(errBody, null, 2));
         return NextResponse.json({ success: false, error: errBody }, { status: 502 });
       }
 
