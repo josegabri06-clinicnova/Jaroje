@@ -147,14 +147,52 @@ const getCapacityRules = (roomName: string) => {
 };
 
 function getSeason(dateStr: string): string {
+  if (!dateStr) return 'media';
+
+  // 1. Rangos específicos definidos por el usuario para 2025-2027
+  // TEMPORADA ALTA
+  if (
+    (dateStr >= '2025-12-15' && dateStr <= '2026-01-06') ||
+    (dateStr >= '2026-03-27' && dateStr <= '2026-04-11') ||
+    (dateStr >= '2026-12-20' && dateStr <= '2027-01-10')
+  ) {
+    return 'alta';
+  }
+
+  // TEMPORADA MEDIA-ALTA
+  if (
+    (dateStr >= '2026-01-07' && dateStr <= '2026-01-10') ||
+    (dateStr >= '2026-07-15' && dateStr <= '2026-08-16') ||
+    (dateStr >= '2026-12-15' && dateStr <= '2026-12-19')
+  ) {
+    return 'media_alta';
+  }
+
+  // TEMPORADA MEDIA
+  if (
+    (dateStr >= '2026-08-17' && dateStr <= '2026-08-31') ||
+    (dateStr >= '2026-09-12' && dateStr <= '2026-09-15') ||
+    (dateStr >= '2026-11-01' && dateStr <= '2026-12-14') ||
+    (dateStr >= '2027-01-11' && dateStr <= '2027-03-26')
+  ) {
+    return 'media';
+  }
+
+  // Si es del periodo 2025-2027 y no cayó en ninguna de las anteriores, es BAJA ("Resto del año")
+  if (dateStr >= '2025-01-01' && dateStr <= '2027-12-31') {
+    return 'baja';
+  }
+
+  // 2. Fallback genérico mensual para otros años futuros (2028+)
   const d = new Date(dateStr + 'T12:00:00');
   const month = d.getMonth() + 1;
   const day = d.getDate();
+
   if ((month === 12 && day >= 20) || (month === 1 && day <= 6)) return 'alta';
-  if (month === 4 && day <= 14) return 'alta'; // Semana Santa / Pascua
+  if (month === 4 && day <= 14) return 'alta';
   if ((month === 7 && day >= 16) || month === 8) return 'media_alta';
-  if (month === 11 && day <= 5) return 'media_alta'; // Día de Muertos
-  if (month === 12 && day < 20) return 'media_alta'; // Pre-navidad
+  if (month === 11 && day <= 5) return 'media_alta';
+  if (month === 12 && day < 20) return 'media_alta';
   if (month === 2 || month === 3 || month === 10 || month === 11) return 'media';
   if (month === 1 && day > 6) return 'media';
   return 'baja';
