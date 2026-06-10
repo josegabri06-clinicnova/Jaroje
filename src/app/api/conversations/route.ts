@@ -252,13 +252,17 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
-    // ── Interceptar si el cliente hizo clic en el botón de "Hablar con Administrador" ──
+    // ── Interceptar si el cliente hizo clic en botones de interacción rápida ──
     let forceHuman = existing ? existing.human_mode : false;
     let finalBotResponse = body.bot_response || null;
+    let isAutoReplyTriggered = false;
 
-    if (body.message_from_guest && body.message_from_guest.toLowerCase().includes('administrador')) {
+    const guestMsgClean = (body.message_from_guest || '').toLowerCase();
+
+    if (guestMsgClean.includes('administrador') || guestMsgClean.includes('administracion') || guestMsgClean.includes('administración')) {
       forceHuman = true;
       finalBotResponse = "Entendido. He pausado el asistente virtual. En un momento, un agente de nuestra recepción continuará la conversación contigo por este medio.";
+      isAutoReplyTriggered = true;
 
       // Registrar log de auditoría en employee_logs para timbrar en la recepción en tiempo real
       try {
@@ -276,8 +280,13 @@ export async function POST(req: Request) {
       } catch (logErr) {
         console.error("Error logging human_mode_activated event:", logErr);
       }
+    } else if (guestMsgClean.includes('reglas') || guestMsgClean.includes('wifi') || guestMsgClean.includes('wi-fi')) {
+      finalBotResponse = "📶 *Información de Wi-Fi y Reglas de Jaroje* 🌴\n\n• *Red Wi-Fi:* Jaroje\n• *Contraseña:* HUXX2025\n• *Servicios:* Piscina, terraza y estacionamiento incluidos.\n• *Reglas de convivencia:* Favor de moderar el ruido a partir de las 10:00 PM para la comodidad de todos los huéspedes.\n\nCualquier otra duda o solicitud especial, escríbenos directamente aquí y te atenderemos con gusto.";
+      isAutoReplyTriggered = true;
+    }
 
-      // Enviar respuesta automática de pausa a WhatsApp
+    // Enviar respuesta automática por WhatsApp si se activó algún disparador (como botones rápidos)
+    if (isAutoReplyTriggered && finalBotResponse) {
       const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
       const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
       if (WHATSAPP_TOKEN && WHATSAPP_PHONE_ID) {
@@ -296,7 +305,7 @@ export async function POST(req: Request) {
             }),
           });
         } catch (e) {
-          console.error("Error sending automatic bot pause message to WhatsApp:", e);
+          console.error("Error sending automatic response to WhatsApp:", e);
         }
       }
     }
