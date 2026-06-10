@@ -622,6 +622,12 @@ export default function PreciosPage() {
       curr.setDate(dStart.getDate() + i);
       const dateStr = curr.toISOString().split('T')[0];
 
+      // 0. Buscar precio en vivo de Beds24
+      const beds24Room = beds24Rooms.find(r => r.id === simRoomId);
+      const activeBlock = beds24Room?.seasonBlocks?.find((block: any) => 
+        block.from <= dateStr && dateStr <= block.to
+      );
+
       // 1. Buscar regla especial
       const specialRule = rules.find(r => 
         r.room_type_id === simRoomId && 
@@ -648,7 +654,11 @@ export default function PreciosPage() {
       let ruleName = '';
       let ruleSource = '';
 
-      if (specialRule) {
+      if (activeBlock) {
+        priceUsed = Number(activeBlock.priceRaw);
+        ruleName = `${activeBlock.seasonLabel} (Beds24 Live)`;
+        ruleSource = 'beds24';
+      } else if (specialRule) {
         priceUsed = Number(specialRule.price);
         ruleName = `${specialRule.name} (Especial)`;
         ruleSource = 'special';
@@ -686,7 +696,7 @@ export default function PreciosPage() {
     const customMultipliers = pricingSettings?.[simRoomId]?.multipliers;
     const customMultVal = customMultipliers?.[simChannelId] !== undefined
       ? Number(customMultipliers[simChannelId])
-      : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.35 : 1.00);
+      : (simChannelId === 'airbnb' ? beds24Multipliers.airbnb : simChannelId === 'booking' ? beds24Multipliers.booking : 1.00);
 
     const discountedBaseSum = Math.round(totalBaseWithoutSurcharge * discountMult);
     const subtotalWithSurcharge = discountedBaseSum + totalSurcharges;
@@ -708,7 +718,7 @@ export default function PreciosPage() {
       extraGuests,
       channelMultiplier: customMultVal
     };
-  }, [simRoomId, simCheckIn, simCheckOut, simGuests, simChannelId, rules, selectedRoomMetadata, pricingSettings]);
+  }, [simRoomId, simCheckIn, simCheckOut, simGuests, simChannelId, rules, selectedRoomMetadata, pricingSettings, beds24Rooms, beds24Multipliers]);
 
   // Save Rule
   const handleSaveRule = async (e: React.FormEvent) => {
@@ -1474,11 +1484,21 @@ export default function PreciosPage() {
             {activeTab === 'reglas' && (
               <div className="space-y-4">
                 
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center flex-wrap gap-2">
                   <h3 className="text-[14px] font-extrabold text-zinc-500 uppercase tracking-widest">Lista de Reglas en Base de Datos</h3>
-                  <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 border px-3 py-1 rounded-xl">
-                    {rules.length} Reglas Guardadas
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSyncFromBeds24}
+                      disabled={syncingBeds24}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl flex items-center gap-2 shadow cursor-pointer disabled:opacity-50 transition-colors"
+                    >
+                      <RefreshCw size={12} className={syncingBeds24 ? 'animate-spin' : ''} />
+                      {syncingBeds24 ? 'Sincronizando...' : 'Sincronizar desde Beds24'}
+                    </button>
+                    <span className="text-[11px] font-bold text-zinc-500 bg-zinc-100 border px-3 py-1 rounded-xl">
+                      {rules.length} Reglas Guardadas
+                    </span>
+                  </div>
                 </div>
 
                 {rules.length === 0 ? (
@@ -1590,10 +1610,11 @@ export default function PreciosPage() {
                     <tbody className="divide-y divide-zinc-50 font-medium">
                       {ROOMS.map(r => {
                         const pricesObj = dynamicBasePriceGrid[r.id] || FALLBACK_PRICES[r.id];
+                        const beds24Room = beds24Rooms.find(br => br.id === r.id);
                         const customMultipliers = pricingSettings?.[r.id]?.multipliers;
                         const mult = customMultipliers?.[simChannelId] !== undefined
                           ? Number(customMultipliers[simChannelId])
-                          : (simChannelId === 'airbnb' ? 1.20 : simChannelId === 'booking' ? 1.35 : 1.00);
+                          : (simChannelId === 'airbnb' ? beds24Multipliers.airbnb : simChannelId === 'booking' ? beds24Multipliers.booking : 1.00);
 
                         return (
                           <tr key={r.id} className="hover:bg-zinc-50/50">
@@ -1607,7 +1628,9 @@ export default function PreciosPage() {
                               </div>
                             </td>
                             {SEASONS.map(s => {
-                              const calculatedPrice = pricesObj[s.id] * mult;
+                              const b24Block = beds24Room?.seasonBlocks?.find((b: any) => b.season === s.id);
+                              const basePrice = b24Block ? Number(b24Block.priceRaw) : (pricesObj[s.id] || 0);
+                              const calculatedPrice = basePrice * mult;
                               return (
                                 <td key={s.id} className="py-3.5 px-3 text-center">
                                   <span className="font-black text-zinc-900 block">{fmt(calculatedPrice)}</span>
