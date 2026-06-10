@@ -503,7 +503,7 @@ export default function PreciosPage() {
         return;
       }
 
-      const { pricesByRoom, multipliers } = json;
+      const { rooms: beds24RoomsList, multipliers } = json;
 
       // 1️⃣ Actualizar multiplicadores OTA en los campos del formulario
       if (multipliers) {
@@ -511,31 +511,38 @@ export default function PreciosPage() {
         if (multipliers.booking !== undefined) setMultBooking(String(multipliers.booking));
       }
 
-      // 2️⃣ Mapear percentiles → temporadas y upsertear en pricing_rules
-      // p25 = tarifa baja (25% de los días son más baratos)
-      // p50 = tarifa media (mediana)
-      // p75 = tarifa media-alta
-      // p90 = tarifa alta (solo el 10% de los días son más caros)
-      const seasonMapping = [
-        { key: 'p25', name: 'Temporada Baja' },
-        { key: 'p50', name: 'Temporada Media' },
-        { key: 'p75', name: 'Temporada Media-Alta' },
-        { key: 'p90', name: 'Temporada Alta' },
-      ];
-
-      if (pricesByRoom && Object.keys(pricesByRoom).length > 0) {
+      // 2️⃣ Mapear bloques de temporada y upsertear en pricing_rules
+      if (beds24RoomsList && beds24RoomsList.length > 0) {
         let rulesUpdated = 0;
         const summary: string[] = [];
 
-        for (const [roomId, stats] of Object.entries(pricesByRoom as Record<string, any>)) {
-          summary.push(`\n${stats.name}: Baja $${stats.p25} | Media $${stats.p50} | M-Alta $${stats.p75} | Alta $${stats.p90}`);
+        for (const room of beds24RoomsList) {
+          const getPriceForSeason = (seasonId: string) => {
+            const block = room.seasonBlocks?.find((b: any) => b.season === seasonId);
+            return block ? Number(block.priceRaw) : null;
+          };
 
-          for (const { key, name } of seasonMapping) {
-            const price = (stats as any)[key];
-            if (!price || price <= 0) continue;
+          const baja = getPriceForSeason('baja');
+          const media = getPriceForSeason('media');
+          const media_alta = getPriceForSeason('media_alta');
+          const alta = getPriceForSeason('alta');
+
+          if (baja === null && media === null && media_alta === null && alta === null) continue;
+
+          summary.push(`\n${room.name}: Baja $${baja || '—'} | Media $${media || '—'} | M-Alta $${media_alta || '—'} | Alta $${alta || '—'}`);
+
+          const seasonMapping = [
+            { name: 'Temporada Baja', price: baja },
+            { name: 'Temporada Media', price: media },
+            { name: 'Temporada Media-Alta', price: media_alta },
+            { name: 'Temporada Alta', price: alta },
+          ];
+
+          for (const { name, price } of seasonMapping) {
+            if (price === null || price === undefined || price <= 0) continue;
 
             const existingRule = rules.find(
-              r => r.room_type_id === roomId && r.name === name
+              r => r.room_type_id === room.id && r.name === name
             );
 
             await fetch('/api/precios', {
@@ -543,7 +550,7 @@ export default function PreciosPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 ...(existingRule ? { id: existingRule.id } : {}),
-                room_type_id: roomId,
+                room_type_id: room.id,
                 rule_type: 'seasonal',
                 name,
                 price: Math.round(price),
@@ -556,7 +563,7 @@ export default function PreciosPage() {
         await fetchRules();
         alert(
           `✅ Sincronización exitosa desde Beds24\n` +
-          `📊 Precios importados (con impuestos incluidos):` +
+          `📊 Precios base importados (sin impuestos):` +
           summary.join('') +
           `\n\n${rulesUpdated} reglas actualizadas en Supabase.`
         );
