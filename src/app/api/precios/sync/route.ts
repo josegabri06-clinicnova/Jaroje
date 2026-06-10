@@ -30,10 +30,10 @@ export async function POST() {
       throw new Error(`Error al leer reglas de Supabase: ${rulesErr.message}`);
     }
 
-    // 2. Definir ventana de 365 días a partir de hoy
+    // 2. Definir ventana de 540 días a partir de hoy
     const today = new Date();
     const dates: string[] = [];
-    for (let i = 0; i < 365; i++) {
+    for (let i = 0; i < 540; i++) {
       const d = new Date(today);
       d.setDate(today.getDate() + i);
       dates.push(d.toISOString().split('T')[0]);
@@ -109,7 +109,7 @@ export async function POST() {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Tarifas sincronizadas exitosamente en Beds24 para 365 días en ${syncedCount} habitaciones.`
+      message: `Tarifas sincronizadas exitosamente en Beds24 para 540 días en ${syncedCount} habitaciones.`
     });
 
   } catch (err: any) {

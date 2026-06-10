@@ -814,7 +814,7 @@ export default function PreciosPage() {
       } else {
         alert(
           `⚠️ Beds24 no devolvió precios del calendario.\n\n` +
-          `Revisa que:\n• Las habitaciones tengan precios en Beds24\n• El token tiene scope "inventory"\n• Hay precios activos para los próximos 365 días`
+          `Revisa que:\n• Las habitaciones tengan precios en Beds24\n• El token tiene scope "inventory"\n• Hay precios activos para los próximos 540 días`
         );
       }
     } catch (err: any) {

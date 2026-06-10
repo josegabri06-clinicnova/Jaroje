@@ -763,9 +763,9 @@ export async function getBeds24Bookings(): Promise<any[]> {
     console.error("Error al obtener dynamicSettings en getBeds24Bookings:", err);
   }
 
-  // 2. Obtener tarifas de calendario dinámicas de Beds24 (de hoy a 365 días en adelante)
+  // 2. Obtener tarifas de calendario dinámicas de Beds24 (de hoy a 540 días en adelante)
   const ratesToDate = new Date(today);
-  ratesToDate.setDate(today.getDate() + 365);
+  ratesToDate.setDate(today.getDate() + 540);
   const ratesTo = ratesToDate.toISOString().split('T')[0];
   const beds24RatesMap = await fetchBeds24RatesMap(token, arrivalFrom, ratesTo);
 

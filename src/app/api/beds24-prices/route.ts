@@ -107,7 +107,7 @@ function buildTiers(
 /**
  * GET /api/beds24-prices
  *
- * Lee el calendario completo de Beds24 (365 días) para cada habitación.
+ * Lee el calendario completo de Beds24 (540 días) para cada habitación.
  * Devuelve todos los rangos de fechas con sus precios (1 rango por temporada).
  * También lee las reglas de descuento por estancia (LOS) de fixedPrices.
  *
@@ -132,11 +132,11 @@ export async function GET() {
           : settingsRow.value)
       : { airbnb: 1.20, booking: 1.35 };
 
-    // 2. Leer 365 días de calendario (para cubrir todas las temporadas)
+    // 2. Leer 540 días de calendario (para cubrir todas las temporadas)
     const today = new Date();
     const startDate = today.toISOString().split('T')[0];
     const endDateFull = new Date(today);
-    endDateFull.setDate(today.getDate() + 365);
+    endDateFull.setDate(today.getDate() + 540);
     const endDate = endDateFull.toISOString().split('T')[0];
 
     const roomIdParams = ROOMS.map(r => `roomId=${r.id}`).join('&');
@@ -269,7 +269,7 @@ export async function GET() {
  * Actualiza el precio de un rango de fechas específico en Beds24.
  * Body: { roomId: string, priceRaw: number, from: string, to: string }
  *
- * Si no se especifican from/to, aplica desde hoy hasta +365 días.
+ * Si no se especifican from/to, aplica desde hoy hasta +540 días.
  */
 export async function PUT(req: Request) {
   try {
@@ -296,7 +296,7 @@ export async function PUT(req: Request) {
           from: body.from || new Date().toISOString().split('T')[0],
           to: body.to || (() => {
             const d = new Date();
-            d.setDate(d.getDate() + 365);
+            d.setDate(d.getDate() + 540);
             return d.toISOString().split('T')[0];
           })(),
           price1: Math.round(priceRaw * 100) / 100,
