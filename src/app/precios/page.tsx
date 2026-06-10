@@ -51,28 +51,36 @@ function getSeason(dateStr: string): string {
   // 1. Rangos específicos definidos por el usuario para 2025-2027
   // TEMPORADA ALTA
   if (
-    (dateStr >= '2025-12-15' && dateStr <= '2026-01-06') ||
+    (dateStr >= '2025-12-20' && dateStr <= '2026-01-10') ||
     (dateStr >= '2026-03-27' && dateStr <= '2026-04-11') ||
-    (dateStr >= '2026-12-20' && dateStr <= '2027-01-10')
+    (dateStr >= '2026-12-20' && dateStr <= '2027-01-10') ||
+    (dateStr >= '2027-03-19' && dateStr <= '2027-04-03') ||
+    (dateStr >= '2027-12-20' && dateStr <= '2028-01-10')
   ) {
     return 'alta';
   }
 
   // TEMPORADA MEDIA-ALTA
   if (
-    (dateStr >= '2026-01-07' && dateStr <= '2026-01-10') ||
+    (dateStr >= '2025-12-15' && dateStr <= '2025-12-19') ||
     (dateStr >= '2026-07-15' && dateStr <= '2026-08-16') ||
-    (dateStr >= '2026-12-15' && dateStr <= '2026-12-19')
+    (dateStr >= '2026-12-15' && dateStr <= '2026-12-19') ||
+    (dateStr >= '2027-07-15' && dateStr <= '2027-08-16') ||
+    (dateStr >= '2027-12-15' && dateStr <= '2027-12-19')
   ) {
     return 'media_alta';
   }
 
   // TEMPORADA MEDIA
   if (
+    (dateStr >= '2026-01-11' && dateStr <= '2026-03-26') ||
     (dateStr >= '2026-08-17' && dateStr <= '2026-08-31') ||
     (dateStr >= '2026-09-12' && dateStr <= '2026-09-15') ||
     (dateStr >= '2026-11-01' && dateStr <= '2026-12-14') ||
-    (dateStr >= '2027-01-11' && dateStr <= '2027-03-26')
+    (dateStr >= '2027-01-11' && dateStr <= '2027-03-18') ||
+    (dateStr >= '2027-08-17' && dateStr <= '2027-08-31') ||
+    (dateStr >= '2027-09-12' && dateStr <= '2027-09-15') ||
+    (dateStr >= '2027-11-01' && dateStr <= '2027-12-14')
   ) {
     return 'media';
   }
@@ -87,13 +95,16 @@ function getSeason(dateStr: string): string {
   const month = d.getMonth() + 1;
   const day = d.getDate();
 
-  if ((month === 12 && day >= 20) || (month === 1 && day <= 6)) return 'alta';
-  if (month === 4 && day <= 14) return 'alta';
-  if ((month === 7 && day >= 16) || month === 8) return 'media_alta';
-  if (month === 11 && day <= 5) return 'media_alta';
-  if (month === 12 && day < 20) return 'media_alta';
-  if (month === 2 || month === 3 || month === 10 || month === 11) return 'media';
-  if (month === 1 && day > 6) return 'media';
+  if ((month === 12 && day >= 20) || (month === 1 && day <= 10)) return 'alta';
+  if ((month === 3 && day >= 22) || (month === 4 && day <= 7)) return 'alta';
+  if ((month === 7 && day >= 15) || (month === 8 && day <= 16)) return 'media_alta';
+  if (month === 12 && day >= 15 && day <= 19) return 'media_alta';
+  if (month === 1 && day >= 11) return 'media';
+  if (month === 2) return 'media';
+  if (month === 3 && day < 22) return 'media';
+  if (month === 8 && day >= 17 && day <= 31) return 'media';
+  if (month === 9 && day >= 12 && day <= 15) return 'media';
+  if (month === 11 || (month === 12 && day <= 14)) return 'media';
   return 'baja';
 }
 
