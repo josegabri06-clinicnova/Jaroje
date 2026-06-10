@@ -1078,115 +1078,138 @@ export default function PreciosPage() {
                                   <p className="text-[12px] text-zinc-400">Sin rangos de precios en el calendario</p>
                                 </div>
                               ) : (
-                                <div className="divide-y divide-zinc-100">
-                                  {/* Header de columnas */}
-                                  <div className="grid grid-cols-[1fr_auto] gap-2 px-4 py-1.5 bg-zinc-50">
-                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">Temporada · Periodo</span>
-                                    <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest text-right">Precio base s/imp.</span>
-                                  </div>
+                                <div className="p-4 space-y-6">
+                                  {(() => {
+                                    const SEASONS_ORDER = [
+                                      { id: 'alta', label: 'TEMPORADA ALTA 2026 - 2027', badgeColor: 'rose' },
+                                      { id: 'media_alta', label: 'TEMPORADA MEDIA-ALTA', badgeColor: 'orange' },
+                                      { id: 'media', label: 'TEMPORADA MEDIA', badgeColor: 'amber' },
+                                      { id: 'baja', label: 'TEMPORADA BAJA', badgeColor: 'sky' }
+                                    ];
 
-                                  {seasonBlocks.map((block: any) => {
-                                    const priceKey = `${room.id}_${block.from}`;
-                                    const isBlockEditing = editedPrices[priceKey] !== undefined;
-                                    const isSavingBlock = savingPriceKey === priceKey;
-                                    const styles = badgeStyles[block.badge] || badgeStyles.zinc;
+                                    return SEASONS_ORDER.map(sGroup => {
+                                      const blocksInSeason = seasonBlocks.filter((b: any) => b.season === sGroup.id);
+                                      if (blocksInSeason.length === 0) return null;
+                                      const styles = badgeStyles[sGroup.badgeColor] || badgeStyles.zinc;
 
-                                    const rawInput = isBlockEditing ? editedPrices[priceKey] : String(block.priceRaw || '');
-                                    const rawVal = isBlockEditing ? Number(editedPrices[priceKey]) : (block.priceRaw || 0);
-
-                                    // Preview de precios al huésped (con impuestos)
-                                    const pDirecto  = rawVal > 0 ? Math.round(rawVal * 1.19) : 0;
-                                    const pAirbnb   = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.airbnb * 1.19) : 0;
-                                    const pBooking  = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.booking * 1.19) : 0;
-
-                                    return (
-                                      <div key={priceKey} className={`px-4 py-3 space-y-2 ${isBlockEditing ? styles.bg : ''}`}>
-                                        {/* Fila principal: badge + precio input */}
-                                        <div className="flex items-center gap-2.5">
-                                          {/* Badge de temporada */}
-                                          <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                              <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-full ${styles.badge}`}>
-                                                {block.seasonLabel}
-                                              </span>
-                                              <span className="text-[10px] text-zinc-500 font-medium">
-                                                {block.fromLabel} — {block.toLabel}
-                                              </span>
-                                            </div>
+                                      return (
+                                        <div key={sGroup.id} className="space-y-2.5">
+                                          {/* Cabecera de la Temporada */}
+                                          <div className="flex items-center gap-2 pb-1.5 border-b border-zinc-100">
+                                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${styles.badge} shadow-sm`}>
+                                              {sGroup.label}
+                                            </span>
+                                            <span className="text-[10px] font-bold text-zinc-400">
+                                              ({blocksInSeason.length} {blocksInSeason.length === 1 ? 'periodo' : 'periodos'})
+                                            </span>
                                           </div>
 
-                                          {/* Input precio base */}
-                                          <div className="flex items-center gap-1.5 shrink-0">
-                                            <div className="relative">
-                                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 pointer-events-none">$</span>
-                                              <input
-                                                type="number"
-                                                value={rawInput}
-                                                placeholder="0"
-                                                onChange={e => setEditedPrices(prev => ({ ...prev, [priceKey]: e.target.value }))}
-                                                className={`w-24 pl-6 pr-2 py-1.5 text-[13px] font-black rounded-xl border outline-none transition-all text-right ${
-                                                  isBlockEditing
-                                                    ? `border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200`
-                                                    : 'border-zinc-200 bg-zinc-50 text-zinc-900 focus:border-indigo-300 focus:bg-white'
-                                                }`}
-                                              />
-                                            </div>
+                                          {/* Grid de periodos en esta temporada */}
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            {blocksInSeason.map((block: any) => {
+                                              const priceKey = `${room.id}_${block.from}`;
+                                              const isBlockEditing = editedPrices[priceKey] !== undefined;
+                                              const isSavingBlock = savingPriceKey === priceKey;
 
-                                            {isBlockEditing ? (
-                                              <>
-                                                <button
-                                                  onClick={() => handleSaveBlockPrice({
-                                                    roomId: room.id,
-                                                    roomName: room.name,
-                                                    from: block.from,
-                                                    to: block.to,
-                                                    fromLabel: block.fromLabel,
-                                                    toLabel: block.toLabel,
-                                                    seasonLabel: block.seasonLabel,
-                                                    currentPriceRaw: block.priceRaw,
-                                                  })}
-                                                  disabled={isSavingBlock}
-                                                  className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg cursor-pointer disabled:opacity-50 transition-colors"
+                                              const rawInput = isBlockEditing ? editedPrices[priceKey] : String(block.priceRaw || '');
+                                              const rawVal = isBlockEditing ? Number(editedPrices[priceKey]) : (block.priceRaw || 0);
+
+                                              // Preview de precios al huésped (con impuestos)
+                                              const pDirecto  = rawVal > 0 ? Math.round(rawVal * 1.19) : 0;
+                                              const pAirbnb   = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.airbnb * 1.19) : 0;
+                                              const pBooking  = rawVal > 0 ? Math.round(rawVal * beds24Multipliers.booking * 1.19) : 0;
+
+                                              return (
+                                                <div
+                                                  key={priceKey}
+                                                  className={`p-3.5 rounded-2xl border transition-all duration-200 flex flex-col justify-between gap-3 ${
+                                                    isBlockEditing
+                                                      ? `${styles.bg} border-indigo-300 ring-2 ring-indigo-100`
+                                                      : 'border-zinc-200/80 bg-zinc-50/30 hover:bg-zinc-50 hover:shadow-sm'
+                                                  }`}
                                                 >
-                                                  {isSavingBlock
-                                                    ? <RefreshCw size={11} className="animate-spin" />
-                                                    : <Check size={11} strokeWidth={3} />}
-                                                </button>
-                                                <button
-                                                  onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[priceKey]; return n; })}
-                                                  className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-lg cursor-pointer transition-colors"
-                                                >
-                                                  <X size={11} />
-                                                </button>
-                                              </>
-                                            ) : null}
+                                                  {/* Fila principal: fechas + input de precio */}
+                                                  <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex flex-col min-w-0">
+                                                      <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">Rango de fechas</span>
+                                                      <span className="text-[12px] font-black text-zinc-800 tracking-tight mt-0.5">
+                                                        {block.fromLabel} — {block.toLabel}
+                                                      </span>
+                                                    </div>
+
+                                                    {/* Input precio base */}
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                      <div className="relative">
+                                                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400 pointer-events-none">$</span>
+                                                        <input
+                                                          type="number"
+                                                          value={rawInput}
+                                                          placeholder="0"
+                                                          onChange={e => setEditedPrices(prev => ({ ...prev, [priceKey]: e.target.value }))}
+                                                          className={`w-24 pl-6 pr-2 py-1 text-[12px] font-black rounded-lg border outline-none transition-all text-right ${
+                                                            isBlockEditing
+                                                              ? `border-indigo-400 bg-white text-indigo-900 ring-2 ring-indigo-200`
+                                                              : 'border-zinc-200 bg-white text-zinc-900 focus:border-indigo-300 focus:bg-white'
+                                                          }`}
+                                                        />
+                                                      </div>
+
+                                                      {isBlockEditing ? (
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                          <button
+                                                            onClick={() => handleSaveBlockPrice({
+                                                              roomId: room.id,
+                                                              roomName: room.name,
+                                                              from: block.from,
+                                                              to: block.to,
+                                                              fromLabel: block.fromLabel,
+                                                              toLabel: block.toLabel,
+                                                              seasonLabel: block.seasonLabel,
+                                                              currentPriceRaw: block.priceRaw,
+                                                            })}
+                                                            disabled={isSavingBlock}
+                                                            className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md cursor-pointer disabled:opacity-50 transition-colors shadow-sm"
+                                                            title="Guardar precio"
+                                                          >
+                                                            {isSavingBlock
+                                                              ? <RefreshCw size={10} className="animate-spin" />
+                                                              : <Check size={10} strokeWidth={3} />}
+                                                          </button>
+                                                          <button
+                                                            onClick={() => setEditedPrices(prev => { const n = { ...prev }; delete n[priceKey]; return n; })}
+                                                            className="p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-md cursor-pointer transition-colors"
+                                                            title="Cancelar"
+                                                          >
+                                                            <X size={10} />
+                                                          </button>
+                                                        </div>
+                                                      ) : null}
+                                                    </div>
+                                                  </div>
+
+                                                  {/* Precios calculados al huésped */}
+                                                  <div className="grid grid-cols-3 gap-2 bg-zinc-50/50 p-2 rounded-xl border border-zinc-100 text-[10px]">
+                                                    <div>
+                                                      <p className="text-[8px] font-bold text-zinc-400 uppercase tracking-widest">Directo</p>
+                                                      <p className="font-extrabold text-zinc-700 mt-0.5">${pDirecto > 0 ? pDirecto.toLocaleString('es-MX') : '—'}</p>
+                                                    </div>
+                                                    <div>
+                                                      <p className="text-[8px] font-bold text-rose-400 uppercase tracking-widest">Airbnb</p>
+                                                      <p className="font-extrabold text-rose-600 mt-0.5">${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}</p>
+                                                    </div>
+                                                    <div>
+                                                      <p className="text-[8px] font-bold text-sky-400 uppercase tracking-widest">Booking</p>
+                                                      <p className="font-extrabold text-sky-600 mt-0.5">${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}</p>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
                                           </div>
                                         </div>
-
-                                        {/* Preview precios al huésped (siempre visible, pequeño) */}
-                                        <div className="grid grid-cols-3 gap-1">
-                                          <div className="text-center">
-                                            <p className="text-[8px] font-bold text-zinc-400 uppercase">Directo</p>
-                                            <p className={`text-[11px] font-extrabold ${isBlockEditing ? 'text-zinc-800' : 'text-zinc-600'}`}>
-                                              ${pDirecto > 0 ? pDirecto.toLocaleString('es-MX') : '—'}
-                                            </p>
-                                          </div>
-                                          <div className="text-center">
-                                            <p className="text-[8px] font-bold text-rose-400 uppercase">Airbnb</p>
-                                            <p className={`text-[11px] font-extrabold ${isBlockEditing ? 'text-rose-700' : 'text-rose-500'}`}>
-                                              ${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}
-                                            </p>
-                                          </div>
-                                          <div className="text-center">
-                                            <p className="text-[8px] font-bold text-sky-400 uppercase">Booking</p>
-                                            <p className={`text-[11px] font-extrabold ${isBlockEditing ? 'text-sky-700' : 'text-sky-500'}`}>
-                                              ${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}
-                                            </p>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
+                                      );
+                                    });
+                                  })()}
                                 </div>
                               )}
 
