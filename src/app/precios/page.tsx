@@ -131,6 +131,8 @@ export default function PreciosPage() {
   // Key format: `${roomId}_${fromDate}` — permite editar cada bloque de temporada por separado
   const [savingPriceKey, setSavingPriceKey] = useState<string | null>(null);
   const [editedPrices, setEditedPrices] = useState<Record<string, string>>({});  
+  const [editedSeasonPrices, setEditedSeasonPrices] = useState<Record<string, string>>({});  
+  const [savingSeasonKey, setSavingSeasonKey] = useState<string | null>(null);
   const [expandedLos, setExpandedLos] = useState<Record<string, boolean>>({}); // roomId → expandido
   const [savingMultipliers, setSavingMultipliers] = useState(false);
 
@@ -311,7 +313,25 @@ export default function PreciosPage() {
       });
       const json = await res.json();
       if (!json.success) throw new Error(json.error);
-      await loadBeds24Prices();
+      
+      // Actualizar localmente el bloque modificado
+      setBeds24Rooms(prev => prev.map(room => {
+        if (room.id !== block.roomId) return room;
+        return {
+          ...room,
+          seasonBlocks: (room.seasonBlocks || []).map((b: any) => {
+            if (b.from !== block.from) return b;
+            return {
+              ...b,
+              priceRaw: newPriceRaw,
+              priceDirecto: Math.round(newPriceRaw * 1.19),
+              priceAirbnb: Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19),
+              priceBooking: Math.round(newPriceRaw * beds24Multipliers.booking * 1.19),
+            };
+          })
+        };
+      }));
+
       setEditedPrices(prev => { const n = { ...prev }; delete n[priceKey]; return n; });
       alert(`✅ Precio actualizado en Beds24.\n${block.seasonLabel} → $${newPriceRaw.toLocaleString('es-MX')} (sin imp.)`);
     } catch (err: any) {
@@ -320,6 +340,87 @@ export default function PreciosPage() {
       setSavingPriceKey(null);
     }
   };
+
+  /**
+   * Guarda el precio para todos los bloques de una temporada a la vez en Beds24.
+   */
+  const handleSaveBeds24SeasonPrice = async (params: {
+    roomId: string;
+    roomName: string;
+    seasonId: string;
+    seasonLabel: string;
+    ranges: { from: string; to: string }[];
+  }) => {
+    const key = `${params.roomId}_${params.seasonId}`;
+    const rawInput = editedSeasonPrices[key];
+    const newPriceRaw = Number(rawInput);
+
+    if (!rawInput || isNaN(newPriceRaw) || newPriceRaw <= 0) {
+      alert('Ingresa un precio válido mayor que 0.');
+      return;
+    }
+
+    const precioDirecto = Math.round(newPriceRaw * 1.19).toLocaleString('es-MX');
+    const precioAirbnb  = Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19).toLocaleString('es-MX');
+    const precioBooking = Math.round(newPriceRaw * beds24Multipliers.booking * 1.19).toLocaleString('es-MX');
+
+    const confirmed = window.confirm(
+      `⚠️ CONFIRMAR CAMBIO MASIVO EN BEDS24\n\n` +
+      `Habitación: ${params.roomName}\n` +
+      `Temporada: ${params.seasonLabel}\n` +
+      `Total de periodos a actualizar: ${params.ranges.length}\n` +
+      `Nuevo precio base para toda la temporada: $${newPriceRaw.toLocaleString('es-MX')} (sin impuestos)\n\n` +
+      `Los huéspedes verán (1-6 noches):\n` +
+      `  · Directo:  $${precioDirecto}\n` +
+      `  · Airbnb:   $${precioAirbnb}\n` +
+      `  · Booking:  $${precioBooking}\n\n` +
+      `Se modificarán TODOS los periodos de esta temporada en Beds24.\n` +
+      `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
+      `¿Continuar?`
+    );
+    if (!confirmed) return;
+
+    setSavingSeasonKey(key);
+    try {
+      const res = await fetch('/api/beds24-prices', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: params.roomId,
+          priceRaw: newPriceRaw,
+          ranges: params.ranges,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      
+      // Actualizar localmente los precios de los bloques de esta temporada
+      setBeds24Rooms(prev => prev.map(room => {
+        if (room.id !== params.roomId) return room;
+        return {
+          ...room,
+          seasonBlocks: (room.seasonBlocks || []).map((b: any) => {
+            if (b.season !== params.seasonId) return b;
+            return {
+              ...b,
+              priceRaw: newPriceRaw,
+              priceDirecto: Math.round(newPriceRaw * 1.19),
+              priceAirbnb: Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19),
+              priceBooking: Math.round(newPriceRaw * beds24Multipliers.booking * 1.19),
+            };
+          })
+        };
+      }));
+
+      setEditedSeasonPrices(prev => { const n = { ...prev }; delete n[key]; return n; });
+      alert(`✅ Precios de la temporada "${params.seasonLabel}" actualizados en Beds24.`);
+    } catch (err: any) {
+      alert('Error al guardar en Beds24: ' + err.message);
+    } finally {
+      setSavingSeasonKey(null);
+    }
+  };
+
   // Save OTA multipliers to Supabase
   const handleSaveMultipliers = async () => {
     setSavingMultipliers(true);
@@ -1106,13 +1207,77 @@ export default function PreciosPage() {
                                       return (
                                         <div key={sGroup.id} className="space-y-2.5">
                                           {/* Cabecera de la Temporada */}
-                                          <div className="flex items-center gap-2 pb-1.5 border-b border-zinc-100">
-                                            <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${styles.badge} shadow-sm`}>
-                                              {sGroup.label}
-                                            </span>
-                                            <span className="text-[10px] font-bold text-zinc-400">
-                                              ({blocksInSeason.length} {blocksInSeason.length === 1 ? 'periodo' : 'periodos'})
-                                            </span>
+                                          <div className="flex items-center justify-between pb-1.5 border-b border-zinc-100 flex-wrap gap-2">
+                                            <div className="flex items-center gap-2">
+                                              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-md uppercase tracking-wider ${styles.badge} shadow-sm`}>
+                                                {sGroup.label}
+                                              </span>
+                                              <span className="text-[10px] font-bold text-zinc-400">
+                                                ({blocksInSeason.length} {blocksInSeason.length === 1 ? 'periodo' : 'periodos'})
+                                              </span>
+                                            </div>
+
+                                            {/* Edición Masiva de la Temporada */}
+                                            {(() => {
+                                              const seasonKey = `${room.id}_${sGroup.id}`;
+                                              const isEditingSeason = editedSeasonPrices[seasonKey] !== undefined;
+                                              const currentVal = editedSeasonPrices[seasonKey] || '';
+
+                                              if (isEditingSeason) {
+                                                return (
+                                                  <div className="flex items-center gap-1.5 shrink-0">
+                                                    <div className="relative">
+                                                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] font-extrabold text-indigo-400 pointer-events-none">$</span>
+                                                      <input
+                                                        type="number"
+                                                        value={currentVal}
+                                                        placeholder="Precio"
+                                                        onChange={e => setEditedSeasonPrices(prev => ({ ...prev, [seasonKey]: e.target.value }))}
+                                                        className="w-20 pl-5 pr-1.5 py-1 text-[11px] font-black rounded-lg border border-indigo-400 bg-white text-indigo-900 outline-none ring-2 ring-indigo-100 text-right"
+                                                      />
+                                                    </div>
+                                                    <button
+                                                      onClick={() => handleSaveBeds24SeasonPrice({
+                                                        roomId: room.id,
+                                                        roomName: room.name,
+                                                        seasonId: sGroup.id,
+                                                        seasonLabel: sGroup.label,
+                                                        ranges: blocksInSeason.map((b: any) => ({ from: b.from, to: b.to })),
+                                                      })}
+                                                      disabled={savingSeasonKey === seasonKey}
+                                                      className="p-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md cursor-pointer disabled:opacity-50 transition-colors shadow-sm"
+                                                      title="Guardar precio para toda la temporada"
+                                                    >
+                                                      {savingSeasonKey === seasonKey ? (
+                                                        <RefreshCw size={10} className="animate-spin" />
+                                                      ) : (
+                                                        <Check size={10} strokeWidth={3} />
+                                                      )}
+                                                    </button>
+                                                    <button
+                                                      onClick={() => setEditedSeasonPrices(prev => { const n = { ...prev }; delete n[seasonKey]; return n; })}
+                                                      className="p-1 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-md cursor-pointer transition-colors"
+                                                      title="Cancelar"
+                                                    >
+                                                      <X size={10} />
+                                                    </button>
+                                                  </div>
+                                                );
+                                              }
+
+                                              return (
+                                                <button
+                                                  onClick={() => {
+                                                    const referencePrice = blocksInSeason[0]?.priceRaw || 0;
+                                                    setEditedSeasonPrices(prev => ({ ...prev, [seasonKey]: String(referencePrice) }));
+                                                  }}
+                                                  className="px-2.5 py-1 text-[9px] font-black text-indigo-600 hover:text-white hover:bg-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg cursor-pointer flex items-center gap-1 transition-all uppercase tracking-wider"
+                                                >
+                                                  <Edit2 size={9} strokeWidth={2.5} />
+                                                  <span>Editar Temp.</span>
+                                                </button>
+                                              );
+                                            })()}
                                           </div>
 
                                           {/* Grid de periodos en esta temporada */}

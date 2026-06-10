@@ -280,22 +280,28 @@ export async function PUT(req: Request) {
       );
     }
 
-    const fromDate = body.from || new Date().toISOString().split('T')[0];
-    const toDate = body.to || (() => {
-      const d = new Date();
-      d.setDate(d.getDate() + 365);
-      return d.toISOString().split('T')[0];
-    })();
-
     const token = await getBeds24Token();
+
+    // Si viene body.ranges, se construye un array con cada rango y el mismo precio
+    const calendarEntries = body.ranges && Array.isArray(body.ranges)
+      ? body.ranges.map((r: any) => ({
+          from: r.from,
+          to: r.to,
+          price1: Math.round(priceRaw * 100) / 100,
+        }))
+      : [{
+          from: body.from || new Date().toISOString().split('T')[0],
+          to: body.to || (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 365);
+            return d.toISOString().split('T')[0];
+          })(),
+          price1: Math.round(priceRaw * 100) / 100,
+        }];
 
     const payload = [{
       roomId: Number(roomId),
-      calendar: [{
-        from: fromDate,
-        to: toDate,
-        price1: Math.round(priceRaw * 100) / 100,
-      }]
+      calendar: calendarEntries
     }];
 
     const res = await fetch('https://api.beds24.com/v2/inventory/rooms/calendar', {
@@ -313,7 +319,7 @@ export async function PUT(req: Request) {
       );
     }
 
-    return NextResponse.json({ success: true, roomId, priceRaw, from: fromDate, to: toDate });
+    return NextResponse.json({ success: true, roomId, priceRaw, ranges: calendarEntries });
 
   } catch (err: any) {
     if (err.message === 'TOKEN_EXPIRED' || err.message === 'REFRESH_TOKEN_EXPIRED') {
