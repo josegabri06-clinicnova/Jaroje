@@ -75,10 +75,13 @@ function getMidDate(from: string, to: string): string {
   return mid.toISOString().split('T')[0];
 }
 
-/** Formatea una fecha ISO (YYYY-MM-DD) como "15 Jun" */
+/** Formatea una fecha ISO (YYYY-MM-DD) como "15 dic 2026" o "6 ene 2027" */
 function fmtDate(iso: string) {
   const d = new Date(iso + 'T12:00:00');
-  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short' });
+  const day = d.getDate();
+  const month = d.toLocaleDateString('es-MX', { month: 'short' }).replace('.', '');
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
 }
 
 function buildTiers(
