@@ -22,7 +22,7 @@ const ROOMS = [
   '201','202','203','204','205','206',
   '301','302','303','304','305','306',
   '401','402',
-  '500','501','502','503','504','505','506'
+  '500','501','502','503','504','505','506','507'
 ];
 
 const ROOM_ROWS = [
@@ -30,7 +30,7 @@ const ROOM_ROWS = [
   { label: 'Apartamentos Premier 2 Recámaras (201-206)', rooms: ['201','202','203','204','205','206'] },
   { label: 'Unidades Especiales (401-402)', rooms: ['401','402'] },
   { label: 'Habitaciones Dobles (301-306)', rooms: ['301','302','303','304','305','306'] },
-  { label: 'Apartamentos Nuevos (500-506)', rooms: ['500','501','502','503','504','505','506'] }
+  { label: 'Apartamentos Nuevos (500-507)', rooms: ['500','501','502','503','504','505','506','507'], isLocal: true }
 ];
 
 
@@ -909,9 +909,16 @@ export default function AdminDashboard() {
             {ROOM_ROWS.map((row) => (
               <div key={row.label} className="space-y-2 border-b border-zinc-100 pb-3 last:border-b-0 last:pb-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">
-                    {row.label}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[9px] font-black text-zinc-400 uppercase tracking-widest leading-none">
+                      {row.label}
+                    </span>
+                    {row.isLocal && (
+                      <span className="text-[8px] font-black bg-blue-50 text-blue-600 border border-blue-150 px-1 py-0.5 rounded uppercase tracking-wider leading-none">
+                        Local
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[8px] font-extrabold bg-zinc-50 border border-zinc-150 px-1.5 py-0.5 rounded text-zinc-400">
                     {row.rooms.length} HAB
                   </span>

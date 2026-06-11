@@ -25,7 +25,7 @@ const ROOM_GROUPS = [
   { label: 'Condo 2R', color: '#0ea5e9', bg: '#f0f9ff', rooms: ['201','202','203','204','205','206'] },
   { label: 'Especial', color: '#10b981', bg: '#f0fdf4', rooms: ['401','402'] },
   { label: 'Estándar', color: '#6366f1', bg: '#eef2ff', rooms: ['301','302','303','304','305','306'] },
-  { label: 'Nuevos', color: '#a855f7', bg: '#faf5ff', rooms: ['500','501','502','503','504','505','506'] },
+  { label: 'Nuevos', color: '#a855f7', bg: '#faf5ff', rooms: ['500','501','502','503','504','505','506','507'], isLocal: true },
 ];
 
 const PHYSICAL_ROOM_GROUPS = [
@@ -43,7 +43,7 @@ const PHYSICAL_ROOM_GROUPS = [
   },
   {
     category: 'Otras Unidades',
-    rooms: ['401', '402', '500', '501', '502', '503', '504', '505', '506']
+    rooms: ['401', '402', '500', '501', '502', '503', '504', '505', '506', '507']
   }
 ];
 
@@ -67,14 +67,15 @@ const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
   '402': { roomId: '679087', unitId: '1' },
   // --- Casa Lujo (Casa Vacacional 401) ---
   '401': { roomId: '679008', unitId: '1' },
-  // --- Nuevos (500-506) ---
+  // --- Nuevos (500-507) ---
   '500': { roomId: '685542', unitId: '1' },
-  '501': { roomId: '685542', unitId: '1' },
-  '502': { roomId: '685542', unitId: '1' },
-  '503': { roomId: '685542', unitId: '1' },
-  '504': { roomId: '685542', unitId: '1' },
-  '505': { roomId: '685542', unitId: '1' },
-  '506': { roomId: '685542', unitId: '1' },
+  '501': { roomId: '685542', unitId: '2' },
+  '502': { roomId: '685542', unitId: '3' },
+  '503': { roomId: '685542', unitId: '4' },
+  '504': { roomId: '685542', unitId: '5' },
+  '505': { roomId: '685542', unitId: '6' },
+  '506': { roomId: '685542', unitId: '7' },
+  '507': { roomId: '685542', unitId: '8' },
 };
 
 const COLS = 10; // days to show
@@ -1291,12 +1292,17 @@ export default function CalendarPage() {
             {/* Group header */}
             <div className="flex border-b border-zinc-100 bg-zinc-50/70">
               <div
-                className="w-[52px] shrink-0 border-r border-zinc-100 flex items-center justify-center py-1.5"
+                className="w-[52px] shrink-0 border-r border-zinc-100 flex flex-col items-center justify-center py-1.5 leading-none"
                 style={{ backgroundColor: group.bg }}
               >
-                <span className="text-[8px] font-black uppercase tracking-wider" style={{ color: group.color }}>
+                <span className="text-[8px] font-black uppercase tracking-wider text-center" style={{ color: group.color }}>
                   {group.label.replace(' ', '\n')}
                 </span>
+                {group.isLocal && (
+                  <span className="text-[6px] font-extrabold bg-purple-100 text-purple-700 border border-purple-200 px-1 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                    Local
+                  </span>
+                )}
               </div>
               <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
                 {days.map((_, i) => (
