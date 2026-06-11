@@ -423,7 +423,7 @@ export default function PreciosPage() {
                                   </div>
 
                                   {/* Input y Precios de Canales */}
-                                  <div className="flex-1 grid grid-cols-4 items-center gap-4">
+                                  <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 items-center gap-3 sm:gap-4">
                                     
                                     {/* Input Precio Base */}
                                     <div className="flex flex-col">
