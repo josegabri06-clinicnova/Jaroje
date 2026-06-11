@@ -100,11 +100,11 @@ const BEDS24_ROOMS = [
 ];
 
 const PRICES: Record<string, Record<string, number>> = {
-  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
-  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 },
-  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 },
+  '679077': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  '679087': { baja: 2017, media: 2395, media_alta: 2521, alta: 2773 },
+  '679091': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
+  '679092': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '679093': { baja: 5378, media: 6387, media_alta: 6723, alta: 7395 },
 };
 
 const PHYSICAL_ROOM_GROUPS = [
@@ -1326,14 +1326,14 @@ export default function RecepcionPage() {
         );
         
         let priceUsed = 0;
-        if (specialRule) {
+        if (dynamicPrice > 0) {
+          priceUsed = dynamicPrice;
+        } else if (specialRule) {
           priceUsed = Number(specialRule.price);
         } else if (seasonalRule) {
           priceUsed = Number(seasonalRule.price);
         } else if (baseRule) {
           priceUsed = Number(baseRule.price);
-        } else if (dynamicPrice > 0) {
-          priceUsed = dynamicPrice;
         } else {
           const fallbackSeason = getSeason(dateStr);
           const parentRoom = getParentMapping(rm.roomId, rm.unitId);
