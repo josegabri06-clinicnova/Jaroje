@@ -18,8 +18,18 @@ const ROOM_GROUPS = [
   { parentId: '685542', childIds: ['685542'] }
 ];
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    // Validar token de seguridad de Cron si está configurado en las variables de entorno
+    const cronSecret = process.env.CRON_SECRET;
+    if (cronSecret) {
+      const authHeader = req.headers.get('authorization') || '';
+      const providedToken = authHeader.replace(/^bearer\s+/i, '').trim() || req.headers.get('x-cron-secret') || '';
+      if (providedToken !== cronSecret) {
+        return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 });
+      }
+    }
+
     // 1. Obtener reglas activas de Supabase
     const { data: rules, error: rulesErr } = await supabase
       .from('pricing_rules')
