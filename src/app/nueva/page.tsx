@@ -191,6 +191,7 @@ export default function VercelActionForm() {
   const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35 });
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [formAccountId, setFormAccountId] = useState('');
+  const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
 
   // Calcular precio automático
   useEffect(() => {
@@ -274,6 +275,16 @@ export default function VercelActionForm() {
         }
         return nextState;
       });
+
+      if (isDailyRateEdited) {
+        setRateSource('edited');
+      } else if (foundDynamicPrice) {
+        setRateSource('beds24');
+      } else if (form.roomId || (form.groupRooms && form.groupRooms.length > 0)) {
+        setRateSource('fallback');
+      } else {
+        setRateSource(null);
+      }
     }
   }, [form.roomId, form.groupRooms, form.checkIn, form.checkOut, form.channel, form.dailyRate, isDailyRateEdited, isDepositEdited, inventory, otaMultipliers]);
 
@@ -959,8 +970,30 @@ export default function VercelActionForm() {
 
                   {/* Tarifa Diaria */}
                   <div className="space-y-1.5">
-                    <div className="flex justify-between items-center pr-1">
-                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Diaria (x Hab)</label>
+                    <div className="flex justify-between items-center pr-1 animate-in fade-in duration-200">
+                      <div className="flex items-center gap-2">
+                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">
+                          Tarifa Diaria (x Hab)
+                        </label>
+                        {rateSource === 'beds24' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/50 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Live Beds24
+                          </span>
+                        )}
+                        {rateSource === 'fallback' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/50 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            Tarifa Backup
+                          </span>
+                        )}
+                        {rateSource === 'edited' && (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/50 shadow-xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                            Modificado
+                          </span>
+                        )}
+                      </div>
                       {form.channel === 'Recepción' && (
                         <button 
                           type="button" 
