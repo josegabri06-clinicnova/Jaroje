@@ -488,7 +488,7 @@ async function _doRefresh(): Promise<string> {
 
   // 3. Refrescar el token usando el refreshToken
   console.log('[Beds24 Auth] Solicitando nuevo token a Beds24...');
-  const refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
+  let refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
     method: 'GET',
     headers: { 'refreshToken': refreshToken },
     cache: 'no-store'
@@ -497,9 +497,39 @@ async function _doRefresh(): Promise<string> {
   if (!refreshRes.ok) {
     const errText = await refreshRes.text().catch(() => String(refreshRes.status));
     console.error(`[Beds24 Auth] Refresh falló ${refreshRes.status}: ${errText}`);
-    // 401/403 = el refresh token en sí mismo ha caducado → requiere acción manual
-    // Cualquier otro error puede ser temporal
+    
     if (refreshRes.status === 401 || refreshRes.status === 403) {
+      // Concurrencia en serverless: un contenedor paralelo podría haber refrescado ya el token.
+      // Esperamos un momento y re-verificamos Supabase antes de lanzar error definitivo.
+      console.log('[Beds24 Auth] 401/403 detectado, verificando si otro proceso ya renovó el token...');
+      await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
+      
+      try {
+        const { data: dbCheck, error: dbError } = await supabase
+          .from('beds24_auth')
+          .select('temp_token, refresh_token, updated_at')
+          .eq('id', 1)
+          .single();
+          
+        if (!dbError && dbCheck && dbCheck.updated_at) {
+          const updatedAt = new Date(dbCheck.updated_at).getTime();
+          const minutesSinceUpdate = (Date.now() - updatedAt) / (1000 * 60);
+          
+          if (minutesSinceUpdate < 5) {
+            console.log(`[Beds24 Auth] ✅ Concurrencia resuelta: otro proceso renovó el token hace ${Math.round(minutesSinceUpdate * 60)}s.`);
+            _cachedToken = dbCheck.temp_token;
+            _cachedTokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
+            if (dbCheck.temp_token) {
+              process.env.BEDS24_TEMP_TOKEN = dbCheck.temp_token;
+              process.env.BEDS24_REFRESH_TOKEN = dbCheck.refresh_token || refreshToken;
+              return dbCheck.temp_token;
+            }
+          }
+        }
+      } catch (checkErr) {
+        console.error('[Beds24 Auth] Error al re-verificar tokens de Supabase:', checkErr);
+      }
+      
       throw new Error('REFRESH_TOKEN_EXPIRED');
     }
     throw new Error('TOKEN_EXPIRED');
@@ -509,7 +539,6 @@ async function _doRefresh(): Promise<string> {
 
   if (!refreshData.token) {
     console.error('[Beds24 Auth] Refresh no devolvió token:', JSON.stringify(refreshData));
-    // Si la respuesta es exitosa pero no tiene token, el refresh token pudo haber caducado
     if (refreshData.error || refreshData.message?.toLowerCase().includes('expired')) {
       throw new Error('REFRESH_TOKEN_EXPIRED');
     }
@@ -517,7 +546,7 @@ async function _doRefresh(): Promise<string> {
   }
 
   const newTempToken = refreshData.token as string;
-  const newRefreshToken = (refreshData.refreshToken || refreshToken) as string;
+  const newRefreshToken = (refreshData.refreshToken || refreshData.refresh_token || refreshToken) as string;
 
   console.log('[Beds24 Auth] ✅ Token refrescado exitosamente.');
 

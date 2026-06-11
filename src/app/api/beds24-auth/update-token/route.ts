@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
     const newTempToken = tokenData.token as string;
     // Beds24 puede devolver un nuevo refreshToken rotado — usar ese si viene, si no usar el que nos pasaron
-    const newRefreshToken = (tokenData.refreshToken || cleanRefreshToken) as string;
+    const newRefreshToken = (tokenData.refreshToken || tokenData.refresh_token || cleanRefreshToken) as string;
 
     // 2. Guardar en Supabase
     const { error: upsertError } = await supabase

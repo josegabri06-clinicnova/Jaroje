@@ -369,13 +369,13 @@ export default function AdminDashboard() {
                     if (json.success) {
                       setTokenError(false);
                       fetchAll();
-                    } else if (json.error?.includes('REFRESH')) {
+                    } else if (json.error === 'REFRESH_TOKEN_EXPIRED' || json.error?.includes('REFRESH')) {
                       setTokenError('REFRESH_TOKEN_EXPIRED');
                     } else {
-                      setTokenError('REFRESH_TOKEN_EXPIRED');
+                      alert('Error al intentar renovar el token: ' + (json.error || 'Error desconocido') + '\n\nPor favor intenta de nuevo.');
                     }
-                  } catch (e) {
-                    setTokenError('REFRESH_TOKEN_EXPIRED');
+                  } catch (e: any) {
+                    alert('Error de red al intentar renovar el token:\n' + (e.message || 'Error de conexión') + '\n\nPor favor intenta de nuevo.');
                   }
                 }}
                 className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-extrabold rounded-xl shrink-0 cursor-pointer transition-colors"

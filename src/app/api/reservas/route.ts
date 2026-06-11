@@ -9,11 +9,13 @@ export async function GET() {
     const mappedBookings = await getBeds24Bookings();
     return NextResponse.json({ success: true, data: mappedBookings });
   } catch (err: any) {
-    if (err.message === 'TOKEN_EXPIRED') {
+    if (err.message === 'TOKEN_EXPIRED' || err.message === 'REFRESH_TOKEN_EXPIRED') {
       return NextResponse.json({ 
         success: false, 
-        error: 'TOKEN_EXPIRED',
-        message: 'Token de Beds24 caducado o inválido. Genera uno nuevo en Beds24 > Marketplace > API.'
+        error: err.message,
+        message: err.message === 'REFRESH_TOKEN_EXPIRED'
+          ? 'El refresh token de Beds24 ha caducado. Genera uno nuevo en Beds24 > Marketplace > API.'
+          : 'Token de Beds24 caducado o inválido. Intentando renovar automáticamente...'
       }, { status: 401 });
     }
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
