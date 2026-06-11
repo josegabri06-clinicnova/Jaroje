@@ -9,6 +9,7 @@ export default function PreciosPage() {
   // Beds24 direct pricing state
   const [beds24Loading, setBeds24Loading] = useState(false);
   const [beds24Rooms, setBeds24Rooms] = useState<any[]>([]); // rooms con precios del calendario
+  const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35 });
   const [beds24Error, setBeds24Error] = useState<string | null>(null);
 
   // Key format: `${roomId}_${seasonId}` — permite editar cada bloque de temporada por separado
@@ -30,6 +31,9 @@ export default function PreciosPage() {
         return;
       }
       setBeds24Rooms(json.rooms || []);
+      if (json.multipliers) {
+        setBeds24Multipliers(json.multipliers);
+      }
     } catch (err: any) {
       setBeds24Error('Error de red: ' + err.message);
     } finally {
@@ -57,6 +61,8 @@ export default function PreciosPage() {
     }
 
     const precioDirecto = Math.round(newPriceRaw * 1.19).toLocaleString('es-MX');
+    const precioAirbnb  = Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19).toLocaleString('es-MX');
+    const precioBooking = Math.round(newPriceRaw * beds24Multipliers.booking * 1.19).toLocaleString('es-MX');
 
     const confirmed = window.confirm(
       `⚠️ CONFIRMAR CAMBIO MASIVO EN BEDS24\n\n` +
@@ -65,7 +71,9 @@ export default function PreciosPage() {
       `Total de periodos a actualizar: ${params.ranges.length}\n` +
       `Nuevo precio base para toda la temporada: $${newPriceRaw.toLocaleString('es-MX')} (sin impuestos)\n\n` +
       `Los huéspedes verán (1-6 noches):\n` +
-      `  · Directo:  $${precioDirecto} (con impuestos)\n\n` +
+      `  · Directo:  $${precioDirecto} (con impuestos)\n` +
+      `  · Airbnb:   $${precioAirbnb} (con impuestos)\n` +
+      `  · Booking:  $${precioBooking} (con impuestos)\n\n` +
       `Se modificarán TODOS los periodos de esta temporada en Beds24.\n` +
       `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
       `¿Continuar?`
@@ -97,6 +105,8 @@ export default function PreciosPage() {
               ...b,
               priceRaw: newPriceRaw,
               priceDirecto: Math.round(newPriceRaw * 1.19),
+              priceAirbnb: Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19),
+              priceBooking: Math.round(newPriceRaw * beds24Multipliers.booking * 1.19),
             };
           })
         };
@@ -181,6 +191,8 @@ export default function PreciosPage() {
               ...b,
               priceRaw: newPriceRaw,
               priceDirecto: Math.round(newPriceRaw * 1.19),
+              priceAirbnb: Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19),
+              priceBooking: Math.round(newPriceRaw * beds24Multipliers.booking * 1.19),
             };
           })
         };
@@ -251,9 +263,11 @@ export default function PreciosPage() {
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2.5 py-1.5 bg-zinc-800 rounded-lg text-[11px] font-extrabold text-white">Precio Beds24</span>
               <span className="text-zinc-500 font-black text-sm">×</span>
+              <span className="px-2.5 py-1.5 bg-indigo-900/60 rounded-lg text-[11px] font-extrabold text-indigo-300">Multiplicador OTA</span>
+              <span className="text-zinc-500 font-black text-sm">×</span>
               <span className="px-2.5 py-1.5 bg-amber-900/60 rounded-lg text-[11px] font-extrabold text-amber-300">1.19 impuestos</span>
               <span className="text-zinc-500 font-black text-sm">=</span>
-              <span className="px-2.5 py-1.5 bg-emerald-900/60 rounded-lg text-[11px] font-extrabold text-emerald-300">Precio Directo (Huésped)</span>
+              <span className="px-2.5 py-1.5 bg-emerald-900/60 rounded-lg text-[11px] font-extrabold text-emerald-300">Precio al huésped</span>
             </div>
           </div>
 
@@ -393,6 +407,8 @@ export default function PreciosPage() {
 
                               // Previews de precios calculados
                               const pDirecto = currentPriceNum > 0 ? Math.round(currentPriceNum * 1.19) : 0;
+                              const pAirbnb  = currentPriceNum > 0 ? Math.round(currentPriceNum * beds24Multipliers.airbnb * 1.19) : 0;
+                              const pBooking = currentPriceNum > 0 ? Math.round(currentPriceNum * beds24Multipliers.booking * 1.19) : 0;
 
                               return (
                                 <div key={room.id} className={`pt-4 ${rIdx === 0 ? 'pt-0' : ''} flex flex-col lg:flex-row lg:items-center justify-between gap-4`}>
@@ -403,8 +419,11 @@ export default function PreciosPage() {
                                     <div className="min-w-0">
                                       <p className="text-[12.5px] font-black text-zinc-800 leading-snug">{room.name}</p>
                                       <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mt-0.5">Beds24 Live</span>
-                                                                   {/* Input y Precios de Canales */}
-                                  <div className="flex-1 grid grid-cols-2 items-center gap-4">
+                                    </div>
+                                  </div>
+
+                                  {/* Input y Precios de Canales */}
+                                  <div className="flex-1 grid grid-cols-4 items-center gap-4">
                                     
                                     {/* Input Precio Base */}
                                     <div className="flex flex-col">
@@ -431,7 +450,17 @@ export default function PreciosPage() {
                                       <span className="text-[12.5px] font-black text-zinc-700 mt-1">${pDirecto > 0 ? pDirecto.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
-                                  </div>          </div>
+                                    {/* Airbnb */}
+                                    <div className="flex flex-col pl-1">
+                                      <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb ({Math.round((beds24Multipliers.airbnb - 1) * 100)}%)</span>
+                                      <span className="text-[12.5px] font-black text-rose-600 mt-1">${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}</span>
+                                    </div>
+
+                                    {/* Booking */}
+                                    <div className="flex flex-col pl-1">
+                                      <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking ({Math.round((beds24Multipliers.booking - 1) * 100)}%)</span>
+                                      <span className="text-[12.5px] font-black text-sky-600 mt-1">${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}</span>
+                                    </div>
 
                                   </div>
 
@@ -515,20 +544,24 @@ export default function PreciosPage() {
 
                     {losExpanded && (
                       <div className="p-4 space-y-0">
-                        <div className="grid grid-cols-[1.5fr_1fr] gap-1 pb-1.5 mb-1 border-b border-zinc-100 text-[8px] font-extrabold text-zinc-450 uppercase">
+                        <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 pb-1.5 mb-1 border-b border-zinc-100 text-[8px] font-extrabold text-zinc-450 uppercase">
                           <span>Estancia</span>
-                          <span className="text-right">Directo (Con Impuestos)</span>
+                          <span className="text-right">Directo</span>
+                          <span className="text-right text-rose-450">Airbnb</span>
+                          <span className="text-right text-sky-450">Booking</span>
                         </div>
                         {(room.tiers as any[]).map((tier: any, idx: number) => {
                           const isBase = tier.offsetPct === 0;
                           const stayLabel = tier.maxStay >= 100 ? `${tier.minStay}+ noches` : `${tier.minStay}-${tier.maxStay} noches`;
                           return (
-                            <div key={idx} className={`grid grid-cols-[1.5fr_1fr] gap-1 py-1 ${isBase ? 'font-extrabold text-zinc-800' : 'text-zinc-500'} text-[10px]`}>
+                            <div key={idx} className={`grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 py-1 ${isBase ? 'font-extrabold text-zinc-800' : 'text-zinc-500'} text-[10px]`}>
                               <div className="flex items-center gap-1 min-w-0">
                                 {!isBase && <span className="text-[8px] text-emerald-600 font-black shrink-0">{tier.offsetPct}%</span>}
                                 <span className="truncate">{stayLabel}</span>
                               </div>
                               <span className="text-right">{tier.priceDirecto > 0 ? `$${tier.priceDirecto.toLocaleString('es-MX')}` : '—'}</span>
+                              <span className={`text-right ${isBase ? 'text-rose-600 font-extrabold' : 'text-rose-450'}`}>{tier.priceAirbnb > 0 ? `$${tier.priceAirbnb.toLocaleString('es-MX')}` : '—'}</span>
+                              <span className={`text-right ${isBase ? 'text-sky-600 font-extrabold' : 'text-sky-450'}`}>{tier.priceBooking > 0 ? `$${tier.priceBooking.toLocaleString('es-MX')}` : '—'}</span>
                             </div>
                           );
                         })}
