@@ -16,7 +16,6 @@ export default function PreciosPage() {
   const [editedSeasonPrices, setEditedSeasonPrices] = useState<Record<string, string>>({});  
   const [savingSeasonKey, setSavingSeasonKey] = useState<string | null>(null);
   const [expandedLos, setExpandedLos] = useState<Record<string, boolean>>({}); // roomId → expandido
-  const [savingMultipliers, setSavingMultipliers] = useState(false);
 
   // Cargar precios del calendario de Beds24 (Daily Prices)
   const loadBeds24Prices = async () => {
@@ -214,24 +213,7 @@ export default function PreciosPage() {
     }
   };
 
-  // Save OTA multipliers to Supabase
-  const handleSaveMultipliers = async () => {
-    setSavingMultipliers(true);
-    try {
-      const res = await fetch('/api/beds24-prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(beds24Multipliers),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
-      alert('✅ Multiplicadores guardados correctamente.');
-    } catch (err: any) {
-      alert('Error: ' + err.message);
-    } finally {
-      setSavingMultipliers(false);
-    }
-  };
+
 
   useEffect(() => {
     loadBeds24Prices();
@@ -533,10 +515,10 @@ export default function PreciosPage() {
             <div>
               <h3 className="text-[13px] font-extrabold text-zinc-900 flex items-center gap-2">
                 <Zap size={15} className="text-indigo-500" />
-                Multiplicadores de Canal
+                Multiplicadores de Canal (Informativo)
               </h3>
               <p className="text-[11px] text-zinc-400 font-semibold mt-1">
-                Cambiar estos valores actualiza la vista de precios en tiempo real. Guarda para persistir.
+                Valores configurados en la app para cálculo de comisiones. Para cambiarlos, modifícalos en Beds24.
               </p>
             </div>
             <div className="grid grid-cols-3 gap-4">
@@ -544,10 +526,9 @@ export default function PreciosPage() {
                 <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Airbnb</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
-                  <input type="number" step="0.01" min="1"
+                  <input type="number" readOnly
                     value={beds24Multipliers.airbnb}
-                    onChange={e => setBeds24Multipliers(prev => ({ ...prev, airbnb: parseFloat(e.target.value) || 1 }))}
-                    className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-indigo-300"
+                    className="w-full pl-7 pr-3 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-400 outline-none cursor-not-allowed"
                   />
                 </div>
                 <p className="text-[9px] text-zinc-400 font-semibold mt-0.5">+{Math.round((beds24Multipliers.airbnb - 1) * 100)}% comisión OTA</p>
@@ -556,10 +537,9 @@ export default function PreciosPage() {
                 <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider mb-1.5">Booking.com</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">×</span>
-                  <input type="number" step="0.01" min="1"
+                  <input type="number" readOnly
                     value={beds24Multipliers.booking}
-                    onChange={e => setBeds24Multipliers(prev => ({ ...prev, booking: parseFloat(e.target.value) || 1 }))}
-                    className="w-full pl-7 pr-3 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-900 outline-none focus:bg-white focus:border-sky-300"
+                    className="w-full pl-7 pr-3 py-2.5 bg-zinc-100 border border-zinc-200 rounded-xl text-[13px] font-extrabold text-zinc-400 outline-none cursor-not-allowed"
                   />
                 </div>
                 <p className="text-[9px] text-zinc-400 font-semibold mt-0.5">+{Math.round((beds24Multipliers.booking - 1) * 100)}% comisión OTA</p>
@@ -574,16 +554,6 @@ export default function PreciosPage() {
                 </div>
                 <p className="text-[9px] text-zinc-400 font-semibold mt-0.5">Sin recargo</p>
               </div>
-            </div>
-            <div className="flex justify-end pt-3 border-t border-zinc-100">
-              <button
-                onClick={handleSaveMultipliers}
-                disabled={savingMultipliers}
-                className="px-6 py-3 bg-zinc-900 hover:bg-black text-white text-[11px] font-extrabold uppercase tracking-wider rounded-xl flex items-center gap-2 shadow cursor-pointer disabled:opacity-50 transition-colors"
-              >
-                {savingMultipliers ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} strokeWidth={3} />}
-                Guardar Multiplicadores
-              </button>
             </div>
           </div>
 
