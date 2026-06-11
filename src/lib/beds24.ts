@@ -7,42 +7,42 @@ import { supabase } from './supabase';
 // Precios BASE por noche (sin impuestos) · Impuesto: 16% IVA + 3% estatal = 19%
 export const JAROJE_PRICES: Record<string, Record<string, number>> = {
   // --- Habitación DOBLE (Antigua y nuevas 301-306) ---
-  '679077': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
-  '685531': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
-  '685532': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
-  '685533': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
-  '685534': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
-  '685535': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
-  '685536': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '679077': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  '685531': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  '685532': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  '685533': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  '685534': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  '685535': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  '685536': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
 
   // --- Apartamento Premier de 1 dormitorio (402) ---
-  '679087': { baja: 2400, media: 2850, media_alta: 3000, alta: 3300 },
+  '679087': { baja: 2017, media: 2395, media_alta: 2521, alta: 2773 },
 
   // --- Apartamento Premier de 2 dormitorios (Antigua y nuevas 201-206) ---
-  '679091': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '685312': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '685318': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '685314': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '685315': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '685316': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
-  '685317': { baja: 3200, media: 3800, media_alta: 4000, alta: 4400 },
+  '679091': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
+  '685312': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
+  '685318': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
+  '685314': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
+  '685315': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
+  '685316': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
+  '685317': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
 
   // --- Apartamento Premier de 3 dormitorios (Antigua y nuevas 101-107) ---
-  '679092': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '685321': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '685322': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '685323': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '685324': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '685325': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '685326': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
-  '685327': { baja: 4800, media: 5700, media_alta: 6000, alta: 6600 },
+  '679092': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '685321': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '685322': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '685323': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '685324': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '685325': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '685326': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
+  '685327': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
 
   // --- Casa Vacacional (Antigua 679093 y nueva 679008) ---
-  '679093': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 },
-  '679008': { baja: 6400, media: 7600, media_alta: 8000, alta: 8800 },
+  '679093': { baja: 5378, media: 6387, media_alta: 6723, alta: 7395 },
+  '679008': { baja: 5378, media: 6387, media_alta: 6723, alta: 7395 },
 
   // --- Habitación 500 ---
-  '685542': { baja: 1600, media: 1900, media_alta: 2000, alta: 2200 },
+  '685542': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
 };
 
 // Nombres canónicos por roomId para el catálogo de display
@@ -614,7 +614,7 @@ export async function fetchBeds24RatesMap(
 ): Promise<Record<string, Record<string, number>>> {
   const ratesMap: Record<string, Record<string, number>> = {};
   try {
-    const res = await fetch(`https://api.beds24.com/v2/inventory/calendar?from=${fromDateStr}&to=${toDateStr}`, {
+    const res = await fetch(`https://api.beds24.com/v2/inventory/calendar?from=${fromDateStr}&to=${toDateStr}&includePrices=true`, {
       method: 'GET',
       headers: { 'token': token },
       cache: 'no-store'
