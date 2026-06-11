@@ -469,19 +469,6 @@ async function _doRefresh(): Promise<string> {
     console.error('[Beds24 Auth] Error al leer tokens de Supabase:', err);
   }
 
-  // 2. Fallback a variables de entorno si Supabase falló o está vacío
-  const envRefreshToken = process.env.BEDS24_REFRESH_TOKEN || null;
-  const envTempToken = process.env.BEDS24_TEMP_TOKEN || null;
-
-  if (envRefreshToken && envRefreshToken !== refreshToken) {
-    console.log('[Beds24 Auth] Usando BEDS24_REFRESH_TOKEN de variables de entorno.');
-    refreshToken = envRefreshToken;
-    tempToken = envTempToken;
-  } else if (!refreshToken) {
-    tempToken = envTempToken;
-    refreshToken = envRefreshToken;
-  }
-
   if (!refreshToken) {
     throw new Error('TOKEN_EXPIRED');
   }
@@ -520,8 +507,6 @@ async function _doRefresh(): Promise<string> {
             _cachedToken = dbCheck.temp_token;
             _cachedTokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
             if (dbCheck.temp_token) {
-              process.env.BEDS24_TEMP_TOKEN = dbCheck.temp_token;
-              process.env.BEDS24_REFRESH_TOKEN = dbCheck.refresh_token || refreshToken;
               return dbCheck.temp_token;
             }
           }
@@ -574,9 +559,7 @@ async function _doRefresh(): Promise<string> {
   _cachedToken = newTempToken;
   _cachedTokenExpiry = Date.now() + 23 * 60 * 60 * 1000;
 
-  // Actualizar variables de proceso como respaldo adicional
-  process.env.BEDS24_TEMP_TOKEN = newTempToken;
-  process.env.BEDS24_REFRESH_TOKEN = newRefreshToken;
+  // Guardado local en caché de memoria del proceso
 
   return newTempToken;
 }
