@@ -1,13 +1,68 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-// GET: Obtener todas las reservas activas procesadas desde Beds24
+// GET: Obtener todas las reservas activas procesadas desde Beds24 y locales de Supabase
 export async function GET() {
   try {
     const mappedBookings = await getBeds24Bookings();
-    return NextResponse.json({ success: true, data: mappedBookings });
+    
+    // Obtener reservas locales de Supabase
+    let localBookings: any[] = [];
+    try {
+      const { data } = await supabase
+        .from('local_reservas')
+        .select('*')
+        .neq('status', 'cancelled');
+      
+      if (data) {
+        localBookings = data.map((b: any) => {
+          const arrivalDate = b.check_in ? new Date(b.check_in) : null;
+          const departureDate = b.check_out ? new Date(b.check_out) : null;
+          const nights = (arrivalDate && departureDate)
+            ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
+            : 1;
+
+          const physicalName = b.unit_id ? (b.unit_id === '1' ? '500' : b.unit_id === '2' ? '501' : b.unit_id === '3' ? '502' : b.unit_id === '4' ? '503' : b.unit_id === '5' ? '504' : b.unit_id === '6' ? '505' : b.unit_id === '7' ? '506' : b.unit_id === '8' ? '507' : b.unit_id) : '';
+
+          return {
+            id: b.id,
+            roomId: Number(b.room_id),
+            unitId: Number(b.unit_id),
+            roomName: `Habitación ${physicalName}`,
+            room_name: `Habitación ${physicalName}`,
+            arrival: b.check_in,
+            departure: b.check_out,
+            check_in: b.check_in,
+            check_out: b.check_out,
+            guest_name: b.guest_name,
+            firstName: b.guest_name,
+            lastName: '',
+            status: b.status || 'confirmed',
+            price: Number(b.price || 0),
+            price_estimate: Number(b.price || 0),
+            deposit: Number(b.deposit || 0),
+            balance: Number(b.price || 0) - Number(b.deposit || 0),
+            phone: b.phone || '',
+            mobile: b.phone || '',
+            numAdult: Number(b.num_adult || 1),
+            numChild: Number(b.num_child || 0),
+            notes: b.notes || '',
+            comments: b.notes || '',
+            channel: b.channel || 'Recepción',
+            isLocal: true,
+            nights
+          };
+        });
+      }
+    } catch (dbErr) {
+      console.error("[Reservas GET] Error reading local_reservas:", dbErr);
+    }
+
+    const combined = [...mappedBookings, ...localBookings];
+    return NextResponse.json({ success: true, data: combined });
   } catch (err: any) {
     if (err.message === 'TOKEN_EXPIRED' || err.message === 'REFRESH_TOKEN_EXPIRED') {
       return NextResponse.json({ 
@@ -45,10 +100,42 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan parámetros: roomId, unitId, checkIn, checkOut' }, { status: 400 });
     }
 
-    // Usamos el roomId (ID de tipo de habitación en Beds24) y unitId (unidad física asignada)
-    // directamente como están definidos en la base de datos de Beds24 del usuario.
     const finalRoomId = Number(roomId);
     const finalUnitId = Number(unitId);
+
+    if (finalRoomId === 685542) {
+      // Es local! Guardar en local_reservas de Supabase
+      const { data, error } = await supabase
+        .from('local_reservas')
+        .insert([{
+          room_id: roomId.toString(),
+          unit_id: unitId.toString(),
+          guest_name: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
+          check_in: checkIn,
+          check_out: checkOut,
+          price: price ? Number(price) : 0,
+          deposit: deposit ? Number(deposit) : 0,
+          phone: phone || '',
+          num_adult: numAdult ? Number(numAdult) : 1,
+          num_child: numChild ? Number(numChild) : 0,
+          notes: notes || '',
+          channel: isBlock ? 'Bloqueo' : 'Recepción',
+          status: isBlock ? 'black' : 'confirmed'
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("[Reservas POST] Error inserting local reservation:", error);
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ 
+        success: true, 
+        message: "Reserva registrada localmente.", 
+        data: { data: [{ id: data.id, success: true }] } 
+      });
+    }
 
     const BEDS24_TOKEN = await getBeds24Token();
 
@@ -115,6 +202,35 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: 'Falta el parámetro id de la reserva' }, { status: 400 });
     }
 
+    // 1. Intentamos buscar si la reserva es local en Supabase
+    const { data: localRes } = await supabase
+      .from('local_reservas')
+      .select('*')
+      .eq('id', Number(id))
+      .maybeSingle();
+
+    if (localRes) {
+      // Es local! Cancelar localmente en Supabase
+      const { error: cancelErr } = await supabase
+        .from('local_reservas')
+        .update({ status: 'cancelled' })
+        .eq('id', Number(id));
+
+      if (cancelErr) {
+        console.error("[Reservas DELETE] Error cancelling local reservation:", cancelErr);
+        return NextResponse.json({ error: cancelErr.message }, { status: 500 });
+      }
+
+      // Liberar registro de checkin local en Supabase si existía
+      await supabase.from('checkins').delete().eq('reservation_id', id.toString());
+
+      return NextResponse.json({ 
+        success: true, 
+        message: "Reserva local cancelada y liberada.", 
+        data: { data: [{ id, success: true }] } 
+      });
+    }
+
     const BEDS24_TOKEN = await getBeds24Token();
 
     // 1. Cancelar en Beds24
@@ -133,10 +249,6 @@ export async function DELETE(req: Request) {
     }
 
     // 2. Liberar registro de checkin local en Supabase si existía
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(supabaseUrl, supabaseKey);
     await supabase.from('checkins').delete().eq('reservation_id', id.toString());
 
     const dataB24 = await beds24Response.json();
@@ -167,6 +279,68 @@ export async function PUT(req: Request) {
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
+    }
+
+    // 1. Intentamos buscar si la reserva es local en Supabase
+    const { data: localRes } = await supabase
+      .from('local_reservas')
+      .select('*')
+      .eq('id', Number(id))
+      .maybeSingle();
+
+    if (localRes) {
+      // Es local! Modificar localmente
+      const localUpdate: any = {};
+      if (guestName) localUpdate.guest_name = guestName;
+      if (phone !== undefined) localUpdate.phone = phone;
+      if (numAdult !== undefined) localUpdate.num_adult = Number(numAdult);
+      if (numChild !== undefined) localUpdate.num_child = Number(numChild);
+      if (price !== undefined) localUpdate.price = Number(price);
+      if (deposit !== undefined) localUpdate.deposit = Number(deposit);
+      if (notes !== undefined) localUpdate.notes = notes;
+      
+      let displayRoomName = '';
+      if (roomName) {
+        const { getBeds24RoomIdAndUnit, getRoomMetadata } = await import('@/lib/beds24');
+        const mapping = getBeds24RoomIdAndUnit(roomName);
+        if (!mapping) {
+          return NextResponse.json({ error: `La habitación ${roomName} no es válida.` }, { status: 400 });
+        }
+        localUpdate.room_id = mapping.roomId;
+        localUpdate.unit_id = mapping.unitId;
+
+        const roomData = getRoomMetadata(mapping.roomId, null);
+        displayRoomName = roomData?.nombre || `Habitación ${roomName}`;
+      }
+
+      const { error: localErr } = await supabase
+        .from('local_reservas')
+        .update(localUpdate)
+        .eq('id', Number(id));
+
+      if (localErr) {
+        console.error("[Reservas PUT] Error updating local reservation:", localErr);
+        return NextResponse.json({ error: localErr.message }, { status: 500 });
+      }
+
+      // Actualizar checkin local si existe
+      const dbUpdate: any = {};
+      if (displayRoomName) dbUpdate.room = displayRoomName;
+      if (guestName) dbUpdate.guest_name = guestName;
+
+      if (Object.keys(dbUpdate).length > 0) {
+        await supabase
+          .from('checkins')
+          .update(dbUpdate)
+          .eq('reservation_id', id.toString());
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: "Reserva local actualizada exitosamente.",
+        room_name: displayRoomName || undefined,
+        data: { data: [{ id, success: true }] }
+      });
     }
 
     const { getBeds24RoomIdAndUnit, getRoomMetadata } = await import('@/lib/beds24');
@@ -226,11 +400,6 @@ export async function PUT(req: Request) {
     }
 
     // 2. Actualizar registro local de checkin en Supabase si existe
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
     const dbUpdate: any = {};
     if (displayRoomName) {
       dbUpdate.room = displayRoomName;

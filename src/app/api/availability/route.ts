@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { 
   fetchAllRawBeds24Bookings, 
   getParentMapping,
@@ -9,6 +10,11 @@ import {
 } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const ROOM_MAP = [
   { 
@@ -64,7 +70,7 @@ const ROOM_MAP = [
   },
   {
     roomId: '685542',
-    name: 'Apartamentos Nuevos (500-506)',
+    name: 'Apartamentos Nuevos (500-507)',
     units: [
       { unitId: '1', name: '500' },
       { unitId: '2', name: '501' },
@@ -72,7 +78,8 @@ const ROOM_MAP = [
       { unitId: '4', name: '503' },
       { unitId: '5', name: '504' },
       { unitId: '6', name: '505' },
-      { unitId: '7', name: '506' }
+      { unitId: '7', name: '506' },
+      { unitId: '8', name: '507' }
     ]
   }
 ];
@@ -114,7 +121,7 @@ export async function GET(req: Request) {
     const reqOut = new Date(checkOut);
 
     const bookings = bookingsData.data && Array.isArray(bookingsData.data) ? bookingsData.data : [];
-    
+
     bookings.forEach((b: any) => {
       if (String(b.status) !== '0' && b.status !== 'cancelled') {
         const bIn = new Date(b.arrival);
@@ -130,6 +137,24 @@ export async function GET(req: Request) {
         }
       }
     });
+
+    // Cargar también las reservas locales activas de Supabase
+    try {
+      const { data: localBookings } = await supabase
+        .from('local_reservas')
+        .select('*')
+        .neq('status', 'cancelled');
+
+      (localBookings || []).forEach((b: any) => {
+        const bIn = new Date(b.check_in);
+        const bOut = new Date(b.check_out);
+        if (bIn < reqOut && bOut > reqIn) {
+          occupiedUnits.add(`${b.room_id}_${b.unit_id}`);
+        }
+      });
+    } catch (localDbErr) {
+      console.error("[Availability API] Error reading local_reservas:", localDbErr);
+    }
 
     // Construir el inventario final con disponibilidad y tarifas dinámicas
     const inventory = ROOM_MAP.map(r => {
