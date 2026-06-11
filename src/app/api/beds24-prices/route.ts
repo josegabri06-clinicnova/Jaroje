@@ -36,10 +36,10 @@ const SEASON_BADGE: Record<string, string> = {
 // Descuentos LOS hardcoded desde las capturas de Beds24 (usados cuando fixedPrices devuelve vacío)
 const FALLBACK_TIERS: Record<string, { minStay: number; maxStay: number; offsetPct: number; name: string }[]> = {
   '679077': [
-    { name: 'Estándar 1-6 noches', minStay: 1,  maxStay: 6,   offsetPct: 0     },
-    { name: 'Estándar 7-14 noches',minStay: 7,  maxStay: 14,  offsetPct: -10.8 },
-    { name: 'Estándar 15-29 noch', minStay: 15, maxStay: 29,  offsetPct: -25   },
-    { name: 'Estándar +29 noches', minStay: 30, maxStay: 100, offsetPct: -40   },
+    { name: 'Estándar 1-6 noches', minStay: 1,  maxStay: 6,   offsetPct: 0   },
+    { name: 'Estándar 7-14 noches',minStay: 7,  maxStay: 14,  offsetPct: -15 },
+    { name: 'Estándar 15-29 noch', minStay: 15, maxStay: 29,  offsetPct: -25 },
+    { name: 'Estándar +29 noches', minStay: 30, maxStay: 100, offsetPct: -40 },
   ],
   '679087': [
     { name: 'Condo 1R 1-6 noches',  minStay: 1,  maxStay: 6,   offsetPct: 0   },
