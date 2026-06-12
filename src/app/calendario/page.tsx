@@ -168,29 +168,6 @@ async function compressImage(file: File): Promise<string> {
   });
 }
 
-const getCapacityRules = (roomName: string) => {
-  const r = (roomName || '').toLowerCase();
-  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
-    return { base: 2, max: 2 };
-  }
-  if (r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
-    return { base: 4, max: 4 };
-  }
-  if (r.includes('1 dormitorio') || r.includes('402')) {
-    return { base: 4, max: 4 };
-  }
-  if (r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 6, max: 8 };
-  }
-  if (r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 10, max: 12 };
-  }
-  if (r.includes('casa') || r.includes('401')) {
-    return { base: 12, max: 16 };
-  }
-  return { base: 6, max: 8 };
-};
-
 function fmtCurrency(amount: number, guestName?: string) {
   const isUSD = guestName?.toUpperCase().includes('(US DOLLARS)');
   return (isUSD ? 'USD$' : 'MX$') + Math.round(amount || 0).toLocaleString('es-MX');
@@ -932,7 +909,10 @@ export default function CalendarPage() {
         selectedReserva.channel || '',
         selectedReserva.room,
         selectedReserva.check_in,
-        selectedReserva.check_out
+        selectedReserva.check_out,
+        undefined,
+        Number(selectedReserva.num_adult || 1),
+        Number(selectedReserva.num_child || 0)
       );
 
       if (otaSplit.isOTA) {
@@ -973,6 +953,11 @@ export default function CalendarPage() {
             account_id: commissionAcc?.id || null,
             date: todayStr
           });
+
+          if (commissionAcc) {
+            const newCommBalance = commissionAcc.balance + otaSplit.commission;
+            await supabase.from('accounts').update({ balance: newCommBalance }).eq('id', commissionAcc.id);
+          }
         }
 
         let syncedSuccess = false;

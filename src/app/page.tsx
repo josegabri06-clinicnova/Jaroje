@@ -287,7 +287,7 @@ export default function AdminDashboard() {
     }, 15000);
     return () => clearInterval(interval);
   }, []);
-  const llegadasHoy = reservas.filter(r => r.check_in === todayStr);
+  const llegadasHoy = reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
   const salidasHoy = reservas.filter(r => r.check_out === todayStr);
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr).slice(0, 5);
 
@@ -311,7 +311,7 @@ export default function AdminDashboard() {
   };
 
   const totalRevenue = reservas.reduce((s, r) => s + (r.price_estimate || 0), 0);
-  const activeNow = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr).length;
+  const activeNow = reservas.filter(r => r.check_out > todayStr && r.checked_in).length;
 
   return (
     <div className="space-y-6 pb-28 bg-[#fafafa] min-h-screen">
@@ -442,7 +442,7 @@ export default function AdminDashboard() {
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-emerald-600">{llegadasHoy.length}</p>
-          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan</p>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Pendientes</p>
         </button>
         <button 
           onClick={() => setKpiModalType('salen')}
@@ -521,10 +521,10 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
             <ArrowDownLeft size={13} className="text-emerald-500" />
-            Llegadas Hoy
+            Pendientes Check-In
           </h3>
           <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">
-            {llegadasHoy.length} llegan
+            {llegadasHoy.length} pendientes
           </span>
         </div>
 
@@ -534,7 +534,7 @@ export default function AdminDashboard() {
               <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
             </div>
           ) : llegadasHoy.length === 0 ? (
-            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay llegadas programadas para hoy.</div>
+            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay check-ins pendientes.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[850px]">
@@ -1334,9 +1334,9 @@ export default function AdminDashboard() {
         if (kpiModalType === 'encasa') {
           title = 'Huéspedes En Casa';
           badgeColor = 'bg-zinc-900 text-white';
-          filtered = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr);
+          filtered = reservas.filter(r => r.check_out > todayStr && r.checked_in);
         } else if (kpiModalType === 'llegan') {
-          title = 'Llegadas Hoy';
+          title = 'Pendientes Check-In';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = llegadasHoy;
         } else if (kpiModalType === 'salen') {

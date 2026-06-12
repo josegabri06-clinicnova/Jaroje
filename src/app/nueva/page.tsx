@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, CheckCircle2, Lock, Unlock, X, Wallet, BedDouble, Send, Minus, Plus } from 'lucide-react';
 import { getActiveEmployee, getAdminPin } from '@/lib/auth';
-import { getUnitName, getRoomMetadata, getParentMapping } from '@/lib/beds24';
+import { getUnitName, getRoomMetadata, getParentMapping, getCapacityRules } from '@/lib/beds24';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
@@ -111,29 +111,6 @@ function addDaysToDateStr(dateStr: string, days: number): string {
   return getLocalDateStr(d);
 }
 
-const getCapacityRules = (roomIdOrName: string) => {
-  const r = (roomIdOrName || '').toLowerCase();
-  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
-    return { base: 2, max: 2 };
-  }
-  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
-    return { base: 4, max: 4 };
-  }
-  if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
-    return { base: 4, max: 4 };
-  }
-  if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 6, max: 8 };
-  }
-  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 10, max: 12 };
-  }
-  if (r === '679093' || r.includes('casa') || r.includes('401')) {
-    return { base: 12, max: 16 };
-  }
-  return { base: 6, max: 8 }; // default fallback
-};
-
 export default function VercelActionForm() {
   const router = useRouter();
   const [mode, setMode] = useState<'reserva' | 'bloqueo'>('reserva');
@@ -159,7 +136,8 @@ export default function VercelActionForm() {
     phone: '',
     numAdult: 1,
     numChild: 0,
-    notes: ''
+    notes: '',
+    extraGuestSurcharge: ''
   });
 
   const [groupRoomRates, setGroupRoomRates] = useState<Record<string, string>>({});
@@ -195,6 +173,64 @@ export default function VercelActionForm() {
   const [formAccountId, setFormAccountId] = useState('');
   const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
 
+  const distributeGuestsInRooms = (rooms: any[], numAdults: number, numChildren: number) => {
+    let adultsLeft = Math.max(0, numAdults);
+    let childrenLeft = Math.max(0, numChildren);
+    
+    const roomsWithCap = rooms.map(rm => {
+      const cap = getCapacityRules(rm.roomId || rm.room);
+      return {
+        roomId: rm.roomId || rm.room,
+        unitId: rm.unitId || rm.unit_id || '',
+        name: rm.name || 'Habitación',
+        max: cap.max,
+        base: cap.base,
+        adults: 0,
+        children: 0
+      };
+    });
+    
+    // Paso 1: Cada habitación seleccionada requiere al menos 1 adulto si hay adultos disponibles
+    roomsWithCap.forEach(r => {
+      if (adultsLeft > 0) {
+        r.adults = 1;
+        adultsLeft--;
+      }
+    });
+    
+    // Paso 2: Distribuir adultos restantes respetando el límite max de cada habitación
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const space = r.max - currentTotal;
+      if (space > 0 && adultsLeft > 0) {
+        const toAdd = Math.min(space, adultsLeft);
+        r.adults += toAdd;
+        adultsLeft -= toAdd;
+      }
+    }
+    
+    // Paso 3: Distribuir niños respetando el límite max
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const space = r.max - currentTotal;
+      if (space > 0 && childrenLeft > 0) {
+        const toAdd = Math.min(space, childrenLeft);
+        r.children += toAdd;
+        childrenLeft -= toAdd;
+      }
+    }
+    
+    // Paso 4: Si quedan excedentes (por encima del máximo teórico), sumarlos a la última habitación
+    if (adultsLeft > 0 && roomsWithCap.length > 0) {
+      roomsWithCap[roomsWithCap.length - 1].adults += adultsLeft;
+    }
+    if (childrenLeft > 0 && roomsWithCap.length > 0) {
+      roomsWithCap[roomsWithCap.length - 1].children += childrenLeft;
+    }
+    
+    return roomsWithCap;
+  };
+
   const calculateReservationPrices = () => {
     if (!form.checkIn || !form.checkOut) {
       return { totalStay: 0, roomDetails: [], suggestedDailyRate: 0 };
@@ -213,6 +249,24 @@ export default function VercelActionForm() {
     let totalStay = 0;
     let sumSuggestedRates = 0;
 
+    const distributedGuests = distributeGuestsInRooms(group, Number(form.numAdult || 1), Number(form.numChild || 0));
+
+    // Sum total extra guests across all selected rooms to determine default surcharge total
+    let totalExtraGuests = 0;
+    const roomExtraGuestsList = group.map((rm) => {
+      const dist = distributedGuests.find(d => d.roomId === rm.roomId && d.unitId === rm.unitId) || { adults: 1, children: 0 };
+      const capRules = getCapacityRules(rm.roomId || rm.name);
+      const totalGuests = dist.adults + dist.children;
+      const extraGuests = Math.max(0, totalGuests - capRules.base);
+      totalExtraGuests += extraGuests;
+      return { roomId: rm.roomId, unitId: rm.unitId, extraGuests };
+    });
+
+    const defaultSurchargeTotal = totalExtraGuests * 500;
+    const activeSurchargeTotal = form.extraGuestSurcharge !== '' && form.extraGuestSurcharge !== undefined
+      ? (Number(form.extraGuestSurcharge) || 0)
+      : defaultSurchargeTotal;
+
     const roomDetails = group.map((rm) => {
       // 1. Find dynamic price in inventory
       const roomGroup = inventory.find(g => g.roomId === rm.roomId);
@@ -225,13 +279,25 @@ export default function VercelActionForm() {
       const fallbackPrice = PRICES[parentRoom.roomId]?.[season] || 2000;
       const basePrice = dynamicPrice > 0 ? dynamicPrice : fallbackPrice;
 
-      // 3. Apply long stay discount to basePrice!
+      // 3. Apply long stay discount ONLY to basePrice if NOT dynamic
       let discountMult = 1.0;
-      if (computedNights >= 30) discountMult = 0.60;
-      else if (computedNights >= 15) discountMult = 0.75;
-      else if (computedNights >= 7) discountMult = 0.85;
+      if (dynamicPrice <= 0) {
+        if (computedNights >= 30) discountMult = 0.60;
+        else if (computedNights >= 15) discountMult = 0.75;
+        else if (computedNights >= 7) discountMult = 0.85;
+      }
 
-      const priceWithChannel = Math.round(basePrice * discountMult * multiplier);
+      // Guest Surcharge distribution
+      const roomExtraObj = roomExtraGuestsList.find(x => x.roomId === rm.roomId && x.unitId === rm.unitId);
+      const extraGuests = roomExtraObj ? roomExtraObj.extraGuests : 0;
+      let surchargePerNight = 0;
+      if (totalExtraGuests > 0) {
+        surchargePerNight = (extraGuests / totalExtraGuests) * activeSurchargeTotal;
+      } else if (activeSurchargeTotal > 0 && group.length > 0) {
+        surchargePerNight = activeSurchargeTotal / group.length;
+      }
+
+      const priceWithChannel = Math.round(basePrice * discountMult * multiplier) + surchargePerNight;
       const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
       const suggestedDailyRate = priceWithChannel + tax;
 
@@ -312,11 +378,36 @@ export default function VercelActionForm() {
     form.checkOut,
     form.channel,
     form.dailyRate,
+    form.numAdult,
+    form.numChild,
+    form.extraGuestSurcharge,
     isDailyRateEdited,
     inventory,
     otaMultipliers,
     groupRoomRates
   ]);
+
+  const { totalExtraGuests, defaultSurchargeTotal } = useMemo(() => {
+    if (!form.checkIn || !form.checkOut) {
+      return { totalExtraGuests: 0, defaultSurchargeTotal: 0 };
+    }
+    const group = form.groupRooms && form.groupRooms.length > 0
+      ? form.groupRooms
+      : (form.roomId && form.unitId ? [{ roomId: form.roomId, unitId: form.unitId, name: getUnitName(form.roomId, form.unitId) || form.unitId }] : []);
+    
+    const distributedGuests = distributeGuestsInRooms(group, Number(form.numAdult || 1), Number(form.numChild || 0));
+    let totalExtra = 0;
+    group.forEach((rm) => {
+      const dist = distributedGuests.find(d => d.roomId === rm.roomId && d.unitId === rm.unitId) || { adults: 1, children: 0 };
+      const capRules = getCapacityRules(rm.roomId || rm.name);
+      const totalGuests = dist.adults + dist.children;
+      const extraGuests = Math.max(0, totalGuests - capRules.base);
+      totalExtra += extraGuests;
+    });
+    return { totalExtraGuests: totalExtra, defaultSurchargeTotal: totalExtra * 500 };
+  }, [form.checkIn, form.checkOut, form.groupRooms, form.roomId, form.unitId, form.numAdult, form.numChild]);
+
+  const hasExtraGuests = totalExtraGuests > 0 || (form.extraGuestSurcharge !== '' && Number(form.extraGuestSurcharge) !== 0);
 
   // Resetear ediciones manuales cuando cambien las habitaciones seleccionadas
   useEffect(() => {
@@ -933,9 +1024,27 @@ export default function VercelActionForm() {
                       >
                         <Minus size={16} strokeWidth={2.5} />
                       </button>
-                      <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
-                        {form.numAdult}
-                      </span>
+                      <input 
+                        type="number" 
+                        required
+                        min={1}
+                        className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[16px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        value={form.numAdult}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setForm({...form, numAdult: '' as any});
+                            return;
+                          }
+                          const num = Number(val);
+                          if (isNaN(num)) return;
+                          setForm({...form, numAdult: num});
+                        }}
+                        onBlur={() => {
+                          const num = Math.max(1, Number(form.numAdult) || 1);
+                          setForm({...form, numAdult: num});
+                        }}
+                      />
                       <button
                         type="button"
                         onClick={() => {
@@ -961,9 +1070,27 @@ export default function VercelActionForm() {
                       >
                         <Minus size={16} strokeWidth={2.5} />
                       </button>
-                      <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
-                        {form.numChild}
-                      </span>
+                      <input 
+                        type="number" 
+                        required
+                        min={0}
+                        className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[16px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        value={form.numChild}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '') {
+                            setForm({...form, numChild: '' as any});
+                            return;
+                          }
+                          const num = Number(val);
+                          if (isNaN(num)) return;
+                          setForm({...form, numChild: num});
+                        }}
+                        onBlur={() => {
+                          const num = Math.max(0, Number(form.numChild) || 0);
+                          setForm({...form, numChild: num});
+                        }}
+                      />
                       <button
                         type="button"
                         onClick={() => {
@@ -1146,6 +1273,36 @@ export default function VercelActionForm() {
                           readOnly
                           className="w-full bg-zinc-100 border border-zinc-200/80 text-zinc-650 cursor-not-allowed rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
                           value={form.dailyRate}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cargos por Personas Adicionales */}
+                  {hasExtraGuests && (
+                    <div className="space-y-1.5 col-span-2 animate-in fade-in duration-200">
+                      <div className="flex justify-between items-center pr-1">
+                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">
+                          Cargos Personas Adicionales (Total por Noche, antes de Impuestos)
+                        </label>
+                        {form.extraGuestSurcharge !== '' && (
+                          <button
+                            type="button"
+                            onClick={() => setForm(prev => ({ ...prev, extraGuestSurcharge: '' }))}
+                            className="text-[10px] font-bold text-blue-600 hover:underline"
+                          >
+                            Restablecer a sugerido
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                        <input
+                          type="number"
+                          placeholder={String(defaultSurchargeTotal)}
+                          className="w-full bg-white border border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                          value={form.extraGuestSurcharge}
+                          onChange={e => setForm(prev => ({ ...prev, extraGuestSurcharge: e.target.value }))}
                         />
                       </div>
                     </div>

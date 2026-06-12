@@ -14,7 +14,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import InventarioPage from '../inventario/page';
-import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay } from '@/lib/beds24';
+import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit } from '@/lib/beds24';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -45,6 +45,7 @@ interface Reserva {
   balance?: number;
   notes?: string;
   groupRooms?: { roomId: string; unitId: string; name: string }[];
+  extra_guest_surcharge?: string;
   channel?: string;
   status?: string;
   taxes?: {
@@ -130,28 +131,6 @@ const PHYSICAL_ROOM_GROUPS = [
   }
 ];
 
-const getCapacityRules = (roomName: string) => {
-  const r = (roomName || '').toLowerCase();
-  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
-    return { base: 2, max: 2 };
-  }
-  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
-    return { base: 4, max: 4 };
-  }
-  if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
-    return { base: 4, max: 4 };
-  }
-  if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 6, max: 8 };
-  }
-  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 10, max: 12 };
-  }
-  if (r === '679093' || r.includes('casa') || r.includes('401')) {
-    return { base: 12, max: 16 };
-  }
-  return { base: 6, max: 8 }; // default fallback
-};
 
 function getSeason(dateStr: string): string {
   if (!dateStr) return 'media';
@@ -535,6 +514,14 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva]);
 
+  // Sincronizar editedAdults y editedChildren con selectedReserva (por ejemplo, al cambiar en steppers de walk-in)
+  useEffect(() => {
+    if (selectedReserva) {
+      setEditedAdults(Number(selectedReserva.num_adult || 1));
+      setEditedChildren(Number(selectedReserva.num_child || 0));
+    }
+  }, [selectedReserva?.num_adult, selectedReserva?.num_child]);
+
   // Bloquear el scroll del body principal cuando el modal de check-in está abierto (evita fugas de scroll en móviles)
   useEffect(() => {
     if (showCheckInModal && selectedReserva) {
@@ -637,7 +624,7 @@ export default function RecepcionPage() {
     const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room).base);
     const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room).base);
     const diffExtra = newExtraGuests - originalExtraGuests;
-    const priceAdjustment = 0; // Desactivado: tarifa plana por habitación (anteriormente diffExtra * 200 * (selectedReserva.nights || 1))
+    const priceAdjustment = Math.round(diffExtra * 500 * 1.19 * (selectedReserva.nights || 1));
     return Math.round(Number(selectedReserva.price_estimate || 0) + priceAdjustment);
   }, [selectedReserva, editedAdults, editedChildren]);
 
@@ -1149,7 +1136,8 @@ export default function RecepcionPage() {
         guest_phone: '',
         num_adult: 1,
         num_child: 0,
-        notes: ''
+        notes: '',
+        extra_guest_surcharge: ''
       });
       setShowCheckInModal(true);
       fetchAvailability(targetDate, nextDay);
@@ -1251,6 +1239,21 @@ export default function RecepcionPage() {
     
     const distributedGuests = distributeGuestsInRooms(group, Number(res.num_adult || 1), Number(res.num_child || 0));
 
+    let totalExtraGuests = 0;
+    const roomExtraGuestsList = group.map((rm, index) => {
+      const dist = distributedGuests[index] || { adults: 1, children: 0 };
+      const numGuests = dist.adults + dist.children;
+      const capRules = getCapacityRules(rm.roomId);
+      const extraGuests = Math.max(0, numGuests - capRules.base);
+      totalExtraGuests += extraGuests;
+      return { roomId: rm.roomId, unitId: rm.unitId || '', extraGuests };
+    });
+
+    const defaultSurchargeTotal = totalExtraGuests * 500;
+    const activeSurchargeTotal = res.extra_guest_surcharge !== '' && res.extra_guest_surcharge !== undefined
+      ? (Number(res.extra_guest_surcharge) || 0)
+      : defaultSurchargeTotal;
+
     let totalStay = 0;
     let sumSuggestedRates = 0;
 
@@ -1258,9 +1261,15 @@ export default function RecepcionPage() {
       const dist = distributedGuests[index] || { adults: 1, children: 0 };
       const numGuests = dist.adults + dist.children;
       
-      const capRules = getCapacityRules(rm.roomId);
-      const extraGuests = Math.max(0, numGuests - capRules.base);
-      const surchargePerNight = 0; // Desactivado: tarifa plana por habitación (anteriormente extraGuests * 200)
+      const roomExtraObj = roomExtraGuestsList.find(x => x.roomId === rm.roomId && x.unitId === (rm.unitId || ''));
+      const extraGuests = roomExtraObj ? roomExtraObj.extraGuests : 0;
+      
+      let surchargePerNight = 0;
+      if (totalExtraGuests > 0) {
+        surchargePerNight = (extraGuests / totalExtraGuests) * activeSurchargeTotal;
+      } else if (activeSurchargeTotal > 0 && group.length > 0) {
+        surchargePerNight = activeSurchargeTotal / group.length;
+      }
 
       // Buscar tarifa dinámica en roomInventory
       const roomGroup = roomInventory.find(g => g.roomId === rm.roomId);
@@ -1308,9 +1317,11 @@ export default function RecepcionPage() {
         }
         
         let discountMult = 1.0;
-        if (computedNights >= 30) discountMult = 0.60;
-        else if (computedNights >= 15) discountMult = 0.75;
-        else if (computedNights >= 7) discountMult = 0.85;
+        if (dynamicPrice <= 0) {
+          if (computedNights >= 30) discountMult = 0.60;
+          else if (computedNights >= 15) discountMult = 0.75;
+          else if (computedNights >= 7) discountMult = 0.85;
+        }
 
         const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
         const nightWithChannel = Math.round(nightBase * 1.0);
@@ -1354,7 +1365,17 @@ export default function RecepcionPage() {
     if (!selectedReserva || selectedReserva.id !== 'walkin') return 0;
     const { suggestedDailyRate } = calculateWalkinPrices(selectedReserva);
     return suggestedDailyRate;
-  }, [selectedReserva?.room, selectedReserva?.groupRooms, selectedReserva?.check_in, selectedReserva?.check_out, selectedReserva?.num_adult, selectedReserva?.num_child, rules, groupRoomRates]);
+  }, [
+    selectedReserva?.room,
+    selectedReserva?.groupRooms,
+    selectedReserva?.check_in,
+    selectedReserva?.check_out,
+    selectedReserva?.num_adult,
+    selectedReserva?.num_child,
+    selectedReserva?.extra_guest_surcharge,
+    rules,
+    groupRoomRates
+  ]);
 
   // Recalcular precio estimado en base a la edición manual o automática
   useEffect(() => {
@@ -1377,6 +1398,7 @@ export default function RecepcionPage() {
     selectedReserva?.check_out,
     selectedReserva?.num_adult,
     selectedReserva?.num_child,
+    selectedReserva?.extra_guest_surcharge,
     rules,
     groupRoomRates
   ]);
@@ -1634,7 +1656,7 @@ export default function RecepcionPage() {
     };
   }, []);
 
-  const llegadas = reservas.filter(r => r.check_in === todayStr);
+  const llegadas = reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
   const salidas = reservas.filter(r => r.check_out === todayStr);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1986,6 +2008,11 @@ export default function RecepcionPage() {
               account_id: commissionAcc?.id || null,
               date: todayStr
             });
+
+            if (commissionAcc) {
+              const newCommBalance = commissionAcc.balance + otaSplit.commission;
+              await supabase.from('accounts').update({ balance: newCommBalance }).eq('id', commissionAcc.id);
+            }
           }
 
           // Sincronizar con Beds24
@@ -2329,7 +2356,7 @@ export default function RecepcionPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-zinc-900">
-                {reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in))).length}
+                {reservas.filter(r => r.check_out > todayStr && r.checked_in).length}
               </p>
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">En casa</p>
             </button>
@@ -2338,7 +2365,7 @@ export default function RecepcionPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-emerald-600">{llegadas.length}</p>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Pendientes</p>
             </button>
             <button 
               onClick={() => setKpiModalType('salen')}
@@ -2365,7 +2392,8 @@ export default function RecepcionPage() {
                   guest_phone: '',
                   num_adult: 1,
                   num_child: 0,
-                  notes: ''
+                  notes: '',
+                  extra_guest_surcharge: ''
                 });
                 setShowCheckInModal(true);
                 fetchAvailability(todayStr, tomorrowStr);
@@ -2382,16 +2410,16 @@ export default function RecepcionPage() {
             <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Llegadas Hoy</h3>
+                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Pendientes Check-In</h3>
               </div>
               <span className="text-[11px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-100">
-                {llegadas.length} llegadas
+                {llegadas.length} pendientes
               </span>
             </div>
 
             {llegadas.length === 0 ? (
               <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
-                No hay llegadas programadas para hoy.
+                No hay check-ins pendientes.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -3019,9 +3047,27 @@ export default function RecepcionPage() {
                             >
                               <Minus size={16} strokeWidth={2.5} />
                             </button>
-                            <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
-                              {selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult}
-                            </span>
+                            <input 
+                              type="number" 
+                              required
+                              min={1}
+                              className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[16px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              value={selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '') {
+                                  setSelectedReserva({ ...selectedReserva, num_adult: '' as any });
+                                  return;
+                                }
+                                const num = Number(val);
+                                if (isNaN(num)) return;
+                                setSelectedReserva({ ...selectedReserva, num_adult: num });
+                              }}
+                              onBlur={() => {
+                                const num = Math.max(1, Number(selectedReserva.num_adult) || 1);
+                                setSelectedReserva({ ...selectedReserva, num_adult: num });
+                              }}
+                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -3047,9 +3093,27 @@ export default function RecepcionPage() {
                             >
                               <Minus size={16} strokeWidth={2.5} />
                             </button>
-                            <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
-                              {selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child}
-                            </span>
+                            <input 
+                              type="number" 
+                              required
+                              min={0}
+                              className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[16px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                              value={selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child}
+                              onChange={e => {
+                                const val = e.target.value;
+                                if (val === '') {
+                                  setSelectedReserva({ ...selectedReserva, num_child: '' as any });
+                                  return;
+                                }
+                                const num = Number(val);
+                                if (isNaN(num)) return;
+                                setSelectedReserva({ ...selectedReserva, num_child: num });
+                              }}
+                              onBlur={() => {
+                                const num = Math.max(0, Number(selectedReserva.num_child) || 0);
+                                setSelectedReserva({ ...selectedReserva, num_child: num });
+                              }}
+                            />
                             <button
                               type="button"
                               onClick={() => {
@@ -3091,6 +3155,23 @@ export default function RecepcionPage() {
                       {/* Pricing Section (Walk-In) */}
                       {selectedReserva.id === 'walkin' ? (() => {
                         const { roomDetails, totalStay } = calculateWalkinPrices(selectedReserva);
+
+                        const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
+                          ? selectedReserva.groupRooms
+                          : [{ roomId: selectedReserva.room, unitId: selectedReserva.unit_id || '', name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) }];
+                        
+                        const distributedGuests = distributeGuestsInRooms(group, Number(selectedReserva.num_adult || 1), Number(selectedReserva.num_child || 0));
+                        let totalExtra = 0;
+                        group.forEach((rm) => {
+                          const dist = distributedGuests.find(d => d.roomId === rm.roomId && d.unitId === rm.unitId) || { adults: 1, children: 0 };
+                          const capRules = getCapacityRules(rm.roomId);
+                          const totalGuests = dist.adults + dist.children;
+                          const extraGuests = Math.max(0, totalGuests - capRules.base);
+                          totalExtra += extraGuests;
+                        });
+                        const defaultSurchargeTotal = totalExtra * 500;
+                        const hasExtraGuests = totalExtra > 0 || (selectedReserva.extra_guest_surcharge !== '' && Number(selectedReserva.extra_guest_surcharge) !== 0);
+
                         return (
                           <div className="space-y-4 pt-1">
                             <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5 block">
@@ -3130,6 +3211,39 @@ export default function RecepcionPage() {
                                 );
                               })}
                             </div>
+
+                            {/* Cargos por Personas Adicionales */}
+                            {hasExtraGuests && (
+                              <div className="space-y-1.5 animate-in fade-in duration-200">
+                                <div className="flex justify-between items-center pr-1">
+                                  <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">
+                                    Cargos Personas Adicionales (Total por Noche, antes de Impuestos)
+                                  </label>
+                                  {selectedReserva.extra_guest_surcharge !== '' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedReserva(prev => prev ? { ...prev, extra_guest_surcharge: '' } : null)}
+                                      className="text-[10px] font-bold text-blue-600 hover:underline"
+                                    >
+                                      Restablecer a sugerido
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="relative">
+                                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                  <input
+                                    type="number"
+                                    placeholder={String(defaultSurchargeTotal)}
+                                    className="w-full bg-white border border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                                    value={selectedReserva.extra_guest_surcharge || ''}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setSelectedReserva(prev => prev ? { ...prev, extra_guest_surcharge: val } : null);
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            )}
 
                             <div className="grid grid-cols-2 gap-3.5 pt-1">
                               {/* Noches */}
@@ -3229,6 +3343,93 @@ export default function RecepcionPage() {
                           ({selectedReserva.num_adult || 1}A{Number(selectedReserva.num_child) > 0 ? ` / ${selectedReserva.num_child}N` : ''})
                         </span>
                       </h4>
+                    </div>
+                  </div>
+
+                  {/* Huéspedes Steppers for Existing Reservation */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Editar Número de Huéspedes</span>
+                    <div className="grid grid-cols-2 gap-3.5">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Adultos</label>
+                        <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                          <button
+                            type="button"
+                            onClick={() => setEditedAdults(prev => Math.max(1, prev - 1))}
+                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                          >
+                            <Minus size={14} strokeWidth={2.5} />
+                          </button>
+                          <input 
+                            type="number" 
+                            required
+                            min={1}
+                            className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={editedAdults}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '') {
+                                setEditedAdults('' as any);
+                                return;
+                              }
+                              const num = Number(val);
+                              if (isNaN(num)) return;
+                              setEditedAdults(num);
+                            }}
+                            onBlur={() => {
+                              const num = Math.max(1, Number(editedAdults) || 1);
+                              setEditedAdults(num);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditedAdults(prev => prev + 1)}
+                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                          >
+                            <Plus size={14} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Niños</label>
+                        <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                          <button
+                            type="button"
+                            onClick={() => setEditedChildren(prev => Math.max(0, prev - 1))}
+                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                          >
+                            <Minus size={14} strokeWidth={2.5} />
+                          </button>
+                          <input 
+                            type="number" 
+                            required
+                            min={0}
+                            className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            value={editedChildren}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '') {
+                                setEditedChildren('' as any);
+                                return;
+                              }
+                              const num = Number(val);
+                              if (isNaN(num)) return;
+                              setEditedChildren(num);
+                            }}
+                            onBlur={() => {
+                              const num = Math.max(0, Number(editedChildren) || 0);
+                              setEditedChildren(num);
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setEditedChildren(prev => prev + 1)}
+                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                          >
+                            <Plus size={14} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -4277,9 +4478,9 @@ export default function RecepcionPage() {
         if (kpiModalType === 'encasa') {
           title = 'Huéspedes En Casa';
           badgeColor = 'bg-zinc-900 text-white';
-          filtered = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in)));
+          filtered = reservas.filter(r => r.check_out > todayStr && r.checked_in);
         } else if (kpiModalType === 'llegan') {
-          title = 'Llegadas Hoy';
+          title = 'Pendientes Check-In';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = llegadas;
         } else if (kpiModalType === 'salen') {

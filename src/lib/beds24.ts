@@ -123,9 +123,9 @@ export function getUnitName(roomId: string | null | undefined, unitId: string | 
   return oldUnitMap[id]?.[uId] || null;
 }
 
-// Obtener el ID de Beds24 a partir de un número de habitación física (ej. "101" -> roomId: 679092, unitId: 1)
 export function getBeds24RoomIdAndUnit(physicalRoomName: string | null | undefined): { roomId: string, unitId: string } | null {
-  const name = String(physicalRoomName || '').trim();
+  let name = String(physicalRoomName || '').trim();
+  name = name.replace(/^(habitación|habitacion|hab\.|hab)\s+/i, '').trim();
   const map: Record<string, { roomId: string, unitId: string }> = {
     '101': { roomId: '679092', unitId: '1' },
     '102': { roomId: '679092', unitId: '2' },
@@ -886,14 +886,47 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
 }
 
 /**
+ * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.
+ */
+export function getCapacityRules(roomNameOrId: string): { base: number; max: number } {
+  const r = (roomNameOrId || '').toLowerCase();
+  // 500 es de 2 huéspedes únicamente
+  if (r.includes('500')) {
+    return { base: 2, max: 2 };
+  }
+  // 501-507 o el tipo 685542 es de 4 huéspedes (sin opción a adicionales)
+  if (r === '685542' || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
+    return { base: 4, max: 4 };
+  }
+  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
+    return { base: 4, max: 4 };
+  }
+  if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
+    return { base: 4, max: 4 };
+  }
+  if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
+    return { base: 6, max: 8 };
+  }
+  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
+    return { base: 10, max: 12 };
+  }
+  if (r === '679093' || r.includes('casa') || r.includes('401')) {
+    return { base: 12, max: 16 };
+  }
+  return { base: 6, max: 8 }; // default fallback
+}
+
+/**
  * Calcula el monto total sugerido de una renta directa basándose en fechas, habitación
- * y reglas/temporadas (incluyendo impuesto 19% e incentivos stayover).
+ * y reglas/temporadas (incluyendo impuesto 19% e huéspedes adicionales).
  */
 export function getDirectTotalForStay(
   roomName: string, // ej. '102'
   checkIn: string,
   checkOut: string,
-  rulesList?: any[]
+  rulesList?: any[],
+  numAdults: number = 1,
+  numChildren: number = 0
 ): number {
   const roomB24 = getBeds24RoomIdAndUnit(roomName);
   if (!roomB24) return 0;
@@ -906,6 +939,11 @@ export function getDirectTotalForStay(
   if (nights >= 30) discountMult = 0.60;
   else if (nights >= 15) discountMult = 0.75;
   else if (nights >= 7) discountMult = 0.85;
+
+  const capRules = getCapacityRules(roomName);
+  const totalGuests = numAdults + numChildren;
+  const extraGuests = Math.max(0, totalGuests - capRules.base);
+  const surchargePerNight = extraGuests * 500;
 
   let totalDirect = 0;
   for (let i = 0; i < nights; i++) {
@@ -950,7 +988,7 @@ export function getDirectTotalForStay(
       priceUsed = JAROJE_PRICES[parentRoom.roomId]?.[season] || 2000;
     }
 
-    const nightBase = Math.round(priceUsed * discountMult);
+    const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
     const nightTax = Math.round(nightBase * 0.19);
     totalDirect += (nightBase + nightTax);
   }
@@ -967,7 +1005,9 @@ export function computeOtaSplit(
   roomName: string,
   checkIn: string,
   checkOut: string,
-  rulesList?: any[]
+  rulesList?: any[],
+  numAdults: number = 1,
+  numChildren: number = 0
 ): {
   isOTA: boolean;
   netRevenue: number;
@@ -981,7 +1021,7 @@ export function computeOtaSplit(
 
   if (isAirbnb || isBooking || isExpedia) {
     const channelLabel = isAirbnb ? 'Airbnb' : isBooking ? 'Booking.com' : 'Expedia';
-    const directTotal = getDirectTotalForStay(roomName, checkIn, checkOut, rulesList);
+    const directTotal = getDirectTotalForStay(roomName, checkIn, checkOut, rulesList, numAdults, numChildren);
     const netRevenue = Math.min(totalAmount, directTotal > 0 ? directTotal : totalAmount);
     const commission = Math.max(0, totalAmount - netRevenue);
 

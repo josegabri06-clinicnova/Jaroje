@@ -6,7 +6,7 @@ import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
-import { computeOtaSplit } from '@/lib/beds24';
+import { computeOtaSplit, getCapacityRules } from '@/lib/beds24';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -37,28 +37,6 @@ const PHYSICAL_ROOM_GROUPS = [
   }
 ];
 
-const getCapacityRules = (roomName: string) => {
-  const r = (roomName || '').toLowerCase();
-  if (r === '685542' || r.includes('500') || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
-    return { base: 2, max: 2 };
-  }
-  if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
-    return { base: 4, max: 4 };
-  }
-  if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
-    return { base: 4, max: 4 };
-  }
-  if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 6, max: 8 };
-  }
-  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 10, max: 12 };
-  }
-  if (r === '679093' || r.includes('casa') || r.includes('401')) {
-    return { base: 12, max: 16 };
-  }
-  return { base: 6, max: 8 }; // default fallback
-};
 
 function StatusBadge({ status, isCheckedIn, isCheckedOut }: { status: string, isCheckedIn?: boolean, isCheckedOut?: boolean }) {
   if (isCheckedOut) return (
@@ -474,15 +452,19 @@ export default function ReservasList() {
           selectedRes.channel || '',
           selectedRes.room_name || '',
           selectedRes.check_in || '',
-          selectedRes.check_out || ''
+          selectedRes.check_out || '',
+          undefined,
+          Number(selectedRes.num_adult || 1),
+          Number(selectedRes.num_child || 0)
         );
 
         let isSuccess = false;
+        let financeError: any = null;
 
         if (otaSplit.isOTA) {
           // 1. Ingreso neto para el negocio (sin comisión OTA)
           const netDesc = `${baseDesc} | Ingreso Neto (sin comisión ${otaSplit.channelLabel}) | ${paymentDetail}`;
-          const { error: financeErr } = await supabase.from('finances').insert([{
+          const { error } = await supabase.from('finances').insert([{
             type: 'ingreso',
             amount: otaSplit.netRevenue,
             category: 'Alojamiento',
@@ -492,12 +474,14 @@ export default function ReservasList() {
             date: new Date().toISOString().split('T')[0]
           }]);
 
-          if (!financeErr) {
+          if (!error) {
             isSuccess = true;
             const acc = accounts.find(a => a.id === paymentReference);
             if (acc) {
               await supabase.from('accounts').update({ balance: acc.balance + otaSplit.netRevenue }).eq('id', paymentReference);
             }
+          } else {
+            financeError = error;
           }
 
           // 2. Egreso de comisión OTA
@@ -515,10 +499,15 @@ export default function ReservasList() {
               account_id: commissionAcc?.id || null,
               date: new Date().toISOString().split('T')[0]
             }]);
+
+            if (commissionAcc) {
+              const newCommBalance = commissionAcc.balance + otaSplit.commission;
+              await supabase.from('accounts').update({ balance: newCommBalance }).eq('id', commissionAcc.id);
+            }
           }
         } else {
           // Registro normal directo (sin OTA)
-          const { error: financeErr } = await supabase.from('finances').insert([{
+          const { error } = await supabase.from('finances').insert([{
             type: 'ingreso',
             amount: paymentAmountNum,
             category: 'Alojamiento',
@@ -530,12 +519,14 @@ export default function ReservasList() {
             date: new Date().toISOString().split('T')[0]
           }]);
 
-          if (!financeErr) {
+          if (!error) {
             isSuccess = true;
             const acc = accounts.find(a => a.id === paymentReference);
             if (acc) {
               await supabase.from('accounts').update({ balance: acc.balance + paymentAmountNum }).eq('id', paymentReference);
             }
+          } else {
+            financeError = error;
           }
         }
 
@@ -558,7 +549,7 @@ export default function ReservasList() {
             console.error("Error al registrar pago en Beds24:", payB24Err);
           }
         } else {
-          console.error("Error al registrar ingreso en finanzas:", financeErr);
+          console.error("Error al registrar ingreso en finanzas:", financeError);
         }
       }
 
