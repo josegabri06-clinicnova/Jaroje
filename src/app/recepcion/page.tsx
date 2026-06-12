@@ -1925,8 +1925,7 @@ export default function RecepcionPage() {
         check_out_date: selectedReserva.check_out,
         status: 'checked_in',
         checked_in_by: operatorName,
-        document_url: finalDniUrl || null,
-        notes: checkInNotes || null
+        document_url: finalDniUrl || null
       }, { onConflict: 'reservation_id' });
 
       if (upsertErr) {
