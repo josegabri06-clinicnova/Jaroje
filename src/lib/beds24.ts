@@ -48,7 +48,7 @@ export const JAROJE_PRICES: Record<string, Record<string, number>> = {
 // Nombres canónicos por roomId para el catálogo de display
 export const JAROJE_CATALOG: Record<string, any> = {
   // --- Habitación DOBLE (Antigua y nuevas 301-306) ---
-  '679077': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '679077': { nombre: 'Habitación Doble', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
   '685531': { nombre: 'Habitación DOBLE 301', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
   '685532': { nombre: 'Habitación DOBLE 302', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
   '685533': { nombre: 'Habitación DOBLE 303', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
@@ -57,26 +57,26 @@ export const JAROJE_CATALOG: Record<string, any> = {
   '685536': { nombre: 'Habitación DOBLE 306', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
 
   // --- Apartamento Premier de 1 dormitorio (402) ---
-  '679087': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '1 King o 2 Matrimoniales', amenities: 'Cocina equipada, Terraza, Alberca, Jardín, WiFi, AC', categoria: 'Condominio' },
+  '679087': { nombre: 'Apartamento de 1 dormitorio', capacidad: 4, camas: '1 King o 2 Matrimoniales', amenities: 'Cocina equipada, Terraza, Alberca, Jardín, WiFi, AC', categoria: 'Condominio' },
 
   // --- Apartamento Premier de 2 dormitorios (Antigua y nuevas 201-206) ---
-  '679091': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '685312': { nombre: 'Apartamento Premier 201', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '685318': { nombre: 'Apartamento Premier 202', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '685314': { nombre: 'Apartamento Premier 203', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '685315': { nombre: 'Apartamento Premier 204', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '685316': { nombre: 'Apartamento Premier 205', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
-  '685317': { nombre: 'Apartamento Premier 206', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '679091': { nombre: 'Apartamento de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685312': { nombre: 'Apartamento 201', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685318': { nombre: 'Apartamento 202', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685314': { nombre: 'Apartamento 203', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685315': { nombre: 'Apartamento 204', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685316': { nombre: 'Apartamento 205', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
+  '685317': { nombre: 'Apartamento 206', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza', categoria: 'Condominio' },
 
   // --- Apartamento Premier de 3 dormitorios (Antigua y nuevas 101-107) ---
-  '679092': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '685321': { nombre: 'Apartamento Premier 101', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '685322': { nombre: 'Apartamento Premier 102', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '685323': { nombre: 'Apartamento Premier 103', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '685324': { nombre: 'Apartamento Premier 104', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '685325': { nombre: 'Apartamento Premier 105', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '685326': { nombre: 'Apartamento Premier 106', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
-  '685327': { nombre: 'Apartamento Premier 107', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '679092': { nombre: 'Apartamento de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685321': { nombre: 'Apartamento 101', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685322': { nombre: 'Apartamento 102', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685323': { nombre: 'Apartamento 103', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685324': { nombre: 'Apartamento 104', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685325': { nombre: 'Apartamento 105', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685326': { nombre: 'Apartamento 106', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
+  '685327': { nombre: 'Apartamento 107', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
 
   // --- Casa Vacacional y Habitación 500 ---
   '679093': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
@@ -84,10 +84,10 @@ export const JAROJE_CATALOG: Record<string, any> = {
   '685542': { nombre: 'Habitación 500', capacidad: 2, camas: '1 Cama King', amenities: 'WiFi, AC, Vista Premium', categoria: 'Estándar' },
 
   // Fallbacks genéricos
-  'default_1': { nombre: 'Habitación DOBLE - 2 camas dobles', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
-  'default_2': { nombre: 'Apartamento Premier de 1 dormitorio', capacidad: 4, camas: '2 Matrimoniales', amenities: 'Cocina, WiFi, AC', categoria: 'Condominio' },
-  'default_3': { nombre: 'Apartamento Premier de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, 2 Baños', categoria: 'Condominio' },
-  'default_4': { nombre: 'Apartamento Premier de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, 3 Baños', categoria: 'Condominio' },
+  'default_1': { nombre: 'Habitación Doble', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
+  'default_2': { nombre: 'Apartamento de 1 dormitorio', capacidad: 4, camas: '2 Matrimoniales', amenities: 'Cocina, WiFi, AC', categoria: 'Condominio' },
+  'default_3': { nombre: 'Apartamento de 2 dormitorios', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, 2 Baños', categoria: 'Condominio' },
+  'default_4': { nombre: 'Apartamento de 3 dormitorios', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, 3 Baños', categoria: 'Condominio' },
   'default_5': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, Premium', categoria: 'Casa' },
 };
 

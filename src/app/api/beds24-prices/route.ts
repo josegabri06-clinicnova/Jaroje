@@ -12,10 +12,10 @@ const supabase = createClient(
 const TAX_FACTOR = 1.19;
 
 const ROOMS: { id: string; name: string; icon: string }[] = [
-  { id: '679077', name: 'Habitación DOBLE', icon: '🛏️' },
-  { id: '679087', name: 'Apartamento Premier 1 dorm.', icon: '🏠' },
-  { id: '679091', name: 'Apartamento Premier 2 dorm.', icon: '🏠' },
-  { id: '679092', name: 'Apartamento Premier 3 dorm.', icon: '🏡' },
+  { id: '679077', name: 'Habitación Doble', icon: '🛏️' },
+  { id: '679087', name: 'Apartamento 1 dorm.', icon: '🏠' },
+  { id: '679091', name: 'Apartamento 2 dorm.', icon: '🏠' },
+  { id: '679092', name: 'Apartamento 3 dorm.', icon: '🏡' },
   { id: '679093', name: 'Casa Vacacional 3 dorm.', icon: '🏖️' },
 ];
 

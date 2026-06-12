@@ -30,11 +30,11 @@ const ROOM_GROUPS = [
 
 const PHYSICAL_ROOM_GROUPS = [
   {
-    category: 'Apartamentos Premier de 3 Recámaras',
+    category: 'Apartamentos de 3 dormitorios',
     rooms: ['101', '102', '103', '104', '105', '106', '107']
   },
   {
-    category: 'Apartamentos Premier de 2 Recámaras',
+    category: 'Apartamentos de 2 dormitorios',
     rooms: ['201', '202', '203', '204', '205', '206']
   },
   {

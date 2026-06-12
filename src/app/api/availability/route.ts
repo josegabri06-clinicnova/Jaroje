@@ -19,7 +19,7 @@ const supabase = createClient(
 const ROOM_MAP = [
   { 
     roomId: '679092', 
-    name: 'Apartamento Premier de 3 dormitorios',
+    name: 'Apartamento de 3 dormitorios',
     units: [
       { unitId: '1', name: '101' },
       { unitId: '2', name: '102' },
@@ -32,7 +32,7 @@ const ROOM_MAP = [
   },
   { 
     roomId: '679091', 
-    name: 'Apartamento Premier de 2 dormitorios',
+    name: 'Apartamento de 2 dormitorios',
     units: [
       { unitId: '1', name: '201' },
       { unitId: '2', name: '202' },
@@ -51,14 +51,14 @@ const ROOM_MAP = [
   },
   { 
     roomId: '679087', 
-    name: 'Apartamento Premier de 1 dormitorio',
+    name: 'Apartamento de 1 dormitorio',
     units: [
       { unitId: '1', name: '402' }
     ]
   },
   { 
     roomId: '679077', 
-    name: 'Habitación DOBLE - 2 camas dobles',
+    name: 'Habitación Doble',
     units: [
       { unitId: '1', name: '301' },
       { unitId: '2', name: '302' },

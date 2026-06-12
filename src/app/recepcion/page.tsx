@@ -76,8 +76,8 @@ const ROOMS = [
 ];
 
 const ROOM_ROWS = [
-  { label: 'Apartamentos Premier 3 Recámaras (101-107)', rooms: ['101','102','103','104','105','106','107'] },
-  { label: 'Apartamentos Premier 2 Recámaras (201-206)', rooms: ['201','202','203','204','205','206'] },
+  { label: 'Apartamentos de 3 dormitorios (101-107)', rooms: ['101','102','103','104','105','106','107'] },
+  { label: 'Apartamentos de 2 dormitorios (201-206)', rooms: ['201','202','203','204','205','206'] },
   { label: 'Unidades Especiales (401-402)', rooms: ['401','402'] },
   { label: 'Habitaciones Dobles (301-306)', rooms: ['301','302','303','304','305','306'] },
   { label: 'Apartamentos Nuevos (500-507)', rooms: ['500','501','502','503','504','505','506','507'], isLocal: true }
@@ -92,10 +92,10 @@ const MTTO_LOCATIONS = [
 ];
 
 const BEDS24_ROOMS = [
-  { id: '679077', name: 'Habitación DOBLE - 2 camas dobles' },
-  { id: '679087', name: 'Apartamento Premier de 1 dormitorio' },
-  { id: '679091', name: 'Apartamento Premier de 2 dormitorios' },
-  { id: '679092', name: 'Apartamento Premier de 3 dormitorios' },
+  { id: '679077', name: 'Habitación Doble' },
+  { id: '679087', name: 'Apartamento de 1 dormitorio' },
+  { id: '679091', name: 'Apartamento de 2 dormitorios' },
+  { id: '679092', name: 'Apartamento de 3 dormitorios' },
   { id: '679093', name: 'Casa Vacacional de 3 dormitorios' }
 ];
 
@@ -109,11 +109,11 @@ const PRICES: Record<string, Record<string, number>> = {
 
 const PHYSICAL_ROOM_GROUPS = [
   {
-    category: 'Apartamentos Premier de 3 Recámaras',
+    category: 'Apartamentos de 3 dormitorios',
     rooms: ['101', '102', '103', '104', '105', '106', '107']
   },
   {
-    category: 'Apartamentos Premier de 2 Recámaras',
+    category: 'Apartamentos de 2 dormitorios',
     rooms: ['201', '202', '203', '204', '205', '206']
   },
   {

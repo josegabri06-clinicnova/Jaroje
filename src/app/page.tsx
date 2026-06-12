@@ -26,8 +26,8 @@ const ROOMS = [
 ];
 
 const ROOM_ROWS = [
-  { label: 'Apartamentos Premier 3 Recámaras (101-107)', rooms: ['101','102','103','104','105','106','107'] },
-  { label: 'Apartamentos Premier 2 Recámaras (201-206)', rooms: ['201','202','203','204','205','206'] },
+  { label: 'Apartamentos de 3 dormitorios (101-107)', rooms: ['101','102','103','104','105','106','107'] },
+  { label: 'Apartamentos de 2 dormitorios (201-206)', rooms: ['201','202','203','204','205','206'] },
   { label: 'Unidades Especiales (401-402)', rooms: ['401','402'] },
   { label: 'Habitaciones Dobles (301-306)', rooms: ['301','302','303','304','305','306'] },
   { label: 'Apartamentos Nuevos (500-507)', rooms: ['500','501','502','503','504','505','506','507'], isLocal: true }
