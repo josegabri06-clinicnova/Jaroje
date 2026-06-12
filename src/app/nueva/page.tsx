@@ -588,8 +588,8 @@ export default function VercelActionForm() {
           try {
             const beds24BookingId = responseData.data?.data?.[0]?.id || '';
             const baseDesc = form.channel === 'Recepción'
-              ? `Pago Walk-in de ${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name}`
-              : `Anticipo de ${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name}`;
+              ? `${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name} - Pago Walk-in`
+              : `${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name} - Anticipo`;
             
             const currentDayStr = getLocalDateStr(new Date());
             // Si el check-in es retroactivo, registrar en esa fecha de check-in, si no, registrar hoy

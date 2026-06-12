@@ -884,3 +884,76 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
   const json = await res.json();
   return json;
 }
+
+/**
+ * Calcula el monto total sugerido de una renta directa basándose en fechas, habitación
+ * y reglas/temporadas (incluyendo impuesto 19% e incentivos stayover).
+ */
+export function getDirectTotalForStay(
+  roomName: string, // ej. '102'
+  checkIn: string,
+  checkOut: string,
+  rulesList?: any[]
+): number {
+  const roomB24 = getBeds24RoomIdAndUnit(roomName);
+  if (!roomB24) return 0;
+
+  const checkInDate = new Date(checkIn + 'T12:00:00');
+  const checkOutDate = new Date(checkOut + 'T12:00:00');
+  const nights = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+  let discountMult = 1.0;
+  if (nights >= 30) discountMult = 0.60;
+  else if (nights >= 15) discountMult = 0.75;
+  else if (nights >= 7) discountMult = 0.85;
+
+  let totalDirect = 0;
+  for (let i = 0; i < nights; i++) {
+    const curr = new Date(checkInDate);
+    curr.setDate(curr.getDate() + i);
+    const dateStr = curr.toISOString().split('T')[0];
+
+    let priceUsed = 0;
+
+    // 1. Buscar en reglas de Supabase si se proveen
+    if (rulesList && rulesList.length > 0) {
+      const specialRule = rulesList.find(rule => 
+        rule.room_type_id === roomB24.roomId && 
+        rule.rule_type === 'special' && 
+        rule.start_date <= dateStr && 
+        rule.end_date >= dateStr
+      );
+      const seasonalRule = rulesList.find(rule => 
+        rule.room_type_id === roomB24.roomId && 
+        rule.rule_type === 'seasonal' && 
+        rule.start_date <= dateStr && 
+        rule.end_date >= dateStr
+      );
+      const baseRule = rulesList.find(rule => 
+        rule.room_type_id === roomB24.roomId && 
+        rule.rule_type === 'base'
+      );
+
+      if (specialRule) {
+        priceUsed = Number(specialRule.price);
+      } else if (seasonalRule) {
+        priceUsed = Number(seasonalRule.price);
+      } else if (baseRule) {
+        priceUsed = Number(baseRule.price);
+      }
+    }
+
+    // 2. Fallback a tarifas fijas estacionales de JAROJE_PRICES
+    if (priceUsed <= 0) {
+      const parentRoom = getParentMapping(roomB24.roomId, roomB24.unitId);
+      const season = getSeason(dateStr);
+      priceUsed = JAROJE_PRICES[parentRoom.roomId]?.[season] || 2000;
+    }
+
+    const nightBase = Math.round(priceUsed * discountMult);
+    const nightTax = Math.round(nightBase * 0.19);
+    totalDirect += (nightBase + nightTax);
+  }
+
+  return totalDirect;
+}

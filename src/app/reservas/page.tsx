@@ -15,20 +15,24 @@ const TABS = ['Todas', 'Nuevas', 'Próximas', 'Directas', 'WhatsApp Bot', 'Airbn
 
 const PHYSICAL_ROOM_GROUPS = [
   {
-    category: 'Apartamentos de 3 dormitorios',
+    category: 'Apartamentos de 3 dormitorios (101-107)',
     rooms: ['101', '102', '103', '104', '105', '106', '107']
   },
   {
-    category: 'Apartamentos de 2 dormitorios',
+    category: 'Apartamentos de 2 dormitorios (201-206)',
     rooms: ['201', '202', '203', '204', '205', '206']
   },
   {
-    category: 'Habitaciones Dobles',
+    category: 'Unidades Especiales (401-402)',
+    rooms: ['401', '402']
+  },
+  {
+    category: 'Habitaciones Dobles (301-306)',
     rooms: ['301', '302', '303', '304', '305', '306']
   },
   {
-    category: 'Otras Unidades',
-    rooms: ['401', '402', '500']
+    category: 'Apartamentos Nuevos (500-507)',
+    rooms: ['500', '501', '502', '503', '504', '505', '506', '507']
   }
 ];
 
@@ -466,8 +470,8 @@ export default function ReservasList() {
           amount: paymentAmountNum,
           category: 'Alojamiento',
           description: paymentDescription
-            ? `${paymentDescription} - Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail} [Pending Sync: B24]`
-            : `Check-in automático: ${selectedRes.guest_name} (${selectedRes.room_name}) | ${paymentDetail} [Pending Sync: B24]`,
+            ? `${paymentDescription} - ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático | ${paymentDetail} [Pending Sync: B24]`
+            : `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático | ${paymentDetail} [Pending Sync: B24]`,
           payment_method: paymentMethod,
           account_id: paymentReference,
           date: new Date().toISOString().split('T')[0]
@@ -690,7 +694,7 @@ export default function ReservasList() {
       if (!res.ok) throw new Error(data.error || 'Error al guardar el anticipo en Beds24');
 
       // 2. Registrar en Supabase finances
-      const baseDesc = `Anticipo Directo de ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'}`;
+      const baseDesc = `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Anticipo Directo`;
       const todayStr = new Date().toLocaleDateString('sv-SE');
 
       const { error: financeErr } = await supabase.from('finances').insert({

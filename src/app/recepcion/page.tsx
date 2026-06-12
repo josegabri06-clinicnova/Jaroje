@@ -14,7 +14,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import InventarioPage from '../inventario/page';
-import { getParentMapping, getBeds24RoomIdAndUnit } from '@/lib/beds24';
+import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay } from '@/lib/beds24';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -109,20 +109,24 @@ const PRICES: Record<string, Record<string, number>> = {
 
 const PHYSICAL_ROOM_GROUPS = [
   {
-    category: 'Apartamentos de 3 dormitorios',
+    category: 'Apartamentos de 3 dormitorios (101-107)',
     rooms: ['101', '102', '103', '104', '105', '106', '107']
   },
   {
-    category: 'Apartamentos de 2 dormitorios',
+    category: 'Apartamentos de 2 dormitorios (201-206)',
     rooms: ['201', '202', '203', '204', '205', '206']
   },
   {
-    category: 'Habitaciones Dobles',
+    category: 'Unidades Especiales (401-402)',
+    rooms: ['401', '402']
+  },
+  {
+    category: 'Habitaciones Dobles (301-306)',
     rooms: ['301', '302', '303', '304', '305', '306']
   },
   {
-    category: 'Otras Unidades',
-    rooms: ['401', '402', '500', '501', '502', '503', '504', '505', '506']
+    category: 'Apartamentos Nuevos (500-507)',
+    rooms: ['500', '501', '502', '503', '504', '505', '506', '507']
   }
 ];
 
@@ -404,32 +408,36 @@ function fmtCurrency(amount: number, guestName?: string) {
 function computeOtaSplit(
   totalAmount: number,
   channel: string,
-  customMultipliers?: { airbnb?: number; booking?: number; directo?: number }
+  roomName: string,
+  checkIn: string,
+  checkOut: string,
+  rulesList?: any[]
 ): {
   isOTA: boolean;
   netRevenue: number;
   commission: number;
   channelLabel: string;
-  multiplier: number;
 } {
   const ch = (channel || '').toLowerCase();
-  if (ch.includes('airbnb')) {
-    const multiplier = customMultipliers?.airbnb ?? 1.20;
-    const netRevenue = Math.round(totalAmount / multiplier);
-    return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Airbnb', multiplier };
+  const isAirbnb = ch.includes('airbnb');
+  const isBooking = ch.includes('booking');
+  const isExpedia = ch.includes('expedia');
+
+  if (isAirbnb || isBooking || isExpedia) {
+    const channelLabel = isAirbnb ? 'Airbnb' : isBooking ? 'Booking.com' : 'Expedia';
+    const directTotal = getDirectTotalForStay(roomName, checkIn, checkOut, rulesList);
+    const netRevenue = Math.min(totalAmount, directTotal > 0 ? directTotal : totalAmount);
+    const commission = Math.max(0, totalAmount - netRevenue);
+
+    return {
+      isOTA: true,
+      netRevenue,
+      commission,
+      channelLabel
+    };
   }
-  if (ch.includes('booking')) {
-    const multiplier = customMultipliers?.booking ?? 1.35;
-    const netRevenue = Math.round(totalAmount / multiplier);
-    return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Booking.com', multiplier };
-  }
-  if (ch.includes('expedia')) {
-    // Expedia usa el mismo multiplicador que Booking como referencia
-    const multiplier = customMultipliers?.booking ?? 1.35;
-    const netRevenue = Math.round(totalAmount / multiplier);
-    return { isOTA: true, netRevenue, commission: totalAmount - netRevenue, channelLabel: 'Expedia', multiplier };
-  }
-  return { isOTA: false, netRevenue: totalAmount, commission: 0, channelLabel: '', multiplier: 1.0 };
+
+  return { isOTA: false, netRevenue: totalAmount, commission: 0, channelLabel: '' };
 }
 
 export default function RecepcionPage() {
@@ -1969,13 +1977,17 @@ export default function RecepcionPage() {
 
       if (paymentMode && paymentAmount) {
         const amountNum = Number(paymentAmount);
-        const baseDesc = `Cobro Check-in ${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room} (Operado por: ${operatorName}) [Reserva B24: ${selectedReserva.id}]`;
+        const baseDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in (Operado por: ${operatorName})`;
 
         // ── OTA Commission Split ──────────────────────────────────────────
-        // Resolver multiplicadores reales desde pricingSettings (Beds24/Supabase)
-        const roomB24 = getBeds24RoomIdAndUnit(selectedReserva.room);
-        const roomMultipliers = roomB24 ? pricingSettings?.[roomB24.roomId]?.multipliers : undefined;
-        const otaSplit = computeOtaSplit(amountNum, selectedReserva.channel || '', roomMultipliers);
+        const otaSplit = computeOtaSplit(
+          amountNum,
+          selectedReserva.channel || '',
+          selectedReserva.room,
+          selectedReserva.check_in,
+          selectedReserva.check_out,
+          rules
+        );
 
         if (otaSplit.isOTA) {
           // 1. Ingreso neto para el negocio (sin comisión OTA)
@@ -2002,7 +2014,6 @@ export default function RecepcionPage() {
           }
 
           // 2. Egreso de comisión OTA
-          const commissionAccName = `COMISIÓN ${otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '')}`;
           const commissionAcc = accounts.find(a =>
             a.name.toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
           );
@@ -2012,7 +2023,7 @@ export default function RecepcionPage() {
               type: 'egreso',
               amount: otaSplit.commission,
               category: 'Comisiones',
-              description: `Comisión ${otaSplit.channelLabel} - ${selectedReserva.guest_name || 'Huésped'} Hab ${selectedReserva.room} [B24: ${selectedReserva.id}]`,
+              description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Comisión ${otaSplit.channelLabel}`,
               payment_method: 'transferencia',
               account_id: commissionAcc?.id || null,
               date: todayStr
