@@ -6,6 +6,7 @@ import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
+import { computeOtaSplit } from '@/lib/beds24';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -465,23 +466,80 @@ export default function ReservasList() {
                               paymentMethod === 'tarjeta' ? `Terminal/Autorización: ${accountName}` : 
                               `Cuenta destino: ${accountName}`;
 
-        const { error: financeErr } = await supabase.from('finances').insert([{
-          type: 'ingreso',
-          amount: paymentAmountNum,
-          category: 'Alojamiento',
-          description: paymentDescription
-            ? `${paymentDescription} - ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático | ${paymentDetail} [Pending Sync: B24]`
-            : `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático | ${paymentDetail} [Pending Sync: B24]`,
-          payment_method: paymentMethod,
-          account_id: paymentReference,
-          date: new Date().toISOString().split('T')[0]
-        }]);
+        const baseDesc = `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático`;
 
-        if (!financeErr) {
-          const acc = accounts.find(a => a.id === paymentReference);
-          if (acc) {
-            await supabase.from('accounts').update({ balance: acc.balance + paymentAmountNum }).eq('id', paymentReference);
+        // ── OTA Commission Split ──────────────────────────────────────────
+        const otaSplit = computeOtaSplit(
+          paymentAmountNum,
+          selectedRes.channel || '',
+          selectedRes.room_name || '',
+          selectedRes.check_in || '',
+          selectedRes.check_out || ''
+        );
+
+        let isSuccess = false;
+
+        if (otaSplit.isOTA) {
+          // 1. Ingreso neto para el negocio (sin comisión OTA)
+          const netDesc = `${baseDesc} | Ingreso Neto (sin comisión ${otaSplit.channelLabel}) | ${paymentDetail}`;
+          const { error: financeErr } = await supabase.from('finances').insert([{
+            type: 'ingreso',
+            amount: otaSplit.netRevenue,
+            category: 'Alojamiento',
+            description: paymentDescription ? `${paymentDescription} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
+            payment_method: paymentMethod,
+            account_id: paymentReference,
+            date: new Date().toISOString().split('T')[0]
+          }]);
+
+          if (!financeErr) {
+            isSuccess = true;
+            const acc = accounts.find(a => a.id === paymentReference);
+            if (acc) {
+              await supabase.from('accounts').update({ balance: acc.balance + otaSplit.netRevenue }).eq('id', paymentReference);
+            }
           }
+
+          // 2. Egreso de comisión OTA
+          const commissionAcc = accounts.find(a =>
+            a.name.toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
+          );
+
+          if (otaSplit.commission > 0) {
+            await supabase.from('finances').insert([{
+              type: 'egreso',
+              amount: otaSplit.commission,
+              category: 'Comisiones',
+              description: `${selectedRes.guest_name || 'Huésped'} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Comisión ${otaSplit.channelLabel}`,
+              payment_method: 'transferencia',
+              account_id: commissionAcc?.id || null,
+              date: new Date().toISOString().split('T')[0]
+            }]);
+          }
+        } else {
+          // Registro normal directo (sin OTA)
+          const { error: financeErr } = await supabase.from('finances').insert([{
+            type: 'ingreso',
+            amount: paymentAmountNum,
+            category: 'Alojamiento',
+            description: paymentDescription
+              ? `${paymentDescription} - ${baseDesc} | ${paymentDetail} [Pending Sync: B24]`
+              : `${baseDesc} | ${paymentDetail} [Pending Sync: B24]`,
+            payment_method: paymentMethod,
+            account_id: paymentReference,
+            date: new Date().toISOString().split('T')[0]
+          }]);
+
+          if (!financeErr) {
+            isSuccess = true;
+            const acc = accounts.find(a => a.id === paymentReference);
+            if (acc) {
+              await supabase.from('accounts').update({ balance: acc.balance + paymentAmountNum }).eq('id', paymentReference);
+            }
+          }
+        }
+
+        if (isSuccess) {
 
           // Registrar el pago en Beds24 en tiempo real
           try {

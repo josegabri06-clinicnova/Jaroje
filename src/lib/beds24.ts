@@ -957,3 +957,41 @@ export function getDirectTotalForStay(
 
   return totalDirect;
 }
+
+/**
+ * Retorna el desglose neto + comisión OTA para una reserva Airbnb/Booking.
+ */
+export function computeOtaSplit(
+  totalAmount: number,
+  channel: string,
+  roomName: string,
+  checkIn: string,
+  checkOut: string,
+  rulesList?: any[]
+): {
+  isOTA: boolean;
+  netRevenue: number;
+  commission: number;
+  channelLabel: string;
+} {
+  const ch = (channel || '').toLowerCase();
+  const isAirbnb = ch.includes('airbnb');
+  const isBooking = ch.includes('booking');
+  const isExpedia = ch.includes('expedia');
+
+  if (isAirbnb || isBooking || isExpedia) {
+    const channelLabel = isAirbnb ? 'Airbnb' : isBooking ? 'Booking.com' : 'Expedia';
+    const directTotal = getDirectTotalForStay(roomName, checkIn, checkOut, rulesList);
+    const netRevenue = Math.min(totalAmount, directTotal > 0 ? directTotal : totalAmount);
+    const commission = Math.max(0, totalAmount - netRevenue);
+
+    return {
+      isOTA: true,
+      netRevenue,
+      commission,
+      channelLabel
+    };
+  }
+
+  return { isOTA: false, netRevenue: totalAmount, commission: 0, channelLabel: '' };
+}
