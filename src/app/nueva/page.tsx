@@ -117,19 +117,19 @@ const getCapacityRules = (roomIdOrName: string) => {
     return { base: 2, max: 2 };
   }
   if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
-    return { base: 2, max: 4 };
+    return { base: 4, max: 4 };
   }
   if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
-    return { base: 2, max: 4 };
+    return { base: 4, max: 4 };
   }
   if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 4, max: 8 };
+    return { base: 6, max: 8 };
   }
   if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 6, max: 12 };
+    return { base: 10, max: 12 };
   }
   if (r === '679093' || r.includes('casa') || r.includes('401')) {
-    return { base: 8, max: 16 };
+    return { base: 12, max: 16 };
   }
   return { base: 6, max: 8 }; // default fallback
 };
@@ -155,12 +155,14 @@ export default function VercelActionForm() {
     channel: 'Directo',
     price: '',
     dailyRate: '',
-    deposit: '',
+    deposit: '0',
     phone: '',
     numAdult: 1,
     numChild: 0,
     notes: ''
   });
+
+  const [groupRoomRates, setGroupRoomRates] = useState<Record<string, string>>({});
 
   const [nights, setNights] = useState<number | ''>(1);
 
@@ -193,90 +195,107 @@ export default function VercelActionForm() {
   const [formAccountId, setFormAccountId] = useState('');
   const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
 
+  const calculateReservationPrices = () => {
+    if (!form.checkIn || !form.checkOut) {
+      return { totalStay: 0, roomDetails: [], suggestedDailyRate: 0 };
+    }
+    const diffTime = Math.abs(new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime());
+    const computedNights = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+
+    const group = form.groupRooms && form.groupRooms.length > 0
+      ? form.groupRooms
+      : (form.roomId && form.unitId ? [{ roomId: form.roomId, unitId: form.unitId, name: getUnitName(form.roomId, form.unitId) || form.unitId }] : []);
+
+    let multiplier = 1;
+    if (form.channel === 'Airbnb') multiplier = otaMultipliers.airbnb;
+    if (form.channel === 'Booking.com') multiplier = otaMultipliers.booking;
+
+    let totalStay = 0;
+    let sumSuggestedRates = 0;
+
+    const roomDetails = group.map((rm) => {
+      // 1. Find dynamic price in inventory
+      const roomGroup = inventory.find(g => g.roomId === rm.roomId);
+      const unit = roomGroup?.units?.find((u: any) => u.unitId === rm.unitId);
+      const dynamicPrice = (unit && unit.price !== undefined && unit.price > 0) ? unit.price : 0;
+
+      // 2. Fallback or seasonal pricing
+      const season = getSeason(form.checkIn);
+      const parentRoom = getParentMapping(rm.roomId, rm.unitId);
+      const fallbackPrice = PRICES[parentRoom.roomId]?.[season] || 2000;
+      const basePrice = dynamicPrice > 0 ? dynamicPrice : fallbackPrice;
+
+      // 3. Apply long stay discount to basePrice!
+      let discountMult = 1.0;
+      if (computedNights >= 30) discountMult = 0.60;
+      else if (computedNights >= 15) discountMult = 0.75;
+      else if (computedNights >= 7) discountMult = 0.85;
+
+      const priceWithChannel = Math.round(basePrice * discountMult * multiplier);
+      const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
+      const suggestedDailyRate = priceWithChannel + tax;
+
+      sumSuggestedRates += suggestedDailyRate;
+
+      // Detect if user modified manually this room's price
+      const key = `${rm.roomId}_${rm.unitId}`;
+      const userPrice = groupRoomRates[key];
+      let dailyRate = suggestedDailyRate;
+      
+      if (group.length <= 1 && isDailyRateEdited) {
+        dailyRate = Number(form.dailyRate) || 0;
+      } else if (userPrice !== undefined && userPrice !== '') {
+        dailyRate = Number(userPrice);
+      }
+      
+      const roomTotal = dailyRate * computedNights;
+
+      totalStay += roomTotal;
+
+      return {
+        roomId: rm.roomId,
+        unitId: rm.unitId,
+        name: rm.name,
+        suggestedDailyRate,
+        dailyRate,
+        roomTotal
+      };
+    });
+
+    const suggestedDailyRate = group.length > 0 ? Math.round(sumSuggestedRates / group.length) : 0;
+
+    return {
+      totalStay,
+      roomDetails,
+      suggestedDailyRate
+    };
+  };
+
   // Calcular precio automático
   useEffect(() => {
     if (form.checkIn && form.checkOut) {
-      const season = getSeason(form.checkIn);
+      const { totalStay, roomDetails, suggestedDailyRate } = calculateReservationPrices();
       
-      const diffTime = Math.abs(new Date(form.checkOut).getTime() - new Date(form.checkIn).getTime());
-      const computedNights = Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-      
-      let multiplier = 1;
-      if (form.channel === 'Airbnb') multiplier = otaMultipliers.airbnb;
-      if (form.channel === 'Booking.com') multiplier = otaMultipliers.booking;
-
-      let calculatedDailyRate = 0;
-      const group = form.groupRooms || [];
-      const totalRooms = group.length > 0 ? group.length : 1;
-
-      // Intentar buscar el precio dinámico de la API en el inventario actual
-      let foundDynamicPrice = false;
-      let dynamicPriceSum = 0;
-
-      if (group.length > 0) {
-        group.forEach(gr => {
-          const roomGroup = inventory.find(g => g.roomId === gr.roomId);
-          const unit = roomGroup?.units?.find((u: any) => u.unitId === gr.unitId);
-          if (unit && unit.price !== undefined && unit.price > 0) {
-            dynamicPriceSum += unit.price;
-            foundDynamicPrice = true;
-          }
-        });
-      } else if (form.roomId && form.unitId) {
-        const roomGroup = inventory.find(g => g.roomId === form.roomId);
-        const unit = roomGroup?.units?.find((u: any) => u.unitId === form.unitId);
-        if (unit && unit.price !== undefined && unit.price > 0) {
-          dynamicPriceSum += unit.price;
-          foundDynamicPrice = true;
-        }
-      }
-
-      if (foundDynamicPrice && totalRooms > 0) {
-        const basePrice = Math.round(dynamicPriceSum / totalRooms);
-        const priceWithChannel = Math.round(basePrice * multiplier);
-        const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
-        calculatedDailyRate = priceWithChannel + tax;
-      } else {
-        // Fallback al catálogo estático aplicando el descuento por longitud de estancia
-        let discountMult = 1.0;
-        if (computedNights >= 30) discountMult = 0.60;
-        else if (computedNights >= 15) discountMult = 0.75;
-        else if (computedNights >= 7) discountMult = 0.85;
-
-        if (group.length > 0) {
-          const gr = group[0];
-          const parentRoom = getParentMapping(gr.roomId, gr.unitId);
-          const basePrice = Math.round((PRICES[parentRoom.roomId]?.[season] || 2000) * discountMult);
-          const priceWithChannel = Math.round(basePrice * multiplier);
-          const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
-          calculatedDailyRate = priceWithChannel + tax;
-        } else if (form.roomId) {
-          const parentRoom = getParentMapping(form.roomId, form.unitId);
-          const basePrice = Math.round((PRICES[parentRoom.roomId]?.[season] || 2000) * discountMult);
-          const priceWithChannel = Math.round(basePrice * multiplier);
-          const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
-          calculatedDailyRate = priceWithChannel + tax;
-        }
-      }
-
-      const activeDailyRate = isDailyRateEdited ? Number(form.dailyRate) || 0 : calculatedDailyRate;
-      const totalStay = activeDailyRate * computedNights * totalRooms;
-
       setForm(prev => {
         const nextState = { ...prev };
-        if (!isDailyRateEdited) {
-          nextState.dailyRate = calculatedDailyRate.toString();
+        
+        const isAnyGroupRateEdited = Object.keys(groupRoomRates).some(key => groupRoomRates[key] !== undefined && groupRoomRates[key] !== '');
+        
+        if (!isDailyRateEdited && !isAnyGroupRateEdited) {
+          nextState.dailyRate = suggestedDailyRate.toString();
         }
         nextState.price = totalStay.toString();
-        if (prev.channel === 'Recepción') {
-          nextState.deposit = totalStay.toString(); // Forzar el pago total para walk-ins
-        } else if (!isDepositEdited) {
-          nextState.deposit = totalStay.toString();
-        }
         return nextState;
       });
 
-      if (isDailyRateEdited) {
+      const isAnyGroupRateEdited = Object.keys(groupRoomRates).some(key => groupRoomRates[key] !== undefined && groupRoomRates[key] !== '');
+      const foundDynamicPrice = roomDetails.some(d => {
+        const roomGroup = inventory.find(g => g.roomId === d.roomId);
+        const unit = roomGroup?.units?.find((u: any) => u.unitId === d.unitId);
+        return unit && unit.price !== undefined && unit.price > 0;
+      });
+
+      if (isDailyRateEdited || isAnyGroupRateEdited) {
         setRateSource('edited');
       } else if (foundDynamicPrice) {
         setRateSource('beds24');
@@ -286,13 +305,25 @@ export default function VercelActionForm() {
         setRateSource(null);
       }
     }
-  }, [form.roomId, form.groupRooms, form.checkIn, form.checkOut, form.channel, form.dailyRate, isDailyRateEdited, isDepositEdited, inventory, otaMultipliers]);
+  }, [
+    form.roomId,
+    form.groupRooms,
+    form.checkIn,
+    form.checkOut,
+    form.channel,
+    form.dailyRate,
+    isDailyRateEdited,
+    inventory,
+    otaMultipliers,
+    groupRoomRates
+  ]);
 
   // Resetear ediciones manuales cuando cambien las habitaciones seleccionadas
   useEffect(() => {
     setIsDailyRateEdited(false);
     setIsDepositEdited(false);
     setIsPriceUnlocked(false);
+    setGroupRoomRates({});
   }, [form.roomId, form.unitId, form.groupRooms]);
 
   // Cargar cuentas (accounts) y multiplicadores de Supabase al montar
@@ -470,13 +501,15 @@ export default function VercelActionForm() {
           }];
 
       const totalRooms = roomsToBook.length;
-      const totalPayment = isBlock ? 0 : Number(form.price || 0);
-      const pricePerRoom = Math.round(totalPayment / totalRooms);
+      const { roomDetails } = calculateReservationPrices();
       const totalDeposit = isBlock ? 0 : Number(form.deposit || 0);
       const depositPerRoom = Math.round(totalDeposit / totalRooms);
       const roomNamesList = roomsToBook.map(r => r.name).join(', ');
 
       for (const room of roomsToBook) {
+        const matchedDetails = roomDetails.find(d => d.roomId === room.roomId && d.unitId === room.unitId);
+        const roomTotal = matchedDetails ? matchedDetails.roomTotal : 0;
+
         const payload = {
           roomId: room.roomId,
           unitId: room.unitId,
@@ -484,7 +517,7 @@ export default function VercelActionForm() {
           checkOut: form.checkOut,
           guestName: form.guestName,
           isBlock,
-          price: pricePerRoom,
+          price: isBlock ? 0 : roomTotal,
           deposit: depositPerRoom,
           phone: isBlock ? '' : form.phone,
           numAdult: isBlock ? 1 : (Number(form.numAdult) || 1),
@@ -529,7 +562,7 @@ export default function VercelActionForm() {
               details: JSON.stringify({
                 text: isBlock 
                   ? `Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}. Motivo: ${form.guestName || 'Mantenimiento'}`
-                  : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${pricePerRoom} (Anticipo: $${depositPerRoom}) vía ${form.channel}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''} [ID: ${responseData.data?.data?.[0]?.id || ''}]`,
+                  : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${roomTotal} (Anticipo: $${depositPerRoom}) vía ${form.channel}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''} [ID: ${responseData.data?.data?.[0]?.id || ''}]`,
                 reserva: {
                   guestName: form.guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
                   roomId: room.roomId,
@@ -537,7 +570,7 @@ export default function VercelActionForm() {
                   roomName: roomDisplayName,
                   checkIn: form.checkIn,
                   checkOut: form.checkOut,
-                  price: pricePerRoom,
+                  price: roomTotal,
                   deposit: depositPerRoom,
                   channel: form.channel,
                   isBlock,
@@ -607,7 +640,7 @@ export default function VercelActionForm() {
         ? '¡Éxito! Reserva(s) conectada(s) hacia Beds24 y confirmada(s) en la(s) unidad(es) seleccionada(s).' 
         : '¡Éxito! Bloqueo(s) aplicado(s) en la(s) unidad(es) seleccionada(s).');
       
-      router.push('/reservas');
+      router.push(`/reservas?search=${encodeURIComponent(form.guestName)}`);
     } catch (err: any) {
       alert(`Fallo en el intento:\n\n${err.message}`);
     } finally {
@@ -888,32 +921,60 @@ export default function VercelActionForm() {
 
                 <div className="grid grid-cols-2 gap-3.5">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Adultos</label>
-                    <input 
-                      type="number" 
-                      required
-                      min={1}
-                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                      value={form.numAdult}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setForm({...form, numAdult: val === '' ? '' : Math.max(1, Number(val)) as any});
-                      }}
-                    />
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Adultos</label>
+                    <div className="flex items-center w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl h-14 focus-within:bg-white focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Math.max(1, Number(form.numAdult || 1) - 1);
+                          setForm({...form, numAdult: val});
+                        }}
+                        className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                      >
+                        <Minus size={16} strokeWidth={2.5} />
+                      </button>
+                      <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
+                        {form.numAdult}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Number(form.numAdult || 1) + 1;
+                          setForm({...form, numAdult: val});
+                        }}
+                        className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                      >
+                        <Plus size={16} strokeWidth={2.5} />
+                      </button>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Niños</label>
-                    <input 
-                      type="number" 
-                      required
-                      min={0}
-                      className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                      value={form.numChild}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setForm({...form, numChild: val === '' ? '' : Math.max(0, Number(val)) as any});
-                      }}
-                    />
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Niños</label>
+                    <div className="flex items-center w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl h-14 focus-within:bg-white focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Math.max(0, Number(form.numChild || 0) - 1);
+                          setForm({...form, numChild: val});
+                        }}
+                        className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                      >
+                        <Minus size={16} strokeWidth={2.5} />
+                      </button>
+                      <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
+                        {form.numChild}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = Number(form.numChild || 0) + 1;
+                          setForm({...form, numChild: val});
+                        }}
+                        className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                      >
+                        <Plus size={16} strokeWidth={2.5} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -952,7 +1013,6 @@ export default function VercelActionForm() {
                           setForm(prev => ({
                             ...prev,
                             channel: channelVal,
-                            ...(channelVal === 'Recepción' ? { deposit: prev.price } : {})
                           }));
                           if (channelVal === 'Recepción') {
                             setIsPriceUnlocked(false);
@@ -968,79 +1028,140 @@ export default function VercelActionForm() {
                     </div>
                   </div>
 
-                  {/* Tarifa Diaria */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center pr-1 animate-in fade-in duration-200">
-                      <div className="flex items-center gap-2">
-                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">
-                          Tarifa Diaria (x Hab)
-                        </label>
-                        {rateSource === 'beds24' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/50 shadow-xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Live Beds24
-                          </span>
-                        )}
-                        {rateSource === 'fallback' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/50 shadow-xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                            Tarifa Backup
-                          </span>
-                        )}
-                        {rateSource === 'edited' && (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/50 shadow-xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                            Modificado
-                          </span>
+                  {/* Si es una habitación o ninguna, colocar Tarifa Diaria al lado de Origen */}
+                  {!(form.groupRooms && form.groupRooms.length > 1) ? (
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between items-center pr-1 animate-in fade-in duration-200">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">
+                            Tarifa Diaria (x Hab)
+                          </label>
+                          {rateSource === 'beds24' && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200/50 shadow-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                              Live Beds24
+                            </span>
+                          )}
+                          {rateSource === 'fallback' && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200/50 shadow-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                              Tarifa Backup
+                            </span>
+                          )}
+                          {rateSource === 'edited' && (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/50 shadow-xs">
+                              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                              Modificado
+                            </span>
+                          )}
+                        </div>
+                        {form.channel === 'Recepción' && (
+                          <button 
+                            type="button" 
+                            onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
+                            className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
+                          >
+                            {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
+                            {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
+                          </button>
                         )}
                       </div>
-                      {form.channel === 'Recepción' && (
-                        <button 
-                          type="button" 
-                          onClick={() => isPriceUnlocked ? setIsPriceUnlocked(false) : setShowPinModal(true)}
-                          className="text-[10px] font-bold text-blue-600 flex items-center gap-1"
-                        >
-                          {isPriceUnlocked ? <Unlock size={12} /> : <Lock size={12} />}
-                          {isPriceUnlocked ? 'Bloquear' : 'Modificar'}
-                        </button>
-                      )}
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                        <input 
+                          type="number" 
+                          placeholder="0.00"
+                          readOnly={form.channel === 'Recepción' && !isPriceUnlocked}
+                          className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                            (form.channel !== 'Recepción' || isPriceUnlocked)
+                              ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
+                              : 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
+                          }`}
+                          value={form.dailyRate}
+                          onChange={e => {
+                            setIsDailyRateEdited(true);
+                            setForm({...form, dailyRate: e.target.value});
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                      <input 
-                        type="number" 
-                        placeholder="0.00"
-                        readOnly={form.channel === 'Recepción' && !isPriceUnlocked}
-                        className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                          (form.channel !== 'Recepción' || isPriceUnlocked)
-                            ? 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm' 
-                            : 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
-                        }`}
-                        value={form.dailyRate}
-                        onChange={e => {
-                          setIsDailyRateEdited(true);
-                          setForm({...form, dailyRate: e.target.value});
-                        }}
-                      />
+                  ) : (
+                    <div />
+                  )}
+
+                  {/* Si hay múltiples habitaciones, mostrar el desglose ocupando el ancho completo */}
+                  {form.groupRooms && form.groupRooms.length > 1 && (() => {
+                    const { roomDetails } = calculateReservationPrices();
+                    return (
+                      <div className="col-span-2 space-y-3 pt-1">
+                        <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5 block animate-in fade-in duration-200">
+                          Tarifas por Habitación
+                        </label>
+                        <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                          {roomDetails.map((room) => {
+                            const key = `${room.roomId}_${room.unitId}`;
+                            return (
+                              <div 
+                                key={key} 
+                                className="flex items-center justify-between gap-3 p-3 bg-zinc-50 border border-zinc-200/80 rounded-xl hover:border-zinc-300 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.01)]"
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-[13px] font-bold text-zinc-800 leading-snug">Habitación {room.name}</span>
+                                  <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
+                                    Sugerido: ${room.suggestedDailyRate.toLocaleString('es-MX')}
+                                  </span>
+                                </div>
+                                <div className="relative w-32 shrink-0">
+                                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] font-bold text-zinc-400">$</span>
+                                  <input
+                                    type="number"
+                                    placeholder={String(room.suggestedDailyRate)}
+                                    className="w-full bg-white border border-zinc-200/80 focus:border-zinc-400 rounded-xl py-2 pl-7 pr-3 text-right text-[15px] font-bold text-zinc-900 transition-all outline-none"
+                                    value={groupRoomRates[key] !== undefined ? groupRoomRates[key] : ''}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setGroupRoomRates(prev => ({
+                                        ...prev,
+                                        [key]: val
+                                      }));
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Si hay múltiples habitaciones, mostrar la tarifa promedio en vez de la tarifa diaria */}
+                  {form.groupRooms && form.groupRooms.length > 1 && (
+                    <div className="space-y-1.5 col-span-2">
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Tarifa Promedio (Diaria)</label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                        <input 
+                          type="number" 
+                          readOnly
+                          className="w-full bg-zinc-100 border border-zinc-200/80 text-zinc-650 cursor-not-allowed rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                          value={form.dailyRate}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Anticipo */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">
-                      {form.channel === 'Recepción' ? 'Pago Total Recibido' : 'Anticipo'}
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">
+                      Anticipo
                     </label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
                       <input 
                         type="number" 
                         placeholder="0.00"
-                        readOnly={form.channel === 'Recepción'}
-                        className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                          form.channel === 'Recepción'
-                            ? 'bg-zinc-100 border-zinc-200/80 text-zinc-650 cursor-not-allowed'
-                            : 'bg-white border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm'
-                        }`}
+                        className="w-full bg-white border border-blue-400 focus:ring-4 focus:ring-blue-900/10 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
                         value={form.deposit}
                         onChange={e => {
                           setIsDepositEdited(true);
@@ -1052,7 +1173,7 @@ export default function VercelActionForm() {
 
                   {/* Tarifa Total */}
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5">Tarifa Total</label>
+                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Tarifa Total</label>
                     <div className="relative">
                       <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
                       <input 

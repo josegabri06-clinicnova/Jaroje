@@ -18,22 +18,16 @@ const supabase = createClient(
 
 const ROOM_MAP = [
   { 
-    roomId: '679077', 
-    name: 'Habitación DOBLE - 2 camas dobles',
+    roomId: '679092', 
+    name: 'Apartamento Premier de 3 dormitorios',
     units: [
-      { unitId: '1', name: '301' },
-      { unitId: '2', name: '302' },
-      { unitId: '3', name: '303' },
-      { unitId: '4', name: '304' },
-      { unitId: '5', name: '305' },
-      { unitId: '6', name: '306' }
-    ]
-  },
-  { 
-    roomId: '679087', 
-    name: 'Apartamento Premier de 1 dormitorio',
-    units: [
-      { unitId: '1', name: '402' }
+      { unitId: '1', name: '101' },
+      { unitId: '2', name: '102' },
+      { unitId: '3', name: '103' },
+      { unitId: '4', name: '104' },
+      { unitId: '5', name: '105' },
+      { unitId: '6', name: '106' },
+      { unitId: '7', name: '107' }
     ]
   },
   { 
@@ -49,23 +43,29 @@ const ROOM_MAP = [
     ]
   },
   { 
-    roomId: '679092', 
-    name: 'Apartamento Premier de 3 dormitorios',
-    units: [
-      { unitId: '1', name: '101' },
-      { unitId: '2', name: '102' },
-      { unitId: '3', name: '103' },
-      { unitId: '4', name: '104' },
-      { unitId: '5', name: '105' },
-      { unitId: '6', name: '106' },
-      { unitId: '7', name: '107' }
-    ]
-  },
-  { 
     roomId: '679093', 
     name: 'Casa Vacacional de 3 dormitorios',
     units: [
       { unitId: '1', name: '401' }
+    ]
+  },
+  { 
+    roomId: '679087', 
+    name: 'Apartamento Premier de 1 dormitorio',
+    units: [
+      { unitId: '1', name: '402' }
+    ]
+  },
+  { 
+    roomId: '679077', 
+    name: 'Habitación DOBLE - 2 camas dobles',
+    units: [
+      { unitId: '1', name: '301' },
+      { unitId: '2', name: '302' },
+      { unitId: '3', name: '303' },
+      { unitId: '4', name: '304' },
+      { unitId: '5', name: '305' },
+      { unitId: '6', name: '306' }
     ]
   },
   {

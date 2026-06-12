@@ -132,19 +132,19 @@ const getCapacityRules = (roomName: string) => {
     return { base: 2, max: 2 };
   }
   if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
-    return { base: 2, max: 4 };
+    return { base: 4, max: 4 };
   }
   if (r === '679087' || r.includes('1 dormitorio') || r.includes('402')) {
-    return { base: 2, max: 4 };
+    return { base: 4, max: 4 };
   }
   if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
-    return { base: 4, max: 8 };
+    return { base: 6, max: 8 };
   }
   if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 6, max: 12 };
+    return { base: 10, max: 12 };
   }
   if (r === '679093' || r.includes('casa') || r.includes('401')) {
-    return { base: 8, max: 16 };
+    return { base: 12, max: 16 };
   }
   return { base: 6, max: 8 }; // default fallback
 };
@@ -1461,6 +1461,22 @@ export default function RecepcionPage() {
     }
   }, [showCheckInModal, selectedReserva]);
 
+  useEffect(() => {
+    if (selectedReserva && selectedReserva.id === 'walkin') {
+      const { totalStay } = calculateWalkinPrices(selectedReserva);
+      setPaymentAmount(totalStay.toString());
+    }
+  }, [
+    selectedReserva?.room,
+    selectedReserva?.groupRooms,
+    selectedReserva?.check_in,
+    selectedReserva?.check_out,
+    selectedReserva?.num_adult,
+    selectedReserva?.num_child,
+    rules,
+    groupRoomRates
+  ]);
+
   const handleUnlockPrice = () => {
     if (pinInput === getAdminPin()) {
       setIsPriceUnlocked(true);
@@ -1726,7 +1742,9 @@ export default function RecepcionPage() {
               phone: selectedReserva.guest_phone || '',
               numAdult: room.adults,
               numChild: room.children,
-              notes: `${selectedReserva.notes || ''} (Grupo: Habs ${roomNamesList})`
+              notes: selectedReserva.id === 'walkin'
+                ? `${paymentDescription || ''}${roomDetails.length > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`
+                : `${selectedReserva.notes || ''}${roomDetails.length > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`
             })
           });
 
@@ -3019,37 +3037,61 @@ export default function RecepcionPage() {
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-3.5">
-                        <div>
-                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
-                          <input
-                            type="number"
-                            min={1}
-                            value={selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setSelectedReserva({
-                                ...selectedReserva,
-                                num_adult: val === '' ? '' : Math.max(1, Number(val)) as any
-                              });
-                            }}
-                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                          />
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Adultos</label>
+                          <div className="flex items-center w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl h-14 focus-within:bg-white focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const val = Math.max(1, Number(selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult) - 1);
+                                setSelectedReserva({ ...selectedReserva, num_adult: val });
+                              }}
+                              className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                            >
+                              <Minus size={16} strokeWidth={2.5} />
+                            </button>
+                            <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
+                              {selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const val = Number(selectedReserva.num_adult === undefined ? 1 : selectedReserva.num_adult) + 1;
+                                setSelectedReserva({ ...selectedReserva, num_adult: val });
+                              }}
+                              className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                            >
+                              <Plus size={16} strokeWidth={2.5} />
+                            </button>
+                          </div>
                         </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
-                          <input
-                            type="number"
-                            min={0}
-                            value={selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setSelectedReserva({
-                                ...selectedReserva,
-                                num_child: val === '' ? '' : Math.max(0, Number(val)) as any
-                              });
-                            }}
-                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                          />
+                        <div className="space-y-1.5">
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Niños</label>
+                          <div className="flex items-center w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl h-14 focus-within:bg-white focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const val = Math.max(0, Number(selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child) - 1);
+                                setSelectedReserva({ ...selectedReserva, num_child: val });
+                              }}
+                              className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                            >
+                              <Minus size={16} strokeWidth={2.5} />
+                            </button>
+                            <span className="flex-1 text-center text-zinc-900 font-semibold text-[16px]">
+                              {selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const val = Number(selectedReserva.num_child === undefined ? 0 : selectedReserva.num_child) + 1;
+                                setSelectedReserva({ ...selectedReserva, num_child: val });
+                              }}
+                              className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                            >
+                              <Plus size={16} strokeWidth={2.5} />
+                            </button>
+                          </div>
                         </div>
                       </div>
 
@@ -3065,15 +3107,17 @@ export default function RecepcionPage() {
                         </div>
                       )}
 
-                      <div>
-                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nota / Comentarios (Opcional)</label>
-                        <textarea
-                          value={selectedReserva.notes || ''}
-                          onChange={e => setSelectedReserva({ ...selectedReserva, notes: e.target.value })}
-                          placeholder="Ej. Requiere factura, check-in temprano..."
-                          className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
-                        />
-                      </div>
+                      {selectedReserva.id !== 'walkin' && (
+                        <div>
+                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Nota / Comentarios (Opcional)</label>
+                          <textarea
+                            value={selectedReserva.notes || ''}
+                            onChange={e => setSelectedReserva({ ...selectedReserva, notes: e.target.value })}
+                            placeholder="Ej. Requiere factura, check-in temprano..."
+                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none placeholder:font-medium placeholder:text-zinc-400 h-20 resize-none"
+                          />
+                        </div>
+                      )}
 
                       {/* Pricing Section (Walk-In) */}
                       {selectedReserva.id === 'walkin' ? (() => {
@@ -3705,9 +3749,18 @@ export default function RecepcionPage() {
                           <input
                             type="number"
                             value={paymentAmount}
-                            onChange={e => setPaymentAmount(e.target.value)}
+                            onChange={e => {
+                              if (selectedReserva.id !== 'walkin') {
+                                setPaymentAmount(e.target.value);
+                              }
+                            }}
+                            readOnly={selectedReserva.id === 'walkin'}
                             placeholder="0.00"
-                            className="w-full bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                            className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                              selectedReserva.id === 'walkin'
+                                ? 'bg-zinc-100 border-zinc-200/80 text-zinc-500 cursor-not-allowed'
+                                : 'bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm'
+                            }`}
                           />
                         </div>
 
