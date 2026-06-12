@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, ArrowUp, Eye, Share2, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, ArrowUp, Eye, Share2, ArrowLeft, ArrowRight, Percent } from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync, getActiveEmployee } from '@/lib/auth';
@@ -21,7 +21,7 @@ const normalizeText = (text: string) =>
 type Account = {
   id: string;
   name: string;
-  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR';
+  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR' | 'COMISIONES';
   balance: number;
   currency: string;
   sort_index?: number;
@@ -71,7 +71,7 @@ export default function FinanzasPage() {
  
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
   const [accName, setAccName] = useState('');
-  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR'>('EFECTIVO');
+  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR' | 'COMISIONES'>('EFECTIVO');
   const [accBalance, setAccBalance] = useState('');
   const [accCurrency, setAccCurrency] = useState('MXN');
   const [isSavingAcc, setIsSavingAcc] = useState(false);
@@ -114,6 +114,7 @@ export default function FinanzasPage() {
     { type: 'CUENTAS X PAGAR', title: 'Cuentas x Pagar', icon: ArrowRight, color: 'text-rose-600', bg: 'bg-rose-50', iconColor: 'text-rose-600' },
     { type: 'AHORROS', title: 'Ahorros', icon: PiggyBank, color: 'text-purple-600', bg: 'bg-purple-50', iconColor: 'text-purple-600' },
     { type: 'EXTRANJERO', title: 'Extranjero', icon: Globe, color: 'text-indigo-600', bg: 'bg-indigo-50', iconColor: 'text-indigo-600' },
+    { type: 'COMISIONES', title: 'Comisiones', icon: Percent, color: 'text-orange-600', bg: 'bg-orange-50', iconColor: 'text-orange-600' },
   ] as const;
 
   
@@ -2388,6 +2389,7 @@ export default function FinanzasPage() {
                   <option value="EXTRANJERO">EXTRANJERO (DLL/EUR)</option>
                   <option value="CUENTAS X COBRAR">CUENTAS X COBRAR (Saldos a favor / Booking)</option>
                   <option value="CUENTAS X PAGAR">CUENTAS X PAGAR (Obligaciones a pagar / Proveedores)</option>
+                  <option value="COMISIONES">COMISIONES (Comisiones de OTAs)</option>
                 </select>
               </div>
 

@@ -25,7 +25,7 @@ interface Employee {
 interface Account {
   id: string;
   name: string;
-  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR';
+  group_type: 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR' | 'COMISIONES';
   balance: number;
   currency: string;
   sort_index?: number | null;
@@ -61,7 +61,7 @@ export default function AjustesPage() {
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
   const [accName, setAccName] = useState('');
   const [accBalance, setAccBalance] = useState('');
-  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR'>('EFECTIVO');
+  const [accGroupType, setAccGroupType] = useState<'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR' | 'COMISIONES'>('EFECTIVO');
   const [accCurrency, setAccCurrency] = useState('MXN');
   const [isSavingAcc, setIsSavingAcc] = useState(false);
   const [renamingAccount, setRenamingAccount] = useState<string | null>(null);
@@ -930,7 +930,7 @@ export default function AjustesPage() {
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5 block">Grupo Contable</label>
                 <select 
                   value={accGroupType}
-                  onChange={e => setAccGroupType(e.target.value as 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR')}
+                  onChange={e => setAccGroupType(e.target.value as 'EFECTIVO' | 'BANCOS' | 'AHORROS' | 'EXTRANJERO' | 'CUENTAS X COBRAR' | 'CUENTAS X PAGAR' | 'COMISIONES')}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-900"
                 >
                   <option value="EFECTIVO">EFECTIVO (Cajas físicas)</option>
@@ -939,6 +939,7 @@ export default function AjustesPage() {
                   <option value="EXTRANJERO">EXTRANJERO (DLL/EUR)</option>
                   <option value="CUENTAS X COBRAR">CUENTAS X COBRAR (Saldos a favor / Booking)</option>
                   <option value="CUENTAS X PAGAR">CUENTAS X PAGAR (Obligaciones a pagar / Proveedores)</option>
+                  <option value="COMISIONES">COMISIONES (Comisiones de OTAs)</option>
                 </select>
               </div>
 
