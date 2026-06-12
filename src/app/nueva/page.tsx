@@ -652,8 +652,8 @@ export default function VercelActionForm() {
               room: room.name,
               details: JSON.stringify({
                 text: isBlock 
-                  ? `Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}. Motivo: ${form.guestName || 'Mantenimiento'}`
-                  : `Registró reserva manual de ${form.guestName || 'Huésped'} en ${roomDisplayName} desde ${form.checkIn} a ${form.checkOut} por $${roomTotal} (Anticipo: $${depositPerRoom}) vía ${form.channel}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''} [ID: ${responseData.data?.data?.[0]?.id || ''}]`,
+                  ? `${form.guestName || 'Mantenimiento'} - Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}.`
+                  : `${form.guestName || 'Huésped'} ${form.numAdult || 1}/${form.numChild || 0} (ID: ${responseData.data?.data?.[0]?.id || ''}) de la Habitación ${roomDisplayName} - Registró reserva manual desde ${form.checkIn} a ${form.checkOut} por $${roomTotal} (Anticipo: $${depositPerRoom}, vía ${form.channel}${totalRooms > 1 ? `, Grupo: Habs ${roomNamesList}` : ''}).`,
                 reserva: {
                   guestName: form.guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
                   roomId: room.roomId,

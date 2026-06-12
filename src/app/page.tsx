@@ -256,7 +256,7 @@ export default function AdminDashboard() {
             module: 'recepcion',
             action: 'change_room_status',
             room: selectedRoomForStatus.room_number,
-            details: `Cambió el estado de Habitación ${selectedRoomForStatus.room_number} a '${newStatus}' desde el Dashboard de Administración`
+            details: `Habitación ${selectedRoomForStatus.room_number} - Cambió el estado a '${newStatus}' desde el Dashboard de Administración.`
           })
         });
 

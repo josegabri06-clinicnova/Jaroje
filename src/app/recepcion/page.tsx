@@ -713,7 +713,7 @@ export default function RecepcionPage() {
             action: 'reserva_modificada',
             room: selectedReserva.room || 'General',
             details: JSON.stringify({
-              text: `Modificó la reserva de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}). Pax: ${editedAdults}A/${editedChildren}N, Tel: ${editedPhone}, Total: MX$${editedPrice}, Anticipo: MX$${editedDeposit}`,
+              text: `${selectedReserva.guest_name} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room || 'General'} - Modificó la reserva (Pax: ${editedAdults}A/${editedChildren}N, Tel: ${editedPhone}, Total: MX$${editedPrice}, Anticipo: MX$${editedDeposit}).`,
               modificacion: {
                 bookingId: selectedReserva.id,
                 guestName: selectedReserva.guest_name,
@@ -852,7 +852,7 @@ export default function RecepcionPage() {
             action: 'abono_registrado',
             room: selectedReserva.room || 'General',
             details: JSON.stringify({
-              text: `Registró abono directo de MX$${amountNum} para ${selectedReserva.guest_name} (ID: ${selectedReserva.id}). Cuenta: ${abonoFlowAccountId}, Método: ${abonoFlowPaymentMethod}`,
+              text: `${selectedReserva.guest_name} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room || 'General'} - Registró abono directo de MX$${amountNum} (Cuenta: ${abonoFlowAccountId}, Método: ${abonoFlowPaymentMethod}).`,
               abono: {
                 bookingId: selectedReserva.id,
                 amount: amountNum,
@@ -941,7 +941,7 @@ export default function RecepcionPage() {
             action: 'reasignacion_habitacion',
             room: targetRoomName,
             details: JSON.stringify({
-              text: `Reasignó la habitación de la reserva de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) desde ${selectedReserva.room || 'Sin asignar'} a la Habitación ${targetRoomName}`,
+              text: `${selectedReserva.guest_name} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName}.`,
               reasignacion: {
                 bookingId: selectedReserva.id,
                 guestName: selectedReserva.guest_name,
@@ -1792,7 +1792,7 @@ export default function RecepcionPage() {
                 module: 'recepcion',
                 action: 'walk_in',
                 room: roomNameHuman,
-                details: `Registró Walk-In de ${selectedReserva.guest_name || 'Huésped'} (Grupo: ${roomNamesList}) [ID: ${beds24AssignedId}]`
+                details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (Grupo: ${roomNamesList}) (ID: ${beds24AssignedId}) - Registró Walk-In.`
               })
             });
           }
@@ -1875,7 +1875,7 @@ export default function RecepcionPage() {
                 module: 'recepcion',
                 action: 'payment_received',
                 room: `Grupo: ${roomNamesList}`,
-                details: `Recibió pago total de $${totalPayment} vía ${paymentMode} para Grupo Habs ${roomNamesList} (Depositado en sobre: ${matchedAccName}) [ID: ${bookedBeds24Ids.join(', ')}]`
+                details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (Grupo: ${roomNamesList}) (ID: ${bookedBeds24Ids.join(', ')}) - Recibió pago total de $${totalPayment} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`
               })
             });
           }
@@ -1950,7 +1950,7 @@ export default function RecepcionPage() {
             module: 'recepcion',
             action: 'check_in',
             room: selectedReserva.room,
-            details: `Registró Check-In de ${selectedReserva.guest_name || 'Huésped'} [ID: ${selectedReserva.id}]`
+            details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Registró Check-In.`
           })
         });
       }
@@ -2059,7 +2059,7 @@ export default function RecepcionPage() {
                 module: 'recepcion',
                 action: 'payment_received',
                 room: selectedReserva.room,
-                details: `Recibió pago OTA (${otaSplit.channelLabel}) de $${amountNum} para Hab ${selectedReserva.room}. Neto negocio: $${otaSplit.netRevenue}, Comisión ${otaSplit.channelLabel}: $${otaSplit.commission}. Cuenta: ${matchedAccName} [ID: ${selectedReserva.id}]`
+                details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago OTA (${otaSplit.channelLabel}) de $${amountNum} (Neto negocio: $${otaSplit.netRevenue}, Comisión ${otaSplit.channelLabel}: $${otaSplit.commission}, Cuenta: ${matchedAccName}).`
               })
             });
           }
@@ -2129,7 +2129,7 @@ export default function RecepcionPage() {
                 module: 'recepcion',
                 action: 'payment_received',
                 room: selectedReserva.room,
-                details: `Recibió pago de $${paymentAmount} vía ${paymentMode} para Habitación ${selectedReserva.room} (Depositado en sobre: ${matchedAccName}) [ID: ${selectedReserva.id}]`
+                details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago de $${paymentAmount} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`
               })
             });
           }
@@ -2220,7 +2220,7 @@ export default function RecepcionPage() {
           module: 'recepcion',
           action: 'check_out',
           room: r.room,
-          details: `Procesó Check-Out de ${r.guest_name || 'Huésped'} [ID: ${r.id}]. Habitación ${roomNumber} marcada en limpieza.`
+          details: `${r.guest_name || 'Huésped'} ${r.num_adult || 1}/${r.num_child || 0} (ID: ${r.id}) de la Habitación ${r.room || 'General'} - Procesó Check-Out.`
         })
       });
     }

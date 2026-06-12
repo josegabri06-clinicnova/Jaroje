@@ -55,7 +55,7 @@ export async function POST(req: Request) {
         action: 'reserva_creada_webhook',
         room: guestName || 'Desconocido',
         details: JSON.stringify({
-          text: `Entró nueva reserva OTA (${source || 'Beds24'}) de ${guestName || 'Huésped'} para fechas ${checkIn} a ${checkOut} (Beds24 ID: ${bookingId})`,
+          text: `${guestName || 'Desconocido'} (ID: ${bookingId}) - Nueva reserva recibida por ${source || 'Beds24'} para fechas ${checkIn} a ${checkOut} (Habitación Beds24: ${roomId}).`,
           reserva: {
             guestName: guestName || 'Desconocido',
             roomId: roomId,

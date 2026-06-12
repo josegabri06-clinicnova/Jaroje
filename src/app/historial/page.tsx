@@ -486,7 +486,7 @@ export default function HistorialPage() {
     }
 
     // ─── 3. DISEÑO PREMIUM DE TARJETA DE RESERVAS ────────────────────────────
-    if (parsed?.reserva) {
+    if (parsed?.reserva && parsed.reserva.checkIn && parsed.reserva.checkOut) {
       const res = parsed.reserva;
       const isBlock = res.isBlock;
       

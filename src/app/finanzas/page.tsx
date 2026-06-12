@@ -413,7 +413,7 @@ export default function FinanzasPage() {
               module: 'finanzas',
               action: 'movimiento_financiero',
               details: JSON.stringify({
-                text: `Actualizó movimiento contable (ID: ${editingRecord.id}): ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`,
+                text: `Movimiento Contable (ID: ${editingRecord.id}) - Actualizó ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category}).`,
                 finance: {
                   type: selectedType,
                   amount: evaluatedAmount,
@@ -454,7 +454,7 @@ export default function FinanzasPage() {
               module: 'finanzas',
               action: 'movimiento_financiero',
               details: JSON.stringify({
-                text: `Creó nuevo movimiento contable: ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category})`,
+                text: `Movimiento Contable - Creó nuevo ${selectedType === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${evaluatedAmount} en cuenta ${matchedAcc} (${newRecord.category}).`,
                 finance: {
                   type: selectedType,
                   amount: evaluatedAmount,
@@ -513,7 +513,7 @@ export default function FinanzasPage() {
             module: 'finanzas',
             action: 'movimiento_financiero',
             details: JSON.stringify({
-              text: `Eliminó movimiento contable (ID: ${editingRecord.id}): ${editingRecord.type === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${editingRecord.amount} en cuenta ${matchedAcc} (${editingRecord.category || 'Sin categoría'})`,
+              text: `Movimiento Contable (ID: ${editingRecord.id}) - Eliminó ${editingRecord.type === 'ingreso' ? 'Ingreso' : 'Gasto'} de $${editingRecord.amount} en cuenta ${matchedAcc} (${editingRecord.category || 'Sin categoría'}).`,
               finance: {
                 type: editingRecord.type,
                 amount: editingRecord.amount,
@@ -619,7 +619,7 @@ export default function FinanzasPage() {
             module: 'finanzas',
             action: 'movimiento_financiero',
             details: JSON.stringify({
-              text: `Realizó un traspaso de $${convertedFromAmount} ${fromAcc.currency} desde ${fromAcc.name} a ${toAcc.name} (Monto recibido: $${convertedToAmount} ${toAcc.currency})`,
+              text: `Traspaso de Fondos - Realizó un traspaso de $${convertedFromAmount} ${fromAcc.currency} desde ${fromAcc.name} a ${toAcc.name} (Monto recibido: $${convertedToAmount} ${toAcc.currency}).`,
               finance: {
                 type: 'traspaso',
                 amount: convertedFromAmount,
@@ -849,7 +849,7 @@ export default function FinanzasPage() {
                 module: 'recepcion',
                 action: 'payment_reconciled',
                 details: JSON.stringify({
-                  text: `Concilió manualmente pago pendiente a Beds24 de $${record.amount} para reserva B24 ID ${actualBookId} (Registro ID: ${record.id})`,
+                  text: `Reserva (B24 ID: ${actualBookId}) - Concilió manualmente pago pendiente a Beds24 de $${record.amount} (Registro ID: ${record.id}).`,
                   finance: {
                     type: 'reconciled',
                     amount: record.amount,
@@ -1077,7 +1077,7 @@ export default function FinanzasPage() {
             module: 'finanzas',
             action: 'renombrar_cuenta',
             details: JSON.stringify({
-              text: `Renombró cuenta: "${currentName}" a "${clean}"`,
+              text: `Cuenta "${currentName}" - Renombró cuenta a "${clean}".`,
               account: {
                 oldName: currentName,
                 newName: clean

@@ -340,7 +340,7 @@ export default function ReservasList() {
             action: 'reasignacion_habitacion',
             room: targetRoomName,
             details: JSON.stringify({
-              text: `Reasignó la habitación de la reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}) desde ${selectedRes.room_name || 'Sin asignar'} a la Habitación ${targetRoomName}`,
+              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName}.`,
               reasignacion: {
                 bookingId: selectedRes.id,
                 guestName: selectedRes.guest_name,
@@ -666,7 +666,7 @@ export default function ReservasList() {
             action: 'reserva_modificada_admin',
             room: selectedRes.room_name || 'General',
             details: JSON.stringify({
-              text: `Administrador modificó reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}). Nombre: ${editGuestName}, Tel: ${editPhone}, Pax: ${editAdults}A/${editChildren}N, Total: MX$${editPrice}, Anticipo: MX$${editDeposit}`,
+              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Modificó la reserva (Nombre: ${editGuestName}, Tel: ${editPhone}, Pax: ${editAdults}A/${editChildren}N, Total: MX$${editPrice}, Anticipo: MX$${editDeposit}).`,
               modificacion: {
                 bookingId: selectedRes.id,
                 guestName: editGuestName,
@@ -808,7 +808,7 @@ export default function ReservasList() {
             action: 'abono_registrado',
             room: selectedRes.room_name || 'General',
             details: JSON.stringify({
-              text: `Registró abono directo de MX$${amountNum} para ${selectedRes.guest_name} (ID: ${selectedRes.id}). Cuenta: ${abonoAccountId}, Método: ${abonoPaymentMethod}`,
+              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Registró abono directo de MX$${amountNum} (Cuenta: ${abonoAccountId}, Método: ${abonoPaymentMethod}).`,
               abono: {
                 bookingId: selectedRes.id,
                 amount: amountNum,
@@ -888,7 +888,7 @@ export default function ReservasList() {
             action: 'reserva_enterado',
             room: selectedRes.room_name || 'General',
             details: JSON.stringify({
-              text: `Marcó como enterado la reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id})`,
+              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Marcó la reserva como enterado.`,
               bookingId: selectedRes.id,
               guestName: selectedRes.guest_name
             })
@@ -941,7 +941,7 @@ export default function ReservasList() {
             action: 'reserva_cancelada',
             room: selectedRes.room_name || 'General',
             details: JSON.stringify({
-              text: `Canceló permanentemente la reserva de ${selectedRes.guest_name} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'}`,
+              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Canceló permanentemente la reserva.`,
               cancelacion: {
                 bookingId: selectedRes.id,
                 guestName: selectedRes.guest_name,
