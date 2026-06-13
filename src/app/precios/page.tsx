@@ -17,6 +17,9 @@ export default function PreciosPage() {
   const [savingSeasonKey, setSavingSeasonKey] = useState<string | null>(null);
   const [expandedLos, setExpandedLos] = useState<Record<string, boolean>>({}); // roomId → expandido
 
+  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }>>({});
+  const [savingCapacity, setSavingCapacity] = useState(false);
+
   // Cargar precios del calendario de Beds24 (Daily Prices)
   const loadBeds24Prices = async () => {
     setBeds24Loading(true);
@@ -34,10 +37,42 @@ export default function PreciosPage() {
       if (json.multipliers) {
         setBeds24Multipliers(json.multipliers);
       }
+      if (json.capacitySettings) {
+        setCapacitySettings(json.capacitySettings);
+      } else {
+        setCapacitySettings({
+          '679077': { base: 4, max: 4 },
+          '679087': { base: 4, max: 4 },
+          '679091': { base: 6, max: 8 },
+          '679092': { base: 10, max: 12 },
+          '679093': { base: 12, max: 16 },
+          '685542': { base: 4, max: 4 },
+        });
+      }
     } catch (err: any) {
       setBeds24Error('Error de red: ' + err.message);
     } finally {
       setBeds24Loading(false);
+    }
+  };
+
+  const handleSaveCapacitySettings = async () => {
+    setSavingCapacity(true);
+    try {
+      const res = await fetch('/api/beds24-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          capacitySettings
+        })
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Error al guardar');
+      alert('✅ Capacidades de habitaciones actualizadas con éxito.');
+    } catch (err: any) {
+      alert('Error al guardar capacidades: ' + err.message);
+    } finally {
+      setSavingCapacity(false);
     }
   };
 
@@ -571,6 +606,81 @@ export default function PreciosPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Sección de Capacidades de Habitaciones */}
+          <div className="bg-white border border-zinc-200 rounded-3xl p-6 shadow-sm space-y-4">
+            <div>
+              <h3 className="text-[13px] font-extrabold text-zinc-900 flex items-center gap-2">
+                👥 Configuración de Capacidades (Huéspedes)
+              </h3>
+              <p className="text-[11px] text-zinc-400 font-semibold mt-1">
+                Configura el número de huéspedes permitidos sin costo (Base) y con costo adicional (Máx). Estos valores regulan las alertas de capacidad y los cálculos del recargo de $500 pesos.
+              </p>
+            </div>
+
+            <div className="divide-y divide-zinc-100 space-y-4">
+              {[
+                { id: '679077', name: 'Habitación Doble (301-306)', icon: '🛏️' },
+                { id: '679087', name: 'Apartamento 1 dorm. (402)', icon: '🏠' },
+                { id: '679091', name: 'Apartamento 2 dorm. (201-206)', icon: '🏠' },
+                { id: '679092', name: 'Apartamento 3 dorm. (101-107)', icon: '🏡' },
+                { id: '679093', name: 'Casa Vacacional 3 dorm. (401)', icon: '🏖️' },
+                { id: '685542', name: 'Apartamentos Nuevos (500-507)', icon: '✨' },
+              ].map(item => {
+                const config = capacitySettings[item.id] || { base: 4, max: 4 };
+                return (
+                  <div key={item.id} className="pt-4 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-2.5 min-w-0 sm:w-[40%]">
+                      <span className="text-lg shrink-0">{item.icon}</span>
+                      <p className="text-[12.5px] font-black text-zinc-800 truncate">{item.name}</p>
+                    </div>
+
+                    <div className="flex-1 grid grid-cols-2 gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Huéspedes sin costo (Base)</span>
+                        <input
+                          type="number"
+                          value={config.base}
+                          onChange={e => setCapacitySettings(prev => ({
+                            ...prev,
+                            [item.id]: { ...config, base: Math.max(1, Number(e.target.value) || 1) }
+                          }))}
+                          className="w-full px-3 py-1.5 text-[12px] font-black rounded-lg border border-zinc-200 bg-zinc-50/30 text-zinc-900 focus:border-indigo-300 outline-none text-right"
+                        />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-1">Huéspedes Máximos (Límite)</span>
+                        <input
+                          type="number"
+                          value={config.max}
+                          onChange={e => setCapacitySettings(prev => ({
+                            ...prev,
+                            [item.id]: { ...config, max: Math.max(config.base, Number(e.target.value) || config.base) }
+                          }))}
+                          className="w-full px-3 py-1.5 text-[12px] font-black rounded-lg border border-zinc-200 bg-zinc-50/30 text-zinc-900 focus:border-indigo-300 outline-none text-right"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-4 border-t border-zinc-100 flex justify-end">
+              <button
+                onClick={handleSaveCapacitySettings}
+                disabled={savingCapacity}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-[0.96] flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+              >
+                {savingCapacity ? (
+                  <RefreshCw size={12} className="animate-spin" />
+                ) : (
+                  <Check size={12} strokeWidth={3} />
+                )}
+                <span>Guardar Capacidades</span>
+              </button>
             </div>
           </div>
         </div>

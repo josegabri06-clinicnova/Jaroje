@@ -152,11 +152,11 @@ export default function VercelActionForm() {
     let totalMax = 0;
     roomsToBook.forEach(r => {
       const parentMapping = getParentMapping(r.roomId, r.unitId);
-      const rules = getCapacityRules(parentMapping.roomId || r.roomId || r.name);
+      const rules = getCapacityRules(parentMapping.roomId || r.roomId || r.name, capacitySettings || undefined);
       totalMax += rules.max;
     });
     return totalMax;
-  }, [form.roomId, form.unitId, form.groupRooms]);
+  }, [form.roomId, form.unitId, form.groupRooms, capacitySettings]);
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [loadingInventory, setLoadingInventory] = useState(false);
@@ -168,6 +168,7 @@ export default function VercelActionForm() {
   const [showPinModal, setShowPinModal] = useState(false);
 
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35 });
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [formAccountId, setFormAccountId] = useState('');
@@ -178,7 +179,7 @@ export default function VercelActionForm() {
     let childrenLeft = Math.max(0, numChildren);
     
     const roomsWithCap = rooms.map(rm => {
-      const cap = getCapacityRules(rm.roomId || rm.room);
+      const cap = getCapacityRules(rm.roomId || rm.room, capacitySettings || undefined);
       return {
         roomId: rm.roomId || rm.room,
         unitId: rm.unitId || rm.unit_id || '',
@@ -255,7 +256,7 @@ export default function VercelActionForm() {
     let totalExtraGuests = 0;
     const roomExtraGuestsList = group.map((rm) => {
       const dist = distributedGuests.find(d => d.roomId === rm.roomId && d.unitId === rm.unitId) || { adults: 1, children: 0 };
-      const capRules = getCapacityRules(rm.roomId || rm.name);
+      const capRules = getCapacityRules(rm.roomId || rm.name, capacitySettings || undefined);
       const totalGuests = dist.adults + dist.children;
       const extraGuests = Math.max(0, totalGuests - capRules.base);
       totalExtraGuests += extraGuests;
@@ -399,13 +400,13 @@ export default function VercelActionForm() {
     let totalExtra = 0;
     group.forEach((rm) => {
       const dist = distributedGuests.find(d => d.roomId === rm.roomId && d.unitId === rm.unitId) || { adults: 1, children: 0 };
-      const capRules = getCapacityRules(rm.roomId || rm.name);
+      const capRules = getCapacityRules(rm.roomId || rm.name, capacitySettings || undefined);
       const totalGuests = dist.adults + dist.children;
       const extraGuests = Math.max(0, totalGuests - capRules.base);
       totalExtra += extraGuests;
     });
     return { totalExtraGuests: totalExtra, defaultSurchargeTotal: totalExtra * 500 };
-  }, [form.checkIn, form.checkOut, form.groupRooms, form.roomId, form.unitId, form.numAdult, form.numChild]);
+  }, [form.checkIn, form.checkOut, form.groupRooms, form.roomId, form.unitId, form.numAdult, form.numChild, capacitySettings]);
 
   const hasExtraGuests = totalExtraGuests > 0 || (form.extraGuestSurcharge !== '' && Number(form.extraGuestSurcharge) !== 0);
 
@@ -451,8 +452,24 @@ export default function VercelActionForm() {
         console.error("Error fetching multipliers:", err);
       }
     };
+    const fetchCapacitySettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'capacity_settings')
+          .maybeSingle();
+        if (data && data.value) {
+          const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          setCapacitySettings(parsed || null);
+        }
+      } catch (err) {
+        console.error("Error fetching capacity settings:", err);
+      }
+    };
     fetchAccounts();
     fetchMultipliers();
+    fetchCapacitySettings();
   }, []);
 
   // Limpiar método y cuenta si el anticipo es 0 o vacío
@@ -563,7 +580,7 @@ export default function VercelActionForm() {
       let totalMaxCapacity = 0;
       roomsToBook.forEach(r => {
         const parentMapping = getParentMapping(r.roomId, r.unitId);
-        const rules = getCapacityRules(parentMapping.roomId || r.roomId || r.name);
+        const rules = getCapacityRules(parentMapping.roomId || r.roomId || r.name, capacitySettings || undefined);
         totalMaxCapacity += rules.max;
       });
 

@@ -921,8 +921,22 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
 /**
  * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.
  */
-export function getCapacityRules(roomNameOrId: string): { base: number; max: number } {
+export function getCapacityRules(
+  roomNameOrId: string,
+  customSettings?: Record<string, { base: number; max: number }>
+): { base: number; max: number } {
   const r = (roomNameOrId || '').toLowerCase();
+
+  if (customSettings) {
+    if (customSettings[roomNameOrId]) {
+      return customSettings[roomNameOrId];
+    }
+    for (const key of Object.keys(customSettings)) {
+      if (r.includes(key.toLowerCase()) || key.toLowerCase().includes(r)) {
+        return customSettings[key];
+      }
+    }
+  }
   // 500 es de 2 huéspedes únicamente
   if (r.includes('500')) {
     return { base: 2, max: 2 };

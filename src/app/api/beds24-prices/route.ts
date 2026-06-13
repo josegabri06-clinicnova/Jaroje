@@ -132,6 +132,16 @@ export async function GET() {
           : settingsRow.value)
       : { airbnb: 1.20, booking: 1.35 };
 
+    const { data: capacityRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'capacity_settings')
+      .maybeSingle();
+
+    const capacitySettings = capacityRow?.value
+      ? (typeof capacityRow.value === 'string' ? JSON.parse(capacityRow.value) : capacityRow.value)
+      : null;
+
     // 2. Leer 540 días de calendario (para cubrir todas las temporadas)
     const today = new Date();
     const startDate = today.toISOString().split('T')[0];
@@ -251,6 +261,7 @@ export async function GET() {
       success: true,
       rooms,
       multipliers,
+      capacitySettings,
       startDate,
       endDate,
     });
@@ -340,25 +351,29 @@ export async function PUT(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { airbnb, booking } = body;
+    const { airbnb, booking, capacitySettings } = body;
 
-    if (typeof airbnb !== 'number' || typeof booking !== 'number') {
-      return NextResponse.json(
-        { success: false, error: 'Se esperan: airbnb (number), booking (number)' },
-        { status: 400 }
-      );
+    if (capacitySettings) {
+      const { error } = await supabase
+        .from('settings')
+        .upsert(
+          { key: 'capacity_settings', value: capacitySettings },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
     }
 
-    const { error } = await supabase
-      .from('settings')
-      .upsert(
-        { key: 'ota_multipliers', value: JSON.stringify({ airbnb, booking }) },
-        { onConflict: 'key' }
-      );
+    if (typeof airbnb === 'number' && typeof booking === 'number') {
+      const { error } = await supabase
+        .from('settings')
+        .upsert(
+          { key: 'ota_multipliers', value: JSON.stringify({ airbnb, booking }) },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+    }
 
-    if (error) throw error;
-
-    return NextResponse.json({ success: true, multipliers: { airbnb, booking } });
+    return NextResponse.json({ success: true });
   } catch (err: any) {
     console.error('beds24-prices POST error:', err);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

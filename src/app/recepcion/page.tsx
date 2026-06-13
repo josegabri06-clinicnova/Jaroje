@@ -385,6 +385,7 @@ export default function RecepcionPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [rules, setRules] = useState<any[]>([]);
   const [pricingSettings, setPricingSettings] = useState<Record<string, any>>({}); // Multiplicadores por roomId desde Beds24/Supabase
+  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const [cleanToast, setCleanToast] = useState<{ room: string; by: string } | null>(null);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
@@ -621,12 +622,12 @@ export default function RecepcionPage() {
   const suggestedPrice = useMemo(() => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return 0;
     const originalPax = (selectedReserva.num_adult || 1) + (selectedReserva.num_child || 0);
-    const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room).base);
-    const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room).base);
+    const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room, capacitySettings || undefined).base);
+    const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room, capacitySettings || undefined).base);
     const diffExtra = newExtraGuests - originalExtraGuests;
     const priceAdjustment = Math.round(diffExtra * 500 * (selectedReserva.nights || 1));
     return Math.round(Number(selectedReserva.price_estimate || 0) + priceAdjustment);
-  }, [selectedReserva, editedAdults, editedChildren]);
+  }, [selectedReserva, editedAdults, editedChildren, capacitySettings]);
 
   // Sincronizar el precio editado cuando cambia el precio sugerido
   useEffect(() => {
@@ -665,7 +666,7 @@ export default function RecepcionPage() {
     if (!selectedReserva) return;
 
     // Validar capacidad máxima de la habitación
-    const rules = getCapacityRules(selectedReserva.room);
+    const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
     const totalGuests = Number(editedAdults) + Number(editedChildren);
     if (totalGuests > rules.max) {
       alert(`⚠️ La capacidad máxima de la habitación ${selectedReserva.room} es de ${rules.max} personas. Has ingresado ${totalGuests} personas. Por favor, ajusta la cantidad de huéspedes.`);
@@ -899,7 +900,7 @@ export default function RecepcionPage() {
 
     // Validar capacidad máxima de la nueva habitación
     const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
-    const rules = getCapacityRules(targetRoomName);
+    const rules = getCapacityRules(targetRoomName, capacitySettings || undefined);
     if (totalGuests > rules.max) {
       alert(`⚠️ No se puede reasignar a la habitación ${targetRoomName} porque la capacidad máxima es de ${rules.max} personas y la reserva tiene ${totalGuests} huéspedes.`);
       return;
@@ -1027,11 +1028,11 @@ export default function RecepcionPage() {
     let totalMax = 0;
     group.forEach((rm: any) => {
       if (!rm.roomId && !rm.room) return;
-      const cap = getCapacityRules(rm.roomId || rm.room);
+      const cap = getCapacityRules(rm.roomId || rm.room, capacitySettings || undefined);
       totalMax += cap.max;
     });
     return totalMax;
-  }, [selectedReserva?.groupRooms, selectedReserva?.room, selectedReserva?.unit_id, roomInventory]);
+  }, [selectedReserva?.groupRooms, selectedReserva?.room, selectedReserva?.unit_id, roomInventory, capacitySettings]);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const mttoPhotoRef = useRef<HTMLInputElement>(null);
@@ -1173,7 +1174,7 @@ export default function RecepcionPage() {
     let childrenLeft = Math.max(0, numChildren);
     
     const roomsWithCap = rooms.map(rm => {
-      const cap = getCapacityRules(rm.roomId || rm.room);
+      const cap = getCapacityRules(rm.roomId || rm.room, capacitySettings || undefined);
       return {
         roomId: rm.roomId || rm.room,
         unitId: rm.unitId || rm.unit_id || '',
@@ -1243,7 +1244,7 @@ export default function RecepcionPage() {
     const roomExtraGuestsList = group.map((rm, index) => {
       const dist = distributedGuests[index] || { adults: 1, children: 0 };
       const numGuests = dist.adults + dist.children;
-      const capRules = getCapacityRules(rm.roomId);
+      const capRules = getCapacityRules(rm.roomId, capacitySettings || undefined);
       const extraGuests = Math.max(0, numGuests - capRules.base);
       totalExtraGuests += extraGuests;
       return { roomId: rm.roomId, unitId: rm.unitId || '', extraGuests };
@@ -1494,7 +1495,7 @@ export default function RecepcionPage() {
 
   const fetchData = async () => {
     try {
-      const [r, t, inv, chk, acc, rms, prc, psRes] = await Promise.all([
+      const [r, t, inv, chk, acc, rms, prc, psRes, capRes] = await Promise.all([
         fetch('/api/reservas?t=' + Date.now()),
         fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
@@ -1502,7 +1503,8 @@ export default function RecepcionPage() {
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
         supabase.from('room_status').select('*'),
         fetch('/api/precios?t=' + Date.now()).then(res => res.json()).catch(() => ({ success: false, data: [] })),
-        supabase.from('settings').select('value').eq('key', 'pricing_unit_settings').maybeSingle()
+        supabase.from('settings').select('value').eq('key', 'pricing_unit_settings').maybeSingle(),
+        supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle()
       ]);
       const rj = await r.json();
       const tj = await t.json();
@@ -1541,6 +1543,16 @@ export default function RecepcionPage() {
           setPricingSettings(parsed || {});
         } catch (e) {
           console.error('Error al parsear pricing_unit_settings:', e);
+        }
+      }
+
+      // Cargar configuracion de capacidades desde Supabase
+      if (capRes.data && capRes.data.value) {
+        try {
+          const parsed = typeof capRes.data.value === 'string' ? JSON.parse(capRes.data.value) : capRes.data.value;
+          setCapacitySettings(parsed || null);
+        } catch (e) {
+          console.error('Error al parsear capacity_settings:', e);
         }
       }
     } catch (err) {
@@ -1683,7 +1695,7 @@ export default function RecepcionPage() {
         let totalMaxCapacity = 0;
         group.forEach((rm: any) => {
           if (!rm.roomId && !rm.room) return;
-          const cap = getCapacityRules(rm.roomId || rm.room);
+          const cap = getCapacityRules(rm.roomId || rm.room, capacitySettings || undefined);
           totalMaxCapacity += cap.max;
         });
 
@@ -3371,7 +3383,7 @@ export default function RecepcionPage() {
                         let totalExtra = 0;
                         group.forEach((rm) => {
                           const dist = distributedGuests.find(d => d.roomId === rm.roomId && d.unitId === rm.unitId) || { adults: 1, children: 0 };
-                          const capRules = getCapacityRules(rm.roomId);
+                          const capRules = getCapacityRules(rm.roomId, capacitySettings || undefined);
                           const totalGuests = dist.adults + dist.children;
                           const extraGuests = Math.max(0, totalGuests - capRules.base);
                           totalExtra += extraGuests;
@@ -3555,7 +3567,7 @@ export default function RecepcionPage() {
 
                   {/* Huéspedes Steppers for Existing Reservation */}
                   {(() => {
-                    const rules = getCapacityRules(selectedReserva.room);
+                    const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
                     return (
                       <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Editar Número de Huéspedes</span>
@@ -4069,7 +4081,7 @@ export default function RecepcionPage() {
                   {/* Resumen de Huéspedes (Igual que se maneja en Reservas) */}
                   {(() => {
                     if (selectedReserva.id === 'walkin') return null;
-                    const rules = getCapacityRules(selectedReserva.room);
+                    const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
                     const totalGuests = Number(editedAdults || 0) + Number(editedChildren || 0);
                     const extraGuests = Math.max(0, totalGuests - rules.base);
                     const costPerNight = extraGuests * 500;

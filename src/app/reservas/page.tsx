@@ -117,6 +117,7 @@ export default function ReservasList() {
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
   const [isReassigning, setIsReassigning] = useState(false);
@@ -297,7 +298,7 @@ export default function ReservasList() {
 
     // Validar capacidad máxima de la nueva habitación
     const totalGuests = Number(selectedRes.num_adult || 1) + Number(selectedRes.num_child || 0);
-    const rules = getCapacityRules(targetRoomName);
+    const rules = getCapacityRules(targetRoomName, capacitySettings || undefined);
     if (totalGuests > rules.max) {
       alert(`⚠️ No se puede reasignar a la habitación ${targetRoomName} porque la capacidad máxima es de ${rules.max} personas y la reserva tiene ${totalGuests} huéspedes.`);
       return;
@@ -712,10 +713,11 @@ export default function ReservasList() {
     setIsLoading(true);
     setTokenError(false);
     try {
-      const [res, chk, acc] = await Promise.all([
+      const [res, chk, acc, capRes] = await Promise.all([
         fetch('/api/reservas?t=' + Date.now()),
         supabase.from('checkins').select('*'),
-        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true })
+        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
+        supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle()
       ]);
       const json = await res.json();
       
@@ -723,6 +725,15 @@ export default function ReservasList() {
       if (acc.data) setAccounts(acc.data);
       if (chk.data) {
         chk.data.forEach(c => { checkinMap[String(c.reservation_id)] = c; });
+      }
+
+      if (capRes?.data?.value) {
+        try {
+          const parsed = typeof capRes.data.value === 'string' ? JSON.parse(capRes.data.value) : capRes.data.value;
+          setCapacitySettings(parsed || null);
+        } catch (e) {
+          console.error("Error al parsear capacity_settings:", e);
+        }
       }
 
       if (json.error === 'TOKEN_EXPIRED') { setTokenError(true); return; }
@@ -749,10 +760,10 @@ export default function ReservasList() {
     if (!selectedRes) return;
 
     // Validar capacidad máxima de la habitación
-    const rules = getCapacityRules(selectedRes.room);
+    const rules = getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined);
     const totalGuests = Number(editAdults) + Number(editChildren);
     if (totalGuests > rules.max) {
-      alert(`⚠️ La capacidad máxima de la habitación ${selectedRes.room} es de ${rules.max} personas. Has ingresado ${totalGuests} huéspedes.`);
+      alert(`⚠️ La capacidad máxima de la habitación ${selectedRes.room_name || 'seleccionada'} es de ${rules.max} personas. Has ingresado ${totalGuests} huéspedes.`);
       return;
     }
 
@@ -1538,13 +1549,13 @@ export default function ReservasList() {
                     </div>
 
                     {selectedRes && (() => {
-                      const rules = getCapacityRules(selectedRes.room);
+                      const rules = getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined);
                       const total = editAdults + editChildren;
                       const isOver = total > rules.max;
                       return (
                         <div className={`text-[11px] font-bold mt-1 pl-0.5 ${isOver ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`}>
                           {isOver 
-                            ? `⚠️ Límite excedido. Máximo permitido para la habitación ${selectedRes.room}: ${rules.max} personas.` 
+                            ? `⚠️ Límite excedido. Máximo permitido para la habitación ${selectedRes.room_name || 'seleccionada'}: ${rules.max} personas.` 
                             : `✓ Capacidad permitida. Máximo: ${rules.max} personas.`}
                         </div>
                       );
