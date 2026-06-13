@@ -671,7 +671,7 @@ export default function EquipoPage() {
           if (accountIdA && Number(amountA) > 0) {
             const accNameA = accounts.find(a => a.id === accountIdA)?.name || 'Cuenta A';
             const financeRecordA = {
-              type: 'egreso',
+              type: 'gasto',
               amount: Number(amountA),
               category: 'Nóminas',
               description: `Nómina - Empleado: ${name} (${accNameA})`,
@@ -691,7 +691,7 @@ export default function EquipoPage() {
           if (accountIdB && Number(amountB) > 0) {
             const accNameB = accounts.find(a => a.id === accountIdB)?.name || 'Cuenta B';
             const financeRecordB = {
-              type: 'egreso',
+              type: 'gasto',
               amount: Number(amountB),
               category: 'Nóminas',
               description: `Nómina - Empleado: ${name} (${accNameB})`,
@@ -710,7 +710,7 @@ export default function EquipoPage() {
         } else if (selectedAccountId) {
           // Registro tradicional único
           const financeRecord = {
-            type: 'egreso',
+            type: 'gasto',
             amount: Number(amount),
             category: 'Nóminas',
             description: `Nómina - Empleado: ${name}`,

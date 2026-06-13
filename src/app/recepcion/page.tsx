@@ -2029,7 +2029,7 @@ export default function RecepcionPage() {
         if (commission > 0) {
           const commDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Comisión ${channel}`;
           await supabase.from('finances').insert({
-            type: 'egreso',
+            type: 'gasto',
             amount: commission,
             category: 'Comisiones',
             description: commDesc,
@@ -2133,7 +2133,7 @@ export default function RecepcionPage() {
 
           if (otaSplit.commission > 0) {
             await supabase.from('finances').insert({
-              type: 'egreso',
+              type: 'gasto',
               amount: otaSplit.commission,
               category: 'Comisiones',
               description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Comisión ${otaSplit.channelLabel}`,
