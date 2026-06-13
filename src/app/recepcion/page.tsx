@@ -3424,7 +3424,7 @@ export default function RecepcionPage() {
                               <div className="space-y-1.5 animate-in fade-in duration-200">
                                 <div className="flex justify-between items-center pr-1">
                                   <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-widest pl-0.5">
-                                    Cargos Personas Adicionales (Total por Noche, antes de Impuestos)
+                                    Cargos Personas Adicionales (Total por Noche, Impuestos Incluidos)
                                   </label>
                                   {selectedReserva.extra_guest_surcharge !== '' && (
                                     <button
