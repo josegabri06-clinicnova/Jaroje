@@ -382,6 +382,10 @@ export default function ReservasList() {
         const found = reservas.find(r => r.id.toString() === searchId);
         if (found) {
           setSelectedRes(found);
+          setSearch(searchId);
+          const today = new Date().toISOString().split('T')[0];
+          const isCompleted = found.is_checked_out || found.check_out < today;
+          setActiveTab(isCompleted ? 'Completadas' : 'Todas');
         }
         // Limpiar el parámetro de la URL inmediatamente para evitar que
         // el efecto vuelva a ejecutarse y reabra el modal al cerrarlo
