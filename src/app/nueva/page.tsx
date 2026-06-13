@@ -263,7 +263,8 @@ export default function VercelActionForm() {
       return { roomId: rm.roomId, unitId: rm.unitId, extraGuests };
     });
 
-    const defaultSurchargeTotal = totalExtraGuests * 500;
+    const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+    const defaultSurchargeTotal = totalExtraGuests * extraGuestPrice;
     const activeSurchargeTotal = form.extraGuestSurcharge !== '' && form.extraGuestSurcharge !== undefined
       ? (Number(form.extraGuestSurcharge) || 0)
       : defaultSurchargeTotal;
@@ -405,7 +406,8 @@ export default function VercelActionForm() {
       const extraGuests = Math.max(0, totalGuests - capRules.base);
       totalExtra += extraGuests;
     });
-    return { totalExtraGuests: totalExtra, defaultSurchargeTotal: totalExtra * 500 };
+    const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+    return { totalExtraGuests: totalExtra, defaultSurchargeTotal: totalExtra * extraGuestPrice };
   }, [form.checkIn, form.checkOut, form.groupRooms, form.roomId, form.unitId, form.numAdult, form.numChild, capacitySettings]);
 
   const hasExtraGuests = totalExtraGuests > 0 || (form.extraGuestSurcharge !== '' && Number(form.extraGuestSurcharge) !== 0);

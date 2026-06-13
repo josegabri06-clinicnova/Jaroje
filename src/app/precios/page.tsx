@@ -38,7 +38,10 @@ export default function PreciosPage() {
         setBeds24Multipliers(json.multipliers);
       }
       if (json.capacitySettings) {
-        setCapacitySettings(json.capacitySettings);
+        setCapacitySettings({
+          'extra_guest_price': 500,
+          ...json.capacitySettings
+        });
       } else {
         setCapacitySettings({
           '679077': { base: 4, max: 4 },
@@ -47,6 +50,7 @@ export default function PreciosPage() {
           '679092': { base: 10, max: 12 },
           '679093': { base: 12, max: 16 },
           '685542': { base: 4, max: 4 },
+          'extra_guest_price': 500,
         });
       }
     } catch (err: any) {
@@ -616,8 +620,33 @@ export default function PreciosPage() {
                 👥 Configuración de Capacidades (Huéspedes)
               </h3>
               <p className="text-[11px] text-zinc-400 font-semibold mt-1">
-                Configura el número de huéspedes permitidos sin costo (Base) y con costo adicional (Máx). Estos valores regulan las alertas de capacidad y los cálculos del recargo de $500 pesos.
+                Configura el número de huéspedes permitidos sin costo (Base) y con costo adicional (Máx). Estos valores regulan las alertas de capacidad y los cálculos del recargo de huéspedes adicionales.
               </p>
+            </div>
+
+            {/* Tarjeta de Costo por Huésped Adicional */}
+            <div className="bg-zinc-50 border border-zinc-200/60 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-lg shrink-0">💰</span>
+                <div>
+                  <p className="text-[12.5px] font-black text-zinc-800">Costo por Huésped Adicional</p>
+                  <p className="text-[10px] text-zinc-400 font-semibold mt-0.5">Recargo neto por cada huésped extra por noche</p>
+                </div>
+              </div>
+              <div className="w-full sm:w-48 flex items-center bg-white border border-zinc-200 rounded-xl px-3 py-1.5 focus-within:border-indigo-300">
+                <span className="text-[12.5px] font-black text-zinc-400 mr-1.5">$</span>
+                <input
+                  type="number"
+                  value={capacitySettings.extra_guest_price !== undefined ? capacitySettings.extra_guest_price : 500}
+                  onChange={e => setCapacitySettings(prev => ({
+                    ...prev,
+                    extra_guest_price: Math.max(0, Number(e.target.value) || 0)
+                  }))}
+                  className="w-full text-[12px] font-black text-zinc-900 outline-none text-right bg-transparent"
+                  placeholder="500"
+                />
+                <span className="text-[11px] font-bold text-zinc-400 ml-1.5">MXN</span>
+              </div>
             </div>
 
             <div className="divide-y divide-zinc-100 space-y-4">

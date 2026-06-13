@@ -625,7 +625,8 @@ export default function RecepcionPage() {
     const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room, capacitySettings || undefined).base);
     const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room, capacitySettings || undefined).base);
     const diffExtra = newExtraGuests - originalExtraGuests;
-    const priceAdjustment = Math.round(diffExtra * 500 * (selectedReserva.nights || 1));
+    const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+    const priceAdjustment = Math.round(diffExtra * extraGuestPrice * (selectedReserva.nights || 1));
     return Math.round(Number(selectedReserva.price_estimate || 0) + priceAdjustment);
   }, [selectedReserva, editedAdults, editedChildren, capacitySettings]);
 
@@ -1250,7 +1251,8 @@ export default function RecepcionPage() {
       return { roomId: rm.roomId, unitId: rm.unitId || '', extraGuests };
     });
 
-    const defaultSurchargeTotal = totalExtraGuests * 500;
+    const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+    const defaultSurchargeTotal = totalExtraGuests * extraGuestPrice;
     const activeSurchargeTotal = res.extra_guest_surcharge !== '' && res.extra_guest_surcharge !== undefined
       ? (Number(res.extra_guest_surcharge) || 0)
       : defaultSurchargeTotal;
@@ -3388,7 +3390,8 @@ export default function RecepcionPage() {
                           const extraGuests = Math.max(0, totalGuests - capRules.base);
                           totalExtra += extraGuests;
                         });
-                        const defaultSurchargeTotal = totalExtra * 500;
+                        const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+                        const defaultSurchargeTotal = totalExtra * extraGuestPrice;
                         const hasExtraGuests = totalExtra > 0 || (selectedReserva.extra_guest_surcharge !== '' && Number(selectedReserva.extra_guest_surcharge) !== 0);
 
                         return (
@@ -4084,7 +4087,8 @@ export default function RecepcionPage() {
                     const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
                     const totalGuests = Number(editedAdults || 0) + Number(editedChildren || 0);
                     const extraGuests = Math.max(0, totalGuests - rules.base);
-                    const costPerNight = extraGuests * 500;
+                    const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+                    const costPerNight = extraGuests * extraGuestPrice;
                     const totalCost = costPerNight * (selectedReserva.nights || 1);
 
                     return (

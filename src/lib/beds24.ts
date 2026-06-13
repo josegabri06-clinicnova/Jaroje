@@ -973,7 +973,8 @@ export function getDirectTotalForStay(
   checkOut: string,
   rulesList?: any[],
   numAdults: number = 1,
-  numChildren: number = 0
+  numChildren: number = 0,
+  capacitySettings?: Record<string, any>
 ): number {
   const roomB24 = getBeds24RoomIdAndUnit(roomName);
   if (!roomB24) return 0;
@@ -987,10 +988,11 @@ export function getDirectTotalForStay(
   else if (nights >= 15) discountMult = 0.75;
   else if (nights >= 7) discountMult = 0.85;
 
-  const capRules = getCapacityRules(roomName);
+  const capRules = getCapacityRules(roomName, capacitySettings);
   const totalGuests = numAdults + numChildren;
   const extraGuests = Math.max(0, totalGuests - capRules.base);
-  const surchargePerNight = extraGuests * 500;
+  const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+  const surchargePerNight = extraGuests * extraGuestPrice;
 
   let totalDirect = 0;
   for (let i = 0; i < nights; i++) {
