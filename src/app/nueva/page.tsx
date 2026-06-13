@@ -297,9 +297,9 @@ export default function VercelActionForm() {
         surchargePerNight = activeSurchargeTotal / group.length;
       }
 
-      const priceWithChannel = Math.round(basePrice * discountMult * multiplier) + surchargePerNight;
+      const priceWithChannel = Math.round(basePrice * discountMult * multiplier);
       const tax = Math.round(priceWithChannel * 0.19); // 16% IVA + 3% ISH
-      const suggestedDailyRate = priceWithChannel + tax;
+      const suggestedDailyRate = priceWithChannel + tax + surchargePerNight;
 
       sumSuggestedRates += suggestedDailyRate;
 

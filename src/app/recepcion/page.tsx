@@ -624,7 +624,7 @@ export default function RecepcionPage() {
     const originalExtraGuests = Math.max(0, originalPax - getCapacityRules(selectedReserva.room).base);
     const newExtraGuests = Math.max(0, (editedAdults + editedChildren) - getCapacityRules(selectedReserva.room).base);
     const diffExtra = newExtraGuests - originalExtraGuests;
-    const priceAdjustment = Math.round(diffExtra * 500 * 1.19 * (selectedReserva.nights || 1));
+    const priceAdjustment = Math.round(diffExtra * 500 * (selectedReserva.nights || 1));
     return Math.round(Number(selectedReserva.price_estimate || 0) + priceAdjustment);
   }, [selectedReserva, editedAdults, editedChildren]);
 
@@ -1323,10 +1323,10 @@ export default function RecepcionPage() {
           else if (computedNights >= 7) discountMult = 0.85;
         }
 
-        const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
+        const nightBase = Math.round(priceUsed * discountMult);
         const nightWithChannel = Math.round(nightBase * 1.0);
         const nightTax = Math.round(nightWithChannel * 0.19);
-        suggestedTotalRoom += (nightWithChannel + nightTax);
+        suggestedTotalRoom += (nightWithChannel + nightTax) + surchargePerNight;
       }
       
       const suggestedDailyRate = computedNights > 0 ? Math.round(suggestedTotalRoom / computedNights) : 0;
