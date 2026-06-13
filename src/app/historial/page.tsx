@@ -513,7 +513,7 @@ export default function HistorialPage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center flex-wrap gap-1.5 mb-0.5">
                   <span className="text-[14px] font-bold text-zinc-900 leading-tight truncate">
-                    {res.guestName}
+                    {ev.title.split(' · ')[0]}
                   </span>
                   {!isBlock && (
                     <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${sourceBg}`}>
@@ -526,8 +526,8 @@ export default function HistorialPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mt-0.5">
-                  📅 {format(new Date(res.checkIn + 'T12:00:00Z'), 'dd MMM', { locale: es })} — {format(new Date(res.checkOut + 'T12:00:00Z'), 'dd MMM', { locale: es })}
+                <p className="text-[12px] font-medium text-zinc-500 block mt-0.5 truncate leading-tight">
+                  {ev.desc}
                 </p>
               </div>
             </div>

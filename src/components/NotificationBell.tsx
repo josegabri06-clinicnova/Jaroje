@@ -733,8 +733,8 @@ export function NotificationBell() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center flex-wrap gap-1.5 mb-0.5">
-                  <span className="text-[13px] font-bold text-zinc-900 leading-tight truncate max-w-[120px]">
-                    {res.guestName}
+                  <span className="text-[13px] font-bold text-zinc-900 leading-tight truncate max-w-[180px]">
+                    {ev.title.split(' · ')[0]}
                   </span>
                   {!isBlock && (
                     <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${sourceBg}`}>
@@ -747,15 +747,9 @@ export function NotificationBell() {
                     </span>
                   )}
                 </div>
-                {res.checkIn && res.checkOut ? (
-                  <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block mt-0.5">
-                    📅 {format(new Date(res.checkIn + 'T12:00:00Z'), 'dd MMM', { locale: es })} — {format(new Date(res.checkOut + 'T12:00:00Z'), 'dd MMM', { locale: es })}
-                  </p>
-                ) : (
-                  <p className="text-[10px] font-bold text-zinc-400 block mt-0.5 truncate leading-tight">
-                    {ev.desc}
-                  </p>
-                )}
+                <p className="text-[11px] font-medium text-zinc-500 block mt-0.5 truncate leading-tight">
+                  {ev.desc}
+                </p>
               </div>
             </div>
             
