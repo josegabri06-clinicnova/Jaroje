@@ -496,9 +496,10 @@ export default function ReservasList() {
         const baseDesc = `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático (${channel})`;
 
         const netDesc = `${baseDesc} | Ingreso Neto`;
+        let netRecordId = null;
 
         if (netRevenue > 0) {
-          const { error: netErr } = await supabase.from('finances').insert([{
+          const { data: netRows, error: netErr } = await supabase.from('finances').insert([{
             type: 'ingreso',
             amount: netRevenue,
             category: 'Alojamiento',
@@ -506,10 +507,11 @@ export default function ReservasList() {
             payment_method: 'transferencia',
             account_id: netAcc?.id || null,
             date: new Date().toISOString().split('T')[0]
-          }]);
+          }]).select();
 
           if (!netErr) {
             isSuccess = true;
+            netRecordId = netRows?.[0]?.id;
             if (netAcc) {
               await supabase.from('accounts').update({ balance: netAcc.balance + netRevenue }).eq('id', netAcc.id);
             }
@@ -519,11 +521,12 @@ export default function ReservasList() {
         }
 
         if (commission > 0) {
+          const commDesc = `${selectedRes.guest_name || 'Huésped'} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Comisión ${channel}`;
           const { error: commErr } = await supabase.from('finances').insert([{
             type: 'egreso',
             amount: commission,
             category: 'Comisiones',
-            description: `${selectedRes.guest_name || 'Huésped'} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Comisión ${channel}`,
+            description: commDesc,
             payment_method: 'transferencia',
             account_id: commAcc?.id || null,
             date: new Date().toISOString().split('T')[0]
@@ -533,6 +536,35 @@ export default function ReservasList() {
             const newCommBalance = commAcc.balance + commission;
             await supabase.from('accounts').update({ balance: newCommBalance }).eq('id', commAcc.id);
           }
+        }
+
+        // Sincronizar pago de OTA con Beds24 en tiempo real
+        const totalAmount = netRevenue + commission;
+        let syncedSuccess = false;
+        try {
+          const b24PayRes = await fetch('/api/reservas/payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookId: selectedRes.id,
+              amount: totalAmount,
+              paymentMethod: 'transferencia',
+              employeeNum: '999', // Admin
+              description: `Cobro Check-in Automático ${channel}`
+            })
+          });
+          const payData = await b24PayRes.json();
+          if (b24PayRes.ok && payData.success) {
+            syncedSuccess = true;
+          }
+        } catch (payErr) {
+          console.error("Error al registrar pago OTA en Beds24:", payErr);
+        }
+
+        if (syncedSuccess && netRecordId) {
+          await supabase.from('finances').update({
+            description: `${netDesc} [Synced: B24]`
+          }).eq('id', netRecordId);
         }
       } else {
         if (paymentReference && paymentAmountNum > 0) {
@@ -624,11 +656,9 @@ export default function ReservasList() {
             }
           }
         }
-      }
 
-      if (isSuccess) {
-
-          // Registrar el pago en Beds24 en tiempo real
+        if (isSuccess) {
+          // Registrar el pago en Beds24 en tiempo real para flujos manuales
           try {
             await fetch('/api/reservas/payment', {
               method: 'POST',
@@ -645,7 +675,9 @@ export default function ReservasList() {
             console.error("Error al registrar pago en Beds24:", payB24Err);
           }
         } else {
-          console.error("Error al registrar ingreso en finanzas:", financeError);
+          if (financeError) {
+            console.error("Error al registrar ingreso en finanzas:", financeError);
+          }
         }
       }
 
