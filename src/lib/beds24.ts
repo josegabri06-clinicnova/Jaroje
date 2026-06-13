@@ -746,6 +746,36 @@ export function extractTaxesFromInvoice(invoiceItems: any[]): TaxInfo {
   };
 }
 
+export interface OtaDetails {
+  expectedPayout: number;
+  hostFee: number;
+}
+
+export function extractOtaDetails(invoiceItems: any[]): OtaDetails {
+  let expectedPayout = 0;
+  let hostFee = 0;
+
+  if (invoiceItems && Array.isArray(invoiceItems)) {
+    invoiceItems.forEach((item: any) => {
+      const desc = String(item.description || item.desc || '').toLowerCase();
+      const qty = item.qty !== undefined ? Number(item.qty) : 1;
+      const price = item.price !== undefined ? Number(item.price) : 0;
+      const amount = item.amount !== undefined ? Number(item.amount) : (qty * price);
+
+      if (desc.includes('expected payout') || desc.includes('expected_payout')) {
+        expectedPayout += amount;
+      } else if (desc.includes('host fee') || desc.includes('host_fee') || desc.includes('comisión') || desc.includes('comision')) {
+        hostFee += Math.abs(amount);
+      }
+    });
+  }
+
+  return {
+    expectedPayout: Math.round(expectedPayout * 100) / 100,
+    hostFee: Math.round(hostFee * 100) / 100
+  };
+}
+
 // Obtener y mapear reservas activas (Backend Server-Side)
 export async function getBeds24Bookings(): Promise<any[]> {
   const today = new Date();
@@ -835,6 +865,7 @@ export async function getBeds24Bookings(): Promise<any[]> {
         : roomData.nombre;
 
       const taxInfo = extractTaxesFromInvoice(b.invoiceItems);
+      const otaDetails = extractOtaDetails(b.invoiceItems);
 
       return {
         id: b.id || Math.random().toString(),
@@ -857,7 +888,9 @@ export async function getBeds24Bookings(): Promise<any[]> {
         num_adult: b.numAdult ? Number(b.numAdult) : 1,
         num_child: b.numChild ? Number(b.numChild) : 0,
         rooms: { name: roomData.nombre },
-        taxes: taxInfo
+        taxes: taxInfo,
+        expected_payout: otaDetails.expectedPayout,
+        host_fee: otaDetails.hostFee
       };
     });
 }

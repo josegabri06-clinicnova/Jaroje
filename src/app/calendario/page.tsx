@@ -899,7 +899,142 @@ export default function CalendarPage() {
       });
     }
 
-    if (paymentMode && paymentAmount) {
+    const channel = selectedReserva.channel || '';
+    const isOtaAutomated = ['Airbnb', 'Booking.com'].includes(channel);
+
+    if (isOtaAutomated) {
+      let netAcc = null;
+      let commAcc = null;
+
+      if (channel === 'Airbnb') {
+        netAcc = accounts.find(a => {
+          const name = a.name.toUpperCase();
+          return name === 'HSBC' || name === 'HSBC FISCAL' || name.includes('HSBC');
+        });
+        commAcc = accounts.find(a => {
+          const name = a.name.toUpperCase();
+          return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('AIRBNB');
+        });
+      } else if (channel === 'Booking.com') {
+        netAcc = accounts.find(a => {
+          const name = a.name.toUpperCase();
+          return name === 'BOOKING' || (name.includes('BOOKING') && !name.includes('COMISIO') && !name.includes('COMISIÓ'));
+        });
+        commAcc = accounts.find(a => {
+          const name = a.name.toUpperCase();
+          return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('BOOKING');
+        });
+      }
+
+      let netRevenue = selectedReserva.expected_payout || 0;
+      let commission = selectedReserva.host_fee || 0;
+
+      if (netRevenue === 0 && commission === 0) {
+        const balanceVal = selectedReserva.balance !== undefined
+          ? selectedReserva.balance
+          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+
+        const otaSplit = computeOtaSplit(
+          balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0),
+          channel,
+          selectedReserva.room,
+          selectedReserva.check_in,
+          selectedReserva.check_out,
+          undefined,
+          Number(selectedReserva.num_adult || 1),
+          Number(selectedReserva.num_child || 0)
+        );
+        netRevenue = otaSplit.netRevenue;
+        commission = otaSplit.commission;
+      }
+
+      const baseDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in Automático (${channel}) (Operado por: ${operatorName})`;
+
+      let netRecordId = null;
+      const netDesc = `${baseDesc} | Ingreso Neto`;
+
+      if (netRevenue > 0) {
+        const { data: netRows } = await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: netRevenue,
+          category: 'Reserva Directa',
+          description: `${netDesc} [Pending Sync: B24]`,
+          payment_method: 'transferencia',
+          account_id: netAcc?.id || null,
+          date: todayStr
+        }).select();
+
+        netRecordId = netRows?.[0]?.id;
+
+        if (netAcc) {
+          const newBalance = netAcc.balance + netRevenue;
+          await supabase.from('accounts').update({ balance: newBalance }).eq('id', netAcc.id);
+        }
+      }
+
+      if (commission > 0) {
+        const commDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Comisión ${channel}`;
+        await supabase.from('finances').insert({
+          type: 'egreso',
+          amount: commission,
+          category: 'Comisiones',
+          description: commDesc,
+          payment_method: 'transferencia',
+          account_id: commAcc?.id || null,
+          date: todayStr
+        });
+
+        if (commAcc) {
+          const newCommBalance = commAcc.balance + commission;
+          await supabase.from('accounts').update({ balance: newCommBalance }).eq('id', commAcc.id);
+        }
+      }
+
+      const totalAmount = netRevenue + commission;
+      let syncedSuccess = false;
+      try {
+        const b24PayRes = await fetch('/api/reservas/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookId: selectedReserva.id,
+            amount: totalAmount,
+            paymentMethod: 'transferencia',
+            employeeNum: emp?.employee_num || null,
+            description: `Cobro Check-in Automático ${channel}`
+          })
+        });
+        const payData = await b24PayRes.json();
+        if (b24PayRes.ok && payData.success) {
+          syncedSuccess = true;
+        }
+      } catch (payErr) {
+        console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
+      }
+
+      if (syncedSuccess && netRecordId) {
+        await supabase.from('finances').update({
+          description: `${netDesc} [Synced: B24]`
+        }).eq('id', netRecordId);
+      }
+
+      if (emp) {
+        const matchedAccName = netAcc?.name || 'Desconocido';
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'recepcion',
+            action: 'payment_received',
+            room: selectedReserva.room,
+            details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago OTA (${channel}) de $${totalAmount} (Neto negocio: $${netRevenue}, Comisión ${channel}: $${commission}, Cuenta: ${matchedAccName}).`
+          })
+        });
+      }
+    } else if (paymentMode && paymentAmount) {
       const amountNum = Number(paymentAmount);
       const baseDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in (Operado por: ${operatorName})`;
 
@@ -1989,18 +2124,47 @@ export default function CalendarPage() {
                         if (balanceVal <= 0) {
                           return (
                             <div className="bg-emerald-50 border border-emerald-250 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
-                              <div className="space-y-0.5">
-                                <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
-                                  Estancia Liquidada
+                               const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedReserva.channel || '');
+
+                        if (isAirbnbOrBooking) {
+                          const channel = selectedReserva.channel || '';
+                          const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
+                          const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
+
+                          let expectedPayout = selectedReserva.expected_payout || 0;
+                          let hostFee = selectedReserva.host_fee || 0;
+
+                          if (expectedPayout === 0 && hostFee === 0) {
+                            const otaSplit = computeOtaSplit(
+                              balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0),
+                              channel,
+                              selectedReserva.room,
+                              selectedReserva.check_in,
+                              selectedReserva.check_out,
+                              undefined,
+                              Number(selectedReserva.num_adult || 1),
+                              Number(selectedReserva.num_child || 0)
+                            );
+                            expectedPayout = otaSplit.netRevenue;
+                            hostFee = otaSplit.commission;
+                          }
+
+                          return (
+                            <div className="space-y-4">
+                              <div className="bg-zinc-50 border border-zinc-250 rounded-2xl p-4 shadow-sm animate-in fade-in duration-300">
+                                <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest block mb-2 text-left">
+                                  Dispersión de Pago Automatizada ({channel})
                                 </span>
-                                <p className="text-[11px] text-emerald-600 font-medium leading-relaxed">
-                                  Total: {fmtCurrency(totalVal, selectedReserva.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedReserva.guest_name)} (100% Pagado)
-                                </p>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-[20px] font-black text-emerald-700">
-                                  {fmtCurrency(0, selectedReserva.guest_name)}
-                                </span>
+                                <div className="space-y-2 text-left">
+                                  <div className="flex justify-between items-center text-[13px]">
+                                    <span className="font-semibold text-zinc-650">Depósito Neto a {netAccName}:</span>
+                                    <span className="font-bold text-zinc-900">{fmtCurrency(expectedPayout, selectedReserva.guest_name)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
+                                    <span className="font-semibold text-zinc-650">Comisión a {commAccName}:</span>
+                                    <span className="font-bold text-zinc-900">{fmtCurrency(hostFee, selectedReserva.guest_name)}</span>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           );
@@ -2149,11 +2313,13 @@ export default function CalendarPage() {
                             if (submitting) return true;
                             if (!dniPreview) return true; // DNI obligatorio
 
+                            const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedReserva.channel || '');
+                            
                             const pendingBalance = selectedReserva.balance !== undefined
                               ? selectedReserva.balance
                               : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
 
-                            if (pendingBalance > 0) {
+                            if (!isAirbnbOrBooking && pendingBalance > 0) {
                               const currentPayment = Number(paymentAmount || 0);
                               if (!paymentMode) return true;
                               if (!selectedAccountId) return true;

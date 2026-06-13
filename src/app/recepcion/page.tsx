@@ -1955,7 +1955,140 @@ export default function RecepcionPage() {
         });
       }
 
-      if (paymentMode && paymentAmount) {
+      const channel = selectedReserva.channel || '';
+      const isOtaAutomated = ['Airbnb', 'Booking.com'].includes(channel);
+
+      if (isOtaAutomated) {
+        let netAcc = null;
+        let commAcc = null;
+
+        if (channel === 'Airbnb') {
+          netAcc = accounts.find(a => {
+            const name = a.name.toUpperCase();
+            return name === 'HSBC' || name === 'HSBC FISCAL' || name.includes('HSBC');
+          });
+          commAcc = accounts.find(a => {
+            const name = a.name.toUpperCase();
+            return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('AIRBNB');
+          });
+        } else if (channel === 'Booking.com') {
+          netAcc = accounts.find(a => {
+            const name = a.name.toUpperCase();
+            return name === 'BOOKING' || (name.includes('BOOKING') && !name.includes('COMISIO') && !name.includes('COMISIÓ'));
+          });
+          commAcc = accounts.find(a => {
+            const name = a.name.toUpperCase();
+            return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('BOOKING');
+          });
+        }
+
+        let netRevenue = selectedReserva.expected_payout || 0;
+        let commission = selectedReserva.host_fee || 0;
+
+        if (netRevenue === 0 && commission === 0) {
+          const balanceVal = selectedReserva.balance !== undefined
+            ? selectedReserva.balance
+            : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+
+          const otaSplit = computeOtaSplit(
+            balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0),
+            channel,
+            selectedReserva.room,
+            selectedReserva.check_in,
+            selectedReserva.check_out,
+            rules
+          );
+          netRevenue = otaSplit.netRevenue;
+          commission = otaSplit.commission;
+        }
+
+        const baseDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in Automático (${channel}) (Operado por: ${operatorName})`;
+
+        let netRecordId = null;
+        const netDesc = `${baseDesc} | Ingreso Neto`;
+
+        if (netRevenue > 0) {
+          const { data: netRows } = await supabase.from('finances').insert({
+            type: 'ingreso',
+            amount: netRevenue,
+            category: 'Reserva Directa',
+            description: `${netDesc} [Pending Sync: B24]`,
+            payment_method: 'transferencia',
+            account_id: netAcc?.id || null,
+            date: todayStr
+          }).select();
+
+          netRecordId = netRows?.[0]?.id;
+
+          if (netAcc) {
+            const newBalance = netAcc.balance + netRevenue;
+            await supabase.from('accounts').update({ balance: newBalance }).eq('id', netAcc.id);
+          }
+        }
+
+        if (commission > 0) {
+          const commDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Comisión ${channel}`;
+          await supabase.from('finances').insert({
+            type: 'egreso',
+            amount: commission,
+            category: 'Comisiones',
+            description: commDesc,
+            payment_method: 'transferencia',
+            account_id: commAcc?.id || null,
+            date: todayStr
+          });
+
+          if (commAcc) {
+            const newCommBalance = commAcc.balance + commission;
+            await supabase.from('accounts').update({ balance: newCommBalance }).eq('id', commAcc.id);
+          }
+        }
+
+        const totalAmount = netRevenue + commission;
+        let syncedSuccess = false;
+        try {
+          const b24PayRes = await fetch('/api/reservas/payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookId: selectedReserva.id,
+              amount: totalAmount,
+              paymentMethod: 'transferencia',
+              employeeNum: emp?.employee_num || null,
+              description: `Cobro Check-in Automático ${channel}`
+            })
+          });
+          const payData = await b24PayRes.json();
+          if (b24PayRes.ok && payData.success) {
+            syncedSuccess = true;
+          }
+        } catch (payErr) {
+          console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
+        }
+
+        if (syncedSuccess && netRecordId) {
+          await supabase.from('finances').update({
+            description: `${netDesc} [Synced: B24]`
+          }).eq('id', netRecordId);
+        }
+
+        if (emp) {
+          const matchedAccName = netAcc?.name || 'Desconocido';
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'recepcion',
+              action: 'payment_received',
+              room: selectedReserva.room,
+              details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago OTA (${channel}) de $${totalAmount} (Neto negocio: $${netRevenue}, Comisión ${channel}: $${commission}, Cuenta: ${matchedAccName}).`
+            })
+          });
+        }
+      } else if (paymentMode && paymentAmount) {
         const amountNum = Number(paymentAmount);
         const baseDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in (Operado por: ${operatorName})`;
 
@@ -3885,115 +4018,163 @@ export default function RecepcionPage() {
 
                   {/* Registro de Pago */}
                   <div className="space-y-3 pt-2">
-                    <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Registrar Pago (Opcional)</h4>
-                    <div className="flex gap-2">
-                      {[
-                        { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                        { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                        { id: 'transferencia', label: 'Transferencia', icon: Send }
-                      ].map(m => (
-                        <button
-                          key={m.id}
-                          onClick={() => setPaymentMode(m.id as any)}
-                          className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                            paymentMode === m.id
-                              ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                              : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
-                          }`}
-                        >
-                          <m.icon size={15} />
-                          <span className="text-[11px] font-bold">{m.label}</span>
-                        </button>
-                      ))}
-                    </div>
+                    {['Airbnb', 'Booking.com'].includes(selectedReserva.channel || '') ? (
+                      (() => {
+                        const channel = selectedReserva.channel || '';
+                        const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
+                        const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
 
-                    {paymentMode && (
-                      <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
-                            {selectedReserva.id === 'walkin' ? 'Pago Actual (Anticipo)' : 'Monto a cobrar'}
-                          </span>
-                        </div>
-                        <div className="relative text-left">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                          <input
-                            type="number"
-                            value={paymentAmount}
-                            onChange={e => {
-                              if (selectedReserva.id !== 'walkin') {
-                                setPaymentAmount(e.target.value);
-                              }
-                            }}
-                            readOnly={selectedReserva.id === 'walkin'}
-                            placeholder="0.00"
-                            className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                              selectedReserva.id === 'walkin'
-                                ? 'bg-zinc-100 border-zinc-200/80 text-zinc-500 cursor-not-allowed'
-                                : 'bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm'
-                            }`}
-                          />
-                        </div>
+                        const balanceVal = selectedReserva.balance !== undefined
+                          ? selectedReserva.balance
+                          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
 
-                        {/* Selector de cuenta/sobre */}
-                        <div className="space-y-1.5 pt-1 text-left">
-                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                            ¿A qué sobre va el dinero?
-                          </label>
-                          <select
-                            value={selectedAccountId}
-                            onChange={e => setSelectedAccountId(e.target.value)}
-                            required
-                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
-                          >
-                            <option value="" disabled>Selecciona un sobre...</option>
-                            {accounts
-                              .filter(acc => {
-                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                if (isUSD) {
-                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                  if (!isUSDAcc) return false;
-                                  
-                                  const name = acc.name.trim().toUpperCase();
-                                  if (paymentMode === 'efectivo') {
-                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                  }
-                                  return !name.includes('EFE') && !name.includes('CASH');
-                                } else {
-                                  const name = acc.name.trim().toUpperCase();
-                                  if (paymentMode === 'efectivo') {
-                                    return name === 'EFECTIVO';
-                                  }
-                                  if (paymentMode === 'tarjeta') {
-                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                  }
-                                  if (paymentMode === 'transferencia') {
-                                    return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                  }
-                                  return false;
-                                }
-                              })
-                              .map(acc => (
-                                <option key={acc.id} value={acc.id}>
-                                  {acc.name}
-                                </option>
-                              ))}
-                          </select>
+                        let expectedPayout = selectedReserva.expected_payout || 0;
+                        let hostFee = selectedReserva.host_fee || 0;
+
+                        if (expectedPayout === 0 && hostFee === 0) {
+                          const otaSplit = computeOtaSplit(
+                            balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0),
+                            channel,
+                            selectedReserva.room,
+                            selectedReserva.check_in,
+                            selectedReserva.check_out,
+                            rules
+                          );
+                          expectedPayout = otaSplit.netRevenue;
+                          hostFee = otaSplit.commission;
+                        }
+
+                        return (
+                          <div className="bg-zinc-50 border border-zinc-200/85 rounded-2xl p-4 shadow-sm animate-in fade-in duration-300 text-left">
+                            <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest block mb-2">
+                              Dispersión de Pago Automatizada ({channel})
+                            </span>
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center text-[13px]">
+                                <span className="font-semibold text-zinc-600">Depósito Neto a {netAccName}:</span>
+                                <span className="font-bold text-zinc-900">{fmtCurrency(expectedPayout, selectedReserva.guest_name)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
+                                <span className="font-semibold text-zinc-600">Comisión a {commAccName}:</span>
+                                <span className="font-bold text-zinc-900">{fmtCurrency(hostFee, selectedReserva.guest_name)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()
+                    ) : (
+                      <>
+                        <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Registrar Pago (Opcional)</h4>
+                        <div className="flex gap-2">
+                          {[
+                            { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                            { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                            { id: 'transferencia', label: 'Transferencia', icon: Send }
+                          ].map(m => (
+                            <button
+                              key={m.id}
+                              onClick={() => setPaymentMode(m.id as any)}
+                              className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                paymentMode === m.id
+                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                  : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
+                              }`}
+                            >
+                              <m.icon size={15} />
+                              <span className="text-[11px] font-bold">{m.label}</span>
+                            </button>
+                          ))}
                         </div>
 
-                        {/* Descripción opcional */}
-                        <div className="space-y-1.5 pt-1 text-left">
-                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                            Descripción (opcional)
-                          </label>
-                          <input
-                            type="text"
-                            value={paymentDescription}
-                            onChange={e => setPaymentDescription(e.target.value)}
-                            placeholder="Ej. S07 -EP, referencia de transferencia..."
-                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                          />
-                        </div>
-                      </div>
+                        {paymentMode && (
+                          <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
+                            <div className="flex justify-between items-center">
+                              <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                                {selectedReserva.id === 'walkin' ? 'Pago Actual (Anticipo)' : 'Monto a cobrar'}
+                              </span>
+                            </div>
+                            <div className="relative text-left">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                              <input
+                                type="number"
+                                value={paymentAmount}
+                                onChange={e => {
+                                  if (selectedReserva.id !== 'walkin') {
+                                    setPaymentAmount(e.target.value);
+                                  }
+                                }}
+                                readOnly={selectedReserva.id === 'walkin'}
+                                placeholder="0.00"
+                                className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                                  selectedReserva.id === 'walkin'
+                                    ? 'bg-zinc-100 border-zinc-200/80 text-zinc-500 cursor-not-allowed'
+                                    : 'bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm'
+                                }`}
+                              />
+                            </div>
+
+                            {/* Selector de cuenta/sobre */}
+                            <div className="space-y-1.5 pt-1 text-left">
+                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                ¿A qué sobre va el dinero?
+                              </label>
+                              <select
+                                value={selectedAccountId}
+                                onChange={e => setSelectedAccountId(e.target.value)}
+                                required
+                                className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+                              >
+                                <option value="" disabled>Selecciona un sobre...</option>
+                                {accounts
+                                  .filter(acc => {
+                                    const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                    if (isUSD) {
+                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                      if (!isUSDAcc) return false;
+
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (paymentMode === 'efectivo') {
+                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                      }
+                                      return !name.includes('EFE') && !name.includes('CASH');
+                                    } else {
+                                      const name = acc.name.trim().toUpperCase();
+                                      if (paymentMode === 'efectivo') {
+                                        return name === 'EFECTIVO';
+                                      }
+                                      if (paymentMode === 'tarjeta') {
+                                        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                      }
+                                      if (paymentMode === 'transferencia') {
+                                        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                      }
+                                      return false;
+                                    }
+                                  })
+                                  .map(acc => (
+                                    <option key={acc.id} value={acc.id}>
+                                      {acc.name}
+                                    </option>
+                                  ))}
+                              </select>
+                            </div>
+
+                            {/* Descripción opcional */}
+                            <div className="space-y-1.5 pt-1 text-left">
+                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                Descripción (opcional)
+                              </label>
+                              <input
+                                type="text"
+                                value={paymentDescription}
+                                onChange={e => setPaymentDescription(e.target.value)}
+                                placeholder="Ej. S07 -EP, referencia de transferencia..."
+                                className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </>
@@ -4012,7 +4193,7 @@ export default function RecepcionPage() {
                     if (isFuture) return true;
 
                     if (submitting) return true;
-                    
+
                     // Validación DNI obligatoria para todas las reservas y walk-ins
                     if (!dniPreview) return true;
 
@@ -4026,6 +4207,9 @@ export default function RecepcionPage() {
                         (selectedReserva.num_adult || 0) < 1
                       ) return true;
                     }
+
+                    const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedReserva.channel || '');
+                    if (isAirbnbOrBooking) return false;
 
                     // Calcular balance pendiente
                     const pendingBalance = selectedReserva.id === 'walkin'
@@ -4041,7 +4225,7 @@ export default function RecepcionPage() {
                       if (!selectedAccountId) return true;
                       if (currentPayment < pendingBalance) return true;
                     }
-                    
+
                     return false;
                   })()}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[14px] py-3.5 rounded-xl transition-all cursor-pointer shadow-md shadow-blue-600/15 disabled:opacity-40 flex items-center justify-center gap-2"
