@@ -1020,19 +1020,56 @@ export default function CalendarPage() {
 
       if (emp) {
         const matchedAccName = netAcc?.name || 'Desconocido';
-        await fetch('/api/employee-logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            employee_num: emp.employee_num,
-            employee_name: emp.full_name,
-            department: emp.department,
-            module: 'recepcion',
-            action: 'payment_received',
-            room: selectedReserva.room,
-            details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago OTA (${channel}) de $${totalAmount} (Neto negocio: $${netRevenue}, Comisión ${channel}: $${commission}, Cuenta: ${matchedAccName}).`
-          })
-        });
+        if (netRevenue > 0) {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'recepcion',
+              action: 'payment_received',
+              room: selectedReserva.room,
+              details: JSON.stringify({
+                text: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago neto OTA (${channel})`,
+                finance: {
+                  type: 'ingreso',
+                  amount: netRevenue,
+                  category: 'Reserva Directa',
+                  account: matchedAccName,
+                  description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Ingreso Neto OTA (${channel})`
+                }
+              })
+            })
+          });
+        }
+
+        if (commission > 0) {
+          const commAccName = commAcc?.name || 'COMISIÓN AIRBNB';
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'recepcion',
+              action: 'payment_received',
+              room: selectedReserva.room,
+              details: JSON.stringify({
+                text: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Egreso de Comisión OTA (${channel})`,
+                finance: {
+                  type: 'gasto',
+                  amount: commission,
+                  category: 'Comisiones',
+                  account: commAccName,
+                  description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Comisión Egreso OTA (${channel})`
+                }
+              })
+            })
+          });
+        }
       }
     } else if (paymentMode && paymentAmount) {
       const amountNum = Number(paymentAmount);
@@ -1128,19 +1165,56 @@ export default function CalendarPage() {
 
         if (emp) {
           const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
-          await fetch('/api/employee-logs', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              employee_num: emp.employee_num,
-              employee_name: emp.full_name,
-              department: emp.department,
-              module: 'recepcion',
-              action: 'payment_received',
-              room: selectedReserva.room,
-              details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago OTA (${otaSplit.channelLabel}) de $${amountNum} (Neto negocio: $${otaSplit.netRevenue}, Comisión ${otaSplit.channelLabel}: $${otaSplit.commission}, Cuenta: ${matchedAccName}).`
-            })
-          });
+          if (otaSplit.netRevenue > 0) {
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: emp.employee_num,
+                employee_name: emp.full_name,
+                department: emp.department,
+                module: 'recepcion',
+                action: 'payment_received',
+                room: selectedReserva.room,
+                details: JSON.stringify({
+                  text: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago neto OTA (${otaSplit.channelLabel})`,
+                  finance: {
+                    type: 'ingreso',
+                    amount: otaSplit.netRevenue,
+                    category: 'Reserva Directa',
+                    account: matchedAccName,
+                    description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Ingreso Neto OTA (${otaSplit.channelLabel})`
+                  }
+                })
+              })
+            });
+          }
+
+          if (otaSplit.commission > 0) {
+            const commAccName = commissionAcc?.name || 'COMISIÓN AIRBNB';
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: emp.employee_num,
+                employee_name: emp.full_name,
+                department: emp.department,
+                module: 'recepcion',
+                action: 'payment_received',
+                room: selectedReserva.room,
+                details: JSON.stringify({
+                  text: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Egreso de Comisión OTA (${otaSplit.channelLabel})`,
+                  finance: {
+                    type: 'gasto',
+                    amount: otaSplit.commission,
+                    category: 'Comisiones',
+                    account: commAccName,
+                    description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Comisión Egreso OTA (${otaSplit.channelLabel})`
+                  }
+                })
+              })
+            });
+          }
         }
 
       } else {
