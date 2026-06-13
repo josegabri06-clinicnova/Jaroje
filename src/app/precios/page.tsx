@@ -267,7 +267,7 @@ export default function PreciosPage() {
       <div className="bg-gradient-to-r from-indigo-950 to-indigo-900 px-6 py-8 rounded-b-[24px] shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4 text-white">
         <div>
           <span className="text-[10px] font-extrabold text-indigo-300 uppercase tracking-widest block mb-1">Sincronización Beds24 · Bidirecional</span>
-          <h2 className="text-[24px] font-black tracking-tight leading-none">Manipulador de precios</h2>
+          <h2 className="text-[24px] font-black tracking-tight leading-none">Tarifas</h2>
           <p className="text-[13px] text-indigo-200 mt-1.5 font-medium">
             Edita las tarifas de Beds24 directamente desde la app. Los cambios se sincronizan automáticamente.
           </p>

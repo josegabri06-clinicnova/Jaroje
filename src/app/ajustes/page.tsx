@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Hotel, Shield, ChevronRight, ChevronUp, ChevronDown,
   Star, Key, X, Check, Eye, EyeOff, LogOut,
-  Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown
+  Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
+  Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench
 } from 'lucide-react';
 import { 
   getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, 
@@ -13,6 +14,8 @@ import {
   logout 
 } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { format, subDays, isBefore } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 type PinTarget = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion' | null;
 
@@ -33,6 +36,33 @@ interface Account {
 
 export default function AjustesPage() {
   const router = useRouter();
+
+  // Collapsible sections state
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    perfil: false,
+    seguridad: false,
+    contable: false,
+    empleados: false,
+    depuracion: false,
+  });
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
+  // Depuración states
+  const [depurarTab, setDepurarTab] = useState<'logs' | 'tasks'>('logs');
+  const [depurarLogs, setDepurarLogs] = useState<any[]>([]);
+  const [depurarTasks, setDepurarTasks] = useState<any[]>([]);
+  const [isLoadingDepurar, setIsLoadingDepurar] = useState(false);
+  const [depurarSelectedIds, setDepurarSelectedIds] = useState<Set<string>>(new Set());
+  const [showPurgeConfirmModal, setShowPurgeConfirmModal] = useState(false);
+  const [purgeBackedUpConfirmed, setPurgeBackedUpConfirmed] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
 
   // PIN states
   const [pinModal, setPinModal]     = useState<PinTarget>(null);
@@ -102,9 +132,203 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchDepurarData = async () => {
+    setIsLoadingDepurar(true);
+    try {
+      const [logsRes, tasksRes] = await Promise.all([
+        fetch('/api/employee-logs'),
+        fetch('/api/tasks?status=resuelta')
+      ]);
+
+      const logsJson = await logsRes.json();
+      const tasksJson = await tasksRes.json();
+
+      if (logsJson.success) setDepurarLogs(logsJson.data || []);
+      if (tasksJson.success) {
+        setDepurarTasks((tasksJson.data || []).filter((t: any) => t.status === 'resuelta'));
+      }
+    } catch (e) {
+      console.error("Error al cargar datos históricos para limpieza:", e);
+    } finally {
+      setIsLoadingDepurar(false);
+      setDepurarSelectedIds(new Set());
+    }
+  };
+
+  useEffect(() => {
+    if (expandedSections.depuracion) {
+      fetchDepurarData();
+    }
+  }, [expandedSections.depuracion]);
+
+  const activeDepurarData = depurarTab === 'logs' ? depurarLogs : depurarTasks;
+
+  const handleToggleDepurarRow = (id: string) => {
+    const next = new Set(depurarSelectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setDepurarSelectedIds(next);
+  };
+
+  const handleToggleDepurarAll = () => {
+    if (depurarSelectedIds.size === activeDepurarData.length) {
+      setDepurarSelectedIds(new Set());
+    } else {
+      setDepurarSelectedIds(new Set(activeDepurarData.map(item => String(item.id))));
+    }
+  };
+
+  const handleDepurarQuickSelect = (days: number) => {
+    const cutoffDate = subDays(new Date(), days);
+    const matched = activeDepurarData.filter(item => {
+      const itemDate = new Date(item.created_at || item.resolved_at);
+      return isBefore(itemDate, cutoffDate);
+    });
+
+    if (matched.length === 0) {
+      setToastMessage(`⚠️ Ningún registro tiene más de ${days} días.`);
+      setTimeout(() => setToastMessage(''), 3000);
+      return;
+    }
+
+    setDepurarSelectedIds(new Set(matched.map(item => String(item.id))));
+    setToastMessage(`✓ Seleccionados ${matched.length} registros anteriores a ${days} días.`);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const handleDepurarSelectAll = () => {
+    setDepurarSelectedIds(new Set(activeDepurarData.map(item => String(item.id))));
+  };
+
+  const handleDepurarExportJSON = () => {
+    if (depurarSelectedIds.size === 0) {
+      alert("Selecciona al menos un registro para descargar.");
+      return;
+    }
+
+    const itemsToExport = activeDepurarData.filter(item => depurarSelectedIds.has(String(item.id)));
+    const filename = `respaldo_jaroje_${depurarTab}_${format(new Date(), 'yyyy-MM-dd')}.json`;
+    const jsonStr = JSON.stringify(itemsToExport, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setToastMessage("📥 ¡Respaldo JSON descargado con éxito!");
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const handleDepurarExportCSV = () => {
+    if (depurarSelectedIds.size === 0) {
+      alert("Selecciona al menos un registro para descargar.");
+      return;
+    }
+
+    const itemsToExport = activeDepurarData.filter(item => depurarSelectedIds.has(String(item.id)));
+    let csvContent = "";
+
+    if (depurarTab === 'logs') {
+      const headers = ["ID", "Fecha", "Empleado", "Módulo", "Acción", "Habitación", "Detalles"];
+      csvContent = [
+        headers.join(","),
+        ...itemsToExport.map(item => [
+          item.id,
+          format(new Date(item.created_at), 'yyyy-MM-dd HH:mm'),
+          `"${(item.employee_name || 'Sistema').replace(/"/g, '""')}"`,
+          `"${(item.module || 'recepcion').replace(/"/g, '""')}"`,
+          `"${(item.action || '').replace(/"/g, '""')}"`,
+          `"${(item.room || 'General').replace(/"/g, '""')}"`,
+          `"${(item.details || '').replace(/"/g, '""')}"`
+        ].join(","))
+      ].join("\n");
+    } else {
+      const headers = ["ID", "Fecha Reporte", "Fecha Resolución", "Ubicación", "Reportado Por", "Descripción"];
+      csvContent = [
+        headers.join(","),
+        ...itemsToExport.map(item => [
+          item.id,
+          format(new Date(item.created_at), 'yyyy-MM-dd HH:mm'),
+          item.resolved_at ? format(new Date(item.resolved_at), 'yyyy-MM-dd HH:mm') : '—',
+          `"${(item.room || 'General').replace(/"/g, '""')}"`,
+          `"${(item.reported_by || 'Staff').replace(/"/g, '""')}"`,
+          `"${(item.description || '').replace(/"/g, '""')}"`
+        ].join(","))
+      ].join("\n");
+    }
+
+    const filename = `respaldo_jaroje_${depurarTab}_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setToastMessage("📥 ¡Respaldo CSV descargado con éxito!");
+    setTimeout(() => setToastMessage(''), 3000);
+  };
+
+  const handlePurgeSubmit = async () => {
+    if (!purgeBackedUpConfirmed) {
+      alert("Por favor, confirma que has descargado un respaldo de los datos.");
+      return;
+    }
+
+    setIsPurging(true);
+    try {
+      const idsArray = Array.from(depurarSelectedIds);
+      const url = depurarTab === 'logs' ? '/api/employee-logs' : '/api/tasks';
+
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: idsArray })
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setToastMessage(`🔥 Se eliminaron permanentemente ${idsArray.length} registros.`);
+        setTimeout(() => setToastMessage(''), 4000);
+        setShowPurgeConfirmModal(false);
+        setPurgeBackedUpConfirmed(false);
+        fetchDepurarData();
+      } else {
+        throw new Error(json.error || "Error en el servidor");
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert(`Error al eliminar datos: ${e.message}`);
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchAccounts();
+
+    // Check section parameter on load
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const section = params.get('section');
+      if (section && ['perfil', 'seguridad', 'contable', 'empleados', 'depuracion'].includes(section)) {
+        setExpandedSections(prev => ({
+          ...prev,
+          [section]: true
+        }));
+        setTimeout(() => {
+          const el = document.getElementById(`section-${section}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
+    }
   }, []);
 
   const openPinModal = (target: PinTarget) => {
@@ -450,10 +674,49 @@ export default function AjustesPage() {
 
   const handleLogout = () => { logout(); router.replace('/login'); };
 
-  const SectionHeader = ({ icon, title }: { icon: React.ReactNode; title: string }) => (
-    <div className="flex items-center gap-2 mb-4 mt-6 first:mt-0">
-      <div className="w-7 h-7 bg-zinc-100 rounded-lg flex items-center justify-center text-zinc-600 shrink-0">{icon}</div>
-      <h2 className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest">{title}</h2>
+  const CollapsibleSection = ({ 
+    id,
+    icon, 
+    title, 
+    isOpen, 
+    onToggle, 
+    children,
+    headerAddon
+  }: { 
+    id: string;
+    icon: React.ReactNode; 
+    title: string; 
+    isOpen: boolean; 
+    onToggle: () => void; 
+    children: React.ReactNode;
+    headerAddon?: React.ReactNode;
+  }) => (
+    <div id={`section-${id}`} className="border border-zinc-200/80 rounded-2xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden mb-4 transition-all duration-300">
+      <div 
+        onClick={onToggle}
+        className="flex items-center justify-between p-4.5 cursor-pointer hover:bg-zinc-50/50 select-none"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 bg-zinc-100 rounded-lg flex items-center justify-center text-zinc-650 shrink-0">
+            {icon}
+          </div>
+          <h2 className="text-[12.5px] font-black text-zinc-900 uppercase tracking-wider leading-none">
+            {title}
+          </h2>
+        </div>
+        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {headerAddon}
+          <button onClick={onToggle} className="p-1.5 rounded-lg hover:bg-zinc-200 text-zinc-400 hover:text-zinc-600 transition-colors">
+            {isOpen ? <ChevronUp size={16} strokeWidth={2.5} /> : <ChevronDown size={16} strokeWidth={2.5} />}
+          </button>
+        </div>
+      </div>
+      
+      {isOpen && (
+        <div className="border-t border-zinc-150 p-4 bg-white animate-in fade-in duration-200">
+          {children}
+        </div>
+      )}
     </div>
   );
 
@@ -467,23 +730,23 @@ export default function AjustesPage() {
     </div>
   );
 
-  const Card = ({ children }: { children: React.ReactNode }) => (
-    <div className="bg-white border border-zinc-200/80 rounded-2xl px-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)] divide-y divide-zinc-100">
-      {children}
-    </div>
-  );
-
   return (
-    <div className="space-y-1 pb-24 bg-[#fafafa]">
+    <div className="space-y-1 pb-24 bg-[#fafafa] px-4 sm:px-6">
       
-      <div className="mb-6">
+      <div className="mb-6 pt-4">
         <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight leading-tight">Ajustes</h2>
         <p className="text-[13px] font-medium text-zinc-500 mt-1">Jaroje Hotel · Versión 1.2.0</p>
       </div>
 
-      <SectionHeader icon={<Hotel size={15} strokeWidth={2.5} />} title="Perfil del Hotel" />
-      <Card>
-        <div className="py-4 flex items-center gap-4">
+      {/* 1. PERFIL DEL HOTEL */}
+      <CollapsibleSection
+        id="perfil"
+        icon={<Hotel size={15} strokeWidth={2.5} />}
+        title="Perfil del Hotel"
+        isOpen={expandedSections.perfil}
+        onToggle={() => toggleSection('perfil')}
+      >
+        <div className="py-2.5 flex items-center gap-4 border-b border-zinc-100 pb-4">
           <div className="w-14 h-14 rounded-xl bg-zinc-900 flex items-center justify-center shrink-0 shadow-sm">
             <svg viewBox="0 0 24 24" fill="none" className="w-7 h-7 text-white" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
@@ -497,112 +760,313 @@ export default function AjustesPage() {
             </div>
           </div>
         </div>
-        <Row label="Nombre del hotel" value="Condominios Jaroje" />
-        <Row label="Habitaciones" value="21 unidades" />
-      </Card>
+        <div className="divide-y divide-zinc-100">
+          <Row label="Nombre del hotel" value="Condominios Jaroje" />
+          <Row label="Habitaciones" value="21 unidades" />
+        </div>
+      </CollapsibleSection>
 
-      {/* Seguridad con PINs reales */}
-      <SectionHeader icon={<Shield size={15} strokeWidth={2.5} />} title="Seguridad y Acceso" />
-      <Card>
-        <Row label="Cambiar PIN Administrador" value="••••" onPress={() => openPinModal('admin')} />
-        <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
-        <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
-        <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
-      </Card>
+      {/* 2. SEGURIDAD Y ACCESO */}
+      <CollapsibleSection
+        id="seguridad"
+        icon={<Shield size={15} strokeWidth={2.5} />}
+        title="Seguridad y Acceso"
+        isOpen={expandedSections.seguridad}
+        onToggle={() => toggleSection('seguridad')}
+      >
+        <div className="divide-y divide-zinc-100">
+          <Row label="Cambiar PIN Administrador" value="••••" onPress={() => openPinModal('admin')} />
+          <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
+          <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
+          <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
+        </div>
+      </CollapsibleSection>
 
-      {/* Configuración Contable */}
-      <SectionHeader icon={<Hotel size={15} strokeWidth={2.5} />} title="Configuración Contable" />
-      <Card>
-        <Row label="Acomodar Cuentas" onPress={() => setShowAccountOrderModal(true)} />
-      </Card>
+      {/* 3. CONFIGURACIÓN CONTABLE */}
+      <CollapsibleSection
+        id="contable"
+        icon={<Database size={15} strokeWidth={2.5} />}
+        title="Configuración Contable"
+        isOpen={expandedSections.contable}
+        onToggle={() => toggleSection('contable')}
+      >
+        <div className="divide-y divide-zinc-100">
+          <Row label="Acomodar Cuentas" onPress={() => setShowAccountOrderModal(true)} />
+        </div>
+      </CollapsibleSection>
 
-      {/* Catálogo de Empleados (CRUD Manual) */}
-      <div className="flex items-center justify-between mb-4 mt-6">
-        <SectionHeader icon={<Users size={15} strokeWidth={2.5} />} title="Catálogo de Empleados" />
-        <button 
-          onClick={() => openEditEmployee()} 
-          className="text-xs font-black bg-zinc-900 text-white px-3 py-1.5 rounded-lg active:scale-95 transition-all shadow flex items-center gap-1 cursor-pointer"
-        >
-          <Plus size={13} strokeWidth={3} /> Nuevo Empleado
-        </button>
-      </div>
-      
-      <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] divide-y divide-zinc-100 overflow-hidden mb-6">
-        {isLoadingEmployees ? (
-          <div className="p-6 text-center text-zinc-400 text-xs font-medium flex items-center justify-center gap-2">
-            <div className="w-3.5 h-3.5 border-2 border-zinc-200 border-t-zinc-650 rounded-full animate-spin" />
-            Cargando plantilla de personal...
-          </div>
-        ) : employees.length === 0 ? (
-          <div className="p-6 text-center text-zinc-400 text-xs font-medium">
-            No hay empleados registrados. Crea uno nuevo.
-          </div>
-        ) : (
-          employees.map((emp, index) => {
-            const deptLabel = {
-              recepcion: 'Recepción',
-              limpieza: 'Limpieza',
-              mantenimiento: 'Mantenimiento'
-            }[emp.department as 'recepcion' | 'limpieza' | 'mantenimiento'] || emp.department;
-            const deptBg = {
-              recepcion: 'bg-indigo-50 text-indigo-650 border-indigo-100/50',
-              limpieza: 'bg-amber-50 text-amber-650 border-amber-100/50',
-              mantenimiento: 'bg-rose-50 text-rose-650 border-rose-100/50'
-            }[emp.department as 'recepcion' | 'limpieza' | 'mantenimiento'] || 'bg-gray-50 text-gray-650';
+      {/* 4. CATÁLOGO DE EMPLEADOS */}
+      <CollapsibleSection
+        id="empleados"
+        icon={<Users size={15} strokeWidth={2.5} />}
+        title="Catálogo de Empleados"
+        isOpen={expandedSections.empleados}
+        onToggle={() => toggleSection('empleados')}
+        headerAddon={
+          <button 
+            onClick={() => openEditEmployee()} 
+            className="text-[10px] font-black bg-zinc-900 text-white px-2.5 py-1.5 rounded-lg active:scale-95 transition-all shadow flex items-center gap-1 cursor-pointer select-none shrink-0"
+          >
+            <Plus size={12} strokeWidth={3} /> Nuevo Empleado
+          </button>
+        }
+      >
+        <div className="divide-y divide-zinc-100 -mx-4 -my-4 overflow-hidden">
+          {isLoadingEmployees ? (
+            <div className="p-6 text-center text-zinc-400 text-xs font-medium flex items-center justify-center gap-2">
+              <div className="w-3.5 h-3.5 border-2 border-zinc-200 border-t-zinc-650 rounded-full animate-spin" />
+              Cargando plantilla de personal...
+            </div>
+          ) : employees.length === 0 ? (
+            <div className="p-6 text-center text-zinc-400 text-xs font-medium">
+              No hay empleados registrados. Crea uno nuevo.
+            </div>
+          ) : (
+            employees.map((emp, index) => {
+              const deptLabel = {
+                recepcion: 'Recepción',
+                limpieza: 'Limpieza',
+                mantenimiento: 'Mantenimiento'
+              }[emp.department as 'recepcion' | 'limpieza' | 'mantenimiento'] || emp.department;
+              const deptBg = {
+                recepcion: 'bg-indigo-50 text-indigo-650 border-indigo-100/50',
+                limpieza: 'bg-amber-50 text-amber-650 border-amber-100/50',
+                mantenimiento: 'bg-rose-50 text-rose-650 border-rose-100/50'
+              }[emp.department as 'recepcion' | 'limpieza' | 'mantenimiento'] || 'bg-gray-50 text-gray-650';
 
-            return (
-              <div key={`${emp.employee_num}-${emp.full_name}-${emp.department}`} className="flex items-center justify-between p-4 hover:bg-zinc-50/40 transition-colors">
-                <div className="min-w-0">
-                  <h4 className="text-[14px] font-bold text-zinc-900 leading-tight">{emp.full_name}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50 font-mono">
-                      PIN: {emp.employee_num}
-                    </span>
-                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${deptBg}`}>
-                      {deptLabel}
-                    </span>
+              return (
+                <div key={`${emp.employee_num}-${emp.full_name}-${emp.department}`} className="flex items-center justify-between p-4 hover:bg-zinc-50/40 transition-colors">
+                  <div className="min-w-0">
+                    <h4 className="text-[14px] font-bold text-zinc-900 leading-tight">{emp.full_name}</h4>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50/50 px-1.5 py-0.5 rounded border border-indigo-100/50 font-mono">
+                        PIN: {emp.employee_num}
+                      </span>
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${deptBg}`}>
+                        {deptLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <button 
+                      onClick={() => handleMoveEmployee(index, 'up')}
+                      disabled={index === 0}
+                      className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="Mover arriba"
+                    >
+                      <ChevronUp size={13} />
+                    </button>
+                    <button 
+                      onClick={() => handleMoveEmployee(index, 'down')}
+                      disabled={index === employees.length - 1}
+                      className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                      title="Mover abajo"
+                    >
+                      <ChevronDown size={13} />
+                    </button>
+
+                    <div className="w-px h-5 bg-zinc-100 mx-1"></div>
+
+                    <button 
+                      onClick={() => openEditEmployee(emp)} 
+                      className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 transition-colors"
+                      title="Editar Empleado"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteEmployee(emp)} 
+                      className="p-2 rounded-lg hover:bg-rose-50 text-zinc-450 hover:text-rose-600 transition-colors"
+                      title="Dar de Baja"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-0.5 shrink-0">
-                  <button 
-                    onClick={() => handleMoveEmployee(index, 'up')}
-                    disabled={index === 0}
-                    className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                    title="Mover arriba"
-                  >
-                    <ChevronUp size={13} />
-                  </button>
-                  <button 
-                    onClick={() => handleMoveEmployee(index, 'down')}
-                    disabled={index === employees.length - 1}
-                    className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                    title="Mover abajo"
-                  >
-                    <ChevronDown size={13} />
-                  </button>
+              );
+            })
+          )}
+        </div>
+      </CollapsibleSection>
 
-                  <div className="w-px h-5 bg-zinc-100 mx-1"></div>
+      {/* 5. DEPURACIÓN Y LIMPIEZA DE DATOS */}
+      <CollapsibleSection
+        id="depuracion"
+        icon={<Sparkles size={15} className="text-zinc-700" />}
+        title="Depuración de datos"
+        isOpen={expandedSections.depuracion}
+        onToggle={() => toggleSection('depuracion')}
+      >
+        <div className="space-y-4">
+          <p className="text-[12px] text-zinc-450 font-semibold leading-normal">
+            Administra y depura registros históricos del sistema de forma masiva para mantener un rendimiento óptimo.
+          </p>
 
-                  <button 
-                    onClick={() => openEditEmployee(emp)} 
-                    className="p-2 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 transition-colors"
-                    title="Editar Empleado"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button 
-                    onClick={() => handleDeleteEmployee(emp)} 
-                    className="p-2 rounded-lg hover:bg-rose-50 text-zinc-450 hover:text-rose-600 transition-colors"
-                    title="Dar de Baja"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+          {/* Selector de Tabs de Depuración */}
+          <div className="flex bg-zinc-100 p-1 rounded-xl gap-1 select-none">
+            <button 
+              onClick={() => { setDepurarTab('logs'); setDepurarSelectedIds(new Set()); }}
+              className={`flex-1 py-2 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${depurarTab === 'logs' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/20' : 'text-zinc-500 hover:text-zinc-800'}`}
+            >
+              <History size={12} />
+              <span>Auditoría ({depurarLogs.length})</span>
+            </button>
+            <button 
+              onClick={() => { setDepurarTab('tasks'); setDepurarSelectedIds(new Set()); }}
+              className={`flex-1 py-2 text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${depurarTab === 'tasks' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/20' : 'text-zinc-500 hover:text-zinc-800'}`}
+            >
+              <Wrench size={12} />
+              <span>MTTO Resuelto ({depurarTasks.length})</span>
+            </button>
+          </div>
+
+          {/* Acciones y Selección por lote */}
+          <div className="bg-[#fafafa] border border-zinc-200/60 p-3 rounded-2xl space-y-3">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] font-black text-zinc-450 uppercase tracking-widest mr-1">Selección rápida:</span>
+              <button 
+                onClick={() => handleDepurarQuickSelect(30)}
+                className="px-2.5 py-1.5 bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              >
+                &gt; 30 días
+              </button>
+              <button 
+                onClick={() => handleDepurarQuickSelect(90)}
+                className="px-2.5 py-1.5 bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              >
+                &gt; 90 días
+              </button>
+              <button 
+                onClick={handleDepurarSelectAll}
+                className="px-2.5 py-1.5 bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-100 rounded-xl text-[10px] font-bold transition-all cursor-pointer"
+              >
+                Todos
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-zinc-200/50">
+              <span className="text-[12px] font-bold text-zinc-700">
+                Seleccionados: <span className="text-zinc-950 font-black">{depurarSelectedIds.size}</span>
+              </span>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                <button
+                  onClick={handleDepurarExportJSON}
+                  disabled={depurarSelectedIds.size === 0}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-3 py-2 bg-white border border-zinc-200 hover:border-zinc-350 text-zinc-700 disabled:opacity-50 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer"
+                >
+                  <Download size={13} />
+                  <span>Descargar JSON</span>
+                </button>
+                <button
+                  onClick={handleDepurarExportCSV}
+                  disabled={depurarSelectedIds.size === 0}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-3 py-2 bg-white border border-zinc-200 hover:border-zinc-350 text-zinc-700 disabled:opacity-50 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer"
+                >
+                  <Download size={13} />
+                  <span>Descargar CSV</span>
+                </button>
+                <button
+                  onClick={() => setShowPurgeConfirmModal(true)}
+                  disabled={depurarSelectedIds.size === 0}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1 px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-45 rounded-xl text-[11px] font-black tracking-wide shadow-sm active:scale-[0.97] transition-all cursor-pointer"
+                >
+                  <Trash2 size={13} />
+                  <span>Purgar</span>
+                </button>
               </div>
-            );
-          })
-        )}
-      </div>
+            </div>
+          </div>
+
+          {/* Tabla de registros (Scrollable horizontal) */}
+          <div className="border border-zinc-200 rounded-2xl overflow-hidden flex flex-col bg-white">
+            {isLoadingDepurar ? (
+              <div className="p-10 flex justify-center items-center gap-2 text-zinc-400 text-xs font-semibold">
+                <div className="w-4 h-4 border-2 border-zinc-200 border-t-zinc-650 rounded-full animate-spin" />
+                <span>Cargando historial...</span>
+              </div>
+            ) : activeDepurarData.length === 0 ? (
+              <div className="p-10 text-center text-zinc-400 text-[12px] font-semibold">
+                No hay registros resueltos/antiguos en esta sección.
+              </div>
+            ) : (
+              <div className="overflow-x-auto max-h-[300px] scrollbar-thin">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] font-bold text-zinc-400 uppercase tracking-wider select-none">
+                      <th className="p-3 w-10 text-center">
+                        <input 
+                          type="checkbox"
+                          checked={depurarSelectedIds.size === activeDepurarData.length}
+                          onChange={handleToggleDepurarAll}
+                          className="w-3.5 h-3.5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 cursor-pointer"
+                        />
+                      </th>
+                      <th className="p-3">Fecha</th>
+                      {depurarTab === 'logs' ? (
+                        <>
+                          <th className="p-3">Empleado</th>
+                          <th className="p-3">Módulo</th>
+                          <th className="p-3">Acción</th>
+                          <th className="p-3">Detalles</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="p-3">Ubicación</th>
+                          <th className="p-3">Reportado Por</th>
+                          <th className="p-3">Descripción</th>
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {activeDepurarData.map((item) => {
+                      const isChecked = depurarSelectedIds.has(String(item.id));
+                      const itemDateStr = format(new Date(item.created_at || item.resolved_at), 'dd/MM/yyyy HH:mm', { locale: es });
+                      
+                      return (
+                        <tr 
+                          key={item.id}
+                          onClick={() => handleToggleDepurarRow(String(item.id))}
+                          className={`hover:bg-zinc-50/50 transition-colors cursor-pointer text-[11.5px] ${isChecked ? 'bg-zinc-50' : ''}`}
+                        >
+                          <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <input 
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleToggleDepurarRow(String(item.id))}
+                              className="w-3.5 h-3.5 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 cursor-pointer"
+                            />
+                          </td>
+                          <td className="p-3 font-semibold text-zinc-700 whitespace-nowrap">{itemDateStr}</td>
+                          
+                          {depurarTab === 'logs' ? (
+                            <>
+                              <td className="p-3 font-bold text-zinc-900 truncate max-w-[100px]">{item.employee_name || 'Sistema'}</td>
+                              <td className="p-3 text-[10px] font-black uppercase text-zinc-500">
+                                <span className="bg-zinc-150 px-1 py-0.5 border border-zinc-200 rounded">
+                                  {item.module}
+                                </span>
+                              </td>
+                              <td className="p-3 text-zinc-800 whitespace-nowrap">{item.action?.replace(/_/g, ' ')}</td>
+                              <td className="p-3 text-zinc-500 truncate max-w-[160px] font-medium">{item.details}</td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-3 font-extrabold text-zinc-650">{item.room || 'General'}</td>
+                              <td className="p-3 font-bold text-zinc-950">{item.reported_by}</td>
+                              <td className="p-3 text-zinc-500 truncate max-w-[200px] font-medium">{item.description}</td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      </CollapsibleSection>
 
       <div className="mt-8 mb-4">
         <button 
@@ -615,7 +1079,7 @@ export default function AjustesPage() {
       </div>
 
       <p className="text-center text-[11px] text-zinc-300 font-medium pb-4">
-        Jaroje OS v1.2.0 · Catálogo Manual de Personal ✓
+        Jaroje OS v1.2.0 · Ajustes Inteligentes ✓
       </p>
 
       {/* Modal cambio PIN */}
@@ -994,6 +1458,75 @@ export default function AjustesPage() {
             </form>
           </div>
         </>
+      )}
+
+      {/* Modal de Advertencia Seguro (Doble Confirmación) de Purga */}
+      {showPurgeConfirmModal && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 border border-rose-100">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
+                <AlertTriangle className="text-rose-600 animate-bounce" size={24} />
+                Confirmación de Purga Permanente
+              </h3>
+              <button onClick={() => setShowPurgeConfirmModal(false)} className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors">
+                <X size={16} strokeWidth={3} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-rose-50 border border-rose-150 p-4.5 rounded-2xl">
+                <p className="text-[13px] font-semibold text-rose-800 leading-relaxed">
+                  ⚠️ <strong>¡CUIDADO!</strong> Estás a punto de eliminar de forma permanente <span className="font-black text-rose-900 underline">{depurarSelectedIds.size} registros</span> de la sección <strong>{depurarTab === 'logs' ? 'Historial de Auditoría' : 'Mantenimiento Resuelto'}</strong> de la base de datos de Supabase.
+                </p>
+                <p className="text-[11.5px] text-rose-700 mt-2 font-medium">
+                  Esta acción es física, inmediata e irreversible. Los datos no podrán recuperarse.
+                </p>
+              </div>
+
+              {/* Checkbox de Confirmación */}
+              <label className="flex items-start gap-3 p-3.5 border border-zinc-200 hover:border-zinc-300 rounded-2xl cursor-pointer select-none transition-colors">
+                <input 
+                  type="checkbox"
+                  checked={purgeBackedUpConfirmed}
+                  onChange={(e) => setPurgeBackedUpConfirmed(e.target.checked)}
+                  className="w-5 h-5 rounded border-zinc-300 text-rose-650 focus:ring-rose-600 mt-0.5 shrink-0"
+                />
+                <div className="text-[12px] font-bold text-zinc-800 leading-tight">
+                  <span>Confirmo que he descargado una copia de seguridad en JSON o CSV y la he guardado en mi equipo local para futuras referencias.</span>
+                </div>
+              </label>
+
+              {/* Botones de acción final */}
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  onClick={() => setShowPurgeConfirmModal(false)}
+                  disabled={isPurging}
+                  className="flex-1 py-3.5 bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold rounded-2xl hover:bg-zinc-200 transition-all text-center text-[13px] cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handlePurgeSubmit}
+                  disabled={!purgeBackedUpConfirmed || isPurging}
+                  className="flex-1 py-3.5 bg-rose-600 disabled:opacity-40 hover:bg-rose-700 text-white font-extrabold rounded-2xl transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                >
+                  {isPurging ? 'Borrando...' : `Purgar permanentemente ✓`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 left-4 right-4 z-[9999] animate-in fade-in slide-in-from-bottom-5">
+          <div className="bg-zinc-900 text-white text-[13.5px] font-bold px-5 py-4 rounded-2xl text-center shadow-2xl flex items-center justify-center gap-2.5 max-w-md mx-auto border border-zinc-800">
+            <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        </div>
       )}
 
     </div>

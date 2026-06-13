@@ -364,7 +364,9 @@ export default function AnalyticsPage() {
   const filteredFinanzas = useMemo(() => {
     return finanzas.filter(f => {
       if (!f.date) return false;
-      return f.date >= startDate && f.date <= endDate;
+      const matchStart = startDate ? f.date >= startDate : true;
+      const matchEnd = endDate ? f.date <= endDate : true;
+      return matchStart && matchEnd;
     });
   }, [finanzas, startDate, endDate]);
 
@@ -396,9 +398,21 @@ export default function AnalyticsPage() {
 
   // Ocupación calculada de forma dinámica en el rango
   const { ocupacionPeriodo, totalNochesPeriodo } = useMemo(() => {
-    if (!startDate || !endDate) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0 };
-    const sDate = new Date(startDate + 'T12:00:00');
-    const eDate = new Date(endDate + 'T12:00:00');
+    let sDate: Date;
+    let eDate: Date;
+    
+    if (!startDate || !endDate) {
+      if (reservas.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0 };
+      const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
+      const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
+      if (checkIns.length === 0 || checkOuts.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0 };
+      sDate = new Date(checkIns[0] + 'T12:00:00');
+      eDate = new Date(checkOuts[checkOuts.length - 1] + 'T12:00:00');
+    } else {
+      sDate = new Date(startDate + 'T12:00:00');
+      eDate = new Date(endDate + 'T12:00:00');
+    }
+    
     const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
     const totalPossibleRoomNights = 22 * rangeDays; // 22 Habitaciones físicas
 
@@ -561,7 +575,9 @@ export default function AnalyticsPage() {
     // Filtrar reservas que caen en el rango de fechas
     const rangeReservas = reservas.filter(r => {
       if (!r.check_in) return false;
-      return r.check_in >= startDate && r.check_in <= endDate;
+      const matchStart = startDate ? r.check_in >= startDate : true;
+      const matchEnd = endDate ? r.check_in <= endDate : true;
+      return matchStart && matchEnd;
     });
 
     const totalN = rangeReservas.reduce((s, r) => s + (r.nights || 0), 0);
@@ -656,8 +672,8 @@ export default function AnalyticsPage() {
                 <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Filtrado interactivo de cantidades</p>
               </div>
             </div>
-            <div className="flex flex-row items-center gap-3">
-              <div className="flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5">
+            <div className="flex flex-row items-center gap-3 flex-wrap md:flex-nowrap">
+              <div className="flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px]">
                 <span className="text-[9px] font-extrabold text-zinc-450 uppercase tracking-widest">Desde</span>
                 <input
                   type="date"
@@ -666,7 +682,7 @@ export default function AnalyticsPage() {
                   className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
                 />
               </div>
-              <div className="flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5">
+              <div className="flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px]">
                 <span className="text-[9px] font-extrabold text-zinc-450 uppercase tracking-widest">Hasta</span>
                 <input
                   type="date"
@@ -675,6 +691,17 @@ export default function AnalyticsPage() {
                   className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
                 />
               </div>
+              {(startDate || endDate) && (
+                <button
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                  }}
+                  className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-xl text-[11px] font-extrabold transition-all active:scale-95 cursor-pointer shrink-0"
+                >
+                  Restablecer
+                </button>
+              )}
             </div>
           </div>
 

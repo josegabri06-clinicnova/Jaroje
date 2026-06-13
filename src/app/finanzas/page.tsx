@@ -1675,6 +1675,7 @@ export default function FinanzasPage() {
                       <option>Personal</option>
                       <option>Tarjeta de Crédito</option>
                       <option>Transferencia</option>
+                      <option>Ajuste</option>
                       <option>Otros</option>
                     </>
                   ) : (
