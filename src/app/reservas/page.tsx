@@ -1390,6 +1390,54 @@ export default function ReservasList() {
                 </div>
 
                 <StatusBadge status={r.status} isCheckedIn={r.is_checked_in} isCheckedOut={r.is_checked_out} />
+
+                {!r.is_acknowledged && r.status !== 'cancelled' && (
+                  <button
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        const { error } = await supabase.from('checkins').upsert({
+                          reservation_id: r.id.toString(),
+                          guest_name: r.guest_name,
+                          room: r.room_name,
+                          check_in_date: r.check_in,
+                          check_out_date: r.check_out,
+                          status: 'acknowledged',
+                          checked_in_by: 'Admin'
+                        }, { onConflict: 'reservation_id' });
+                        if (error) throw error;
+                        
+                        setReservas(prev => prev.map(res => res.id === r.id ? { ...res, is_acknowledged: true } : res));
+                        
+                        const emp = getActiveEmployee('recepcion');
+                        const employeeNum = emp?.employee_num || '999';
+                        const employeeName = emp?.full_name || 'Administrador';
+                        await fetch('/api/employee-logs', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            employee_num: employeeNum,
+                            employee_name: employeeName,
+                            department: emp?.department || 'recepcion',
+                            module: 'recepcion',
+                            action: 'reserva_enterado',
+                            room: r.room_name || 'General',
+                            details: JSON.stringify({
+                              text: `${r.guest_name} ${r.num_adult || 1}/${r.num_child || 0} (ID: ${r.id}) de la Habitación ${r.room_name || 'General'} - Marcó la reserva como enterado desde el listado.`,
+                              bookingId: r.id
+                            })
+                          })
+                        });
+                      } catch (err) {
+                        console.error(err);
+                        alert('Error al marcar como revisado');
+                      }
+                    }}
+                    className="w-full mt-2.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
+                  >
+                    ✓ REVISADO (Quitar de Nuevas)
+                  </button>
+                )}
               </div>
             );
           })}
@@ -2017,7 +2065,7 @@ export default function ReservasList() {
                   {ackLoading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <span>✓ Marcar como Enterado</span>
+                    <span>✓ REVISADO (Quitar de Nuevas)</span>
                   )}
                 </button>
               )}

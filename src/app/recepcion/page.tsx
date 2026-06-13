@@ -3554,91 +3554,100 @@ export default function RecepcionPage() {
                   </div>
 
                   {/* Huéspedes Steppers for Existing Reservation */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Editar Número de Huéspedes</span>
-                    <div className="grid grid-cols-2 gap-3.5">
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Adultos</label>
-                        <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
-                          <button
-                            type="button"
-                            onClick={() => setEditedAdults(prev => Math.max(1, prev - 1))}
-                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
-                          >
-                            <Minus size={14} strokeWidth={2.5} />
-                          </button>
-                          <input 
-                            type="number" 
-                            required
-                            min={1}
-                            className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            value={editedAdults}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '') {
-                                setEditedAdults('' as any);
-                                return;
-                              }
-                              const num = Number(val);
-                              if (isNaN(num)) return;
-                              setEditedAdults(num);
-                            }}
-                            onBlur={() => {
-                              const num = Math.max(1, Number(editedAdults) || 1);
-                              setEditedAdults(num);
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setEditedAdults(prev => prev + 1)}
-                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
-                          >
-                            <Plus size={14} strokeWidth={2.5} />
-                          </button>
+                  {(() => {
+                    const rules = getCapacityRules(selectedReserva.room);
+                    return (
+                      <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Editar Número de Huéspedes</span>
+                        <div className="grid grid-cols-2 gap-3.5">
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Adultos</label>
+                            <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                              <button
+                                type="button"
+                                onClick={() => setEditedAdults(prev => Math.max(1, prev - 1))}
+                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                              >
+                                <Minus size={14} strokeWidth={2.5} />
+                              </button>
+                              <input 
+                                type="number" 
+                                required
+                                min={1}
+                                className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                value={editedAdults}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setEditedAdults('' as any);
+                                    return;
+                                  }
+                                  const num = Number(val);
+                                  if (isNaN(num)) return;
+                                  const maxAllowed = Math.max(1, rules.max - Number(editedChildren || 0));
+                                  setEditedAdults(Math.min(maxAllowed, Math.max(1, num)));
+                                }}
+                                onBlur={() => {
+                                  const num = Math.max(1, Number(editedAdults) || 1);
+                                  const maxAllowed = Math.max(1, rules.max - Number(editedChildren || 0));
+                                  setEditedAdults(Math.min(maxAllowed, num));
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setEditedAdults(prev => (prev + Number(editedChildren || 0) < rules.max ? prev + 1 : prev))}
+                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                              >
+                                <Plus size={14} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Niños</label>
+                            <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                              <button
+                                type="button"
+                                onClick={() => setEditedChildren(prev => Math.max(0, prev - 1))}
+                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                              >
+                                <Minus size={14} strokeWidth={2.5} />
+                              </button>
+                              <input 
+                                type="number" 
+                                required
+                                min={0}
+                                className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                value={editedChildren}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (val === '') {
+                                    setEditedChildren('' as any);
+                                    return;
+                                  }
+                                  const num = Number(val);
+                                  if (isNaN(num)) return;
+                                  const maxAllowed = Math.max(0, rules.max - Number(editedAdults || 0));
+                                  setEditedChildren(Math.min(maxAllowed, Math.max(0, num)));
+                                }}
+                                onBlur={() => {
+                                  const num = Math.max(0, Number(editedChildren) || 0);
+                                  const maxAllowed = Math.max(0, rules.max - Number(editedAdults || 0));
+                                  setEditedChildren(Math.min(maxAllowed, num));
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setEditedChildren(prev => (Number(editedAdults || 0) + prev < rules.max ? prev + 1 : prev))}
+                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                              >
+                                <Plus size={14} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Niños</label>
-                        <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
-                          <button
-                            type="button"
-                            onClick={() => setEditedChildren(prev => Math.max(0, prev - 1))}
-                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
-                          >
-                            <Minus size={14} strokeWidth={2.5} />
-                          </button>
-                          <input 
-                            type="number" 
-                            required
-                            min={0}
-                            className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                            value={editedChildren}
-                            onChange={e => {
-                              const val = e.target.value;
-                              if (val === '') {
-                                setEditedChildren('' as any);
-                                return;
-                              }
-                              const num = Number(val);
-                              if (isNaN(num)) return;
-                              setEditedChildren(num);
-                            }}
-                            onBlur={() => {
-                              const num = Math.max(0, Number(editedChildren) || 0);
-                              setEditedChildren(num);
-                            }}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setEditedChildren(prev => prev + 1)}
-                            className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
-                          >
-                            <Plus size={14} strokeWidth={2.5} />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   {/* 2. Teléfono */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
@@ -3758,7 +3767,12 @@ export default function RecepcionPage() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Tarifa diaria</span>
                       <p className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
-                        {fmtCurrency(selectedReserva.price_per_night || Math.round((selectedReserva.price_estimate || 0) / (selectedReserva.nights || 1)), selectedReserva.guest_name)}
+                        {fmtCurrency(
+                          selectedReserva.id === 'walkin'
+                            ? (selectedReserva.price_per_night || 0)
+                            : Math.round(Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) / (selectedReserva.nights || 1)),
+                          selectedReserva.guest_name
+                        )}
                       </p>
                     </div>
                   </div>
@@ -3768,7 +3782,12 @@ export default function RecepcionPage() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total de la reserva</span>
                       <p className="text-[15px] font-black text-zinc-950 mt-0.5">
-                        {fmtCurrency(selectedReserva.price_estimate || 0, selectedReserva.guest_name)}
+                        {fmtCurrency(
+                          selectedReserva.id === 'walkin'
+                            ? (selectedReserva.price_estimate || 0)
+                            : Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)),
+                          selectedReserva.guest_name
+                        )}
                       </p>
                     </div>
                   </div>
@@ -3815,7 +3834,12 @@ export default function RecepcionPage() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
                       <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                        {fmtCurrency(selectedReserva.deposit || 0, selectedReserva.guest_name)}
+                        {fmtCurrency(
+                          selectedReserva.id === 'walkin'
+                            ? 0
+                            : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0)),
+                          selectedReserva.guest_name
+                        )}
                       </p>
                     </div>
                   </div>
@@ -3825,9 +3849,16 @@ export default function RecepcionPage() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       <p className={`text-[15px] font-black mt-0.5 ${
-                        (selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'
+                        (selectedReserva.id === 'walkin'
+                          ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
+                          : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0)))) > 0 ? 'text-amber-600' : 'text-zinc-650'
                       }`}>
-                        {fmtCurrency(selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)), selectedReserva.guest_name)}
+                        {fmtCurrency(
+                          selectedReserva.id === 'walkin'
+                            ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
+                            : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0))),
+                          selectedReserva.guest_name
+                        )}
                       </p>
                     </div>
                   </div>
@@ -4035,15 +4066,46 @@ export default function RecepcionPage() {
                     )}
                   </div>
 
+                  {/* Resumen de Huéspedes (Igual que se maneja en Reservas) */}
+                  {(() => {
+                    if (selectedReserva.id === 'walkin') return null;
+                    const rules = getCapacityRules(selectedReserva.room);
+                    const totalGuests = Number(editedAdults || 0) + Number(editedChildren || 0);
+                    const extraGuests = Math.max(0, totalGuests - rules.base);
+                    const costPerNight = extraGuests * 500;
+                    const totalCost = costPerNight * (selectedReserva.nights || 1);
+
+                    return (
+                      <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-2 text-left shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Resumen de Huéspedes</span>
+                          <span className="text-[10px] font-bold text-zinc-500 bg-zinc-200/60 px-2 py-0.5 rounded-full">
+                            Base: {rules.base} / Máx: {rules.max}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[13px] font-semibold text-zinc-800">
+                          <span>Total Huéspedes:</span>
+                          <span>{totalGuests} ({editedAdults}A / {editedChildren}N)</span>
+                        </div>
+                        {extraGuests > 0 && (
+                          <div className="border-t border-zinc-200/60 pt-2 flex justify-between items-center text-[12px] text-amber-600 font-bold">
+                            <span>Huéspedes adicionales con costo ({extraGuests}):</span>
+                            <span>${costPerNight.toLocaleString('es-MX')}/noche (Total: ${totalCost.toLocaleString('es-MX')})</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Adeudo por Pagar */}
                   {(() => {
-                    const totalVal = selectedReserva.price_estimate || 0;
-                    const depositVal = selectedReserva.id === 'walkin' ? Number(paymentAmount || 0) : (selectedReserva.deposit || 0);
-                    const balanceVal = selectedReserva.id === 'walkin'
-                      ? Math.max(0, totalVal - depositVal)
-                      : (selectedReserva.balance !== undefined
-                          ? selectedReserva.balance
-                          : totalVal - depositVal);
+                    const totalVal = selectedReserva.id === 'walkin'
+                      ? (selectedReserva.price_estimate || 0)
+                      : Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0));
+                    const depositVal = selectedReserva.id === 'walkin'
+                      ? Number(paymentAmount || 0)
+                      : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
+                    const balanceVal = Math.max(0, totalVal - depositVal);
 
                     if (balanceVal <= 0) {
                       return (
