@@ -1398,7 +1398,7 @@ export default function CalendarPage() {
             <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/30 shrink-0">
               <div>
                 <h3 className="text-[16px] font-bold text-zinc-950">
-                  {selectedReserva.checked_in 
+                  {(selectedReserva.checked_in || userRole === 'admin')
                     ? (isEditingRes ? 'Editar Reserva' : 'Detalles de Reserva') 
                     : 'Proceso de Check-In'}
                 </h3>
@@ -1798,8 +1798,8 @@ export default function CalendarPage() {
                     </div>
                   )}
 
-                  {/* Registrar Anticipo Button & Panel (Only if checked_in is true) */}
-                  {selectedReserva.checked_in && (
+                  {/* Registrar Anticipo Button & Panel (Only if checked_in is true or user is admin) */}
+                  {(selectedReserva.checked_in || userRole === 'admin') && (
                     <div className="pt-3 border-t border-zinc-200/40 space-y-2.5">
                       {showAbonoFlow ? (
                         <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 text-left">
@@ -1944,8 +1944,8 @@ export default function CalendarPage() {
                 </div>
               )}
 
-              {/* Proceso Check-In / Payment Flow (Only if checked_in is false) */}
-              {!selectedReserva.checked_in && (
+              {/* Proceso Check-In / Payment Flow (Only if checked_in is false and user is not admin) */}
+              {!selectedReserva.checked_in && userRole !== 'admin' && (
                 <div className="pt-2">
                   {showPaymentFlow ? (
                     <div className="space-y-4 bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl animate-in fade-in duration-200">
