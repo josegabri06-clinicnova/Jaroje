@@ -47,6 +47,15 @@ function DoubleBarChart({
     return `MX$${Math.round(v).toLocaleString('es-MX')}`;
   };
 
+  const formatCompactValue = (v: number) => {
+    if (isPercentage) return `${Math.round(v)}%`;
+    const absV = Math.abs(v);
+    if (absV === 0) return 'MX$0';
+    if (absV >= 1000000) return `${v < 0 ? '-' : ''}MX$${(absV / 1000000).toFixed(1)}M`;
+    if (absV >= 1000) return `${v < 0 ? '-' : ''}MX$${Math.round(absV / 1000)}k`;
+    return `${v < 0 ? '-' : ''}MX$${Math.round(absV)}`;
+  };
+
   // Encontrar el valor máximo y mínimo para escalar verticalmente (soportando negativos)
   const maxVal = Math.max(...data.map(d => Math.max(d.prevVal, d.currVal, 0)), 1);
   const minVal = Math.min(...data.map(d => Math.min(d.prevVal, d.currVal, 0)), 0);
@@ -64,6 +73,21 @@ function DoubleBarChart({
   const growthText = isPercentage
     ? `${isPositiveGrowth ? '+' : ''}${growth.toFixed(1)}%`
     : `${isPositiveGrowth ? '+' : ''}${growth.toFixed(1)}%`;
+
+  // Generar las marcas del eje Y (ticks)
+  const ticks = useMemo(() => {
+    if (isPercentage) {
+      return [100, 80, 60, 40, 20, 0];
+    }
+    const step = range / 4;
+    return [
+      maxVal,
+      maxVal - step,
+      maxVal - step * 2,
+      maxVal - step * 3,
+      minVal
+    ];
+  }, [maxVal, minVal, range, isPercentage]);
 
   return (
     <div className="bg-white border border-zinc-200/80 rounded-[32px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)] space-y-6 flex flex-col">
@@ -98,83 +122,117 @@ function DoubleBarChart({
 
       {/* Área de columnas */}
       <div className="w-full overflow-x-auto pb-2 -mx-2 px-2 scrollbar-thin">
-        <div className="min-w-[600px] pt-6 relative">
+        <div className="min-w-[650px] pt-6 flex flex-col relative">
           
-          {/* Líneas auxiliares horizontales */}
-          <div className="absolute inset-x-0 h-40 border-b border-zinc-100 pointer-events-none" style={{ top: '24px' }} />
-          <div className="absolute inset-x-0 h-20 border-b border-zinc-100 pointer-events-none" style={{ top: '24px' }} />
-          
-          {/* Línea base cero si existen valores negativos (ej. pérdida en utilidad) */}
-          {zeroPct > 0 && zeroPct < 100 && (
-            <div 
-              className="absolute inset-x-0 border-t-2 border-dashed border-zinc-300 pointer-events-none z-10"
-              style={{ bottom: `${zeroPct + 24}px` }}
-            />
-          )}
+          <div className="flex relative h-40">
+            {/* Eje Y (Etiquetas) */}
+            <div className="w-[70px] h-full relative pr-2 select-none">
+              {ticks.map((tickVal, idx) => {
+                const pct = range > 0 ? ((tickVal - minVal) / range) * 100 : 0;
+                return (
+                  <span 
+                    key={idx} 
+                    className="absolute right-2 text-[9px] font-bold text-zinc-400 whitespace-nowrap transition-all translate-y-1/2" 
+                    style={{ bottom: `${pct}%` }}
+                  >
+                    {formatCompactValue(tickVal)}
+                  </span>
+                );
+              })}
+            </div>
 
-          {/* Columnas comparativas */}
-          <div className="flex items-end justify-between h-40 relative z-20">
-            {data.map((item) => {
-              const prevHeight = range > 0 ? (Math.abs(item.prevVal) / range) * 100 : 0;
-              const currHeight = range > 0 ? (Math.abs(item.currVal) / range) * 100 : 0;
+            {/* Área de la gráfica (Líneas y barras) */}
+            <div className="flex-1 h-full relative border-l border-zinc-150 pl-1">
+              
+              {/* Líneas auxiliares horizontales */}
+              {ticks.map((tickVal, idx) => {
+                const pct = range > 0 ? ((tickVal - minVal) / range) * 100 : 0;
+                return (
+                  <div 
+                    key={idx} 
+                    className="absolute inset-x-0 border-b border-zinc-100 pointer-events-none" 
+                    style={{ bottom: `${pct}%` }} 
+                  />
+                );
+              })}
+              
+              {/* Línea base cero si existen valores negativos (ej. pérdida en utilidad) */}
+              {zeroPct > 0 && zeroPct < 100 && (
+                <div 
+                  className="absolute inset-x-0 border-t-2 border-dashed border-zinc-300 pointer-events-none z-10"
+                  style={{ bottom: `${zeroPct}%` }}
+                />
+              )}
 
-              const prevIsNegative = item.prevVal < 0;
-              const currIsNegative = item.currVal < 0;
+              {/* Columnas comparativas */}
+              <div className="flex items-end justify-between h-full relative z-20">
+                {data.map((item) => {
+                  const prevHeight = range > 0 ? (Math.abs(item.prevVal) / range) * 100 : 0;
+                  const currHeight = range > 0 ? (Math.abs(item.currVal) / range) * 100 : 0;
 
-              const prevStyle = prevIsNegative
-                ? { height: `${prevHeight}%`, top: `${100 - zeroPct}%`, bottom: 'auto' }
-                : { height: `${prevHeight}%`, bottom: `${zeroPct}%`, top: 'auto' };
+                  const prevIsNegative = item.prevVal < 0;
+                  const currIsNegative = item.currVal < 0;
 
-              const currStyle = currIsNegative
-                ? { height: `${currHeight}%`, top: `${100 - zeroPct}%`, bottom: 'auto' }
-                : { height: `${currHeight}%`, bottom: `${zeroPct}%`, top: 'auto' };
+                  const prevStyle = prevIsNegative
+                    ? { height: `${prevHeight}%`, top: `${100 - zeroPct}%`, bottom: 'auto' }
+                    : { height: `${prevHeight}%`, bottom: `${zeroPct}%`, top: 'auto' };
 
-              return (
-                <div key={item.label} className="flex-1 flex flex-col items-center group relative h-full">
-                  
-                  {/* Contenedor de barras dobles */}
-                  <div className="w-full flex justify-center gap-1 h-full relative">
-                    
-                    {/* Barra Año Anterior */}
-                    <div 
-                      className={`w-3.5 rounded-t-sm hover:opacity-85 transition-all cursor-pointer relative ${bgClassPrev} ${
-                        prevIsNegative ? 'rounded-b-sm rounded-t-none bg-rose-200 border border-rose-300' : ''
-                      }`}
-                      style={prevStyle}
-                    >
-                      {/* Tooltip flotante */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-zinc-950 text-white text-[9px] font-bold px-2 py-1 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
-                        {prevYear} · {item.label}: {formatValue(item.prevVal)}
+                  const currStyle = currIsNegative
+                    ? { height: `${currHeight}%`, top: `${100 - zeroPct}%`, bottom: 'auto' }
+                    : { height: `${currHeight}%`, bottom: `${zeroPct}%`, top: 'auto' };
+
+                  return (
+                    <div key={item.label} className="flex-1 flex flex-col items-center group relative h-full">
+                      
+                      {/* Contenedor de barras dobles */}
+                      <div className="w-full h-full relative">
+                        
+                        {/* Barra Año Anterior */}
+                        <div 
+                          className={`w-3.5 rounded-t-sm hover:opacity-85 transition-all cursor-pointer absolute ${bgClassPrev} ${
+                            prevIsNegative ? 'rounded-b-sm rounded-t-none bg-rose-200 border border-rose-300' : ''
+                          }`}
+                          style={{ ...prevStyle, left: 'calc(50% - 16px)' }}
+                        >
+                          {/* Tooltip flotante */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-zinc-950 text-white text-[9px] font-bold px-2 py-1 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
+                            {prevYear} · {item.label}: {formatValue(item.prevVal)}
+                          </div>
+                        </div>
+
+                        {/* Barra Año Actual */}
+                        <div 
+                          className={`w-3.5 rounded-t-sm hover:opacity-85 transition-all cursor-pointer absolute ${bgClassCurr} ${
+                            currIsNegative ? 'rounded-b-sm rounded-t-none bg-rose-500 border border-rose-600' : ''
+                          }`}
+                          style={{ ...currStyle, right: 'calc(50% - 16px)' }}
+                        >
+                          {/* Tooltip flotante */}
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-zinc-950 text-white text-[9px] font-bold px-2 py-1 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
+                            {currYear} · {item.label}: {formatValue(item.currVal)}
+                          </div>
+                        </div>
+
                       </div>
+
                     </div>
+                  );
+                })}
+              </div>
 
-                    {/* Barra Año Actual */}
-                    <div 
-                      className={`w-3.5 rounded-t-sm hover:opacity-85 transition-all cursor-pointer relative ${bgClassCurr} ${
-                        currIsNegative ? 'rounded-b-sm rounded-t-none bg-rose-500 border border-rose-600' : ''
-                      }`}
-                      style={currStyle}
-                    >
-                      {/* Tooltip flotante */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-zinc-950 text-white text-[9px] font-bold px-2 py-1 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
-                        {currYear} · {item.label}: {formatValue(item.currVal)}
-                      </div>
-                    </div>
-
-                  </div>
-
-                </div>
-              );
-            })}
+            </div>
           </div>
 
           {/* Eje X (Meses) */}
-          <div className="flex justify-between mt-3 pt-2 border-t border-zinc-200/80 select-none">
-            {data.map(item => (
-              <span key={item.label} className="flex-1 text-center text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
-                {item.label}
-              </span>
-            ))}
+          <div className="flex">
+            <div className="w-[70px] shrink-0 pr-2" />
+            <div className="flex-1 flex justify-between mt-3 pt-2 border-t border-zinc-200/80 select-none pl-1">
+              {data.map(item => (
+                <span key={item.label} className="flex-1 text-center text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                  {item.label}
+                </span>
+              ))}
+            </div>
           </div>
 
         </div>
