@@ -115,13 +115,7 @@ export default function VercelActionForm() {
   const router = useRouter();
   const [mode, setMode] = useState<'reserva' | 'bloqueo'>('reserva');
   const [loading, setLoading] = useState(false);
-  
   const [todayStr, setTodayStr] = useState('');
-
-  useEffect(() => {
-    setTodayStr(getLocalDateStr());
-  }, []);
-  
   const [form, setForm] = useState({
     roomId: '',
     unitId: '',
@@ -139,10 +133,25 @@ export default function VercelActionForm() {
     notes: '',
     extraGuestSurcharge: ''
   });
-
   const [groupRoomRates, setGroupRoomRates] = useState<Record<string, string>>({});
-
   const [nights, setNights] = useState<number | ''>(1);
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [loadingInventory, setLoadingInventory] = useState(false);
+  const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
+  const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
+  const [isDepositEdited, setIsDepositEdited] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
+  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35 });
+  const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
+  const [formAccountId, setFormAccountId] = useState('');
+  const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
+
+  useEffect(() => {
+    setTodayStr(getLocalDateStr());
+  }, []);
 
   const maxCapacity = useMemo(() => {
     const roomsToBook = form.groupRooms && form.groupRooms.length > 0
@@ -157,22 +166,6 @@ export default function VercelActionForm() {
     });
     return totalMax;
   }, [form.roomId, form.unitId, form.groupRooms, capacitySettings]);
-
-  const [inventory, setInventory] = useState<any[]>([]);
-  const [loadingInventory, setLoadingInventory] = useState(false);
-
-  const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
-  const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
-  const [isDepositEdited, setIsDepositEdited] = useState(false);
-  const [pinInput, setPinInput] = useState('');
-  const [showPinModal, setShowPinModal] = useState(false);
-
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
-  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35 });
-  const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
-  const [formAccountId, setFormAccountId] = useState('');
-  const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
 
   const distributeGuestsInRooms = (rooms: any[], numAdults: number, numChildren: number) => {
     let adultsLeft = Math.max(0, numAdults);
