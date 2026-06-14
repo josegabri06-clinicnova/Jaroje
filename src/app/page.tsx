@@ -288,7 +288,7 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, []);
   const llegadasHoy = reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
-  const salidasHoy = reservas.filter(r => r.check_out === todayStr);
+  const salidasHoy = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr).slice(0, 5);
 
   // WhatsApp — semáforo de urgencia
@@ -449,7 +449,7 @@ export default function AdminDashboard() {
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-amber-500">{salidasHoy.length}</p>
-          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen</p>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Por salir</p>
         </button>
       </div>
 
@@ -648,10 +648,10 @@ export default function AdminDashboard() {
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
             <ArrowUpRight size={13} className="text-amber-500" />
-            Salidas Hoy
+            Pendientes por Salir
           </h3>
           <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">
-            {salidasHoy.length} salen
+            {salidasHoy.length} por salir
           </span>
         </div>
 
@@ -661,7 +661,7 @@ export default function AdminDashboard() {
               <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
             </div>
           ) : salidasHoy.length === 0 ? (
-            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay salidas programadas para hoy.</div>
+            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay salidas pendientes para hoy.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[850px]">
@@ -1340,7 +1340,7 @@ export default function AdminDashboard() {
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = llegadasHoy;
         } else if (kpiModalType === 'salen') {
-          title = 'Salidas Hoy';
+          title = 'Pendientes por Salir';
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
           filtered = salidasHoy;
         }

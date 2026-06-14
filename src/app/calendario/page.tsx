@@ -1341,7 +1341,7 @@ export default function CalendarPage() {
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayActive = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in))).length;
   const todayArrivals = reservas.filter(r => r.check_in === todayStr).length;
-  const todayDepartures = reservas.filter(r => r.check_out === todayStr).length;
+  const todayDepartures = reservas.filter(r => r.check_out === todayStr && !r.checked_out).length;
 
   return (
     <div className="pb-28 bg-[#f8f8fa] min-h-screen">
@@ -1381,7 +1381,7 @@ export default function CalendarPage() {
           className="bg-amber-50 border border-amber-100 rounded-2xl p-3 text-center cursor-pointer hover:bg-amber-100/65 hover:border-amber-200 active:scale-95 transition-all outline-none block w-full"
         >
           <p className="text-[20px] font-bold text-amber-700">{todayDepartures}</p>
-          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Salen hoy</p>
+          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Por salir</p>
         </button>
       </div>
 
@@ -2530,9 +2530,9 @@ export default function CalendarPage() {
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = reservas.filter(r => r.check_in === todayStr);
         } else if (kpiModalType === 'salen') {
-          title = 'Salidas Hoy';
+          title = 'Pendientes por Salir';
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
-          filtered = reservas.filter(r => r.check_out === todayStr);
+          filtered = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
         }
 
         return (

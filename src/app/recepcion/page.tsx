@@ -1721,7 +1721,7 @@ export default function RecepcionPage() {
   }, []);
 
   const llegadas = reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
-  const salidas = reservas.filter(r => r.check_out === todayStr);
+  const salidas = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3091,7 +3091,7 @@ export default function RecepcionPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-amber-500">{salidas.length}</p>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Por salir</p>
             </button>
           </div>
 
@@ -3261,16 +3261,16 @@ export default function RecepcionPage() {
             <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Salidas Hoy</h3>
+                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Pendientes por Salir</h3>
               </div>
               <span className="text-[11px] font-bold bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-100">
-                {salidas.length} salidas
+                {salidas.length} por salir
               </span>
             </div>
 
             {salidas.length === 0 ? (
               <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
-                No hay salidas programadas para hoy.
+                No hay salidas pendientes para hoy.
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -5424,7 +5424,7 @@ export default function RecepcionPage() {
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = llegadas;
         } else if (kpiModalType === 'salen') {
-          title = 'Salidas Hoy';
+          title = 'Pendientes por Salir';
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
           filtered = salidas;
         }

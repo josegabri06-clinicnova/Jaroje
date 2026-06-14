@@ -515,7 +515,7 @@ export default function StaffPage() {
   }, []);
 
   const llegadas = reservas.filter(r => r.check_in === todayStr);
-  const salidas  = reservas.filter(r => r.check_out === todayStr);
+  const salidas  = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
   const ocupadas = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr);
 
   const getScheduledCleanings = (): CleanTask[] => {
@@ -1078,7 +1078,7 @@ export default function StaffPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-center items-center cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-2xl font-black text-amber-500 leading-none mb-1">{salidas.length}</p>
-              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">Salen</p>
+              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">Por salir</p>
             </button>
           </div>
         )}
@@ -2049,7 +2049,7 @@ export default function StaffPage() {
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = llegadas;
         } else if (kpiModalType === 'salen') {
-          title = 'Salidas Hoy';
+          title = 'Pendientes por Salir';
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
           filtered = salidas;
         }
