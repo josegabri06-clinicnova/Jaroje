@@ -356,7 +356,7 @@ export function getRealPrice(
     const dynamicPrice = beds24RatesMap[id][dateStr];
     const customMultipliers = dynamicSettings?.[id]?.multipliers;
     const multiplier = getChannelMultiplier(referer, customMultipliers);
-    return Math.round(dynamicPrice * multiplier);
+    return Math.round(dynamicPrice * multiplier * 100) / 100;
   }
 
   // Si no se encuentra tarifa en el ID de la unidad hijo, intentar buscar en el ID del padre
@@ -367,7 +367,7 @@ export function getRealPrice(
       const dynamicPrice = beds24RatesMap[parentId][dateStr];
       const customMultipliers = dynamicSettings?.[parentId]?.multipliers;
       const multiplier = getChannelMultiplier(referer, customMultipliers);
-      return Math.round(dynamicPrice * multiplier);
+      return Math.round(dynamicPrice * multiplier * 100) / 100;
     }
   }
 
@@ -382,7 +382,7 @@ export function getRealPrice(
       const base = parentPrices[season];
       const customMultipliers = dynamicSettings?.[parentMapping.roomId]?.multipliers;
       const multiplier = getChannelMultiplier(referer, customMultipliers);
-      return Math.round(base * multiplier);
+      return Math.round(base * multiplier * 100) / 100;
     }
     return 2000;
   }
@@ -390,7 +390,7 @@ export function getRealPrice(
   const base = prices[season];
   const customMultipliers = dynamicSettings?.[id]?.multipliers;
   const multiplier = getChannelMultiplier(referer, customMultipliers);
-  return Math.round(base * multiplier);
+  return Math.round(base * multiplier * 100) / 100;
 }
 
 // Obtener metadata de la habitación
@@ -681,10 +681,10 @@ export function getAverageRatesForDates(
     current.setDate(current.getDate() + 1);
   }
 
-  const averageBase = daysCount > 0 ? Math.round(totalSum / daysCount) : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
+  const averageBase = daysCount > 0 ? Math.round((totalSum / daysCount) * 100) / 100 : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
   const customDiscounts = dynamicSettings?.[id]?.discounts;
   const discountMultiplier = getLengthOfStayMultiplier(daysCount, customDiscounts);
-  return Math.round(averageBase * discountMultiplier);
+  return Math.round(averageBase * discountMultiplier * 100) / 100;
 }
 
 export interface TaxInfo {
@@ -1037,9 +1037,9 @@ export function getDirectTotalForStay(
       priceUsed = JAROJE_PRICES[parentRoom.roomId]?.[season] || 2000;
     }
 
-    const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
-    const nightTax = Math.round(nightBase * 0.19);
-    totalDirect += (nightBase + nightTax);
+    const nightBase = Math.round(priceUsed * discountMult * 100) / 100 + surchargePerNight;
+    const nightTax = Math.round(nightBase * 0.19 * 100) / 100;
+    totalDirect += Math.round(nightBase + nightTax);
   }
 
   return totalDirect;

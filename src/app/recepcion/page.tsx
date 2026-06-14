@@ -1366,10 +1366,10 @@ export default function RecepcionPage() {
           else if (computedNights >= 7) discountMult = 0.85;
         }
 
-        const nightBase = Math.round(priceUsed * discountMult);
-        const nightWithChannel = Math.round(nightBase * 1.0);
-        const nightTax = Math.round(nightWithChannel * 0.19);
-        suggestedTotalRoom += (nightWithChannel + nightTax) + surchargePerNight;
+        const nightBase = Math.round(priceUsed * discountMult * 100) / 100;
+        const nightWithChannel = Math.round(nightBase * 1.0 * 100) / 100;
+        const nightTax = Math.round(nightWithChannel * 0.19 * 100) / 100;
+        suggestedTotalRoom += Math.round(nightWithChannel + nightTax) + surchargePerNight;
       }
       
       const suggestedDailyRate = computedNights > 0 ? Math.round(suggestedTotalRoom / computedNights) : 0;
