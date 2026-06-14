@@ -1392,7 +1392,7 @@ export default function AdminDashboard() {
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">ID: {r.id}</span>
                           </div>
                           <span className="text-[11px] font-extrabold bg-zinc-900 text-white px-2.5 py-1 rounded-lg">
-                            {r.room_name || r.room || 'Sin asign'}
+                            {getUnitDisplay(r.room_name || r.room || '') || 'Sin asign'}
                           </span>
                         </div>
 
