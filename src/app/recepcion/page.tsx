@@ -54,6 +54,8 @@ interface Reserva {
     otros: number;
     total: number;
   };
+  expected_payout?: number;
+  host_fee?: number;
 }
 
 interface Task {

@@ -17,7 +17,7 @@ export default function PreciosPage() {
   const [savingSeasonKey, setSavingSeasonKey] = useState<string | null>(null);
   const [expandedLos, setExpandedLos] = useState<Record<string, boolean>>({}); // roomId → expandido
 
-  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }>>({});
+  const [capacitySettings, setCapacitySettings] = useState<Record<string, any>>({});
   const [savingCapacity, setSavingCapacity] = useState(false);
 
   // Cargar precios del calendario de Beds24 (Daily Prices)
