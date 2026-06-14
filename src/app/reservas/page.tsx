@@ -1252,6 +1252,8 @@ export default function ReservasList() {
               type="date"
               value={startDate}
               onChange={e => setStartDate(e.target.value)}
+              onBlur={e => setStartDate((e.target as HTMLInputElement).value)}
+              onInput={e => setStartDate((e.target as HTMLInputElement).value)}
               className="w-full bg-white border border-zinc-200/80 rounded-xl py-2 pl-12 pr-2 text-[12px] font-semibold text-zinc-700 outline-none focus:border-zinc-400 transition-all shadow-sm"
             />
           </div>
@@ -1261,6 +1263,8 @@ export default function ReservasList() {
               type="date"
               value={endDate}
               onChange={e => setEndDate(e.target.value)}
+              onBlur={e => setEndDate((e.target as HTMLInputElement).value)}
+              onInput={e => setEndDate((e.target as HTMLInputElement).value)}
               className="w-full bg-white border border-zinc-200/80 rounded-xl py-2 pl-12 pr-2 text-[12px] font-semibold text-zinc-700 outline-none focus:border-zinc-400 transition-all shadow-sm"
             />
           </div>
