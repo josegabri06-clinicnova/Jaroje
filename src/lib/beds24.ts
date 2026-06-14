@@ -237,6 +237,34 @@ export function getChildRoomId(parentId: string | null | undefined, unitId: stri
   return parentToChild[pId]?.[uId] || null;
 }
 
+export function getAllChildRoomIds(parentId: string | null | undefined): string[] {
+  const pId = String(parentId || '');
+  if (!pId) return [];
+  const parentToChild: Record<string, Record<string, string>> = {
+    '679092': {
+      '1': '685321', '2': '685322', '3': '685323', '4': '685324', '5': '685325', '6': '685326', '7': '685327'
+    },
+    '679091': {
+      '1': '685312', '2': '685318', '3': '685314', '4': '685315', '5': '685316', '6': '685317'
+    },
+    '679077': {
+      '1': '685531', '2': '685532', '3': '685533', '4': '685534', '5': '685535', '6': '685536'
+    },
+    '679093': {
+      '1': '679008'
+    },
+    '679087': {
+      '1': '679087'
+    },
+    '685542': {
+      '1': '685542', '2': '685542', '3': '685542', '4': '685542', '5': '685542', '6': '685542', '7': '685542', '8': '685542'
+    }
+  };
+  const mapping = parentToChild[pId];
+  if (!mapping) return [pId];
+  return Array.from(new Set(Object.values(mapping)));
+}
+
 // Detección de temporada (Huatulco/México)
 export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' | 'media_alta' | 'alta' {
   if (!dateStr) return 'media';

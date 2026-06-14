@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getBeds24Token, getSeason } from '@/lib/beds24';
+import { getBeds24Token, getSeason, getAllChildRoomIds } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -313,10 +313,15 @@ export async function PUT(req: Request) {
           price1: Math.round(priceRaw * 100) / 100,
         }];
 
-    const payload = [{
-      roomId: Number(roomId),
+    const roomIdsToUpdate = getAllChildRoomIds(roomId);
+    if (!roomIdsToUpdate.includes(roomId)) {
+      roomIdsToUpdate.push(roomId);
+    }
+
+    const payload = roomIdsToUpdate.map((id) => ({
+      roomId: Number(id),
       calendar: calendarEntries
-    }];
+    }));
 
     const res = await fetch('https://api.beds24.com/v2/inventory/rooms/calendar', {
       method: 'POST',
