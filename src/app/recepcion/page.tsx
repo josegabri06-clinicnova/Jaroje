@@ -645,7 +645,7 @@ export default function RecepcionPage() {
       const fetchReassignAvailability = async () => {
         setLoadingAvailability(true);
         try {
-          const res = await fetch(`/api/availability?checkIn=${selectedReserva.check_in}&checkOut=${selectedReserva.check_out}`);
+          const res = await fetch(`/api/availability?checkIn=${selectedReserva.check_in}&checkOut=${selectedReserva.check_out}&t=${Date.now()}`);
           const json = await res.json();
           if (json.success && json.inventory) {
             const availMap: Record<string, boolean> = {};

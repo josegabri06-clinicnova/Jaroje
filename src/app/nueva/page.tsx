@@ -529,7 +529,7 @@ export default function VercelActionForm() {
       const fetchAvailability = async () => {
         setLoadingInventory(true);
         try {
-          const res = await fetch(`/api/availability?checkIn=${form.checkIn}&checkOut=${form.checkOut}`);
+          const res = await fetch(`/api/availability?checkIn=${form.checkIn}&checkOut=${form.checkOut}&t=${Date.now()}`);
           const data = await res.json();
           if (data.success) {
             setInventory(data.inventory);
