@@ -375,8 +375,58 @@ export async function PUT(req: Request) {
     if (numChild !== undefined) {
       updatePayload.numChild = Number(numChild);
     }
+
+    const BEDS24_TOKEN = await getBeds24Token();
+
+    // 1. Obtener detalles actuales de la reserva (incluyendo invoice items) para actualizar la tarifa
+    let currentBooking: any = null;
+    if (price !== undefined) {
+      try {
+        const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&includeInvoiceItems=true`, {
+          headers: { 'token': BEDS24_TOKEN }
+        });
+        if (getRes.ok) {
+          const getJson = await getRes.json();
+          if (getJson.data && getJson.data.length > 0) {
+            currentBooking = getJson.data[0];
+          }
+        }
+      } catch (getErr) {
+        console.error("[Reservas PUT] Error fetching current booking for invoice update:", getErr);
+      }
+    }
+
     if (price !== undefined) {
       updatePayload.price = Number(price);
+      if (currentBooking && Array.isArray(currentBooking.invoiceItems)) {
+        const charges = currentBooking.invoiceItems.filter((item: any) => Number(item.qty || 0) > 0);
+        const invoiceItemsUpdate: any[] = [];
+        if (charges.length > 0) {
+          const firstCharge = charges[0];
+          invoiceItemsUpdate.push({
+            id: firstCharge.id,
+            description: firstCharge.description || "Room Charge",
+            qty: 1,
+            price: Number(price)
+          });
+          for (let i = 1; i < charges.length; i++) {
+            invoiceItemsUpdate.push({
+              id: charges[i].id,
+              description: "",
+              qty: "",
+              price: "",
+              status: ""
+            });
+          }
+        } else {
+          invoiceItemsUpdate.push({
+            description: "Room Charge",
+            qty: 1,
+            price: Number(price)
+          });
+        }
+        updatePayload.invoiceItems = invoiceItemsUpdate;
+      }
     }
     if (deposit !== undefined) {
       updatePayload.deposit = Number(deposit);
@@ -384,8 +434,6 @@ export async function PUT(req: Request) {
     if (notes !== undefined) {
       updatePayload.notes = notes;
     }
-
-    const BEDS24_TOKEN = await getBeds24Token();
 
     // 1. Modificar en Beds24
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {

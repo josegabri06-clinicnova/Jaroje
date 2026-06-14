@@ -1506,7 +1506,7 @@ export default function CalendarPage() {
                       return (
                         <div
                           key={ds}
-                          onClick={() => { setSelectedReserva(booking); setShowCheckInModal(true); }}
+                          onClick={() => { router.push(`/reservas?id=${booking.id}`); }}
                           className="border-r border-zinc-100 last:border-r-0 h-9 px-0.5 py-1 cursor-pointer relative"
                           style={{ backgroundColor: todayCol ? '#eff6ff' : undefined }}
                         >
@@ -2569,9 +2569,8 @@ export default function CalendarPage() {
                       <div 
                         key={r.id} 
                         onClick={() => {
-                          setSelectedReserva(r);
-                          setShowCheckInModal(true);
                           setKpiModalType(null);
+                          router.push(`/reservas?id=${r.id}`);
                         }}
                         className="p-4 border border-zinc-150 rounded-2xl bg-zinc-50/20 space-y-2.5 cursor-pointer hover:bg-zinc-100/50 hover:border-zinc-300 transition-all active:scale-[0.98] select-none"
                       >
