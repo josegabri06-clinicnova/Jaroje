@@ -1788,13 +1788,15 @@ export default function StaffPage() {
                   })()}
 
                   <div className="flex flex-col gap-2.5 pt-2">
-                    <button
-                      onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: 'limpia' })}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 active:scale-[0.98]"
-                    >
-                      <CheckCircle2 size={16} strokeWidth={2.5} />
-                      <span>Finalizar Limpieza (Marcar en Azul)</span>
-                    </button>
+                    {operStatus !== 'salida_hoy' && (
+                      <button
+                        onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: 'limpia' })}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer shadow-md shadow-blue-600/15 flex items-center justify-center gap-2 active:scale-[0.98]"
+                      >
+                        <CheckCircle2 size={16} strokeWidth={2.5} />
+                        <span>Finalizar Limpieza (Marcar en Azul)</span>
+                      </button>
+                    )}
                     
                     <button
                       onClick={() => {

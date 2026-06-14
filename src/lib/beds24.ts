@@ -805,7 +805,7 @@ export function extractOtaDetails(invoiceItems: any[]): OtaDetails {
 }
 
 // Obtener y mapear reservas activas (Backend Server-Side)
-export async function getBeds24Bookings(): Promise<any[]> {
+export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
   const today = new Date();
   const fromDate = new Date(today);
   fromDate.setDate(today.getDate() - 180);
@@ -838,7 +838,7 @@ export async function getBeds24Bookings(): Promise<any[]> {
   const ratesToDate = new Date(today);
   ratesToDate.setDate(today.getDate() + 540);
   const ratesTo = ratesToDate.toISOString().split('T')[0];
-  const beds24RatesMap = await fetchBeds24RatesMap(token, arrivalFrom, ratesTo);
+  const beds24RatesMap = fast ? {} : await fetchBeds24RatesMap(token, arrivalFrom, ratesTo);
 
   const ROOM_MAP = [
     { roomId: '679077', units: [{ unitId: '1', name: '301' }, { unitId: '2', name: '302' }, { unitId: '3', name: '303' }, { unitId: '4', name: '304' }, { unitId: '5', name: '305' }, { unitId: '6', name: '306' }] },

@@ -59,7 +59,58 @@ export async function POST(req: Request) {
 
     try {
       // --- 1. BEDS24 RESERVATIONS (Llamada interna local, cero loopback HTTP) ---
-      const allReservas = await getBeds24Bookings();
+      let allReservas = await getBeds24Bookings(true);
+
+      // --- 1.1 LOCAL RESERVATIONS (Supabase) ---
+      try {
+        const { data: localData } = await supabase
+          .from('local_reservas')
+          .select('*')
+          .neq('status', 'cancelled');
+
+        if (localData && localData.length > 0) {
+          const mappedLocal = localData.map((b: any) => {
+            const arrivalDate = b.check_in ? new Date(b.check_in) : null;
+            const departureDate = b.check_out ? new Date(b.check_out) : null;
+            const nights = (arrivalDate && departureDate)
+              ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
+              : 1;
+
+            const physicalName = b.unit_id ? (b.unit_id === '1' ? '500' : b.unit_id === '2' ? '501' : b.unit_id === '3' ? '502' : b.unit_id === '4' ? '503' : b.unit_id === '5' ? '504' : b.unit_id === '6' ? '505' : b.unit_id === '7' ? '506' : b.unit_id === '8' ? '507' : b.unit_id) : '';
+
+            return {
+              id: b.id.toString(),
+              roomId: b.room_id,
+              unitId: b.unit_id,
+              room_name: `Habitación ${physicalName}`,
+              roomName: `Habitación ${physicalName}`,
+              arrival: b.check_in,
+              departure: b.check_out,
+              check_in: b.check_in,
+              check_out: b.check_out,
+              guest_name: b.guest_name,
+              firstName: b.guest_name,
+              lastName: '',
+              status: b.status || 'confirmed',
+              price: Number(b.price || 0),
+              price_estimate: Number(b.price || 0),
+              deposit: Number(b.deposit || 0),
+              balance: Number(b.price || 0) - Number(b.deposit || 0),
+              guest_phone: b.phone || '',
+              phone: b.phone || '',
+              num_adult: Number(b.num_adult || 1),
+              num_child: Number(b.num_child || 0),
+              notes: b.notes || '',
+              channel: b.channel || 'Recepción',
+              isLocal: true,
+              nights
+            };
+          });
+          allReservas = [...allReservas, ...mappedLocal];
+        }
+      } catch (localDbErr) {
+        console.error("Copilot local_reservas fetch error:", localDbErr);
+      }
 
       const active = allReservas.filter((r: any) => r.check_in <= todayStr && r.check_out > todayStr);
       const llegadasHoy = allReservas.filter((r: any) => r.check_in === todayStr);
