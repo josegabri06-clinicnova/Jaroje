@@ -57,8 +57,8 @@ function DoubleBarChart({
   };
 
   // Encontrar el valor máximo y mínimo para escalar verticalmente (soportando negativos)
-  const maxVal = Math.max(...data.map(d => Math.max(d.prevVal, d.currVal, 0)), 1);
-  const minVal = Math.min(...data.map(d => Math.min(d.prevVal, d.currVal, 0)), 0);
+  const maxVal = isPercentage ? 100 : Math.max(...data.map(d => Math.max(d.prevVal, d.currVal, 0)), 1);
+  const minVal = isPercentage ? 0 : Math.min(...data.map(d => Math.min(d.prevVal, d.currVal, 0)), 0);
   const range = maxVal - minVal;
 
   // Posición de la línea cero en porcentaje desde la parte inferior de la gráfica
@@ -125,7 +125,7 @@ function DoubleBarChart({
         <div className="min-w-[650px] pt-6 flex flex-col relative">
           
           <div className="flex relative h-40">
-            {/* Eje Y (Etiquetas) */}
+            {/* Eje Y Izquierdo (Etiquetas) */}
             <div className="w-[70px] h-full relative pr-2 select-none">
               {ticks.map((tickVal, idx) => {
                 const pct = range > 0 ? ((tickVal - minVal) / range) * 100 : 0;
@@ -142,7 +142,7 @@ function DoubleBarChart({
             </div>
 
             {/* Área de la gráfica (Líneas y barras) */}
-            <div className="flex-1 h-full relative border-l border-zinc-150 pl-1">
+            <div className="flex-1 h-full relative border-l border-r border-zinc-150 px-1">
               
               {/* Líneas auxiliares horizontales */}
               {ticks.map((tickVal, idx) => {
@@ -221,18 +221,35 @@ function DoubleBarChart({
               </div>
 
             </div>
+
+            {/* Eje Y Derecho (Etiquetas) */}
+            <div className="w-[70px] h-full relative pl-2 select-none">
+              {ticks.map((tickVal, idx) => {
+                const pct = range > 0 ? ((tickVal - minVal) / range) * 100 : 0;
+                return (
+                  <span 
+                    key={idx} 
+                    className="absolute left-2 text-[9px] font-bold text-zinc-400 whitespace-nowrap transition-all translate-y-1/2" 
+                    style={{ bottom: `${pct}%` }}
+                  >
+                    {formatCompactValue(tickVal)}
+                  </span>
+                );
+              })}
+            </div>
           </div>
 
           {/* Eje X (Meses) */}
           <div className="flex">
             <div className="w-[70px] shrink-0 pr-2" />
-            <div className="flex-1 flex justify-between mt-3 pt-2 border-t border-zinc-200/80 select-none pl-1">
+            <div className="flex-1 flex justify-between mt-3 pt-2 border-t border-zinc-200/80 select-none px-1">
               {data.map(item => (
                 <span key={item.label} className="flex-1 text-center text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
                   {item.label}
                 </span>
               ))}
             </div>
+            <div className="w-[70px] shrink-0 pl-2" />
           </div>
 
         </div>
@@ -691,11 +708,11 @@ export default function AnalyticsPage() {
                   className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
                 />
               </div>
-              {(startDate || endDate) && (
+              {(startDate !== defaultStart || endDate !== defaultEnd) && (
                 <button
                   onClick={() => {
-                    setStartDate('');
-                    setEndDate('');
+                    setStartDate(defaultStart);
+                    setEndDate(defaultEnd);
                   }}
                   className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-xl text-[11px] font-extrabold transition-all active:scale-95 cursor-pointer shrink-0"
                 >
