@@ -159,8 +159,6 @@ export default function AdminDashboard() {
   const [selectedRoomForStatus, setSelectedRoomForStatus] = useState<any | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
-  const [arrivalFilter, setArrivalFilter] = useState<'all' | 'pending'>('all');
-  const [departureFilter, setDepartureFilter] = useState<'all' | 'pending'>('all');
 
   const fetchAll = async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -290,20 +288,12 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, []);
   const llegadasHoy = useMemo(() => {
-    if (arrivalFilter === 'all') {
-      return reservas.filter(r => r.check_in === todayStr);
-    } else {
-      return reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
-    }
-  }, [reservas, todayStr, arrivalFilter]);
+    return reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
+  }, [reservas, todayStr]);
 
   const salidasHoy = useMemo(() => {
-    if (departureFilter === 'all') {
-      return reservas.filter(r => r.check_out === todayStr);
-    } else {
-      return reservas.filter(r => r.check_out === todayStr && !r.checked_out);
-    }
-  }, [reservas, todayStr, departureFilter]);
+    return reservas.filter(r => r.check_out === todayStr && !r.checked_out);
+  }, [reservas, todayStr]);
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr).slice(0, 5);
 
   // WhatsApp — semáforo de urgencia
@@ -456,19 +446,19 @@ export default function AdminDashboard() {
           onClick={() => setKpiModalType('llegan')}
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
-          <p className="text-[20px] font-bold text-emerald-600">{llegadasHoy.length}</p>
-          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">
-            {arrivalFilter === 'pending' ? 'Pendientes' : 'Llegan hoy'}
+          <p className="text-[20px] font-bold text-emerald-600">
+            {reservas.filter(r => r.check_in === todayStr).length}
           </p>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan hoy</p>
         </button>
         <button 
           onClick={() => setKpiModalType('salen')}
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
-          <p className="text-[20px] font-bold text-amber-500">{salidasHoy.length}</p>
-          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">
-            {departureFilter === 'pending' ? 'Por salir' : 'Salen hoy'}
+          <p className="text-[20px] font-bold text-amber-500">
+            {reservas.filter(r => r.check_out === todayStr).length}
           </p>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
         </button>
       </div>
 
@@ -537,45 +527,15 @@ export default function AdminDashboard() {
 
       {/* ── 2. LLEGADAS HOY ───────────────────────────────────────────── */}
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
               <ArrowDownLeft size={13} className="text-emerald-500" />
-              {arrivalFilter === 'pending' ? 'Pendientes Check-In' : 'Llegadas Hoy'}
+              Pendientes Check-In
             </h3>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-              arrivalFilter === 'pending'
-                ? 'bg-blue-50 text-blue-700 border-blue-100'
-                : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-            }`}>
-              {llegadasHoy.length} {arrivalFilter === 'pending' ? 'pendientes' : 'totales'}
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-100">
+              {llegadasHoy.length} pendientes
             </span>
-          </div>
-
-          {/* Toggle de Opciones */}
-          <div className="flex bg-zinc-200/60 p-0.5 rounded-xl border border-zinc-200/20 shadow-inner select-none self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setArrivalFilter('all')}
-              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-                arrivalFilter === 'all' 
-                  ? 'bg-white text-zinc-900 shadow-sm' 
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              Llegan Hoy
-            </button>
-            <button
-              type="button"
-              onClick={() => setArrivalFilter('pending')}
-              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-                arrivalFilter === 'pending' 
-                  ? 'bg-white text-zinc-900 shadow-sm' 
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              Pendientes
-            </button>
           </div>
         </div>
 
@@ -585,9 +545,7 @@ export default function AdminDashboard() {
               <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
             </div>
           ) : llegadasHoy.length === 0 ? (
-            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
-              {arrivalFilter === 'pending' ? 'No hay check-ins pendientes.' : 'No hay llegadas programadas para hoy.'}
-            </div>
+            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">No hay check-ins pendientes.</div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[850px]">
@@ -698,45 +656,15 @@ export default function AdminDashboard() {
 
       {/* ── 3. SALIDAS HOY ────────────────────────────────────────────── */}
       <div>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
               <ArrowUpRight size={13} className="text-amber-500" />
-              {departureFilter === 'pending' ? 'Pendientes por Salir' : 'Salidas Hoy'}
+              Pendientes por Salir
             </h3>
-            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-              departureFilter === 'pending'
-                ? 'bg-amber-50 text-amber-700 border-amber-100'
-                : 'bg-zinc-100 text-zinc-700 border-zinc-200'
-            }`}>
-              {salidasHoy.length} {departureFilter === 'pending' ? 'pendientes' : 'totales'}
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-amber-50 text-amber-700 border-amber-100">
+              {salidasHoy.length} pendientes
             </span>
-          </div>
-
-          {/* Toggle de Opciones */}
-          <div className="flex bg-zinc-200/60 p-0.5 rounded-xl border border-zinc-200/20 shadow-inner select-none self-end sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setDepartureFilter('all')}
-              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-                departureFilter === 'all' 
-                  ? 'bg-white text-zinc-900 shadow-sm' 
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              Salen Hoy
-            </button>
-            <button
-              type="button"
-              onClick={() => setDepartureFilter('pending')}
-              className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
-                departureFilter === 'pending' 
-                  ? 'bg-white text-zinc-900 shadow-sm' 
-                  : 'text-zinc-500 hover:text-zinc-800'
-              }`}
-            >
-              Pendientes
-            </button>
           </div>
         </div>
 
@@ -747,7 +675,7 @@ export default function AdminDashboard() {
             </div>
           ) : salidasHoy.length === 0 ? (
             <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
-              {departureFilter === 'pending' ? 'No hay salidas pendientes para hoy.' : 'No hay salidas programadas para hoy.'}
+              No hay salidas pendientes para hoy.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -1423,17 +1351,13 @@ export default function AdminDashboard() {
           badgeColor = 'bg-zinc-900 text-white';
           filtered = reservas.filter(r => r.check_out > todayStr && r.checked_in);
         } else if (kpiModalType === 'llegan') {
-          title = arrivalFilter === 'pending' ? 'Pendientes Check-In' : 'Llegadas Hoy';
-          badgeColor = arrivalFilter === 'pending' 
-            ? 'bg-blue-100 text-blue-800 border border-blue-200' 
-            : 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-          filtered = llegadasHoy;
+          title = 'Llegadas Hoy';
+          badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+          filtered = reservas.filter(r => r.check_in === todayStr);
         } else if (kpiModalType === 'salen') {
-          title = departureFilter === 'pending' ? 'Pendientes por Salir' : 'Salidas Hoy';
-          badgeColor = departureFilter === 'pending'
-            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-            : 'bg-zinc-150 text-zinc-700 border border-zinc-200';
-          filtered = salidasHoy;
+          title = 'Salidas Hoy';
+          badgeColor = 'bg-zinc-150 text-zinc-700 border border-zinc-200';
+          filtered = reservas.filter(r => r.check_out === todayStr);
         }
 
         return (
