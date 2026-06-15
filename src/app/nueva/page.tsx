@@ -15,6 +15,7 @@ const PRICES: Record<string, Record<string, number>> = {
   '679091': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
   '679092': { baja: 4034, media: 4790, media_alta: 5042, alta: 5546 },
   '679093': { baja: 5378, media: 6387, media_alta: 6723, alta: 7395 },
+  '685542': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
 };
 
 function getSeason(dateStr: string): string {

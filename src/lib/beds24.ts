@@ -371,6 +371,11 @@ export function getRealPrice(
 ): number {
   let id = String(roomId || '');
 
+  // Mapear 685542 (Apartamentos Nuevos 500-507) a 679077 (Habitación Doble)
+  if (id === '685542') {
+    id = '679077';
+  }
+
   // Si nos pasan un ID padre y un unitId, intentar resolver al ID hijo específico
   if (unitId) {
     const childId = getChildRoomId(id, unitId);
