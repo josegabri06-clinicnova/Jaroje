@@ -1560,7 +1560,9 @@ export default function ReservasList() {
                         <div className={`text-[11px] font-bold mt-1 pl-0.5 ${isOver ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`}>
                           {isOver 
                             ? `⚠️ Límite excedido. Máximo permitido para la habitación ${selectedRes.room_name || 'seleccionada'}: ${rules.max} personas.` 
-                            : `✓ Capacidad permitida. Máximo: ${rules.max} personas.`}
+                            : rules.max > rules.base
+                              ? `✓ Capacidad permitida. Incluidas: ${rules.base} · Adicionales con cargo: ${rules.max - rules.base} (Máx: ${rules.max} personas).`
+                              : `✓ Capacidad permitida: ${rules.max} personas (sin cargos adicionales).`}
                         </div>
                       );
                     })()}

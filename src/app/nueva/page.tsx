@@ -153,18 +153,20 @@ export default function VercelActionForm() {
     setTodayStr(getLocalDateStr());
   }, []);
 
-  const maxCapacity = useMemo(() => {
+  const { maxCapacity, baseCapacity } = useMemo(() => {
     const roomsToBook = form.groupRooms && form.groupRooms.length > 0
       ? form.groupRooms
       : (form.roomId && form.unitId ? [{ roomId: form.roomId, unitId: form.unitId, name: getUnitName(form.roomId, form.unitId) || form.unitId }] : []);
     
     let totalMax = 0;
+    let totalBase = 0;
     roomsToBook.forEach(r => {
       const parentMapping = getParentMapping(r.roomId, r.unitId);
       const rules = getCapacityRules(parentMapping.roomId || r.roomId || r.name, capacitySettings || undefined);
       totalMax += rules.max;
+      totalBase += rules.base;
     });
-    return totalMax;
+    return { maxCapacity: totalMax, baseCapacity: totalBase };
   }, [form.roomId, form.unitId, form.groupRooms, capacitySettings]);
 
   const distributeGuestsInRooms = (rooms: any[], numAdults: number, numChildren: number) => {
@@ -192,29 +194,51 @@ export default function VercelActionForm() {
       }
     });
     
-    // Paso 2: Distribuir adultos restantes respetando el límite max de cada habitación
+    // Paso 2: Distribuir adultos hasta el límite BASE de cada habitación
     for (let r of roomsWithCap) {
       const currentTotal = r.adults + r.children;
-      const space = r.max - currentTotal;
-      if (space > 0 && adultsLeft > 0) {
-        const toAdd = Math.min(space, adultsLeft);
+      const spaceToBase = r.base - currentTotal;
+      if (spaceToBase > 0 && adultsLeft > 0) {
+        const toAdd = Math.min(spaceToBase, adultsLeft);
         r.adults += toAdd;
         adultsLeft -= toAdd;
       }
     }
     
-    // Paso 3: Distribuir niños respetando el límite max
+    // Paso 3: Distribuir niños hasta el límite BASE de cada habitación
     for (let r of roomsWithCap) {
       const currentTotal = r.adults + r.children;
-      const space = r.max - currentTotal;
-      if (space > 0 && childrenLeft > 0) {
-        const toAdd = Math.min(space, childrenLeft);
+      const spaceToBase = r.base - currentTotal;
+      if (spaceToBase > 0 && childrenLeft > 0) {
+        const toAdd = Math.min(spaceToBase, childrenLeft);
         r.children += toAdd;
         childrenLeft -= toAdd;
       }
     }
     
-    // Paso 4: Si quedan excedentes (por encima del máximo teórico), sumarlos a la última habitación
+    // Paso 4: Si todavía quedan adultos, distribuirlos hasta el límite MAX de cada habitación
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const spaceToMax = r.max - currentTotal;
+      if (spaceToMax > 0 && adultsLeft > 0) {
+        const toAdd = Math.min(spaceToMax, adultsLeft);
+        r.adults += toAdd;
+        adultsLeft -= toAdd;
+      }
+    }
+    
+    // Paso 5: Si todavía quedan niños, distribuirlos hasta el límite MAX de cada habitación
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const spaceToMax = r.max - currentTotal;
+      if (spaceToMax > 0 && childrenLeft > 0) {
+        const toAdd = Math.min(spaceToMax, childrenLeft);
+        r.children += toAdd;
+        childrenLeft -= toAdd;
+      }
+    }
+    
+    // Paso 6: Si quedan excedentes por sobrecupo, sumarlos a la última habitación
     if (adultsLeft > 0 && roomsWithCap.length > 0) {
       roomsWithCap[roomsWithCap.length - 1].adults += adultsLeft;
     }
@@ -1125,7 +1149,9 @@ export default function VercelActionForm() {
                   }`}>
                     {(Number(form.numAdult || 1) + Number(form.numChild || 0)) > maxCapacity
                       ? `⚠️ Límite de capacidad excedido. Máximo permitido: ${maxCapacity} personas.`
-                      : `✓ Capacidad permitida. Máximo total: ${maxCapacity} personas.`}
+                      : maxCapacity > baseCapacity
+                        ? `✓ Capacidad permitida. Incluidas: ${baseCapacity} · Adicionales con cargo: ${maxCapacity - baseCapacity} (Máx: ${maxCapacity} personas).`
+                        : `✓ Capacidad permitida: ${maxCapacity} personas (sin cargos adicionales).`}
                   </div>
                 )}
 

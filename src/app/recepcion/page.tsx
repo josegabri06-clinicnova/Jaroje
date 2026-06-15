@@ -1062,19 +1062,21 @@ export default function RecepcionPage() {
   const [roomInventory, setRoomInventory] = useState<any[]>([]);
   const [checkingAvail, setCheckingAvail] = useState(false);
 
-  const walkinMaxCapacity = useMemo(() => {
-    if (!selectedReserva || selectedReserva.id !== 'walkin') return 0;
+  const { walkinMaxCapacity, walkinBaseCapacity } = useMemo(() => {
+    if (!selectedReserva || selectedReserva.id !== 'walkin') return { walkinMaxCapacity: 0, walkinBaseCapacity: 0 };
     const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
       ? selectedReserva.groupRooms
       : [{ roomId: selectedReserva.room, unitId: selectedReserva.unit_id || '', name: getUnitNumberFromInventory(selectedReserva.room, selectedReserva.unit_id || '', roomInventory) }];
     
     let totalMax = 0;
+    let totalBase = 0;
     group.forEach((rm: any) => {
       if (!rm.roomId && !rm.room) return;
       const cap = getCapacityRules(rm.roomId || rm.room, capacitySettings || undefined);
       totalMax += cap.max;
+      totalBase += cap.base;
     });
-    return totalMax;
+    return { walkinMaxCapacity: totalMax, walkinBaseCapacity: totalBase };
   }, [selectedReserva?.groupRooms, selectedReserva?.room, selectedReserva?.unit_id, roomInventory, capacitySettings]);
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -1237,29 +1239,51 @@ export default function RecepcionPage() {
       }
     });
     
-    // Paso 2: Distribuir adultos restantes respetando el límite max de cada habitación
+    // Paso 2: Distribuir adultos hasta el límite BASE de cada habitación
     for (let r of roomsWithCap) {
       const currentTotal = r.adults + r.children;
-      const space = r.max - currentTotal;
-      if (space > 0 && adultsLeft > 0) {
-        const toAdd = Math.min(space, adultsLeft);
+      const spaceToBase = r.base - currentTotal;
+      if (spaceToBase > 0 && adultsLeft > 0) {
+        const toAdd = Math.min(spaceToBase, adultsLeft);
         r.adults += toAdd;
         adultsLeft -= toAdd;
       }
     }
     
-    // Paso 3: Distribuir niños respetando el límite max
+    // Paso 3: Distribuir niños hasta el límite BASE de cada habitación
     for (let r of roomsWithCap) {
       const currentTotal = r.adults + r.children;
-      const space = r.max - currentTotal;
-      if (space > 0 && childrenLeft > 0) {
-        const toAdd = Math.min(space, childrenLeft);
+      const spaceToBase = r.base - currentTotal;
+      if (spaceToBase > 0 && childrenLeft > 0) {
+        const toAdd = Math.min(spaceToBase, childrenLeft);
         r.children += toAdd;
         childrenLeft -= toAdd;
       }
     }
     
-    // Paso 4: Si quedan excedentes (por encima del máximo teórico), sumarlos a la última habitación
+    // Paso 4: Si todavía quedan adultos, distribuirlos hasta el límite MAX de cada habitación
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const spaceToMax = r.max - currentTotal;
+      if (spaceToMax > 0 && adultsLeft > 0) {
+        const toAdd = Math.min(spaceToMax, adultsLeft);
+        r.adults += toAdd;
+        adultsLeft -= toAdd;
+      }
+    }
+    
+    // Paso 5: Si todavía quedan niños, distribuirlos hasta el límite MAX de cada habitación
+    for (let r of roomsWithCap) {
+      const currentTotal = r.adults + r.children;
+      const spaceToMax = r.max - currentTotal;
+      if (spaceToMax > 0 && childrenLeft > 0) {
+        const toAdd = Math.min(spaceToMax, childrenLeft);
+        r.children += toAdd;
+        childrenLeft -= toAdd;
+      }
+    }
+    
+    // Paso 6: Si quedan excedentes por sobrecupo, sumarlos a la última habitación
     if (adultsLeft > 0 && roomsWithCap.length > 0) {
       roomsWithCap[roomsWithCap.length - 1].adults += adultsLeft;
     }
@@ -3855,7 +3879,9 @@ export default function RecepcionPage() {
                         }`}>
                           {(Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0)) > walkinMaxCapacity
                             ? `⚠️ Límite de capacidad excedido. Máximo permitido: ${walkinMaxCapacity} personas.`
-                            : `✓ Capacidad permitida. Máximo total: ${walkinMaxCapacity} personas.`}
+                            : walkinMaxCapacity > walkinBaseCapacity
+                              ? `✓ Capacidad permitida. Incluidas: ${walkinBaseCapacity} · Adicionales con cargo: ${walkinMaxCapacity - walkinBaseCapacity} (Máx: ${walkinMaxCapacity} personas).`
+                              : `✓ Capacidad permitida: ${walkinMaxCapacity} personas (sin cargos adicionales).`}
                         </div>
                       )}
 
@@ -4594,7 +4620,9 @@ export default function RecepcionPage() {
                         <div className="flex justify-between items-center">
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Resumen de Huéspedes</span>
                           <span className="text-[10px] font-bold text-zinc-500 bg-zinc-200/60 px-2 py-0.5 rounded-full">
-                            Base: {rules.base} / Máx: {rules.max}
+                            {rules.max > rules.base 
+                              ? `Incluidas: ${rules.base} | Con cargo: ${rules.max - rules.base} (Máx: ${rules.max})` 
+                              : `Permitidas: ${rules.base}`}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-[13px] font-semibold text-zinc-800">
