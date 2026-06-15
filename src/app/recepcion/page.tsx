@@ -439,6 +439,8 @@ export default function RecepcionPage() {
   // Modal Check-In / Walk-In
   const [showCheckInModal, setShowCheckInModal] = useState(false);
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
+  const [arrivalFilter, setArrivalFilter] = useState<'all' | 'pending'>('all');
+  const [departureFilter, setDepartureFilter] = useState<'all' | 'pending'>('all');
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
 
   // Estados para reasignar y editar reservas existentes en Recepción
@@ -1744,8 +1746,21 @@ export default function RecepcionPage() {
     };
   }, []);
 
-  const llegadas = reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
-  const salidas = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
+  const llegadas = useMemo(() => {
+    if (arrivalFilter === 'all') {
+      return reservas.filter(r => r.check_in === todayStr);
+    } else {
+      return reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
+    }
+  }, [reservas, todayStr, arrivalFilter]);
+
+  const salidas = useMemo(() => {
+    if (departureFilter === 'all') {
+      return reservas.filter(r => r.check_out === todayStr);
+    } else {
+      return reservas.filter(r => r.check_out === todayStr && !r.checked_out);
+    }
+  }, [reservas, todayStr, departureFilter]);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3108,14 +3123,18 @@ export default function RecepcionPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-emerald-600">{llegadas.length}</p>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Pendientes</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">
+                {arrivalFilter === 'pending' ? 'Pendientes' : 'Llegan hoy'}
+              </p>
             </button>
             <button 
               onClick={() => setKpiModalType('salen')}
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-amber-500">{salidas.length}</p>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Por salir</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">
+                {departureFilter === 'pending' ? 'Por salir' : 'Salen hoy'}
+              </p>
             </button>
           </div>
 
@@ -3150,19 +3169,53 @@ export default function RecepcionPage() {
 
           {/* ── TABLA DE LLEGADAS DE HOY (7 Columnas Requeridas) ────────────────── */}
           <div className="bg-white border border-zinc-200/80 rounded-[24px] shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Pendientes Check-In</h3>
+            <div className="px-5 py-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50/50">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${arrivalFilter === 'pending' ? 'bg-blue-600' : 'bg-emerald-500'} animate-pulse`} />
+                  <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">
+                    {arrivalFilter === 'pending' ? 'Pendientes Check-In' : 'Llegadas Hoy'}
+                  </h3>
+                </div>
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                  arrivalFilter === 'pending'
+                    ? 'bg-blue-50 text-blue-700 border-blue-100'
+                    : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                }`}>
+                  {llegadas.length} {arrivalFilter === 'pending' ? 'pendientes' : 'totales'}
+                </span>
               </div>
-              <span className="text-[11px] font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-100">
-                {llegadas.length} pendientes
-              </span>
+
+              {/* Toggle de Opciones */}
+              <div className="flex bg-zinc-200/60 p-0.5 rounded-xl border border-zinc-200/20 shadow-inner select-none self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setArrivalFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                    arrivalFilter === 'all' 
+                      ? 'bg-white text-zinc-900 shadow-sm' 
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  Llegan Hoy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setArrivalFilter('pending')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                    arrivalFilter === 'pending' 
+                      ? 'bg-white text-zinc-900 shadow-sm' 
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  Pendientes
+                </button>
+              </div>
             </div>
 
             {llegadas.length === 0 ? (
               <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
-                No hay check-ins pendientes.
+                {arrivalFilter === 'pending' ? 'No hay check-ins pendientes.' : 'No hay llegadas programadas para hoy.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -3282,19 +3335,53 @@ export default function RecepcionPage() {
 
           {/* ── TABLA DE CHECK-OUTS DE HOY ─────────────────────────────── */}
           <div className="bg-white border border-zinc-200/80 rounded-[24px] shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-zinc-50/50">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">Pendientes por Salir</h3>
+            <div className="px-5 py-4 border-b border-zinc-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50/50">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${departureFilter === 'pending' ? 'bg-amber-500' : 'bg-zinc-600'} animate-pulse`} />
+                  <h3 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">
+                    {departureFilter === 'pending' ? 'Pendientes por Salir' : 'Salidas Hoy'}
+                  </h3>
+                </div>
+                <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                  departureFilter === 'pending'
+                    ? 'bg-amber-50 text-amber-700 border-amber-100'
+                    : 'bg-zinc-100 text-zinc-700 border-zinc-200'
+                }`}>
+                  {salidas.length} {departureFilter === 'pending' ? 'pendientes' : 'totales'}
+                </span>
               </div>
-              <span className="text-[11px] font-bold bg-amber-50 text-amber-700 px-2.5 py-0.5 rounded-full border border-amber-100">
-                {salidas.length} por salir
-              </span>
+
+              {/* Toggle de Opciones */}
+              <div className="flex bg-zinc-200/60 p-0.5 rounded-xl border border-zinc-200/20 shadow-inner select-none self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setDepartureFilter('all')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                    departureFilter === 'all' 
+                      ? 'bg-white text-zinc-900 shadow-sm' 
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  Salen Hoy
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDepartureFilter('pending')}
+                  className={`px-3 py-1 rounded-lg text-[10px] font-extrabold uppercase tracking-wider transition-all cursor-pointer ${
+                    departureFilter === 'pending' 
+                      ? 'bg-white text-zinc-900 shadow-sm' 
+                      : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  Pendientes
+                </button>
+              </div>
             </div>
 
             {salidas.length === 0 ? (
               <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
-                No hay salidas pendientes para hoy.
+                {departureFilter === 'pending' ? 'No hay salidas pendientes para hoy.' : 'No hay salidas programadas para hoy.'}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -5448,12 +5535,16 @@ export default function RecepcionPage() {
           badgeColor = 'bg-zinc-900 text-white';
           filtered = reservas.filter(r => r.check_out > todayStr && r.checked_in);
         } else if (kpiModalType === 'llegan') {
-          title = 'Pendientes Check-In';
-          badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+          title = arrivalFilter === 'pending' ? 'Pendientes Check-In' : 'Llegadas Hoy';
+          badgeColor = arrivalFilter === 'pending' 
+            ? 'bg-blue-100 text-blue-800 border border-blue-200' 
+            : 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = llegadas;
         } else if (kpiModalType === 'salen') {
-          title = 'Pendientes por Salir';
-          badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+          title = departureFilter === 'pending' ? 'Pendientes por Salir' : 'Salidas Hoy';
+          badgeColor = departureFilter === 'pending'
+            ? 'bg-amber-100 text-amber-800 border border-amber-200'
+            : 'bg-zinc-150 text-zinc-700 border border-zinc-200';
           filtered = salidas;
         }
 
