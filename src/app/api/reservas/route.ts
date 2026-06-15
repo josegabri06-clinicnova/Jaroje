@@ -383,17 +383,32 @@ export async function PUT(req: Request) {
     let currentBooking: any = null;
     if (price !== undefined) {
       try {
-        const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&id[]=${id}&includeInvoiceItems=true`, {
+        // Probamos primero con la sintaxis de array id[] que es recomendada en la API v2 de Beds24
+        let getRes = await fetch(`https://api.beds24.com/v2/bookings?id[]=${id}&includeInvoiceItems=true`, {
           headers: { 
             'token': BEDS24_TOKEN,
             'Content-Type': 'application/json'
           }
         });
-        if (getRes.ok) {
-          const getJson = await getRes.json();
-          if (getJson.data && getJson.data.length > 0) {
-            currentBooking = getJson.data[0];
-          }
+        let getJson = await getRes.json().catch(() => null);
+
+        // Si no se encuentra con la sintaxis id[], probamos con la sintaxis singular por si acaso
+        if (!getJson || !getJson.data || getJson.data.length === 0) {
+          console.log(`[Reservas PUT] No se encontró reserva usando id[]=${id}, probando fallback con id=${id}`);
+          getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&includeInvoiceItems=true`, {
+            headers: { 
+              'token': BEDS24_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          });
+          getJson = await getRes.json().catch(() => null);
+        }
+
+        if (getJson && getJson.data && getJson.data.length > 0) {
+          currentBooking = getJson.data[0];
+          console.log(`[Reservas PUT] Reserva ${id} recuperada exitosamente para actualización de factura. Ítems: ${currentBooking.invoiceItems?.length || 0}`);
+        } else {
+          console.error(`[Reservas PUT] Error: no se pudo recuperar la reserva ${id} con id[] ni con id. Respuesta:`, getJson);
         }
       } catch (getErr) {
         console.error("[Reservas PUT] Error fetching current booking for invoice update:", getErr);
@@ -402,35 +417,37 @@ export async function PUT(req: Request) {
 
     if (price !== undefined) {
       updatePayload.price = Number(price);
-      if (currentBooking && Array.isArray(currentBooking.invoiceItems)) {
-        const charges = currentBooking.invoiceItems.filter((item: any) => Number(item.qty || 0) > 0);
-        const invoiceItemsUpdate: any[] = [];
-        if (charges.length > 0) {
-          const firstCharge = charges[0];
+      // Incluso si currentBooking es null (error de red/API), o si invoiceItems no es un array, definimos la factura.
+      // Pero si pudimos recuperar la reserva, actualizamos/borramos los ítems de cargo existentes de forma segura.
+      const currentItems = (currentBooking && Array.isArray(currentBooking.invoiceItems)) ? currentBooking.invoiceItems : [];
+      const charges = currentItems.filter((item: any) => Number(item.qty || 0) > 0);
+      const invoiceItemsUpdate: any[] = [];
+      
+      if (charges.length > 0) {
+        const firstCharge = charges[0];
+        invoiceItemsUpdate.push({
+          id: firstCharge.id,
+          description: firstCharge.description || "Room Charge",
+          qty: 1,
+          price: Number(price)
+        });
+        for (let i = 1; i < charges.length; i++) {
           invoiceItemsUpdate.push({
-            id: firstCharge.id,
-            description: firstCharge.description || "Room Charge",
-            qty: 1,
-            price: Number(price)
-          });
-          for (let i = 1; i < charges.length; i++) {
-            invoiceItemsUpdate.push({
-              id: charges[i].id,
-              description: "",
-              qty: "",
-              price: "",
-              status: ""
-            });
-          }
-        } else {
-          invoiceItemsUpdate.push({
-            description: "Room Charge",
-            qty: 1,
-            price: Number(price)
+            id: charges[i].id,
+            description: "",
+            qty: "",
+            price: "",
+            status: ""
           });
         }
-        updatePayload.invoiceItems = invoiceItemsUpdate;
+      } else {
+        invoiceItemsUpdate.push({
+          description: "Room Charge",
+          qty: 1,
+          price: Number(price)
+        });
       }
+      updatePayload.invoiceItems = invoiceItemsUpdate;
     }
     if (deposit !== undefined) {
       updatePayload.deposit = Number(deposit);
