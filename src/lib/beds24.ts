@@ -643,7 +643,7 @@ export async function fetchBeds24RatesMap(
 ): Promise<Record<string, Record<string, number>>> {
   const ratesMap: Record<string, Record<string, number>> = {};
   try {
-    const res = await fetch(`https://api.beds24.com/v2/inventory/calendar?from=${fromDateStr}&to=${toDateStr}&includePrices=true`, {
+    const res = await fetch(`https://api.beds24.com/v2/inventory/rooms/calendar?startDate=${fromDateStr}&endDate=${toDateStr}&includePrices=true`, {
       method: 'GET',
       headers: { 'token': token },
       cache: 'no-store'
@@ -653,22 +653,29 @@ export async function fetchBeds24RatesMap(
       return ratesMap;
     }
     const json = await res.json();
-    if (json && Array.isArray(json.data)) {
-      json.data.forEach((roomItem: any) => {
-        const roomId = String(roomItem.roomId);
-        ratesMap[roomId] = {};
-        if (Array.isArray(roomItem.calendar)) {
-          roomItem.calendar.forEach((dayItem: any) => {
-            const dateStr = dayItem.date;
-            // Beds24 v2 devuelve las tarifas en price1 o price
-            const dailyPrice = dayItem.price1 || dayItem.price || 0;
-            if (dailyPrice > 0) {
-              ratesMap[roomId][dateStr] = Number(dailyPrice);
+    const calData: any[] = Array.isArray(json) ? json : (json.data || []);
+
+    calData.forEach((roomItem: any) => {
+      const roomId = String(roomItem.roomId);
+      ratesMap[roomId] = {};
+      if (Array.isArray(roomItem.calendar)) {
+        roomItem.calendar.forEach((range: any) => {
+          const dailyPrice = range.price1 || range.price || 0;
+          if (dailyPrice > 0 && range.from && range.to) {
+            const start = new Date(range.from + 'T00:00:00');
+            const end = new Date(range.to + 'T00:00:00');
+            if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+              const current = new Date(start);
+              while (current <= end) {
+                const dateStr = current.toISOString().split('T')[0];
+                ratesMap[roomId][dateStr] = Number(dailyPrice);
+                current.setDate(current.getDate() + 1);
+              }
             }
-          });
-        }
-      });
-    }
+          }
+        });
+      }
+    });
   } catch (err: any) {
     console.warn(`[Beds24 Rates] Fallback to static catalog due to network or API error: ${err.message}`);
   }

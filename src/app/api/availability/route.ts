@@ -156,6 +156,21 @@ export async function GET(req: Request) {
       console.error("[Availability API] Error reading local_reservas:", localDbErr);
     }
 
+    // Cargar dynamicSettings (pricing_unit_settings) de precios
+    let dynamicSettings: any = null;
+    try {
+      const { data: settingsData } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'pricing_unit_settings')
+        .maybeSingle();
+      if (settingsData && settingsData.value) {
+        dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+      }
+    } catch (err) {
+      console.error("[Availability API] Error loading pricing_unit_settings:", err);
+    }
+
     // Construir el inventario final con disponibilidad y tarifas dinámicas
     const inventory = ROOM_MAP.map(r => {
       return {
@@ -169,7 +184,8 @@ export async function GET(req: Request) {
             checkOut, 
             'Directo', 
             beds24RatesMap, 
-            u.unitId
+            u.unitId,
+            dynamicSettings
           );
           return {
             unitId: u.unitId,
