@@ -964,8 +964,6 @@ export default function HistorialPage() {
                   type="date"
                   value={customStartDate}
                   onChange={(e) => setCustomStartDate(e.target.value)}
-                  onBlur={(e) => setCustomStartDate((e.target as HTMLInputElement).value)}
-                  onInput={(e) => setCustomStartDate((e.target as HTMLInputElement).value)}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[12px] font-semibold text-zinc-800 focus:ring-2 focus:ring-zinc-900/10"
                 />
               </div>
@@ -975,8 +973,6 @@ export default function HistorialPage() {
                   type="date"
                   value={customEndDate}
                   onChange={(e) => setCustomEndDate(e.target.value)}
-                  onBlur={(e) => setCustomEndDate((e.target as HTMLInputElement).value)}
-                  onInput={(e) => setCustomEndDate((e.target as HTMLInputElement).value)}
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[12px] font-semibold text-zinc-800 focus:ring-2 focus:ring-zinc-900/10"
                 />
               </div>

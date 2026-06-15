@@ -696,8 +696,6 @@ export default function AnalyticsPage() {
                   type="date"
                   value={startDate}
                   onChange={e => setStartDate(e.target.value)}
-                  onBlur={e => setStartDate((e.target as HTMLInputElement).value)}
-                  onInput={e => setStartDate((e.target as HTMLInputElement).value)}
                   className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
                 />
               </div>
@@ -707,16 +705,14 @@ export default function AnalyticsPage() {
                   type="date"
                   value={endDate}
                   onChange={e => setEndDate(e.target.value)}
-                  onBlur={e => setEndDate((e.target as HTMLInputElement).value)}
-                  onInput={e => setEndDate((e.target as HTMLInputElement).value)}
                   className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
                 />
               </div>
-              {(startDate !== "" || endDate !== "") && (
+              {(startDate !== defaultStart || endDate !== defaultEnd) && (
                 <button
                   onClick={() => {
-                    setStartDate("");
-                    setEndDate("");
+                    setStartDate(defaultStart);
+                    setEndDate(defaultEnd);
                   }}
                   className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-xl text-[11px] font-extrabold transition-all active:scale-95 cursor-pointer shrink-0"
                 >
