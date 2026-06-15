@@ -346,7 +346,8 @@ export async function PUT(req: Request) {
     const { getBeds24RoomIdAndUnit, getRoomMetadata } = await import('@/lib/beds24');
 
     const updatePayload: any = {
-      id: Number(id)
+      id: Number(id),
+      bookId: Number(id)
     };
 
     let displayRoomName = '';
@@ -382,8 +383,11 @@ export async function PUT(req: Request) {
     let currentBooking: any = null;
     if (price !== undefined) {
       try {
-        const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&includeInvoiceItems=true`, {
-          headers: { 'token': BEDS24_TOKEN }
+        const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&id[]=${id}&includeInvoiceItems=true`, {
+          headers: { 
+            'token': BEDS24_TOKEN,
+            'Content-Type': 'application/json'
+          }
         });
         if (getRes.ok) {
           const getJson = await getRes.json();
