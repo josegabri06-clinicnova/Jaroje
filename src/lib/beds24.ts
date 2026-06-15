@@ -878,10 +878,11 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
       const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
 
       const roomData = getRoomMetadata(b.roomId, b.roomName);
-      let pricePerNight = b.price ? (Number(b.price) / nights) : null;
-      if (!isOTA && (!pricePerNight || pricePerNight < 10)) {
+      let pricePerNight = (b.price !== undefined && b.price !== null && b.price !== '') ? (Number(b.price) / nights) : null;
+      const hasInvoiceItems = Array.isArray(b.invoiceItems) && b.invoiceItems.length > 0;
+      if (!isOTA && (pricePerNight === null || (pricePerNight < 10 && !hasInvoiceItems))) {
         pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap, String(b.unitId || ''), dynamicSettings);
-      } else if (isOTA && !pricePerNight) {
+      } else if (isOTA && pricePerNight === null) {
         pricePerNight = 0;
       }
       pricePerNight = Math.round(pricePerNight ?? 0);
