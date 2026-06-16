@@ -928,14 +928,45 @@ export default function StaffPage() {
       }
     }
 
+    const reportedForm = { ...form };
+    const reportedOperator = operatorName;
+
     setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: 'General', description: '' });
     setImagePreview(null);
     setImagePreviews([]);
     setShowForm(false);
-    setSuccessMsg('¡Reporte enviado con éxito!');
     fetchData();
-    setTimeout(() => setSuccessMsg(''), 3000);
     setSubmitting(false);
+
+    // Si es reporte de MANTENIMIENTO → copiar al clipboard y abrir grupo WhatsApp MTTO
+    if (reportedForm.type === 'mantenimiento') {
+      const dateStr = format(new Date(), "EEEE, d 'de' MMMM · HH:mm", { locale: es });
+      const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(reportedForm.room);
+      const ubicacion = isRoom ? `Habitación ${reportedForm.room}` : reportedForm.room;
+
+      const waText =
+        `🔧 *REPORTE DE MANTENIMIENTO*\n` +
+        `🏨 *Jaroje Condominios*\n` +
+        `📅 *${dateStr.toUpperCase()}*\n\n` +
+        `📍 *Ubicación:* ${ubicacion}\n` +
+        `📝 *Descripción:* ${reportedForm.description}\n` +
+        `👤 *Reportado por:* ${reportedOperator}\n\n` +
+        `_Generado automáticamente desde Jaroje OS_`;
+
+      navigator.clipboard.writeText(waText).then(() => {
+        setSuccessMsg('🔧 ¡Reporte copiado! Abriendo grupo de Mantenimiento...');
+        setTimeout(() => setSuccessMsg(''), 5000);
+      }).catch(() => {
+        setSuccessMsg('¡Reporte enviado con éxito!');
+        setTimeout(() => setSuccessMsg(''), 3000);
+      });
+
+      // Abrir grupo de WhatsApp de Mantenimiento
+      window.open('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', '_blank');
+    } else {
+      setSuccessMsg('¡Reporte enviado con éxito!');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    }
   };
 
   const openMaintenanceReport = () => {
@@ -982,12 +1013,15 @@ export default function StaffPage() {
     text += `_Generado automáticamente desde Jaroje OS_`;
 
     navigator.clipboard.writeText(text).then(() => {
-      setSuccessMsg('📋 ¡Reporte de limpieza copiado al portapapeles! Listo para WhatsApp.');
+      setSuccessMsg('📋 ¡Reporte copiado! Abriendo WhatsApp...');
       setTimeout(() => setSuccessMsg(''), 4000);
     }).catch(err => {
       console.error("Error al copiar al portapapeles:", err);
       alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
     });
+
+    // Abrir de inmediato el enlace de invitación al grupo de WhatsApp
+    window.open('https://chat.whatsapp.com/GB3Mz5s1unl6wZhp5kzv4X', '_blank');
   };
 
   // Obtener estado de una habitación
