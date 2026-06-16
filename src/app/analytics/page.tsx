@@ -692,22 +692,28 @@ export default function AnalyticsPage() {
               </div>
             </div>
             <div className="flex flex-row items-center gap-3 flex-wrap md:flex-nowrap">
-              <div className="flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px]">
+              <div className="relative flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px] cursor-pointer hover:bg-zinc-50 transition-colors">
                 <span className="text-[9px] font-extrabold text-zinc-450 uppercase tracking-widest">Desde</span>
+                <span className="text-[12px] font-black text-zinc-800 pr-0.5">
+                  {startDate ? startDate : 'Seleccionar'}
+                </span>
                 <input
                   type="date"
                   value={startDate}
                   onChange={e => setStartDate(e.target.value)}
-                  className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                 />
               </div>
-              <div className="flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px]">
+              <div className="relative flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px] cursor-pointer hover:bg-zinc-50 transition-colors">
                 <span className="text-[9px] font-extrabold text-zinc-450 uppercase tracking-widest">Hasta</span>
+                <span className="text-[12px] font-black text-zinc-800 pr-0.5">
+                  {endDate ? endDate : 'Seleccionar'}
+                </span>
                 <input
                   type="date"
                   value={endDate}
                   onChange={e => setEndDate(e.target.value)}
-                  className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                 />
               </div>
               {(startDate !== '' || endDate !== '') && (
