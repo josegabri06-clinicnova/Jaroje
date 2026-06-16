@@ -216,6 +216,15 @@ const getReservaStatusColor = (booking: any, todayStr: string) => {
 export default function CalendarPage() {
   const router = useRouter();
   const [startDate, setStartDate] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = sessionStorage.getItem('jaroje_calendar_start_date');
+      if (saved) {
+        const parsed = new Date(saved);
+        if (!isNaN(parsed.getTime())) {
+          return parsed;
+        }
+      }
+    }
     const d = subDays(new Date(), 1);
     d.setHours(0, 0, 0, 0);
     return d;
@@ -333,6 +342,12 @@ export default function CalendarPage() {
     fetchData();
     setUserRole(localStorage.getItem('jaroje_role'));
   }, []);
+
+  useEffect(() => {
+    if (startDate) {
+      sessionStorage.setItem('jaroje_calendar_start_date', startDate.toISOString());
+    }
+  }, [startDate]);
 
   useEffect(() => {
     if (selectedReserva?.check_in && selectedReserva?.check_out) {
@@ -1354,8 +1369,14 @@ export default function CalendarPage() {
             {isLoading ? 'Sincronizando...' : `${reservas.length} reservas · Vista semanal`}
           </p>
         </div>
-        <button onClick={fetchData} disabled={isLoading}
-          className="w-9 h-9 flex items-center justify-center bg-white border border-zinc-200 rounded-xl shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
+        <button 
+          onClick={() => {
+            goToday();
+            fetchData();
+          }} 
+          disabled={isLoading}
+          className="w-9 h-9 flex items-center justify-center bg-white border border-zinc-200 rounded-xl shadow-sm hover:bg-zinc-50 active:scale-95 transition-all"
+        >
           <RefreshCw size={15} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
       </div>
