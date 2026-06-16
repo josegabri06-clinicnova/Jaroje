@@ -381,8 +381,9 @@ export default function AnalyticsPage() {
   const filteredFinanzas = useMemo(() => {
     return finanzas.filter(f => {
       if (!f.date) return false;
-      const matchStart = startDate ? f.date >= startDate : true;
-      const matchEnd = endDate ? f.date <= endDate : true;
+      const datePart = (f.date || '').substring(0, 10);
+      const matchStart = startDate ? datePart >= startDate : true;
+      const matchEnd = endDate ? datePart <= endDate : true;
       return matchStart && matchEnd;
     });
   }, [finanzas, startDate, endDate]);
@@ -469,7 +470,8 @@ export default function AnalyticsPage() {
         // Filtrar transacciones del mes
         const monthFinances = finanzas.filter(f => {
           if (!f.date) return false;
-          const fDate = new Date(f.date + 'T12:00:00');
+          const datePart = (f.date || '').substring(0, 10);
+          const fDate = new Date(datePart + 'T12:00:00');
           return fDate.getFullYear() === year && fDate.getMonth() === monthIdx;
         });
 

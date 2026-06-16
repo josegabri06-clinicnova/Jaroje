@@ -29,7 +29,8 @@ export async function GET(req: Request) {
       // Filtrar por tiempo
       let matchTime = true;
       if (timeFilter !== 'todo') {
-        const rDate = new Date(r.date + 'T00:00:00'); // Evitar problemas de huso horario
+        const datePart = (r.date || '').substring(0, 10);
+        const rDate = new Date(datePart + 'T00:00:00'); // Evitar problemas de huso horario
         if (timeFilter === 'hoy') {
           matchTime = rDate.toDateString() === today.toDateString();
         } else if (timeFilter === 'semana') {
@@ -43,11 +44,12 @@ export async function GET(req: Request) {
 
       // Filtrar por rango de fechas específico
       let matchDateRange = true;
+      const datePartRange = (r.date || '').substring(0, 10);
       if (startDate) {
-        matchDateRange = matchDateRange && (r.date >= startDate);
+        matchDateRange = matchDateRange && (datePartRange >= startDate);
       }
       if (endDate) {
-        matchDateRange = matchDateRange && (r.date <= endDate);
+        matchDateRange = matchDateRange && (datePartRange <= endDate);
       }
 
       // Filtrar por búsqueda de texto
@@ -88,7 +90,8 @@ export async function GET(req: Request) {
       "sep=;", // Le indica a Excel que fuerce la separación por punto y coma
       headers.join(";"),
       ...filtered.map(r => {
-        const rDate = r.date ? new Date(r.date + 'T00:00:00') : new Date(); // Evitar desfasamiento de zona horaria
+        const datePart = (r.date || '').substring(0, 10);
+        const rDate = datePart ? new Date(datePart + 'T00:00:00') : new Date(); // Evitar desfasamiento de zona horaria
         const dateStr = format(rDate, 'dd/MM/yyyy');
         const descStr = String(r.description || '').replace(/"/g, '""').replace(/;/g, ' ').replace(/\r?\n|\r/g, ' ');
         const catStr = String(r.category || '').replace(/"/g, '""').replace(/;/g, ' ');

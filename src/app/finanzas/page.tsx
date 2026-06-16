@@ -881,7 +881,8 @@ export default function FinanzasPage() {
     // 1. Filtrar por tiempo (hoy, semana, mes, todo)
     let matchTime = true;
     if (filterType !== 'todo') {
-      const rDate = new Date(r.date + 'T12:00:00Z'); // Evitar problemas de timezone
+      const datePart = (r.date || '').substring(0, 10);
+      const rDate = new Date(datePart + 'T12:00:00Z'); // Evitar problemas de timezone
       const today = new Date();
       if (filterType === 'hoy') {
         matchTime = rDate.toDateString() === today.toDateString();
@@ -896,11 +897,12 @@ export default function FinanzasPage() {
 
     // 2. Filtrar por rango de fechas
     let matchDateRange = true;
+    const datePartRange = (r.date || '').substring(0, 10);
     if (startDate) {
-      matchDateRange = matchDateRange && (r.date >= startDate);
+      matchDateRange = matchDateRange && (datePartRange >= startDate);
     }
     if (endDate) {
-      matchDateRange = matchDateRange && (r.date <= endDate);
+      matchDateRange = matchDateRange && (datePartRange <= endDate);
     }
 
     // 3. Filtrar por búsqueda de texto
@@ -1508,7 +1510,7 @@ export default function FinanzasPage() {
                           {record.type === 'ingreso' ? '+' : '-'}MX${Math.round(record.amount).toLocaleString('es-MX')}
                         </span>
                         <span className="text-[11px] text-zinc-400 font-medium">
-                          {format(new Date(record.date + 'T12:00:00Z'), 'd MMM', { locale: es })}
+                          {format(new Date((record.date || '').substring(0, 10) + 'T12:00:00Z'), 'd MMM', { locale: es })}
                         </span>
                       </div>
                       
@@ -2008,7 +2010,7 @@ export default function FinanzasPage() {
                     filteredRecords.map(r => (
                       <tr key={r.id} className="hover:bg-zinc-100/50 transition-colors">
                         <td className="p-3 whitespace-nowrap font-bold text-zinc-500">
-                          {format(new Date(r.date + 'T12:00:00Z'), 'dd/MM/yyyy')}
+                          {format(new Date((r.date || '').substring(0, 10) + 'T12:00:00Z'), 'dd/MM/yyyy')}
                         </td>
                         <td className="p-3 whitespace-nowrap">
                           <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-extrabold border uppercase tracking-wider ${
