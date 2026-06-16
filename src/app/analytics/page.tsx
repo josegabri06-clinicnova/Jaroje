@@ -710,11 +710,11 @@ export default function AnalyticsPage() {
                   className="bg-transparent border-none text-[12px] font-black text-zinc-800 outline-none cursor-pointer p-0.5 text-right"
                 />
               </div>
-              {(startDate !== defaultStart || endDate !== defaultEnd) && (
+              {(startDate !== '' || endDate !== '') && (
                 <button
                   onClick={() => {
-                    setStartDate(defaultStart);
-                    setEndDate(defaultEnd);
+                    setStartDate('');
+                    setEndDate('');
                   }}
                   className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-xl text-[11px] font-extrabold transition-all active:scale-95 cursor-pointer shrink-0"
                 >
