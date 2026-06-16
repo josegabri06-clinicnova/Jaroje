@@ -5214,12 +5214,30 @@ export default function RecepcionPage() {
                       }
                     }
 
+                    const reportedRoom = form.room;
+                    const reportedDesc = form.description;
+
                     setForm({ type: 'mantenimiento', room: 'General', description: '' });
                     setPhotoFile(null);
                     setPhotoBase64(null);
                     setShowForm(false);
-                    alert('¡Incidencia de mantenimiento reportada con éxito!');
                     setSubmitting(false);
+
+                    // Copiar reporte al clipboard y abrir grupo WhatsApp de Mantenimiento
+                    const dateStr = format(new Date(), "EEEE, d 'de' MMMM · HH:mm", { locale: es });
+                    const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(reportedRoom);
+                    const ubicacion = isRoom ? `Habitación ${reportedRoom}` : reportedRoom;
+                    const waText =
+                      `🔧 *REPORTE DE MANTENIMIENTO*\n` +
+                      `🏨 *Jaroje Condominios*\n` +
+                      `📅 *${dateStr.toUpperCase()}*\n\n` +
+                      `📍 *Ubicación:* ${ubicacion}\n` +
+                      `📝 *Descripción:* ${reportedDesc}\n` +
+                      `👤 *Reportado por:* ${operatorName}\n\n` +
+                      `_Generado automáticamente desde Jaroje OS_`;
+
+                    navigator.clipboard.writeText(waText).catch(() => {});
+                    window.open('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', '_blank');
                   });
                 }}
                 disabled={!form.description.trim() || submitting}

@@ -330,6 +330,22 @@ export default function MantenimientoPage() {
           }
         })
       );
+
+      // Copiar reporte al clipboard y abrir grupo WhatsApp de Mantenimiento
+      const dateStr = format(new Date(), "EEEE, d 'de' MMMM · HH:mm", { locale: es });
+      const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(payload.room);
+      const ubicacion = isRoom ? `Habitación ${payload.room}` : payload.room;
+      const waText =
+        `🔧 *REPORTE DE MANTENIMIENTO*\n` +
+        `🏨 *Jaroje Condominios*\n` +
+        `📅 *${dateStr.toUpperCase()}*\n\n` +
+        `📍 *Ubicación:* ${ubicacion}\n` +
+        `📝 *Descripción:* ${payload.description}\n` +
+        `👤 *Reportado por:* ${payload.reported_by}\n\n` +
+        `_Generado automáticamente desde Jaroje OS_`;
+
+      navigator.clipboard.writeText(waText).catch(() => {});
+      window.open('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', '_blank');
     }
 
     setShowModal(false);
