@@ -259,6 +259,11 @@ export default function MantenimientoPage() {
     if (!formDesc) return;
     setIsSaving(true);
 
+    // Abrir ventana ANTES de los awaits (el navegador bloquea window.open después de async)
+    // Solo para nuevas tareas de mantenimiento
+    const isNewMtto = !editingTask && formType === 'mantenimiento';
+    const waWindow = isNewMtto ? window.open('about:blank', '_blank') : null;
+
     let finalPhotoUrl = editingTask?.photo_url;
     let finalResPhotoUrl = editingTask?.resolution_photo_url;
 
@@ -331,7 +336,7 @@ export default function MantenimientoPage() {
         })
       );
 
-      // Copiar reporte al clipboard y abrir grupo WhatsApp de Mantenimiento
+      // Copiar reporte al clipboard y redirigir la ventana ya abierta al grupo de WhatsApp
       const dateStr = format(new Date(), "EEEE, d 'de' MMMM · HH:mm", { locale: es });
       const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(payload.room);
       const ubicacion = isRoom ? `Habitación ${payload.room}` : payload.room;
@@ -345,7 +350,10 @@ export default function MantenimientoPage() {
         `_Generado automáticamente desde Jaroje OS_`;
 
       navigator.clipboard.writeText(waText).catch(() => {});
-      window.open('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', '_blank');
+      // Redirigir la ventana ya abierta (evita bloqueo del navegador)
+      if (waWindow) {
+        waWindow.location.href = 'https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq';
+      }
     }
 
     setShowModal(false);
