@@ -466,6 +466,7 @@ export default function RecepcionPage() {
   const [abonoFlowPaymentMethod, setAbonoFlowPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [abonoFlowAccountId, setAbonoFlowAccountId] = useState('');
   const [abonoFlowLoading, setAbonoFlowLoading] = useState(false);
+  const [abonoGrupalMode, setAbonoGrupalMode] = useState(false); // true = distribuir entre grupo
 
   // Inicializar estados editados al cambiar de reserva
   useEffect(() => {
@@ -894,6 +895,138 @@ export default function RecepcionPage() {
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al registrar anticipo:\n\n${err.message}`);
+    } finally {
+      setAbonoFlowLoading(false);
+    }
+  };
+
+  // Registrar anticipo grupal proporcional
+  const handleRegisterAbonoGrupal = async () => {
+    if (!selectedReserva || !abonoAmount || !abonoFlowPaymentMethod || !abonoFlowAccountId) return;
+    if (directGroupBookings.length === 0) return;
+    setAbonoFlowLoading(true);
+    try {
+      const totalAmount = Number(abonoAmount);
+      const totalBalance = directGroupTotalBalance;
+      const todayStr = new Date().toLocaleDateString('sv-SE');
+      const emp = getActiveEmployee('recepcion');
+      const employeeNum = emp?.employee_num || '999';
+      const employeeName = emp?.full_name || 'Administrador';
+
+      // Procesar cada habitación del grupo proporcionalmente
+      for (const booking of directGroupBookings) {
+        const bookingBalance = booking.balance !== undefined
+          ? booking.balance
+          : Math.max(0, (booking.price_estimate || 0) - (booking.deposit || 0));
+
+        // Proporción: si el balance total es 0, distribuir en partes iguales
+        const proportion = totalBalance > 0
+          ? bookingBalance / totalBalance
+          : 1 / directGroupBookings.length;
+
+        const bookingAmount = Math.round(totalAmount * proportion * 100) / 100;
+        if (bookingAmount <= 0) continue;
+
+        const newDeposit = (booking.deposit || 0) + bookingAmount;
+
+        // 1. Actualizar depósito en Beds24
+        const res = await fetch('/api/reservas', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: booking.id, deposit: newDeposit })
+        });
+        if (!res.ok) {
+          console.error(`Error actualizando depósito de reserva ${booking.id}`);
+          continue;
+        }
+
+        // 2. Registrar en Finanzas
+        await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: bookingAmount,
+          category: 'Alojamiento',
+          description: `Anticipo Grupal – ${booking.guest_name} (ID: ${booking.id}) Hab ${booking.room}`,
+          payment_method: abonoFlowPaymentMethod,
+          account_id: abonoFlowAccountId,
+          date: todayStr
+        });
+
+        // 3. Registrar pago en Beds24
+        try {
+          await fetch('/api/reservas/payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookId: booking.id,
+              amount: bookingAmount,
+              paymentMethod: abonoFlowPaymentMethod,
+              employeeNum,
+              description: `Anticipo Grupal ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
+            })
+          });
+        } catch (e) { console.error('Error pago Beds24:', e); }
+
+        // 4. Log de auditoría por habitación
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: employeeNum,
+              employee_name: employeeName,
+              department: emp?.department || 'recepcion',
+              module: 'recepcion',
+              action: 'abono_grupal_registrado',
+              room: booking.room || 'General',
+              details: JSON.stringify({
+                text: `Anticipo grupal de MX$${bookingAmount} aplicado a ${booking.guest_name} Hab ${booking.room} (proporcional del total MX$${totalAmount})`,
+                abono: { bookingId: booking.id, amount: bookingAmount, method: abonoFlowPaymentMethod, accountId: abonoFlowAccountId }
+              })
+            })
+          });
+        } catch (e) { console.error('Error log abono grupal:', e); }
+
+        // 5. Actualizar estado local de la reserva
+        setReservas(prev => prev.map(r => String(r.id) === String(booking.id) ? {
+          ...r,
+          deposit: newDeposit,
+          balance: Math.max(0, (r.price_estimate || 0) - newDeposit)
+        } : r));
+      }
+
+      // Actualizar balance de la cuenta destino (una sola vez al final)
+      const matchedAcc = accounts.find(a => a.id === abonoFlowAccountId);
+      if (matchedAcc) {
+        const newBalance = matchedAcc.balance + totalAmount;
+        const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoFlowAccountId);
+        if (!accErr) setAccounts(prev => prev.map(a => a.id === abonoFlowAccountId ? { ...a, balance: newBalance } : a));
+      }
+
+      // Actualizar selectedReserva
+      const mainBooking = directGroupBookings.find(b => String(b.id) === String(selectedReserva.id));
+      if (mainBooking) {
+        const mainBalance = mainBooking.balance !== undefined ? mainBooking.balance : Math.max(0, (mainBooking.price_estimate || 0) - (mainBooking.deposit || 0));
+        const mainProportion = totalBalance > 0 ? mainBalance / totalBalance : 1 / directGroupBookings.length;
+        const mainAmount = Math.round(totalAmount * mainProportion * 100) / 100;
+        const newMainDeposit = (selectedReserva.deposit || 0) + mainAmount;
+        setSelectedReserva((prev: any) => ({
+          ...prev,
+          deposit: newMainDeposit,
+          balance: Math.max(0, (prev.price_estimate || 0) - newMainDeposit)
+        }));
+      }
+
+      setShowAbonoFlow(false);
+      setAbonoGrupalMode(false);
+      setAbonoAmount('');
+      setAbonoFlowPaymentMethod(null);
+      setAbonoFlowAccountId('');
+      alert(`✅ Anticipo grupal de ${fmtCurrency(totalAmount, selectedReserva.guest_name)} distribuido en ${directGroupBookings.length} habitaciones.`);
+
+      setTimeout(() => { fetchData(); }, 3000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al registrar anticipo grupal:\n\n${err.message}`);
     } finally {
       setAbonoFlowLoading(false);
     }
@@ -4430,7 +4563,6 @@ export default function RecepcionPage() {
                       <span>{selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
                     </div>
                   </div>
-
                   {/* Notas del Huésped */}
                   {/* Notas del Huésped — editable durante el check-in */}
                   {selectedReserva.id !== 'walkin' && (
@@ -4454,7 +4586,7 @@ export default function RecepcionPage() {
                           <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
                             <h4 className="text-[12px] font-extrabold text-zinc-855 uppercase tracking-wider">💰 Registrar Nuevo Anticipo</h4>
                             <button 
-                              onClick={() => setShowAbonoFlow(false)}
+                              onClick={() => { setShowAbonoFlow(false); setAbonoGrupalMode(false); }}
                               className="text-[11px] font-bold text-zinc-500 hover:text-zinc-755"
                             >
                               ✕ Cancelar
@@ -4470,17 +4602,12 @@ export default function RecepcionPage() {
                                 value={abonoAmount}
                                 onChange={e => {
                                   const val = e.target.value;
-                                  if (val === '') {
-                                    setAbonoAmount('');
-                                    return;
-                                  }
-                                  const bal = Number(editedPrice || 0) - Number(editedDeposit || 0);
-                                  const maxVal = Math.max(0, bal);
-                                  if (Number(val) > maxVal) {
-                                    setAbonoAmount(String(maxVal));
-                                  } else {
-                                    setAbonoAmount(val);
-                                  }
+                                  if (val === '') { setAbonoAmount(''); return; }
+                                  const maxBal = abonoGrupalMode
+                                    ? directGroupTotalBalance
+                                    : Math.max(0, Number(editedPrice || 0) - Number(editedDeposit || 0));
+                                  if (Number(val) > maxBal) setAbonoAmount(String(maxBal));
+                                  else setAbonoAmount(val);
                                 }}
                                 placeholder="0.00"
                                 className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
@@ -4488,11 +4615,56 @@ export default function RecepcionPage() {
                             </div>
                             <span className="text-[10px] text-zinc-500 mt-1 block pl-0.5 font-medium">
                               * Monto máximo: {fmtCurrency(
-                                Math.max(0, Number(editedPrice || 0) - Number(editedDeposit || 0)),
+                                abonoGrupalMode
+                                  ? directGroupTotalBalance
+                                  : Math.max(0, Number(editedPrice || 0) - Number(editedDeposit || 0)),
                                 selectedReserva.guest_name
                               )}
                             </span>
                           </div>
+
+                          {/* Toggle Grupal — solo si hay hermanas de grupo */}
+                          {siblingBookings.length > 0 && (
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-2.5 animate-in fade-in duration-200">
+                              <p className="text-[11px] font-bold text-blue-800 leading-snug">
+                                🏨 Grupo detectado: <span className="font-extrabold">{siblingBookings.length + 1} habitaciones</span> (Hab. {groupBookings.map(b => b.room).join(', ')})
+                              </p>
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => { setAbonoGrupalMode(false); setAbonoAmount(''); }}
+                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${!abonoGrupalMode ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}`}
+                                >
+                                  Solo esta hab.
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setAbonoGrupalMode(true); setAbonoAmount(''); }}
+                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${abonoGrupalMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}`}
+                                >
+                                  Distribuir en grupo ({siblingBookings.length + 1} hab.)
+                                </button>
+                              </div>
+
+                              {/* Desglose proporcional */}
+                              {abonoGrupalMode && abonoAmount && Number(abonoAmount) > 0 && (
+                                <div className="space-y-1.5 pt-1 border-t border-blue-200/60 animate-in fade-in duration-150">
+                                  <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-widest">Distribución proporcional al balance</p>
+                                  {directGroupBookings.map(b => {
+                                    const bBal = b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0));
+                                    const prop = directGroupTotalBalance > 0 ? bBal / directGroupTotalBalance : 1 / directGroupBookings.length;
+                                    const amt = Math.round(Number(abonoAmount) * prop * 100) / 100;
+                                    return (
+                                      <div key={b.id} className="flex justify-between items-center text-[10px]">
+                                        <span className="font-bold text-blue-800">Hab. {b.room}</span>
+                                        <span className="font-extrabold text-blue-900">{fmtCurrency(amt, b.guest_name)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           <div className="space-y-1.5">
                             <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-widest block">Método de Pago</span>
@@ -4567,11 +4739,11 @@ export default function RecepcionPage() {
                           )}
 
                           <button
-                            onClick={handleRegisterAbono}
+                            onClick={abonoGrupalMode ? handleRegisterAbonoGrupal : handleRegisterAbono}
                             disabled={abonoFlowLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoFlowPaymentMethod || !abonoFlowAccountId}
-                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className={`w-full py-3 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 ${abonoGrupalMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                           >
-                            {abonoFlowLoading ? 'Procesando...' : 'Confirmar Registro de Anticipo'}
+                            {abonoFlowLoading ? 'Procesando...' : abonoGrupalMode ? `Distribuir en ${directGroupBookings.length} habitaciones` : 'Confirmar Registro de Anticipo'}
                           </button>
                         </div>
                       ) : (
