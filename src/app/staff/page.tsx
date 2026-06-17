@@ -1095,24 +1095,24 @@ export default function StaffPage() {
           <div className="grid grid-cols-3 gap-2.5">
             <button 
               onClick={() => setKpiModalType('encasa')}
-              className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-center items-center cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+              className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
-              <p className="text-2xl font-black text-zinc-900 leading-none mb-1">{ocupadas.length}</p>
-              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">En casa</p>
+              <p className="text-[20px] font-bold text-zinc-900">{ocupadas.length}</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">En casa</p>
             </button>
             <button 
               onClick={() => setKpiModalType('llegan')}
-              className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-center items-center cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+              className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
-              <p className="text-2xl font-black text-emerald-600 leading-none mb-1">{llegadas.length}</p>
-              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">Llegan</p>
+              <p className="text-[20px] font-bold text-emerald-600">{llegadas.length}</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan</p>
             </button>
             <button 
               onClick={() => setKpiModalType('salen')}
-              className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm flex flex-col justify-center items-center cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
+              className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
-              <p className="text-2xl font-black text-amber-500 leading-none mb-1">{salidas.length}</p>
-              <p className="text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider">Por salir</p>
+              <p className="text-[20px] font-bold text-amber-500">{salidas.length}</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Por salir</p>
             </button>
           </div>
         )}
