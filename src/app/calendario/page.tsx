@@ -755,22 +755,6 @@ export default function CalendarPage() {
       }
 
       try {
-        await fetch('/api/reservas/payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookId: selectedReserva.id,
-            amount: amountNum,
-            paymentMethod: abonoFlowPaymentMethod,
-            employeeNum: getActiveEmployee('recepcion')?.employee_num || '999',
-            description: `Anticipo ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
-          })
-        });
-      } catch (payB24Err) {
-        console.error("Error al registrar pago en Beds24:", payB24Err);
-      }
-
-      try {
         const emp = getActiveEmployee('recepcion');
         const employeeNum = emp?.employee_num || '999';
         const employeeName = emp?.full_name || 'Administrador';
@@ -862,20 +846,6 @@ export default function CalendarPage() {
           account_id: abonoFlowAccountId,
           date: todayStr
         });
-
-        try {
-          await fetch('/api/reservas/payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookId: booking.id,
-              amount: bookingAmount,
-              paymentMethod: abonoFlowPaymentMethod,
-              employeeNum,
-              description: `Anticipo Grupal ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
-            })
-          });
-        } catch (e) { console.error('Error pago Beds24:', e); }
 
         try {
           await fetch('/api/employee-logs', {

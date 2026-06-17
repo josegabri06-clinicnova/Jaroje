@@ -823,23 +823,6 @@ export default function RecepcionPage() {
         }
       }
 
-      // Registrar el pago en Beds24 en tiempo real
-      try {
-        await fetch('/api/reservas/payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookId: selectedReserva.id,
-            amount: amountNum,
-            paymentMethod: abonoFlowPaymentMethod,
-            employeeNum: getActiveEmployee('recepcion')?.employee_num || '999',
-            description: `Anticipo ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
-          })
-        });
-      } catch (payB24Err) {
-        console.error("Error al registrar pago en Beds24:", payB24Err);
-      }
-
       // Registrar log de anticipo
       try {
         const emp = getActiveEmployee('recepcion');
@@ -950,21 +933,6 @@ export default function RecepcionPage() {
           account_id: abonoFlowAccountId,
           date: todayStr
         });
-
-        // 3. Registrar pago en Beds24
-        try {
-          await fetch('/api/reservas/payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookId: booking.id,
-              amount: bookingAmount,
-              paymentMethod: abonoFlowPaymentMethod,
-              employeeNum,
-              description: `Anticipo Grupal ${abonoFlowPaymentMethod.toUpperCase()} [Jaroje OS]`
-            })
-          });
-        } catch (e) { console.error('Error pago Beds24:', e); }
 
         // 4. Log de auditoría por habitación
         try {
