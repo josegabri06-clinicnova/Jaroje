@@ -2012,11 +2012,20 @@ export default function CalendarPage() {
                       )}
                     </div>
 
-                    {isReassigning && (
+                    {isReassigning && (() => {
+                      const LOCAL_ROOMS = ['500','501','502','503','504','505','506','507'];
+                      const isLocalBooking = LOCAL_ROOMS.some(lr => (selectedReserva.room || '').includes(lr));
+                      const filteredGroups = PHYSICAL_ROOM_GROUPS
+                        .map(group => ({
+                          ...group,
+                          rooms: group.rooms.filter(r => isLocalBooking ? LOCAL_ROOMS.includes(r) : !LOCAL_ROOMS.includes(r))
+                        }))
+                        .filter(group => group.rooms.length > 0);
+                      return (
                       <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200 text-left">
                         <div>
                           <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5">
-                            Seleccionar Nueva Habitación (Filtro de Disponibilidad)
+                            Seleccionar Nueva Habitación {isLocalBooking ? '(Local)' : '(Filtro de Disponibilidad)'}
                           </label>
                           <select
                             value={targetRoomName}
@@ -2027,7 +2036,7 @@ export default function CalendarPage() {
                             <option value="" disabled>
                               {loadingAvailability ? '⏳ Analizando ocupación en tiempo real...' : 'Selecciona una habitación física...'}
                             </option>
-                            {PHYSICAL_ROOM_GROUPS.map(group => (
+                            {filteredGroups.map(group => (
                               <optgroup key={group.category} label={group.category}>
                                 {group.rooms.map(room => {
                                   const isAvail = availableRooms[room] !== false;
@@ -2059,7 +2068,7 @@ export default function CalendarPage() {
                           </button>
                         </div>
                       </div>
-                    )}
+                    ); })()}
                   </div>
 
                   {/* 4. Canal reservado (directo, Airbnb, Booking) */}
