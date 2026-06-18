@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
@@ -149,6 +149,7 @@ export default function ReservasList() {
   const [abonoPaymentMethod, setAbonoPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [abonoAccountId, setAbonoAccountId] = useState('');
   const [abonoLoading, setAbonoLoading] = useState(false);
+  const [abonoGrupalMode, setAbonoGrupalMode] = useState(false);
 
   // Estados para abonar/editar anticipo rápido en detalles
   const [isEditingDepositInline, setIsEditingDepositInline] = useState(false);
@@ -861,6 +862,38 @@ export default function ReservasList() {
     }
   };
 
+  // --- Grupo de reservas para anticipo grupal ---
+  const siblingBookings = useMemo(() => {
+    if (!selectedRes) return [];
+    const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+    const mainName = cleanStr(selectedRes.guest_name || '');
+    const mainPhone = (selectedRes.guest_phone || '').trim();
+    return reservas.filter(r => {
+      if (r.check_in !== selectedRes.check_in || r.id === selectedRes.id || r.is_checked_out) return false;
+      const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone;
+      const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
+      return samePhone || sameName;
+    });
+  }, [selectedRes, reservas]);
+
+  const groupBookings = useMemo(() => {
+    if (!selectedRes) return [];
+    return [selectedRes, ...siblingBookings];
+  }, [selectedRes, siblingBookings]);
+
+  const isOtaRoom = (r: any) => ['Airbnb', 'Booking.com'].includes(r.channel || '');
+
+  const directGroupBookings = useMemo(() => {
+    return groupBookings.filter(r => !isOtaRoom(r));
+  }, [groupBookings]);
+
+  const directGroupTotalBalance = useMemo(() => {
+    return directGroupBookings.reduce((sum, r) => {
+      const bal = r.balance !== undefined ? r.balance : Math.max(0, (r.price_estimate || 0) - (r.deposit || 0));
+      return sum + bal;
+    }, 0);
+  }, [directGroupBookings]);
+
   const handleRegisterAbono = async () => {
     if (!selectedRes || !abonoAmount || !abonoPaymentMethod || !abonoAccountId) return;
     setAbonoLoading(true);
@@ -970,6 +1003,115 @@ export default function ReservasList() {
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al registrar anticipo:\n\n${err.message}`);
+    } finally {
+      setAbonoLoading(false);
+    }
+  };
+
+  // Registrar anticipo grupal proporcional (Reservas / Admin)
+  const handleRegisterAbonoGrupal = async () => {
+    if (!selectedRes || !abonoAmount || !abonoPaymentMethod || !abonoAccountId) return;
+    if (directGroupBookings.length === 0) return;
+    setAbonoLoading(true);
+    try {
+      const totalAmount = Number(abonoAmount);
+      const totalBalance = directGroupTotalBalance;
+      const todayStr = new Date().toLocaleDateString('sv-SE');
+      const emp = getActiveEmployee('recepcion');
+      const employeeNum = emp?.employee_num || '999';
+      const employeeName = emp?.full_name || 'Administrador';
+
+      for (const booking of directGroupBookings) {
+        const bookingBalance = booking.balance !== undefined
+          ? booking.balance
+          : Math.max(0, (booking.price_estimate || 0) - (booking.deposit || 0));
+
+        const proportion = totalBalance > 0
+          ? bookingBalance / totalBalance
+          : 1 / directGroupBookings.length;
+
+        const bookingAmount = Math.round(totalAmount * proportion * 100) / 100;
+        if (bookingAmount <= 0) continue;
+
+        const newDeposit = (booking.deposit || 0) + bookingAmount;
+
+        const res = await fetch('/api/reservas', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: booking.id, deposit: newDeposit })
+        });
+        if (!res.ok) {
+          console.error(`Error actualizando depósito de reserva ${booking.id}`);
+          continue;
+        }
+
+        await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: bookingAmount,
+          category: 'Alojamiento',
+          description: `Anticipo Grupal – ${booking.guest_name} (ID: ${booking.id}) Hab ${booking.room_name || booking.room}`,
+          payment_method: abonoPaymentMethod,
+          account_id: abonoAccountId,
+          date: todayStr
+        });
+
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: employeeNum,
+              employee_name: employeeName,
+              department: emp?.department || 'recepcion',
+              module: 'reservas',
+              action: 'abono_grupal_registrado',
+              room: booking.room_name || booking.room || 'General',
+              details: JSON.stringify({
+                text: `Anticipo grupal de MX$${bookingAmount} aplicado a ${booking.guest_name} Hab ${booking.room_name || booking.room} (proporcional del total MX$${totalAmount})`,
+                abono: { bookingId: booking.id, amount: bookingAmount, method: abonoPaymentMethod, accountId: abonoAccountId }
+              })
+            })
+          });
+        } catch (e) { console.error('Error log abono grupal:', e); }
+
+        setReservas(prev => prev.map(r => r.id === booking.id ? {
+          ...r,
+          deposit: newDeposit,
+          balance: Math.max(0, (r.price_estimate || 0) - newDeposit)
+        } : r));
+      }
+
+      const matchedAcc = accounts.find(a => a.id === abonoAccountId);
+      if (matchedAcc) {
+        const newBalance = matchedAcc.balance + totalAmount;
+        const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoAccountId);
+        if (!accErr) setAccounts(prev => prev.map(a => a.id === abonoAccountId ? { ...a, balance: newBalance } : a));
+      }
+
+      const mainBooking = directGroupBookings.find(b => String(b.id) === String(selectedRes.id));
+      if (mainBooking) {
+        const mainBalance = mainBooking.balance !== undefined ? mainBooking.balance : Math.max(0, (mainBooking.price_estimate || 0) - (mainBooking.deposit || 0));
+        const mainProportion = totalBalance > 0 ? mainBalance / totalBalance : 1 / directGroupBookings.length;
+        const mainAmount = Math.round(totalAmount * mainProportion * 100) / 100;
+        const newMainDeposit = (selectedRes.deposit || 0) + mainAmount;
+        setSelectedRes((prev: any) => ({
+          ...prev,
+          deposit: newMainDeposit,
+          balance: Math.max(0, (prev.price_estimate || 0) - newMainDeposit)
+        }));
+      }
+
+      setShowAbonoFlow(false);
+      setAbonoGrupalMode(false);
+      setAbonoAmount('');
+      setAbonoPaymentMethod(null);
+      setAbonoAccountId('');
+      alert(`✅ Anticipo grupal de ${fmtCurrency(totalAmount, selectedRes.guest_name)} distribuido en ${directGroupBookings.length} habitaciones.`);
+
+      setTimeout(() => { fetchReservas(); }, 3000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al registrar anticipo grupal:\n\n${err.message}`);
     } finally {
       setAbonoLoading(false);
     }
@@ -1948,7 +2090,9 @@ export default function ReservasList() {
                           </div>
 
                           <div>
-                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Monto de Anticipo</label>
+                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                              {abonoGrupalMode ? 'Monto Total del Anticipo Grupal' : 'Monto de Anticipo'}
+                            </label>
                             <div className="relative">
                               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
                               <input
@@ -1960,9 +2104,11 @@ export default function ReservasList() {
                                     setAbonoAmount('');
                                     return;
                                   }
-                                  const bal = selectedRes.balance !== undefined
-                                    ? selectedRes.balance
-                                    : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+                                  const bal = abonoGrupalMode
+                                    ? directGroupTotalBalance
+                                    : (selectedRes.balance !== undefined
+                                        ? selectedRes.balance
+                                        : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0));
                                   const maxVal = Math.max(0, bal);
                                   if (Number(val) > maxVal) {
                                     setAbonoAmount(String(maxVal));
@@ -1975,14 +2121,59 @@ export default function ReservasList() {
                               />
                             </div>
                             <span className="text-[10px] text-zinc-500 mt-1 block pl-0.5 font-medium">
-                              * Monto máximo: {fmtCurrency(
-                                Math.max(0, selectedRes.balance !== undefined
-                                  ? selectedRes.balance
-                                  : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0)),
+                              * Monto máximo{abonoGrupalMode ? ' (grupo)' : ''}: {fmtCurrency(
+                                Math.max(0, abonoGrupalMode
+                                  ? directGroupTotalBalance
+                                  : (selectedRes.balance !== undefined
+                                      ? selectedRes.balance
+                                      : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0))),
                                 selectedRes.guest_name
                               )}
                             </span>
                           </div>
+
+                          {/* Toggle Grupal — solo si hay hermanas de grupo */}
+                          {siblingBookings.length > 0 && (
+                            <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-2.5 animate-in fade-in duration-200">
+                              <p className="text-[11px] font-bold text-blue-800 leading-snug">
+                                🏨 Grupo detectado: <span className="font-extrabold">{siblingBookings.length + 1} habitaciones</span> (Hab. {groupBookings.map(b => b.room_name || b.room).join(', ')})
+                              </p>
+                              <div className="flex gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => { setAbonoGrupalMode(false); setAbonoAmount(''); }}
+                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${!abonoGrupalMode ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}`}
+                                >
+                                  Solo esta hab.
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setAbonoGrupalMode(true); setAbonoAmount(''); }}
+                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${abonoGrupalMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}`}
+                                >
+                                  Distribuir en grupo ({siblingBookings.length + 1} hab.)
+                                </button>
+                              </div>
+
+                              {/* Desglose proporcional */}
+                              {abonoGrupalMode && abonoAmount && Number(abonoAmount) > 0 && (
+                                <div className="space-y-1.5 pt-1 border-t border-blue-200/60 animate-in fade-in duration-150">
+                                  <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-widest">Distribución proporcional al balance</p>
+                                  {directGroupBookings.map(b => {
+                                    const bBal = b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0));
+                                    const prop = directGroupTotalBalance > 0 ? bBal / directGroupTotalBalance : 1 / directGroupBookings.length;
+                                    const amt = Math.round(Number(abonoAmount) * prop * 100) / 100;
+                                    return (
+                                      <div key={b.id} className="flex justify-between items-center text-[10px]">
+                                        <span className="font-bold text-blue-800">Hab. {b.room_name || b.room}</span>
+                                        <span className="font-extrabold text-blue-900">{fmtCurrency(amt, b.guest_name)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           <div className="space-y-1.5">
                             <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-widest block">Método de Pago</span>
@@ -2057,11 +2248,11 @@ export default function ReservasList() {
                           )}
 
                           <button
-                            onClick={handleRegisterAbono}
+                            onClick={abonoGrupalMode ? handleRegisterAbonoGrupal : handleRegisterAbono}
                             disabled={abonoLoading || !abonoAmount || Number(abonoAmount) <= 0 || !abonoPaymentMethod || !abonoAccountId}
-                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                            className={`w-full py-3 ${abonoGrupalMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'} text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5`}
                           >
-                            {abonoLoading ? 'Procesando...' : 'Confirmar Registro de Anticipo'}
+                            {abonoLoading ? 'Procesando...' : (abonoGrupalMode ? `Confirmar Anticipo Grupal (${directGroupBookings.length} hab.)` : 'Confirmar Registro de Anticipo')}
                           </button>
                         </div>
                       ) : (
@@ -2070,6 +2261,7 @@ export default function ReservasList() {
                             setAbonoAmount('');
                             setAbonoPaymentMethod(null);
                             setAbonoAccountId('');
+                            setAbonoGrupalMode(false);
                             setShowAbonoFlow(true);
                           }}
                           className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
