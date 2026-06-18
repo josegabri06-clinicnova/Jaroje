@@ -868,16 +868,19 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
     });
   });
 
-  // roomIds válidos conectados a Beds24 (excluye 685542 = local 500-507 y cualquier Unallocated)
-  const KNOWN_BEDS24_ROOM_IDS = new Set(['679077', '679087', '679091', '679092', '679093']);
+  // Excluir roomId 685542 (habitaciones 500-507: son locales, no de Beds24)
+  // Excluir "Unallocated": reservas sin unitId asignado (unitId = 0, nulo o vacío)
+  const LOCAL_ROOM_ID = '685542';
 
   return bookingsArray
     .filter((b: any) => {
       if (String(b.status) === '0' || b.status === 'cancelled') return false;
       const rId = String(b.roomId || '').trim();
-      // Excluir "Unallocated": sin roomId, roomId=0, o roomId fuera del mapa conocido
-      if (!rId || rId === '0') return false;
-      if (!KNOWN_BEDS24_ROOM_IDS.has(rId)) return false;
+      // Excluir habitaciones locales 500-507 que Beds24 no gestiona
+      if (rId === LOCAL_ROOM_ID) return false;
+      // Excluir "Unallocated": sin unitId o unitId = 0
+      const uId = String(b.unitId ?? '').trim();
+      if (!uId || uId === '0') return false;
       return true;
     })
     .map((b: any) => {
