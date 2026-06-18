@@ -872,6 +872,55 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
   // Excluir "Unallocated": reservas sin unitId asignado (unitId = 0, nulo o vacío)
   const LOCAL_ROOM_ID = '685542';
 
+  // --- Capturar reservas OTA de la habitación 500 para auto-sync a locales ---
+  // unitId=1 es la 500 en Beds24. Cuando una OTA (Airbnb/Booking) reserva ahí,
+  // la clonamos a una habitación local 501-507 disponible.
+  const otaRoom500Bookings = bookingsArray.filter((b: any) => {
+    if (String(b.status) === '0' || b.status === 'cancelled') return false;
+    const rId = String(b.roomId || '').trim();
+    if (rId !== LOCAL_ROOM_ID) return false;
+    const uId = String(b.unitId ?? '').trim();
+    if (!uId || uId === '0') return false; // Excluir unallocated
+    // Detectar si es OTA
+    const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+    const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+    const isOTA = rawSource.includes('airbnb') || rawSource.includes('booking') || rawSource.includes('expedia')
+      || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
+    return isOTA;
+  }).map((b: any) => {
+    const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+    const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+    let channel = 'Directo';
+    if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
+    else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
+    else if (rawSource.includes('expedia')) channel = 'Expedia';
+
+    const arrivalDate = b.arrival ? new Date(b.arrival) : null;
+    const departureDate = b.departure ? new Date(b.departure) : null;
+    const nights = (arrivalDate && departureDate)
+      ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
+      : 1;
+
+    return {
+      beds24_id: String(b.id),
+      guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped OTA',
+      check_in: b.arrival,
+      check_out: b.departure,
+      price: b.price !== undefined ? Number(b.price) : 0,
+      deposit: b.deposit !== undefined ? Number(b.deposit) : 0,
+      phone: b.phone || b.mobile || '',
+      num_adult: b.numAdult ? Number(b.numAdult) : 1,
+      num_child: b.numChild ? Number(b.numChild) : 0,
+      notes: b.info || b.notes || '',
+      channel,
+      nights,
+      unit_id: String(b.unitId || '1'),
+    };
+  });
+
+  // Almacenar en variable de módulo para que route.ts pueda accederla
+  _lastOtaRoom500Bookings = otaRoom500Bookings;
+
   return bookingsArray
     .filter((b: any) => {
       if (String(b.status) === '0' || b.status === 'cancelled') return false;
@@ -948,6 +997,14 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
         booking_time: b.bookingTime || b.arrival || null
       };
     });
+}
+
+// Variable de módulo para almacenar las reservas OTA de habitación 500
+let _lastOtaRoom500Bookings: any[] = [];
+
+/** Devuelve las reservas OTA de Beds24 que llegaron a la habitación 500 */
+export function getOtaRoom500Bookings(): any[] {
+  return _lastOtaRoom500Bookings;
 }
 
 // Enviar tarifas actualizadas directamente al calendario de Beds24
