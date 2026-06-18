@@ -52,8 +52,15 @@ function getLocalDateStr(date: Date = new Date()): string {
 }
 
 const getUnitDisplay = (roomStr: string) => {
-  const match = (roomStr || '').match(/\(([^)]+)\)/);
-  return match ? match[1] : (roomStr || '').split(' ')[0];
+  if (!roomStr) return '';
+  // 1. Try parentheses format: "Habitación Doble (101)" → "101"
+  const parenMatch = roomStr.match(/\(([^)]+)\)/);
+  if (parenMatch) return parenMatch[1];
+  // 2. Extract trailing number: "Habitación 504" → "504"
+  const numMatch = roomStr.match(/(\d+)\s*$/);
+  if (numMatch) return numMatch[1];
+  // 3. Fallback: return the whole string
+  return roomStr;
 };
 
 function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {

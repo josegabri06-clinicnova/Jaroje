@@ -174,8 +174,12 @@ function fmtCurrency(amount: number, guestName?: string) {
 }
 
 const getUnitDisplay = (roomStr: string) => {
-  const match = (roomStr || '').match(/\(([^)]+)\)/);
-  return match ? match[1] : roomStr.split(' ')[0];
+  if (!roomStr) return '';
+  const parenMatch = roomStr.match(/\(([^)]+)\)/);
+  if (parenMatch) return parenMatch[1];
+  const numMatch = roomStr.match(/(\d+)\s*$/);
+  if (numMatch) return numMatch[1];
+  return roomStr;
 };
 
 const getReservaStatusColor = (booking: any, todayStr: string) => {
