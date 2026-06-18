@@ -356,6 +356,14 @@ export async function PUT(req: Request) {
       if (!mapping) {
         return NextResponse.json({ error: `La habitación ${roomName} no es una habitación física válida en staySync.` }, { status: 400 });
       }
+
+      // Bloquear reasignación de reservas Beds24 a habitaciones locales (500-507 = roomId 685542)
+      if (mapping.roomId === '685542') {
+        return NextResponse.json({ 
+          error: `Las habitaciones 500-507 son locales y no están conectadas a Beds24. No se puede reasignar una reserva de Beds24 a una habitación local. Crea la reserva manualmente en la app para las habitaciones 500-507.` 
+        }, { status: 400 });
+      }
+
       updatePayload.roomId = Number(mapping.roomId);
       updatePayload.unitId = Number(mapping.unitId);
 
