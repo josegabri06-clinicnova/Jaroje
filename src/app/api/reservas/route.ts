@@ -243,7 +243,13 @@ export async function POST(req: Request) {
         roomQty: 1,
         arrival: checkIn,
         departure: checkOut,
-        firstName: guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
+        ...(() => {
+          const fullName = guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa');
+          const parts = fullName.trim().split(/\s+/);
+          return parts.length > 1
+            ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+            : { firstName: fullName.trim(), lastName: '' };
+        })(),
         status: isBlock ? "black" : "confirmed",
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
         ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
@@ -467,7 +473,17 @@ export async function PUT(req: Request) {
     }
 
     if (guestName) {
-      updatePayload.firstName = guestName;
+      // Beds24 usa firstName + lastName separados.
+      // Si solo enviamos firstName, el lastName viejo persiste y se concatena.
+      // Solución: dividir el nombre y limpiar lastName explícitamente.
+      const nameParts = guestName.trim().split(/\s+/);
+      if (nameParts.length > 1) {
+        updatePayload.firstName = nameParts[0];
+        updatePayload.lastName = nameParts.slice(1).join(' ');
+      } else {
+        updatePayload.firstName = guestName.trim();
+        updatePayload.lastName = '';
+      }
     }
     if (phone !== undefined) {
       updatePayload.phone = phone;
