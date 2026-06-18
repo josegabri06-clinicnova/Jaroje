@@ -41,8 +41,8 @@ export const JAROJE_PRICES: Record<string, Record<string, number>> = {
   '679093': { baja: 5378, media: 6387, media_alta: 6723, alta: 7395 },
   '679008': { baja: 5378, media: 6387, media_alta: 6723, alta: 7395 },
 
-  // --- Habitación 500 ---
-  '685542': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
+  // --- Habitación 500 (tarifa fija: $672.50 base, +19% impuestos se aplica después) ---
+  '685542': { baja: 672.50, media: 672.50, media_alta: 672.50, alta: 672.50 },
 };
 
 // Nombres canónicos por roomId para el catálogo de display
@@ -371,7 +371,13 @@ export function getRealPrice(
 ): number {
   let id = String(roomId || '');
 
-  // Mapear 685542 (Apartamentos Nuevos 500-507) a 679077 (Habitación Doble)
+  // Tarifa especial FIJA para habitación 500 (roomId 685542, unitId 1):
+  // $672.50 base por noche (el +19% impuestos se aplica en getDirectTotalForStay)
+  if (id === '685542' && String(unitId || '') === '1') {
+    return 672.50;
+  }
+
+  // Mapear 685542 (Apartamentos Nuevos 501-507) a 679077 (Habitación Doble)
   if (id === '685542') {
     id = '679077';
   }
