@@ -944,7 +944,8 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
         rooms: { name: roomData.nombre },
         taxes: taxInfo,
         expected_payout: otaDetails.expectedPayout,
-        host_fee: otaDetails.hostFee
+        host_fee: otaDetails.hostFee,
+        booking_time: b.bookingTime || b.arrival || null
       };
     });
 }

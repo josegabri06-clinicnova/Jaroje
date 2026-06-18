@@ -53,6 +53,7 @@ export async function GET() {
             comments: b.notes || '',
             channel: b.channel || 'Recepción',
             isLocal: true,
+            booking_time: b.created_at || b.check_in || null,
             nights
           };
         });

@@ -12,7 +12,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TABS = ['Todas', 'Nuevas', 'Próximas', 'Directas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
+const TABS = ['Todas', 'Nuevas', 'Próximas', 'Sin Anticipo', 'Directas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -1161,6 +1161,10 @@ export default function ReservasList() {
     let matchTab = true;
     if (activeTab === 'Nuevas') matchTab = !r.is_acknowledged;
     else if (activeTab === 'Próximas') matchTab = r.check_in >= todayStr;
+    else if (activeTab === 'Sin Anticipo') {
+      const isDirectChannel = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
+      matchTab = isDirectChannel && (!r.deposit || r.deposit === 0);
+    }
     else if (activeTab === 'Directas') matchTab = r.channel === 'Directo' || r.channel === 'WhatsApp Bot' || r.channel === 'Beds24';
     else if (activeTab !== 'Todas' && activeTab !== 'Completadas') matchTab = r.channel === activeTab;
 
@@ -1272,21 +1276,29 @@ export default function ReservasList() {
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
         {TABS.map(t => {
           const isNuevas = t === 'Nuevas';
+          const isSinAnticipo = t === 'Sin Anticipo';
           const nuevasCount = activeReservas.filter(r => !r.is_acknowledged).length;
-          const displayLabel = isNuevas && nuevasCount > 0 ? `Nuevas (${nuevasCount})` : t;
+          const sinAnticipoCount = activeReservas.filter(r => {
+            const isDirectChannel = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
+            return isDirectChannel && (!r.deposit || r.deposit === 0);
+          }).length;
+          const displayLabel = isNuevas && nuevasCount > 0 ? `Nuevas (${nuevasCount})` : isSinAnticipo && sinAnticipoCount > 0 ? `Sin Anticipo (${sinAnticipoCount})` : t;
           return (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
               className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-[0.98] flex items-center gap-1.5 ${
                 activeTab === t
-                  ? 'bg-zinc-900 text-white shadow-sm'
-                  : 'bg-white text-zinc-650 border border-zinc-200/80 hover:bg-zinc-50'
+                  ? (isSinAnticipo ? 'bg-rose-600 text-white shadow-sm' : 'bg-zinc-900 text-white shadow-sm')
+                  : (isSinAnticipo && sinAnticipoCount > 0 ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100' : 'bg-white text-zinc-650 border border-zinc-200/80 hover:bg-zinc-50')
               }`}
             >
               <span>{displayLabel}</span>
               {isNuevas && nuevasCount > 0 && (
                 <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse inline-block" />
+              )}
+              {isSinAnticipo && sinAnticipoCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse inline-block" />
               )}
             </button>
           );
@@ -1384,6 +1396,21 @@ export default function ReservasList() {
                 </div>
 
                 {/* Fechas y Estancia */}
+                {activeTab === 'Sin Anticipo' && r.booking_time && (
+                  <div className="flex items-center gap-2 text-[11px] font-semibold bg-rose-50 border border-rose-100 rounded-lg px-3 py-1.5">
+                    <span className="text-rose-600">📅 Ingresada al sistema:</span>
+                    <strong className="text-rose-800">{format(parseISO(r.booking_time.split(' ')[0] || r.booking_time.split('T')[0]), 'dd MMM yyyy', { locale: es })}</strong>
+                    <span className="text-rose-500 ml-auto">
+                      {(() => {
+                        const created = new Date(r.booking_time);
+                        const now = new Date();
+                        const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+                        return diffDays === 0 ? 'Hoy' : diffDays === 1 ? 'Hace 1 día' : `Hace ${diffDays} días`;
+                      })()}
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between text-[11.5px] text-zinc-500 font-semibold border-t border-zinc-100 pt-2 px-1">
                   <span>In: <strong className="text-zinc-800">{r.check_in ? format(parseISO(r.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</strong></span>
                   <span className="bg-zinc-100 text-zinc-650 px-2 py-0.5 rounded font-bold text-[10.5px]">{r.nights} noche{r.nights !== 1 ? 's' : ''}</span>
