@@ -912,22 +912,8 @@ export default function ReservasList() {
         }
       }
 
-      // Registrar el pago en Beds24 en tiempo real
-      try {
-        await fetch('/api/reservas/payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            bookId: selectedRes.id,
-            amount: amountNum,
-            paymentMethod: abonoPaymentMethod,
-            employeeNum: '999', // Admin
-            description: `Anticipo ${abonoPaymentMethod.toUpperCase()} [Jaroje OS]`
-          })
-        });
-      } catch (payB24Err) {
-        console.error("Error al registrar pago en Beds24:", payB24Err);
-      }
+      // NOTA: No se llama a /api/reservas/payment porque el PUT ya actualiza el depósito
+      // tanto en Beds24 como en local_reservas. Llamar a ambos causaba duplicación ($675 → $1350).
 
       // Registrar log de anticipo
       try {
