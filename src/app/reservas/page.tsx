@@ -1507,6 +1507,21 @@ export default function ReservasList() {
                         )}
                         {isArrival && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">HOY LLEGA</span>}
                         {isDeparture && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">HOY SALE</span>}
+                        {(() => {
+                          const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+                          const mainName = cleanStr(r.guest_name || '');
+                          const mainPhone = (r.guest_phone || '').trim();
+                          const siblings = reservas.filter(o => {
+                            if (o.check_in !== r.check_in || o.id === r.id || o.is_checked_out) return false;
+                            const samePhone = mainPhone && o.guest_phone && o.guest_phone.trim() === mainPhone;
+                            const sameName = mainName && o.guest_name && (cleanStr(o.guest_name).includes(mainName) || mainName.includes(cleanStr(o.guest_name)));
+                            return samePhone || sameName;
+                          });
+                          if (siblings.length > 0) {
+                            return <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-150">GRUPO 🏨 {siblings.length + 1}</span>;
+                          }
+                          return null;
+                        })()}
                       </div>
                       <p className="text-[12.5px] font-bold text-zinc-700 mt-1 flex items-center gap-1.5">
                         <BedDouble size={13} className="text-zinc-400" />
@@ -1963,6 +1978,44 @@ export default function ReservasList() {
                       </div>
                     )}
                   </div>
+
+                  {/* Banner de Grupo — siempre visible si hay hermanas */}
+                  {siblingBookings.length > 0 && (
+                    <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-2xl space-y-3 animate-in fade-in duration-200 shadow-[0_2px_12px_rgba(59,130,246,0.08)]">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
+                          <Users size={16} className="text-blue-600" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">Grupo Detectado</span>
+                          <p className="text-[13px] font-bold text-blue-900 leading-tight">
+                            {groupBookings.length} habitaciones · Mismo huésped
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
+                        {groupBookings.map(b => {
+                          const bBal = b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0));
+                          const isCurrent = String(b.id) === String(selectedRes.id);
+                          return (
+                            <div key={b.id} className={`flex justify-between items-center text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
+                              <span className="font-bold text-blue-800 flex items-center gap-1.5">
+                                <BedDouble size={11} className="text-blue-500" />
+                                {b.room_name || b.room}
+                                {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
+                              </span>
+                              <span className={`font-extrabold ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                {bBal > 0 ? `Adeudo: ${fmtCurrency(bBal, b.guest_name)}` : '✅ Pagado'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] font-semibold text-blue-600 pt-1">
+                        💡 Al registrar un anticipo, puedes distribuirlo proporcionalmente en todas las habitaciones del grupo.
+                      </p>
+                    </div>
+                  )}
 
                   {/* 4. Canal reservado (directo, Airbnb, Booking) */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
