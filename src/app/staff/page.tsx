@@ -1109,14 +1109,14 @@ export default function StaffPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-emerald-600">{llegadas.length}</p>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan hoy</p>
             </button>
             <button 
               onClick={() => setKpiModalType('salen')}
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-amber-500">{salidas.length}</p>
-              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Por salir</p>
+              <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
             </button>
           </div>
         )}
