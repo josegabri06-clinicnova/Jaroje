@@ -317,9 +317,9 @@ export default function VercelActionForm() {
         surchargePerNight = activeSurchargeTotal / group.length;
       }
 
-      const priceWithChannel = Math.round(basePrice * discountMult * multiplier * 100) / 100;
-      const tax = Math.round(priceWithChannel * 0.19 * 100) / 100; // 16% IVA + 3% ISH
-      const suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
+      const priceWithChannel = Math.ceil(basePrice * discountMult * multiplier * 100) / 100;
+      const tax = Math.ceil(priceWithChannel * 0.19 * 100) / 100; // 16% IVA + 3% ISH
+      const suggestedDailyRate = Math.ceil((priceWithChannel + tax + surchargePerNight) * 100) / 100;
 
       sumSuggestedRates += suggestedDailyRate;
 
@@ -348,7 +348,7 @@ export default function VercelActionForm() {
       };
     });
 
-    const suggestedDailyRate = group.length > 0 ? Math.round(sumSuggestedRates / group.length) : 0;
+    const suggestedDailyRate = group.length > 0 ? Math.ceil((sumSuggestedRates / group.length) * 100) / 100 : 0;
 
     return {
       totalStay,
@@ -1274,7 +1274,7 @@ export default function VercelActionForm() {
                                 <div className="flex flex-col">
                                   <span className="text-[13px] font-bold text-zinc-800 leading-snug">Habitación {room.name}</span>
                                   <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
-                                    Sugerido: ${room.suggestedDailyRate.toLocaleString('es-MX')}
+                                    Sugerido: ${room.suggestedDailyRate.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                   </span>
                                 </div>
                                 <div className="relative w-32 shrink-0">
