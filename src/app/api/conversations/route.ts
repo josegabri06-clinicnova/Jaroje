@@ -241,13 +241,11 @@ export async function POST(req: Request) {
     const phone     = (body.guest_phone || 'desconocido').replace(/\D/g, '');
     const timestamp = body.timestamp   || new Date().toISOString();
 
-    // Buscar conversación activa del mismo teléfono en las últimas 3 horas
-    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    // Buscar la última conversación de este teléfono para mantener un historial unificado (SaaS CRM)
     const { data: existing } = await supabase
       .from('conversations')
       .select('*')
       .eq('guest_phone', phone)
-      .gte('timestamp', threeHoursAgo)
       .order('timestamp', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -326,7 +324,8 @@ export async function POST(req: Request) {
           messages:        updatedMessages,
           timestamp,
           booking_created: body.booking_created ?? existing.booking_created,
-          resolved:        body.resolved        ?? existing.resolved,
+          resolved:        body.resolved        ?? false, // Si escribe el cliente, reactivar (no resuelta)
+          archived:        false,                    // Desarchivar de forma automática al recibir mensaje
           human_mode:      forceHuman,
         })
         .eq('id', existing.id);
