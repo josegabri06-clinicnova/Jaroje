@@ -1084,7 +1084,7 @@ export default function ReservasList() {
     
     // 2. Validar colisión (overbooking) local
     const isOccupied = reservas.some(r => 
-      r.id !== selectedRes.id && 
+      String(r.id) !== String(selectedRes.id) && 
       r.status !== 'cancelled' && 
       (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
       (r.arrival || r.check_in || '') < newCheckOut && 
@@ -2556,7 +2556,7 @@ export default function ReservasList() {
                           {(() => {
                             const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
                             const isColliding = reservas.some(r => 
-                              r.id !== selectedRes.id && 
+                              String(r.id) !== String(selectedRes.id) && 
                               r.status !== 'cancelled' && 
                               (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
                               (r.arrival || r.check_in || '') < newCheckOut && 
@@ -2581,7 +2581,7 @@ export default function ReservasList() {
                               (() => {
                                 const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
                                 const isColliding = reservas.some(r => 
-                                  r.id !== selectedRes.id && 
+                                  String(r.id) !== String(selectedRes.id) && 
                                   r.status !== 'cancelled' && 
                                   (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
                                   (r.arrival || r.check_in || '') < newCheckOut && 

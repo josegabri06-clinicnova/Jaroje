@@ -4877,7 +4877,7 @@ export default function RecepcionPage() {
                           {(() => {
                             const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
                             const isColliding = reservas.some(r => 
-                              r.id !== selectedReserva.id && 
+                              String(r.id) !== String(selectedReserva.id) && 
                               r.status !== 'cancelled' && 
                               r.room === selectedReserva.room && 
                               r.check_in < newCheckOut && 
@@ -4903,7 +4903,7 @@ export default function RecepcionPage() {
                               (() => {
                                 const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
                                 const isColliding = reservas.some(r => 
-                                  r.id !== selectedReserva.id && 
+                                  String(r.id) !== String(selectedReserva.id) && 
                                   r.status !== 'cancelled' && 
                                   r.room === selectedReserva.room && 
                                   r.check_in < newCheckOut && 
