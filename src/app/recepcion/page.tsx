@@ -4874,9 +4874,45 @@ export default function RecepcionPage() {
                             </div>
                           )}
 
+                          {(() => {
+                            const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
+                            const isColliding = reservas.some(r => 
+                              r.id !== selectedReserva.id && 
+                              r.status !== 'cancelled' && 
+                              r.room === selectedReserva.room && 
+                              r.check_in < newCheckOut && 
+                              r.check_out > selectedReserva.check_out
+                            );
+                            if (!isColliding) return null;
+                            const userRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
+                            return (
+                              <div className="bg-rose-50 border border-rose-100 text-rose-800 text-[11px] font-bold p-3 rounded-xl leading-snug animate-in fade-in duration-200 mt-2 mb-2 text-left">
+                                ⚠️ Conflicto de Disponibilidad: Esta habitación ya está reservada para las nuevas fechas. 
+                                {userRole === 'admin' 
+                                  ? ' Como administrador, puedes confirmar y luego reasignar la otra reserva o cambiar de habitación al huésped.'
+                                  : ' Solo un administrador puede confirmar extensiones con conflicto.'}
+                              </div>
+                            );
+                          })()}
+
                           <button
                             onClick={handleExtendStay}
-                            disabled={extensionLoading || (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId))}
+                            disabled={
+                              extensionLoading || 
+                              (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId)) ||
+                              (() => {
+                                const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
+                                const isColliding = reservas.some(r => 
+                                  r.id !== selectedReserva.id && 
+                                  r.status !== 'cancelled' && 
+                                  r.room === selectedReserva.room && 
+                                  r.check_in < newCheckOut && 
+                                  r.check_out > selectedReserva.check_out
+                                );
+                                const userRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
+                                return isColliding && userRole !== 'admin';
+                              })()
+                            }
                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12.5px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             {extensionLoading ? 'Procesando...' : 'Confirmar Extensión de Estancia'}

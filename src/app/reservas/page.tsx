@@ -1092,8 +1092,13 @@ export default function ReservasList() {
     );
     
     if (isOccupied) {
-      alert(`⚠️ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. Por favor, selecciona menos noches.`);
-      return;
+      if (userRole !== 'admin') {
+        alert(`⚠️ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. Solo un administrador puede forzar esta extensión.`);
+        return;
+      } else {
+        const confirmForce = window.confirm(`⚠️ Conflicto de Disponibilidad: La habitación ya se encuentra reservada u ocupada por otro huésped. Como administrador, ¿deseas forzar esta extensión de estancia? Tendrás que reasignar la otra reserva o cambiar de habitación al huésped.`);
+        if (!confirmForce) return;
+      }
     }
     
     setExtensionLoading(true);
@@ -2548,9 +2553,43 @@ export default function ReservasList() {
                             </div>
                           )}
 
+                          {(() => {
+                            const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
+                            const isColliding = reservas.some(r => 
+                              r.id !== selectedRes.id && 
+                              r.status !== 'cancelled' && 
+                              (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
+                              (r.arrival || r.check_in || '') < newCheckOut && 
+                              (r.departure || r.check_out || '') > (selectedRes.check_out || selectedRes.departure || '')
+                            );
+                            if (!isColliding) return null;
+                            return (
+                              <div className="bg-rose-50 border border-rose-100 text-rose-800 text-[11px] font-bold p-3 rounded-xl leading-snug animate-in fade-in duration-200 mt-2 mb-2 text-left">
+                                ⚠️ Conflicto de Disponibilidad: Esta habitación ya está reservada para las nuevas fechas. 
+                                {userRole === 'admin' 
+                                  ? ' Como administrador, puedes confirmar y luego reasignar la otra reserva o cambiar de habitación al huésped.'
+                                  : ' Solo un administrador puede confirmar extensiones con conflicto.'}
+                              </div>
+                            );
+                          })()}
+
                           <button
                             onClick={handleExtendStay}
-                            disabled={extensionLoading || (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId))}
+                            disabled={
+                              extensionLoading || 
+                              (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId)) ||
+                              (() => {
+                                const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
+                                const isColliding = reservas.some(r => 
+                                  r.id !== selectedRes.id && 
+                                  r.status !== 'cancelled' && 
+                                  (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
+                                  (r.arrival || r.check_in || '') < newCheckOut && 
+                                  (r.departure || r.check_out || '') > (selectedRes.check_out || selectedRes.departure || '')
+                                );
+                                return isColliding && userRole !== 'admin';
+                              })()
+                            }
                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12.5px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
                           >
                             {extensionLoading ? 'Procesando...' : 'Confirmar Extensión de Estancia'}
