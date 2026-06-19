@@ -70,6 +70,14 @@ function fmtCurrency(amount: number, guestName?: string) {
   return (isUSD ? 'USD$' : 'MX$') + rounded.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function getNightsBetweenDates(checkIn: string, checkOut: string): number {
+  if (!checkIn || !checkOut) return 1;
+  const d1 = new Date(checkIn + 'T12:00:00');
+  const d2 = new Date(checkOut + 'T12:00:00');
+  const diffTime = Math.abs(d2.getTime() - d1.getTime());
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+}
+
 async function compressImage(file: File): Promise<string> {
   return new Promise(resolve => {
     const reader = new FileReader();
@@ -142,6 +150,8 @@ export default function ReservasList() {
   const [editDailyRate, setEditDailyRate] = useState('');
   const [editDeposit, setEditDeposit] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editCheckIn, setEditCheckIn] = useState('');
+  const [editCheckOut, setEditCheckOut] = useState('');
   const [saveEditLoading, setSaveEditLoading] = useState(false);
 
   // Estados para registrar abono dedicado
@@ -174,6 +184,8 @@ export default function ReservasList() {
       setEditDailyRate(String(Math.round(priceEstimate / nights)));
       setEditDeposit(String(selectedRes.deposit || '0'));
       setEditNotes(selectedRes.notes || '');
+      setEditCheckIn(selectedRes.arrival || selectedRes.check_in || '');
+      setEditCheckOut(selectedRes.departure || selectedRes.check_out || '');
       
       setShowAbonoFlow(false);
       setAbonoAmount('');
@@ -189,6 +201,8 @@ export default function ReservasList() {
       setEditDailyRate('');
       setEditDeposit('');
       setEditNotes('');
+      setEditCheckIn('');
+      setEditCheckOut('');
       
       setShowAbonoFlow(false);
       setAbonoAmount('');
@@ -782,7 +796,9 @@ export default function ReservasList() {
           numChild: editChildren,
           price: Number(editPrice),
           deposit: Number(editDeposit),
-          notes: editNotes
+          notes: editNotes,
+          checkIn: editCheckIn,
+          checkOut: editCheckOut
         })
       });
       const data = await res.json();
@@ -834,7 +850,12 @@ export default function ReservasList() {
         price_estimate: Number(editPrice),
         deposit: Number(editDeposit),
         balance: Number(editPrice) - Number(editDeposit),
-        notes: editNotes
+        notes: editNotes,
+        arrival: editCheckIn,
+        check_in: editCheckIn,
+        departure: editCheckOut,
+        check_out: editCheckOut,
+        nights: getNightsBetweenDates(editCheckIn, editCheckOut)
       }));
 
       setReservas(prev => prev.map(r => r.id === selectedRes.id ? {
@@ -846,7 +867,12 @@ export default function ReservasList() {
         price_estimate: Number(editPrice),
         deposit: Number(editDeposit),
         balance: Number(editPrice) - Number(editDeposit),
-        notes: editNotes
+        notes: editNotes,
+        arrival: editCheckIn,
+        check_in: editCheckIn,
+        departure: editCheckOut,
+        check_out: editCheckOut,
+        nights: getNightsBetweenDates(editCheckIn, editCheckOut)
       } : r));
 
       setIsEditingRes(false);
@@ -1740,6 +1766,49 @@ export default function ReservasList() {
 
                   </div>
 
+                  {/* Fechas de Estancia */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fechas de Estancia</span>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Check-In</label>
+                        <input
+                          type="date"
+                          value={editCheckIn}
+                          onChange={e => {
+                            const newIn = e.target.value;
+                            setEditCheckIn(newIn);
+                            if (newIn && editCheckOut) {
+                              const nights = getNightsBetweenDates(newIn, editCheckOut) || 1;
+                              if (editDailyRate !== '') {
+                                setEditPrice(String(Math.round(Number(editDailyRate) * nights)));
+                              }
+                            }
+                          }}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Check-Out</label>
+                        <input
+                          type="date"
+                          value={editCheckOut}
+                          onChange={e => {
+                            const newOut = e.target.value;
+                            setEditCheckOut(newOut);
+                            if (editCheckIn && newOut) {
+                              const nights = getNightsBetweenDates(editCheckIn, newOut) || 1;
+                              if (editDailyRate !== '') {
+                                setEditPrice(String(Math.round(Number(editDailyRate) * nights)));
+                              }
+                            }
+                          }}
+                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* 2. Teléfono */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Teléfono</label>
@@ -1783,7 +1852,8 @@ export default function ReservasList() {
                           const val = e.target.value;
                           setEditDailyRate(val);
                           if (val !== '') {
-                            setEditPrice(String(Math.round(Number(val) * (selectedRes.nights || 1))));
+                            const nights = getNightsBetweenDates(editCheckIn, editCheckOut) || 1;
+                            setEditPrice(String(Math.round(Number(val) * nights)));
                           }
                         }}
                         className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"

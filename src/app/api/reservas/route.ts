@@ -379,7 +379,7 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit } = body;
+    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit, checkIn, checkOut } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
@@ -402,6 +402,8 @@ export async function PUT(req: Request) {
       if (price !== undefined) localUpdate.price = Number(price);
       if (deposit !== undefined) localUpdate.deposit = Number(deposit);
       if (notes !== undefined) localUpdate.notes = notes;
+      if (checkIn) localUpdate.check_in = checkIn;
+      if (checkOut) localUpdate.check_out = checkOut;
       
       let displayRoomName = '';
       if (roomName) {
@@ -431,6 +433,8 @@ export async function PUT(req: Request) {
       const dbUpdate: any = {};
       if (displayRoomName) dbUpdate.room = displayRoomName;
       if (guestName) dbUpdate.guest_name = guestName;
+      if (checkIn) dbUpdate.check_in_date = checkIn;
+      if (checkOut) dbUpdate.check_out_date = checkOut;
 
       if (Object.keys(dbUpdate).length > 0) {
         await supabase
@@ -453,6 +457,13 @@ export async function PUT(req: Request) {
       id: Number(id),
       bookId: Number(id)
     };
+
+    if (checkIn) {
+      updatePayload.arrival = checkIn;
+    }
+    if (checkOut) {
+      updatePayload.departure = checkOut;
+    }
 
     let displayRoomName = '';
     if (roomName) {
@@ -597,6 +608,12 @@ export async function PUT(req: Request) {
     }
     if (guestName) {
       dbUpdate.guest_name = guestName;
+    }
+    if (checkIn) {
+      dbUpdate.check_in_date = checkIn;
+    }
+    if (checkOut) {
+      dbUpdate.check_out_date = checkOut;
     }
 
     if (Object.keys(dbUpdate).length > 0) {
