@@ -5529,6 +5529,25 @@ export default function RecepcionPage() {
                 </button>
               </div>
             )}
+
+            {selectedReserva.checked_in && (
+              <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setExtensionNights(1);
+                    setExtensionCustomPrice('');
+                    setExtensionRegisterPayment(true);
+                    setExtensionPaymentMethod(null);
+                    setExtensionAccountId('');
+                    setShowExtensionFlow(true);
+                    setShowAbonoFlow(false);
+                  }}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in duration-200"
+                >
+                  <CheckCircle2 size={18} /> En Casa (Extender Estancia 🗓️)
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

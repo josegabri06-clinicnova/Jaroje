@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus } from 'lucide-react';
 import { getActiveEmployee } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -76,6 +76,20 @@ function getNightsBetweenDates(checkIn: string, checkOut: string): number {
   const d2 = new Date(checkOut + 'T12:00:00');
   const diffTime = Math.abs(d2.getTime() - d1.getTime());
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+}
+
+function getLocalDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const r = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${r}`;
+}
+
+function addDaysToDateStr(dateStr: string, days: number): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return getLocalDateStr(d);
 }
 
 async function compressImage(file: File): Promise<string> {
@@ -162,6 +176,15 @@ export default function ReservasList() {
   const [abonoLoading, setAbonoLoading] = useState(false);
   const [abonoGrupalMode, setAbonoGrupalMode] = useState(false);
 
+  // Estados para extensión de estancia
+  const [showExtensionFlow, setShowExtensionFlow] = useState(false);
+  const [extensionNights, setExtensionNights] = useState(1);
+  const [extensionCustomPrice, setExtensionCustomPrice] = useState('');
+  const [extensionRegisterPayment, setExtensionRegisterPayment] = useState(true);
+  const [extensionPaymentMethod, setExtensionPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
+  const [extensionAccountId, setExtensionAccountId] = useState('');
+  const [extensionLoading, setExtensionLoading] = useState(false);
+
   // Estados para abonar/editar anticipo rápido en detalles
   const [isEditingDepositInline, setIsEditingDepositInline] = useState(false);
   const [inlineDepositValue, setInlineDepositValue] = useState('');
@@ -191,6 +214,14 @@ export default function ReservasList() {
       setAbonoAmount('');
       setAbonoPaymentMethod(null);
       setAbonoAccountId('');
+
+      setShowExtensionFlow(false);
+      setExtensionNights(1);
+      setExtensionCustomPrice('');
+      setExtensionRegisterPayment(true);
+      setExtensionPaymentMethod(null);
+      setExtensionAccountId('');
+      setExtensionLoading(false);
     } else {
       setIsReassigning(false);
       setTargetRoomName('');
@@ -208,6 +239,14 @@ export default function ReservasList() {
       setAbonoAmount('');
       setAbonoPaymentMethod(null);
       setAbonoAccountId('');
+
+      setShowExtensionFlow(false);
+      setExtensionNights(1);
+      setExtensionCustomPrice('');
+      setExtensionRegisterPayment(true);
+      setExtensionPaymentMethod(null);
+      setExtensionAccountId('');
+      setExtensionLoading(false);
     }
   }, [selectedRes]);
 
@@ -1035,6 +1074,159 @@ export default function ReservasList() {
     }
   };
 
+  const handleExtendStay = async () => {
+    if (!selectedRes) return;
+    
+    // 1. Validar fechas de salida
+    const originalCheckOut = selectedRes.check_out || selectedRes.departure;
+    if (!originalCheckOut) return;
+    const newCheckOut = addDaysToDateStr(originalCheckOut, extensionNights);
+    
+    // 2. Validar colisión (overbooking) local
+    const isOccupied = reservas.some(r => 
+      r.id !== selectedRes.id && 
+      r.status !== 'cancelled' && 
+      (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
+      (r.arrival || r.check_in || '') < newCheckOut && 
+      (r.departure || r.check_out || '') > originalCheckOut
+    );
+    
+    if (isOccupied) {
+      alert(`⚠️ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. Por favor, selecciona menos noches.`);
+      return;
+    }
+    
+    setExtensionLoading(true);
+    try {
+      const originalPrice = Number(selectedRes.price_estimate || 0);
+      const originalNights = Number(selectedRes.nights || 1);
+      const dailyRate = Math.round(originalPrice / originalNights);
+      const extraCost = extensionCustomPrice !== '' ? Number(extensionCustomPrice) : (dailyRate * extensionNights);
+      const newPrice = originalPrice + extraCost;
+      
+      const paymentAmountNum = extensionRegisterPayment ? extraCost : 0;
+      const oldDeposit = Number(selectedRes.deposit || 0);
+      const newDeposit = oldDeposit + paymentAmountNum;
+      
+      // A. Llamar a la API PUT /api/reservas
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedRes.id,
+          checkOut: newCheckOut,
+          price: newPrice,
+          deposit: newDeposit
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar la reserva en el servidor');
+      
+      // B. Si se registra pago en caja, insertar en Supabase finances y actualizar balance de la cuenta
+      if (extensionRegisterPayment && paymentAmountNum > 0 && extensionAccountId && extensionPaymentMethod) {
+        const baseDesc = `Pago Extensión Stay de ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} (+${extensionNights} noches)`;
+        const todayStr = new Date().toLocaleDateString('sv-SE');
+        
+        const { error: financeErr } = await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: paymentAmountNum,
+          category: 'Alojamiento',
+          description: baseDesc,
+          payment_method: extensionPaymentMethod,
+          account_id: extensionAccountId,
+          date: todayStr
+        });
+        
+        if (financeErr) {
+          console.error("Error al registrar finanzas de la extensión:", financeErr);
+          alert(`⚠️ Se actualizó la reserva, pero hubo un error al registrar el ingreso en Finanzas: ${financeErr.message}`);
+        } else {
+          // Actualizar balance de la cuenta
+          const matchedAcc = accounts.find(a => a.id === extensionAccountId);
+          if (matchedAcc) {
+            const newBalance = matchedAcc.balance + paymentAmountNum;
+            const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', extensionAccountId);
+            if (accErr) {
+              console.error("Error al actualizar balance de cuenta:", accErr);
+            } else {
+              setAccounts(prev => prev.map(a => a.id === extensionAccountId ? { ...a, balance: newBalance } : a));
+            }
+          }
+        }
+      }
+      
+      // C. Registrar Log de Empleado
+      try {
+        const emp = getActiveEmployee('recepcion');
+        const employeeNum = emp?.employee_num || '999';
+        const employeeName = emp?.full_name || 'Administrador';
+        const employeeDept = emp?.department || 'recepcion';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'estancia_extendida_admin',
+            room: selectedRes.room_name || 'General',
+            details: JSON.stringify({
+              text: `${selectedRes.guest_name} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Extendió estancia +${extensionNights} noches (Check-Out: ${newCheckOut}, Cobro: MX$${extraCost}).`,
+              extension: {
+                bookingId: selectedRes.id,
+                extraNights: extensionNights,
+                extraCost: extraCost,
+                newCheckOut: newCheckOut,
+                paymentRegistered: extensionRegisterPayment,
+                paymentMethod: extensionPaymentMethod,
+                accountId: extensionAccountId
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de extensión:", logErr);
+      }
+      
+      // D. Actualizar estados locales reactivos
+      setSelectedRes((prev: any) => ({
+        ...prev,
+        check_out: newCheckOut,
+        departure: newCheckOut,
+        nights: originalNights + extensionNights,
+        price_estimate: newPrice,
+        deposit: newDeposit,
+        balance: newPrice - newDeposit
+      }));
+      
+      setReservas(prev => prev.map(r => r.id === selectedRes.id ? {
+        ...r,
+        check_out: newCheckOut,
+        departure: newCheckOut,
+        nights: originalNights + extensionNights,
+        price_estimate: newPrice,
+        deposit: newDeposit,
+        balance: newPrice - newDeposit
+      } : r));
+      
+      setShowExtensionFlow(false);
+      alert(`✅ Estancia extendida con éxito hasta el ${newCheckOut}.`);
+      
+      // E. Refrescar datos en segundo plano
+      setTimeout(() => {
+        fetchReservas();
+      }, 3000);
+      
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al extender la estancia:\n\n${err.message}`);
+    } finally {
+      setExtensionLoading(false);
+    }
+  };
+
   // Registrar anticipo grupal proporcional (Reservas / Admin)
   const handleRegisterAbonoGrupal = async () => {
     if (!selectedRes || !abonoAmount || !abonoPaymentMethod || !abonoAccountId) return;
@@ -1769,12 +1961,18 @@ export default function ReservasList() {
                   {/* Fechas de Estancia */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left">
                     <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Fechas de Estancia</span>
+                    {isCheckedIn && (
+                      <div className="bg-amber-50 border border-amber-200 text-amber-850 text-[11px] font-bold p-3 rounded-xl leading-snug">
+                        ⚠️ Para modificar las fechas de un huésped "En Casa", por favor cancela la edición y utiliza el botón verde <b>"En Casa (Extender Estancia 🗓️)"</b> en el panel de detalles para asegurar el registro correcto en finanzas.
+                      </div>
+                    )}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Check-In</label>
                         <input
                           type="date"
                           value={editCheckIn}
+                          disabled={isCheckedIn}
                           onChange={e => {
                             const newIn = e.target.value;
                             setEditCheckIn(newIn);
@@ -1785,7 +1983,7 @@ export default function ReservasList() {
                               }
                             }
                           }}
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
+                          className={`w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm ${isCheckedIn ? 'opacity-60 cursor-not-allowed' : ''}`}
                         />
                       </div>
                       <div>
@@ -1793,6 +1991,7 @@ export default function ReservasList() {
                         <input
                           type="date"
                           value={editCheckOut}
+                          disabled={isCheckedIn}
                           onChange={e => {
                             const newOut = e.target.value;
                             setEditCheckOut(newOut);
@@ -1803,7 +2002,7 @@ export default function ReservasList() {
                               }
                             }
                           }}
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
+                          className={`w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm ${isCheckedIn ? 'opacity-60 cursor-not-allowed' : ''}`}
                         />
                       </div>
                     </div>
@@ -2201,7 +2400,163 @@ export default function ReservasList() {
                   {/* Registrar Anticipo Button & Panel */}
                   {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
                     <div className="mt-3">
-                      {showAbonoFlow ? (
+                      {showExtensionFlow ? (
+                        <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 text-left animate-in fade-in duration-205">
+                          <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
+                            <h4 className="text-[12px] font-extrabold text-zinc-800 uppercase tracking-wider">🗓️ Extender Estancia</h4>
+                            <button 
+                              onClick={() => { setShowExtensionFlow(false); }}
+                              className="text-[11px] font-bold text-zinc-500 hover:text-zinc-700 cursor-pointer"
+                            >
+                              ✕ Cancelar
+                            </button>
+                          </div>
+
+                          {/* Stepper de noches adicionales */}
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 block">Noches Adicionales</label>
+                            <div className="flex items-center w-full bg-white border border-zinc-200 rounded-xl h-12 focus-within:border-zinc-400 transition-all">
+                              <button
+                                type="button"
+                                onClick={() => setExtensionNights(prev => Math.max(1, prev - 1))}
+                                className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 border-r border-zinc-100 cursor-pointer"
+                              >
+                                <Minus size={15} strokeWidth={2.5} />
+                              </button>
+                              <span className="flex-1 text-center font-bold text-[14px] text-zinc-900 select-none">
+                                {extensionNights} Noche{extensionNights !== 1 ? 's' : ''}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setExtensionNights(prev => prev + 1)}
+                                className="w-12 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 border-l border-zinc-100 cursor-pointer"
+                              >
+                                <Plus size={15} strokeWidth={2.5} />
+                              </button>
+                            </div>
+                            <span className="text-[10px] text-zinc-500 pl-0.5 block">
+                              Nueva Salida: <span className="font-bold text-zinc-700">{format(parseISO(addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights)), "dd MMM yyyy", { locale: es })}</span>
+                            </span>
+                          </div>
+
+                          {/* Costo de noches adicionales */}
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 block">Costo Adicional</label>
+                            <div className="relative">
+                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
+                              <input
+                                type="number"
+                                placeholder={String(Math.round(Number(selectedRes.price_estimate || 0) / (selectedRes.nights || 1)) * extensionNights)}
+                                value={extensionCustomPrice}
+                                onChange={e => setExtensionCustomPrice(e.target.value)}
+                                className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                              />
+                            </div>
+                            <span className="text-[9px] text-zinc-450 pl-0.5 block leading-normal">
+                              * Basado en la tarifa promedio de {fmtCurrency(Math.round(Number(selectedRes.price_estimate || 0) / (selectedRes.nights || 1)), selectedRes.guest_name)}/noche. Deja en blanco para usar la sugerida.
+                            </span>
+                          </div>
+
+                          {/* Toggle registrar pago en caja */}
+                          <div className="flex items-center gap-2 py-1 pl-0.5">
+                            <input
+                              type="checkbox"
+                              id="regExtensionPayment"
+                              checked={extensionRegisterPayment}
+                              onChange={e => setExtensionRegisterPayment(e.target.checked)}
+                              className="w-4.5 h-4.5 text-blue-600 border-zinc-300 rounded focus:ring-blue-500 cursor-pointer"
+                            />
+                            <label htmlFor="regExtensionPayment" className="text-[12px] font-bold text-zinc-700 select-none cursor-pointer">
+                              Registrar Pago de Extensión en Caja
+                            </label>
+                          </div>
+
+                          {/* Flujo de pago */}
+                          {extensionRegisterPayment && (
+                            <div className="space-y-3.5 pt-1.5 border-t border-zinc-200/50 animate-in fade-in duration-200">
+                              <div className="space-y-1.5">
+                                <span className="text-[9px] font-bold text-zinc-455 uppercase tracking-widest block pl-0.5">Método de Pago</span>
+                                <div className="flex gap-1.5">
+                                  {[
+                                    { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                    { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                    { id: 'transferencia', label: 'Transf.', icon: Send }
+                                  ].map(m => (
+                                    <button
+                                      key={m.id}
+                                      type="button"
+                                      onClick={() => setExtensionPaymentMethod(m.id as any)}
+                                      className={`flex-1 py-1.5 px-2 border rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                                        extensionPaymentMethod === m.id
+                                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                          : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
+                                      }`}
+                                    >
+                                      <m.icon size={11} />
+                                      <span className="text-[10px] font-bold">{m.label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {extensionPaymentMethod && (
+                                <div className="space-y-1.5 animate-in fade-in duration-150">
+                                  <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest block pl-0.5">
+                                    Sobre / Cuenta Destino
+                                  </label>
+                                  <select
+                                    value={extensionAccountId}
+                                    onChange={e => setExtensionAccountId(e.target.value)}
+                                    required
+                                    className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer"
+                                  >
+                                    <option value="" disabled>Selecciona un sobre...</option>
+                                    {accounts
+                                      .filter(acc => {
+                                        const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                        if (isUSD) {
+                                          const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                          if (!isUSDAcc) return false;
+                                          
+                                          const name = acc.name.trim().toUpperCase();
+                                          if (extensionPaymentMethod === 'efectivo') {
+                                            return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                          }
+                                          return !name.includes('EFE') && !name.includes('CASH');
+                                        } else {
+                                          const name = acc.name.trim().toUpperCase();
+                                          if (extensionPaymentMethod === 'efectivo') {
+                                            return name === 'EFECTIVO';
+                                          }
+                                          if (extensionPaymentMethod === 'tarjeta') {
+                                            return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                          }
+                                          if (extensionPaymentMethod === 'transferencia') {
+                                            return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                          }
+                                          return false;
+                                        }
+                                      })
+                                      .map(acc => (
+                                        <option key={acc.id} value={acc.id}>
+                                          {acc.name}
+                                        </option>
+                                      ))}
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <button
+                            onClick={handleExtendStay}
+                            disabled={extensionLoading || (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId))}
+                            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12.5px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            {extensionLoading ? 'Procesando...' : 'Confirmar Extensión de Estancia'}
+                          </button>
+                        </div>
+                      ) : showAbonoFlow ? (
                         <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4">
                           <div className="flex justify-between items-center pb-2 border-b border-zinc-200">
                             <h4 className="text-[12px] font-extrabold text-zinc-855 uppercase tracking-wider">💰 Registrar Nuevo Anticipo</h4>
@@ -2380,18 +2735,35 @@ export default function ReservasList() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => {
-                            setAbonoAmount('');
-                            setAbonoPaymentMethod(null);
-                            setAbonoAccountId('');
-                            setAbonoGrupalMode(false);
-                            setShowAbonoFlow(true);
-                          }}
-                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
-                        >
-                          💰 Registrar Anticipo
-                        </button>
+                        <div className="flex gap-2 w-full pt-1.5 border-t border-zinc-100">
+                          <button
+                            onClick={() => {
+                              setAbonoAmount('');
+                              setAbonoPaymentMethod(null);
+                              setAbonoAccountId('');
+                              setAbonoGrupalMode(false);
+                              setShowAbonoFlow(true);
+                              setShowExtensionFlow(false);
+                            }}
+                            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer text-center"
+                          >
+                            💰 Registrar Anticipo
+                          </button>
+                          <button
+                            onClick={() => {
+                              setExtensionNights(1);
+                              setExtensionCustomPrice('');
+                              setExtensionRegisterPayment(true);
+                              setExtensionPaymentMethod(null);
+                              setExtensionAccountId('');
+                              setShowExtensionFlow(true);
+                              setShowAbonoFlow(false);
+                            }}
+                            className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-600/10 cursor-pointer text-center"
+                          >
+                            🗓️ Extender Estancia
+                          </button>
+                        </div>
                       )}
                     </div>
                   )}
@@ -2417,9 +2789,20 @@ export default function ReservasList() {
               )}
               {isCheckedIn ? (
                 <div className="flex flex-col gap-2">
-                  <div className="w-full bg-emerald-50 text-emerald-700 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-emerald-200">
-                    <CheckCircle2 size={18} /> Huésped en Casa
-                  </div>
+                  <button
+                    onClick={() => {
+                      setExtensionNights(1);
+                      setExtensionCustomPrice('');
+                      setExtensionRegisterPayment(true);
+                      setExtensionPaymentMethod(null);
+                      setExtensionAccountId('');
+                      setShowExtensionFlow(true);
+                      setShowAbonoFlow(false);
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in duration-200"
+                  >
+                    <CheckCircle2 size={18} /> En Casa (Extender Estancia 🗓️)
+                  </button>
                   {selectedRes.document_url && (
                     <a 
                       href={selectedRes.document_url}
