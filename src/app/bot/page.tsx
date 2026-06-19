@@ -336,44 +336,45 @@ export default function BotPage() {
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {activeConv.messages.map((msg, idx) => (
             <div key={idx}>
-              {/* Mensaje del Huésped */}
+              {/* Mensaje del Huésped (Recibido) */}
               {msg.role_guest && (
-                <div className="flex justify-end items-end gap-2 mb-1">
-                  <div className="max-w-[78%] bg-zinc-900 text-white px-4 py-2.5 rounded-2xl rounded-br-sm shadow-sm">
+                <div className="flex justify-start items-end gap-2 mb-1">
+                  <div className="max-w-[78%] bg-white border border-zinc-200 text-zinc-900 px-4 py-2.5 rounded-2xl rounded-bl-sm shadow-sm">
                     <p className="text-[13px] font-medium leading-snug">{msg.role_guest}</p>
+                    <p className="text-[10px] mt-1.5 text-zinc-400 flex items-center gap-1">
+                      <Clock size={9} />{format(new Date(msg.timestamp), 'HH:mm')}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {/* Respuesta del Bot (Enviado) */}
+              {msg.role_bot && (
+                <div className="flex justify-end items-end gap-2 mb-1">
+                  <div className="max-w-[78%] bg-emerald-50 border border-emerald-100 text-zinc-900 px-4 py-2.5 rounded-2xl rounded-br-sm shadow-sm">
+                    <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 mb-1 uppercase tracking-wider">
+                      <Bot size={10} />
+                      <span>Asistente IA</span>
+                    </div>
+                    <p className="text-[13px] font-medium leading-snug">{msg.role_bot}</p>
                     <p className="text-[10px] mt-1.5 text-zinc-400 text-right flex items-center justify-end gap-1">
                       <Clock size={9} />{format(new Date(msg.timestamp), 'HH:mm')}
+                      <CheckCheck size={10} className="text-emerald-500 ml-1" />
                     </p>
                   </div>
                 </div>
               )}
-              {/* Respuesta del Bot */}
-              {msg.role_bot && (
-                <div className="flex justify-start items-end gap-2 mb-1">
-                  <div className="w-7 h-7 rounded-full bg-[#25D366]/15 border border-[#25D366]/25 flex items-center justify-center shrink-0 mb-1">
-                    <Bot size={12} className="text-[#25D366]" />
-                  </div>
-                  <div className="max-w-[78%] bg-white border border-zinc-200 text-zinc-800 px-4 py-2.5 rounded-2xl rounded-bl-sm shadow-sm">
-                    <p className="text-[13px] font-medium leading-snug">{msg.role_bot}</p>
-                    <p className="text-[10px] mt-1.5 text-zinc-400 flex items-center gap-1">
-                      <Clock size={9} />{format(new Date(msg.timestamp), 'HH:mm')}
-                      <CheckCheck size={10} className="text-emerald-400 ml-1" />
-                    </p>
-                  </div>
-                </div>
-              )}
-              {/* Respuesta Manual del Gerente */}
+              {/* Respuesta Manual del Gerente (Enviado) */}
               {msg.role_manager && (
-                <div className="flex justify-start items-end gap-2 mb-1">
-                  <div className="w-7 h-7 rounded-full bg-amber-100 border border-amber-200 flex items-center justify-center shrink-0 mb-1">
-                    <User size={12} className="text-amber-600" />
-                  </div>
-                  <div className="max-w-[78%] bg-amber-50 border border-amber-200 text-zinc-800 px-4 py-2.5 rounded-2xl rounded-bl-sm shadow-sm">
-                    <p className="text-[10px] font-bold text-amber-600 mb-1 uppercase tracking-wider">Gerente</p>
+                <div className="flex justify-end items-end gap-2 mb-1">
+                  <div className="max-w-[78%] bg-indigo-50 border border-indigo-100 text-zinc-900 px-4 py-2.5 rounded-2xl rounded-br-sm shadow-sm">
+                    <div className="flex items-center gap-1 text-[9px] font-bold text-indigo-600 mb-1 uppercase tracking-wider">
+                      <User size={10} />
+                      <span>Gerente</span>
+                    </div>
                     <p className="text-[13px] font-medium leading-snug">{msg.role_manager}</p>
-                    <p className="text-[10px] mt-1.5 text-zinc-400 flex items-center gap-1">
+                    <p className="text-[10px] mt-1.5 text-zinc-400 text-right flex items-center justify-end gap-1">
                       <Clock size={9} />{format(new Date(msg.timestamp), 'HH:mm')}
-                      <CheckCheck size={10} className="text-amber-400 ml-1" />
+                      <CheckCheck size={10} className="text-indigo-500 ml-1" />
                     </p>
                   </div>
                 </div>
