@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X, Archive } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { supabase } from '@/lib/supabase';
 
 type Message = {
   role_guest:   string | null;
@@ -223,9 +224,27 @@ export default function BotPage() {
 
   useEffect(() => {
     fetchConversations();
-    // 4 segundos: suficientemente rápido para parecer tiempo real
-    const interval = setInterval(fetchConversations, 4000);
-    return () => clearInterval(interval);
+
+    // Suscribirse a cambios en tiempo real en Supabase (instantáneo)
+    const channel = supabase
+      .channel('conversations-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'conversations' },
+        (payload) => {
+          console.log('[Realtime] Cambio detectado en conversaciones:', payload);
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
+    // Fallback lento en caso de desconexión del WebSocket
+    const interval = setInterval(fetchConversations, 10000);
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
