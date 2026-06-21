@@ -864,7 +864,7 @@ export default function AdminDashboard() {
             className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-zinc-50 hover:border-emerald-200 active:scale-[0.97] transition-all shadow-sm group cursor-pointer outline-none"
           >
             <MessageCircle size={20} className="text-emerald-600 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
-            <span className="text-[12px] font-bold text-zinc-800 leading-tight">WhatsApp Plan B</span>
+            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Resumen Diario</span>
           </button>
           <Link href="/mantenimiento?action=new_task"
             className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-rose-50/50 active:scale-[0.97] transition-all shadow-sm group">
