@@ -6,7 +6,8 @@ import {
   Hotel, Shield, ChevronRight, ChevronUp, ChevronDown,
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
-  Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench
+  Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench,
+  TrendingUp
 } from 'lucide-react';
 import { 
   getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, 
@@ -42,6 +43,7 @@ export default function AjustesPage() {
     perfil: false,
     seguridad: false,
     contable: false,
+    tarifas: false,
     empleados: false,
     depuracion: false,
   });
@@ -318,7 +320,7 @@ export default function AjustesPage() {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const section = params.get('section');
-      if (section && ['perfil', 'seguridad', 'contable', 'empleados', 'depuracion'].includes(section)) {
+      if (section && ['perfil', 'seguridad', 'contable', 'tarifas', 'empleados', 'depuracion'].includes(section)) {
         setExpandedSections(prev => ({
           ...prev,
           [section]: true
@@ -792,6 +794,19 @@ export default function AjustesPage() {
       >
         <div className="divide-y divide-zinc-100">
           <Row label="Acomodar Cuentas" onPress={() => setShowAccountOrderModal(true)} />
+        </div>
+      </CollapsibleSection>
+
+      {/* 3.5. TARIFAS */}
+      <CollapsibleSection
+        id="tarifas"
+        icon={<TrendingUp size={15} strokeWidth={2.5} />}
+        title="Tarifas"
+        isOpen={expandedSections.tarifas}
+        onToggle={() => toggleSection('tarifas')}
+      >
+        <div className="divide-y divide-zinc-100">
+          <Row label="Sincronizador Beds24" onPress={() => router.push('/precios')} />
         </div>
       </CollapsibleSection>
 

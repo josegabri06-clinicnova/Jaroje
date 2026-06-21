@@ -921,25 +921,6 @@ export default function AdminDashboard() {
               <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Revenue · Métricas</p>
             </div>
           </Link>
-          {/* PRECIO DINÁMICO */}
-          <Link href="/precios" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all">
-            <TrendingUp size={20} className="text-zinc-700" />
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">TARIFAS</p>
-              <p className="text-[11px] font-bold text-emerald-500 mt-0.5">Sincronizador Beds24</p>
-            </div>
-          </Link>
-          {/* DEPURACIÓN DE DATOS */}
-          <Link href="/ajustes?section=depuracion" className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-sm flex flex-col gap-3 hover:border-zinc-300 active:scale-[0.98] transition-all group">
-            <div className="flex justify-between items-start w-full">
-              <Sparkles size={20} className="text-zinc-700 group-hover:scale-115 transition-transform duration-300" />
-              <span className="text-[10px] font-bold text-zinc-650 bg-zinc-50 px-2 py-0.5 rounded-full">Depurar →</span>
-            </div>
-            <div>
-              <p className="text-[14px] font-bold text-zinc-900 tracking-tight">DEPURACIÓN DE DATOS</p>
-              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Limpieza y Archivo</p>
-            </div>
-          </Link>
         </div>
       </div>
 
