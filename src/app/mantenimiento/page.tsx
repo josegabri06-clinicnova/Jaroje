@@ -461,49 +461,66 @@ export default function MantenimientoPage() {
       </div>
 
       {/* KPIs Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 select-none">
+        {/* NUEVOS */}
+        <div 
+          onClick={() => setFilterStatus('nuevo')}
+          className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+            filterStatus === 'nuevo' 
+              ? 'bg-purple-50/10 border-purple-600 ring-2 ring-purple-500/10 shadow-md' 
+              : 'bg-white border-zinc-200/85 shadow-sm hover:bg-zinc-50/50'
+          }`}
+        >
           <span className="text-[20px] font-black text-purple-650 leading-none">
             {tasks.filter(t => t.status === 'nuevo').length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Nuevos</p>
         </div>
-        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+
+        {/* PENDIENTES */}
+        <div 
+          onClick={() => setFilterStatus('pendiente')}
+          className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+            filterStatus === 'pendiente' 
+              ? 'bg-amber-50/10 border-amber-500 ring-2 ring-amber-500/10 shadow-md' 
+              : 'bg-white border-zinc-200/85 shadow-sm hover:bg-zinc-50/50'
+          }`}
+        >
           <span className="text-[20px] font-black text-amber-500 leading-none">
             {tasks.filter(t => t.status === 'pendiente').length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Pendientes</p>
         </div>
-        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+
+        {/* EN PROCESO */}
+        <div 
+          onClick={() => setFilterStatus('en_proceso')}
+          className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+            filterStatus === 'en_proceso' 
+              ? 'bg-blue-50/10 border-blue-500 ring-2 ring-blue-500/10 shadow-md' 
+              : 'bg-white border-zinc-200/85 shadow-sm hover:bg-zinc-50/50'
+          }`}
+        >
           <span className="text-[20px] font-black text-blue-500 leading-none">
             {tasks.filter(t => t.status === 'en_proceso').length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
         </div>
-        <div className="bg-white border border-zinc-200/85 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+
+        {/* RESUELTAS */}
+        <div 
+          onClick={() => setFilterStatus('resuelta')}
+          className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+            filterStatus === 'resuelta' 
+              ? 'bg-emerald-50/10 border-emerald-600 ring-2 ring-emerald-500/10 shadow-md' 
+              : 'bg-white border-zinc-200/85 shadow-sm hover:bg-zinc-50/50'
+          }`}
+        >
           <span className="text-[20px] font-black text-emerald-650 leading-none">
             {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === new Date().toISOString().split('T')[0]).length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex bg-zinc-200/60 p-1 rounded-2xl gap-1">
-        {[
-          { id: 'nuevo', label: 'Nuevos' },
-          { id: 'pendiente', label: 'Pendientes' },
-          { id: 'en_proceso', label: 'En Proceso' },
-          { id: 'resuelta', label: 'Resueltos' },
-        ].map(f => (
-          <button 
-            key={f.id}
-            onClick={() => setFilterStatus(f.id as any)}
-            className={`flex-1 py-2.5 text-[12px] font-bold rounded-xl transition-all ${filterStatus === f.id ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-700'}`}
-          >
-            {f.label}
-          </button>
-        ))}
       </div>
 
       {/* Search and Filters Bar */}

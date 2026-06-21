@@ -1405,26 +1405,61 @@ export default function StaffPage() {
             </div>
 
             {/* KPIs Grid 2x2 para Móviles */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+            <div className="grid grid-cols-2 gap-2.5 select-none">
+              {/* NUEVOS */}
+              <div 
+                onClick={() => setTaskTab('nuevos')}
+                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                  taskTab === 'nuevos' 
+                    ? 'bg-purple-50/10 border-purple-600 ring-2 ring-purple-500/10 shadow-md' 
+                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                }`}
+              >
                 <span className="text-[20px] font-black text-purple-650 leading-none">
                   {nuevos.length}
                 </span>
                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Nuevos</p>
               </div>
-              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+
+              {/* PENDIENTES */}
+              <div 
+                onClick={() => setTaskTab('pendientes')}
+                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                  taskTab === 'pendientes' 
+                    ? 'bg-amber-50/10 border-amber-500 ring-2 ring-amber-500/10 shadow-md' 
+                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                }`}
+              >
                 <span className="text-[20px] font-black text-amber-500 leading-none">
                   {pendientes.length}
                 </span>
                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Pendientes</p>
               </div>
-              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+
+              {/* EN PROCESO */}
+              <div 
+                onClick={() => setTaskTab('en_proceso')}
+                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                  taskTab === 'en_proceso' 
+                    ? 'bg-blue-50/10 border-blue-500 ring-2 ring-blue-500/10 shadow-md' 
+                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                }`}
+              >
                 <span className="text-[20px] font-black text-blue-500 leading-none">
                   {enProceso.length}
                 </span>
                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
               </div>
-              <div className="bg-white border border-zinc-200/80 rounded-2xl p-3.5 shadow-sm flex flex-col justify-between">
+
+              {/* RESUELTAS */}
+              <div 
+                onClick={() => setTaskTab('resueltos')}
+                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                  taskTab === 'resueltos' 
+                    ? 'bg-emerald-50/10 border-emerald-600 ring-2 ring-emerald-500/10 shadow-md' 
+                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                }`}
+              >
                 <span className="text-[20px] font-black text-emerald-650 leading-none">
                   {resueltos.filter(t => {
                     if (!t.resolved_at) return false;
@@ -1434,24 +1469,6 @@ export default function StaffPage() {
                 </span>
                 <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>
               </div>
-            </div>
-
-            {/* Pestañas de Filtro Premium estilo Cápsula */}
-            <div className="flex bg-zinc-200/60 p-1 rounded-2xl gap-1">
-              {[
-                { id: 'nuevos', label: 'Nuevos' },
-                { id: 'pendientes', label: 'Pendientes' },
-                { id: 'en_proceso', label: 'En Proceso' },
-                { id: 'resueltos', label: 'Resueltos' },
-              ].map(f => (
-                <button 
-                  key={f.id}
-                  onClick={() => setTaskTab(f.id as any)}
-                  className={`flex-1 py-2.5 text-[11px] font-bold rounded-xl transition-all ${taskTab === f.id ? 'bg-white text-zinc-900 shadow-sm border border-zinc-200/50' : 'text-zinc-500 hover:text-zinc-700'}`}
-                >
-                  {f.label}
-                </button>
-              ))}
             </div>
 
             {/* Barra de Búsqueda Interactiva */}
