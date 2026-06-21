@@ -11,6 +11,8 @@
   "dependencies": {
     "@ai-sdk/openai": "3.0.63",
     "@ai-sdk/react": "3.0.184",
+    "@simplewebauthn/browser": "^10.0.0",
+    "@simplewebauthn/server": "^10.0.0",
     "@supabase/supabase-js": "^2.99.3",
     "ai": "3.4.1",
     "clsx": "^2.1.1",

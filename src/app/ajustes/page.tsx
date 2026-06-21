@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+// @ts-ignore
+import { startRegistration } from '@simplewebauthn/browser';
 import { 
   Hotel, Shield, ChevronRight, ChevronUp, ChevronDown,
   Star, Key, X, Check, Eye, EyeOff, LogOut,
@@ -312,9 +314,73 @@ export default function AjustesPage() {
     }
   };
 
+  const [passkeys, setPasskeys] = useState<any[]>([]);
+
+  const fetchPasskeys = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_passkeys')
+        .select('id, device_name, created_at')
+        .eq('role', 'admin')
+        .order('created_at', { ascending: false });
+      if (!error && data) {
+        setPasskeys(data);
+      }
+    } catch (err) {
+      console.error('Error fetching passkeys:', err);
+    }
+  };
+
+  const handleRegisterBiometrics = async () => {
+    const deviceNameInput = prompt("Introduce un nombre para este dispositivo (ej: iPhone de Josega, Laptop Trabajo):");
+    if (!deviceNameInput) return;
+    
+    try {
+      const resOptions = await fetch('/api/auth/webauthn/register/options');
+      const options = await resOptions.json();
+      if (!resOptions.ok) throw new Error(options.error || 'Error al obtener opciones de registro');
+      
+      const credential = await startRegistration({ optionsJSON: options });
+      
+      const resVerify = await fetch('/api/auth/webauthn/register/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          registrationResponse: credential,
+          deviceName: deviceNameInput
+        })
+      });
+      const verifyResult = await resVerify.json();
+      if (!resVerify.ok) throw new Error(verifyResult.error || 'Error al verificar credencial');
+      
+      alert('✅ ¡Dispositivo registrado con éxito!');
+      fetchPasskeys();
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al registrar biometría: ${err.message}`);
+    }
+  };
+
+  const handleDeletePasskey = async (id: string) => {
+    if (!confirm('¿Estás seguro de que deseas eliminar este dispositivo de los accesos autorizados?')) return;
+    try {
+      const { error } = await supabase
+        .from('user_passkeys')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      alert('✅ Dispositivo eliminado.');
+      fetchPasskeys();
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al eliminar dispositivo: ${err.message}`);
+    }
+  };
+
   useEffect(() => {
     fetchEmployees();
     fetchAccounts();
+    fetchPasskeys();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
@@ -781,6 +847,45 @@ export default function AjustesPage() {
           <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
           <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
           <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
+          
+          <div className="p-4 bg-zinc-50/50 space-y-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h4 className="text-[13px] font-bold text-zinc-900">Accesos Biométricos (Face ID / Touch ID)</h4>
+                <p className="text-[11px] text-zinc-500 mt-0.5">Dispositivos registrados que pueden acceder como Administrador sin PIN.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRegisterBiometrics}
+                className="px-3 py-2 bg-zinc-900 text-white rounded-xl text-[11px] font-bold shadow hover:bg-zinc-800 transition-all cursor-pointer text-center shrink-0"
+              >
+                Registrar Dispositivo
+              </button>
+            </div>
+            
+            {passkeys.length === 0 ? (
+              <p className="text-[11px] text-zinc-400 italic text-center py-2">No hay dispositivos biométricos registrados.</p>
+            ) : (
+              <div className="space-y-2">
+                {passkeys.map(pk => (
+                  <div key={pk.id} className="flex items-center justify-between p-3 bg-white border border-zinc-200/60 rounded-xl">
+                    <div className="flex flex-col">
+                      <span className="text-[12px] font-semibold text-zinc-800">{pk.device_name}</span>
+                      <span className="text-[9px] text-zinc-400 mt-0.5">Registrado el {new Date(pk.created_at).toLocaleDateString('es-MX')}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePasskey(pk.id)}
+                      className="p-1.5 text-zinc-400 hover:text-red-650 transition-colors cursor-pointer"
+                      title="Eliminar dispositivo"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </CollapsibleSection>
 

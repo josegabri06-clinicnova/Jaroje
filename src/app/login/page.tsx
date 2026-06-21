@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { validatePinAsync, setRole, resetAllPinsToDefault, loadPinsFromSupabase } from '@/lib/auth';
-import { Shield, Wrench, Sparkles, KeyRound, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Shield, Wrench, Sparkles, KeyRound, RotateCcw, AlertTriangle, Fingerprint } from 'lucide-react';
+// @ts-ignore
+import { startAuthentication } from '@simplewebauthn/browser';
 
 type Mode = 'select' | 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion';
 
@@ -17,6 +19,40 @@ export default function LoginPage() {
   const [logoTaps, setLogoTaps] = useState(0);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetDone, setResetDone] = useState(false);
+
+  const handleBiometricLogin = async () => {
+    setLoading(true);
+    setError(false);
+    try {
+      const resOptions = await fetch('/api/auth/webauthn/login/options');
+      const options = await resOptions.json();
+      if (!resOptions.ok) {
+        throw new Error(options.error || 'Error al obtener opciones de inicio de sesión');
+      }
+
+      const assertion = await startAuthentication({ optionsJSON: options });
+
+      const resVerify = await fetch('/api/auth/webauthn/login/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ authenticationResponse: assertion })
+      });
+      const verifyResult = await resVerify.json();
+      if (!resVerify.ok) {
+        throw new Error(verifyResult.error || 'Verificación fallida');
+      }
+
+      setRole('admin');
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('jaroje_session_pin', verifyResult.pin || '1234');
+      }
+      router.replace('/');
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al ingresar con biometría: ${err.message}`);
+      setLoading(false);
+    }
+  };
 
   // Precargar PINs desde Supabase al iniciar
   useEffect(() => {
@@ -225,6 +261,17 @@ export default function LoginPage() {
 
           {error && (
             <p className="text-red-500 text-xs font-medium -mt-4">PIN incorrecto</p>
+          )}
+
+          {mode === 'admin' && (
+            <button
+              onClick={handleBiometricLogin}
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2.5 p-3.5 bg-zinc-900 text-white rounded-2xl font-bold text-sm transition-all active:scale-[0.98] shadow cursor-pointer disabled:opacity-40 -mt-2"
+            >
+              <Fingerprint size={16} strokeWidth={2.5} />
+              <span>Ingresar con Face ID / Touch ID</span>
+            </button>
           )}
 
           {/* Teclado numérico */}
