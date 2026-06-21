@@ -1155,9 +1155,9 @@ export function getDirectTotalForStay(
       priceUsed = JAROJE_PRICES[parentRoom.roomId]?.[season] || 2000;
     }
 
-    const nightBase = Math.ceil(priceUsed * discountMult * 100) / 100 + surchargePerNight;
-    const nightTax = Math.ceil(nightBase * 0.19 * 100) / 100;
-    totalDirect += Math.ceil((nightBase + nightTax) * 100) / 100;
+    const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
+    const nightTax = Math.round(nightBase * 0.19);
+    totalDirect += nightBase + nightTax;
   }
 
   return totalDirect;
@@ -1198,12 +1198,12 @@ export function computeOtaSplit(
       // host_fee = tarifa_cuarto * 15.5% * 1.16 = tarifa_cuarto * 17.98%
       // expected_payout = tarifa_cuarto * (1 + 16% Lodging Tax - 17.98% host fee - 12% retenciones) = tarifa_cuarto * 86.02%
       const roomRate = Math.round(totalAmount / 1.16);
-      commission = Math.round(roomRate * 0.1798 * 100) / 100;
-      netRevenue = Math.round(roomRate * 0.8602 * 100) / 100;
+      commission = Math.round(roomRate * 0.1798);
+      netRevenue = Math.round(roomRate * 0.8602);
     } else {
       // Booking.com o Expedia: 15% de comisión estándar
-      commission = Math.round(totalAmount * 0.15 * 100) / 100;
-      netRevenue = Math.round((totalAmount - commission) * 100) / 100;
+      commission = Math.round(totalAmount * 0.15);
+      netRevenue = totalAmount - commission;
     }
 
     return {

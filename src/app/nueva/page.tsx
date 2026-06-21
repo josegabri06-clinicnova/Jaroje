@@ -317,9 +317,9 @@ export default function VercelActionForm() {
         surchargePerNight = activeSurchargeTotal / group.length;
       }
 
-      const priceWithChannel = Math.ceil(basePrice * discountMult * multiplier * 100) / 100;
-      const tax = Math.ceil(priceWithChannel * 0.19 * 100) / 100; // 16% IVA + 3% ISH
-      const suggestedDailyRate = Math.ceil((priceWithChannel + tax + surchargePerNight) * 100) / 100;
+      const priceWithChannel = basePrice * discountMult * multiplier;
+      const tax = priceWithChannel * 0.19; // 16% IVA + 3% ISH
+      const suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
 
       sumSuggestedRates += suggestedDailyRate;
 
@@ -329,9 +329,9 @@ export default function VercelActionForm() {
       let dailyRate = suggestedDailyRate;
       
       if (group.length <= 1 && isDailyRateEdited) {
-        dailyRate = Number(form.dailyRate) || 0;
+        dailyRate = Math.round(Number(form.dailyRate) || 0);
       } else if (userPrice !== undefined && userPrice !== '') {
-        dailyRate = Number(userPrice);
+        dailyRate = Math.round(Number(userPrice));
       }
       
       const roomTotal = dailyRate * computedNights;
@@ -348,7 +348,7 @@ export default function VercelActionForm() {
       };
     });
 
-    const suggestedDailyRate = group.length > 0 ? Math.ceil((sumSuggestedRates / group.length) * 100) / 100 : 0;
+    const suggestedDailyRate = group.length > 0 ? Math.round(sumSuggestedRates / group.length) : 0;
 
     return {
       totalStay,
@@ -1274,7 +1274,7 @@ export default function VercelActionForm() {
                                 <div className="flex flex-col">
                                   <span className="text-[13px] font-bold text-zinc-800 leading-snug">Habitación {room.name}</span>
                                   <span className="text-[10px] text-zinc-500 font-medium mt-0.5">
-                                    Sugerido: ${room.suggestedDailyRate.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    Sugerido: ${room.suggestedDailyRate.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                                   </span>
                                 </div>
                                 <div className="relative w-32 shrink-0">

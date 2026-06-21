@@ -170,8 +170,8 @@ async function compressImage(file: File): Promise<string> {
 
 function fmtCurrency(amount: number, guestName?: string) {
   const isUSD = guestName?.toUpperCase().includes('(US DOLLARS)');
-  const rounded = Math.ceil((amount || 0) * 100) / 100;
-  return (isUSD ? 'USD$' : 'MX$') + rounded.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const rounded = Math.round(amount || 0);
+  return (isUSD ? 'USD$' : 'MX$') + rounded.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 const getUnitDisplay = (roomStr: string) => {
