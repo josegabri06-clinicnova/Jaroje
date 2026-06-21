@@ -19,3 +19,8 @@ CREATE POLICY "Permitir lectura de credenciales de seguridad"
 ON public.user_passkeys
 FOR SELECT 
 USING (true);
+
+-- Registrar la llave de recuperación maestra por defecto para administración en Supabase
+INSERT INTO public.settings (key, value)
+VALUES ('admin_recovery_key', 'JRJ-SEC-9X2P-7QLK-4M1Z')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;

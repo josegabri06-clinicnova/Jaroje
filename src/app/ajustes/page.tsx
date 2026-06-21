@@ -9,7 +9,7 @@ import {
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
   Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench,
-  TrendingUp
+  TrendingUp, RotateCcw
 } from 'lucide-react';
 import { 
   getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, 
@@ -315,6 +315,61 @@ export default function AjustesPage() {
   };
 
   const [passkeys, setPasskeys] = useState<any[]>([]);
+  const [recoveryKey, setRecoveryKey] = useState('');
+  const [showRecoveryKey, setShowRecoveryKey] = useState(false);
+  const [isRegeneratingKey, setIsRegeneratingKey] = useState(false);
+
+  const generateRandomKey = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const segment = (len: number) => {
+      let str = '';
+      for (let i = 0; i < len; i++) {
+        str += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return str;
+    };
+    return `JRJ-SEC-${segment(4)}-${segment(4)}-${segment(4)}`;
+  };
+
+  const fetchRecoveryKey = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'admin_recovery_key')
+        .maybeSingle();
+      if (!error && data) {
+        setRecoveryKey(data.value);
+      } else {
+        setRecoveryKey('JRJ-SEC-9X2P-7QLK-4M1Z');
+      }
+    } catch (e) {
+      console.error('Error fetching recovery key:', e);
+    }
+  };
+
+  const handleRegenerateRecoveryKey = async () => {
+    if (!confirm('¿Estás seguro de que deseas regenerar la Llave de Recuperación Maestra? La llave anterior dejará de ser válida inmediatamente.')) {
+      return;
+    }
+    setIsRegeneratingKey(true);
+    const newKey = generateRandomKey();
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'admin_recovery_key', value: newKey }, { onConflict: 'key' });
+      
+      if (error) throw error;
+      
+      setRecoveryKey(newKey);
+      alert('✅ Llave de Recuperación Maestra regenerada con éxito. Asegúrate de guardarla en un lugar seguro.');
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al regenerar la llave: ${err.message}`);
+    } finally {
+      setIsRegeneratingKey(false);
+    }
+  };
 
   const fetchPasskeys = async () => {
     try {
@@ -381,6 +436,7 @@ export default function AjustesPage() {
     fetchEmployees();
     fetchAccounts();
     fetchPasskeys();
+    fetchRecoveryKey();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
@@ -843,10 +899,38 @@ export default function AjustesPage() {
         onToggle={() => toggleSection('seguridad')}
       >
         <div className="divide-y divide-zinc-100">
-          <Row label="Cambiar PIN Administrador" value="••••" onPress={() => openPinModal('admin')} />
           <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
           <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
           <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
+
+          <div className="py-3.5 flex items-center justify-between border-b border-zinc-100 last:border-none">
+            <div className="flex flex-col">
+              <span className="text-[15px] font-medium text-zinc-800">Llave de Recuperación Maestra</span>
+              <span className="text-[11px] text-zinc-400 mt-0.5 font-sans">Usada para registrar nuevos dispositivos Admin</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[13px] font-mono font-bold text-zinc-700 bg-zinc-100 px-2.5 py-1 rounded">
+                {showRecoveryKey ? recoveryKey : '••••-••••-••••-••••'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowRecoveryKey(!showRecoveryKey)}
+                className="p-1.5 rounded-lg hover:bg-zinc-100 text-zinc-500 hover:text-zinc-800 transition-colors cursor-pointer"
+                title={showRecoveryKey ? "Ocultar llave" : "Mostrar llave"}
+              >
+                {showRecoveryKey ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+              <button
+                type="button"
+                onClick={handleRegenerateRecoveryKey}
+                disabled={isRegeneratingKey}
+                className="p-1.5 rounded-lg hover:bg-zinc-150 text-zinc-500 hover:text-zinc-800 transition-colors disabled:opacity-40 cursor-pointer"
+                title="Regenerar llave"
+              >
+                <RotateCcw size={16} className={isRegeneratingKey ? "animate-spin" : ""} />
+              </button>
+            </div>
+          </div>
           
           <div className="p-4 bg-zinc-50/50 space-y-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">

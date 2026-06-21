@@ -20,6 +20,11 @@ export default function LoginPage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetDone, setResetDone] = useState(false);
 
+  // Estados de recuperación para Admin
+  const [showRecoveryInput, setShowRecoveryInput] = useState(false);
+  const [recoveryKeyInput, setRecoveryKeyInput] = useState('');
+  const [recoveryError, setRecoveryError] = useState('');
+
   const handleBiometricLogin = async () => {
     setLoading(true);
     setError(false);
@@ -53,6 +58,44 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  const handleRecoverySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recoveryKeyInput.trim()) {
+      setRecoveryError('Por favor ingresa la llave de recuperación.');
+      return;
+    }
+    setLoading(true);
+    setRecoveryError('');
+    try {
+      const res = await fetch('/api/auth/verify-recovery-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recoveryKey: recoveryKeyInput.trim() })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Llave incorrecta');
+      }
+
+      setRole('admin');
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('jaroje_session_pin', data.pin || '1234');
+      }
+      router.replace('/ajustes?section=seguridad');
+    } catch (err: any) {
+      console.error(err);
+      setRecoveryError(err.message || 'La llave de recuperación es inválida.');
+      setLoading(false);
+    }
+  };
+
+  // Disparar biometría automáticamente cuando se selecciona Administrador
+  useEffect(() => {
+    if (mode === 'admin' && !showRecoveryInput && !loading) {
+      handleBiometricLogin();
+    }
+  }, [mode, showRecoveryInput]);
 
   // Precargar PINs desde Supabase al iniciar
   useEffect(() => {
@@ -156,7 +199,7 @@ export default function LoginPage() {
               <div className="flex gap-3 w-full">
                 <button
                   onClick={() => setShowResetConfirm(false)}
-                  className="flex-1 py-3 rounded-xl border border-zinc-200 text-zinc-600 font-semibold text-sm"
+                  className="flex-1 py-3 rounded-xl border border-zinc-200 text-zinc-650 font-semibold text-sm"
                 >
                   Cancelar
                 </button>
@@ -235,71 +278,151 @@ export default function LoginPage() {
               {mode === 'admin' ? 'Administrador' : mode === 'recepcion' ? 'Recepción' : mode === 'staff_limpieza' ? 'Limpieza' : 'Mantenimiento'}
             </p>
             <p className="text-zinc-400 text-xs">
-              {loading ? 'Verificando...' : 'Introduce tu PIN de acceso'}
+              {mode === 'admin' 
+                ? showRecoveryInput 
+                  ? 'Ingresa tu Llave de Recuperación' 
+                  : loading 
+                    ? 'Autenticando biometría...' 
+                    : 'Acceso biométrico requerido'
+                : loading 
+                  ? 'Verificando PIN...' 
+                  : 'Introduce tu PIN de acceso'}
             </p>
           </div>
 
-          {/* Indicadores PIN */}
-          <div
-            className={`flex gap-4 transition-all`}
-            style={shake ? { animation: 'wiggle 0.4s ease-in-out' } : {}}
-          >
-            {[0,1,2,3].map(i => (
+          {mode === 'admin' ? (
+            // UI Exclusiva del Admin
+            <div className="w-full flex flex-col gap-6">
+              {!showRecoveryInput ? (
+                <>
+                  <div className="bg-white border border-zinc-200 rounded-3xl p-5 shadow-sm text-center flex flex-col items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-zinc-50 border border-zinc-150 flex items-center justify-center text-zinc-800">
+                      <Fingerprint size={32} strokeWidth={1.5} className="text-zinc-700 animate-pulse" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-zinc-500 leading-relaxed">
+                        Usa la biometría (Face ID / Touch ID) para iniciar sesión en tu dispositivo.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleBiometricLogin}
+                    disabled={loading}
+                    className="w-full flex items-center justify-center gap-2.5 p-4 bg-zinc-900 hover:bg-zinc-800 text-white rounded-2xl font-bold text-sm transition-all active:scale-[0.98] shadow-md cursor-pointer disabled:opacity-40"
+                  >
+                    <Fingerprint size={18} strokeWidth={2.5} />
+                    <span>Iniciar Autenticación</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setShowRecoveryInput(true); setRecoveryError(''); }}
+                    disabled={loading}
+                    className="text-zinc-500 hover:text-zinc-800 text-xs font-bold text-center underline cursor-pointer"
+                  >
+                    ¿Dispositivo nuevo? Registrar con Llave Maestra
+                  </button>
+                </>
+              ) : (
+                <form onSubmit={handleRecoverySubmit} className="space-y-4">
+                  <div className="bg-white border border-zinc-200 rounded-3xl p-4.5 shadow-sm space-y-3">
+                    <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
+                      Llave de Recuperación Maestra
+                    </label>
+                    <input
+                      type="text"
+                      value={recoveryKeyInput}
+                      onChange={(e) => {
+                        setRecoveryKeyInput(e.target.value.toUpperCase());
+                        setRecoveryError('');
+                      }}
+                      placeholder="JRJ-SEC-XXXX-XXXX-XXXX"
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-3 text-xs font-mono font-bold text-center text-zinc-850 focus:outline-none focus:ring-2 focus:ring-zinc-950 placeholder:text-zinc-350"
+                      disabled={loading}
+                      autoFocus
+                    />
+                    {recoveryError && (
+                      <p className="text-red-500 text-[11px] font-semibold text-center mt-1">
+                        ❌ {recoveryError}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => { setShowRecoveryInput(false); setRecoveryError(''); }}
+                      disabled={loading}
+                      className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-xs active:scale-[0.98] transition-all cursor-pointer border border-zinc-250/60"
+                    >
+                      Volver
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl text-xs active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+                    >
+                      {loading ? 'Verificando...' : 'Verificar Key'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : (
+            // UI de los Roles Operativos (PIN Clásico)
+            <>
+              {/* Indicadores PIN */}
               <div
-                key={i}
-                className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-150 ${
-                  i < pin.length
-                    ? error
-                      ? 'bg-red-500 border-red-500'
-                      : 'border-transparent'
-                    : 'border-zinc-300 bg-transparent'
-                }`}
-                style={i < pin.length && !error ? { background: modeColor, borderColor: modeColor } : {}}
-              />
-            ))}
-          </div>
-
-          {error && (
-            <p className="text-red-500 text-xs font-medium -mt-4">PIN incorrecto</p>
-          )}
-
-          {mode === 'admin' && (
-            <button
-              onClick={handleBiometricLogin}
-              disabled={loading}
-              className="w-full flex items-center justify-center gap-2.5 p-3.5 bg-zinc-900 text-white rounded-2xl font-bold text-sm transition-all active:scale-[0.98] shadow cursor-pointer disabled:opacity-40 -mt-2"
-            >
-              <Fingerprint size={16} strokeWidth={2.5} />
-              <span>Ingresar con Face ID / Touch ID</span>
-            </button>
-          )}
-
-          {/* Teclado numérico */}
-          <div className="grid grid-cols-3 gap-3 w-full">
-            {digits.map((d, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  if (d === '⌫') handleDelete();
-                  else if (d !== '') handleDigit(d);
-                }}
-                disabled={loading}
-                className={`h-[62px] rounded-2xl font-semibold text-xl transition-all active:scale-95 ${
-                  d === ''
-                    ? 'pointer-events-none'
-                    : d === '⌫'
-                    ? 'bg-transparent text-zinc-400 hover:text-zinc-700'
-                    : 'bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50 shadow-sm disabled:opacity-40'
-                }`}
+                className={`flex gap-4 transition-all`}
+                style={shake ? { animation: 'wiggle 0.4s ease-in-out' } : {}}
               >
-                {d}
-              </button>
-            ))}
-          </div>
+                {[0,1,2,3].map(i => (
+                  <div
+                    key={i}
+                    className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-150 ${
+                      i < pin.length
+                        ? error
+                          ? 'bg-red-500 border-red-500'
+                          : 'border-transparent'
+                        : 'border-zinc-300 bg-transparent'
+                    }`}
+                    style={i < pin.length && !error ? { background: modeColor, borderColor: modeColor } : {}}
+                  />
+                ))}
+              </div>
+
+              {error && (
+                <p className="text-red-500 text-xs font-medium -mt-4">PIN incorrecto</p>
+              )}
+
+              {/* Teclado numérico */}
+              <div className="grid grid-cols-3 gap-3 w-full animate-in fade-in duration-200">
+                {digits.map((d, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (d === '⌫') handleDelete();
+                      else if (d !== '') handleDigit(d);
+                    }}
+                    disabled={loading}
+                    className={`h-[62px] rounded-2xl font-semibold text-xl transition-all active:scale-95 ${
+                      d === ''
+                        ? 'pointer-events-none'
+                        : d === '⌫'
+                        ? 'bg-transparent text-zinc-400 hover:text-zinc-700'
+                        : 'bg-white border border-zinc-200 text-zinc-900 hover:bg-zinc-50 shadow-sm disabled:opacity-40'
+                    }`}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
           <button
-            onClick={() => { setMode('select'); setPin(''); setError(false); setLoading(false); }}
-            className="text-zinc-400 text-sm hover:text-zinc-600 transition-colors"
+            onClick={() => { setMode('select'); setPin(''); setError(false); setLoading(false); setShowRecoveryInput(false); }}
+            className="text-zinc-400 text-sm hover:text-zinc-650 transition-colors"
           >
             ← Cambiar tipo de acceso
           </button>
