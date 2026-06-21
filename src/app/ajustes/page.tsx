@@ -419,11 +419,14 @@ export default function AjustesPage() {
   const handleDeletePasskey = async (id: string) => {
     if (!confirm('¿Estás seguro de que deseas eliminar este dispositivo de los accesos autorizados?')) return;
     try {
-      const { error } = await supabase
-        .from('user_passkeys')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      const res = await fetch('/api/auth/webauthn/register/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar el dispositivo');
+
       alert('✅ Dispositivo eliminado.');
       fetchPasskeys();
     } catch (err: any) {
