@@ -983,7 +983,7 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
         guest_phone: b.phone || b.mobile || null,
         guest_email: b.email || null,
-        status: (b.status === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending',
+        status: b.status === 'black' ? 'black' : (b.status === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending',
         source: 'beds24',
         channel: channel,
         room_name: displayRoomName,

@@ -214,6 +214,13 @@ function getLocalDateStr(date: Date = new Date()): string {
   }
 }
 
+function extractRoomNumber(roomName: string | null | undefined): string | null {
+  if (!roomName) return null;
+  const cleaned = String(roomName).replace(/[\s()]/g, '');
+  const match = cleaned.match(/\b(10[1-7]|20[1-6]|30[1-6]|40[1-2]|50[0-7])\b/) || cleaned.match(/\b\d{3}\b/) || roomName.match(/\d{3}/);
+  return match ? match[0] : null;
+}
+
 function getNextDayStr(dateStr: string): string {
   if (!dateStr) return '';
   const d = new Date(dateStr + 'T12:00:00');
@@ -917,13 +924,17 @@ export default function RecepcionPage() {
     const newCheckOut = addDaysToDateStr(originalCheckOut, extensionNights);
     
     // 2. Validar colisión (overbooking) local
-    const collidingRes = reservas.find(r => 
-      r.id !== selectedReserva.id && 
-      r.status !== 'cancelled' && 
-      r.room === selectedReserva.room && 
-      r.check_in < newCheckOut && 
-      r.check_out > originalCheckOut
-    );
+    const collidingRes = reservas.find(r => {
+      const rRoomNum = extractRoomNumber(r.room);
+      const selRoomNum = extractRoomNumber(selectedReserva.room);
+      return (
+        String(r.id) !== String(selectedReserva.id) && 
+        r.status !== 'cancelled' && 
+        rRoomNum && selRoomNum && rRoomNum === selRoomNum && 
+        r.check_in < newCheckOut && 
+        r.check_out > originalCheckOut
+      );
+    });
     
     if (collidingRes) {
       const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
@@ -4888,13 +4899,17 @@ export default function RecepcionPage() {
 
                           {(() => {
                             const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
-                            const collidingRes = reservas.find(r => 
-                              String(r.id) !== String(selectedReserva.id) && 
-                              r.status !== 'cancelled' && 
-                              r.room === selectedReserva.room && 
-                              r.check_in < newCheckOut && 
-                              r.check_out > selectedReserva.check_out
-                            );
+                            const collidingRes = reservas.find(r => {
+                              const rRoomNum = extractRoomNumber(r.room);
+                              const selRoomNum = extractRoomNumber(selectedReserva.room);
+                              return (
+                                String(r.id) !== String(selectedReserva.id) && 
+                                r.status !== 'cancelled' && 
+                                rRoomNum && selRoomNum && rRoomNum === selRoomNum && 
+                                r.check_in < newCheckOut && 
+                                r.check_out > selectedReserva.check_out
+                              );
+                            });
                             if (!collidingRes) return null;
                             const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
                             const userRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
@@ -4921,13 +4936,17 @@ export default function RecepcionPage() {
                               (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId)) ||
                               (() => {
                                 const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
-                                const collidingRes = reservas.find(r => 
-                                  String(r.id) !== String(selectedReserva.id) && 
-                                  r.status !== 'cancelled' && 
-                                  r.room === selectedReserva.room && 
-                                  r.check_in < newCheckOut && 
-                                  r.check_out > selectedReserva.check_out
-                                );
+                                const collidingRes = reservas.find(r => {
+                                  const rRoomNum = extractRoomNumber(r.room);
+                                  const selRoomNum = extractRoomNumber(selectedReserva.room);
+                                  return (
+                                    String(r.id) !== String(selectedReserva.id) && 
+                                    r.status !== 'cancelled' && 
+                                    rRoomNum && selRoomNum && rRoomNum === selRoomNum && 
+                                    r.check_in < newCheckOut && 
+                                    r.check_out > selectedReserva.check_out
+                                  );
+                                });
                                 if (!collidingRes) return false;
                                 const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
                                 if (isBlock) return true; // Deshabilitar para todos
