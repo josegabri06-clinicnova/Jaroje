@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const options = await generateRegistrationOptions({
       rpName: 'Jaroje Condominios',
       rpID,
-      userID: 'admin-role-id-999', // Identificador de usuario constante para el rol único admin
+      userID: new Uint8Array(Buffer.from('admin-role-id-999')), // Identificador de usuario constante para el rol único admin
       userName: 'admin@jaroje.com',
       userDisplayName: 'Administrador Jaroje',
       attestationType: 'none',
