@@ -166,6 +166,7 @@ export default function AdminDashboard() {
   const [selectedRoomForStatus, setSelectedRoomForStatus] = useState<any | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
+  const [toastMsg, setToastMsg] = useState('');
 
   const fetchAll = async (silent = false) => {
     if (!silent) setIsLoading(true);
@@ -282,6 +283,76 @@ export default function AdminDashboard() {
     } finally {
       setStatusUpdating(false);
     }
+  };
+
+  const handleCopyDailyReport = () => {
+    if (reservas.length === 0) {
+      alert("No hay datos de reservaciones cargados para generar el reporte.");
+      return;
+    }
+
+    const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
+    const llegan = reservas.filter(r => r.check_in === todayStr);
+    const salen = reservas.filter(r => r.check_out === todayStr);
+    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in);
+
+    let text = `📋 *RESUMEN DIARIO DE OPERACIONES (PLAN B)*\n🏨 *Jaroje Condominios*\n📅 *${dateStr.toUpperCase()}*\n\n`;
+
+    // --- LLEGAN HOY ---
+    text += `🚪 *LLEGAN HOY (${llegan.length})*\n`;
+    if (llegan.length === 0) {
+      text += `   _Sin llegadas programadas_\n`;
+    } else {
+      llegan.forEach((r, idx) => {
+        const room = getUnitDisplay(r.room_name || r.room || '');
+        const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
+        const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+        const balanceStr = balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`;
+        text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} (${paxTotal} pax) - Canal: ${r.channel || 'Directo'} ${balanceStr}\n`;
+      });
+    }
+    text += `\n`;
+
+    // --- SALEN HOY ---
+    text += `🚪 *SALEN HOY (${salen.length})*\n`;
+    if (salen.length === 0) {
+      text += `   _Sin salidas programadas_\n`;
+    } else {
+      salen.forEach((r, idx) => {
+        const room = getUnitDisplay(r.room_name || r.room || '');
+        const status = r.checked_out ? 'Salida completada ✓' : 'Pendiente ⏳';
+        text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} - Estado: ${status}\n`;
+      });
+    }
+    text += `\n`;
+
+    // --- EN CASA ---
+    text += `🏠 *EN CASA (${enCasa.length})*\n`;
+    if (enCasa.length === 0) {
+      text += `   _Sin huéspedes hospedados_\n`;
+    } else {
+      enCasa.forEach((r, idx) => {
+        const room = getUnitDisplay(r.room_name || r.room || '');
+        let checkoutText = r.check_out;
+        try {
+          checkoutText = format(new Date(r.check_out + 'T12:00:00'), 'dd MMM', { locale: es });
+        } catch (e) {}
+        text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} - Sale: ${checkoutText}\n`;
+      });
+    }
+    text += `\n`;
+
+    text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setToastMsg('📋 ¡Reporte copiado! Pegar en WhatsApp');
+      setTimeout(() => setToastMsg(''), 4000);
+    }).catch(err => {
+      console.error("Error al copiar al portapapeles:", err);
+      alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
+    });
+
+    window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
   };
 
   useEffect(() => {
@@ -788,11 +859,13 @@ export default function AdminDashboard() {
             <Plus size={20} strokeWidth={2.5} />
             <span className="text-[12px] font-bold leading-tight">Nueva Reserva</span>
           </Link>
-          <Link href="/nueva?mode=bloqueo"
-            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-zinc-50 active:scale-[0.97] transition-all shadow-sm">
-            <Lock size={20} className="text-zinc-700" strokeWidth={2.5} />
-            <span className="text-[12px] font-bold text-zinc-800 leading-tight">Aplicar Bloqueo</span>
-          </Link>
+          <button
+            onClick={handleCopyDailyReport}
+            className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-zinc-50 hover:border-emerald-200 active:scale-[0.97] transition-all shadow-sm group cursor-pointer outline-none"
+          >
+            <MessageCircle size={20} className="text-emerald-600 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
+            <span className="text-[12px] font-bold text-zinc-800 leading-tight">WhatsApp Plan B</span>
+          </button>
           <Link href="/mantenimiento?action=new_task"
             className="bg-white border border-zinc-200 rounded-2xl p-4 flex flex-col items-center gap-2 text-center hover:bg-rose-50/50 active:scale-[0.97] transition-all shadow-sm group">
             <Wrench size={20} className="text-rose-500 group-hover:scale-110 transition-transform" strokeWidth={2.5} />
@@ -1466,6 +1539,14 @@ export default function AdminDashboard() {
           </div>
         );
       })()}
+
+      {/* Floating Toast Notification */}
+      {toastMsg && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[10000] bg-zinc-900/95 text-white text-[13px] font-bold py-3.5 px-6 rounded-2xl shadow-2xl backdrop-blur-md border border-zinc-800 flex items-center gap-2.5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <CheckCircle2 size={16} className="text-emerald-500 shrink-0" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
 
     </div>
   );
