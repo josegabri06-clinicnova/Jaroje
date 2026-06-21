@@ -1086,7 +1086,7 @@ export default function ReservasList() {
     const isOccupied = reservas.some(r => 
       String(r.id) !== String(selectedRes.id) && 
       r.status !== 'cancelled' && 
-      (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
+      r.room_name && r.room_name === selectedRes.room_name && 
       (r.arrival || r.check_in || '') < newCheckOut && 
       (r.departure || r.check_out || '') > originalCheckOut
     );
@@ -2557,7 +2557,7 @@ export default function ReservasList() {
                             const isColliding = reservas.some(r => 
                               String(r.id) !== String(selectedRes.id) && 
                               r.status !== 'cancelled' && 
-                              (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
+                              r.room_name && r.room_name === selectedRes.room_name && 
                               (r.arrival || r.check_in || '') < newCheckOut && 
                               (r.departure || r.check_out || '') > (selectedRes.check_out || selectedRes.departure || '')
                             );
@@ -2582,7 +2582,7 @@ export default function ReservasList() {
                                 const isColliding = reservas.some(r => 
                                   String(r.id) !== String(selectedRes.id) && 
                                   r.status !== 'cancelled' && 
-                                  (r.room_name === selectedRes.room_name || r.room_id === selectedRes.room_id) && 
+                                  r.room_name && r.room_name === selectedRes.room_name && 
                                   (r.arrival || r.check_in || '') < newCheckOut && 
                                   (r.departure || r.check_out || '') > (selectedRes.check_out || selectedRes.departure || '')
                                 );
