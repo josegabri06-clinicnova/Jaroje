@@ -12,7 +12,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TABS = ['Todas', 'Nuevas', 'Próximas', 'Sin Anticipo', 'Directas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
+const TABS = ['Todas', 'Nuevas', 'Sin Anticipo', 'Directas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -1514,10 +1514,10 @@ export default function ReservasList() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Reservas activas operativas: no han completado el checkout Y su fecha de salida es hoy o futura
-  const activeReservas = reservas.filter(r => !r.is_checked_out && r.check_out >= todayStr);
-  // Reservas completadas / pasadas: ya hicieron checkout O la fecha de salida ya transcurrió
-  const completedReservas = reservas.filter(r => r.is_checked_out || r.check_out < todayStr);
+  // Reservas activas operativas (próximas): no han completado el checkout Y su fecha de entrada es hoy o futura
+  const activeReservas = reservas.filter(r => !r.is_checked_out && r.check_in >= todayStr);
+  // Reservas completadas / pasadas / activas en curso: ya hicieron checkout O la fecha de entrada ya transcurrió
+  const completedReservas = reservas.filter(r => r.is_checked_out || r.check_in < todayStr);
 
   const filtered = (activeTab === 'Completadas' ? completedReservas : activeReservas).filter(r => {
     const matchSearch = !search || 
@@ -1526,7 +1526,6 @@ export default function ReservasList() {
     
     let matchTab = true;
     if (activeTab === 'Nuevas') matchTab = !r.is_acknowledged;
-    else if (activeTab === 'Próximas') matchTab = r.check_in >= todayStr;
     else if (activeTab === 'Sin Anticipo') {
       const isDirectChannel = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
       matchTab = isDirectChannel && (!r.deposit || r.deposit === 0);
