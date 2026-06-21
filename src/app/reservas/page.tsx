@@ -1083,7 +1083,7 @@ export default function ReservasList() {
     const newCheckOut = addDaysToDateStr(originalCheckOut, extensionNights);
     
     // 2. Validar colisión (overbooking) local
-    const isOccupied = reservas.some(r => 
+    const collidingRes = reservas.find(r => 
       String(r.id) !== String(selectedRes.id) && 
       r.status !== 'cancelled' && 
       r.room_name && r.room_name === selectedRes.room_name && 
@@ -1091,7 +1091,13 @@ export default function ReservasList() {
       (r.departure || r.check_out || '') > originalCheckOut
     );
     
-    if (isOccupied) {
+    if (collidingRes) {
+      const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
+      if (isBlock) {
+        alert(`❌ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} tiene un bloqueo activo (mantenimiento/bloqueo) entre el ${originalCheckOut} y el ${newCheckOut}. La extensión de estancia ha sido rechazada.`);
+        return;
+      }
+      
       if (userRole !== 'admin') {
         alert(`⚠️ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. Solo un administrador puede forzar esta extensión.`);
         return;
@@ -2554,20 +2560,27 @@ export default function ReservasList() {
 
                           {(() => {
                             const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
-                            const isColliding = reservas.some(r => 
+                            const collidingRes = reservas.find(r => 
                               String(r.id) !== String(selectedRes.id) && 
                               r.status !== 'cancelled' && 
                               r.room_name && r.room_name === selectedRes.room_name && 
                               (r.arrival || r.check_in || '') < newCheckOut && 
                               (r.departure || r.check_out || '') > (selectedRes.check_out || selectedRes.departure || '')
                             );
-                            if (!isColliding) return null;
+                            if (!collidingRes) return null;
+                            const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
                             return (
                               <div className="bg-rose-50 border border-rose-100 text-rose-800 text-[11px] font-bold p-3 rounded-xl leading-snug animate-in fade-in duration-200 mt-2 mb-2 text-left">
-                                ⚠️ Conflicto de Disponibilidad: Esta habitación ya está reservada para las nuevas fechas. 
-                                {userRole === 'admin' 
-                                  ? ' Como administrador, puedes confirmar y luego reasignar la otra reserva o cambiar de habitación al huésped.'
-                                  : ' Solo un administrador puede confirmar extensiones con conflicto.'}
+                                {isBlock ? (
+                                  <>🛑 Bloqueo Activo: Esta habitación tiene un bloqueo de administración/mantenimiento para las nuevas fechas. No se puede realizar la extensión.</>
+                                ) : (
+                                  <>
+                                    ⚠️ Conflicto de Disponibilidad: Esta habitación ya está reservada para las nuevas fechas. 
+                                    {userRole === 'admin' 
+                                      ? ' Como administrador, puedes confirmar y luego reasignar la otra reserva o cambiar de habitación al huésped.'
+                                      : ' Solo un administrador puede confirmar extensiones con conflicto.'}
+                                  </>
+                                )}
                               </div>
                             );
                           })()}
@@ -2579,14 +2592,17 @@ export default function ReservasList() {
                               (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId)) ||
                               (() => {
                                 const newCheckOut = addDaysToDateStr(selectedRes.check_out || selectedRes.departure || '', extensionNights);
-                                const isColliding = reservas.some(r => 
+                                const collidingRes = reservas.find(r => 
                                   String(r.id) !== String(selectedRes.id) && 
                                   r.status !== 'cancelled' && 
                                   r.room_name && r.room_name === selectedRes.room_name && 
                                   (r.arrival || r.check_in || '') < newCheckOut && 
                                   (r.departure || r.check_out || '') > (selectedRes.check_out || selectedRes.departure || '')
                                 );
-                                return isColliding && userRole !== 'admin';
+                                if (!collidingRes) return false;
+                                const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
+                                if (isBlock) return true; // Deshabilitar para todos
+                                return userRole !== 'admin';
                               })()
                             }
                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12.5px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"

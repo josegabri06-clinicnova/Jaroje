@@ -917,7 +917,7 @@ export default function RecepcionPage() {
     const newCheckOut = addDaysToDateStr(originalCheckOut, extensionNights);
     
     // 2. Validar colisión (overbooking) local
-    const isOccupied = reservas.some(r => 
+    const collidingRes = reservas.find(r => 
       r.id !== selectedReserva.id && 
       r.status !== 'cancelled' && 
       r.room === selectedReserva.room && 
@@ -925,9 +925,21 @@ export default function RecepcionPage() {
       r.check_out > originalCheckOut
     );
     
-    if (isOccupied) {
-      alert(`⚠️ Conflicto de Disponibilidad: La habitación ${selectedReserva.room} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. Por favor, selecciona menos noches o gestiona una reasignación primero.`);
-      return;
+    if (collidingRes) {
+      const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
+      if (isBlock) {
+        alert(`❌ Conflicto de Disponibilidad: La habitación ${selectedReserva.room} tiene un bloqueo activo (mantenimiento/bloqueo) entre el ${originalCheckOut} y el ${newCheckOut}. La extensión de estancia ha sido rechazada.`);
+        return;
+      }
+      
+      const userRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
+      if (userRole !== 'admin') {
+        alert(`⚠️ Conflicto de Disponibilidad: La habitación ${selectedReserva.room} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. Por favor, selecciona menos noches o gestiona una reasignación primero.`);
+        return;
+      } else {
+        const confirmForce = window.confirm(`⚠️ Conflicto de Disponibilidad: La habitación ya se encuentra reservada u ocupada por otro huésped. Como administrador, ¿deseas forzar esta extensión de estancia? Tendrás que reasignar la otra reserva o cambiar de habitación al huésped.`);
+        if (!confirmForce) return;
+      }
     }
     
     setExtensionLoading(true);
@@ -4876,21 +4888,28 @@ export default function RecepcionPage() {
 
                           {(() => {
                             const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
-                            const isColliding = reservas.some(r => 
+                            const collidingRes = reservas.find(r => 
                               String(r.id) !== String(selectedReserva.id) && 
                               r.status !== 'cancelled' && 
                               r.room === selectedReserva.room && 
                               r.check_in < newCheckOut && 
                               r.check_out > selectedReserva.check_out
                             );
-                            if (!isColliding) return null;
+                            if (!collidingRes) return null;
+                            const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
                             const userRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
                             return (
                               <div className="bg-rose-50 border border-rose-100 text-rose-800 text-[11px] font-bold p-3 rounded-xl leading-snug animate-in fade-in duration-200 mt-2 mb-2 text-left">
-                                ⚠️ Conflicto de Disponibilidad: Esta habitación ya está reservada para las nuevas fechas. 
-                                {userRole === 'admin' 
-                                  ? ' Como administrador, puedes confirmar y luego reasignar la otra reserva o cambiar de habitación al huésped.'
-                                  : ' Solo un administrador puede confirmar extensiones con conflicto.'}
+                                {isBlock ? (
+                                  <>🛑 Bloqueo Activo: Esta habitación tiene un bloqueo de administración/mantenimiento para las nuevas fechas. No se puede realizar la extensión.</>
+                                ) : (
+                                  <>
+                                    ⚠️ Conflicto de Disponibilidad: Esta habitación ya está reservada para las nuevas fechas. 
+                                    {userRole === 'admin' 
+                                      ? ' Como administrador, puedes confirmar y luego reasignar la otra reserva o cambiar de habitación al huésped.'
+                                      : ' Solo un administrador puede confirmar extensiones con conflicto.'}
+                                  </>
+                                )}
                               </div>
                             );
                           })()}
@@ -4902,15 +4921,18 @@ export default function RecepcionPage() {
                               (extensionRegisterPayment && (!extensionPaymentMethod || !extensionAccountId)) ||
                               (() => {
                                 const newCheckOut = addDaysToDateStr(selectedReserva.check_out, extensionNights);
-                                const isColliding = reservas.some(r => 
+                                const collidingRes = reservas.find(r => 
                                   String(r.id) !== String(selectedReserva.id) && 
                                   r.status !== 'cancelled' && 
                                   r.room === selectedReserva.room && 
                                   r.check_in < newCheckOut && 
                                   r.check_out > selectedReserva.check_out
                                 );
+                                if (!collidingRes) return false;
+                                const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
+                                if (isBlock) return true; // Deshabilitar para todos
                                 const userRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
-                                return isColliding && userRole !== 'admin';
+                                return userRole !== 'admin';
                               })()
                             }
                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12.5px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
