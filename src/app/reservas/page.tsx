@@ -1106,16 +1106,10 @@ export default function ReservasList() {
       const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
       if (isBlock) {
         alert(`❌ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} tiene un bloqueo activo (mantenimiento/bloqueo) entre el ${originalCheckOut} y el ${newCheckOut}. La extensión de estancia ha sido rechazada.`);
-        return;
-      }
-      
-      if (userRole !== 'admin') {
-        alert(`⚠️ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. Solo un administrador puede forzar esta extensión.`);
-        return;
       } else {
-        const confirmForce = window.confirm(`⚠️ Conflicto de Disponibilidad: La habitación ya se encuentra reservada u ocupada por otro huésped. Como administrador, ¿deseas forzar esta extensión de estancia? Tendrás que reasignar la otra reserva o cambiar de habitación al huésped.`);
-        if (!confirmForce) return;
+        alert(`❌ Conflicto de Disponibilidad: La habitación ${selectedRes.room_name || 'seleccionada'} ya se encuentra reservada u ocupada por otro huésped entre el ${originalCheckOut} y el ${newCheckOut}. La extensión de estancia ha sido rechazada.`);
       }
+      return;
     }
     
     setExtensionLoading(true);
@@ -2589,12 +2583,7 @@ export default function ReservasList() {
                                 {isBlock ? (
                                   <>🛑 Bloqueo Activo: Esta habitación tiene un bloqueo de administración/mantenimiento para las nuevas fechas. No se puede realizar la extensión.</>
                                 ) : (
-                                  <>
-                                    ⚠️ Conflicto de Disponibilidad: Esta habitación ya está reservada para las nuevas fechas. 
-                                    {userRole === 'admin' 
-                                      ? ' Como administrador, puedes confirmar y luego reasignar la otra reserva o cambiar de habitación al huésped.'
-                                      : ' Solo un administrador puede confirmar extensiones con conflicto.'}
-                                  </>
+                                  <>🛑 Conflicto de Disponibilidad: Esta habitación ya se encuentra reservada u ocupada por otro huésped para las nuevas fechas. No se puede realizar la extensión.</>
                                 )}
                               </div>
                             );
@@ -2619,9 +2608,7 @@ export default function ReservasList() {
                                   );
                                 });
                                 if (!collidingRes) return false;
-                                const isBlock = collidingRes.status === 'black' || collidingRes.channel === 'Bloqueo';
-                                if (isBlock) return true; // Deshabilitar para todos
-                                return userRole !== 'admin';
+                                return true;
                               })()
                             }
                             className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12.5px] rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer"
