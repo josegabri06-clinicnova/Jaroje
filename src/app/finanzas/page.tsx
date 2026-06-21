@@ -1551,38 +1551,6 @@ export default function FinanzasPage() {
             </div>
             
             <form onSubmit={handleSaveMovement} className="space-y-5">
-              {/* 1. SELECCIONAR CUENTA (MANDATORIO) */}
-              <div>
-                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">¿De/Para qué Cuenta?</label>
-                <select 
-                  required
-                  value={formAccountId} onChange={e => setFormAccountId(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-bold text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 cursor-pointer"
-                >
-                  <option value="" disabled>Selecciona una Cuenta...</option>
-                  {sortAccounts(accounts).map(acc => (
-                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.group_type})</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* DETALLES DE CUENTA DINÁMICOS */}
-              {(() => {
-                const selectedAcc = accounts.find(a => a.id === formAccountId);
-                if (!selectedAcc) return null;
-                return (
-                  <div className="space-y-4 animate-in fade-in duration-300">
-                    {/* MONTO DISPONIBLE CARD */}
-                    <div className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 border border-zinc-200/60 rounded-2xl p-4 text-center shadow-sm">
-                      <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1">Monto Disponible en Cuenta</p>
-                      <p className="text-3xl font-black text-zinc-900 tracking-tight">
-                        ${Math.round(selectedAcc.balance).toLocaleString('es-MX')} <span className="text-xs text-zinc-400 font-bold">{selectedAcc.currency || 'MXN'}</span>
-                      </p>
-                    </div>
-                  </div>
-                );
-              })()}
-
               {/* Tabs Tipo */}
               <div className="flex bg-zinc-100 p-1 rounded-xl">
                 <button
@@ -1655,6 +1623,38 @@ export default function FinanzasPage() {
                   return null;
                 })()}
               </div>
+
+              {/* 1. SELECCIONAR CUENTA (MANDATORIO) */}
+              <div>
+                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">¿De/Para qué Cuenta?</label>
+                <select 
+                  required
+                  value={formAccountId} onChange={e => setFormAccountId(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-bold text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 cursor-pointer"
+                >
+                  <option value="" disabled>Selecciona una Cuenta...</option>
+                  {sortAccounts(accounts).map(acc => (
+                    <option key={acc.id} value={acc.id}>{acc.name} ({acc.group_type})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* DETALLES DE CUENTA DINÁMICOS */}
+              {(() => {
+                const selectedAcc = accounts.find(a => a.id === formAccountId);
+                if (!selectedAcc) return null;
+                return (
+                  <div className="space-y-4 animate-in fade-in duration-300">
+                    {/* MONTO DISPONIBLE CARD */}
+                    <div className="bg-gradient-to-br from-zinc-50 to-zinc-100/50 border border-zinc-200/60 rounded-2xl p-4 text-center shadow-sm">
+                      <p className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1">Monto Disponible en Cuenta</p>
+                      <p className="text-3xl font-black text-zinc-900 tracking-tight">
+                        ${Math.round(selectedAcc.balance).toLocaleString('es-MX')} <span className="text-xs text-zinc-400 font-bold">{selectedAcc.currency || 'MXN'}</span>
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* CONCEPTO / CATEGORÍA */}
               <div>
