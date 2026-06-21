@@ -30,7 +30,7 @@ export default function LoginPage() {
         throw new Error(options.error || 'Error al obtener opciones de inicio de sesión');
       }
 
-      const assertion = await startAuthentication({ optionsJSON: options });
+      const assertion = await startAuthentication(options);
 
       const resVerify = await fetch('/api/auth/webauthn/login/verify', {
         method: 'POST',

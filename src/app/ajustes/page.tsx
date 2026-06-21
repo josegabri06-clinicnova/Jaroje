@@ -340,7 +340,7 @@ export default function AjustesPage() {
       const options = await resOptions.json();
       if (!resOptions.ok) throw new Error(options.error || 'Error al obtener opciones de registro');
       
-      const credential = await startRegistration({ optionsJSON: options });
+      const credential = await startRegistration(options);
       
       const resVerify = await fetch('/api/auth/webauthn/register/verify', {
         method: 'POST',
