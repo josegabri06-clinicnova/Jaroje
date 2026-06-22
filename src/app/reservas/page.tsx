@@ -536,6 +536,7 @@ export default function ReservasList() {
 
         let netRevenue = selectedRes.expected_payout || 0;
         let commission = selectedRes.host_fee || 0;
+        let taxesRetained = 0;
 
         if (netRevenue === 0 && commission === 0) {
           const balanceVal = selectedRes.balance !== undefined
@@ -554,6 +555,10 @@ export default function ReservasList() {
           );
           netRevenue = otaSplit.netRevenue;
           commission = otaSplit.commission;
+          taxesRetained = otaSplit.taxesRetained || 0;
+        } else {
+          const totalEstimate = selectedRes.price_estimate || 0;
+          taxesRetained = channel === 'Airbnb' ? Math.max(0, totalEstimate - netRevenue - commission) : 0;
         }
 
         const baseDesc = `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático (${channel})`;
@@ -602,7 +607,7 @@ export default function ReservasList() {
         }
 
         // Sincronizar pago de OTA con Beds24 en tiempo real
-        const totalAmount = netRevenue + commission;
+        const totalAmount = netRevenue + commission + taxesRetained;
         let syncedSuccess = false;
         try {
           const b24PayRes = await fetch('/api/reservas/payment', {
@@ -2954,12 +2959,14 @@ export default function ReservasList() {
                       const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
                       const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
 
+                      const totalAmount = pendingBalance > 0 ? pendingBalance : (selectedRes.price_estimate || 0);
                       let expectedPayout = selectedRes.expected_payout || 0;
                       let hostFee = selectedRes.host_fee || 0;
+                      let taxesRetained = 0;
 
                       if (expectedPayout === 0 && hostFee === 0) {
                         const otaSplit = computeOtaSplit(
-                          pendingBalance > 0 ? pendingBalance : (selectedRes.price_estimate || 0),
+                          totalAmount,
                           channel,
                           selectedRes.room_name || '',
                           selectedRes.check_in || '',
@@ -2970,6 +2977,9 @@ export default function ReservasList() {
                         );
                         expectedPayout = otaSplit.netRevenue;
                         hostFee = otaSplit.commission;
+                        taxesRetained = otaSplit.taxesRetained || 0;
+                      } else {
+                        taxesRetained = channel === 'Airbnb' ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
                       }
 
                       return (
@@ -2987,6 +2997,12 @@ export default function ReservasList() {
                                 <span className="font-semibold text-zinc-600">Comisión a {commAccName}:</span>
                                 <span className="font-bold text-zinc-900">{fmtCurrency(hostFee, selectedRes.guest_name)}</span>
                               </div>
+                              {taxesRetained > 0 && (
+                                <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
+                                  <span className="font-semibold text-zinc-600">Retención de Impuestos (12%):</span>
+                                  <span className="font-bold text-zinc-900">{fmtCurrency(taxesRetained, selectedRes.guest_name)}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
