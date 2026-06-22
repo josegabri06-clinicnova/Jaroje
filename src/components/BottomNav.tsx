@@ -76,7 +76,6 @@ export function BottomNav() {
             { href: '/recepcion', icon: <Home size={22} />, label: 'Panel' },
             { href: '/calendario', icon: <CalendarIcon size={22} />, label: 'Calendario' },
             { href: '/reservas',  icon: <ListIcon size={22} />, label: 'Reservas' },
-            { href: '/precios',   icon: <Wallet size={22} />,   label: 'Tarifas' },
           ].map(item => (
             <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 p-1">
               <div className={`p-1.5 rounded-xl transition-all ${pathname === item.href ? 'bg-blue-50 text-blue-600' : 'text-zinc-400 hover:text-zinc-600'}`}>

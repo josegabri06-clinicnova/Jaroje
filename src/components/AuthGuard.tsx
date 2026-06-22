@@ -12,7 +12,7 @@ const PUBLIC_ROUTES = ['/login'];
 
 const PERMITTED_ROUTES: Record<string, string[]> = {
   admin: ['/'], // Admin has universal access
-  recepcion: ['/recepcion', '/calendario', '/reservas', '/precios', '/nueva'],
+  recepcion: ['/recepcion', '/calendario', '/reservas', '/nueva'],
   staff_limpieza: ['/staff', '/calendario'],
   staff_mantenimiento: ['/staff', '/calendario'],
 };
