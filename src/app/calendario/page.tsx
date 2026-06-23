@@ -1478,7 +1478,7 @@ export default function CalendarPage() {
   // ── Stats strip ───────────────────────────────────────────────────────────
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayActive = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in))).length;
-  const todayArrivals = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in).length;
+  const todayArrivals = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out).length;
   const todayDepartures = reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out).length;
 
   return (
@@ -2720,7 +2720,7 @@ export default function CalendarPage() {
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-          filtered = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in);
+          filtered = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
         } else if (kpiModalType === 'salen') {
           title = 'Pendientes por Salir';
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';

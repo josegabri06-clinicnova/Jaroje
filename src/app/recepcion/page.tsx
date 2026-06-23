@@ -2040,7 +2040,7 @@ export default function RecepcionPage() {
   }, []);
 
   const llegadas = useMemo(() => {
-    return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in);
+    return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
   }, [reservas, todayStr]);
 
   const salidas = useMemo(() => {

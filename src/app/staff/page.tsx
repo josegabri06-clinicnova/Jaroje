@@ -518,7 +518,7 @@ export default function StaffPage() {
     };
   }, []);
 
-  const llegadas = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in);
+  const llegadas = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
   const salidas  = reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out);
   const ocupadas = reservas.filter(r => r.check_out > todayStr && r.checked_in);
 
