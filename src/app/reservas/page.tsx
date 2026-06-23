@@ -1531,13 +1531,13 @@ export default function ReservasList() {
   const todayStr = new Date().toISOString().split('T')[0];
 
   // Reservas activas operativas (próximas): no han completado el checkout Y su fecha de entrada es hoy o futura.
-  // Ordenadas de la más nueva a la más antigua (primero Salen hoy).
+  // Ordenadas de la más próxima a la más lejana (orden cronológico ascendente).
   const activeReservas = reservas
     .filter(r => !r.is_checked_out && r.check_in >= todayStr)
     .sort((a, b) => {
-      const compareOut = (b.check_out || '').localeCompare(a.check_out || '');
-      if (compareOut !== 0) return compareOut;
-      return (b.check_in || '').localeCompare(a.check_in || '');
+      const compareIn = (a.check_in || '').localeCompare(b.check_in || '');
+      if (compareIn !== 0) return compareIn;
+      return (a.check_out || '').localeCompare(b.check_out || '');
     });
   // Reservas completadas / pasadas / activas en curso: ya hicieron checkout O la fecha de entrada ya transcurrió.
   // Ordenadas de la más nueva a la más antigua (primero Salen hoy).
