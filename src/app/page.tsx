@@ -366,11 +366,11 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, []);
   const llegadasHoy = useMemo(() => {
-    return reservas.filter(r => r.check_out > todayStr && r.check_in <= todayStr && !r.checked_in);
+    return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in);
   }, [reservas, todayStr]);
 
   const salidasHoy = useMemo(() => {
-    return reservas.filter(r => r.check_out === todayStr && !r.checked_out);
+    return reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out);
   }, [reservas, todayStr]);
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr).slice(0, 5);
 
@@ -525,7 +525,7 @@ export default function AdminDashboard() {
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-emerald-600">
-            {reservas.filter(r => r.check_in === todayStr).length}
+            {llegadasHoy.length}
           </p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan hoy</p>
         </button>
@@ -534,7 +534,7 @@ export default function AdminDashboard() {
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-amber-500">
-            {reservas.filter(r => r.check_out === todayStr).length}
+            {salidasHoy.length}
           </p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
         </button>
@@ -1414,11 +1414,11 @@ export default function AdminDashboard() {
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-          filtered = reservas.filter(r => r.check_in === todayStr);
+          filtered = llegadasHoy;
         } else if (kpiModalType === 'salen') {
           title = 'Salidas Hoy';
           badgeColor = 'bg-zinc-150 text-zinc-700 border border-zinc-200';
-          filtered = reservas.filter(r => r.check_out === todayStr);
+          filtered = salidasHoy;
         }
 
         return (

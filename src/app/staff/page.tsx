@@ -236,7 +236,7 @@ function getRoomOperationalStatus(
   // Buscar si tiene salida programada hoy (Check-out)
   const isSalidaHoy = activeReservations.some(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
-    return rRoom.includes(roomNum) && r.check_out === todayStr && !r.checked_out;
+    return rRoom.includes(roomNum) && r.check_out === todayStr && r.checked_in && !r.checked_out;
   });
 
   if (isSalidaHoy) {
@@ -518,9 +518,9 @@ export default function StaffPage() {
     };
   }, []);
 
-  const llegadas = reservas.filter(r => r.check_in === todayStr);
-  const salidas  = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
-  const ocupadas = reservas.filter(r => r.check_in <= todayStr && r.check_out > todayStr);
+  const llegadas = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in);
+  const salidas  = reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out);
+  const ocupadas = reservas.filter(r => r.check_out > todayStr && r.checked_in);
 
   const getScheduledCleanings = (): CleanTask[] => {
     const list: CleanTask[] = [];
@@ -533,7 +533,7 @@ export default function StaffPage() {
       // 1. Verificar si es salida hoy (Check-out)
       const salidaRes = reservas.find(res => {
         const rRoom = String(res.room || '').replace(/[\s()]/g, '');
-        return rRoom.includes(r) && res.check_out === todayStr;
+        return rRoom.includes(r) && res.check_out === todayStr && res.checked_in;
       });
       
       if (salidaRes) {

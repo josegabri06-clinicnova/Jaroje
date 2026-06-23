@@ -1530,10 +1530,24 @@ export default function ReservasList() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Reservas activas operativas (próximas): no han completado el checkout Y su fecha de entrada es hoy o futura
-  const activeReservas = reservas.filter(r => !r.is_checked_out && r.check_in >= todayStr);
-  // Reservas completadas / pasadas / activas en curso: ya hicieron checkout O la fecha de entrada ya transcurrió
-  const completedReservas = reservas.filter(r => r.is_checked_out || r.check_in < todayStr);
+  // Reservas activas operativas (próximas): no han completado el checkout Y su fecha de entrada es hoy o futura.
+  // Ordenadas de la más nueva a la más antigua (primero Salen hoy).
+  const activeReservas = reservas
+    .filter(r => !r.is_checked_out && r.check_in >= todayStr)
+    .sort((a, b) => {
+      const compareOut = (b.check_out || '').localeCompare(a.check_out || '');
+      if (compareOut !== 0) return compareOut;
+      return (b.check_in || '').localeCompare(a.check_in || '');
+    });
+  // Reservas completadas / pasadas / activas en curso: ya hicieron checkout O la fecha de entrada ya transcurrió.
+  // Ordenadas de la más nueva a la más antigua (primero Salen hoy).
+  const completedReservas = reservas
+    .filter(r => r.is_checked_out || r.check_in < todayStr)
+    .sort((a, b) => {
+      const compareOut = (b.check_out || '').localeCompare(a.check_out || '');
+      if (compareOut !== 0) return compareOut;
+      return (b.check_in || '').localeCompare(a.check_in || '');
+    });
 
   const filtered = (activeTab === 'Completadas' ? completedReservas : activeReservas).filter(r => {
     const matchSearch = !search || 
