@@ -8,6 +8,26 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+function normalizePhone(rawPhone: string): string {
+  let cleaned = String(rawPhone || '').replace(/\D/g, '');
+  
+  // Si tiene 10 dígitos (México sin lada), agregar '521'
+  if (cleaned.length === 10) {
+    cleaned = '521' + cleaned;
+  }
+  // Si tiene 12 dígitos y empieza con '52' pero no '521' (ej. 529711490086), normalizar agregando el '1' -> 5219711490086
+  if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
+    cleaned = '521' + cleaned.substring(2);
+  }
+  // Si tiene 9 dígitos (España sin lada), agregar '34'
+  if (cleaned.length === 9) {
+    cleaned = '34' + cleaned;
+  }
+  
+  return cleaned;
+}
+
+
 // ── GET: Obtener todas las conversaciones ─────────────────────────────────────
 export async function GET() {
   const { data, error } = await supabase
@@ -39,15 +59,7 @@ export async function POST(req: Request) {
         }, { status: 500 });
       }
 
-      let cleanPhone = guestPhone.replace(/\D/g, '');
-      // Si el número tiene exactamente 10 dígitos (estándar de México), autocompletar lada internacional '52'
-      if (cleanPhone.length === 10) {
-        cleanPhone = '52' + cleanPhone;
-      }
-      // Si el número tiene exactamente 9 dígitos (estándar de España), autocompletar lada internacional '34'
-      if (cleanPhone.length === 9) {
-        cleanPhone = '34' + cleanPhone;
-      }
+      const cleanPhone = normalizePhone(guestPhone);
 
       // Enviar plantilla de WhatsApp
       const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
@@ -165,7 +177,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
-          to: guestPhone.replace(/\D/g, ''),
+          to: normalizePhone(guestPhone),
           type: 'text',
           text: { body: message },
         }),
@@ -238,7 +250,7 @@ export async function POST(req: Request) {
     }
 
     // ── MODO: Recibir mensaje desde n8n ───────────────────────────────────────
-    const phone     = String(body.guest_phone || 'desconocido').replace(/\D/g, '');
+    const phone     = normalizePhone(body.guest_phone || 'desconocido');
     const timestamp = body.timestamp   || new Date().toISOString();
 
     // Buscar la última conversación de este teléfono para mantener un historial unificado (SaaS CRM)
