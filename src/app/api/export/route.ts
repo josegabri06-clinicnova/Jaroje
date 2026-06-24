@@ -57,7 +57,7 @@ function mapBooking(b: any, dynamicSettings?: any) {
     ID_Reserva:          b.id            ?? '',
     Nombre_Huesped:      `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
     Email:               b.email         ?? '',
-    Telefono:            b.phone ?? b.mobile ?? '',
+    Telefono:            b.phone || b.mobile || b.guestPhone || b.guestMobile || '',
     Fecha_CheckIn:       b.arrival       ?? '',
     Fecha_CheckOut:      b.departure     ?? '',
     Noches:              nights,
