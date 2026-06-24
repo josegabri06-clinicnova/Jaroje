@@ -1457,7 +1457,11 @@ export default function RecepcionPage() {
 
     if (isWalkin) {
       const targetRoom = walkinRoom || '';
-      const targetDate = walkinDate || todayStr;
+      let targetDate = walkinDate || todayStr;
+      if (targetDate > todayStr) {
+        alert("Un Walk-In no puede tener fecha de check-in futura. La fecha se ha ajustado al día de hoy.");
+        targetDate = todayStr;
+      }
       const nextDay = getNextDayStr(targetDate);
       setRoomInventory([]);
       const targetUnit = walkinUnit || '';
@@ -3898,9 +3902,14 @@ export default function RecepcionPage() {
                       <input
                         key={todayStr ? `walkin-in-${todayStr}` : 'walkin-in-loading'}
                         type="date"
+                        max={todayStr}
                         value={selectedReserva.check_in}
                         onChange={e => {
-                          const newIn = e.target.value;
+                          let newIn = e.target.value;
+                          if (newIn > todayStr) {
+                            alert("Un Walk-In no puede tener fecha de check-in futura. Para fechas futuras, por favor registra una Reserva.");
+                            newIn = todayStr;
+                          }
                           // Recalcular el check-out manteniendo las noches actuales
                           const currentNights = getNightsBetweenDates(selectedReserva.check_in, selectedReserva.check_out);
                           const newOut = addDaysToDateStr(newIn, currentNights);
