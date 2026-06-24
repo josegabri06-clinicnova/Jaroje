@@ -221,7 +221,19 @@ export default function AdminDashboard() {
 
       if (tasksRes) {
         const tasksJson = await tasksRes.json();
-        if (tasksJson.success) setTasks(tasksJson.data || []);
+        if (tasksJson.success) {
+          const rawTasks = tasksJson.data || [];
+          const maintenanceTasks = rawTasks.filter((t: any) => {
+            const desc = (t.description || '').toLowerCase();
+            const isClean = t.type === 'limpieza' || 
+                            desc.includes('check-out completado') || 
+                            desc.includes('lista para limpieza') || 
+                            desc.includes('servicio de limpieza') || 
+                            desc.includes('limpieza programada');
+            return !isClean;
+          });
+          setTasks(maintenanceTasks);
+        }
       }
 
       // Obtener el balance general real de finanzas (sobres y cuentas)
