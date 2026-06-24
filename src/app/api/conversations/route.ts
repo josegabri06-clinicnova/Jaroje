@@ -238,7 +238,7 @@ export async function POST(req: Request) {
     }
 
     // ── MODO: Recibir mensaje desde n8n ───────────────────────────────────────
-    const phone     = (body.guest_phone || 'desconocido').replace(/\D/g, '');
+    const phone     = String(body.guest_phone || 'desconocido').replace(/\D/g, '');
     const timestamp = body.timestamp   || new Date().toISOString();
 
     // Buscar la última conversación de este teléfono para mantener un historial unificado (SaaS CRM)
@@ -255,7 +255,7 @@ export async function POST(req: Request) {
     let finalBotResponse = body.bot_response || null;
     let isAutoReplyTriggered = false;
 
-    const guestMsgClean = (body.message_from_guest || '').toLowerCase();
+    const guestMsgClean = String(body.message_from_guest || '').toLowerCase();
 
     if (guestMsgClean.includes('administrador') || guestMsgClean.includes('administracion') || guestMsgClean.includes('administración')) {
       forceHuman = true;
@@ -268,7 +268,7 @@ export async function POST(req: Request) {
           .from('employee_logs')
           .insert([{
             employee_num: 'wa-guest',
-            employee_name: (existing?.guest_name || body.guest_name || phone).slice(0, 50),
+            employee_name: String(existing?.guest_name || body.guest_name || phone).slice(0, 50),
             department: 'recepcion',
             module: 'recepcion',
             action: 'human_mode_activated',
