@@ -1472,7 +1472,11 @@ export default function CalendarPage() {
   const handleWalkIn = (room: string, date: Date) => {
     const b = ROOM_TO_BEDS24[room];
     if (!b) return;
-    router.push(`/recepcion?walkin=true&room=${b.roomId}&unit=${b.unitId}&date=${format(date, 'yyyy-MM-dd')}`);
+    if (userRole === 'admin') {
+      router.push(`/nueva?room=${b.roomId}&unit=${b.unitId}&date=${format(date, 'yyyy-MM-dd')}`);
+    } else {
+      router.push(`/recepcion?walkin=true&room=${b.roomId}&unit=${b.unitId}&date=${format(date, 'yyyy-MM-dd')}`);
+    }
   };
 
   // ── Stats strip ───────────────────────────────────────────────────────────
@@ -2693,8 +2697,17 @@ export default function CalendarPage() {
                 onClick={() => { handleWalkIn(panelRoom.room, panelRoom.date); setPanelRoom(null); }}
                 className="w-full py-4 bg-zinc-900 hover:bg-black text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] text-[15px]"
               >
-                <UserPlus size={18} />
-                Registrar Walk-in aquí
+                {userRole === 'admin' ? (
+                  <>
+                    <Plus size={18} />
+                    Crear nueva reserva
+                  </>
+                ) : (
+                  <>
+                    <UserPlus size={18} />
+                    Registrar Walk-in aquí
+                  </>
+                )}
               </button>
               <button
                 onClick={() => setPanelRoom(null)}

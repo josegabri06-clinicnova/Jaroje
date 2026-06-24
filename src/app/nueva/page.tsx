@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { ShieldAlert, CheckCircle2, Lock, Unlock, X, Wallet, BedDouble, Send, Minus, Plus } from 'lucide-react';
 import { getActiveEmployee, getAdminPin } from '@/lib/auth';
 import { getUnitName, getRoomMetadata, getParentMapping, getCapacityRules } from '@/lib/beds24';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 
@@ -152,6 +152,36 @@ export default function VercelActionForm() {
 
   useEffect(() => {
     setTodayStr(getLocalDateStr());
+
+    // Leer parámetros de la URL para pre-cargar la habitación y fecha
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const room = params.get('room');
+      const unit = params.get('unit');
+      const date = params.get('date');
+      if (room || unit || date) {
+        setForm(prev => {
+          const checkInVal = date || prev.checkIn;
+          let checkOutVal = prev.checkOut;
+          if (date) {
+            try {
+              // Sumar 1 día a la fecha y formatear como YYYY-MM-DD
+              const nextDay = addDays(new Date(date + 'T12:00:00'), 1);
+              checkOutVal = format(nextDay, 'yyyy-MM-dd');
+            } catch (e) {
+              console.error('Error calculating checkout date:', e);
+            }
+          }
+          return {
+            ...prev,
+            roomId: room || prev.roomId,
+            unitId: unit || prev.unitId,
+            checkIn: checkInVal,
+            checkOut: checkOutVal
+          };
+        });
+      }
+    }
   }, []);
 
   const { maxCapacity, baseCapacity } = useMemo(() => {
