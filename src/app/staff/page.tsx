@@ -272,6 +272,7 @@ export default function StaffPage() {
   
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [assignments, setAssignments] = useState<Record<string, { employeeNum: string; notes: string }>>({});
+  const [generalObservations, setGeneralObservations] = useState('');
 
   // Cargar recamareras oficiales y asignaciones guardadas en localStorage
   useEffect(() => {
@@ -290,6 +291,8 @@ export default function StaffPage() {
           console.error('Error parseando jaroje_daily_assignments:', e);
         }
       }
+      const savedObs = localStorage.getItem('jaroje_general_observations');
+      if (savedObs) setGeneralObservations(savedObs);
     }
   }, []);
 
@@ -299,6 +302,11 @@ export default function StaffPage() {
       localStorage.setItem('jaroje_daily_assignments', JSON.stringify(next));
       return next;
     });
+  };
+
+  const updateGeneralObservations = (text: string) => {
+    setGeneralObservations(text);
+    localStorage.setItem('jaroje_general_observations', text);
   };
   const [taskTab, setTaskTab] = useState<'nuevos' | 'pendientes' | 'en_proceso' | 'resueltos'>('nuevos');
   const [searchQuery, setSearchQuery] = useState('');
@@ -982,37 +990,58 @@ export default function StaffPage() {
 
   const handleCopyReport = () => {
     const allRooms = getScheduledCleanings();
+    const bpAssignment = assignments['Baños Públicos'] || { employeeNum: '', notes: '' };
+    const hasBP = bpAssignment.employeeNum !== '';
+    const hasGenObs = generalObservations.trim() !== '';
 
-    if (allRooms.length === 0) {
-      alert("No hay limpiezas programadas para hoy.");
+    if (allRooms.length === 0 && !hasBP && !hasGenObs) {
+      alert("No hay limpiezas programadas ni observaciones generales para reportar hoy.");
       return;
     }
 
     const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
     let text = `📋 *REPORTE DIARIO DE LIMPIEZA*\n🏨 *Jaroje Condominios*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
-    allRooms.forEach((task, idx) => {
-      const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
-      const typeLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
-      const statusLabel = isFinished 
-        ? 'Limpia ✅' 
-        : (task.type === 'checkout' && !task.keysReturned)
-          ? 'Huésped en Hab. ⏳'
-          : task.operStatus === 'en_limpieza' 
-            ? 'En limpieza ⚡' 
-            : 'Pendiente ❌';
-      
-      const assignment = assignments[task.room];
-      const empNum = assignment?.employeeNum || '';
-      const empName = getOfficialEmployees().find(e => e.employee_num === empNum)?.full_name || 'Sin asignar ❌';
-      const notes = assignment?.notes?.trim() || 'Sin observaciones';
+    if (allRooms.length > 0) {
+      text += `*Habitaciones por Limpieza:*\n`;
+      allRooms.forEach((task, idx) => {
+        const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
+        const typeLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
+        const statusLabel = isFinished 
+          ? 'Limpia ✅' 
+          : (task.type === 'checkout' && !task.keysReturned)
+            ? 'Huésped en Hab. ⏳'
+            : task.operStatus === 'en_limpieza' 
+              ? 'En limpieza ⚡' 
+              : 'Pendiente ❌';
+        
+        const assignment = assignments[task.room];
+        const empNum = assignment?.employeeNum || '';
+        const empName = getOfficialEmployees().find(e => e.employee_num === empNum)?.full_name || 'Sin asignar ❌';
+        const notes = assignment?.notes?.trim() || 'Sin observaciones';
 
-      text += `${idx + 1}. *Hab. ${task.room}*\n`;
-      text += `   • *Tipo:* ${typeLabel}\n`;
-      text += `   • *Estado:* ${statusLabel}\n`;
-      text += `   • *Asignado:* ${empName}\n`;
-      text += `   • *Observaciones:* ${notes}\n\n`;
-    });
+        text += `${idx + 1}. *Hab. ${task.room}*\n`;
+        text += `   • *Tipo:* ${typeLabel}\n`;
+        text += `   • *Estado:* ${statusLabel}\n`;
+        text += `   • *Asignado:* ${empName}\n`;
+        text += `   • *Observaciones:* ${notes}\n\n`;
+      });
+    }
+
+    // Agregar Baños Públicos
+    const bpEmpName = getOfficialEmployees().find(e => e.employee_num === bpAssignment.employeeNum)?.full_name || 'Sin asignar ❌';
+    const bpNotes = bpAssignment.notes?.trim() || 'Sin observaciones';
+
+    text += `*Áreas Públicas:*\n`;
+    text += `• *Baños Públicos:*\n`;
+    text += `   • *Asignado:* ${bpEmpName}\n`;
+    text += `   • *Observaciones:* ${bpNotes}\n\n`;
+
+    // Agregar Observaciones Generales
+    if (generalObservations.trim()) {
+      text += `*Observaciones Generales del Reporte:*\n`;
+      text += `${generalObservations.trim()}\n\n`;
+    }
 
     text += `_Generado automáticamente desde Jaroje OS_`;
 
@@ -1278,15 +1307,7 @@ export default function StaffPage() {
 
               {(() => {
                 const allRooms = getScheduledCleanings();
-
-                if (allRooms.length === 0) {
-                  return (
-                    <div className="p-6 text-center bg-zinc-50/50 border border-dashed border-zinc-200 rounded-2xl flex flex-col items-center justify-center gap-1.5">
-                      <CheckCircle2 className="text-emerald-500" size={22} />
-                      <p className="text-[12px] font-bold text-zinc-500">🎉 Todo limpio. No hay tareas de aseo por asignar hoy.</p>
-                    </div>
-                  );
-                }
+                const bpAssignment = assignments['Baños Públicos'] || { employeeNum: '', notes: '' };
 
                 return (
                   <div className="space-y-4">
@@ -1375,8 +1396,73 @@ export default function StaffPage() {
                               </tr>
                             );
                           })}
+
+                          {/* BAÑOS PÚBLICOS */}
+                          <tr className="align-middle border-t border-zinc-100 bg-zinc-50/30">
+                            {/* HABITACIÓN / ÁREA */}
+                            <td className="py-3 pr-2">
+                              <span className="inline-flex items-center justify-center px-2 py-1 rounded-lg bg-zinc-800 text-white text-[10px] font-black uppercase select-none">
+                                BP
+                              </span>
+                            </td>
+
+                            {/* ESTADO */}
+                            <td className="py-3 pr-2">
+                              <div className="flex flex-col gap-1 items-start">
+                                <span className="inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border border-zinc-200 bg-zinc-100 text-zinc-600 select-none">
+                                  Baños Públicos
+                                </span>
+                              </div>
+                            </td>
+
+                            {/* ASIGNADO */}
+                            <td className="py-3 pr-2">
+                              <select
+                                value={bpAssignment.employeeNum}
+                                onChange={e => updateAssignment('Baños Públicos', e.target.value, bpAssignment.notes)}
+                                className="w-full max-w-[110px] bg-zinc-50 border border-zinc-200 rounded-xl px-1.5 py-1.5 outline-none text-[10.5px] font-bold text-zinc-800 focus:ring-1 focus:ring-zinc-900/10 cursor-pointer"
+                              >
+                                <option value="">Seleccionar...</option>
+                                {employeesList.map(emp => (
+                                  <option key={emp.employee_num} value={emp.employee_num}>
+                                    {emp.full_name.split(' ')[0]} ({emp.employee_num})
+                                  </option>
+                                ))}
+                              </select>
+                            </td>
+
+                            {/* OBSERVACIONES */}
+                            <td className="py-3">
+                              <input
+                                type="text"
+                                value={bpAssignment.notes}
+                                onChange={e => updateAssignment('Baños Públicos', bpAssignment.employeeNum, e.target.value)}
+                                placeholder="Obs..."
+                                className="w-full min-w-[70px] bg-zinc-50 border border-zinc-200 rounded-xl px-2.5 py-1.5 outline-none text-[10.5px] font-semibold text-zinc-900 focus:ring-1 focus:ring-zinc-900/10"
+                              />
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
+                    </div>
+
+                    {/* Mensaje si no hay habitaciones programadas */}
+                    {allRooms.length === 0 && (
+                      <div className="p-4 text-center bg-zinc-50 border border-dashed border-zinc-200 rounded-2xl flex items-center justify-center gap-1.5">
+                        <span className="text-[11.5px] font-bold text-zinc-400">No hay habitaciones programadas para hoy.</span>
+                      </div>
+                    )}
+
+                    {/* OBSERVACIONES GENERALES */}
+                    <div className="space-y-1.5 pt-2">
+                      <label className="text-[10px] font-black text-zinc-400 uppercase tracking-wider block">Observaciones Generales</label>
+                      <textarea
+                        value={generalObservations}
+                        onChange={e => updateGeneralObservations(e.target.value)}
+                        placeholder="Escribe observaciones adicionales para el reporte del día aquí (opcional)..."
+                        rows={2}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-3 py-2.5 outline-none text-[11.5px] font-semibold text-zinc-900 focus:ring-1 focus:ring-zinc-900/10 placeholder-zinc-400 resize-none"
+                      />
                     </div>
 
                     <button
