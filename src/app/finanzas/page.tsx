@@ -1433,8 +1433,17 @@ export default function FinanzasPage() {
               placeholder="Buscar movimiento por concepto, descripción o monto..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-zinc-200 rounded-xl text-[12px] font-bold text-zinc-700 outline-none shadow-sm focus:border-zinc-400 focus:ring-1 focus:ring-zinc-950/5 placeholder:text-zinc-400 transition-all"
+              className="w-full pl-10 pr-10 py-2.5 bg-white border border-zinc-200 rounded-xl text-[12px] font-bold text-zinc-700 outline-none shadow-sm focus:border-zinc-400 focus:ring-1 focus:ring-zinc-950/5 placeholder:text-zinc-400 transition-all"
             />
+            {searchQuery && (
+              <button 
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 active:scale-95 transition-transform cursor-pointer"
+              >
+                <X size={11} strokeWidth={3} />
+              </button>
+            )}
           </div>
 
           {filterAccountId && filterAccountId !== 'todo' && (

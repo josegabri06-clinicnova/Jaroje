@@ -1626,8 +1626,17 @@ export default function ReservasList() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Buscar por nombre o ID..."
-            className="w-full bg-white border border-zinc-200/80 rounded-xl py-3 pl-10 pr-4 text-[14px] font-medium focus:outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.03)] placeholder:text-zinc-400"
+            className="w-full bg-white border border-zinc-200/80 rounded-xl py-3 pl-10 pr-10 text-[14px] font-medium focus:outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-900/10 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.03)] placeholder:text-zinc-400"
           />
+          {search && (
+            <button 
+              type="button"
+              onClick={() => setSearch('')}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 active:scale-95 transition-transform cursor-pointer"
+            >
+              <X size={12} strokeWidth={3} />
+            </button>
+          )}
         </div>
         
         <div className="grid grid-cols-2 gap-2">

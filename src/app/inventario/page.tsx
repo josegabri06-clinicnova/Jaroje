@@ -626,8 +626,17 @@ export default function InventarioPage() {
             placeholder="Buscar artículos por nombre o categoría..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-white border border-zinc-200/80 rounded-2xl py-3.5 pl-11 pr-4 text-[16px] font-medium text-zinc-900 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
+            className="w-full bg-white border border-zinc-200/80 rounded-2xl py-3.5 pl-11 pr-11 text-[16px] font-medium text-zinc-900 focus:outline-none focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
           />
+          {searchTerm && (
+            <button 
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 active:scale-95 transition-transform cursor-pointer"
+            >
+              <X size={12} strokeWidth={3} />
+            </button>
+          )}
         </div>
         <button
           type="button"
