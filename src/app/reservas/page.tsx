@@ -757,17 +757,40 @@ export default function ReservasList() {
       setPaymentAmount('');
       setPaymentDescription('');
       
+      // Calcular nuevos valores de pago para actualizar el estado local de inmediato
+      const isOta = ['Airbnb', 'Booking.com'].includes(selectedRes.channel || '');
+      const paymentVal = isOta 
+        ? (selectedRes.price_estimate || selectedRes.price || 0)
+        : Number(paymentAmount || 0);
+
+      const prevDeposit = Number(selectedRes.deposit || 0);
+      const totalEstimated = Number(selectedRes.price_estimate || selectedRes.price || 0);
+      const newDepositVal = prevDeposit + paymentVal;
+      const newBalanceVal = Math.max(0, totalEstimated - newDepositVal);
+      
       // Actualizar estado local
       setReservas(prev => prev.map(r => r.id === selectedRes.id ? { 
         ...r, 
         is_checked_in: true,
-        document_url: document_url 
+        document_url: document_url,
+        deposit: newDepositVal,
+        balance: newBalanceVal
       } : r));
       
       // También actualizar selectedRes para que el botón de Ver Documento aparezca de inmediato
-      setSelectedRes((prev: any) => ({ ...prev, is_checked_in: true, document_url: document_url }));
+      setSelectedRes((prev: any) => {
+        if (!prev) return null;
+        return { 
+          ...prev, 
+          is_checked_in: true, 
+          document_url: document_url,
+          deposit: newDepositVal,
+          balance: newBalanceVal
+        };
+      });
 
       alert('¡Check-in realizado con éxito!');
+      fetchReservas(); // Refrescar base de datos en segundo plano
     } catch (error) {
       console.error(error);
       alert('Error al realizar el check-in.');
