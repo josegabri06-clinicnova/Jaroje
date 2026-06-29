@@ -1382,24 +1382,30 @@ export default function ReservasList() {
 
   const [cancelLoading, setCancelLoading] = useState(false);
 
-  const handleAcknowledgeReserva = async () => {
-    if (!selectedRes) return;
+  const handleAcknowledgeReserva = async (resData?: any) => {
+    const targetRes = resData || selectedRes;
+    if (!targetRes) return;
     setAckLoading(true);
     try {
       const { error } = await supabase.from('checkins').upsert({
-        reservation_id: selectedRes.id.toString(),
-        guest_name: selectedRes.guest_name,
-        room: selectedRes.room_name,
-        check_in_date: selectedRes.check_in,
-        check_out_date: selectedRes.check_out,
+        reservation_id: targetRes.id.toString(),
+        guest_name: targetRes.guest_name,
+        room: targetRes.room_name,
+        check_in_date: targetRes.check_in,
+        check_out_date: targetRes.check_out,
         status: 'acknowledged',
         checked_in_by: 'Admin'
       }, { onConflict: 'reservation_id' });
 
       if (error) throw error;
 
-      setSelectedRes((prev: any) => ({ ...prev, is_acknowledged: true }));
-      setReservas(prev => prev.map(r => r.id === selectedRes.id ? { ...r, is_acknowledged: true } : r));
+      if (selectedRes && selectedRes.id === targetRes.id) {
+        setSelectedRes((prev: any) => {
+          if (!prev) return null;
+          return { ...prev, is_acknowledged: true };
+        });
+      }
+      setReservas(prev => prev.map(r => r.id === targetRes.id ? { ...r, is_acknowledged: true } : r));
 
       try {
         const emp = getActiveEmployee('recepcion');
@@ -1416,11 +1422,11 @@ export default function ReservasList() {
             department: employeeDept,
             module: 'recepcion',
             action: 'reserva_enterado',
-            room: selectedRes.room_name || 'General',
+            room: targetRes.room_name || 'General',
             details: JSON.stringify({
-              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Marcó la reserva como enterado.`,
-              bookingId: selectedRes.id,
-              guestName: selectedRes.guest_name
+              text: `${targetRes.guest_name} ${targetRes.num_adult || 1}/${targetRes.num_child || 0} (ID: ${targetRes.id}) de la Habitación ${targetRes.room_name || 'General'} - Marcó la reserva como enterado${resData ? ' desde el listado' : ''}.`,
+              bookingId: targetRes.id,
+              guestName: targetRes.guest_name
             })
           })
         });
@@ -1429,7 +1435,7 @@ export default function ReservasList() {
       }
 
       // Enviar confirmación por WhatsApp si existe número telefónico
-      const phoneNum = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
+      const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
       if (phoneNum) {
         try {
           const waRes = await fetch('/api/whatsapp/confirm', {
@@ -1437,7 +1443,7 @@ export default function ReservasList() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               phone: phoneNum,
-              guestName: selectedRes.guest_name
+              guestName: targetRes.guest_name
             })
           });
           const waData = await waRes.json();
@@ -1895,43 +1901,7 @@ export default function ReservasList() {
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
-                      try {
-                        const { error } = await supabase.from('checkins').upsert({
-                          reservation_id: r.id.toString(),
-                          guest_name: r.guest_name,
-                          room: r.room_name,
-                          check_in_date: r.check_in,
-                          check_out_date: r.check_out,
-                          status: 'acknowledged',
-                          checked_in_by: 'Admin'
-                        }, { onConflict: 'reservation_id' });
-                        if (error) throw error;
-                        
-                        setReservas(prev => prev.map(res => res.id === r.id ? { ...res, is_acknowledged: true } : res));
-                        
-                        const emp = getActiveEmployee('recepcion');
-                        const employeeNum = emp?.employee_num || '999';
-                        const employeeName = emp?.full_name || 'Administrador';
-                        await fetch('/api/employee-logs', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            employee_num: employeeNum,
-                            employee_name: employeeName,
-                            department: emp?.department || 'recepcion',
-                            module: 'recepcion',
-                            action: 'reserva_enterado',
-                            room: r.room_name || 'General',
-                            details: JSON.stringify({
-                              text: `${r.guest_name} ${r.num_adult || 1}/${r.num_child || 0} (ID: ${r.id}) de la Habitación ${r.room_name || 'General'} - Marcó la reserva como enterado desde el listado.`,
-                              bookingId: r.id
-                            })
-                          })
-                        });
-                      } catch (err) {
-                        console.error(err);
-                        alert('Error al marcar como revisado');
-                      }
+                      await handleAcknowledgeReserva(r);
                     }}
                     className="w-full mt-2.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
                   >
