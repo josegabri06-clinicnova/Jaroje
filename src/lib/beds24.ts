@@ -976,6 +976,28 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
       const taxInfo = extractTaxesFromInvoice(b.invoiceItems);
       const otaDetails = extractOtaDetails(b.invoiceItems);
 
+      // Calcular pagos registrados en invoiceItems (Beds24)
+      let actualPaid = 0;
+      let totalInvoiceCharges = 0;
+      if (b.invoiceItems && Array.isArray(b.invoiceItems)) {
+        b.invoiceItems.forEach((item: any) => {
+          const qty = Number(item.qty || 0);
+          const price = Number(item.price || 0);
+          const lineTotal = qty * price;
+          if (lineTotal < 0) {
+            actualPaid += Math.abs(lineTotal);
+          } else {
+            totalInvoiceCharges += lineTotal;
+          }
+        });
+      }
+
+      const calculatedCharges = totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue;
+      const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
+
+      const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
+      const balanceVal = actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal));
+
       return {
         id: b.id || Math.random().toString(),
         check_in: b.arrival,
@@ -991,8 +1013,8 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
         nights: nights,
         price_estimate: totalRevenue,
         price_per_night: pricePerNight,
-        deposit: b.deposit !== undefined ? Number(b.deposit) : 0,
-        balance: b.balance !== undefined ? Number(b.balance) : (totalRevenue - (b.deposit !== undefined ? Number(b.deposit) : 0)),
+        deposit: depositVal,
+        balance: balanceVal,
         notes: b.info || b.notes || null,
         num_adult: b.numAdult ? Number(b.numAdult) : 1,
         num_child: b.numChild ? Number(b.numChild) : 0,
