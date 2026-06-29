@@ -2179,6 +2179,255 @@ export default function ReservasList() {
                   </button>
                 </div>
               
+              ) : showPaymentFlow ? (
+                // Formulario de Check-In (Con scroll)
+                <div className="animate-in fade-in duration-200 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm text-left font-sans space-y-4">
+                  {/* IDENTIFICACIÓN (DNI/PASAPORTE) */}
+                  <div className="mb-4">
+                    <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
+                      Identificación (DNI/Pasaporte)
+                    </label>
+                    <div className="relative">
+                      <input 
+                        ref={docInputRef}
+                        type="file"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const b64 = await compressImage(file);
+                          setDniPreview(b64);
+                          setDocumentFile(file);
+                        }}
+                        className="hidden"
+                        accept="image/*"
+                        required
+                      />
+                      {!dniPreview ? (
+                        <div
+                          onClick={() => docInputRef.current?.click()}
+                          className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
+                        >
+                          <Camera size={20} className="text-zinc-400" />
+                          <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
+                        </div>
+                      ) : (
+                        <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white">
+                          <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
+                          <button
+                            onClick={() => { setDniPreview(null); setDocumentFile(null); }}
+                            className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ADEUDO POR PAGAR DESGLOSADO */}
+                  {(() => {
+                    const pendingBalance = selectedRes.balance !== undefined
+                      ? selectedRes.balance
+                      : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+                    const depositVal = selectedRes.deposit || 0;
+                    const totalVal = selectedRes.price_estimate || 0;
+
+                    if (pendingBalance <= 0) {
+                      return (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm mb-4 animate-in fade-in duration-300">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
+                              Estancia Liquidada
+                            </span>
+                            <p className="text-[11px] text-emerald-600 font-medium leading-relaxed">
+                              Total: {fmtCurrency(totalVal, selectedRes.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedRes.guest_name)} (100% Pagado)
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[20px] font-black text-emerald-700">
+                              {fmtCurrency(0, selectedRes.guest_name)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedRes.channel || '');
+
+                    if (isAirbnbOrBooking) {
+                      const channel = selectedRes.channel || '';
+                      const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
+                      const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
+
+                      const totalAmount = pendingBalance > 0 ? pendingBalance : (selectedRes.price_estimate || 0);
+                      let expectedPayout = selectedRes.expected_payout || 0;
+                      let hostFee = selectedRes.host_fee || 0;
+                      let taxesRetained = 0;
+
+                      if (expectedPayout === 0 && hostFee === 0) {
+                        const otaSplit = computeOtaSplit(
+                          totalAmount,
+                          channel,
+                          selectedRes.room_name || '',
+                          selectedRes.check_in || '',
+                          selectedRes.check_out || '',
+                          undefined,
+                          Number(selectedRes.num_adult || 1),
+                          Number(selectedRes.num_child || 0)
+                        );
+                        expectedPayout = otaSplit.netRevenue;
+                        hostFee = otaSplit.commission;
+                        taxesRetained = otaSplit.taxesRetained || 0;
+                      } else {
+                        taxesRetained = channel === 'Airbnb' ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
+                      }
+
+                      return (
+                        <div className="space-y-4">
+                          <div className="bg-zinc-50 border border-zinc-250 rounded-2xl p-4 shadow-sm animate-in fade-in duration-300">
+                            <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest block mb-2 text-left">
+                              Dispersión de Pago Automatizada ({channel})
+                            </span>
+                            <div className="space-y-2 text-left">
+                              <div className="flex justify-between items-center text-[13px]">
+                                <span className="font-semibold text-zinc-600">Depósito Neto a {netAccName}:</span>
+                                <span className="font-bold text-zinc-900">{fmtCurrency(expectedPayout, selectedRes.guest_name)}</span>
+                              </div>
+                              <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
+                                <span className="font-semibold text-zinc-600">Comisión a {commAccName}:</span>
+                                <span className="font-bold text-zinc-900">{fmtCurrency(hostFee, selectedRes.guest_name)}</span>
+                              </div>
+                              {taxesRetained > 0 && (
+                                <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
+                                  <span className="font-semibold text-zinc-600">Retención de Impuestos (12%):</span>
+                                  <span className="font-bold text-zinc-900">{fmtCurrency(taxesRetained, selectedRes.guest_name)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-4">
+                        <div className="bg-rose-50 border border-rose-250 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-extrabold text-rose-800 uppercase tracking-widest block">
+                              Adeudo por Pagar
+                            </span>
+                            <p className="text-[10px] text-rose-600 font-semibold leading-relaxed">
+                              Total: {fmtCurrency(totalVal, selectedRes.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedRes.guest_name)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[20px] font-black text-rose-700">
+                              {fmtCurrency(pendingBalance, selectedRes.guest_name)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-1 pt-3 border-t border-zinc-100">Registrar Pago</p>
+                        <div className="flex gap-2 mb-2">
+                          {[
+                            { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                            { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                            { id: 'transferencia', label: 'Transf.', icon: Send }
+                          ].map(m => (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => { setPaymentMethod(m.id); setPaymentReference(''); }}
+                              className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                paymentMethod === m.id
+                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                  : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
+                              }`}
+                            >
+                              <m.icon size={15} />
+                              <span className="text-[11px] font-bold">{m.label}</span>
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="mb-2">
+                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
+                            Monto a Cobrar
+                          </label>
+                          <div className="relative">
+                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
+                            <input
+                              type="number"
+                              value={paymentAmount}
+                              onChange={e => setPaymentAmount(e.target.value)}
+                              placeholder="0.00"
+                              className="w-full bg-white border border-zinc-200 rounded-xl py-2 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
+                            {paymentMethod === 'efectivo' ? 'Sobre de Efectivo' : 
+                             paymentMethod === 'tarjeta' ? 'Cuenta de Cobro con Tarjeta' : 
+                             'Cuenta de Depósito'}
+                          </label>
+                          <select
+                            required
+                            value={paymentReference}
+                            onChange={e => setPaymentReference(e.target.value)}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900 cursor-pointer"
+                          >
+                            <option value="" disabled>Selecciona una opción</option>
+                            {accounts
+                              .filter(a => {
+                                const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                if (isUSD) {
+                                  const isUSDAcc = a.currency?.toUpperCase() === 'USD';
+                                  if (!isUSDAcc) return false;
+                                  
+                                  const name = a.name.trim().toUpperCase();
+                                  if (paymentMethod === 'efectivo') {
+                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                  }
+                                  return !name.includes('EFE') && !name.includes('CASH');
+                                } else {
+                                  const name = a.name.trim().toUpperCase();
+                                  if (paymentMethod === 'efectivo') {
+                                    return name === 'EFECTIVO';
+                                  }
+                                  if (paymentMethod === 'tarjeta') {
+                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                  }
+                                  if (paymentMethod === 'transferencia') {
+                                    return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
+                                  }
+                                  return false;
+                                }
+                              })
+                              .map(a => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                          </select>
+                        </div>
+
+                        <div className="mb-4">
+                          <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
+                            Descripción (opcional)
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentDescription}
+                            onChange={e => setPaymentDescription(e.target.value)}
+                            placeholder="Ej. S07 -EP, referencia de transferencia..."
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              
               ) : (
                 // Detalles Normales
                 <>
@@ -2907,293 +3156,44 @@ export default function ReservasList() {
                   )}
                 </div>
               ) : showPaymentFlow ? (
-                <div className="animate-in fade-in duration-200 bg-white p-4 rounded-xl border border-zinc-200 shadow-sm mb-2 text-left font-sans">
-                  
-                  {/* DNI Upload */}
-                  <div className="mb-4">
-                    <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                      Identificación (DNI/Pasaporte)
-                    </label>
-                    <div className="relative">
-                      <input 
-                        ref={docInputRef}
-                        type="file"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (!file) return;
-                          const b64 = await compressImage(file);
-                          setDniPreview(b64);
-                          setDocumentFile(file);
-                        }}
-                        className="hidden"
-                        accept="image/*"
-                        required
-                      />
-                      {!dniPreview ? (
-                        <div
-                          onClick={() => docInputRef.current?.click()}
-                          className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
-                        >
-                          <Camera size={20} className="text-zinc-400" />
-                          <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
-                        </div>
-                      ) : (
-                        <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white">
-                          <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
-                          <button
-                            onClick={() => { setDniPreview(null); setDocumentFile(null); }}
-                            className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                <div className="flex gap-2 w-full animate-in fade-in duration-200">
+                  <button 
+                    onClick={() => {
+                      setShowPaymentFlow(false);
+                      setDniPreview(null);
+                      setDocumentFile(null);
+                      setPaymentMethod('efectivo');
+                      setPaymentReference('');
+                      setPaymentAmount('');
+                      setPaymentDescription('');
+                    }} 
+                    className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[13px] transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={handleConfirmCheckIn} 
+                    disabled={(() => {
+                      if (checkInLoading) return true;
+                      if (!dniPreview) return true; // DNI obligatorio
+                      
+                      const pendingBalance = selectedRes.balance !== undefined
+                        ? selectedRes.balance
+                        : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
 
-                  {/* Adeudo por Pagar Desglosado */}
-                  {(() => {
-                    const pendingBalance = selectedRes.balance !== undefined
-                      ? selectedRes.balance
-                      : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
-                    const depositVal = selectedRes.deposit || 0;
-                    const totalVal = selectedRes.price_estimate || 0;
-
-                    if (pendingBalance <= 0) {
-                      return (
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm mb-4 animate-in fade-in duration-300">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-extrabold text-emerald-800 uppercase tracking-widest block">
-                              Estancia Liquidada
-                            </span>
-                            <p className="text-[11px] text-emerald-600 font-medium leading-relaxed">
-                              Total: {fmtCurrency(totalVal, selectedRes.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedRes.guest_name)} (100% Pagado)
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[20px] font-black text-emerald-700">
-                              {fmtCurrency(0, selectedRes.guest_name)}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedRes.channel || '');
-
-                    if (isAirbnbOrBooking) {
-                      const channel = selectedRes.channel || '';
-                      const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
-                      const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
-
-                      const totalAmount = pendingBalance > 0 ? pendingBalance : (selectedRes.price_estimate || 0);
-                      let expectedPayout = selectedRes.expected_payout || 0;
-                      let hostFee = selectedRes.host_fee || 0;
-                      let taxesRetained = 0;
-
-                      if (expectedPayout === 0 && hostFee === 0) {
-                        const otaSplit = computeOtaSplit(
-                          totalAmount,
-                          channel,
-                          selectedRes.room_name || '',
-                          selectedRes.check_in || '',
-                          selectedRes.check_out || '',
-                          undefined,
-                          Number(selectedRes.num_adult || 1),
-                          Number(selectedRes.num_child || 0)
-                        );
-                        expectedPayout = otaSplit.netRevenue;
-                        hostFee = otaSplit.commission;
-                        taxesRetained = otaSplit.taxesRetained || 0;
-                      } else {
-                        taxesRetained = channel === 'Airbnb' ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
+                      if (pendingBalance > 0) {
+                        const currentPayment = Number(paymentAmount || 0);
+                        if (!paymentReference.trim()) return true;
+                        if (currentPayment < pendingBalance) return true;
                       }
 
-                      return (
-                        <div className="space-y-4">
-                          <div className="bg-zinc-50 border border-zinc-250 rounded-2xl p-4 shadow-sm animate-in fade-in duration-300">
-                            <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest block mb-2 text-left">
-                              Dispersión de Pago Automatizada ({channel})
-                            </span>
-                            <div className="space-y-2 text-left">
-                              <div className="flex justify-between items-center text-[13px]">
-                                <span className="font-semibold text-zinc-600">Depósito Neto a {netAccName}:</span>
-                                <span className="font-bold text-zinc-900">{fmtCurrency(expectedPayout, selectedRes.guest_name)}</span>
-                              </div>
-                              <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
-                                <span className="font-semibold text-zinc-600">Comisión a {commAccName}:</span>
-                                <span className="font-bold text-zinc-900">{fmtCurrency(hostFee, selectedRes.guest_name)}</span>
-                              </div>
-                              {taxesRetained > 0 && (
-                                <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
-                                  <span className="font-semibold text-zinc-600">Retención de Impuestos (12%):</span>
-                                  <span className="font-bold text-zinc-900">{fmtCurrency(taxesRetained, selectedRes.guest_name)}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="space-y-4">
-                        <div className="bg-rose-50 border border-rose-250 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-extrabold text-rose-800 uppercase tracking-widest block">
-                              Adeudo por Pagar
-                            </span>
-                            <p className="text-[10px] text-rose-600 font-semibold leading-relaxed">
-                              Total: {fmtCurrency(totalVal, selectedRes.guest_name)} | Anticipos: {fmtCurrency(depositVal, selectedRes.guest_name)}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[20px] font-black text-rose-700">
-                              {fmtCurrency(pendingBalance, selectedRes.guest_name)}
-                            </span>
-                          </div>
-                        </div>
-
-                        <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-1 pt-3 border-t border-zinc-100">Registrar Pago</p>
-                        <div className="flex gap-2 mb-2">
-                          {[
-                            { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                            { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                            { id: 'transferencia', label: 'Transf.', icon: Send }
-                          ].map(m => (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => { setPaymentMethod(m.id); setPaymentReference(''); }}
-                              className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                                paymentMethod === m.id
-                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                                  : 'border-zinc-200 bg-white text-zinc-650 hover:bg-zinc-50'
-                              }`}
-                            >
-                              <m.icon size={15} />
-                              <span className="text-[11px] font-bold">{m.label}</span>
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="mb-2">
-                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5">
-                            Monto a Cobrar
-                          </label>
-                          <div className="relative">
-                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
-                            <input
-                              type="number"
-                              value={paymentAmount}
-                              onChange={e => setPaymentAmount(e.target.value)}
-                              placeholder="0.00"
-                              className="w-full bg-white border border-zinc-200 rounded-xl py-2 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900"
-                            />
-                          </div>
-                        </div>
-
-                        <div className="mb-4">
-                          <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                            {paymentMethod === 'efectivo' ? 'Sobre de Efectivo' : 
-                             paymentMethod === 'tarjeta' ? 'Cuenta de Cobro con Tarjeta' : 
-                             'Cuenta de Depósito'}
-                          </label>
-                          <select
-                            required
-                            value={paymentReference}
-                            onChange={e => setPaymentReference(e.target.value)}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900 cursor-pointer"
-                          >
-                            <option value="" disabled>Selecciona una opción</option>
-                            {accounts
-                              .filter(a => {
-                                const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                if (isUSD) {
-                                  const isUSDAcc = a.currency?.toUpperCase() === 'USD';
-                                  if (!isUSDAcc) return false;
-                                  
-                                  const name = a.name.trim().toUpperCase();
-                                  if (paymentMethod === 'efectivo') {
-                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                  }
-                                  return !name.includes('EFE') && !name.includes('CASH');
-                                } else {
-                                  const name = a.name.trim().toUpperCase();
-                                  if (paymentMethod === 'efectivo') {
-                                    return name === 'EFECTIVO';
-                                  }
-                                  if (paymentMethod === 'tarjeta') {
-                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                  }
-                                  if (paymentMethod === 'transferencia') {
-                                    return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
-                                  }
-                                  return false;
-                                }
-                              })
-                              .map(a => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
-                              ))}
-                          </select>
-                        </div>
-
-                        {/* Descripción opcional */}
-                        <div className="mb-4">
-                          <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
-                            Descripción (opcional)
-                          </label>
-                          <input
-                            type="text"
-                            value={paymentDescription}
-                            onChange={e => setPaymentDescription(e.target.value)}
-                            placeholder="Ej. S07 -EP, referencia de transferencia..."
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900"
-                          />
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="flex gap-2">
-                    <button 
-                      onClick={() => {
-                        setShowPaymentFlow(false);
-                        setDniPreview(null);
-                        setDocumentFile(null);
-                        setPaymentMethod('efectivo');
-                        setPaymentReference('');
-                        setPaymentAmount('');
-                        setPaymentDescription('');
-                      }} 
-                      className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[13px] transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      onClick={handleConfirmCheckIn} 
-                      disabled={(() => {
-                        if (checkInLoading) return true;
-                        if (!dniPreview) return true; // DNI obligatorio
-                        
-                        const pendingBalance = selectedRes.balance !== undefined
-                          ? selectedRes.balance
-                          : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
-
-                        if (pendingBalance > 0) {
-                          const currentPayment = Number(paymentAmount || 0);
-                          if (!paymentReference.trim()) return true;
-                          if (currentPayment < pendingBalance) return true;
-                        }
-
-                        return false;
-                      })()}
-                      className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[13px] shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2 cursor-pointer"
-                    >
-                      {checkInLoading ? <RefreshCw size={16} className="animate-spin" /> : <LogIn size={16} />}
-                      {checkInLoading ? 'Procesando...' : 'Completar Check-In'}
-                    </button>
-                  </div>
+                      return false;
+                    })()}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[13px] shadow-md shadow-blue-600/20 disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-2 cursor-pointer"
+                  >
+                    {checkInLoading ? <RefreshCw size={16} className="animate-spin" /> : <LogIn size={16} />}
+                    {checkInLoading ? 'Procesando...' : 'Completar Check-In'}
+                  </button>
                 </div>
               ) : (
                 (() => {

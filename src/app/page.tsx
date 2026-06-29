@@ -308,7 +308,7 @@ export default function AdminDashboard() {
     const salen = reservas.filter(r => r.check_out === todayStr);
     const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in);
 
-    let text = `📋 *RESUMEN DIARIO DE OPERACIONES (PLAN B)*\n🏨 *Jaroje Condominios*\n📅 *${dateStr.toUpperCase()}*\n\n`;
+    let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *CONDOMINIOS JAROJE*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
     // --- LLEGAN HOY ---
     text += `🚪 *LLEGAN HOY (${llegan.length})*\n`;
