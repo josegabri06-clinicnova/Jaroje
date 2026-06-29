@@ -1416,6 +1416,10 @@ export default function ReservasList() {
 
   const handleCancelReserva = async () => {
     if (!selectedRes) return;
+    if (userRole !== 'admin') {
+      alert('❌ Error: Solo los administradores pueden cancelar reservas.');
+      return;
+    }
     const confirmCancel = confirm(`⚠️ ¿Estás seguro de que deseas cancelar permanentemente la reserva de ${selectedRes.guest_name}?\n\nEsta acción eliminará el check-in local y sincronizará la cancelación en Beds24 de inmediato.`);
     if (!confirmCancel) return;
 
@@ -3219,8 +3223,8 @@ export default function ReservasList() {
                 })()
               )}
               
-              {/* Cancelar Reserva Button */}
-              {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
+              {/* Cancelar Reserva Button (Solo Admin) */}
+              {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin' && (
                 <button 
                   onClick={handleCancelReserva}
                   disabled={cancelLoading}
