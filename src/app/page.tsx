@@ -18,19 +18,19 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ROOMS = [
-  '101','102','103','104','105','106','107',
-  '201','202','203','204','205','206',
-  '301','302','303','304','305','306',
-  '401','402',
-  '500','501','502','503','504','505','506','507'
+  '101', '102', '103', '104', '105', '106', '107',
+  '201', '202', '203', '204', '205', '206',
+  '301', '302', '303', '304', '305', '306',
+  '401', '402',
+  '500', '501', '502', '503', '504', '505', '506', '507'
 ];
 
 const ROOM_ROWS = [
-  { label: 'Apartamentos de 3 dormitorios (101-107)', rooms: ['101','102','103','104','105','106','107'] },
-  { label: 'Apartamentos de 2 dormitorios (201-206)', rooms: ['201','202','203','204','205','206'] },
-  { label: 'Unidades Especiales (401-402)', rooms: ['401','402'] },
-  { label: 'Habitaciones Dobles (301-306)', rooms: ['301','302','303','304','305','306'] },
-  { label: 'Apartamentos Nuevos (500-507)', rooms: ['500','501','502','503','504','505','506','507'], isLocal: true }
+  { label: 'Apartamentos de 3 dormitorios (101-107)', rooms: ['101', '102', '103', '104', '105', '106', '107'] },
+  { label: 'Apartamentos de 2 dormitorios (201-206)', rooms: ['201', '202', '203', '204', '205', '206'] },
+  { label: 'Unidades Especiales (401-402)', rooms: ['401', '402'] },
+  { label: 'Habitaciones Dobles (301-306)', rooms: ['301', '302', '303', '304', '305', '306'] },
+  { label: 'Apartamentos Nuevos (500-507)', rooms: ['500', '501', '502', '503', '504', '505', '506', '507'], isLocal: true }
 ];
 
 
@@ -118,8 +118,8 @@ function getRoomOperationalStatus(
     const diffTime = Math.abs(todayDate.getTime() - checkInDate.getTime());
     const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
 
-    const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','501','402'].includes(roomNum);
-    const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(roomNum);
+    const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '501', '402'].includes(roomNum);
+    const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '502', '503', '504', '505', '506', '507'].includes(roomNum);
 
     if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
       return 'limpieza_programada'; // Amarillo automático por 3er día (Stayover cada 3er día)
@@ -225,11 +225,11 @@ export default function AdminDashboard() {
           const rawTasks = tasksJson.data || [];
           const maintenanceTasks = rawTasks.filter((t: any) => {
             const desc = (t.description || '').toLowerCase();
-            const isClean = t.type === 'limpieza' || 
-                            desc.includes('check-out completado') || 
-                            desc.includes('lista para limpieza') || 
-                            desc.includes('servicio de limpieza') || 
-                            desc.includes('limpieza programada');
+            const isClean = t.type === 'limpieza' ||
+              desc.includes('check-out completado') ||
+              desc.includes('lista para limpieza') ||
+              desc.includes('servicio de limpieza') ||
+              desc.includes('limpieza programada');
             return !isClean;
           });
           setTasks(maintenanceTasks);
@@ -284,7 +284,7 @@ export default function AdminDashboard() {
         const roomsRes = await fetch('/api/room-status?t=' + Date.now());
         const roomsJson = await roomsRes.json();
         if (roomsJson.success) setRoomStatuses(roomsJson.data || []);
-        
+
         setShowRoomStatusModal(false);
       } else {
         alert('Error al actualizar el estado: ' + json.error);
@@ -308,7 +308,7 @@ export default function AdminDashboard() {
     const salen = reservas.filter(r => r.check_out === todayStr);
     const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in);
 
-    let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *CONDOMINIOS JAROJE*\n📅 *${dateStr.toUpperCase()}*\n\n`;
+    let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *Condominios Jaroje*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
     // --- LLEGAN HOY ---
     text += `🚪 *LLEGAN HOY (${llegan.length})*\n`;
@@ -348,7 +348,7 @@ export default function AdminDashboard() {
         let checkoutText = r.check_out;
         try {
           checkoutText = format(new Date(r.check_out + 'T12:00:00'), 'dd MMM', { locale: es });
-        } catch (e) {}
+        } catch (e) { }
         text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} - Sale: ${checkoutText}\n`;
       });
     }
@@ -428,11 +428,10 @@ export default function AdminDashboard() {
 
       {/* Token error banner */}
       {tokenError && (
-        <div className={`border rounded-2xl p-4 space-y-3 ${
-          tokenError === 'REFRESH_TOKEN_EXPIRED'
+        <div className={`border rounded-2xl p-4 space-y-3 ${tokenError === 'REFRESH_TOKEN_EXPIRED'
             ? 'bg-rose-50 border-rose-200'
             : 'bg-amber-50 border-amber-200'
-        }`}>
+          }`}>
           <div className="flex items-start gap-3">
             <AlertCircle size={16} className={`shrink-0 mt-0.5 ${tokenError === 'REFRESH_TOKEN_EXPIRED' ? 'text-rose-600' : 'text-amber-600'}`} />
             <div className="flex-1">
@@ -525,14 +524,14 @@ export default function AdminDashboard() {
 
       {/* ── KPIs ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-3 gap-2">
-        <button 
+        <button
           onClick={() => setKpiModalType('encasa')}
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-zinc-900">{activeNow}</p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">En casa</p>
         </button>
-        <button 
+        <button
           onClick={() => setKpiModalType('llegan')}
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
@@ -541,7 +540,7 @@ export default function AdminDashboard() {
           </p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan hoy</p>
         </button>
-        <button 
+        <button
           onClick={() => setKpiModalType('salen')}
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
@@ -1155,7 +1154,7 @@ export default function AdminDashboard() {
           <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div onClick={() => setShowRoomStatusModal(false)} className="absolute inset-0" />
             <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-6 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto">
-              
+
               {/* Header */}
               <div className="flex items-center justify-between border-b border-zinc-100 pb-4">
                 <div>
@@ -1171,8 +1170,8 @@ export default function AdminDashboard() {
                     {isCleanTerminated ? 'Control de Calidad y Aprobación de Renta' : 'Información Operativa de la Habitación'}
                   </p>
                 </div>
-                <button 
-                  onClick={() => setShowRoomStatusModal(false)} 
+                <button
+                  onClick={() => setShowRoomStatusModal(false)}
                   className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
                 >
                   <X size={15} strokeWidth={2.5} />
@@ -1193,7 +1192,7 @@ export default function AdminDashboard() {
                         <p className="text-[10px] text-blue-600 font-bold">La habitación está lista para control físico.</p>
                       </div>
                     </div>
-                    
+
                     <div className="border-t border-blue-200/40 pt-3 space-y-2 text-[12px]">
                       <div className="flex justify-between items-center text-zinc-700">
                         <span className="font-bold text-zinc-400">Limpiado por:</span>
@@ -1218,7 +1217,7 @@ export default function AdminDashboard() {
                       <CheckCircle2 size={16} strokeWidth={2.5} />
                       <span>Aprobar Inspección (Marcar Disponible)</span>
                     </button>
-                    
+
                     <button
                       onClick={() => {
                         setShowRoomStatusModal(false);
@@ -1239,7 +1238,7 @@ export default function AdminDashboard() {
                       let bg = 'bg-zinc-150 text-zinc-700 border-zinc-200';
                       let label = 'Desconocido';
                       let desc = '';
-                      
+
                       if (operStatus === 'disponible') {
                         bg = 'bg-emerald-500 text-white border-emerald-600 shadow-lg shadow-emerald-500/10';
                         label = '🟢 Disponible';
@@ -1255,7 +1254,7 @@ export default function AdminDashboard() {
                         if (activeRes) {
                           const checkInFormatted = activeRes.check_in ? format(new Date(activeRes.check_in + 'T12:00:00'), 'd MMM', { locale: es }) : '—';
                           const checkOutFormatted = activeRes.check_out ? format(new Date(activeRes.check_out + 'T12:00:00'), 'd MMM', { locale: es }) : '—';
-                          
+
                           return (
                             <div className="w-full border border-zinc-200/80 rounded-[24px] p-5 space-y-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] bg-white text-left font-sans">
                               {/* Fila 1: Nombre y Habitación */}
@@ -1335,12 +1334,12 @@ export default function AdminDashboard() {
                           <div className={`p-4 border rounded-2xl text-center ${bg}`}>
                             <span className="text-[14px] font-black tracking-wide uppercase">{label}</span>
                           </div>
-                          
+
                           <div className="bg-zinc-50 border border-zinc-200/60 rounded-2xl p-4 space-y-3">
                             <p className="text-[12px] text-zinc-500 font-semibold leading-relaxed">
                               {desc}
                             </p>
-                            
+
                             {(selectedRoomForStatus.updated_by || selectedRoomForStatus.updated_at) && (
                               <div className="border-t border-zinc-200/40 pt-3 space-y-1.5 text-[11px] text-zinc-400 font-bold">
                                 {selectedRoomForStatus.updated_by && (
@@ -1437,7 +1436,7 @@ export default function AdminDashboard() {
           <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div onClick={() => setKpiModalType(null)} className="absolute inset-0" />
             <div className="relative bg-white rounded-t-[32px] shadow-2xl p-6 space-y-4 animate-in slide-in-from-bottom-8 duration-300 w-full max-w-md mx-auto max-h-[85vh] flex flex-col">
-              
+
               {/* Header */}
               <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                 <div className="flex items-center gap-2">
@@ -1446,8 +1445,8 @@ export default function AdminDashboard() {
                     {filtered.length}
                   </span>
                 </div>
-                <button 
-                  onClick={() => setKpiModalType(null)} 
+                <button
+                  onClick={() => setKpiModalType(null)}
                   className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center text-zinc-500 cursor-pointer hover:bg-zinc-200"
                 >
                   <X size={15} strokeWidth={2.5} />
@@ -1464,10 +1463,10 @@ export default function AdminDashboard() {
                   filtered.map(r => {
                     const nightsVal = r.nights || 1;
                     const cleanPhone = r.guest_phone ? r.guest_phone.replace(/\D/g, '') : '';
-                    
+
                     return (
-                      <div 
-                        key={r.id} 
+                      <div
+                        key={r.id}
                         onClick={() => {
                           setKpiModalType(null);
                           router.push(`/reservas?id=${r.id}`);

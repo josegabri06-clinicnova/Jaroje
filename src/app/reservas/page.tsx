@@ -1428,7 +1428,33 @@ export default function ReservasList() {
         console.error("Error registrando log de enterado:", logErr);
       }
 
-      alert('✅ Reserva marcada como enterado.');
+      // Enviar confirmación por WhatsApp si existe número telefónico
+      const phoneNum = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
+      if (phoneNum) {
+        try {
+          const waRes = await fetch('/api/whatsapp/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone: phoneNum,
+              guestName: selectedRes.guest_name
+            })
+          });
+          const waData = await waRes.json();
+          if (!waRes.ok) {
+            console.error("Error al enviar WhatsApp:", waData.error);
+            alert(`✅ Reserva marcada como enterado.\n⚠️ Nota: No se pudo enviar el WhatsApp de confirmación (${waData.error || 'error desconocido'}).`);
+          } else {
+            alert('✅ Reserva marcada como enterado y confirmación enviada por WhatsApp.');
+          }
+        } catch (waErr) {
+          console.error("Error de red enviando WhatsApp:", waErr);
+          alert('✅ Reserva marcada como enterado.\n⚠️ Nota: Error de red al enviar el WhatsApp.');
+        }
+      } else {
+        alert('✅ Reserva marcada como enterado (la reserva no tiene teléfono registrado).');
+      }
+
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al marcar como enterado:\n\n${err.message}`);
