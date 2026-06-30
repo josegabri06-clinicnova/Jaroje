@@ -204,12 +204,14 @@ export default function PublicReservaPage() {
           </div>
         </div>
 
-        {/* Formas de Pago (Solo si no está confirmada) */}
-        {!esConfirmada && (
+        {/* Formas de Pago */}
+        {booking.balance > 0 && (
           <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
             <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
               <CreditCard size={18} className="text-indigo-600" />
-              <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Formas de Pago</h3>
+              <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
+                {esConfirmada ? 'Liquidar Saldo Pendiente' : 'Formas de Pago'}
+              </h3>
             </div>
 
             {/* Método 1: Tarjeta */}
@@ -282,7 +284,10 @@ export default function PublicReservaPage() {
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-850 flex gap-2">
                 <Users size={16} className="shrink-0 mt-0.5 text-amber-700" />
                 <p className="leading-relaxed">
-                  <strong>Importante:</strong> Si realizas una transferencia o depósito, por favor envía el comprobante por WhatsApp para confirmar tu reservación.
+                  <strong>Importante:</strong> {esConfirmada 
+                    ? 'Si realizas una transferencia para liquidar tu saldo, por favor envía el comprobante por WhatsApp para registrarlo en tu cuenta.'
+                    : 'Si realizas una transferencia o depósito, por favor envía el comprobante por WhatsApp para confirmar tu reservación.'
+                  }
                 </p>
               </div>
 
