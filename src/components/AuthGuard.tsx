@@ -39,7 +39,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
 
     // Si está autenticado e intenta ir a /login, redirigir a su panel por defecto
-    if (isPublicRoute) {
+    if (pathname === '/login') {
       if (stored === 'admin') router.replace('/');
       else if (stored === 'recepcion') router.replace('/recepcion');
       else router.replace('/staff');
