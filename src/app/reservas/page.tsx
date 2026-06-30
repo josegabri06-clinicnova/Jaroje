@@ -128,6 +128,13 @@ async function compressImage(file: File): Promise<string> {
   });
 }
 
+function isReservationNew(r: any): boolean {
+  if (!r || r.is_acknowledged || r.status === 'cancelled') return false;
+  const isDirect = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
+  const hasNoDeposit = !r.deposit || Number(r.deposit) === 0;
+  return !(isDirect && hasNoDeposit);
+}
+
 export default function ReservasList() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
@@ -1614,7 +1621,7 @@ export default function ReservasList() {
       r.id?.toString().includes(search);
     
     let matchTab = true;
-    if (activeTab === 'Nuevas') matchTab = !r.is_acknowledged;
+    if (activeTab === 'Nuevas') matchTab = isReservationNew(r);
     else if (activeTab === 'Sin Anticipo') {
       const isDirectChannel = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
       matchTab = isDirectChannel && (!r.deposit || r.deposit === 0);
@@ -1740,7 +1747,7 @@ export default function ReservasList() {
         {TABS.map(t => {
           const isNuevas = t === 'Nuevas';
           const isSinAnticipo = t === 'Sin Anticipo';
-          const nuevasCount = activeReservas.filter(r => !r.is_acknowledged).length;
+          const nuevasCount = activeReservas.filter(isReservationNew).length;
           const sinAnticipoCount = activeReservas.filter(r => {
             const isDirectChannel = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
             return isDirectChannel && (!r.deposit || r.deposit === 0);
@@ -1821,7 +1828,7 @@ export default function ReservasList() {
                         <h3 className="font-semibold text-zinc-900 text-[14px] leading-tight">
                           {r.guest_name} <span className="text-zinc-500 font-medium text-[11px]">({r.num_adult || 1}A{Number(r.num_child) > 0 ? ` / ${r.num_child}N` : ''})</span>
                         </h3>
-                        {!r.is_acknowledged && r.status !== 'cancelled' && (
+                        {isReservationNew(r) && (
                           <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-150 animate-pulse">
                             NUEVA 🆕
                           </span>
@@ -1897,7 +1904,7 @@ export default function ReservasList() {
 
                 <StatusBadge status={r.status} isCheckedIn={r.is_checked_in} isCheckedOut={r.is_checked_out} />
 
-                {!r.is_acknowledged && r.status !== 'cancelled' && (
+                {isReservationNew(r) && (
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
@@ -3134,7 +3141,7 @@ export default function ReservasList() {
             
             {/* Acción Botón */}
             <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
-              {selectedRes.status !== 'cancelled' && !selectedRes.is_acknowledged && (
+              {isReservationNew(selectedRes) && (
                 <button
                   onClick={handleAcknowledgeReserva}
                   disabled={ackLoading}

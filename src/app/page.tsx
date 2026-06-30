@@ -429,8 +429,8 @@ export default function AdminDashboard() {
       {/* Token error banner */}
       {tokenError && (
         <div className={`border rounded-2xl p-4 space-y-3 ${tokenError === 'REFRESH_TOKEN_EXPIRED'
-            ? 'bg-rose-50 border-rose-200'
-            : 'bg-amber-50 border-amber-200'
+          ? 'bg-rose-50 border-rose-200'
+          : 'bg-amber-50 border-amber-200'
           }`}>
           <div className="flex items-start gap-3">
             <AlertCircle size={16} className={`shrink-0 mt-0.5 ${tokenError === 'REFRESH_TOKEN_EXPIRED' ? 'text-rose-600' : 'text-amber-600'}`} />
