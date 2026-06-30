@@ -1534,7 +1534,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Nav controls */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="sticky top-[66px] z-20 bg-[#fafafa]/95 backdrop-blur-md py-2 px-1 -mx-1 border-b border-zinc-200/60 flex items-center justify-between h-[48px] mb-3">
         <div className="flex items-center gap-2">
           <button onClick={goBack}
             className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 rounded-lg hover:bg-zinc-50 active:scale-95 transition-all shadow-sm">
@@ -1578,14 +1578,14 @@ export default function CalendarPage() {
       </div>
 
       {/* ── GANTT GRID ────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm">
 
         {/* Date header row */}
-        <div className="flex border-b border-zinc-100">
+        <div className="flex border-b border-zinc-100 sticky top-[114px] z-10 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           {/* Room label column header */}
-          <div className="w-[52px] shrink-0 border-r border-zinc-100 bg-zinc-50" />
+          <div className="w-[52px] shrink-0 border-r border-zinc-100 bg-zinc-50 rounded-tl-2xl" />
           {/* Day columns */}
-          <div className="flex-1 grid overflow-x-auto" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
+          <div className="flex-1 grid overflow-x-auto rounded-tr-2xl bg-white" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
             {days.map((d, i) => {
               const today = isToday(d);
               return (
@@ -1603,46 +1603,50 @@ export default function CalendarPage() {
         </div>
 
         {/* Room rows grouped by category */}
-        {ROOM_GROUPS.map(group => (
-          <div key={group.label}>
-            {/* Group header */}
-            <div className="flex border-b border-zinc-100 bg-zinc-50/70">
-              <div
-                className="w-[52px] shrink-0 border-r border-zinc-100 flex flex-col items-center justify-center py-1.5 leading-none"
-                style={{ backgroundColor: group.bg }}
-              >
-                <span className="text-[8px] font-black uppercase tracking-wider text-center" style={{ color: group.color }}>
-                  {group.label.replace(' ', '\n')}
-                </span>
-                {group.isLocal && (
-                  <span className="text-[6px] font-extrabold bg-purple-100 text-purple-700 border border-purple-200 px-1 py-0.5 rounded mt-0.5 uppercase tracking-wide">
-                    Local
+        {ROOM_GROUPS.map((group, groupIdx) => {
+          const isLastGroup = groupIdx === ROOM_GROUPS.length - 1;
+          return (
+            <div key={group.label}>
+              {/* Group header */}
+              <div className="flex border-b border-zinc-100 bg-zinc-50/70">
+                <div
+                  className="w-[52px] shrink-0 border-r border-zinc-100 flex flex-col items-center justify-center py-1.5 leading-none"
+                  style={{ backgroundColor: group.bg }}
+                >
+                  <span className="text-[8px] font-black uppercase tracking-wider text-center" style={{ color: group.color }}>
+                    {group.label.replace(' ', '\n')}
                   </span>
-                )}
-              </div>
-              <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
-                {days.map((_, i) => (
-                  <div key={i} className={`border-r border-zinc-100 last:border-r-0 h-6 ${isToday(days[i]) ? 'bg-blue-50/40' : ''}`} />
-                ))}
-              </div>
-            </div>
-
-            {/* Rooms in group */}
-            {group.rooms.map(room => (
-              <div key={room} className="flex border-b border-zinc-100 last:border-b-0">
-                {/* Room label */}
-                <div
-                  className="w-[52px] shrink-0 border-r border-zinc-100 flex items-center justify-center"
-                  style={{ backgroundColor: group.bg + '80' }}
-                >
-                  <span className="text-[11px] font-black" style={{ color: group.color }}>{room}</span>
+                  {group.isLocal && (
+                    <span className="text-[6px] font-extrabold bg-purple-100 text-purple-700 border border-purple-200 px-1 py-0.5 rounded mt-0.5 uppercase tracking-wide">
+                      Local
+                    </span>
+                  )}
                 </div>
+                <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
+                  {days.map((_, i) => (
+                    <div key={i} className={`border-r border-zinc-100 last:border-r-0 h-6 ${isToday(days[i]) ? 'bg-blue-50/40' : ''}`} />
+                  ))}
+                </div>
+              </div>
 
-                {/* Day cells */}
-                <div
-                  className="flex-1 grid"
-                  style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}
-                >
+              {/* Rooms in group */}
+              {group.rooms.map((room, roomIdx) => {
+                const isLastRoom = roomIdx === group.rooms.length - 1;
+                return (
+                  <div key={room} className={`flex border-b border-zinc-100 last:border-b-0 ${isLastGroup && isLastRoom ? 'rounded-b-2xl' : ''}`}>
+                    {/* Room label */}
+                    <div
+                      className={`w-[52px] shrink-0 border-r border-zinc-100 flex items-center justify-center ${isLastGroup && isLastRoom ? 'rounded-bl-2xl' : ''}`}
+                      style={{ backgroundColor: group.bg + '80' }}
+                    >
+                      <span className="text-[11px] font-black" style={{ color: group.color }}>{room}</span>
+                    </div>
+
+                    {/* Day cells */}
+                    <div
+                      className={`flex-1 grid ${isLastGroup && isLastRoom ? 'rounded-br-2xl' : ''}`}
+                      style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}
+                    >
                   {dayStrings.map((ds, i) => {
                     const booking = getBookingForRoomDay(reservas, room, ds);
                     const isArrival = booking?.check_in === ds;
