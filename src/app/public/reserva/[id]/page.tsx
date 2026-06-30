@@ -15,7 +15,8 @@ import {
   Users,
   Compass,
   AlertTriangle,
-  Upload
+  Upload,
+  Loader2
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
