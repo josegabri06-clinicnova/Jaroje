@@ -110,11 +110,38 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta ID de la reserva o archivo' }, { status: 400 });
     }
 
-    // 1. Obtener la extensión del archivo
+    const bookingId = Number(id);
+
+    // 1. Buscar detalles de la reservación para evitar violar restricciones NOT NULL de la base de datos
+    let checkInDate = null;
+    let checkOutDate = null;
+    let guestName = 'Huésped';
+
+    const { data: localRes } = await supabase
+      .from('local_reservas')
+      .select('*')
+      .eq('id', bookingId)
+      .maybeSingle();
+
+    if (localRes) {
+      checkInDate = localRes.check_in;
+      checkOutDate = localRes.check_out;
+      guestName = localRes.guest_name;
+    } else {
+      const allBeds24 = await getBeds24Bookings(true);
+      const booking = allBeds24.find(r => r.id === bookingId);
+      if (booking) {
+        checkInDate = booking.check_in;
+        checkOutDate = booking.check_out;
+        guestName = booking.guest_name;
+      }
+    }
+
+    // 2. Obtener la extensión del archivo
     const fileExt = file.name.split('.').pop() || 'jpg';
     const filePath = `${id}_${Date.now()}.${fileExt}`;
 
-    // 2. Subir directamente como File/Blob a Supabase Storage
+    // 3. Subir directamente como File/Blob a Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('payment_receipts')
       .upload(filePath, file, {
@@ -127,14 +154,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al subir comprobante a storage: ' + uploadError.message }, { status: 500 });
     }
 
-    // 3. Obtener URL pública
+    // 4. Obtener URL pública del archivo
     const { data: urlData } = supabase.storage
       .from('payment_receipts')
       .getPublicUrl(filePath);
 
     const publicUrl = urlData.publicUrl;
 
-    // 4. Actualizar en la tabla 'checkins' de Supabase
+    // 5. Actualizar o insertar en la tabla 'checkins' de Supabase
     const { data: existingCheckin } = await supabase
       .from('checkins')
       .select('*')
@@ -145,7 +172,9 @@ export async function POST(req: Request) {
       .from('checkins')
       .upsert({
         reservation_id: id,
-        guest_name: existingCheckin?.guest_name || 'Huésped',
+        guest_name: existingCheckin?.guest_name || guestName,
+        check_in_date: existingCheckin?.check_in_date || checkInDate || new Date().toISOString().split('T')[0],
+        check_out_date: existingCheckin?.check_out_date || checkOutDate || new Date().toISOString().split('T')[0],
         receipt_url: publicUrl,
         status: existingCheckin?.status || 'pending'
       }, { onConflict: 'reservation_id' });
