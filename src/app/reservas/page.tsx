@@ -2006,45 +2006,54 @@ export default function ReservasList() {
                         className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
-                        <select
-                          value={editAdults}
-                          onChange={e => setEditAdults(Number(e.target.value))}
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
-                        >
-                          {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
-                        <select
-                          value={editChildren}
-                          onChange={e => setEditChildren(Number(e.target.value))}
-                          className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
-                        >
-                          {[0,1,2,3,4,5,6,7,8].map(n => (
-                            <option key={n} value={n}>{n}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    {selectedRes && (() => {
-                      const rules = getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined);
+                    {(() => {
+                      const rules = selectedRes 
+                        ? getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined)
+                        : { base: 6, max: 8 };
                       const total = editAdults + editChildren;
                       const isOver = total > rules.max;
+                      
+                      // Generar dinámicamente las opciones hasta la máxima capacidad de la habitación o lo que tenga seleccionado la reserva actual
+                      const maxAdultOptions = Math.max(16, rules.max, editAdults);
+                      const maxChildOptions = Math.max(10, rules.max, editChildren);
+
                       return (
-                        <div className={`text-[11px] font-bold mt-1 pl-0.5 ${isOver ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`}>
-                          {isOver 
-                            ? `⚠️ Límite excedido. Máximo permitido para la habitación ${selectedRes.room_name || 'seleccionada'}: ${rules.max} personas.` 
-                            : rules.max > rules.base
-                              ? `✓ Capacidad permitida. Incluidas: ${rules.base} · Adicionales con cargo: ${rules.max - rules.base} (Máx: ${rules.max} personas).`
-                              : `✓ Capacidad permitida: ${rules.max} personas (sin cargos adicionales).`}
-                        </div>
+                        <>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
+                              <select
+                                value={editAdults}
+                                onChange={e => setEditAdults(Number(e.target.value))}
+                                className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
+                              >
+                                {Array.from({ length: maxAdultOptions }, (_, i) => i + 1).map(n => (
+                                  <option key={n} value={n}>{n}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
+                              <select
+                                value={editChildren}
+                                onChange={e => setEditChildren(Number(e.target.value))}
+                                className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
+                              >
+                                {Array.from({ length: maxChildOptions + 1 }, (_, i) => i).map(n => (
+                                  <option key={n} value={n}>{n}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className={`text-[11px] font-bold mt-1 pl-0.5 ${isOver ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`}>
+                            {isOver 
+                              ? `⚠️ Límite excedido. Máximo permitido para la habitación ${selectedRes?.room_name || 'seleccionada'}: ${rules.max} personas.` 
+                              : rules.max > rules.base
+                                ? `✓ Capacidad permitida. Incluidas: ${rules.base} · Adicionales con cargo: ${rules.max - rules.base} (Máx: ${rules.max} personas).`
+                                : `✓ Capacidad permitida: ${rules.max} personas (sin cargos adicionales).`}
+                          </div>
+                        </>
                       );
                     })()}
 

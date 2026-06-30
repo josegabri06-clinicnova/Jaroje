@@ -1094,11 +1094,11 @@ export function getCapacityRules(
   if (r === '679091' || r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206')) {
     return { base: 6, max: 8 };
   }
-  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
-    return { base: 10, max: 12 };
-  }
   if (r === '679093' || r.includes('casa') || r.includes('401')) {
     return { base: 12, max: 16 };
+  }
+  if (r === '679092' || r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107')) {
+    return { base: 10, max: 12 };
   }
   return { base: 6, max: 8 }; // default fallback
 }
