@@ -14,7 +14,8 @@ import {
   HelpCircle,
   Users,
   Compass,
-  AlertTriangle
+  AlertTriangle,
+  Upload
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -29,6 +30,46 @@ export default function PublicReservaPage() {
 
   const [copiedClabe, setCopiedClabe] = useState(false);
   const [copiedConcept, setCopiedConcept] = useState(false);
+
+  // Estados para carga de comprobante
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setSelectedFile(e.target.files[0]);
+      setUploadError(null);
+    }
+  };
+
+  const handleUploadReceipt = async () => {
+    if (!selectedFile || !id) return;
+    setUploading(true);
+    setUploadError(null);
+
+    const formData = new FormData();
+    formData.append('id', String(id));
+    formData.append('file', selectedFile);
+
+    try {
+      const res = await fetch('/api/public/reserva', {
+        method: 'POST',
+        body: formData
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setUploadedUrl(json.receiptUrl);
+      } else {
+        setUploadError(json.error || 'Ocurrió un error al subir el comprobante.');
+      }
+    } catch (e) {
+      setUploadError('Error de red al intentar subir el archivo.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -281,21 +322,78 @@ export default function PublicReservaPage() {
                 </button>
               </div>
 
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-850 flex gap-2">
-                <Users size={16} className="shrink-0 mt-0.5 text-amber-700" />
-                <p className="leading-relaxed">
-                  <strong>Importante:</strong> {esConfirmada 
-                    ? 'Si realizas una transferencia para liquidar tu saldo, por favor envía el comprobante por WhatsApp para registrarlo en tu cuenta.'
-                    : 'Si realizas una transferencia o depósito, por favor envía el comprobante por WhatsApp para confirmar tu reservación.'
-                  }
-                </p>
+              {/* Carga de Comprobante */}
+              <div className="bg-[#FAF9F6] border border-zinc-200/70 rounded-xl p-4 text-xs space-y-3">
+                <span className="text-[10px] font-extrabold uppercase text-indigo-650 tracking-wider block">Adjuntar tu comprobante de pago</span>
+                
+                {uploadedUrl ? (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center space-y-2">
+                    <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+                      <Check size={20} />
+                    </div>
+                    <span className="text-emerald-800 font-bold block">¡Comprobante guardado con éxito!</span>
+                    <p className="text-[10.5px] text-emerald-650 leading-relaxed">
+                      El comprobante se ha guardado en tu reserva. Por favor presiona el botón de abajo para enviárselo al administrador por WhatsApp.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3.5">
+                    <label className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 rounded-xl py-5 px-3 hover:bg-zinc-50 transition-all cursor-pointer">
+                      <Upload size={24} className="text-zinc-400 mb-1.5" />
+                      <span className="text-[11.5px] text-zinc-650 font-semibold text-center">
+                        {selectedFile ? selectedFile.name : 'Seleccionar o fotografiar comprobante'}
+                      </span>
+                      <span className="text-[9.5px] text-zinc-400 mt-0.5">(Imágenes o PDF)</span>
+                      <input 
+                        type="file" 
+                        accept="image/*,application/pdf" 
+                        onChange={handleFileChange} 
+                        className="hidden" 
+                        disabled={uploading}
+                      />
+                    </label>
+
+                    {selectedFile && !uploadedUrl && (
+                      <button
+                        onClick={handleUploadReceipt}
+                        disabled={uploading}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:bg-indigo-400"
+                      >
+                        {uploading ? (
+                          <>
+                            <Loader2 size={16} className="animate-spin" />
+                            Subiendo archivo...
+                          </>
+                        ) : (
+                          <>
+                            <Upload size={16} />
+                            Subir y Guardar Comprobante
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {uploadError && (
+                      <div className="text-rose-600 font-bold text-center text-[10.5px]">
+                        ⚠️ {uploadError}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
+              {/* Botón de WhatsApp dinámico */}
               <a 
-                href={`https://wa.me/529581168698?text=Hola,%20envío%20el%20comprobante%20de%20mi%20reserva%20${booking.id}`} 
+                href={
+                  uploadedUrl 
+                    ? `https://wa.me/529581168698?text=Hola,%20acabo%20de%20subir%20el%20comprobante%20de%20mi%20reserva%20${booking.id}.%20Puedes%20verlo%20aquí:%20${encodeURIComponent(uploadedUrl)}`
+                    : `https://wa.me/529581168698?text=Hola,%20envío%20el%20comprobante%20de%20mi%20reserva%20${booking.id}`
+                } 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="w-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-sm py-3 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className={`w-full text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  uploadedUrl ? 'bg-[#25D366] hover:bg-[#20ba5a]' : 'bg-[#25D366]/80 hover:bg-[#20ba5a]/80'
+                }`}
               >
                 Enviar Comprobante por WhatsApp
               </a>
