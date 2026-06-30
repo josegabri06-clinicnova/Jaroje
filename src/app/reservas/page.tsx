@@ -797,6 +797,26 @@ export default function ReservasList() {
       });
 
       alert('¡Check-in realizado con éxito!');
+
+      // Enviar mensaje de bienvenida por WhatsApp en segundo plano (Mensaje 5)
+      const phoneNum = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
+      if (phoneNum) {
+        fetch('/api/whatsapp/send-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            template: 'bienvenida_checkin',
+            booking: {
+              ...selectedRes,
+              is_checked_in: true,
+              document_url: document_url,
+              deposit: newDepositVal,
+              balance: newBalanceVal
+            }
+          })
+        }).catch(err => console.error("Error al enviar WhatsApp de bienvenida:", err));
+      }
+
       fetchReservas(); // Refrescar base de datos en segundo plano
     } catch (error) {
       console.error(error);
@@ -1449,8 +1469,7 @@ export default function ReservasList() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              phone: phoneNum,
-              guestName: targetRes.guest_name
+              booking: targetRes
             })
           });
           const waData = await waRes.json();

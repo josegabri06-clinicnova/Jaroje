@@ -1,15 +1,10 @@
 import { NextResponse } from 'next/server';
+import { sendTemplate3_ReservacionConfirmada } from '@/lib/whatsapp';
 
 export async function POST(req: Request) {
   try {
-    const { phone, guestName } = await req.json();
-
-    if (!phone || !guestName) {
-      return NextResponse.json({
-        success: false,
-        error: 'Faltan parámetros requeridos: phone, guestName'
-      }, { status: 400 });
-    }
+    const body = await req.json();
+    const { booking, phone, guestName } = body;
 
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
@@ -21,68 +16,45 @@ export async function POST(req: Request) {
       }, { status: 500 });
     }
 
-    // Limpiar y formatear el número de teléfono
-    let cleanedPhone = phone.replace(/\D/g, '');
-    if (cleanedPhone.length === 10) {
-      cleanedPhone = '52' + cleanedPhone;
-    } else if (cleanedPhone.startsWith('521') && cleanedPhone.length === 13) {
-      cleanedPhone = '52' + cleanedPhone.slice(3);
+    if (booking) {
+      const res = await sendTemplate3_ReservacionConfirmada(booking);
+      if (!res.success) {
+        return NextResponse.json({ success: false, error: res.error }, { status: 500 });
+      }
+      return NextResponse.json({ success: true, message: 'WhatsApp enviado con éxito', data: res.data });
     }
 
-    if (!cleanedPhone) {
+    // Fallback si solo envían datos de contacto básicos
+    if (!phone || !guestName) {
       return NextResponse.json({
         success: false,
-        error: 'Formato de teléfono no válido'
+        error: 'Faltan parámetros requeridos: booking o (phone, guestName)'
       }, { status: 400 });
     }
 
-    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
-    const payload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: cleanedPhone,
-      type: 'template',
-      template: {
-        name: 'presentacion_cliente_jaroje_2',
-        language: { code: 'es_MX' },
-        components: [
-          {
-            type: 'body',
-            parameters: [
-              {
-                type: 'text',
-                text: guestName
-              }
-            ]
-          }
-        ]
-      }
+    const dummyBooking = {
+      phone,
+      guest_name: guestName,
+      id: 'N/A',
+      room_name: 'Habitación Jaroje',
+      check_in: new Date().toISOString().split('T')[0],
+      check_out: new Date().toISOString().split('T')[0],
+      price: 0,
+      deposit: 0,
+      nights: 1,
+      num_adult: 1,
+      num_child: 0
     };
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const status = response.status;
-    const resBody = await response.json();
-
-    if (status !== 200) {
-      console.error("Meta API error:", resBody);
-      return NextResponse.json({
-        success: false,
-        error: resBody.error?.message || 'Error de la API de Meta'
-      }, { status: 500 });
+    const res = await sendTemplate3_ReservacionConfirmada(dummyBooking);
+    if (!res.success) {
+      return NextResponse.json({ success: false, error: res.error }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
-      message: 'WhatsApp enviado con éxito',
-      data: resBody
+      message: 'WhatsApp enviado con éxito (fallback)',
+      data: res.data
     });
 
   } catch (err: any) {

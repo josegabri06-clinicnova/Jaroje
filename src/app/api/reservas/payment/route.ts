@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token } from '@/lib/beds24';
+import { getBeds24Token, getBeds24Bookings } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
+import { sendTemplate3_ReservacionConfirmada } from '@/lib/whatsapp';
 
 // POST: Registrar un cobro/pago en Beds24 asociado a una reserva o localmente en Supabase
 export async function POST(req: Request) {
@@ -33,6 +34,35 @@ export async function POST(req: Request) {
       if (updateErr) {
         console.error("Error al registrar pago en local_reservas:", updateErr);
         throw new Error(`Error en base de datos local: ${updateErr.message}`);
+      }
+
+      // Enviar confirmación por WhatsApp en segundo plano
+      if (localRes.phone) {
+        (async () => {
+          try {
+            const UNIT_TO_ROOM: Record<string, string> = {
+              '1': '500', '2': '501', '3': '502', '4': '503',
+              '5': '504', '6': '505', '7': '506', '8': '507'
+            };
+            const physicalName = localRes.unit_id ? (UNIT_TO_ROOM[String(localRes.unit_id)] || String(localRes.unit_id)) : '';
+            const bookingForWA = {
+              id: localRes.id,
+              guest_name: localRes.guest_name,
+              phone: localRes.phone,
+              room_name: `Habitación ${physicalName}`,
+              check_in: localRes.check_in,
+              check_out: localRes.check_out,
+              price: Number(localRes.price || 0),
+              deposit: newDeposit, // nuevo depósito acumulado
+              nights: Math.max(1, Math.round((new Date(localRes.check_out).getTime() - new Date(localRes.check_in).getTime()) / (1000 * 60 * 60 * 24))),
+              num_adult: Number(localRes.num_adult || 1),
+              num_child: Number(localRes.num_child || 0)
+            };
+            await sendTemplate3_ReservacionConfirmada(bookingForWA);
+          } catch (waErr) {
+            console.error("Error enviando WhatsApp en payment local:", waErr);
+          }
+        })();
       }
 
       return NextResponse.json({ 
@@ -72,6 +102,19 @@ export async function POST(req: Request) {
     }
 
     const dataB24 = await beds24Response.json();
+
+    // Enviar confirmación por WhatsApp en segundo plano para Beds24
+    (async () => {
+      try {
+        const allBookings = await getBeds24Bookings(true);
+        const booking = allBookings.find(r => r.id === Number(bookId));
+        if (booking && (booking.phone || booking.mobile || booking.guest_phone)) {
+          await sendTemplate3_ReservacionConfirmada(booking);
+        }
+      } catch (waErr) {
+        console.error("Error enviando WhatsApp en payment Beds24:", waErr);
+      }
+    })();
 
     return NextResponse.json({ 
       success: true, 
