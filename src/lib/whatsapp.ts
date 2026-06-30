@@ -30,14 +30,10 @@ export function formatCurrency(amount: number | string): string {
   return num.toLocaleString('es-MX', { maximumFractionDigits: 0 });
 }
 
-// Retorna el enlace de fotos/guía según la habitación
-export function getRoomGuideLink(roomName: string): string {
-  // Por defecto, se usa el Google Drive con fotos, reglamento y directorio provisto por el cliente
-  return 'https://drive.google.com/drive/folders/1f03zp9bblMC-AtY2RkRyYHq-ugl-OyKl';
+// Obtener el enlace del sitio de producción
+function getSiteUrl(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
 }
-
-const STRIPE_DEFAULT_LINK = process.env.STRIPE_PAYMENT_LINK || 'https://buy.stripe.com/test_ejemplo_jaroje_123';
-const ACCESO_LLEGADA_LINK = 'https://drive.google.com/drive/folders/1f03zp9bblMC-AtY2RkRyYHq-ugl-OyKl';
 
 // Envía una plantilla genérica de WhatsApp llamando a Meta Cloud API
 export async function sendWhatsAppTemplate(
@@ -109,28 +105,19 @@ function getFirstName(fullName: string): string {
   return fullName.trim().split(' ')[0];
 }
 
+// Retorna el enlace de la página pública de detalles de la reserva
+function getPublicReservaLink(bookingId: string | number): string {
+  return `${getSiteUrl()}/public/reserva/${bookingId}`;
+}
+
 // 1. Mensaje 1 - Solicitud de reservación recibida
 export async function sendTemplate1_SolicitudRecibida(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
-  const total = Number(booking.price || booking.price_estimate || 0);
-  const depositRequired = Math.round(total * 0.5);
-
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre corto
-    booking.guest_name,                // {{2}} Nombre completo
-    String(booking.id),                // {{3}} NúmeroReservación
-    booking.room_name || 'Alojamiento Jaroje', // {{4}} TipoAlojamiento
-    formatDateStr(booking.check_in),   // {{5}} FechaEntrada
-    formatDateStr(booking.check_out),  // {{6}} FechaSalida
-    String(booking.nights || 1),       // {{7}} Noches
-    String(Number(booking.num_adult || 1) + Number(booking.num_child || 0)), // {{8}} Huéspedes
-    formatCurrency(total),             // {{9}} Total
-    formatCurrency(depositRequired),   // {{10}} Anticipo (50%)
-    STRIPE_DEFAULT_LINK,               // {{11}} Link de pago Stripe
-    String(booking.id),                // {{12}} Concepto (número de reserva)
-    getRoomGuideLink(booking.room_name || '') // {{13}} LinkAlojamiento
+    getPublicReservaLink(booking.id)  // {{2}} Enlace público de detalles y pago
   ];
 
   return sendWhatsAppTemplate(phone, 'solicitud_recibida', params);
@@ -143,8 +130,7 @@ export async function sendTemplate2_UltimoAviso(booking: any) {
 
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre corto
-    STRIPE_DEFAULT_LINK,               // {{2}} LinkPago
-    String(booking.id)                 // {{3}} NúmeroReservación
+    getPublicReservaLink(booking.id)  // {{2}} Enlace público
   ];
 
   return sendWhatsAppTemplate(phone, 'ultimo_aviso', params);
@@ -155,25 +141,9 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
-  const total = Number(booking.price || booking.price_estimate || 0);
-  const deposit = Number(booking.deposit || 0);
-  const balance = Math.max(0, total - deposit);
-  const guestsCount = String(Number(booking.num_adult || 1) + Number(booking.num_child || 0));
-
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre
-    booking.guest_name,                // {{2}} Nombre completo
-    String(booking.id),                // {{3}} NúmeroReservación
-    booking.room_name || 'Alojamiento Jaroje', // {{4}} TipoAlojamiento
-    getRoomGuideLink(booking.room_name || ''), // {{5}} LinkAlojamiento
-    formatDateStr(booking.check_in),   // {{6}} FechaEntrada
-    formatDateStr(booking.check_out),  // {{7}} FechaSalida
-    String(booking.nights || 1),       // {{8}} Noches
-    guestsCount,                       // {{9}} Huéspedes
-    formatCurrency(total),             // {{10}} Total
-    formatCurrency(deposit),           // {{11}} Anticipo recibido
-    formatCurrency(balance),           // {{12}} Saldo pendiente
-    guestsCount                        // {{13}} Huéspedes (repetido)
+    getPublicReservaLink(booking.id)  // {{2}} Enlace público
   ];
 
   return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params);
@@ -184,17 +154,9 @@ export async function sendTemplate4_PreparacionLlegada(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
-  const total = Number(booking.price || booking.price_estimate || 0);
-  const deposit = Number(booking.deposit || 0);
-  const balance = Math.max(0, total - deposit);
-  const guestsCount = String(Number(booking.num_adult || 1) + Number(booking.num_child || 0));
-
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre
-    getRoomGuideLink(booking.room_name || ''), // {{2}} LinkAlojamiento
-    ACCESO_LLEGADA_LINK,               // {{3}} LinkLlegada (Drive con clave/estacionamiento/reglamento)
-    guestsCount,                       // {{4}} Huéspedes
-    formatCurrency(balance)            // {{5}} Saldo pendiente
+    getPublicReservaLink(booking.id)  // {{2}} Enlace público
   ];
 
   return sendWhatsAppTemplate(phone, 'preparacion_llegada', params);
