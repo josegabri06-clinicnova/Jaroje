@@ -20,6 +20,64 @@ import {
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+// Función para comprimir imágenes del lado del cliente
+const compressImage = (file: File): Promise<Blob | File> => {
+  return new Promise((resolve) => {
+    // Si no es una imagen (ej. PDF), no comprimir y retornar archivo original
+    if (!file.type.startsWith('image/')) {
+      resolve(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Dimensiones máximas recomendadas para la web
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Convertir a jpeg con calidad del 70% (reduce un archivo de 5MB a ~200KB)
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            }));
+          } else {
+            resolve(file);
+          }
+        }, 'image/jpeg', 0.7);
+      };
+    };
+    reader.onerror = () => resolve(file);
+  });
+};
+
 export default function PublicReservaPage() {
   const params = useParams();
   const id = params?.id;
@@ -49,11 +107,14 @@ export default function PublicReservaPage() {
     setUploading(true);
     setUploadError(null);
 
-    const formData = new FormData();
-    formData.append('id', String(id));
-    formData.append('file', selectedFile);
-
     try {
+      // Comprimir la imagen antes de subirla
+      const fileToUpload = await compressImage(selectedFile);
+      
+      const formData = new FormData();
+      formData.append('id', String(id));
+      formData.append('file', fileToUpload);
+
       const res = await fetch('/api/public/reserva', {
         method: 'POST',
         body: formData
