@@ -100,49 +100,6 @@ export async function GET(req: Request) {
   }
 }
 
-async function ensureBucketExists() {
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !key) return;
-
-    await fetch(`${supabaseUrl}/storage/v1/bucket`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': key,
-        'Authorization': `Bearer ${key}`,
-      },
-      body: JSON.stringify({ id: 'payment_receipts', name: 'payment_receipts', public: true })
-    });
-  } catch (e) {
-    // Ignorar si ya existe
-  }
-}
-
-async function ensureReceiptUrlColumn() {
-  const sql = `
-  ALTER TABLE public.checkins ADD COLUMN IF NOT EXISTS receipt_url TEXT;
-  `;
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !key) return;
-
-    await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': key,
-        'Authorization': `Bearer ${key}`,
-      },
-      body: JSON.stringify({ query: sql })
-    });
-  } catch (e) {
-    console.error("Error al asegurar columna receipt_url:", e);
-  }
-}
-
 export async function POST(req: Request) {
   try {
     const formData = await req.formData();
@@ -153,36 +110,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Falta ID de la reserva o archivo' }, { status: 400 });
     }
 
-    // 1. Asegurar que el bucket y la columna existen
-    await ensureBucketExists();
-    await ensureReceiptUrlColumn();
-
-    // 2. Convertir archivo a Buffer
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // 1. Obtener la extensión del archivo
     const fileExt = file.name.split('.').pop() || 'jpg';
     const filePath = `${id}_${Date.now()}.${fileExt}`;
 
-    // 3. Subir a Supabase Storage
+    // 2. Subir directamente como File/Blob a Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('payment_receipts')
-      .upload(filePath, buffer, {
+      .upload(filePath, file, {
         contentType: file.type,
         upsert: true
       });
 
     if (uploadError) {
       console.error("Error al subir a storage:", uploadError);
-      return NextResponse.json({ error: 'Fallo al subir archivo a storage' }, { status: 500 });
+      return NextResponse.json({ error: 'Fallo al subir comprobante a storage: ' + uploadError.message }, { status: 500 });
     }
 
-    // 4. Obtener URL pública
+    // 3. Obtener URL pública
     const { data: urlData } = supabase.storage
       .from('payment_receipts')
       .getPublicUrl(filePath);
 
     const publicUrl = urlData.publicUrl;
 
-    // 5. Actualizar en base de datos checkins
+    // 4. Actualizar en la tabla 'checkins' de Supabase
     const { data: existingCheckin } = await supabase
       .from('checkins')
       .select('*')
@@ -200,7 +152,7 @@ export async function POST(req: Request) {
 
     if (dbError) {
       console.error("Error al guardar en base de datos checkins:", dbError);
-      return NextResponse.json({ error: 'Fallo al actualizar la base de datos' }, { status: 500 });
+      return NextResponse.json({ error: 'Fallo al registrar en base de datos: ' + dbError.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true, receiptUrl: publicUrl });
