@@ -27,7 +27,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const stored = localStorage.getItem('jaroje_role') as Role;
     setRole(stored);
 
-    const isPublicRoute = PUBLIC_ROUTES.includes(pathname || '');
+    const isPublicRoute = PUBLIC_ROUTES.includes(pathname || '') || (pathname || '').startsWith('/public');
 
     if (!stored) {
       if (!isPublicRoute) {
@@ -74,6 +74,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   };
 
   if (!checked) return <div className="fixed inset-0 bg-[#fafafa]" />;
+
+  if (pathname?.startsWith('/public')) {
+    return <>{children}</>;
+  }
 
   return (
     <>

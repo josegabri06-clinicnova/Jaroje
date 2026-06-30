@@ -5,6 +5,8 @@ import { AuthGuard } from '@/components/AuthGuard';
 import CopilotWidget from '@/components/CopilotWidget';
 import RealtimeLogNotifier from '@/components/RealtimeLogNotifier';
 
+import { LayoutWrapper } from '@/components/LayoutWrapper';
+
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
@@ -39,9 +41,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${inter.className} bg-[#fafafa] text-zinc-900 min-h-screen flex flex-col selection:bg-zinc-200 overscroll-none`}>
         <AuthGuard>
           <RealtimeLogNotifier />
-          <main className="flex-1 w-full max-w-md mx-auto pb-[calc(100px+env(safe-area-inset-bottom))] pt-5 px-5">
+          <LayoutWrapper>
             {children}
-          </main>
+          </LayoutWrapper>
           <BottomNav />
           <CopilotWidget />
         </AuthGuard>

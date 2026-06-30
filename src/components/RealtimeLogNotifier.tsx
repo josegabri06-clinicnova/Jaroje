@@ -20,9 +20,14 @@ interface ActiveNotification {
   destinationUrl?: string;
 }
 
+import { usePathname } from 'next/navigation';
+
 export default function RealtimeLogNotifier() {
+  const pathname = usePathname();
   const [notification, setNotification] = useState<ActiveNotification | null>(null);
   const router = useRouter();
+
+  if (pathname?.startsWith('/public')) return null;
   
   // Set en memoria para rastrear notificaciones ya reproducidas y evitar bucles
   const notifiedKeys = useRef<Set<string>>(new Set());

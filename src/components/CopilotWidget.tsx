@@ -5,9 +5,14 @@ import { useChat } from "ai/react";
 import { Bot, X, Send, Sparkles, Loader2, User, ShieldAlert, KeyRound, CheckCircle2, Lock, ArrowRight } from "lucide-react";
 import { validatePinAsync } from "@/lib/auth";
 
+import { usePathname } from "next/navigation";
+
 export default function CopilotWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+
+  if (pathname?.startsWith('/public')) return null;
   const [panelOpen, setPanelOpen] = useState(false);
   
   // PIN de sesión en memoria reactiva

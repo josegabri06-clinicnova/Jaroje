@@ -40,7 +40,7 @@ export function BottomNav() {
     };
   }, []);
 
-  if (role === 'loading' || pathname === '/login' || keyboardOpen) return null;
+  if (role === 'loading' || pathname === '/login' || keyboardOpen || pathname?.startsWith('/public')) return null;
 
 
   if (role === 'staff_limpieza' || role === 'staff_mantenimiento' || role === 'recepcion') {
