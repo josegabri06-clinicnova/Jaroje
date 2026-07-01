@@ -308,47 +308,45 @@ export async function POST(req: Request) {
 
     const dataB24 = await beds24Response.json();
     
-    // Validar errores individuales en el array de respuesta de Beds24 v2
-    if (dataB24 && Array.isArray(dataB24.data)) {
-      const firstResult = dataB24.data[0];
-      if (firstResult && firstResult.success === false) {
-        const errorMsg = firstResult.errors 
-          ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
-          : firstResult.message || 'Error individual en Beds24';
-        return NextResponse.json({ error: `Beds24 rechazó la reserva: ${errorMsg}` }, { status: 400 });
-      }
+    // Validar errores individuales en el array de respuesta de Beds24 v2 (soporta array directo u objeto con campo data)
+    const resultsArray = Array.isArray(dataB24) ? dataB24 : (dataB24 && Array.isArray(dataB24.data) ? dataB24.data : []);
+    const firstResult = resultsArray[0];
+
+    if (firstResult && firstResult.success === false) {
+      const errorMsg = firstResult.errors 
+        ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+        : firstResult.message || 'Error individual en Beds24';
+      return NextResponse.json({ error: `Beds24 rechazó la reserva: ${errorMsg}` }, { status: 400 });
     }
 
     // Enviar WhatsApp en segundo plano para Beds24
-    if (!isBlock && phone && dataB24 && Array.isArray(dataB24.data)) {
-      const firstResult = dataB24.data[0];
-      if (firstResult && firstResult.id) {
-        (async () => {
-          try {
-            const physicalName = unitId ? (UNIT_TO_ROOM[String(unitId)] || String(unitId)) : '';
-            const bookingForWA = {
-              id: firstResult.id,
-              guest_name: guestName || 'Huésped',
-              phone: phone,
-              room_name: `Habitación ${physicalName}`,
-              check_in: checkIn,
-              check_out: checkOut,
-              price: price ? Number(price) : 0,
-              deposit: deposit ? Number(deposit) : 0,
-              nights: Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24))),
-              num_adult: numAdult ? Number(numAdult) : 1,
-              num_child: numChild ? Number(numChild) : 0
-            };
-            if (bookingForWA.deposit > 0) {
-              await sendTemplate3_ReservacionConfirmada(bookingForWA);
-            } else {
-              await sendTemplate1_SolicitudRecibida(bookingForWA);
-            }
-          } catch (waErr) {
-            console.error("Error en WhatsApp Beds24:", waErr);
+    const bookingId = firstResult ? (firstResult.id || firstResult.bookId) : null;
+    if (!isBlock && phone && bookingId) {
+      (async () => {
+        try {
+          const physicalName = unitId ? (UNIT_TO_ROOM[String(unitId)] || String(unitId)) : '';
+          const bookingForWA = {
+            id: bookingId,
+            guest_name: guestName || 'Huésped',
+            phone: phone,
+            room_name: `Habitación ${physicalName}`,
+            check_in: checkIn,
+            check_out: checkOut,
+            price: price ? Number(price) : 0,
+            deposit: deposit ? Number(deposit) : 0,
+            nights: Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24))),
+            num_adult: numAdult ? Number(numAdult) : 1,
+            num_child: numChild ? Number(numChild) : 0
+          };
+          if (bookingForWA.deposit > 0) {
+            await sendTemplate3_ReservacionConfirmada(bookingForWA);
+          } else {
+            await sendTemplate1_SolicitudRecibida(bookingForWA);
           }
-        })();
-      }
+        } catch (waErr) {
+          console.error("Error en WhatsApp Beds24:", waErr);
+        }
+      })();
     }
 
     return NextResponse.json({ success: true, message: "Reserva registrada en Beds24.", data: dataB24 });
