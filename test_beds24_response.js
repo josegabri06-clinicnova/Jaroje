@@ -1,38 +1,44 @@
+const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 
-// Intentar leer las credenciales desde .env
-let refreshErr = false;
-let refreshToken = "";
+let supabaseUrl = "";
+let supabaseKey = "";
 
 const envPath = path.resolve(process.cwd(), '.env');
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf8');
-  const tokenMatch = envContent.match(/BEDS24_REFRESH_TOKEN\s*=\s*(.+)/);
-  if (tokenMatch) {
-    refreshToken = tokenMatch[1].replace(/["']/g, '').trim();
+  const urlMatch = envContent.match(/NEXT_PUBLIC_SUPABASE_URL\s*=\s*(.+)/);
+  if (urlMatch) {
+    supabaseUrl = urlMatch[1].replace(/["']/g, '').trim();
+  }
+  const keyMatch = envContent.match(/SUPABASE_SERVICE_ROLE_KEY\s*=\s*(.+)/);
+  if (keyMatch) {
+    supabaseKey = keyMatch[1].replace(/["']/g, '').trim();
   }
 }
 
-if (!refreshToken) {
-  console.error("❌ Error: No se encontró BEDS24_REFRESH_TOKEN en el archivo .env");
+if (!supabaseUrl || !supabaseKey) {
+  console.error("❌ Error: Faltan credenciales de Supabase en .env");
   process.exit(1);
 }
 
+const supabase = createClient(supabaseUrl, supabaseKey);
+
 async function run() {
   try {
-    console.log("🔑 Obteniendo token de acceso temporal de Beds24...");
-    const refreshRes = await fetch('https://api.beds24.com/v2/authentication/token', {
-      method: 'GET',
-      headers: { 'refreshToken': refreshToken }
-    });
-    
-    if (!refreshRes.ok) {
-      throw new Error(`Fallo de autenticación: ${await refreshRes.text()}`);
+    console.log("🔑 Obteniendo token de Beds24 desde la base de datos de Supabase...");
+    const { data: authData, error: authError } = await supabase
+      .from('beds24_auth')
+      .select('temp_token')
+      .maybeSingle();
+
+    if (authError || !authData || !authData.temp_token) {
+      throw new Error(`No se pudo obtener el token de la DB: ${authError?.message || 'Token no encontrado en beds24_auth'}`);
     }
-    
-    const { token } = await refreshRes.json();
-    console.log("✅ Token obtenido con éxito.");
+
+    const token = authData.temp_token;
+    console.log("✅ Token temporal obtenido de Supabase.");
 
     // Creamos una reserva de prueba en la Habitación Doble (roomId: 679091)
     const testPayload = [{
@@ -41,7 +47,7 @@ async function run() {
       departure: "2027-12-02",
       firstName: "Test",
       lastName: "Response Structure",
-      status: "temp", // Estado temporal
+      status: "temp",
       notes: "Prueba de estructura del API Jaroje OS"
     }];
 
@@ -54,7 +60,7 @@ async function run() {
 
     const status = beds24Response.status;
     const bodyText = await beds24Response.text();
-    console.log("=== RESPUESTA RAW DE BEDS24 ===");
+    console.log("\n=== RESPUESTA RAW DE BEDS24 ===");
     console.log("Status Code:", status);
     console.log("Body:", bodyText);
 
