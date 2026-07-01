@@ -2747,6 +2747,22 @@ export default function ReservasList() {
                     </div>
                   )}
 
+                  {/* Documento Adjunto (DNI/Pasaporte) */}
+                  {selectedRes.document_url && (
+                    <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Identificación del Huésped</span>
+                      <a 
+                        href={selectedRes.document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2.5 px-4 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
+                      >
+                        <FileText size={15} className="text-zinc-500" />
+                        <span>Ver DNI / Pasaporte Escaneado ↗</span>
+                      </a>
+                    </div>
+                  )}
+
                   {/* Registrar Anticipo Button & Panel */}
                   {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
                     <div className="mt-3">
@@ -3251,6 +3267,27 @@ export default function ReservasList() {
                 </div>
               ) : (
                 (() => {
+                  if (selectedRes.is_checked_out) {
+                    return (
+                      <div className="flex flex-col gap-2 w-full">
+                        <div className="w-full bg-zinc-100 text-zinc-600 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200">
+                          <CheckCircle2 size={18} className="text-zinc-500" />
+                          <span>Estancia Completada (Checked-Out)</span>
+                        </div>
+                        {selectedRes.document_url && (
+                          <a 
+                            href={selectedRes.document_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 transition-colors shadow-sm"
+                          >
+                            <FileText size={16} /> Ver Documento / Pasaporte
+                          </a>
+                        )}
+                      </div>
+                    );
+                  }
+
                   const todayStr = new Date().toLocaleDateString('sv-SE');
                   const isFuture = selectedRes.check_in && selectedRes.check_in > todayStr;
                   
