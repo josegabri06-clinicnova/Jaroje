@@ -1622,7 +1622,7 @@ export default function CalendarPage() {
           {/* Room label column header */}
           <div className="w-[52px] shrink-0 border-r border-zinc-100 bg-zinc-50 rounded-tl-2xl" />
           {/* Day columns */}
-          <div className="flex-1 grid overflow-x-auto rounded-tr-2xl bg-white" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
+          <div className="flex-1 grid min-w-0 overflow-hidden rounded-tr-2xl bg-white" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
             {days.map((d, i) => {
               const today = isToday(d);
               return (
@@ -1659,7 +1659,7 @@ export default function CalendarPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
+                <div className="flex-1 grid min-w-0 overflow-hidden" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
                   {days.map((_, i) => (
                     <div key={i} className={`border-r border-zinc-100 last:border-r-0 h-6 ${isToday(days[i]) ? 'bg-blue-50/40' : ''}`} />
                   ))}
@@ -1681,7 +1681,7 @@ export default function CalendarPage() {
 
                     {/* Day cells */}
                     <div
-                      className={`flex-1 grid ${isLastGroup && isLastRoom ? 'rounded-br-2xl' : ''}`}
+                      className={`flex-1 grid min-w-0 overflow-hidden ${isLastGroup && isLastRoom ? 'rounded-br-2xl' : ''}`}
                       style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}
                     >
                   {dayStrings.map((ds, i) => {
