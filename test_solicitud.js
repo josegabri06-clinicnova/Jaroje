@@ -19,10 +19,18 @@ if (fs.existsSync(envPath)) {
 }
 
 const targetPhone = process.argv[2];
+const templateName = process.argv[3] || 'solicitud_recibida';
 
 if (!targetPhone) {
   console.log("\n❌ Error: Debes ingresar el número de teléfono (con código de país) para recibir la prueba.");
-  console.log("Ejemplo: node test_solicitud.js 521234567890\n");
+  console.log("Ejemplo: node test_solicitud.js 521234567890 [nombre_plantilla]\n");
+  process.exit(1);
+}
+
+const allowedTemplates = ['solicitud_recibida', 'ultimo_aviso', 'reservacion_confirmada', 'preparacion_llegada'];
+if (!allowedTemplates.includes(templateName)) {
+  console.log(`\n❌ Error: La plantilla '${templateName}' no está en la lista de prueba.`);
+  console.log(`Plantillas permitidas: ${allowedTemplates.join(', ')}\n`);
   process.exit(1);
 }
 
@@ -44,7 +52,7 @@ async function run() {
     to: cleanedPhone,
     type: 'template',
     template: {
-      name: 'solicitud_recibida',
+      name: templateName,
       language: { code: 'es_MX' },
       components: [
         {
@@ -64,7 +72,7 @@ async function run() {
     }
   };
 
-  console.log(`\n📤 Enviando plantilla 'solicitud_recibida' a: ${cleanedPhone}...`);
+  console.log(`\n📤 Enviando plantilla '${templateName}' a: ${cleanedPhone}...`);
 
   try {
     const res = await fetch(url, {
