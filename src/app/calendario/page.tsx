@@ -253,6 +253,10 @@ export default function CalendarPage() {
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Gestos táctiles para deslizar fechas en el calendario
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
   // States for editing reservation
   const [editedGuestName, setEditedGuestName] = useState('');
   const [editedPhone, setEditedPhone] = useState('');
@@ -1469,6 +1473,35 @@ export default function CalendarPage() {
   const goForward = () => setStartDate(d => addDays(d, 7));
   const goToday = () => { const d = subDays(new Date(), 1); d.setHours(0,0,0,0); setStartDate(d); };
 
+  // Manejo de gestos táctiles (Swipe) para avanzar/retroceder fechas en móviles
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+
+    const diffX = touchStartX.current - e.changedTouches[0].clientX;
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+
+    const SWIPE_THRESHOLD = 60;
+
+    // Asegurarse de que sea un movimiento mayormente horizontal y supere el umbral
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > SWIPE_THRESHOLD) {
+      if (diffX > 0) {
+        // Deslizó a la izquierda -> Avanzar fechas
+        goForward();
+      } else {
+        // Deslizó a la derecha -> Retroceder fechas
+        goBack();
+      }
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
 
 
   const handleWalkIn = (room: string, date: Date) => {
@@ -1581,16 +1614,17 @@ export default function CalendarPage() {
 
       {/* ── GANTT GRID ────────────────────────────────────────────────────── */}
       <div 
-        className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm select-none overflow-x-auto"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm select-none overflow-hidden"
       >
-        <div className="min-w-[620px] relative">
 
-          {/* Date header row */}
-          <div className="flex border-b border-zinc-100 sticky top-[114px] z-10 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
-            {/* Room label column header */}
-            <div className="w-[52px] shrink-0 border-r border-zinc-100 bg-zinc-50 rounded-tl-2xl sticky left-0 z-20" />
-            {/* Day columns */}
-            <div className="flex-1 grid min-w-0 overflow-hidden rounded-tr-2xl bg-white" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
+        {/* Date header row */}
+        <div className="flex border-b border-zinc-100 sticky top-[114px] z-10 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+          {/* Room label column header */}
+          <div className="w-[52px] shrink-0 border-r border-zinc-100 bg-zinc-50 rounded-tl-2xl" />
+          {/* Day columns */}
+          <div className="flex-1 grid min-w-0 overflow-hidden rounded-tr-2xl bg-white" style={{ gridTemplateColumns: `repeat(${COLS}, minmax(38px, 1fr))` }}>
               {days.map((d, i) => {
                 const today = isToday(d);
                 return (
@@ -1615,7 +1649,7 @@ export default function CalendarPage() {
                 {/* Group header */}
                 <div className="flex border-b border-zinc-100 bg-zinc-50/70">
                   <div
-                    className="w-[52px] shrink-0 border-r border-zinc-100 flex flex-col items-center justify-center py-1.5 leading-none sticky left-0 z-20"
+                    className="w-[52px] shrink-0 border-r border-zinc-100 flex flex-col items-center justify-center py-1.5 leading-none"
                     style={{ backgroundColor: group.bg }}
                   >
                     <span className="text-[8px] font-black uppercase tracking-wider text-center" style={{ color: group.color }}>
@@ -1641,8 +1675,8 @@ export default function CalendarPage() {
                     <div key={room} className={`flex border-b border-zinc-100 last:border-b-0 ${isLastGroup && isLastRoom ? 'rounded-b-2xl' : ''}`}>
                       {/* Room label */}
                       <div
-                        className={`w-[52px] shrink-0 border-r border-zinc-100 flex items-center justify-center sticky left-0 z-20 ${isLastGroup && isLastRoom ? 'rounded-bl-2xl' : ''}`}
-                        style={{ backgroundColor: group.bg }}
+                        className={`w-[52px] shrink-0 border-r border-zinc-100 flex items-center justify-center ${isLastGroup && isLastRoom ? 'rounded-bl-2xl' : ''}`}
+                        style={{ backgroundColor: group.bg + '80' }}
                       >
                         <span className="text-[11px] font-black" style={{ color: group.color }}>{room}</span>
                       </div>
@@ -1709,7 +1743,6 @@ export default function CalendarPage() {
         </div>
       );
     })}
-        </div>
       </div>
 
       {/* Legend */}
