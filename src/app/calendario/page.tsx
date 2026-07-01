@@ -253,6 +253,10 @@ export default function CalendarPage() {
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Gestos táctiles para deslizar fechas en el calendario
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
   // States for editing reservation
   const [editedGuestName, setEditedGuestName] = useState('');
   const [editedPhone, setEditedPhone] = useState('');
@@ -1469,6 +1473,35 @@ export default function CalendarPage() {
   const goForward = () => setStartDate(d => addDays(d, 7));
   const goToday = () => { const d = subDays(new Date(), 1); d.setHours(0,0,0,0); setStartDate(d); };
 
+  // Manejo de gestos táctiles (Swipe) para avanzar/retroceder fechas en móviles
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+
+    const diffX = touchStartX.current - e.changedTouches[0].clientX;
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+
+    const SWIPE_THRESHOLD = 60;
+
+    // Asegurarse de que sea un movimiento mayormente horizontal y supere el umbral
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > SWIPE_THRESHOLD) {
+      if (diffX > 0) {
+        // Deslizó a la izquierda -> Avanzar fechas
+        goForward();
+      } else {
+        // Deslizó a la derecha -> Retroceder fechas
+        goBack();
+      }
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
   const handleWalkIn = (room: string, date: Date) => {
     const b = ROOM_TO_BEDS24[room];
     if (!b) return;
@@ -1578,7 +1611,11 @@ export default function CalendarPage() {
       </div>
 
       {/* ── GANTT GRID ────────────────────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm">
+      <div 
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm select-none"
+      >
 
         {/* Date header row */}
         <div className="flex border-b border-zinc-100 sticky top-[114px] z-10 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
