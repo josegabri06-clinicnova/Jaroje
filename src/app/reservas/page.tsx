@@ -1076,6 +1076,23 @@ export default function ReservasList() {
       // NOTA: No se llama a /api/reservas/payment porque el PUT ya actualiza el depósito
       // tanto en Beds24 como en local_reservas. Llamar a ambos causaba duplicación ($675 → $1350).
 
+      // Enviar confirmación por WhatsApp en segundo plano al registrar anticipo
+      const phoneNumForWA = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
+      if (phoneNumForWA) {
+        fetch('/api/whatsapp/send-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            template: 'reservacion_confirmada',
+            booking: {
+              ...selectedRes,
+              deposit: newDeposit,
+              balance: Math.max(0, (selectedRes.price_estimate || selectedRes.price || 0) - newDeposit)
+            }
+          })
+        }).catch(err => console.error("Error al enviar WhatsApp de confirmación:", err));
+      }
+
       // Registrar log de anticipo
       try {
         const emp = getActiveEmployee('recepcion');
