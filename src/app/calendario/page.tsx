@@ -1620,7 +1620,7 @@ export default function CalendarPage() {
       >
 
         {/* Date header row */}
-        <div className="flex border-b border-zinc-100 sticky top-[114px] z-10 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
+        <div className="flex border-b border-zinc-100 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
           {/* Room label column header */}
           <div className="w-[52px] shrink-0 border-r border-zinc-100 bg-zinc-50 rounded-tl-2xl" />
           {/* Day columns */}
