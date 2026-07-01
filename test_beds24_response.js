@@ -47,7 +47,7 @@ async function run() {
       departure: "2027-12-02",
       firstName: "Test",
       lastName: "Response Structure",
-      status: "temp",
+      status: "confirmed",
       notes: "Prueba de estructura del API Jaroje OS"
     }];
 
