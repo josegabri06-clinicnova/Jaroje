@@ -319,8 +319,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Beds24 rechazó la reserva: ${errorMsg}` }, { status: 400 });
     }
 
-    // Enviar WhatsApp en segundo plano para Beds24
-    const bookingId = firstResult ? (firstResult.id || firstResult.bookId) : null;
+    // Enviar WhatsApp en segundo plano para Beds24 (busca en la raíz, en el objeto 'new' o en 'info')
+    const bookingId = firstResult
+      ? (firstResult.id || firstResult.bookId || firstResult.new?.id || firstResult.new?.bookId || (firstResult.info && firstResult.info[0]?.id))
+      : null;
     if (!isBlock && phone && bookingId) {
       (async () => {
         try {
