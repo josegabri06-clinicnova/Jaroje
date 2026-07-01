@@ -9,6 +9,8 @@ export function normalizePhone(phone: string): string {
     cleaned = '52' + cleaned;
   } else if (cleaned.startsWith('521') && cleaned.length === 13) {
     cleaned = '52' + cleaned.slice(3);
+  } else if (cleaned.length === 9) {
+    cleaned = '34' + cleaned;
   }
   return cleaned;
 }
