@@ -470,7 +470,7 @@ export default function PublicReservaPage() {
     statusMessage = '¡Bienvenido a Condominios Jaroje! Esperamos que estés disfrutando de tu estancia. Si necesitas algo, nuestro equipo está a tu disposición.';
   } else if (hasPaid && checkInDate && today >= checkInLimit) {
     currentState = 'checkin_pendiente';
-    statusMessage = 'Tu habitación está casi lista. Por favor, completa tu registro y firma digital haciendo clic en el botón de check-in.';
+    statusMessage = 'Tu habitación está casi lista. A tu llegada, el personal de recepción te ayudará a completar tu registro y firma digital de contrato.';
   } else if (hasPaid || isOta) {
     currentState = 'confirmada';
     statusMessage = '¡Tu estancia está confirmada! Todo está listo para tu llegada. Te enviaremos las instrucciones de check-in un día antes de tu entrada.';
