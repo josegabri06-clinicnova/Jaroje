@@ -1616,7 +1616,7 @@ export default function CalendarPage() {
       <div 
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
-        className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm select-none overflow-hidden"
+        className="bg-white rounded-2xl border border-zinc-200/80 shadow-sm select-none"
       >
 
         {/* Date header row */}
