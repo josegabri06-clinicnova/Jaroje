@@ -1070,7 +1070,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
         {
           description,
           qty: -1,
-          price: Number(amount)
+          amount: Number(amount)
         }
       ]
     }

@@ -660,14 +660,14 @@ export async function PUT(req: Request) {
           id: firstCharge.id,
           description: firstCharge.description || "Room Charge",
           qty: 1,
-          price: Number(price)
+          amount: Number(price)
         });
         for (let i = 1; i < charges.length; i++) {
           invoiceItemsUpdate.push({
             id: charges[i].id,
             description: "",
             qty: "",
-            price: "",
+            amount: "",
             status: ""
           });
         }
@@ -675,7 +675,7 @@ export async function PUT(req: Request) {
         invoiceItemsUpdate.push({
           description: "Room Charge",
           qty: 1,
-          price: Number(price)
+          amount: Number(price)
         });
       }
       updatePayload.invoiceItems = invoiceItemsUpdate;
