@@ -292,6 +292,7 @@ export default function PublicReservaPage() {
   const [booking, setBooking] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [paymentSplit, setPaymentSplit] = useState<'50' | '100'>('50');
 
   const [copiedClabe, setCopiedClabe] = useState(false);
   const [copiedConcept, setCopiedConcept] = useState(false);
@@ -665,50 +666,99 @@ export default function PublicReservaPage() {
         </div>
 
         {/* 5. PAGO / CARGA DE COMPROBANTE (Solo cuando aplica saldo pendiente) */}
-        {booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (
-          <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
-            <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-              <CreditCard size={18} className="text-indigo-650" />
-              <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
-                {hasPaid ? 'Liquidar Saldo Pendiente' : 'Formas de Pago'}
-              </h3>
-            </div>
+        {booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (() => {
+          const targetAmount = booking.deposit === 0 
+            ? (paymentSplit === '50' ? booking.price * 0.5 : booking.price)
+            : booking.balance;
 
-            {/* Método 1: Tarjeta */}
-            <div className="space-y-2">
-              <span className="text-[10px] font-extrabold uppercase text-indigo-650 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
-              <a 
-                href="https://link.mercadopago.com.mx/jaroje" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <CreditCard size={18} />
-                Pagar con Mercado Pago
-              </a>
-              <p className="text-[10px] text-zinc-500 italic text-center mt-1">Si realizas tu pago con tarjeta, no es necesario enviar comprobante.</p>
-            </div>
+          return (
+            <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
+              <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
+                <CreditCard size={18} className="text-indigo-650" />
+                <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
+                  {hasPaid ? 'Liquidar Saldo Pendiente' : 'Formas de Pago'}
+                </h3>
+              </div>
 
-            <div className="relative flex py-1 items-center">
-              <div className="flex-grow border-t border-zinc-200"></div>
-              <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">ó</span>
-              <div className="flex-grow border-t border-zinc-200"></div>
-            </div>
+              {/* Selector de Anticipo o Total (solo si no ha abonado nada) */}
+              {booking.deposit === 0 && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-extrabold uppercase text-zinc-400 tracking-wider block">Selecciona el monto a abonar:</span>
+                  <div className="grid grid-cols-2 gap-2 bg-zinc-50 p-1 rounded-xl border border-zinc-200/40 shadow-inner">
+                    <button
+                      onClick={() => setPaymentSplit('50')}
+                      className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${
+                        paymentSplit === '50'
+                          ? 'bg-indigo-650 text-white shadow-md'
+                          : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
+                      }`}
+                    >
+                      <span>Anticipo (50%)</span>
+                      <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '50' ? 'text-indigo-200' : 'text-zinc-500'}`}>
+                        ${(booking.price * 0.5).toLocaleString('es-MX')} MXN
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setPaymentSplit('100')}
+                      className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${
+                        paymentSplit === '100'
+                          ? 'bg-indigo-650 text-white shadow-md'
+                          : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
+                      }`}
+                    >
+                      <span>Total (100%)</span>
+                      <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '100' ? 'text-indigo-200' : 'text-zinc-500'}`}>
+                        ${booking.price.toLocaleString('es-MX')} MXN
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              )}
 
-            {/* Método 2: Transferencia */}
-            <div className="space-y-3 pt-2">
-              <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">Opción 2: Transferencia o Depósito Bancario</span>
-              <a 
-                href={`/public/pago-transferencia?id=${booking.id}&amount=${booking.balance}&name=${encodeURIComponent(booking.guest_name || '')}`}
-                className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <FileText size={18} />
-                Pagar por Transferencia Bancaria
-              </a>
-              <p className="text-[10px] text-zinc-500 italic text-center mt-1">Obtén la cuenta CLABE oficial y reporta tu comprobante de inmediato al panel de staySync.</p>
+              {/* Monto seleccionado explicito */}
+              <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-3.5 text-center">
+                <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider block">Monto a pagar seleccionado</span>
+                <span className="text-xl font-black text-indigo-950">
+                  ${targetAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                </span>
+              </div>
+
+              {/* Método 1: Tarjeta */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-extrabold uppercase text-indigo-650 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
+                <a 
+                  href="https://link.mercadopago.com.mx/jaroje" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <CreditCard size={18} />
+                  Pagar con Mercado Pago
+                </a>
+                <p className="text-[10px] text-zinc-500 italic text-center mt-1">Si realizas tu pago con tarjeta, no es necesario enviar comprobante.</p>
+              </div>
+
+              <div className="relative flex py-1 items-center">
+                <div className="flex-grow border-t border-zinc-200"></div>
+                <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">ó</span>
+                <div className="flex-grow border-t border-zinc-200"></div>
+              </div>
+
+              {/* Método 2: Transferencia */}
+              <div className="space-y-3 pt-2">
+                <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">Opción 2: Transferencia o Depósito Bancario</span>
+                <a 
+                  href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}`}
+                  className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <FileText size={18} />
+                  Pagar por Transferencia Bancaria
+                </a>
+                <p className="text-[10px] text-zinc-500 italic text-center mt-1">Obtén la cuenta CLABE oficial y reporta tu comprobante de inmediato al panel de staySync.</p>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* 6. CARACTERÍSTICAS DEL ALOJAMIENTO */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
