@@ -1064,6 +1064,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
   const payload = [
     {
       bookId: Number(bookId),
+      status: 'confirmed',
       invoiceItems: [
         {
           description,
