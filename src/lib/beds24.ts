@@ -1063,6 +1063,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
   const token = await getBeds24Token();
   const payload = [
     {
+      id: Number(bookId),
       bookId: Number(bookId),
       status: 'confirmed',
       invoiceItems: [
