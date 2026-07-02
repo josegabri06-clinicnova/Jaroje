@@ -13,7 +13,8 @@ import {
   HelpCircle,
   MessageSquare,
   ArrowRight,
-  TrendingUp
+  TrendingUp,
+  Clock
 } from 'lucide-react';
 
 export default function PagoTransferenciaPage() {
