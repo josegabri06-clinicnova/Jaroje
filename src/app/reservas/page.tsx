@@ -1153,15 +1153,18 @@ export default function ReservasList() {
       // Enviar confirmación por WhatsApp en segundo plano al registrar anticipo
       const phoneNumForWA = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
       if (phoneNumForWA) {
+        const total = (selectedRes.price_estimate || selectedRes.price || 0);
+        const isPartial = newDeposit < total;
         fetch('/api/whatsapp/send-template', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            template: 'reservacion_confirmada',
+            template: isPartial ? 'pago_anticipo_recibido' : 'reservacion_confirmada',
             booking: {
               ...selectedRes,
               deposit: newDeposit,
-              balance: Math.max(0, (selectedRes.price_estimate || selectedRes.price || 0) - newDeposit)
+              balance: Math.max(0, total - newDeposit),
+              last_payment_amount: amountNum
             }
           })
         }).catch(err => console.error("Error al enviar WhatsApp de confirmación:", err));

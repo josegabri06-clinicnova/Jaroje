@@ -9,7 +9,8 @@ import {
   sendTemplate7_SeguimientoSatisfaccion,
   sendTemplate8_SalidaCheckout,
   sendTemplate9_ComparteExperiencia,
-  sendTemplate10_RecibimientoNuevamente
+  sendTemplate10_RecibimientoNuevamente,
+  sendTemplate11_PagoAnticipoRecibido
 } from '@/lib/whatsapp';
 
 export async function POST(req: Request) {
@@ -68,6 +69,9 @@ export async function POST(req: Request) {
       case 'recordatorio_estancia_anterior':
       case 'recibimiento_nuevamente':
         res = await sendTemplate10_RecibimientoNuevamente(booking);
+        break;
+      case 'pago_anticipo_recibido':
+        res = await sendTemplate11_PagoAnticipoRecibido(booking);
         break;
       default:
         return NextResponse.json({

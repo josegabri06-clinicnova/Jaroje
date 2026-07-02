@@ -298,3 +298,23 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any) {
 
   return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params);
 }
+
+// 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)
+export async function sendTemplate11_PagoAnticipoRecibido(booking: any) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const total = Number(booking.price || booking.price_estimate || 0);
+  const dep = Number(booking.deposit || 0);
+  const bal = Math.max(0, total - dep);
+  const lastPayment = Number(booking.last_payment_amount || dep || 0);
+
+  const params = [
+    getFirstName(booking.guest_name),      // {{1}} Nombre
+    formatCurrency(lastPayment),           // {{2}} MontoAbonado
+    formatCurrency(bal),                   // {{3}} SaldoPendiente
+    getPublicReservaLink(booking.id)       // {{4}} LinkPortal
+  ];
+
+  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params);
+}

@@ -51,11 +51,26 @@ export async function POST(req: Request) {
               const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${bookingId}`;
               const guestsCount = String(Number(rawB.numAdult || 1) + Number(rawB.numChild || 0));
 
-              console.log(`[Approve Transfer] Sending WhatsApp confirm_reservacion to ${phone}`);
-              // plantilla: reservacion_confirmada (variables: {{1}} nombre, {{2}} link, {{3}} huespedes)
-              const waRes = await sendWhatsAppTemplate(phone, 'reservacion_confirmada', [guestName, linkPortal, guestsCount]);
-              if (!waRes.success) {
-                console.warn("[Approve Transfer] WhatsApp send template failed:", waRes.error);
+              const price = Number(rawB.price || 0);
+              const deposit = Number(rawB.deposit || 0);
+              const balance = Math.max(0, price - deposit);
+
+              if (balance > 0) {
+                console.log(`[Approve Transfer] Sending WhatsApp pago_anticipo_recibido to ${phone}`);
+                const formattedAmount = Number(amount).toLocaleString('es-MX', { maximumFractionDigits: 0 });
+                const formattedBalance = Number(balance).toLocaleString('es-MX', { maximumFractionDigits: 0 });
+                // plantilla: pago_anticipo_recibido (variables: {{1}} nombre, {{2}} monto, {{3}} saldo, {{4}} link)
+                const waRes = await sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', [guestName, formattedAmount, formattedBalance, linkPortal]);
+                if (!waRes.success) {
+                  console.warn("[Approve Transfer] WhatsApp send template failed:", waRes.error);
+                }
+              } else {
+                console.log(`[Approve Transfer] Sending WhatsApp confirm_reservacion to ${phone}`);
+                // plantilla: reservacion_confirmada (variables: {{1}} nombre, {{2}} link, {{3}} huespedes)
+                const waRes = await sendWhatsAppTemplate(phone, 'reservacion_confirmada', [guestName, linkPortal, guestsCount]);
+                if (!waRes.success) {
+                  console.warn("[Approve Transfer] WhatsApp send template failed:", waRes.error);
+                }
               }
             }
           }
