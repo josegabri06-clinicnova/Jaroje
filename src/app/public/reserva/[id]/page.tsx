@@ -104,54 +104,128 @@ const ROOM_FEATURES: Record<string, { title: string; capacity: number; features:
 };
 
 const COMMON_PHOTOS = [
-  'https://images.unsplash.com/photo-1576013551627-0cc20b96c2a7?auto=format&fit=crop&w=800&q=80', // Alberca
-  'https://images.unsplash.com/photo-1585320806297-9794b3e4eeae?auto=format&fit=crop&w=800&q=80', // Jardines
-  'https://images.unsplash.com/photo-1582719508461-905c673771fd?auto=format&fit=crop&w=800&q=80', // Área común
-  'https://images.unsplash.com/photo-1564507592333-c60657eea523?auto=format&fit=crop&w=800&q=80'  // Fachada
+  'https://media.xmlcal.com/pic/p0032/7286/37.png',
+  'https://media.xmlcal.com/pic/p0032/7286/38.png',
+  'https://media.xmlcal.com/pic/p0032/7286/39.png',
+  'https://media.xmlcal.com/pic/p0032/7286/40.png',
+  'https://media.xmlcal.com/pic/p0032/7286/41.png',
+  'https://media.xmlcal.com/pic/p0032/7286/42.png',
+  'https://media.xmlcal.com/pic/p0032/7286/43.png',
+  'https://media.xmlcal.com/pic/p0032/7286/44.png',
+  'https://media.xmlcal.com/pic/p0032/7286/45.png',
+  'https://media.xmlcal.com/pic/p0032/7286/46.png'
 ];
 
 const ROOM_PHOTOS: Record<string, string[]> = {
+  'doble': [
+    'https://media.xmlcal.com/pic/p0032/7286/01.png',
+    'https://media.xmlcal.com/pic/p0032/7286/02.png',
+    'https://media.xmlcal.com/pic/p0032/7286/03.png'
+  ],
   '1rec': [
-    'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80', // Sala
-    'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&w=800&q=80', // Recámara
-    'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80', // Detalle/Baño
-    'https://images.unsplash.com/photo-1565183997392-2f6f122e5912?auto=format&fit=crop&w=800&q=80'  // Cocina
+    'https://media.xmlcal.com/pic/p0032/7286/04.png',
+    'https://media.xmlcal.com/pic/p0032/7286/05.png',
+    'https://media.xmlcal.com/pic/p0032/7286/06.png',
+    'https://media.xmlcal.com/pic/p0032/7286/07.png'
   ],
   '2rec': [
-    'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80', // Sala
-    'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80', // Recámara principal
-    'https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?auto=format&fit=crop&w=800&q=80', // Segunda recámara
-    'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?auto=format&fit=crop&w=800&q=80'  // Cocina
+    'https://media.xmlcal.com/pic/p0032/7286/08.png',
+    'https://media.xmlcal.com/pic/p0032/7286/09.png',
+    'https://media.xmlcal.com/pic/p0032/7286/10.png',
+    'https://media.xmlcal.com/pic/p0032/7286/11.png',
+    'https://media.xmlcal.com/pic/p0032/7286/12.png',
+    'https://media.xmlcal.com/pic/p0032/7286/13.png',
+    'https://media.xmlcal.com/pic/p0032/7286/14.png',
+    'https://media.xmlcal.com/pic/p0032/7286/15.png',
+    'https://media.xmlcal.com/pic/p0032/7286/16.png',
+    'https://media.xmlcal.com/pic/p0032/7286/17.png'
   ],
   '3rec': [
-    'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?auto=format&fit=crop&w=800&q=80', // Sala/Comedor
-    'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?auto=format&fit=crop&w=800&q=80', // Recámara principal
-    'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=800&q=80', // Segunda recámara
-    'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=800&q=80'  // Cocina/Comedor
-  ],
-  'doble': [
-    'https://images.unsplash.com/photo-1566665797739-1674de7a421a?auto=format&fit=crop&w=800&q=80', // Principal
-    'https://images.unsplash.com/photo-1591088398332-8a7791972843?auto=format&fit=crop&w=800&q=80', // Camas
-    'https://images.unsplash.com/photo-1540518614846-7eded433c457?auto=format&fit=crop&w=800&q=80', // Detalle/Muebles
-    'https://images.unsplash.com/photo-1620626011761-996317b8d101?auto=format&fit=crop&w=800&q=80'  // Baño
+    'https://media.xmlcal.com/pic/p0032/7286/18.png',
+    'https://media.xmlcal.com/pic/p0032/7286/19.png',
+    'https://media.xmlcal.com/pic/p0032/7286/31.png',
+    'https://media.xmlcal.com/pic/p0032/7286/32.png',
+    'https://media.xmlcal.com/pic/p0032/7286/33.png',
+    'https://media.xmlcal.com/pic/p0032/7286/34.png',
+    'https://media.xmlcal.com/pic/p0032/7286/35.png',
+    'https://media.xmlcal.com/pic/p0032/7286/36.png'
   ],
   'casa': [
-    'https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=800&q=80', // Sala
-    'https://images.unsplash.com/photo-1617806118233-18e1db207f62?auto=format&fit=crop&w=800&q=80', // Recámara
-    'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=800&q=80', // Alberca/Terraza
-    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80'  // Cocina/Comedor
+    'https://media.xmlcal.com/pic/p0032/7286/20.png',
+    'https://media.xmlcal.com/pic/p0032/7286/21.png',
+    'https://media.xmlcal.com/pic/p0032/7286/22.png',
+    'https://media.xmlcal.com/pic/p0032/7286/23.png',
+    'https://media.xmlcal.com/pic/p0032/7286/24.png',
+    'https://media.xmlcal.com/pic/p0032/7286/25.png',
+    'https://media.xmlcal.com/pic/p0032/7286/26.png',
+    'https://media.xmlcal.com/pic/p0032/7286/27.png',
+    'https://media.xmlcal.com/pic/p0032/7286/28.png',
+    'https://media.xmlcal.com/pic/p0032/7286/29.png',
+    'https://media.xmlcal.com/pic/p0032/7286/30.png'
   ]
 };
 
 const PHOTO_CAPTIONS: Record<string, string[]> = {
-  '1rec': ['Sala y cocina integrada', 'Recámara principal', 'Detalle de interiores', 'Cocina equipada'],
-  '2rec': ['Sala de estar y comedor', 'Recámara principal King', 'Segunda recámara doble', 'Cocina equipada'],
-  '3rec': ['Sala y comedor amplios', 'Recámara principal King', 'Segunda recámara matrimonial', 'Cocina completamente equipada'],
-  'doble': ['Habitación Doble', 'Camas cómodas', 'Área de café y frigobar', 'Baño completo'],
-  'casa': ['Sala de estar familiar', 'Recámara principal King', 'Segunda recámara familiar', 'Cocina comedor de lujo']
+  'doble': [
+    'Habitación Estándar - Cama principal',
+    'Habitación Estándar - Vista general',
+    'Habitación Estándar - Baño y detalles'
+  ],
+  '1rec': [
+    'Condo 1 Recámara - Sala y comedor',
+    'Condo 1 Recámara - Recámara principal',
+    'Condo 1 Recámara - Cocina equipada',
+    'Condo 1 Recámara - Baño completo'
+  ],
+  '2rec': [
+    'Condo 2 Recámaras - Estancia principal',
+    'Condo 2 Recámaras - Recámara principal King',
+    'Condo 2 Recámaras - Segunda recámara doble',
+    'Condo 2 Recámaras - Cocina equipada',
+    'Condo 2 Recámaras - Baño',
+    'Condo 2 Recámaras - Vista de estancia',
+    'Condo 2 Recámaras - Comedor',
+    'Condo 2 Recámaras - Detalles recámara principal',
+    'Condo 2 Recámaras - Pasillo interior',
+    'Condo 2 Recámaras - Terraza'
+  ],
+  '3rec': [
+    'Condo 3 Recámaras - Sala y comedor',
+    'Condo 3 Recámaras - Cocina equipada',
+    'Condo 3 Recámaras - Recámara principal King',
+    'Condo 3 Recámaras - Segunda recámara doble',
+    'Condo 3 Recámaras - Tercera recámara doble',
+    'Condo 3 Recámaras - Baño completo',
+    'Condo 3 Recámaras - Vista de balcón',
+    'Condo 3 Recámaras - Área social'
+  ],
+  'casa': [
+    'Casa de Lujo - Estancia principal de lujo',
+    'Casa de Lujo - Cocina de granito y comedor',
+    'Casa de Lujo - Recámara principal King',
+    'Casa de Lujo - Segunda recámara familiar',
+    'Casa de Lujo - Tercera recámara familiar',
+    'Casa de Lujo - Baño principal espacioso',
+    'Casa de Lujo - Balcón y vista al exterior',
+    'Casa de Lujo - Detalles de diseño',
+    'Casa de Lujo - Entrada independiente',
+    'Casa de Lujo - Sala familiar de TV',
+    'Casa de Lujo - Área de desayunador'
+  ]
 };
 
-const COMMON_CAPTIONS = ['Alberca y camastros', 'Jardines tropicales', 'Áreas comunes', 'Acceso y fachada principal'];
+const COMMON_CAPTIONS = [
+  'Áreas Comunes - Acceso y recepción',
+  'Áreas Comunes - Fachada principal',
+  'Áreas Comunes - Alberca y área de asoleadero',
+  'Áreas Comunes - Alberca principal',
+  'Áreas Comunes - Jardines tropicales',
+  'Áreas Comunes - Terraza común',
+  'Áreas Comunes - Camastros y alberca',
+  'Áreas Comunes - Fachada y acceso vehicular',
+  'Áreas Comunes - Vista exterior de jardines',
+  'Áreas Comunes - Iluminación nocturna de fachada'
+];
 
 // Función para comprimir imágenes del lado del cliente
 const compressImage = (file: File): Promise<Blob | File> => {
