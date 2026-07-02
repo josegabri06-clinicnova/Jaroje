@@ -24,3 +24,52 @@ USING (true);
 INSERT INTO public.settings (key, value)
 VALUES ('admin_recovery_key', 'JRJ-SEC-9X2P-7QLK-4M1Z')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- INTEGRACIÓN DE PASARELA DE TRANSFERENCIA BANCARIA (CUSTOM GATEWAY)
+-- ──────────────────────────────────────────────────────────────────────────────
+
+-- Crear tabla para registro de comprobantes de transferencia
+CREATE TABLE IF NOT EXISTS public.transfer_receipts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    booking_id TEXT NOT NULL,
+    amount NUMERIC NOT NULL,
+    guest_name TEXT,
+    guest_email TEXT,
+    receipt_url TEXT,
+    status TEXT DEFAULT 'pending', -- 'pending', 'approved', 'rejected'
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS (Row Level Security)
+ALTER TABLE public.transfer_receipts ENABLE ROW LEVEL SECURITY;
+
+-- Crear políticas de acceso público
+DROP POLICY IF EXISTS "Allow public insert" ON public.transfer_receipts;
+CREATE POLICY "Allow public insert" ON public.transfer_receipts FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public select" ON public.transfer_receipts;
+CREATE POLICY "Allow public select" ON public.transfer_receipts FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public update" ON public.transfer_receipts;
+CREATE POLICY "Allow public update" ON public.transfer_receipts FOR UPDATE USING (true) WITH CHECK (true);
+
+-- Crear bucket de storage "transfer-receipts" si no existe
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('transfer-receipts', 'transfer-receipts', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Crear políticas para almacenamiento público de comprobantes
+DROP POLICY IF EXISTS "Permitir subida pública de comprobantes" ON storage.objects;
+CREATE POLICY "Permitir subida pública de comprobantes"
+ON storage.objects
+FOR INSERT
+WITH CHECK (bucket_id = 'transfer-receipts');
+
+DROP POLICY IF EXISTS "Permitir lectura pública de comprobantes" ON storage.objects;
+CREATE POLICY "Permitir lectura pública de comprobantes"
+ON storage.objects
+FOR SELECT
+USING (bucket_id = 'transfer-receipts');
+
