@@ -3,12 +3,13 @@ import {
   sendTemplate1_SolicitudRecibida,
   sendTemplate2_UltimoAviso,
   sendTemplate3_ReservacionConfirmada,
-  sendTemplate4_PreparacionLlegada,
-  sendTemplate5_BienvenidaCheckin,
-  sendTemplate6_SeguimientoSatisfaccion,
-  sendTemplate7_CheckoutManana,
-  sendTemplate8_RecordatorioOpinion,
-  sendTemplate9_RecordatorioEstanciaAnterior
+  sendTemplate4_DisponibilidadLiberada,
+  sendTemplate5_PreparacionLlegada,
+  sendTemplate6_BienvenidaCheckin,
+  sendTemplate7_SeguimientoSatisfaccion,
+  sendTemplate8_SalidaCheckout,
+  sendTemplate9_ComparteExperiencia,
+  sendTemplate10_RecibimientoNuevamente
 } from '@/lib/whatsapp';
 
 export async function POST(req: Request) {
@@ -44,23 +45,29 @@ export async function POST(req: Request) {
       case 'reservacion_confirmada':
         res = await sendTemplate3_ReservacionConfirmada(booking);
         break;
+      case 'disponibilidad_liberada':
+        res = await sendTemplate4_DisponibilidadLiberada(booking);
+        break;
       case 'preparacion_llegada':
-        res = await sendTemplate4_PreparacionLlegada(booking);
+        res = await sendTemplate5_PreparacionLlegada(booking);
         break;
       case 'bienvenida_checkin':
-        res = await sendTemplate5_BienvenidaCheckin(booking);
+        res = await sendTemplate6_BienvenidaCheckin(booking);
         break;
       case 'seguimiento_satisfaccion':
-        res = await sendTemplate6_SeguimientoSatisfaccion(booking);
+        res = await sendTemplate7_SeguimientoSatisfaccion(booking);
         break;
       case 'checkout_manana':
-        res = await sendTemplate7_CheckoutManana(booking);
+      case 'salida_checkout':
+        res = await sendTemplate8_SalidaCheckout(booking);
         break;
       case 'recordatorio_opinion':
-        res = await sendTemplate8_RecordatorioOpinion(booking);
+      case 'comparte_experiencia':
+        res = await sendTemplate9_ComparteExperiencia(booking);
         break;
       case 'recordatorio_estancia_anterior':
-        res = await sendTemplate9_RecordatorioEstanciaAnterior(booking);
+      case 'recibimiento_nuevamente':
+        res = await sendTemplate10_RecibimientoNuevamente(booking);
         break;
       default:
         return NextResponse.json({

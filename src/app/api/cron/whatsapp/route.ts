@@ -3,11 +3,11 @@ import { getBeds24Bookings } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import {
   sendTemplate2_UltimoAviso,
-  sendTemplate4_PreparacionLlegada,
-  sendTemplate6_SeguimientoSatisfaccion,
-  sendTemplate7_CheckoutManana,
-  sendTemplate8_RecordatorioOpinion,
-  sendTemplate9_RecordatorioEstanciaAnterior
+  sendTemplate5_PreparacionLlegada,
+  sendTemplate7_SeguimientoSatisfaccion,
+  sendTemplate8_SalidaCheckout,
+  sendTemplate9_ComparteExperiencia,
+  sendTemplate10_RecibimientoNuevamente
 } from '@/lib/whatsapp';
 
 // Asegurar de forma automatizada que existe la tabla whatsapp_logs en Supabase
@@ -153,77 +153,77 @@ export async function GET(req: Request) {
         }
       }
 
-      // --- REGLA 4: Mensaje 4 - Preparación para la llegada (24h antes del check-in) ---
+      // --- REGLA 5: Mensaje 5 - Preparación para tu llegada (24h antes del check-in) ---
       // Se envía típicamente a las 9 A.M. del día previo al check-in
       if (booking.check_in === tomorrowStr && currentHour === 9) {
         const logKey = `${bookingIdStr}_preparacion_llegada`;
         if (!sentSet.has(logKey)) {
-          const res = await sendTemplate4_PreparacionLlegada(booking);
+          const res = await sendTemplate5_PreparacionLlegada(booking);
           if (res.success) {
             await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 4 (Prep llegada) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            reports.push(`Enviado Mensaje 5 (Prep llegada) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
 
-      // --- REGLA 6: Mensaje 6 - Seguimiento de satisfacción ---
-      // Se envía a las 10:00 A.M. del segundo día de estancia (noches >= 3)
-      if (booking.check_in === yesterdayStr && Number(booking.nights || 1) >= 3 && currentHour === 10) {
+      // --- REGLA 7: Mensaje 7 - Seguimiento de satisfacción ---
+      // Se envía a las 10:00 A.M. del segundo día de estancia (noches >= 2)
+      if (booking.check_in === yesterdayStr && Number(booking.nights || 1) >= 2 && currentHour === 10) {
         const logKey = `${bookingIdStr}_seguimiento_satisfaccion`;
         if (!sentSet.has(logKey)) {
-          const res = await sendTemplate6_SeguimientoSatisfaccion(booking);
+          const res = await sendTemplate7_SeguimientoSatisfaccion(booking);
           if (res.success) {
             await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 6 (Satisfacción) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            reports.push(`Enviado Mensaje 7 (Satisfacción) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
 
-      // --- REGLA 7: Mensaje 7 - Mensaje de check-out ---
+      // --- REGLA 8: Mensaje 8 - Día de salida (salida_checkout) ---
       // Se envía a las 7:00 A.M. del día de la salida (check_out === hoy)
       if (booking.check_out === todayStr && currentHour === 7) {
-        const logKey = `${bookingIdStr}_checkout_manana`;
+        const logKey = `${bookingIdStr}_salida_checkout`;
         if (!sentSet.has(logKey)) {
-          const res = await sendTemplate7_CheckoutManana(booking);
+          const res = await sendTemplate8_SalidaCheckout(booking);
           if (res.success) {
-            await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'checkout_manana', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 7 (Checkout) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'salida_checkout', phone: guestPhone }]);
+            reports.push(`Enviado Mensaje 8 (Salida Checkout) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
 
-      // --- REGLA 8: Mensaje 8 - Recordatorio compartir opinión ---
+      // --- REGLA 9: Mensaje 9 - Comparte tu experiencia ---
       // Se envía a las 7:00 P.M. del día de la salida (check_out === hoy)
       if (booking.check_out === todayStr && currentHour === 19) {
-        const logKey = `${bookingIdStr}_recordatorio_opinion`;
+        const logKey = `${bookingIdStr}_comparte_experiencia`;
         if (!sentSet.has(logKey)) {
-          const res = await sendTemplate8_RecordatorioOpinion(booking);
+          const res = await sendTemplate9_ComparteExperiencia(booking);
           if (res.success) {
-            await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recordatorio_opinion', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 8 (Compartir opinión) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone }]);
+            reports.push(`Enviado Mensaje 9 (Compartir opinión) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
 
-      // --- REGLA 9: Mensaje 9 - Recordatorio de estancia anterior (Fidelización) ---
+      // --- REGLA 10: Mensaje 10 - ¡Nos encantaría recibirte nuevamente! (Fidelización) ---
       // Se envía a las 9:00 A.M., a los 6 meses (180 días) o 12 meses (365 días) del checkout
       if (currentHour === 9) {
         if (booking.check_out === sixMonthsAgoStr) {
-          const logKey = `${bookingIdStr}_fidelizacion_6m`;
+          const logKey = `${bookingIdStr}_recibimiento_nuevamente_6m`;
           if (!sentSet.has(logKey)) {
-            const res = await sendTemplate9_RecordatorioEstanciaAnterior(booking);
+            const res = await sendTemplate10_RecibimientoNuevamente(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'fidelizacion_6m', phone: guestPhone }]);
-              reports.push(`Enviado Mensaje 9 (Fidelización 6m) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_6m', phone: guestPhone }]);
+              reports.push(`Enviado Mensaje 10 (Fidelización 6m) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
           }
         } else if (booking.check_out === twelveMonthsAgoStr) {
-          const logKey = `${bookingIdStr}_fidelizacion_12m`;
+          const logKey = `${bookingIdStr}_recibimiento_nuevamente_12m`;
           if (!sentSet.has(logKey)) {
-            const res = await sendTemplate9_RecordatorioEstanciaAnterior(booking);
+            const res = await sendTemplate10_RecibimientoNuevamente(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'fidelizacion_12m', phone: guestPhone }]);
-              reports.push(`Enviado Mensaje 9 (Fidelización 12m) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_12m', phone: guestPhone }]);
+              reports.push(`Enviado Mensaje 10 (Fidelización 12m) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
           }
         }

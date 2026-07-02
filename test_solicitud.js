@@ -27,7 +27,18 @@ if (!targetPhone) {
   process.exit(1);
 }
 
-const allowedTemplates = ['solicitud_recibida', 'ultimo_aviso', 'reservacion_confirmada', 'preparacion_llegada'];
+const allowedTemplates = [
+  'solicitud_recibida',
+  'ultimo_aviso',
+  'reservacion_confirmada',
+  'disponibilidad_liberada',
+  'preparacion_llegada',
+  'bienvenida_checkin',
+  'seguimiento_satisfaccion',
+  'salida_checkout',
+  'comparte_experiencia',
+  'recibimiento_nuevamente'
+];
 if (!allowedTemplates.includes(templateName)) {
   console.log(`\n❌ Error: La plantilla '${templateName}' no está en la lista de prueba.`);
   console.log(`Plantillas permitidas: ${allowedTemplates.join(', ')}\n`);
@@ -44,6 +55,36 @@ if (cleanedPhone.length === 10) {
   cleanedPhone = '34' + cleanedPhone;
 }
 
+// Construir parámetros dinámicamente según la plantilla
+const parameters = [
+  { type: 'text', text: 'Huésped de Prueba' } // {{1}} Nombre
+];
+
+if ([
+  'solicitud_recibida', 
+  'ultimo_aviso', 
+  'disponibilidad_liberada', 
+  'bienvenida_checkin', 
+  'seguimiento_satisfaccion'
+].includes(templateName)) {
+  parameters.push({
+    type: 'text',
+    text: 'https://jaroje-app.vercel.app/public/reserva/TEST_123' // {{2}} LinkPortal
+  });
+} else if ([
+  'reservacion_confirmada', 
+  'preparacion_llegada'
+].includes(templateName)) {
+  parameters.push({
+    type: 'text',
+    text: 'https://jaroje-app.vercel.app/public/reserva/TEST_123' // {{2}} LinkPortal
+  });
+  parameters.push({
+    type: 'text',
+    text: '4' // {{3}} Huéspedes
+  });
+}
+
 async function run() {
   const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
   const payload = {
@@ -57,16 +98,7 @@ async function run() {
       components: [
         {
           type: 'body',
-          parameters: [
-            {
-              type: 'text',
-              text: 'Invitado Prueba' // {{1}}
-            },
-            {
-              type: 'text',
-              text: 'https://jaroje-app.vercel.app/public/reserva/TEST_123' // {{2}}
-            }
-          ]
+          parameters: parameters
         }
       ]
     }

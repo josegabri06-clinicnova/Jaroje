@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
-import { sendTemplate1_SolicitudRecibida, sendTemplate3_ReservacionConfirmada } from '@/lib/whatsapp';
+import { 
+  sendTemplate1_SolicitudRecibida, 
+  sendTemplate3_ReservacionConfirmada,
+  sendTemplate4_DisponibilidadLiberada
+} from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -390,6 +394,13 @@ export async function DELETE(req: Request) {
       // Liberar registro de checkin local en Supabase si existía
       await supabase.from('checkins').delete().eq('reservation_id', id.toString());
 
+      // Enviar WhatsApp de disponibilidad liberada
+      try {
+        await sendTemplate4_DisponibilidadLiberada(localRes);
+      } catch (waErr) {
+        console.error("[Reservas DELETE] Error sending WhatsApp cancellation for local booking:", waErr);
+      }
+
       return NextResponse.json({ 
         success: true, 
         message: "Reserva local cancelada y liberada.", 
@@ -398,6 +409,22 @@ export async function DELETE(req: Request) {
     }
 
     const BEDS24_TOKEN = await getBeds24Token();
+
+    // Obtener detalles de la reserva de Beds24 antes de cancelarla
+    let bookingForWA: any = null;
+    try {
+      const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${id}`, {
+        headers: { 'token': BEDS24_TOKEN }
+      });
+      if (b24Res.ok) {
+        const b24Json = await b24Res.json();
+        if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
+          bookingForWA = b24Json.data[0];
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching reservation from Beds24 before cancellation:", err);
+    }
 
     // 1. Cancelar en Beds24
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
@@ -427,6 +454,15 @@ export async function DELETE(req: Request) {
           ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
           : firstResult.message || 'Error individual al cancelar en Beds24';
         return NextResponse.json({ error: `Beds24 rechazó la cancelación: ${errorMsg}` }, { status: 400 });
+      }
+    }
+
+    // Enviar WhatsApp de disponibilidad liberada para Beds24
+    if (bookingForWA) {
+      try {
+        await sendTemplate4_DisponibilidadLiberada(bookingForWA);
+      } catch (waErr) {
+        console.error("[Reservas DELETE] Error sending WhatsApp cancellation for Beds24 booking:", waErr);
       }
     }
 

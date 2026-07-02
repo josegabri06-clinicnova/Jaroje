@@ -112,60 +112,34 @@ function getPublicReservaLink(bookingId: string | number): string {
   return `${getSiteUrl()}/public/reserva/${bookingId}`;
 }
 
-// 1. Mensaje 1 - Solicitud de reservación recibida
+// 1. Mensaje 1 - Solicitud de reservación recibida (solicitud_recibida)
 export async function sendTemplate1_SolicitudRecibida(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre corto
-    getPublicReservaLink(booking.id)  // {{2}} Enlace público de detalles y pago
+    getFirstName(booking.guest_name), // {{1}} Nombre
+    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
   ];
 
   return sendWhatsAppTemplate(phone, 'solicitud_recibida', params);
 }
 
-// 2. Mensaje 2 - Último aviso para conservar la reservación
+// 2. Mensaje 2 - Último aviso para conservar la reservación (ultimo_aviso)
 export async function sendTemplate2_UltimoAviso(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre corto
-    getPublicReservaLink(booking.id)  // {{2}} Enlace público
+    getFirstName(booking.guest_name), // {{1}} Nombre
+    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
   ];
 
   return sendWhatsAppTemplate(phone, 'ultimo_aviso', params);
 }
 
-// 3. Mensaje 3 - Reservación confirmada
+// 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
 export async function sendTemplate3_ReservacionConfirmada(booking: any) {
-  const phone = booking.phone || booking.mobile || booking.guest_phone;
-  if (!phone) return { success: false, error: 'Sin teléfono' };
-
-  const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id)  // {{2}} Enlace público
-  ];
-
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params);
-}
-
-// 4. Mensaje 4 - Preparación para la llegada
-export async function sendTemplate4_PreparacionLlegada(booking: any) {
-  const phone = booking.phone || booking.mobile || booking.guest_phone;
-  if (!phone) return { success: false, error: 'Sin teléfono' };
-
-  const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id)  // {{2}} Enlace público
-  ];
-
-  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params);
-}
-
-// 5. Mensaje 5 - Bienvenida después del check-in
-export async function sendTemplate5_BienvenidaCheckin(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -173,61 +147,100 @@ export async function sendTemplate5_BienvenidaCheckin(booking: any) {
 
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre
-    booking.room_name || 'General',    // {{2}} Habitacion
-    guestsCount,                       // {{3}} Huéspedes registrados
-    formatDateStr(booking.check_out)   // {{4}} FechaSalida (Check-out)
+    getPublicReservaLink(booking.id), // {{2}} LinkPortal
+    guestsCount                       // {{3}} Huéspedes
   ];
 
-  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params);
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params);
 }
 
-// 6. Mensaje 6 - Seguimiento de satisfacción
-export async function sendTemplate6_SeguimientoSatisfaccion(booking: any) {
-  const phone = booking.phone || booking.mobile || booking.guest_phone;
-  if (!phone) return { success: false, error: 'Sin teléfono' };
-
-  const params = [
-    getFirstName(booking.guest_name)  // {{1}} Nombre
-  ];
-
-  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params);
-}
-
-// 7. Mensaje 7 - Mensaje de check-out
-export async function sendTemplate7_CheckoutManana(booking: any) {
-  const phone = booking.phone || booking.mobile || booking.guest_phone;
-  if (!phone) return { success: false, error: 'Sin teléfono' };
-
-  const params = [
-    getFirstName(booking.guest_name)  // {{1}} Nombre
-  ];
-
-  return sendWhatsAppTemplate(phone, 'checkout_manana', params);
-}
-
-// 8. Mensaje 8 - Recordatorio para compartir tu experiencia
-export async function sendTemplate8_RecordatorioOpinion(booking: any) {
-  const phone = booking.phone || booking.mobile || booking.guest_phone;
-  if (!phone) return { success: false, error: 'Sin teléfono' };
-
-  const params = [
-    getFirstName(booking.guest_name)  // {{1}} Nombre
-  ];
-
-  return sendWhatsAppTemplate(phone, 'recordatorio_opinion', params);
-}
-
-// 9. Mensaje 9 - Recordatorio de una estancia anterior
-export async function sendTemplate9_RecordatorioEstanciaAnterior(booking: any) {
+// 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
+export async function sendTemplate4_DisponibilidadLiberada(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre
-    booking.room_name || 'Alojamiento Jaroje', // {{2}} TipoAlojamiento
-    formatDateStr(booking.check_in),   // {{3}} FechaEntrada
-    formatDateStr(booking.check_out)   // {{4}} FechaSalida
+    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
   ];
 
-  return sendWhatsAppTemplate(phone, 'recordatorio_estancia_anterior', params);
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params);
+}
+
+// 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
+export async function sendTemplate5_PreparacionLlegada(booking: any) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const guestsCount = String(Number(booking.num_adult || 1) + Number(booking.num_child || 0));
+
+  const params = [
+    getFirstName(booking.guest_name), // {{1}} Nombre
+    getPublicReservaLink(booking.id), // {{2}} LinkPortal
+    guestsCount                       // {{3}} Huéspedes
+  ];
+
+  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params);
+}
+
+// 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
+export async function sendTemplate6_BienvenidaCheckin(booking: any) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const params = [
+    getFirstName(booking.guest_name), // {{1}} Nombre
+    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
+  ];
+
+  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params);
+}
+
+// 7. Mensaje 7 - Seguimiento de satisfacción (seguimiento_satisfaccion)
+export async function sendTemplate7_SeguimientoSatisfaccion(booking: any) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const params = [
+    getFirstName(booking.guest_name), // {{1}} Nombre
+    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
+  ];
+
+  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params);
+}
+
+// 8. Mensaje 8 - Día de salida (salida_checkout)
+export async function sendTemplate8_SalidaCheckout(booking: any) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const params = [
+    getFirstName(booking.guest_name) // {{1}} Nombre
+  ];
+
+  return sendWhatsAppTemplate(phone, 'salida_checkout', params);
+}
+
+// 9. Mensaje 9 - Comparte tu experiencia (comparte_experiencia)
+export async function sendTemplate9_ComparteExperiencia(booking: any) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const params = [
+    getFirstName(booking.guest_name) // {{1}} Nombre
+  ];
+
+  return sendWhatsAppTemplate(phone, 'comparte_experiencia', params);
+}
+
+// 10. Mensaje 10 - ¡Nos encantaría recibirte nuevamente! (recibimiento_nuevamente)
+export async function sendTemplate10_RecibimientoNuevamente(booking: any) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const params = [
+    getFirstName(booking.guest_name) // {{1}} Nombre
+  ];
+
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params);
 }
