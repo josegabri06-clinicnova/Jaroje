@@ -1076,7 +1076,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
 
   console.log(`[Beds24 API] Adding payment of ${amount} to booking ${bookId}`);
   const res = await fetch('https://api.beds24.com/v2/bookings', {
-    method: 'PUT',
+    method: 'POST',
     headers: {
       'token': token,
       'Content-Type': 'application/json'
