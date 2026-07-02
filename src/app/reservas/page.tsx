@@ -178,6 +178,9 @@ export default function ReservasList() {
   const [editDailyRate, setEditDailyRate] = useState('');
   const [editDeposit, setEditDeposit] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [approvingReceiptId, setApprovingReceiptId] = useState<string | null>(null);
+  const [rejectionNotes, setRejectionNotes] = useState<Record<string, string>>({});
+
   const [editCheckIn, setEditCheckIn] = useState('');
   const [editCheckOut, setEditCheckOut] = useState('');
   const [saveEditLoading, setSaveEditLoading] = useState(false);
@@ -826,15 +829,68 @@ export default function ReservasList() {
     }
   };
 
+  const handleProcessTransferReceipt = async (receiptId: string, bookingId: string, amount: number, action: 'approve' | 'reject') => {
+    if (!confirm(`¿Estás seguro de que deseas ${action === 'approve' ? 'APROBAR' : 'RECHAZAR'} esta transferencia bancaria de $${amount.toLocaleString('es-MX')} MXN?`)) {
+      return;
+    }
+
+    setApprovingReceiptId(receiptId);
+    try {
+      const notes = rejectionNotes[receiptId] || '';
+      const res = await fetch('/api/payments/transfer-approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiptId,
+          bookingId,
+          amount,
+          action,
+          notes
+        })
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        alert(`✓ Transferencia bancaria ${action === 'approve' ? 'aprobada' : 'rechazada'} con éxito.`);
+        // Limpiar nota
+        setRejectionNotes(prev => {
+          const next = { ...prev };
+          delete next[receiptId];
+          return next;
+        });
+        await fetchReservas();
+      } else {
+        alert(`❌ Error al procesar: ${json.error || 'Ocurrió un error inesperado.'}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('❌ Error de red al procesar la transferencia.');
+    } finally {
+      setApprovingReceiptId(null);
+    }
+  };
+
+
   const fetchReservas = async () => {
     setIsLoading(true);
     setTokenError(false);
     try {
-      const [res, chk, acc, capRes] = await Promise.all([
+      const fetchTransferReceipts = async () => {
+        try {
+          const { data } = await supabase.from('transfer_receipts').select('*').order('created_at', { ascending: false });
+          return data || [];
+        } catch (e) {
+          console.warn("Table transfer_receipts does not exist yet:", e);
+          return [];
+        }
+      };
+
+      const [res, chk, acc, capRes, trData] = await Promise.all([
         fetch('/api/reservas?t=' + Date.now()),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
-        supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle()
+        supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle(),
+        fetchTransferReceipts()
       ]);
       const json = await res.json();
       
@@ -842,6 +898,15 @@ export default function ReservasList() {
       if (acc.data) setAccounts(acc.data);
       if (chk.data) {
         chk.data.forEach(c => { checkinMap[String(c.reservation_id)] = c; });
+      }
+
+      let transferMap: Record<string, any[]> = {};
+      if (Array.isArray(trData)) {
+        trData.forEach((tr: any) => {
+          const bid = String(tr.booking_id);
+          if (!transferMap[bid]) transferMap[bid] = [];
+          transferMap[bid].push(tr);
+        });
       }
 
       if (capRes?.data?.value) {
@@ -860,11 +925,20 @@ export default function ReservasList() {
           is_checked_in: checkinMap[String(r.id)]?.status === 'checked_in',
           is_checked_out: checkinMap[String(r.id)]?.status === 'checked_out',
           is_acknowledged: checkinMap[String(r.id)]?.status === 'acknowledged' || checkinMap[String(r.id)]?.status === 'checked_in' || checkinMap[String(r.id)]?.status === 'checked_out',
-          document_url: checkinMap[String(r.id)]?.document_url
+          document_url: checkinMap[String(r.id)]?.document_url,
+          transfer_receipts: transferMap[String(r.id)] || []
         })).sort((a: any, b: any) => 
           new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
         );
         setReservas(sorted);
+
+        // Si hay una reserva seleccionada activa, refrescar su información local
+        if (selectedRes) {
+          const updatedSelected = sorted.find((r: any) => String(r.id) === String(selectedRes.id));
+          if (updatedSelected) {
+            setSelectedRes(updatedSelected);
+          }
+        }
       }
     } catch (e) {
       console.error("Error al cargar reservas", e);
@@ -2779,6 +2853,112 @@ export default function ReservasList() {
                       </a>
                     </div>
                   )}
+
+                  {/* Comprobantes de Transferencia Bancaria */}
+                  {selectedRes.transfer_receipts && selectedRes.transfer_receipts.length > 0 && (
+                    <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1 space-y-4 text-left animate-in fade-in duration-200">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comprobantes de Transferencia</span>
+                      
+                      <div className="space-y-3">
+                        {selectedRes.transfer_receipts.map((receipt: any) => {
+                          const isPending = receipt.status === 'pending';
+                          const isApproved = receipt.status === 'approved';
+                          const isRejected = receipt.status === 'rejected';
+                          const isProcessing = approvingReceiptId === receipt.id;
+
+                          return (
+                            <div key={receipt.id} className="bg-white border border-zinc-200 rounded-xl p-3.5 space-y-3 shadow-sm">
+                              {/* Header del Comprobante */}
+                              <div className="flex justify-between items-start gap-2">
+                                <div>
+                                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Monto Declarado</span>
+                                  <p className="text-[14px] font-black text-zinc-900 mt-0.5">
+                                    ${receipt.amount?.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                                  </p>
+                                </div>
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
+                                  isPending ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                                  isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                                  'bg-rose-50 border-rose-200 text-rose-700'
+                                }`}>
+                                  {isPending ? 'Pendiente' : isApproved ? 'Aprobado' : 'Rechazado'}
+                                </span>
+                              </div>
+
+                              {/* Detalles */}
+                              <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-zinc-500 bg-zinc-50 p-2 rounded-lg">
+                                <div>
+                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Fecha de Envío</span>
+                                  <span className="text-zinc-800 font-semibold">
+                                    {receipt.created_at ? new Date(receipt.created_at).toLocaleString('es-MX') : '—'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Registrado por</span>
+                                  <span className="text-zinc-800 font-semibold truncate block">
+                                    {receipt.guest_name || 'Huésped'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {receipt.notes && (
+                                <div className="bg-zinc-50 border border-zinc-150 p-2.5 rounded-lg text-[11.5px] text-zinc-650 italic">
+                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider not-italic mb-0.5">Comentarios de recepción</span>
+                                  "{receipt.notes}"
+                                </div>
+                              )}
+
+                              {/* Botones de acción y visualización */}
+                              <div className="space-y-2 pt-1 border-t border-zinc-100">
+                                <a
+                                  href={receipt.receipt_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-center gap-1.5 w-full py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
+                                >
+                                  <FileText size={12} />
+                                  <span>Ver Comprobante Subido ↗</span>
+                                </a>
+
+                                {isPending && (
+                                  <div className="space-y-2 pt-1.5">
+                                    <textarea
+                                      value={rejectionNotes[receipt.id] || ''}
+                                      onChange={(e) => setRejectionNotes(prev => ({ ...prev, [receipt.id]: e.target.value }))}
+                                      placeholder="Escribe notas o motivo si vas a rechazar el pago..."
+                                      className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-zinc-800 text-[11px] outline-none focus:border-zinc-350 h-14 resize-none shadow-sm"
+                                    />
+                                    
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleProcessTransferReceipt(receipt.id, selectedRes.id.toString(), receipt.amount, 'reject')}
+                                        disabled={isProcessing}
+                                        className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-lg text-[11px] transition-colors disabled:opacity-55 cursor-pointer"
+                                      >
+                                        ❌ Rechazar
+                                      </button>
+                                      <button
+                                        onClick={() => handleProcessTransferReceipt(receipt.id, selectedRes.id.toString(), receipt.amount, 'approve')}
+                                        disabled={isProcessing}
+                                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-all disabled:opacity-55 flex justify-center items-center gap-1.5 shadow shadow-emerald-600/10 cursor-pointer"
+                                      >
+                                        {isProcessing ? (
+                                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                          <span>✅ Aprobar</span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
 
                   {/* Registrar Anticipo Button & Panel */}
                   {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (

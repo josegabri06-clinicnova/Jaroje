@@ -1058,6 +1058,45 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
   return json;
 }
 
+// Registrar un pago por transferencia en Beds24 como un ítem de factura (negativo)
+export async function addBeds24Payment(bookId: number | string, amount: number, description: string = 'Pago por transferencia'): Promise<boolean> {
+  const token = await getBeds24Token();
+  const payload = [
+    {
+      bookId: Number(bookId),
+      invoiceItems: [
+        {
+          description,
+          qty: -1,
+          price: Number(amount)
+        }
+      ]
+    }
+  ];
+
+  console.log(`[Beds24 API] Adding payment of ${amount} to booking ${bookId}`);
+  const res = await fetch('https://api.beds24.com/v2/bookings', {
+    method: 'PUT',
+    headers: {
+      'token': token,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload),
+    cache: 'no-store'
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[Beds24 API] Error adding payment: ${errText}`);
+    return false;
+  }
+
+  const data = await res.json();
+  console.log(`[Beds24 API] Add payment response:`, JSON.stringify(data));
+  return true;
+}
+
+
 /**
  * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.
  */

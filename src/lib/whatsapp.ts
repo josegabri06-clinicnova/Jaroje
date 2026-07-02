@@ -101,6 +101,60 @@ export async function sendWhatsAppTemplate(
   }
 }
 
+// Envía un mensaje de texto libre por WhatsApp llamando a Meta Cloud API
+export async function sendWhatsAppTextMessage(
+  phone: string,
+  body: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  try {
+    const token = process.env.WHATSAPP_TOKEN;
+    const phoneId = process.env.WHATSAPP_PHONE_ID;
+
+    if (!token || !phoneId) {
+      return { success: false, error: 'Credenciales de WhatsApp no configuradas en el servidor' };
+    }
+
+    const cleanedPhone = normalizePhone(phone);
+    if (!cleanedPhone) {
+      return { success: false, error: 'Formato de teléfono no válido' };
+    }
+
+    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+    const payload = {
+      messaging_product: 'whatsapp',
+      recipient_type: 'individual',
+      to: cleanedPhone,
+      type: 'text',
+      text: {
+        body: body
+      }
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const status = response.status;
+    const resBody = await response.json();
+
+    if (status !== 200) {
+      console.error(`Meta API error text message to ${cleanedPhone}:`, resBody);
+      return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
+    }
+
+    return { success: true, data: resBody };
+  } catch (err: any) {
+    console.error(`Exception sending WhatsApp text message to ${phone}:`, err);
+    return { success: false, error: err.message || 'Error de red' };
+  }
+}
+
+
 // Helper para extraer el primer nombre
 function getFirstName(fullName: string): string {
   if (!fullName) return '';
