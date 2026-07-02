@@ -1094,6 +1094,20 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
 
   const data = await res.json();
   console.log(`[Beds24 API] Add payment response:`, JSON.stringify(data));
+  
+  if (data && data.success === false) {
+    console.error(`[Beds24 API] Add payment failed (root success false):`, data.error || data.message || 'Unknown error');
+    return false;
+  }
+  
+  if (data && Array.isArray(data.data)) {
+    const firstResult = data.data[0];
+    if (firstResult && firstResult.success === false) {
+      console.error(`[Beds24 API] Add payment failed for booking:`, JSON.stringify(firstResult.errors || firstResult.message));
+      return false;
+    }
+  }
+  
   return true;
 }
 
