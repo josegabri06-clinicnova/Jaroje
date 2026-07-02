@@ -243,7 +243,8 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any) {
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name) // {{1}} Nombre
+    getFirstName(booking.guest_name), // {{1}} Nombre
+    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
   ];
 
   return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params);
