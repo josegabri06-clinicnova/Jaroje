@@ -696,125 +696,16 @@ export default function PublicReservaPage() {
             </div>
 
             {/* Método 2: Transferencia */}
-            <div className="space-y-3">
+            <div className="space-y-3 pt-2">
               <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">Opción 2: Transferencia o Depósito Bancario</span>
-              
-              <div className="bg-[#FAF9F6] border border-zinc-200/70 rounded-xl p-3 text-xs space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500 font-semibold">Banco:</span>
-                  <strong className="text-zinc-950 font-extrabold">Santander</strong>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500 font-semibold">Titular:</span>
-                  <strong className="text-zinc-950 font-extrabold">Laura Isabel Corral Dovalina</strong>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500 font-semibold">Cuenta:</span>
-                  <strong className="text-zinc-950 font-extrabold">60628351140</strong>
-                </div>
-                <div className="flex justify-between items-center pt-1 border-t border-zinc-150">
-                  <span className="text-zinc-500 font-semibold">CLABE:</span>
-                  <strong className="text-zinc-950 font-black tracking-wide">014060606283511403</strong>
-                </div>
-                <button
-                  onClick={() => copyToClipboard('014060606283511403', setCopiedClabe)}
-                  className="w-full mt-2.5 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs hover:bg-indigo-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {copiedClabe ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                  {copiedClabe ? '¡Copiado!' : 'Copiar CLABE'}
-                </button>
-              </div>
-
-              <div className="bg-[#FAF9F6] border border-zinc-200/70 rounded-xl p-3 text-xs space-y-2">
-                <div className="flex justify-between items-center">
-                  <span className="text-zinc-500 font-semibold">Concepto de Transferencia:</span>
-                  <strong className="text-zinc-950 font-black">{booking.id}</strong>
-                </div>
-                <button
-                  onClick={() => copyToClipboard(String(booking.id), setCopiedConcept)}
-                  className="w-full mt-2 py-2 bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold rounded-lg text-xs hover:bg-indigo-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {copiedConcept ? <Check size={14} className="text-emerald-600" /> : <Copy size={14} />}
-                  {copiedConcept ? '¡Copiado!' : 'Copiar Concepto'}
-                </button>
-              </div>
-
-              {/* Adjuntar Comprobante con Subida Automática */}
-              <div className="bg-[#FAF9F6] border border-zinc-200/70 rounded-xl p-4 text-xs space-y-3">
-                <span className="text-[10px] font-extrabold uppercase text-indigo-650 tracking-wider block">Adjuntar comprobante de pago</span>
-
-                {uploading ? (
-                  <div className="bg-indigo-50/50 border border-indigo-200 rounded-xl p-4 text-center space-y-2 flex flex-col items-center justify-center">
-                    <Loader2 size={24} className="animate-spin text-indigo-600" />
-                    <span className="text-indigo-850 font-bold text-[11.5px]">Subiendo comprobante...</span>
-                    <p className="text-[9.5px] text-indigo-500">Comprimiendo y guardando en tu reserva.</p>
-                  </div>
-                ) : uploadedUrl ? (
-                  <div className="space-y-3">
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 text-center space-y-2">
-                      <div className="w-9 h-9 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-                        <Check size={18} className="stroke-[3]" />
-                      </div>
-                      <span className="text-emerald-800 font-bold block text-[11px]">¡Comprobante guardado con éxito!</span>
-                      <p className="text-[9.5px] text-emerald-600 leading-normal">
-                        Tu comprobante se ha subido. Por favor, pulsa el botón de abajo para notificar a recepción.
-                      </p>
-                    </div>
-
-                    <label 
-                      htmlFor="file-upload" 
-                      className="w-full py-2 bg-white border border-zinc-300 text-zinc-700 font-bold rounded-lg text-xs hover:bg-zinc-50 transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center"
-                    >
-                      <Upload size={13} />
-                      Reemplazar comprobante
-                    </label>
-                  </div>
-                ) : (
-                  <div>
-                    <label 
-                      htmlFor="file-upload" 
-                      className="flex flex-col items-center justify-center border-2 border-dashed border-zinc-300 rounded-xl py-6 px-3 hover:bg-zinc-50 transition-all cursor-pointer bg-white"
-                    >
-                      <Upload size={24} className="text-zinc-400 mb-1.5" />
-                      <span className="text-[11.5px] text-indigo-650 font-semibold text-center hover:underline">
-                        Seleccionar o fotografiar comprobante
-                      </span>
-                      <span className="text-[9px] text-zinc-400 mt-0.5">(Imágenes o PDF)</span>
-                    </label>
-                  </div>
-                )}
-
-                <input 
-                  type="file" 
-                  id="file-upload"
-                  accept="image/*,application/pdf" 
-                  onChange={handleFileChange} 
-                  className="hidden" 
-                  disabled={uploading}
-                />
-
-                {uploadError && (
-                  <div className="text-rose-600 font-bold text-center text-[10.5px] mt-2">
-                    ⚠️ {uploadError}
-                  </div>
-                )}
-              </div>
-
-              {/* Botón de WhatsApp dinámico */}
               <a 
-                href={
-                  uploadedUrl 
-                    ? `https://wa.me/529581168698?text=Hola,%20acabo%20de%20subir%20el%20comprobante%20de%20mi%20reserva%20${booking.id}.%20Puedes%20verlo%20aquí:%20${encodeURIComponent(uploadedUrl)}`
-                    : `https://wa.me/529581168698?text=Hola,%20envío%20el%20comprobante%20de%20mi%20reserva%20${booking.id}`
-                } 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={`w-full text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  uploadedUrl ? 'bg-[#25D366] hover:bg-[#20ba5a]' : 'bg-[#25D366]/80 hover:bg-[#20ba5a]/80'
-                }`}
+                href={`/public/pago-transferencia?id=${booking.id}&amount=${booking.balance}&name=${encodeURIComponent(booking.guest_name || '')}`}
+                className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                Enviar Comprobante por WhatsApp
+                <FileText size={18} />
+                Pagar por Transferencia Bancaria
               </a>
+              <p className="text-[10px] text-zinc-500 italic text-center mt-1">Obtén la cuenta CLABE oficial y reporta tu comprobante de inmediato al panel de staySync.</p>
             </div>
           </div>
         )}
