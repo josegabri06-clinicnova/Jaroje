@@ -286,6 +286,7 @@ export async function POST(req: Request) {
           return parts.length > 1
             ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
             : { firstName: fullName.trim(), lastName: '' };
+        })(),
         status: isBlock ? "black" : (Number(deposit || 0) > 0 ? "confirmed" : "request"),
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
         ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
