@@ -582,6 +582,19 @@ export default function PublicReservaPage() {
           </div>
         )}
 
+        {/* ALERTA DE PAGO PARCIAL / SALDO PENDIENTE */}
+        {currentState !== 'liberada' && booking.deposit > 0 && booking.balance > 0 && (
+          <div className="bg-amber-50 border border-amber-250/30 rounded-2xl p-4 flex gap-3 text-amber-900 text-xs shadow-sm">
+            <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5 animate-pulse" />
+            <div className="space-y-1">
+              <span className="font-extrabold block text-amber-950 uppercase tracking-wide">Pago Parcial: Saldo Pendiente</span>
+              <p className="leading-relaxed opacity-95">
+                Has cubierto tu anticipo de <strong>${booking.deposit.toLocaleString('es-MX')} MXN</strong>. Recuerda liquidar el saldo restante de <strong>${booking.balance.toLocaleString('es-MX')} MXN</strong> antes de tu llegada o en recepción durante tu check-in.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* 3. RESUMEN DE LA ESTANCIA */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
