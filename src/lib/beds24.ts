@@ -1061,11 +1061,31 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
 // Registrar un pago por transferencia en Beds24 como un ítem de factura (negativo)
 export async function addBeds24Payment(bookId: number | string, amount: number, description: string = 'Pago por transferencia'): Promise<boolean> {
   const token = await getBeds24Token();
+  // 1. Obtener la reserva actual para conocer el valor del campo 'deposit' previo
+  let currentDeposit = 0;
+  try {
+    const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}`, {
+      headers: { 'token': token },
+      cache: 'no-store'
+    });
+    if (getRes.ok) {
+      const getData = await getRes.json();
+      if (getData && getData.success && Array.isArray(getData.data) && getData.data.length > 0) {
+        currentDeposit = Number(getData.data[0].deposit || 0);
+      }
+    }
+  } catch (e) {
+    console.error(`[Beds24 API] Error fetching booking for deposit calculation:`, e);
+  }
+
+  const newDeposit = currentDeposit + Number(amount);
+
   const payload = [
     {
       id: Number(bookId),
       bookId: Number(bookId),
       status: 'confirmed',
+      deposit: newDeposit,
       invoiceItems: [
         {
           description,
@@ -1076,7 +1096,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
     }
   ];
 
-  console.log(`[Beds24 API] Adding payment of ${amount} to booking ${bookId}`);
+  console.log(`[Beds24 API] Adding payment of ${amount} to booking ${bookId} (previous deposit: ${currentDeposit}, new deposit: ${newDeposit})`);
   const res = await fetch('https://api.beds24.com/v2/bookings', {
     method: 'POST',
     headers: {
