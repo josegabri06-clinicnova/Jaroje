@@ -1584,6 +1584,7 @@ export default function CalendarPage() {
             <input 
               type="date" 
               className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+              value={format(startDate, 'yyyy-MM-dd')}
               onChange={(e) => {
                 if (e.target.value) {
                   const selectedDate = new Date(e.target.value + 'T00:00:00');
@@ -1598,6 +1599,7 @@ export default function CalendarPage() {
           <input 
             type="date" 
             className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            value={format(startDate, 'yyyy-MM-dd')}
             onChange={(e) => {
               if (e.target.value) {
                 const selectedDate = new Date(e.target.value + 'T00:00:00');
