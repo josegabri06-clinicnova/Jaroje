@@ -424,7 +424,7 @@ export default function PublicReservaPage() {
           href="https://wa.me/529581168698" 
           target="_blank" 
           rel="noopener noreferrer"
-          className="bg-indigo-650 text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md hover:bg-indigo-700 transition-all cursor-pointer"
+          className="bg-indigo-600 text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md hover:bg-indigo-700 transition-all cursor-pointer"
         >
           Contactar por WhatsApp
         </a>
@@ -551,7 +551,7 @@ export default function PublicReservaPage() {
                     <div 
                       className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
                         isCompleted 
-                          ? 'bg-indigo-650 text-white shadow-sm' 
+                          ? 'bg-indigo-600 text-white shadow-sm' 
                           : isActive 
                             ? 'bg-white border-2 border-indigo-600 text-indigo-600 shadow-md ring-4 ring-indigo-50 animate-pulse' 
                             : 'bg-white border border-zinc-250 text-zinc-400'
@@ -561,7 +561,7 @@ export default function PublicReservaPage() {
                     </div>
                     <span 
                       className={`text-[8.5px] mt-1.5 font-bold tracking-tight text-center max-w-[62px] block leading-tight ${
-                        isActive ? 'text-indigo-650 font-black' : isCompleted ? 'text-zinc-700' : 'text-zinc-400'
+                        isActive ? 'text-indigo-600 font-black' : isCompleted ? 'text-zinc-700' : 'text-zinc-400'
                       }`}
                     >
                       {step.label}
@@ -599,7 +599,7 @@ export default function PublicReservaPage() {
         {/* 3. RESUMEN DE LA ESTANCIA */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <FileText size={18} className="text-indigo-650" />
+            <FileText size={18} className="text-indigo-600" />
             <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Resumen de tu Estancia</h3>
           </div>
 
@@ -640,7 +640,7 @@ export default function PublicReservaPage() {
         {/* 4. ESTADO DE CUENTA */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <Clock size={18} className="text-indigo-650" />
+            <Clock size={18} className="text-indigo-600" />
             <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Estado de Cuenta</h3>
           </div>
 
@@ -657,12 +657,12 @@ export default function PublicReservaPage() {
                 </div>
                 <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
                   <span className="font-bold">Saldo restante (adeudo):</span>
-                  <strong className="text-indigo-650 font-black text-base">${booking.balance.toLocaleString('es-MX')} MXN</strong>
+                  <strong className="text-indigo-600 font-black text-base">${booking.balance.toLocaleString('es-MX')} MXN</strong>
                 </div>
               </>
             ) : (
               <>
-                <div className="flex justify-between items-center text-indigo-650 font-semibold bg-indigo-50/50 px-3 py-2 rounded-xl border border-indigo-100/80">
+                <div className="flex justify-between items-center text-indigo-600 font-semibold bg-indigo-50/50 px-3 py-2 rounded-xl border border-indigo-100/80">
                   <span>Anticipo Requerido (50%):</span>
                   <strong className="font-black">${anticipoRequerido.toLocaleString('es-MX')} MXN</strong>
                 </div>
@@ -672,7 +672,7 @@ export default function PublicReservaPage() {
                 </div>
                 <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
                   <span className="font-bold">Saldo restante (adeudo):</span>
-                  <strong className="text-indigo-650 font-black text-base">${booking.price.toLocaleString('es-MX')} MXN</strong>
+                  <strong className="text-indigo-600 font-black text-base">${booking.price.toLocaleString('es-MX')} MXN</strong>
                 </div>
               </>
             )}
@@ -688,7 +688,7 @@ export default function PublicReservaPage() {
           return (
             <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-                <CreditCard size={18} className="text-indigo-650" />
+                <CreditCard size={18} className="text-indigo-600" />
                 <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
                   {hasPaid ? 'Liquidar Saldo Pendiente' : 'Formas de Pago'}
                 </h3>
@@ -703,7 +703,7 @@ export default function PublicReservaPage() {
                       onClick={() => setPaymentSplit('50')}
                       className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${
                         paymentSplit === '50'
-                          ? 'bg-indigo-650 text-white shadow-md'
+                          ? 'bg-indigo-600 text-white shadow-md'
                           : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
                       }`}
                     >
@@ -716,7 +716,7 @@ export default function PublicReservaPage() {
                       onClick={() => setPaymentSplit('100')}
                       className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${
                         paymentSplit === '100'
-                          ? 'bg-indigo-650 text-white shadow-md'
+                          ? 'bg-indigo-600 text-white shadow-md'
                           : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
                       }`}
                     >
@@ -739,7 +739,7 @@ export default function PublicReservaPage() {
 
               {/* Método 1: Tarjeta */}
               <div className="space-y-2">
-                <span className="text-[10px] font-extrabold uppercase text-indigo-650 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
+                <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
                 <a 
                   href="https://link.mercadopago.com.mx/jaroje" 
                   target="_blank" 
@@ -777,7 +777,7 @@ export default function PublicReservaPage() {
         {/* 6. CARACTERÍSTICAS DEL ALOJAMIENTO */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <Home size={18} className="text-indigo-650" />
+            <Home size={18} className="text-indigo-600" />
             <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Características del Alojamiento</h3>
           </div>
 
@@ -803,7 +803,7 @@ export default function PublicReservaPage() {
         {/* 7. CARRUSEL DE FOTOGRAFÍAS */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <Compass size={18} className="text-indigo-650" />
+            <Compass size={18} className="text-indigo-600" />
             <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Galería de Imágenes</h3>
           </div>
 
@@ -829,7 +829,7 @@ export default function PublicReservaPage() {
         {/* 8. INFORMACIÓN PARA TU ESTANCIA */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <Info size={18} className="text-indigo-650" />
+            <Info size={18} className="text-indigo-600" />
             <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Información para tu estancia</h3>
           </div>
 
@@ -860,7 +860,7 @@ export default function PublicReservaPage() {
         {/* 9. CÓMO LLEGAR */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <MapPin size={18} className="text-indigo-650" />
+            <MapPin size={18} className="text-indigo-600" />
             <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Ubicación y Cómo Llegar</h3>
           </div>
 
