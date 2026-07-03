@@ -293,7 +293,6 @@ export default function PublicReservaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentSplit, setPaymentSplit] = useState<'50' | '100'>('50');
-  const [stripeLoading, setStripeLoading] = useState(false);
 
   const [copiedClabe, setCopiedClabe] = useState(false);
   const [copiedConcept, setCopiedConcept] = useState(false);
@@ -307,34 +306,6 @@ export default function PublicReservaPage() {
   // Estados para Lightbox de fotos
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
-
-  const handleStripePayment = async (targetAmount: number) => {
-    if (!booking) return;
-    setStripeLoading(true);
-    try {
-      const res = await fetch('/api/payments/stripe-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bookingId: booking.id,
-          amount: targetAmount,
-          splitType: paymentSplit,
-          guestName: booking.guest_name
-        })
-      });
-      const data = await res.json();
-      if (res.ok && data.success && data.url) {
-        window.location.href = data.url;
-      } else {
-        alert("Ocurrió un error al iniciar el portal de pago: " + (data.error || "inténtalo de nuevo."));
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert("Error al conectar con la pasarela de pago.");
-    } finally {
-      setStripeLoading(false);
-    }
-  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0 && id) {
@@ -370,17 +341,6 @@ export default function PublicReservaPage() {
 
   useEffect(() => {
     if (!id) return;
-
-    // Verificar si regresó de un pago exitoso o cancelado de Stripe
-    const params = new URLSearchParams(window.location.search);
-    const paymentStatus = params.get('payment_status');
-    if (paymentStatus === 'success') {
-      alert("🎉 ¡Tu pago ha sido procesado con éxito! El sistema está actualizando tu reservación. Recibirás tu confirmación por WhatsApp en unos momentos.");
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else if (paymentStatus === 'cancelled') {
-      alert("❌ El pago con tarjeta fue cancelado o no pudo completarse. Inténtalo de nuevo o selecciona otro método.");
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
 
     const fetchBooking = async () => {
       try {
@@ -779,25 +739,17 @@ export default function PublicReservaPage() {
 
               {/* Método 1: Tarjeta */}
               <div className="space-y-2">
-                <span className="text-[10px] font-extrabold uppercase text-indigo-650 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Stripe)</span>
-                <button
-                  disabled={stripeLoading}
-                  onClick={() => handleStripePayment(targetAmount)}
-                  className="w-full bg-indigo-650 hover:bg-indigo-700 disabled:bg-zinc-400 text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                <span className="text-[10px] font-extrabold uppercase text-indigo-650 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
+                <a 
+                  href="https://link.mercadopago.com.mx/jaroje" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  {stripeLoading ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      <span>Conectando con Stripe...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard size={18} />
-                      <span>Pagar con Tarjeta</span>
-                    </>
-                  )}
-                </button>
-                <p className="text-[10px] text-zinc-500 italic text-center mt-1">Pago seguro procesado por Stripe. Tu reservación se confirmará de inmediato.</p>
+                  <CreditCard size={18} />
+                  Pagar con Mercado Pago
+                </a>
+                <p className="text-[10px] text-zinc-500 italic text-center mt-1">Si realizas tu pago con tarjeta, no es necesario enviar comprobante.</p>
               </div>
 
               <div className="relative flex py-1 items-center">
