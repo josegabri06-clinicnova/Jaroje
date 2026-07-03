@@ -124,6 +124,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
             </button>
           )}
 
+          {/* Registro Rápido de Finanzas ($) — solo admin */}
+          {role === 'admin' && (
+            <button
+              onClick={() => router.push('/finanzas?action=new_movement')}
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-100 active:scale-95 transition-all text-zinc-500 hover:text-zinc-950 font-black text-[20px] leading-none cursor-pointer"
+              aria-label="Registrar movimiento financiero"
+            >
+              $
+            </button>
+          )}
+
           {/* Campana — solo admin */}
           {role === 'admin' && <NotificationBell />}
 
