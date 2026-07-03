@@ -1,10 +1,6 @@
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16' as any,
-});
-
 export async function POST(req: Request) {
   try {
     const { bookingId, amount, splitType, guestName } = await req.json();
@@ -13,9 +9,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Faltan parámetros bookingId o amount' }, { status: 400 });
     }
 
-    if (!process.env.STRIPE_SECRET_KEY) {
+    const apiKey = process.env.STRIPE_SECRET_KEY;
+    if (!apiKey) {
       return NextResponse.json({ success: false, error: 'STRIPE_SECRET_KEY no está configurado en el servidor' }, { status: 500 });
     }
+
+    const stripe = new Stripe(apiKey, {
+      apiVersion: '2023-10-16' as any,
+    });
 
     const origin = req.headers.get('origin') || 'https://jaroje-app.vercel.app';
 

@@ -4,10 +4,6 @@ import { addBeds24Payment, getBeds24Token } from '@/lib/beds24';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16' as any,
-});
-
 export async function POST(req: Request) {
   try {
     const body = await req.text();
@@ -16,6 +12,15 @@ export async function POST(req: Request) {
     if (!signature) {
       return NextResponse.json({ error: 'Falta stripe-signature' }, { status: 400 });
     }
+
+    const apiKey = process.env.STRIPE_SECRET_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: 'STRIPE_SECRET_KEY no está configurado en el servidor' }, { status: 500 });
+    }
+
+    const stripe = new Stripe(apiKey, {
+      apiVersion: '2023-10-16' as any,
+    });
 
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     if (!webhookSecret) {
