@@ -51,6 +51,48 @@ export async function POST(req: Request) {
               const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${bookingId}`;
               const guestsCount = String(Number(rawB.numAdult || 1) + Number(rawB.numChild || 0));
 
+              // 2.5 Registrar en Finanzas locales de Supabase
+              try {
+                const { data: accounts } = await supabase.from('accounts').select('*');
+                let accountId = null;
+                if (accounts && accounts.length > 0) {
+                  const santanderAcc = accounts.find(a => a.name.toUpperCase().includes('SANTANDER'));
+                  if (santanderAcc) {
+                    accountId = santanderAcc.id;
+                  } else {
+                    const bancoAcc = accounts.find(a => a.group_type === 'BANCOS');
+                    if (bancoAcc) {
+                      accountId = bancoAcc.id;
+                    } else {
+                      accountId = accounts[0].id;
+                    }
+                  }
+                }
+
+                if (accountId) {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const { error: finErr } = await supabase.from('finances').insert({
+                    type: 'ingreso',
+                    amount: Number(amount),
+                    category: 'Alojamiento',
+                    description: `${guestName} (ID: ${bookingId}) - Abono por transferencia Santander (Ref: ${receiptId.substring(0, 8)})`,
+                    payment_method: 'transferencia',
+                    account_id: accountId,
+                    date: todayStr
+                  });
+                  if (finErr) console.error("[Approve Transfer] Error inserting finance log:", finErr);
+
+                  const matchedAcc = accounts?.find(a => a.id === accountId);
+                  if (matchedAcc) {
+                    const newBalance = Number(matchedAcc.balance || 0) + Number(amount);
+                    const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId);
+                    if (accErr) console.error("[Approve Transfer] Error updating account balance:", accErr);
+                  }
+                }
+              } catch (errFin) {
+                console.error("[Approve Transfer] Error logging finances:", errFin);
+              }
+
               const price = Number(rawB.price || 0);
               const deposit = Number(rawB.deposit || 0);
               const balance = Math.max(0, price - deposit);
