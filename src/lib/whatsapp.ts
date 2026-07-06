@@ -188,11 +188,14 @@ export async function sendTemplate1_SolicitudRecibida(booking: any) {
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
+    getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams);
 }
 
 // 2. Mensaje 2 - Último aviso para conservar la reservación (ultimo_aviso)
@@ -201,11 +204,14 @@ export async function sendTemplate2_UltimoAviso(booking: any) {
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
+    getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams);
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
@@ -217,11 +223,14 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any) {
 
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id), // {{2}} LinkPortal
-    guestsCount                       // {{3}} Huéspedes
+    guestsCount                       // {{2}} Huéspedes
   ];
 
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams);
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
@@ -249,11 +258,14 @@ export async function sendTemplate5_PreparacionLlegada(booking: any) {
 
   const params = [
     getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id), // {{2}} LinkPortal
-    guestsCount                       // {{3}} Huéspedes
+    guestsCount                       // {{2}} Huéspedes
   ];
 
-  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams);
 }
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
@@ -262,11 +274,14 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any) {
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
+    getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams);
 }
 
 // 7. Mensaje 7 - Seguimiento de satisfacción (seguimiento_satisfaccion)
@@ -275,11 +290,14 @@ export async function sendTemplate7_SeguimientoSatisfaccion(booking: any) {
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
+    getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams);
 }
 
 // 8. Mensaje 8 - Día de salida (salida_checkout)
@@ -331,9 +349,12 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any) {
   const params = [
     getFirstName(booking.guest_name),      // {{1}} Nombre
     formatCurrency(lastPayment),           // {{2}} MontoAbonado
-    formatCurrency(bal),                   // {{3}} SaldoPendiente
-    getPublicReservaLink(booking.id)       // {{4}} LinkPortal
+    formatCurrency(bal)                    // {{3}} SaldoPendiente
   ];
 
-  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams);
 }
