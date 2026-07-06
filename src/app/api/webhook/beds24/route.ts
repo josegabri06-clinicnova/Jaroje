@@ -90,6 +90,21 @@ export async function POST(req: Request) {
               const b = b24Json.data[0];
               const phone = b.phone || b.mobile || b.guestPhone || '';
               if (phone) {
+                // Evitar envíos duplicados concurrentes en el mismo minuto a este teléfono
+                const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+                const { data: recentLogs } = await supabase
+                  .from('whatsapp_logs')
+                  .select('id')
+                  .eq('phone', phone)
+                  .eq('template_name', 'reservacion_confirmada')
+                  .gt('created_at', oneMinuteAgo)
+                  .limit(1);
+
+                if (recentLogs && recentLogs.length > 0) {
+                  console.log(`[Webhook Beds24] Omitiendo envío duplicado a ${phone} (ya se envió en el último minuto)`);
+                  return;
+                }
+
                 const bookingForWA = {
                   id: bookingId.toString(),
                   guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || guestName || 'Huésped'),

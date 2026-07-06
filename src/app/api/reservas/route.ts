@@ -197,6 +197,7 @@ export async function POST(req: Request) {
       numAdult,
       numChild,
       notes,
+      sendWhatsApp = true,
       portalSettings
     } = body;
 
@@ -250,7 +251,7 @@ export async function POST(req: Request) {
       }
 
       // Enviar WhatsApp en segundo plano
-      if (!isBlock && phone) {
+      if (!isBlock && phone && sendWhatsApp) {
         (async () => {
           try {
             const physicalName = unitId ? (UNIT_TO_ROOM[String(unitId)] || String(unitId)) : '';
@@ -359,7 +360,7 @@ export async function POST(req: Request) {
     }
 
     // Enviar WhatsApp en segundo plano para Beds24 (busca en la raíz, en el objeto 'new' o en 'info')
-    if (!isBlock && phone && bookingId) {
+    if (!isBlock && phone && bookingId && sendWhatsApp) {
       (async () => {
         try {
           const physicalName = unitId ? (UNIT_TO_ROOM[String(unitId)] || String(unitId)) : '';

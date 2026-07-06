@@ -670,7 +670,8 @@ export default function VercelActionForm() {
       const depositPerRoom = Math.round(totalDeposit / totalRooms);
       const roomNamesList = roomsToBook.map(r => r.name).join(', ');
 
-      for (const room of roomsToBook) {
+      for (let i = 0; i < roomsToBook.length; i++) {
+        const room = roomsToBook[i];
         const matchedDetails = roomDetails.find(d => d.roomId === room.roomId && d.unitId === room.unitId);
         const roomTotal = matchedDetails ? matchedDetails.roomTotal : 0;
         const roomAdults = matchedDetails ? (matchedDetails.adults ?? 1) : 1;
@@ -689,6 +690,7 @@ export default function VercelActionForm() {
           numAdult: isBlock ? 1 : roomAdults,
           numChild: isBlock ? 0 : roomChildren,
           notes: isBlock ? '' : `${form.notes || ''}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`,
+          sendWhatsApp: i === 0,
           portalSettings: {
             showCardPayment: form.showCardPayment,
             transferAccount: form.transferAccount
