@@ -108,16 +108,9 @@ const ROOM_FEATURES: Record<string, { title: string; capacity: number; features:
 };
 
 const COMMON_PHOTOS = [
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(1).JPG',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(2).jpg',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(3).jpg',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(4).JPG',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(5).JPG',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(6).JPG',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(7).JPG',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(8).JPG',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(9).JPG',
-  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(10).JPG'
+  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(4).JPG', // Alberca
+  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(5).JPG', // Patio / Jardines
+  'https://www.condominiosjaroje.com/images/INSTALACIONES/INSTALACION%20(1).JPG'  // Entrada / Acceso
 ];
 
 const ROOM_PHOTOS: Record<string, string[]> = {
@@ -225,29 +218,15 @@ const PHOTO_CAPTIONS: Record<string, string[]> = {
 };
 
 const COMMON_CAPTIONS = [
-  'Áreas Comunes - Acceso y recepción',
-  'Áreas Comunes - Fachada principal',
-  'Áreas Comunes - Alberca y área de asoleadero',
   'Áreas Comunes - Alberca principal',
-  'Áreas Comunes - Jardines tropicales',
-  'Áreas Comunes - Terraza común',
-  'Áreas Comunes - Camastros y alberca',
-  'Áreas Comunes - Fachada y acceso vehicular',
-  'Áreas Comunes - Vista exterior de jardines',
-  'Áreas Comunes - Iluminación nocturna de fachada'
+  'Áreas Comunes - Patio y jardines',
+  'Áreas Comunes - Entrada y recepción'
 ];
 
 const COMMON_CAPTIONS_EN = [
-  'Common Areas - Access & Front Desk',
-  'Common Areas - Main Facade',
-  'Common Areas - Swimming Pool & Sun Deck',
-  'Common Areas - Main Pool',
-  'Common Areas - Tropical Gardens',
-  'Common Areas - Shared Terrace',
-  'Common Areas - Lounge Chairs & Pool',
-  'Common Areas - Facade & Vehicle Entrance',
-  'Common Areas - Garden Exterior View',
-  'Common Areas - Nocturnal Facade Lighting'
+  'Common Areas - Main pool',
+  'Common Areas - Patio & gardens',
+  'Common Areas - Entrance & front desk'
 ];
 
 const ROOM_FEATURES_EN: Record<string, { title: string; capacity: number; features: string[] }> = {
