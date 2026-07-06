@@ -41,7 +41,8 @@ function getSiteUrl(): string {
 export async function sendWhatsAppTemplate(
   phone: string,
   templateName: string,
-  parameters: string[]
+  parameters: string[],
+  buttonParameters?: string[]
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   try {
     const token = process.env.WHATSAPP_TOKEN;
@@ -57,6 +58,29 @@ export async function sendWhatsAppTemplate(
     }
 
     const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+
+    const components: any[] = [
+      {
+        type: 'body',
+        parameters: parameters.map(p => ({
+          type: 'text',
+          text: p || '—'
+        }))
+      }
+    ];
+
+    if (buttonParameters && buttonParameters.length > 0) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: '0',
+        parameters: buttonParameters.map(p => ({
+          type: 'text',
+          text: p || ''
+        }))
+      });
+    }
+
     const payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
@@ -65,15 +89,7 @@ export async function sendWhatsAppTemplate(
       template: {
         name: templateName,
         language: { code: 'es_MX' },
-        components: [
-          {
-            type: 'body',
-            parameters: parameters.map(p => ({
-              type: 'text',
-              text: p || '—'
-            }))
-          }
-        ]
+        components
       }
     };
 
@@ -214,11 +230,14 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any) {
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    getPublicReservaLink(booking.id)  // {{2}} LinkPortal
+    getFirstName(booking.guest_name) // {{1}} Nombre en el cuerpo del mensaje
   ];
 
-  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams);
 }
 
 // 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
