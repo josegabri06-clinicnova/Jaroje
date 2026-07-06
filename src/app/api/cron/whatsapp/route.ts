@@ -153,9 +153,16 @@ export async function GET(req: Request) {
         }
       }
 
-      // --- REGLA 5: Mensaje 5 - Preparación para tu llegada (24h antes del check-in) ---
-      // Se envía típicamente a las 9 A.M. del día previo al check-in
-      if (booking.check_in === tomorrowStr && currentHour === 9) {
+      // --- REGLA 5: Mensaje 5 - Preparación para tu llegada ---
+      // Se envía típicamente a las 9 A.M. del día previo al check-in (tomorrowStr).
+      // Para reservas de último minuto:
+      // - Si entra hoy para mañana, y ya pasó de las 9 A.M., se envía en la siguiente corrida del cron (currentHour > 9).
+      // - Si entra hoy para hoy mismo (mismo día de entrada, todayStr), se envía de inmediato.
+      const isTomorrowScheduled = booking.check_in === tomorrowStr && currentHour === 9;
+      const isTomorrowLastMinute = booking.check_in === tomorrowStr && currentHour > 9;
+      const isSameDayBooking = booking.check_in === todayStr;
+
+      if (isTomorrowScheduled || isTomorrowLastMinute || isSameDayBooking) {
         const logKey = `${bookingIdStr}_preparacion_llegada`;
         if (!sentSet.has(logKey)) {
           const res = await sendTemplate5_PreparacionLlegada(booking);
