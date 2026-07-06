@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
+import { normalizePhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,17 +49,49 @@ export async function GET(req: Request) {
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
+      // Obtener todos los localRes de la misma fecha de checkin, mismo nombre o telefono para consolidar el total del grupo
+      let localGroupPrice = Number(localRes.price || 0);
+      let localGroupDeposit = Number(localRes.deposit || 0);
+      let localRoomNames = [`Habitación ${physicalName}`];
+
+      try {
+        const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+        const mainName = cleanStr(localRes.guest_name || '');
+        const mainPhone = (localRes.phone || '').trim();
+
+        const { data: siblingLocal } = await supabase
+          .from('local_reservas')
+          .select('id, guest_name, phone, price, deposit, unit_id')
+          .eq('check_in', localRes.check_in)
+          .neq('id', localRes.id);
+
+        if (siblingLocal && siblingLocal.length > 0) {
+          siblingLocal.forEach(s => {
+            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone;
+            const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
+            if (samePhone || sameName) {
+              localGroupPrice += Number(s.price || 0);
+              localGroupDeposit += Number(s.deposit || 0);
+              const siblingPhysicalName = s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : '';
+              localRoomNames.push(`Habitación ${siblingPhysicalName}`);
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Error al agrupar localRes:", err);
+      }
+
       return NextResponse.json({
         success: true,
         data: {
           id: localRes.id,
           guest_name: localRes.guest_name,
-          room_name: `Habitación ${physicalName}`,
+          room_name: localRoomNames.join(', '),
           check_in: localRes.check_in,
           check_out: localRes.check_out,
-          price: Number(localRes.price || 0),
-          deposit: Number(localRes.deposit || 0),
-          balance: Math.max(0, Number(localRes.price || 0) - Number(localRes.deposit || 0)),
+          price: localGroupPrice,
+          deposit: localGroupDeposit,
+          balance: Math.max(0, localGroupPrice - localGroupDeposit),
           nights,
           num_adult: Number(localRes.num_adult || 1),
           num_child: Number(localRes.num_child || 0),
@@ -166,17 +199,47 @@ export async function GET(req: Request) {
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
+      let b24GroupPrice = Number(booking.price_estimate || booking.price || 0);
+      let b24GroupDeposit = Number(booking.deposit || 0);
+      let b24GroupBalance = Number(booking.balance || 0);
+      let b24RoomNames = [booking.room_name || `Habitación ${booking.roomId}`];
+
+      try {
+        const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+        const mainName = cleanStr(booking.guest_name || '');
+        const mainPhone = booking.phone || booking.mobile || booking.guest_phone || '';
+        const phoneNum = mainPhone ? normalizePhone(mainPhone) : '';
+
+        const siblingBeds24 = allBeds24.filter(r => {
+          if (r.check_in !== booking.check_in || r.id === booking.id || r.status === 'cancelled') return false;
+          const samePhone = phoneNum && r.phone && normalizePhone(r.phone) === phoneNum;
+          const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
+          return samePhone || sameName;
+        });
+
+        if (siblingBeds24.length > 0) {
+          siblingBeds24.forEach(s => {
+            b24GroupPrice += Number(s.price_estimate || s.price || 0);
+            b24GroupDeposit += Number(s.deposit || 0);
+            b24GroupBalance += Number(s.balance || 0);
+            b24RoomNames.push(s.room_name || `Habitación ${s.roomId}`);
+          });
+        }
+      } catch (err) {
+        console.error("Error al agrupar Beds24 bookings:", err);
+      }
+
       return NextResponse.json({
         success: true,
         data: {
           id: booking.id,
           guest_name: booking.guest_name,
-          room_name: booking.room_name,
+          room_name: b24RoomNames.join(', '),
           check_in: booking.check_in,
           check_out: booking.check_out,
-          price: Number(booking.price_estimate || booking.price || 0),
-          deposit: Number(booking.deposit || 0),
-          balance: Number(booking.balance || 0),
+          price: b24GroupPrice,
+          deposit: b24GroupDeposit,
+          balance: b24GroupBalance,
           nights: booking.nights,
           num_adult: Number(booking.num_adult || 1),
           num_child: Number(booking.num_child || 0),
