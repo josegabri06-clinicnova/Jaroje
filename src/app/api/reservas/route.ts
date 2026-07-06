@@ -196,7 +196,8 @@ export async function POST(req: Request) {
       phone,
       numAdult,
       numChild,
-      notes
+      notes,
+      portalSettings
     } = body;
 
     if (!roomId || !unitId || !checkIn || !checkOut) {
@@ -231,6 +232,21 @@ export async function POST(req: Request) {
       if (error) {
         console.error("[Reservas POST] Error inserting local reservation:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+
+      // Guardar ajustes de portal si se especificaron
+      if (portalSettings) {
+        try {
+          await supabase
+            .from('booking_portal_settings')
+            .upsert({
+              booking_id: String(data.id),
+              show_card_payment: portalSettings.showCardPayment ?? true,
+              transfer_account: portalSettings.transferAccount ?? 'santander'
+            });
+        } catch (dbErr) {
+          console.error("Error al guardar portal settings locales:", dbErr);
+        }
       }
 
       // Enviar WhatsApp en segundo plano
@@ -323,10 +339,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: `Beds24 rechazó la reserva: ${errorMsg}` }, { status: 400 });
     }
 
-    // Enviar WhatsApp en segundo plano para Beds24 (busca en la raíz, en el objeto 'new' o en 'info')
     const bookingId = firstResult
       ? (firstResult.id || firstResult.bookId || firstResult.new?.id || firstResult.new?.bookId || (firstResult.info && firstResult.info[0]?.id))
       : null;
+
+    // Guardar ajustes de portal si se especificaron
+    if (portalSettings && bookingId) {
+      try {
+        await supabase
+          .from('booking_portal_settings')
+          .upsert({
+            booking_id: String(bookingId),
+            show_card_payment: portalSettings.showCardPayment ?? true,
+            transfer_account: portalSettings.transferAccount ?? 'santander'
+          });
+      } catch (dbErr) {
+        console.error("Error al guardar portal settings Beds24:", dbErr);
+      }
+    }
+
+    // Enviar WhatsApp en segundo plano para Beds24 (busca en la raíz, en el objeto 'new' o en 'info')
     if (!isBlock && phone && bookingId) {
       (async () => {
         try {

@@ -69,7 +69,7 @@ export async function GET(req: Request) {
           booking_time: localRes.created_at || null,
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment ?? true,
-            transfer_account: portalSettings?.transfer_account ?? 'santander'
+            transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander')
           }
         }
       });
@@ -187,7 +187,7 @@ export async function GET(req: Request) {
           booking_time: booking.booking_time || null,
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment ?? true,
-            transfer_account: portalSettings?.transfer_account ?? 'santander'
+            transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander')
           }
         }
       });
