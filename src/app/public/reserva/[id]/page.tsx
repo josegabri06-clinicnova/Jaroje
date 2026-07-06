@@ -227,6 +227,326 @@ const COMMON_CAPTIONS = [
   'Áreas Comunes - Iluminación nocturna de fachada'
 ];
 
+const COMMON_CAPTIONS_EN = [
+  'Common Areas - Access & Front Desk',
+  'Common Areas - Main Facade',
+  'Common Areas - Swimming Pool & Sun Deck',
+  'Common Areas - Main Pool',
+  'Common Areas - Tropical Gardens',
+  'Common Areas - Shared Terrace',
+  'Common Areas - Lounge Chairs & Pool',
+  'Common Areas - Facade & Vehicle Entrance',
+  'Common Areas - Garden Exterior View',
+  'Common Areas - Nocturnal Facade Lighting'
+];
+
+const ROOM_FEATURES_EN: Record<string, { title: string; capacity: number; features: string[] }> = {
+  '1rec': {
+    title: '1-Bedroom Condominium',
+    capacity: 4,
+    features: [
+      '1 bedroom with Smart TV',
+      '2 double beds or 1 King Size bed',
+      '1 full bathroom',
+      'Comfortable living room',
+      'Dining area for 4 people',
+      'Fully equipped kitchen',
+      'High-speed WiFi',
+      'Air conditioning'
+    ]
+  },
+  '2rec': {
+    title: '2-Bedroom Condominium',
+    capacity: 6,
+    features: [
+      '2 bedrooms with Smart TV',
+      '1 King Size bed and 2 double beds',
+      '1 full bathroom',
+      'Spacious living room',
+      'Dining area for 6 people',
+      'Breakfast bar',
+      'Fully equipped kitchen',
+      'High-speed WiFi',
+      'Laundry patio (no washer/dryer)',
+      'Air conditioning in bedrooms only'
+    ]
+  },
+  '3rec': {
+    title: '3-Bedroom Condominium',
+    capacity: 8,
+    features: [
+      '3 bedrooms with Smart TV',
+      '1 King Size bed and 4 double beds',
+      '3 full bathrooms',
+      'Spacious and cozy living room',
+      'Dining area for 8 people',
+      'Breakfast bar',
+      'Fully equipped kitchen',
+      'High-speed WiFi',
+      'Laundry patio (no washer/dryer)',
+      'Air conditioning in bedrooms only'
+    ]
+  },
+  'doble': {
+    title: 'Double Room',
+    capacity: 2,
+    features: [
+      '1 bedroom with Smart TV',
+      '2 double beds or 1 King Size bed',
+      '1 full bathroom',
+      'Mini-fridge and coffee maker',
+      'High-speed WiFi',
+      'Air conditioning'
+    ]
+  },
+  'casa': {
+    title: '3-Bedroom Vacation Home',
+    capacity: 12,
+    features: [
+      '3 spacious bedrooms',
+      '2 King Size beds and 3 double beds',
+      'Full bathrooms',
+      'Family living and dining room',
+      'Fully equipped kitchen',
+      'Direct access / Private pool',
+      'High-speed WiFi',
+      'Air conditioning in bedrooms'
+    ]
+  }
+};
+
+const PHOTO_CAPTIONS_EN: Record<string, string[]> = {
+  'doble': [
+    'Standard Room - Main Bed',
+    'Standard Room - General View',
+    'Standard Room - Bathroom and Details'
+  ],
+  '1rec': [
+    '1-Bedroom Condo - Living & Dining Area',
+    '1-Bedroom Condo - Main Bedroom',
+    '1-Bedroom Condo - Equipped Kitchen',
+    '1-Bedroom Condo - Full Bathroom'
+  ],
+  '2rec': [
+    '2-Bedroom Condo - Main Living Area',
+    '2-Bedroom Condo - King Main Bedroom',
+    '2-Bedroom Condo - Second Double Bedroom',
+    '2-Bedroom Condo - Equipped Kitchen',
+    '2-Bedroom Condo - Bathroom',
+    '2-Bedroom Condo - Living Room View',
+    '2-Bedroom Condo - Dining Area',
+    '2-Bedroom Condo - Main Bedroom Details',
+    '2-Bedroom Condo - Interior Hallway',
+    '2-Bedroom Condo - Terrace'
+  ],
+  '3rec': [
+    '3-Bedroom Condo - Living & Dining Area',
+    '3-Bedroom Condo - Equipped Kitchen',
+    '3-Bedroom Condo - King Main Bedroom',
+    '3-Bedroom Condo - Second Double Bedroom',
+    '3-Bedroom Condo - Third Double Bedroom',
+    '3-Bedroom Condo - Full Bathroom',
+    '3-Bedroom Condo - Balcony View',
+    '3-Bedroom Condo - Social Area'
+  ],
+  'casa': [
+    'Luxury House - Main Luxury Living Room',
+    'Luxury House - Granite Kitchen & Dining Room',
+    'Luxury House - King Main Bedroom',
+    'Luxury House - Second Family Bedroom',
+    'Luxury House - Third Family Bedroom',
+    'Luxury House - Spacious Main Bathroom',
+    'Luxury House - Balcony & Outdoor View',
+    'Luxury House - Design Details',
+    'Luxury House - Independent Entrance',
+    'Luxury House - Family TV Room',
+    'Luxury House - Breakfast Area'
+  ]
+};
+
+const TRANSLATIONS: Record<'es' | 'en', any> = {
+  es: {
+    title: 'CONDOMINIOS JAROJE',
+    subtitle: 'Tu paraíso en Huatulco, Oaxaca 🌴',
+    loading: 'Cargando los detalles de tu reservación...',
+    errorTitle: '¡Ups! Algo salió mal',
+    errorText: 'La reservación solicitada no existe o ha sido cancelada.',
+    whatsappContact: 'Contactar por WhatsApp',
+    
+    state_solicitud: 'Solicitud recibida',
+    state_pago_pendiente: 'Pago pendiente',
+    state_confirmada: 'Reservación confirmada',
+    state_checkin_pendiente: 'Check-in pendiente',
+    state_hospedado: 'Hospedado',
+    state_finalizada: 'Finalizada',
+    
+    stateTitle: 'Estado de la Reservación',
+    partialPaymentTitle: 'Pago Parcial: Saldo Pendiente',
+    partialPaymentDesc: (deposit: string, balance: string) => `Has cubierto tu anticipo de $${deposit} MXN. Recuerda liquidar el saldo restante de $${balance} MXN antes de tu llegada o en recepción durante tu check-in.`,
+    
+    summaryTitle: 'Resumen de tu Estancia',
+    guest: 'Huésped',
+    bookingId: 'ID de Reserva',
+    accommodation: 'Alojamiento',
+    checkin: 'Fecha de Llegada',
+    checkinTime: '(Check-in: 3:00 PM)',
+    checkout: 'Fecha de Salida',
+    checkoutTime: '(Check-out: 12:00 PM)',
+    nights: (n: number) => `${n} noche${n !== 1 ? 's' : ''}`,
+    guests: (g: number) => `${g} persona${g !== 1 ? 's' : ''}`,
+    
+    accountTitle: 'Estado de Cuenta',
+    totalEstancia: 'Total de la estancia:',
+    anticipoRecibido: 'Anticipo Recibido:',
+    saldoRestante: 'Saldo restante (adeudo):',
+    anticipoRequerido: 'Anticipo Requerido (50%):',
+    anticipoDepositado: 'Anticipo depositado:',
+    
+    paymentTitle: 'Formas de Pago',
+    paymentTitlePending: 'Liquidar Saldo Pendiente',
+    selectAmount: 'Selecciona el monto a abonar:',
+    anticipoSelector: 'Anticipo (50%)',
+    totalSelector: 'Total (100%)',
+    amountSelected: 'Monto a pagar seleccionado',
+    optionCard: 'Opción 1: Tarjeta de Crédito / Débito (Pasarela)',
+    payWithCard: 'Pagar con Mercado Pago',
+    cardNote: 'Si realizas tu pago con tarjeta, no es necesario enviar comprobante.',
+    optionTransfer: 'Opción 2: Transferencia o Depósito Bancario',
+    payWithTransfer: 'Pagar por Transferencia Bancaria',
+    transferNote: 'Obtén la cuenta CLABE oficial y reporta tu comprobante de inmediato al panel de staySync.',
+    
+    featuresTitle: 'Características del Alojamiento',
+    capacity: (c: number) => `Capacidad: ${c} Huéspedes`,
+    
+    photosTitle: 'Galería de Imágenes',
+    photosDesc: 'Visualiza las fotos reales de tu alojamiento y las hermosas áreas comunes de Condominios Jaroje.',
+    commonAreas: 'Áreas Comunes',
+    bedroomPhotos: 'Fotos del Alojamiento',
+    instructionsTitle: 'Instrucciones para tu Llegada',
+    howToGet: '¿Cómo llegar?',
+    locationLabel: 'Ubicación en Google Maps',
+    openMaps: 'Abrir en Google Maps',
+    receptionLabel: 'Ubicación de la Recepción',
+    checkinRulesTitle: 'Reglas y Horarios de Check-in',
+    checkinHoursTitle: 'Horario de Entrada',
+    checkinHoursDesc: 'El horario oficial de entrada es de 3:00 PM a 8:00 PM.',
+    lastMinuteDesc: 'Si estimas llegar después de las 8:00 PM, avísanos con anticipación.',
+    registerTitle: 'Registro y Firma',
+    registerDesc: 'Al llegar a recepción, te ayudaremos a firmar digitalmente tu contrato de hospedaje.',
+    
+    room_casa: 'Casa Vacacional de 3 Dormitorios',
+    room_3rec: 'Condominio de 3 Recámaras',
+    room_2rec: 'Condominio de 2 Recámaras',
+    room_1rec: 'Condominio de 1 Recámara',
+    room_doble: 'Habitación Doble',
+    
+    capacityLabel: 'Huéspedes',
+    tapToZoom: '🔍 Toca cualquier imagen para abrir en pantalla completa',
+    stayGuide: 'Para garantizar una estancia agradable a todos nuestros huéspedes, te pedimos revisar la guía digital de tu alojamiento:',
+    stayGuideBtn: '📖 Ver Fotografías y Guía del Alojamiento',
+    stayPolicies: '🚫 Políticas Básicas',
+    policyPets: 'No se admiten mascotas bajo ningún concepto.',
+    policySmoke: 'Espacio 100% libre de humo (solo permitido fumar en áreas exteriores designadas).',
+    policyHours: 'El horario de entrada es de 3:00 PM a 8:00 PM. Salida a las 12:00 PM.',
+    locationDesc: 'Condominios Jaroje se encuentra en Huatulco, Oaxaca. Haz clic en el botón de abajo para abrir la ubicación exacta en Google Maps:',
+    talkReception: 'Hablar con Recepción por WhatsApp',
+    footerRights: '© 2026 Condominios Jaroje. Todos los derechos reservados.',
+    footerHelp: '¿Necesitas ayuda? Escríbenos a nuestro WhatsApp oficial: 958 116 8698',
+    lightboxOf: 'of',
+    lightboxControls: 'Toca a los lados para navegar • Condominios Jaroje'
+  },
+  en: {
+    title: 'JAROJE CONDOMINIUMS',
+    subtitle: 'Your paradise in Huatulco, Oaxaca 🌴',
+    loading: 'Loading your reservation details...',
+    errorTitle: 'Oops! Something went wrong',
+    errorText: 'The requested reservation does not exist or has been cancelled.',
+    whatsappContact: 'Contact on WhatsApp',
+    
+    state_solicitud: 'Request received',
+    state_pago_pendiente: 'Payment pending',
+    state_confirmada: 'Booking confirmed',
+    state_checkin_pendiente: 'Check-in pending',
+    state_hospedado: 'In-house',
+    state_finalizada: 'Completed',
+    
+    stateTitle: 'Reservation Status',
+    partialPaymentTitle: 'Partial Payment: Balance Due',
+    partialPaymentDesc: (deposit: string, balance: string) => `You have paid your deposit of $${deposit} MXN. Please remember to settle the remaining balance of $${balance} MXN before your arrival or at the front desk during check-in.`,
+    
+    summaryTitle: 'Your Stay Summary',
+    guest: 'Guest',
+    bookingId: 'Reservation ID',
+    accommodation: 'Accommodation',
+    checkin: 'Arrival Date',
+    checkinTime: '(Check-in: 3:00 PM)',
+    checkout: 'Departure Date',
+    checkoutTime: '(Check-out: 12:00 PM)',
+    nights: (n: number) => `${n} night${n !== 1 ? 's' : ''}`,
+    guests: (g: number) => `${g} guest${g !== 1 ? 's' : ''}`,
+    
+    accountTitle: 'Statement of Account',
+    totalEstancia: 'Total stay amount:',
+    anticipoRecibido: 'Deposit Received:',
+    saldoRestante: 'Remaining balance (due):',
+    anticipoRequerido: 'Required Deposit (50%):',
+    anticipoDepositado: 'Deposit paid:',
+    
+    paymentTitle: 'Payment Methods',
+    paymentTitlePending: 'Settle Remaining Balance',
+    selectAmount: 'Select amount to pay:',
+    anticipoSelector: 'Deposit (50%)',
+    totalSelector: 'Total (100%)',
+    amountSelected: 'Selected payment amount',
+    optionCard: 'Option 1: Credit / Debit Card (Gateway)',
+    payWithCard: 'Pay with Mercado Pago',
+    cardNote: 'If you pay with a card, sending a receipt is not required.',
+    optionTransfer: 'Option 2: Bank Transfer or Cash Deposit',
+    payWithTransfer: 'Pay by Bank Transfer',
+    transferNote: 'Obtain the official bank details and upload your receipt directly to staySync.',
+    
+    featuresTitle: 'Accommodation Features',
+    capacity: (c: number) => `Capacity: ${c} Guests`,
+    
+    photosTitle: 'Photo Gallery',
+    photosDesc: 'View actual photos of your accommodation and the beautiful common areas of Jaroje Condominiums.',
+    commonAreas: 'Common Areas',
+    bedroomPhotos: 'Accommodation Photos',
+    instructionsTitle: 'Arrival Instructions',
+    howToGet: 'How to get here?',
+    locationLabel: 'Location on Google Maps',
+    openMaps: 'Open in Google Maps',
+    receptionLabel: 'Front Desk Location',
+    checkinRulesTitle: 'Check-in Rules & Times',
+    checkinHoursTitle: 'Check-in Time',
+    checkinHoursDesc: 'Official entry time is from 3:00 PM to 8:00 PM.',
+    lastMinuteDesc: 'If you expect to arrive after 8:00 PM, please notify us in advance.',
+    registerTitle: 'Registration & Signing',
+    registerDesc: 'Upon arrival at the front desk, we will help you digitally sign your lodging agreement.',
+    
+    room_casa: '3-Bedroom Vacation Home',
+    room_3rec: '3-Bedroom Condominium',
+    room_2rec: '2-Bedroom Condominium',
+    room_1rec: '1-Bedroom Condominium',
+    room_doble: 'Double Room',
+    
+    capacityLabel: 'Guests',
+    tapToZoom: '🔍 Tap any image to open in full screen',
+    stayGuide: 'To ensure a pleasant stay for all our guests, please review your accommodation digital guide:',
+    stayGuideBtn: '📖 View Photos and Accommodation Guide',
+    stayPolicies: '🚫 Basic Policies',
+    policyPets: 'No pets allowed under any circumstances.',
+    policySmoke: '100% Smoke-free space (only smoking in designated outdoor areas permitted).',
+    policyHours: 'Check-in time is from 3:00 PM to 8:00 PM. Check-out is at 12:00 PM.',
+    locationDesc: 'Jaroje Condominiums is located in Huatulco, Oaxaca. Click the button below to open the exact location in Google Maps:',
+    talkReception: 'Chat with Reception on WhatsApp',
+    footerRights: '© 2026 Jaroje Condominiums. All rights reserved.',
+    footerHelp: 'Need help? Write to our official WhatsApp: +52 958 116 8698',
+    lightboxOf: 'of',
+    lightboxControls: 'Tap the sides to navigate • Jaroje Condominiums'
+  }
+};
+
 // Función para comprimir imágenes del lado del cliente
 const compressImage = (file: File): Promise<Blob | File> => {
   return new Promise((resolve) => {
@@ -293,6 +613,21 @@ export default function PublicReservaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentSplit, setPaymentSplit] = useState<'50' | '100'>('50');
+  const [lang, setLang] = useState<'es' | 'en'>('es');
+
+  const changeLanguage = async (newLang: 'es' | 'en') => {
+    setLang(newLang);
+    if (!id) return;
+    try {
+      await fetch('/api/public/reserva/change-language', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: String(id), language: newLang })
+      });
+    } catch (e) {
+      console.error("Error updating language preference:", e);
+    }
+  };
 
   const [copiedClabe, setCopiedClabe] = useState(false);
   const [copiedConcept, setCopiedConcept] = useState(false);
@@ -348,6 +683,9 @@ export default function PublicReservaPage() {
         const json = await res.json();
         if (res.ok && json.success) {
           setBooking(json.data);
+          if (json.data.portal_settings?.language) {
+            setLang(json.data.portal_settings.language);
+          }
           // Si ya existe un recibo previo subido, guardarlo en el estado
           if (json.data.receipt_url) {
             setUploadedUrl(json.data.receipt_url);
@@ -373,7 +711,11 @@ export default function PublicReservaPage() {
   const formatDateStr = (dateStr: string) => {
     if (!dateStr) return '—';
     try {
-      return format(parseISO(dateStr), "dd 'de' MMMM, yyyy", { locale: es });
+      return format(
+        parseISO(dateStr), 
+        lang === 'en' ? "MMMM dd, yyyy" : "dd 'de' MMMM, yyyy", 
+        lang === 'en' ? undefined : { locale: es }
+      );
     } catch (e) {
       return dateStr;
     }
@@ -407,7 +749,9 @@ export default function PublicReservaPage() {
     return (
       <div className="min-h-screen bg-[#FAF9F6] flex flex-col items-center justify-center p-6 text-center">
         <div className="w-12 h-12 border-4 border-indigo-600/30 border-t-indigo-600 rounded-full animate-spin mb-4" />
-        <p className="text-zinc-650 font-medium text-sm">Cargando los detalles de tu reservación...</p>
+        <p className="text-zinc-650 font-medium text-sm">
+          {lang === 'en' ? 'Loading your reservation details...' : 'Cargando los detalles de tu reservación...'}
+        </p>
       </div>
     );
   }
@@ -418,15 +762,19 @@ export default function PublicReservaPage() {
         <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-4 border border-rose-100">
           <AlertTriangle size={32} />
         </div>
-        <h2 className="text-zinc-900 font-extrabold text-lg mb-2">¡Ups! Algo salió mal</h2>
-        <p className="text-zinc-600 text-sm mb-6">{error || 'La reservación solicitada no existe o ha sido cancelada.'}</p>
+        <h2 className="text-zinc-900 font-extrabold text-lg mb-2">
+          {lang === 'en' ? 'Oops! Something went wrong' : '¡Ups! Algo salió mal'}
+        </h2>
+        <p className="text-zinc-600 text-sm mb-6">
+          {error || (lang === 'en' ? 'The requested reservation does not exist or has been cancelled.' : 'La reservación solicitada no existe o ha sido cancelada.')}
+        </p>
         <a 
           href="https://wa.me/529581168698" 
           target="_blank" 
           rel="noopener noreferrer"
           className="bg-indigo-600 text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md hover:bg-indigo-700 transition-all cursor-pointer"
         >
-          Contactar por WhatsApp
+          {lang === 'en' ? 'Contact on WhatsApp' : 'Contactar por WhatsApp'}
         </a>
       </div>
     );
@@ -462,35 +810,49 @@ export default function PublicReservaPage() {
 
   if (isCancelled) {
     currentState = 'liberada';
-    statusMessage = 'Esta reservación ha sido cancelada y la disponibilidad de la habitación ha sido liberada.';
+    statusMessage = lang === 'en'
+      ? 'This reservation has been cancelled and the room availability has been released.'
+      : 'Esta reservación ha sido cancelada y la disponibilidad de la habitación ha sido liberada.';
   } else if (isCheckedOut || (checkInDate && today > new Date(booking.check_out))) {
     currentState = 'finalizada';
-    statusMessage = '¡Gracias por hospedarte con nosotros! Esperamos verte de nuevo muy pronto en Huatulco. ¡Buen viaje de regreso!';
+    statusMessage = lang === 'en'
+      ? 'Thank you for staying with us! We hope to see you again soon in Huatulco. Have a safe trip back!'
+      : '¡Gracias por hospedarte con nosotros! Esperamos verte de nuevo muy pronto en Huatulco. ¡Buen viaje de regreso!';
   } else if (isCheckedIn) {
     currentState = 'hospedado';
-    statusMessage = '¡Bienvenido a Condominios Jaroje! Esperamos que estés disfrutando de tu estancia. Si necesitas algo, nuestro equipo está a tu disposición.';
+    statusMessage = lang === 'en'
+      ? 'Welcome to Jaroje Condominiums! We hope you are enjoying your stay. If you need anything, our team is at your service.'
+      : '¡Bienvenido a Condominios Jaroje! Esperamos que estés disfrutando de tu estancia. Si necesitas algo, nuestro equipo está a tu disposición.';
   } else if (hasPaid && checkInLimit && today >= checkInLimit) {
     currentState = 'checkin_pendiente';
-    statusMessage = 'Tu habitación está casi lista. A tu llegada, el personal de recepción te ayudará a completar tu registro y firma digital de contrato.';
+    statusMessage = lang === 'en'
+      ? 'Your room is almost ready. Upon arrival, the front desk staff will help you complete your digital registration and contract signing.'
+      : 'Tu habitación está casi lista. A tu llegada, el personal de recepción te ayudará a completar tu registro y firma digital de contrato.';
   } else if (hasPaid || isOta) {
     currentState = 'confirmada';
-    statusMessage = '¡Tu estancia está confirmada! Todo está listo para tu llegada. Te enviaremos las instrucciones de check-in un día antes de tu entrada.';
+    statusMessage = lang === 'en'
+      ? 'Your stay is confirmed! Everything is ready for your arrival. We will send you check-in instructions one day before your entry.'
+      : '¡Tu estancia está confirmada! Todo está listo para tu llegada. Te enviaremos las instrucciones de check-in un día antes de tu entrada.';
   } else if (hoursSinceCreation > 2) {
     currentState = 'pago_pendiente';
-    statusMessage = 'Tu reservación está pendiente de pago. Por favor, sube tu comprobante de anticipo para evitar la cancelación automática de tu estancia.';
+    statusMessage = lang === 'en'
+      ? 'Your reservation is pending payment. Please upload your deposit receipt to avoid automatic cancellation of your stay.'
+      : 'Tu reservación está pendiente de pago. Por favor, sube tu comprobante de anticipo para evitar la cancelación automática de tu estancia.';
   } else {
     currentState = 'solicitud';
-    statusMessage = 'Hemos recibido tu solicitud de reservación. Para asegurar tu estancia, realiza el depósito de anticipo en las próximas horas.';
+    statusMessage = lang === 'en'
+      ? 'We have received your reservation request. To secure your stay, please make your deposit payment in the next few hours.'
+      : 'Hemos recibido tu solicitud de reservación. Para asegurar tu estancia, realiza el depósito de anticipo en las próximas horas.';
   }
 
   // Pasos de la barra de progreso
   const steps = [
-    { label: 'Solicitud recibida', state: 'solicitud' },
-    { label: 'Pago pendiente', state: 'pago_pendiente' },
-    { label: 'Reservación confirmada', state: 'confirmada' },
-    { label: 'Check-in pendiente', state: 'checkin_pendiente' },
-    { label: 'Hospedado', state: 'hospedado' },
-    { label: 'Finalizada', state: 'finalizada' }
+    { label: lang === 'en' ? 'Request received' : 'Solicitud recibida', state: 'solicitud' },
+    { label: lang === 'en' ? 'Payment pending' : 'Pago pendiente', state: 'pago_pendiente' },
+    { label: lang === 'en' ? 'Booking confirmed' : 'Reservación confirmada', state: 'confirmada' },
+    { label: lang === 'en' ? 'Check-in pending' : 'Check-in pending', state: 'checkin_pendiente' },
+    { label: lang === 'en' ? 'In-house' : 'Hospedado', state: 'hospedado' },
+    { label: lang === 'en' ? 'Completed' : 'Finalizada', state: 'finalizada' }
   ];
 
   const activeIndex = steps.findIndex(s => s.state === currentState);
@@ -501,17 +863,37 @@ export default function PublicReservaPage() {
 
   // Fotos y descripciones del Carrusel
   const photos = [...(ROOM_PHOTOS[roomTypeKey] || ROOM_PHOTOS['doble']), ...COMMON_PHOTOS];
-  const captions = [...(PHOTO_CAPTIONS[roomTypeKey] || PHOTO_CAPTIONS['doble']), ...COMMON_CAPTIONS];
+  const captions = lang === 'en'
+    ? [...(PHOTO_CAPTIONS_EN[roomTypeKey] || PHOTO_CAPTIONS_EN['doble']), ...COMMON_CAPTIONS_EN]
+    : [...(PHOTO_CAPTIONS[roomTypeKey] || PHOTO_CAPTIONS['doble']), ...COMMON_CAPTIONS];
 
   const anticipoRequerido = Math.round(booking.price * 0.5);
+  const t = TRANSLATIONS[lang];
 
   return (
     <div className="min-h-screen bg-[#F6F5F2] text-zinc-900 pb-16 font-sans">
       {/* Header Premium */}
-      <header className="bg-zinc-900 text-white text-center py-8 px-4 shadow-md relative overflow-hidden">
+      <header className="bg-zinc-900 text-white text-center py-8 px-4 shadow-md relative overflow-hidden flex flex-col items-center">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent)] pointer-events-none" />
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-amber-100">CONDOMINIOS JAROJE</h1>
-        <p className="text-zinc-400 text-xs mt-1 font-medium tracking-wide uppercase">Tu paraíso en Huatulco, Oaxaca 🌴</p>
+        
+        {/* Selector de Idioma Flotante Derecho */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 backdrop-blur-sm p-1 rounded-full border border-white/10 z-25 text-[9px] font-bold">
+          <button 
+            onClick={() => changeLanguage('es')}
+            className={`px-2 py-0.5 rounded-full transition-all cursor-pointer ${lang === 'es' ? 'bg-white text-zinc-950 shadow-sm' : 'text-white/70 hover:text-white'}`}
+          >
+            ESP 🇪🇸
+          </button>
+          <button 
+            onClick={() => changeLanguage('en')}
+            className={`px-2 py-0.5 rounded-full transition-all cursor-pointer ${lang === 'en' ? 'bg-white text-zinc-950 shadow-sm' : 'text-white/70 hover:text-white'}`}
+          >
+            ENG 🇺🇸
+          </button>
+        </div>
+
+        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-amber-100">{t.title}</h1>
+        <p className="text-zinc-400 text-xs mt-1 font-medium tracking-wide uppercase">{t.subtitle}</p>
       </header>
 
       <main className="max-w-md mx-auto px-4 mt-6 space-y-5">
@@ -522,13 +904,15 @@ export default function PublicReservaPage() {
             <div className="w-12 h-12 bg-rose-105 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 border border-rose-100">
               <AlertTriangle size={24} />
             </div>
-            <h3 className="text-rose-900 font-extrabold text-base tracking-tight uppercase">Disponibilidad Liberada</h3>
+            <h3 className="text-rose-900 font-extrabold text-base tracking-tight uppercase">
+              {lang === 'en' ? 'Availability Released' : 'Disponibilidad Liberada'}
+            </h3>
             <p className="text-rose-700 text-xs mt-1.5 leading-relaxed">{statusMessage}</p>
           </div>
         ) : (
           <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4 overflow-hidden relative">
             <div className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block border-b border-zinc-100 pb-1.5 mb-2.5">
-              Estado de la Reservación
+              {t.stateTitle}
             </div>
             
             <div className="flex justify-between items-center relative select-none px-1 overflow-x-auto scrollbar-none gap-4">
@@ -588,9 +972,9 @@ export default function PublicReservaPage() {
           <div className="bg-amber-50 border border-amber-250/30 rounded-2xl p-4 flex gap-3 text-amber-900 text-xs shadow-sm">
             <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5 animate-pulse" />
             <div className="space-y-1">
-              <span className="font-extrabold block text-amber-950 uppercase tracking-wide">Pago Parcial: Saldo Pendiente</span>
+              <span className="font-extrabold block text-amber-950 uppercase tracking-wide">{t.partialPaymentTitle}</span>
               <p className="leading-relaxed opacity-95">
-                Has cubierto tu anticipo de <strong>${booking.deposit.toLocaleString('es-MX')} MXN</strong>. Recuerda liquidar el saldo restante de <strong>${booking.balance.toLocaleString('es-MX')} MXN</strong> antes de tu llegada o en recepción durante tu check-in.
+                {t.partialPaymentDesc(booking.deposit.toLocaleString('es-MX'), booking.balance.toLocaleString('es-MX'))}
               </p>
             </div>
           </div>
@@ -600,39 +984,39 @@ export default function PublicReservaPage() {
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
             <FileText size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Resumen de tu Estancia</h3>
+            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{t.summaryTitle}</h3>
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
-              <span className="text-zinc-500 font-semibold block">Huésped</span>
+              <span className="text-zinc-500 font-semibold block">{t.guest}</span>
               <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.guest_name}</strong>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
-              <span className="text-zinc-500 font-semibold block">ID de Reserva</span>
+              <span className="text-zinc-500 font-semibold block">{t.bookingId}</span>
               <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.id}</strong>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100 col-span-2">
-              <span className="text-zinc-500 font-semibold block">Alojamiento</span>
+              <span className="text-zinc-500 font-semibold block">{t.accommodation}</span>
               <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.room_name}</strong>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
-              <span className="text-zinc-500 font-semibold block">Fecha de Llegada</span>
+              <span className="text-zinc-500 font-semibold block">{t.checkin}</span>
               <span className="text-zinc-900 font-bold text-[11.5px] block mt-0.5">{formatDateStr(booking.check_in)}</span>
-              <span className="text-zinc-500 text-[10px] mt-0.5 block">(Check-in: 3:00 PM)</span>
+              <span className="text-zinc-500 text-[10px] mt-0.5 block">{t.checkinTime}</span>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
-              <span className="text-zinc-500 font-semibold block">Fecha de Salida</span>
+              <span className="text-zinc-500 font-semibold block">{t.checkout}</span>
               <span className="text-zinc-900 font-bold text-[11.5px] block mt-0.5">{formatDateStr(booking.check_out)}</span>
-              <span className="text-zinc-500 text-[10px] mt-0.5 block">(Check-out: 12:00 PM)</span>
+              <span className="text-zinc-500 text-[10px] mt-0.5 block">{t.checkoutTime}</span>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
-              <span className="text-zinc-500 font-semibold block">Estancia</span>
-              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.nights} noche{booking.nights !== 1 ? 's' : ''}</strong>
+              <span className="text-zinc-500 font-semibold block">{lang === 'en' ? 'Nights' : 'Estancia'}</span>
+              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{t.nights(booking.nights)}</strong>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
-              <span className="text-zinc-500 font-semibold block">Huéspedes</span>
-              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.num_adult + booking.num_child} persona{booking.num_adult + booking.num_child !== 1 ? 's' : ''}</strong>
+              <span className="text-zinc-500 font-semibold block">{lang === 'en' ? 'Guests' : 'Huéspedes'}</span>
+              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{t.guests(booking.num_adult + booking.num_child)}</strong>
             </div>
           </div>
         </div>
@@ -641,37 +1025,37 @@ export default function PublicReservaPage() {
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
             <Clock size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Estado de Cuenta</h3>
+            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{t.accountTitle}</h3>
           </div>
 
           <div className="space-y-2 text-sm">
             <div className="flex justify-between items-center text-zinc-650">
-              <span>Total de la estancia:</span>
+              <span>{t.totalEstancia}</span>
               <strong className="text-zinc-900 font-extrabold">${booking.price.toLocaleString('es-MX')} MXN</strong>
             </div>
             {hasPaid ? (
               <>
                 <div className="flex justify-between items-center text-emerald-600 font-semibold bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
-                  <span className="flex items-center gap-1">Anticipo Recibido:</span>
+                  <span className="flex items-center gap-1">{t.anticipoRecibido}</span>
                   <strong className="font-black">${booking.deposit.toLocaleString('es-MX')} MXN</strong>
                 </div>
                 <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
-                  <span className="font-bold">Saldo restante (adeudo):</span>
+                  <span className="font-bold">{t.saldoRestante}</span>
                   <strong className="text-indigo-600 font-black text-base">${booking.balance.toLocaleString('es-MX')} MXN</strong>
                 </div>
               </>
             ) : (
               <>
                 <div className="flex justify-between items-center text-indigo-600 font-semibold bg-indigo-50/50 px-3 py-2 rounded-xl border border-indigo-100/80">
-                  <span>Anticipo Requerido (50%):</span>
+                  <span>{t.anticipoRequerido}</span>
                   <strong className="font-black">${anticipoRequerido.toLocaleString('es-MX')} MXN</strong>
                 </div>
                 <div className="flex justify-between items-center text-zinc-500">
-                  <span>Anticipo depositado:</span>
+                  <span>{t.anticipoDepositado}</span>
                   <strong className="font-bold">$0 MXN</strong>
                 </div>
                 <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
-                  <span className="font-bold">Saldo restante (adeudo):</span>
+                  <span className="font-bold">{t.saldoRestante}</span>
                   <strong className="text-indigo-600 font-black text-base">${booking.price.toLocaleString('es-MX')} MXN</strong>
                 </div>
               </>
@@ -690,14 +1074,14 @@ export default function PublicReservaPage() {
               <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
                 <CreditCard size={18} className="text-indigo-600" />
                 <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
-                  {hasPaid ? 'Liquidar Saldo Pendiente' : 'Formas de Pago'}
+                  {hasPaid ? t.paymentTitlePending : t.paymentTitle}
                 </h3>
               </div>
 
               {/* Selector de Anticipo o Total (solo si no ha abonado nada) */}
               {booking.deposit === 0 && (
                 <div className="space-y-2">
-                  <span className="text-[10px] font-extrabold uppercase text-zinc-400 tracking-wider block">Selecciona el monto a abonar:</span>
+                  <span className="text-[10px] font-extrabold uppercase text-zinc-400 tracking-wider block">{t.selectAmount}</span>
                   <div className="grid grid-cols-2 gap-2 bg-zinc-50 p-1 rounded-xl border border-zinc-200/40 shadow-inner">
                     <button
                       onClick={() => setPaymentSplit('50')}
@@ -707,7 +1091,7 @@ export default function PublicReservaPage() {
                           : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
                       }`}
                     >
-                      <span>Anticipo (50%)</span>
+                      <span>{t.anticipoSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '50' ? 'text-indigo-200' : 'text-zinc-500'}`}>
                         ${(booking.price * 0.5).toLocaleString('es-MX')} MXN
                       </span>
@@ -720,7 +1104,7 @@ export default function PublicReservaPage() {
                           : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
                       }`}
                     >
-                      <span>Total (100%)</span>
+                      <span>{t.totalSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '100' ? 'text-indigo-200' : 'text-zinc-500'}`}>
                         ${booking.price.toLocaleString('es-MX')} MXN
                       </span>
@@ -731,7 +1115,7 @@ export default function PublicReservaPage() {
 
               {/* Monto seleccionado explicito */}
               <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-3.5 text-center">
-                <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider block">Monto a pagar seleccionado</span>
+                <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider block">{t.amountSelected}</span>
                 <span className="text-xl font-black text-indigo-950">
                   ${targetAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
                 </span>
@@ -741,7 +1125,7 @@ export default function PublicReservaPage() {
               {(booking.portal_settings?.show_card_payment ?? true) && (
                 <>
                   <div className="space-y-2">
-                    <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
+                    <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">{t.optionCard}</span>
                     <a 
                       href="https://link.mercadopago.com.mx/jaroje" 
                       target="_blank" 
@@ -749,14 +1133,14 @@ export default function PublicReservaPage() {
                       className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <CreditCard size={18} />
-                      Pagar con Mercado Pago
+                      {t.payWithCard}
                     </a>
-                    <p className="text-[10px] text-zinc-500 italic text-center mt-1">Si realizas tu pago con tarjeta, no es necesario enviar comprobante.</p>
+                    <p className="text-[10px] text-zinc-500 italic text-center mt-1">{t.cardNote}</p>
                   </div>
 
                   <div className="relative flex py-1 items-center">
                     <div className="flex-grow border-t border-zinc-200"></div>
-                    <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">ó</span>
+                    <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">{lang === 'en' ? 'or' : 'ó'}</span>
                     <div className="flex-grow border-t border-zinc-200"></div>
                   </div>
                 </>
@@ -764,15 +1148,15 @@ export default function PublicReservaPage() {
 
               {/* Método 2: Transferencia */}
               <div className="space-y-3 pt-2">
-                <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">Opción 2: Transferencia o Depósito Bancario</span>
+                <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">{t.optionTransfer}</span>
                 <a 
-                  href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}`}
+                  href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}`}
                   className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <FileText size={18} />
-                  Pagar por Transferencia Bancaria
+                  {t.payWithTransfer}
                 </a>
-                <p className="text-[10px] text-zinc-500 italic text-center mt-1">Obtén la cuenta CLABE oficial y reporta tu comprobante de inmediato al panel de staySync.</p>
+                <p className="text-[10px] text-zinc-500 italic text-center mt-1">{t.transferNote}</p>
               </div>
             </div>
           );
@@ -782,14 +1166,16 @@ export default function PublicReservaPage() {
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
             <Home size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Características del Alojamiento</h3>
+            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{t.featuresTitle}</h3>
           </div>
 
           <div className="space-y-3.5">
             <div className="bg-[#FAF9F6] border border-zinc-200/40 rounded-xl p-3 flex justify-between items-center text-xs">
-              <span className="text-zinc-700 font-extrabold uppercase tracking-wide">{featuresData.title}</span>
+              <span className="text-zinc-700 font-extrabold uppercase tracking-wide">
+                {lang === 'en' ? (ROOM_FEATURES_EN[roomTypeKey]?.title || ROOM_FEATURES_EN['doble'].title) : featuresData.title}
+              </span>
               <span className="bg-indigo-600 text-white font-extrabold text-[9px] px-2.5 py-1 rounded-full uppercase tracking-wider">
-                Capacidad: {featuresData.capacity} Huéspedes
+                {t.capacity(featuresData.capacity)}
               </span>
             </div>
 
@@ -808,7 +1194,7 @@ export default function PublicReservaPage() {
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
             <Compass size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Galería de Imágenes</h3>
+            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{t.photosTitle}</h3>
           </div>
 
           <div className="relative group">
@@ -826,7 +1212,7 @@ export default function PublicReservaPage() {
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-zinc-400 text-center mt-1.5 italic">🔍 Toca cualquier imagen para abrir en pantalla completa</p>
+            <p className="text-[10px] text-zinc-400 text-center mt-1.5 italic">{t.tapToZoom}</p>
           </div>
         </div>
 
@@ -834,28 +1220,26 @@ export default function PublicReservaPage() {
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
             <Info size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Información para tu estancia</h3>
+            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{lang === 'en' ? 'Stay Information' : 'Información para tu estancia'}</h3>
           </div>
 
           <div className="space-y-3 text-xs leading-relaxed text-zinc-650">
-            <p>
-              Para garantizar una estancia agradable a todos nuestros huéspedes, te pedimos revisar la guía digital de tu alojamiento:
-            </p>
+            <p>{t.stayGuide}</p>
             <a 
               href="https://drive.google.com/drive/folders/1f03zp9bblMC-AtY2RkRyYHq-ugl-OyKl"
               target="_blank"
               rel="noopener noreferrer"
               className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold rounded-xl text-center block border border-zinc-350/40 transition-all cursor-pointer"
             >
-              📖 Ver Fotografías y Guía del Alojamiento
+              {t.stayGuideBtn}
             </a>
 
             <div className="bg-[#FAF9F6] border border-zinc-200/50 rounded-xl p-3 space-y-2 mt-2">
-              <h4 className="font-extrabold text-zinc-900 uppercase text-[10px] tracking-wide">🚫 Políticas Básicas</h4>
+              <h4 className="font-extrabold text-zinc-900 uppercase text-[10px] tracking-wide">{t.stayPolicies}</h4>
               <ul className="list-disc pl-4 space-y-1">
-                <li><strong>No se admiten mascotas</strong> bajo ningún concepto.</li>
-                <li><strong>Espacio 100% libre de humo</strong> (solo permitido fumar en áreas exteriores designadas).</li>
-                <li>El horario de entrada es de <strong>3:00 PM a 8:00 PM</strong>. Salida a las <strong>12:00 PM</strong>.</li>
+                <li>{t.policyPets}</li>
+                <li>{t.policySmoke}</li>
+                <li>{t.policyHours}</li>
               </ul>
             </div>
           </div>
@@ -865,13 +1249,11 @@ export default function PublicReservaPage() {
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
             <MapPin size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">Ubicación y Cómo Llegar</h3>
+            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{lang === 'en' ? 'Location & Directions' : 'Ubicación y Cómo Llegar'}</h3>
           </div>
 
           <div className="space-y-3 text-xs">
-            <p className="text-zinc-650 leading-relaxed">
-              Condominios Jaroje se encuentra en Huatulco, Oaxaca. Haz clic en el botón de abajo para abrir la ubicación exacta en Google Maps:
-            </p>
+            <p className="text-zinc-650 leading-relaxed">{t.locationDesc}</p>
             <a 
               href="https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic"
               target="_blank"
@@ -879,7 +1261,7 @@ export default function PublicReservaPage() {
               className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-center flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
             >
               <MapPin size={16} />
-              Abrir en Google Maps
+              {lang === 'en' ? 'Open in Google Maps' : 'Abrir en Google Maps'}
             </a>
           </div>
         </div>
@@ -893,7 +1275,7 @@ export default function PublicReservaPage() {
             className="w-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm py-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
           >
             <MessageSquare size={18} />
-            Hablar con Recepción por WhatsApp
+            {t.talkReception}
           </a>
         </div>
 
@@ -901,8 +1283,8 @@ export default function PublicReservaPage() {
 
       {/* Footer */}
       <footer className="text-center text-zinc-500 text-[10px] mt-12 px-4 space-y-1">
-        <p>© 2026 Condominios Jaroje. Todos los derechos reservados.</p>
-        <p>¿Necesitas ayuda? Escríbenos a nuestro WhatsApp oficial: <strong>958 116 8698</strong></p>
+        <p>{t.footerRights}</p>
+        <p>{t.footerHelp}</p>
       </footer>
 
       {/* MODAL LIGHTBOX DE FOTOGRAFÍAS */}
@@ -934,7 +1316,7 @@ export default function PublicReservaPage() {
                 className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-2xl" 
               />
               <span className="text-white/90 text-sm font-semibold mt-4 text-center select-none bg-black/40 px-4 py-1.5 rounded-full">
-                {captions[activePhotoIndex]} ({activePhotoIndex + 1} de {photos.length})
+                {captions[activePhotoIndex]} ({activePhotoIndex + 1} {t.lightboxOf} {photos.length})
               </span>
             </div>
 
@@ -947,7 +1329,7 @@ export default function PublicReservaPage() {
           </div>
 
           <div className="text-center text-zinc-500 text-[10px] pb-2">
-            Toca a los lados para navegar • Condominios Jaroje
+            {t.lightboxControls}
           </div>
         </div>
       )}

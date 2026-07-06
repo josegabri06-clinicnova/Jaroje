@@ -90,6 +90,32 @@ export async function POST(req: Request) {
               const b = b24Json.data[0];
               const phone = b.phone || b.mobile || b.guestPhone || '';
               if (phone) {
+                // Inicializar la configuración de idioma y pagos en booking_portal_settings
+                try {
+                  const { detectLanguageFromPhone } = await import('@/lib/whatsapp');
+                  const autoLang = detectLanguageFromPhone(phone);
+                  
+                  // Verificar si ya existe configuración para no pisarla
+                  const { data: existingSettings } = await supabase
+                    .from('booking_portal_settings')
+                    .select('booking_id')
+                    .eq('booking_id', bookingId.toString())
+                    .maybeSingle();
+                    
+                  if (!existingSettings) {
+                    await supabase
+                      .from('booking_portal_settings')
+                      .insert({
+                        booking_id: bookingId.toString(),
+                        show_card_payment: true,
+                        transfer_account: 'santander',
+                        language: autoLang
+                      });
+                  }
+                } catch (settErr) {
+                  console.error("[Webhook Beds24] Error al inicializar portal settings:", settErr);
+                }
+
                 // Evitar envíos duplicados concurrentes en el mismo minuto a este teléfono
                 const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
                 const { data: recentLogs } = await supabase

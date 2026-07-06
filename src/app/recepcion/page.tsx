@@ -469,6 +469,7 @@ export default function RecepcionPage() {
   const [isSavingChanges, setIsSavingChanges] = useState(false);
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
   const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
+  const [portalLanguage, setPortalLanguage] = useState('es');
 
   // Estados para abono dedicado en Recepción
   const [showAbonoFlow, setShowAbonoFlow] = useState(false);
@@ -527,17 +528,19 @@ export default function RecepcionPage() {
       // Cargar ajustes de portal para la reserva seleccionada
       setPortalShowCardPayment(true);
       setPortalTransferAccount('santander');
+      setPortalLanguage('es');
       if (selectedReserva.id !== 'walkin') {
         (async () => {
           try {
             const { data, error } = await supabase
               .from('booking_portal_settings')
-              .select('show_card_payment, transfer_account')
+              .select('show_card_payment, transfer_account, language')
               .eq('booking_id', String(selectedReserva.id))
               .maybeSingle();
             if (!error && data) {
               setPortalShowCardPayment(data.show_card_payment);
               setPortalTransferAccount(data.transfer_account);
+              setPortalLanguage(data.language || 'es');
             }
           } catch (e) {
             console.error("Error loading portal settings:", e);
@@ -575,7 +578,7 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva]);
 
-  const handleUpdatePortalSettings = async (showCard: boolean, account: string) => {
+  const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string) => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return;
     try {
       const { error } = await supabase
@@ -583,11 +586,13 @@ export default function RecepcionPage() {
         .upsert({
           booking_id: String(selectedReserva.id),
           show_card_payment: showCard,
-          transfer_account: account
+          transfer_account: account,
+          language: languageCode
         }, { onConflict: 'booking_id' });
       if (error) throw error;
       setPortalShowCardPayment(showCard);
       setPortalTransferAccount(account);
+      setPortalLanguage(languageCode);
     } catch (err: any) {
       console.error("Error saving portal settings:", err);
       alert("Error al guardar ajustes de pago: " + err.message);
@@ -4522,7 +4527,7 @@ export default function RecepcionPage() {
                           <p className="text-[10px] text-zinc-400">Habilitar cobro con tarjeta en portal</p>
                         </div>
                         <button
-                          onClick={() => handleUpdatePortalSettings(!portalShowCardPayment, portalTransferAccount)}
+                          onClick={() => handleUpdatePortalSettings(!portalShowCardPayment, portalTransferAccount, portalLanguage)}
                           className={`w-11 h-6 rounded-full transition-colors relative outline-none flex items-center px-1 shrink-0 cursor-pointer ${
                             portalShowCardPayment ? 'bg-indigo-600 justify-end' : 'bg-zinc-200 justify-start'
                           }`}
@@ -4538,7 +4543,7 @@ export default function RecepcionPage() {
                         </div>
                         <select
                           value={portalTransferAccount}
-                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, e.target.value)}
+                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, e.target.value, portalLanguage)}
                           className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                         >
                           <option value="santander">SANTANDER (Laura Isabel Corral)</option>
@@ -4546,6 +4551,21 @@ export default function RecepcionPage() {
                           <option value="hsbc">HSBC (Rolando Diaz)</option>
                           <option value="wise">WISE USD (Rolando Diaz)</option>
                           <option value="paypal">PAYPAL USD (Live Huatulco)</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5 text-left">
+                        <div className="space-y-0.5">
+                          <label className="text-xs font-bold text-zinc-800">Idioma de Comunicación</label>
+                          <p className="text-[10px] text-zinc-400">Idioma preferido del huésped para notificaciones</p>
+                        </div>
+                        <select
+                          value={portalLanguage}
+                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, e.target.value)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                        >
+                          <option value="es">Español 🇲🇽</option>
+                          <option value="en">Inglés 🇺🇸</option>
                         </select>
                       </div>
                     </div>

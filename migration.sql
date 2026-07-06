@@ -98,4 +98,6 @@ CREATE POLICY "Allow public insert on booking_portal_settings" ON public.booking
 DROP POLICY IF EXISTS "Allow public update on booking_portal_settings" ON public.booking_portal_settings;
 CREATE POLICY "Allow public update on booking_portal_settings" ON public.booking_portal_settings FOR UPDATE USING (true) WITH CHECK (true);
 
-
+-- Añadir columna de idioma en booking_portal_settings
+ALTER TABLE public.booking_portal_settings 
+ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'es';

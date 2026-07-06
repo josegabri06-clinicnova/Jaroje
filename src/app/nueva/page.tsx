@@ -134,7 +134,8 @@ export default function VercelActionForm() {
     notes: '',
     extraGuestSurcharge: '',
     showCardPayment: true,
-    transferAccount: 'santander'
+    transferAccount: 'santander',
+    language: 'es'
   });
   const [groupRoomRates, setGroupRoomRates] = useState<Record<string, string>>({});
   const [nights, setNights] = useState<number | ''>(1);
@@ -693,7 +694,8 @@ export default function VercelActionForm() {
           sendWhatsApp: i === 0,
           portalSettings: {
             showCardPayment: form.showCardPayment,
-            transferAccount: form.transferAccount
+            transferAccount: form.transferAccount,
+            language: form.language
           }
         };
 
@@ -1252,6 +1254,21 @@ export default function VercelActionForm() {
                         <option value="hsbc">HSBC (Rolando Diaz)</option>
                         <option value="wise">WISE USD (Rolando Diaz)</option>
                         <option value="paypal">PAYPAL USD (Live Huatulco)</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5 text-left">
+                      <div className="space-y-0.5">
+                        <label className="text-xs font-bold text-zinc-800">Idioma de Comunicación</label>
+                        <p className="text-[10px] text-zinc-400">Idioma para envío de mensajes y Guest Portal</p>
+                      </div>
+                      <select
+                        value={form.language}
+                        onChange={(e) => setForm({ ...form, language: e.target.value })}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer shadow-sm"
+                      >
+                        <option value="es">Español 🇲🇽</option>
+                        <option value="en">Inglés 🇺🇸</option>
                       </select>
                     </div>
                   </div>

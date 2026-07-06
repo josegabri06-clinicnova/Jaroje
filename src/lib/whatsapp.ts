@@ -1,5 +1,17 @@
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { supabase } from '@/lib/supabase';
+
+// Detecta si un teléfono pertenece a un país angloparlante o turístico no-hispano común para mandar en inglés
+export function detectLanguageFromPhone(phone: string): string {
+  if (!phone) return 'es';
+  const cleaned = phone.replace(/\D/g, '');
+  // EE.UU./Canadá (+1), Reino Unido (+44), Alemania (+49), Francia (+33), Países Bajos (+31)
+  if (cleaned.startsWith('1') || cleaned.startsWith('44') || cleaned.startsWith('49') || cleaned.startsWith('33') || cleaned.startsWith('31')) {
+    return 'en';
+  }
+  return 'es';
+}
 
 // Normaliza y limpia el número de teléfono para Meta Cloud API
 export function normalizePhone(phone: string): string {
@@ -42,7 +54,8 @@ export async function sendWhatsAppTemplate(
   phone: string,
   templateName: string,
   parameters: string[],
-  buttonParameters?: string[]
+  buttonParameters?: string[],
+  bookingId?: string | number
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   try {
     const token = process.env.WHATSAPP_TOKEN;
@@ -55,6 +68,30 @@ export async function sendWhatsAppTemplate(
     const cleanedPhone = normalizePhone(phone);
     if (!cleanedPhone) {
       return { success: false, error: 'Formato de teléfono no válido' };
+    }
+
+    // Resolve language preference
+    let languageCode = 'es_MX';
+    let detectedLang = detectLanguageFromPhone(phone);
+
+    if (bookingId) {
+      try {
+        const { data: settings } = await supabase
+          .from('booking_portal_settings')
+          .select('language')
+          .eq('booking_id', String(bookingId))
+          .maybeSingle();
+        
+        if (settings?.language) {
+          detectedLang = settings.language;
+        }
+      } catch (dbErr) {
+        console.error("Error fetching booking language from DB:", dbErr);
+      }
+    }
+
+    if (detectedLang === 'en') {
+      languageCode = 'en_US';
     }
 
     const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
@@ -88,7 +125,7 @@ export async function sendWhatsAppTemplate(
       type: 'template',
       template: {
         name: templateName,
-        language: { code: 'es_MX' },
+        language: { code: languageCode },
         components
       }
     };
@@ -195,7 +232,7 @@ export async function sendTemplate1_SolicitudRecibida(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams, booking.id);
 }
 
 // 2. Mensaje 2 - Último aviso para conservar la reservación (ultimo_aviso)
@@ -211,7 +248,7 @@ export async function sendTemplate2_UltimoAviso(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams, booking.id);
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
@@ -230,7 +267,7 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams, booking.id);
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
@@ -246,7 +283,7 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams, booking.id);
 }
 
 // 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
@@ -265,7 +302,7 @@ export async function sendTemplate5_PreparacionLlegada(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams, booking.id);
 }
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
@@ -281,7 +318,7 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams, booking.id);
 }
 
 // 7. Mensaje 7 - Seguimiento de satisfacción (seguimiento_satisfaccion)
@@ -297,7 +334,7 @@ export async function sendTemplate7_SeguimientoSatisfaccion(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams, booking.id);
 }
 
 // 8. Mensaje 8 - Día de salida (salida_checkout)
@@ -309,7 +346,7 @@ export async function sendTemplate8_SalidaCheckout(booking: any) {
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'salida_checkout', params);
+  return sendWhatsAppTemplate(phone, 'salida_checkout', params, undefined, booking.id);
 }
 
 // 9. Mensaje 9 - Comparte tu experiencia (comparte_experiencia)
@@ -321,7 +358,7 @@ export async function sendTemplate9_ComparteExperiencia(booking: any) {
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'comparte_experiencia', params);
+  return sendWhatsAppTemplate(phone, 'comparte_experiencia', params, undefined, booking.id);
 }
 
 // 10. Mensaje 10 - ¡Nos encantaría recibirte nuevamente! (recibimiento_nuevamente)
@@ -333,7 +370,7 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any) {
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params);
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, undefined, booking.id);
 }
 
 // 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)
@@ -356,5 +393,5 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any) {
     `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
   ];
 
-  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams);
+  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams, booking.id);
 }

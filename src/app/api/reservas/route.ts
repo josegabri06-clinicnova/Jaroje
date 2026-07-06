@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { 
   sendTemplate1_SolicitudRecibida, 
   sendTemplate3_ReservacionConfirmada,
-  sendTemplate4_DisponibilidadLiberada
+  sendTemplate4_DisponibilidadLiberada,
+  detectLanguageFromPhone
 } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -235,19 +236,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
-      // Guardar ajustes de portal si se especificaron
-      if (portalSettings) {
-        try {
-          await supabase
-            .from('booking_portal_settings')
-            .upsert({
-              booking_id: String(data.id),
-              show_card_payment: portalSettings.showCardPayment ?? true,
-              transfer_account: portalSettings.transferAccount ?? 'santander'
-            });
-        } catch (dbErr) {
-          console.error("Error al guardar portal settings locales:", dbErr);
-        }
+      // Guardar ajustes de portal (se inserta siempre para inicializar el idioma)
+      try {
+        await supabase
+          .from('booking_portal_settings')
+          .upsert({
+            booking_id: String(data.id),
+            show_card_payment: portalSettings?.showCardPayment ?? true,
+            transfer_account: portalSettings?.transferAccount ?? 'santander',
+            language: portalSettings?.language || detectLanguageFromPhone(data.phone)
+          });
+      } catch (dbErr) {
+        console.error("Error al guardar portal settings locales:", dbErr);
       }
 
       // Enviar WhatsApp en segundo plano
@@ -352,7 +352,8 @@ export async function POST(req: Request) {
           .upsert({
             booking_id: String(bookingId),
             show_card_payment: portalSettings.showCardPayment ?? true,
-            transfer_account: portalSettings.transferAccount ?? 'santander'
+            transfer_account: portalSettings.transferAccount ?? 'santander',
+            language: portalSettings.language || detectLanguageFromPhone(phone)
           });
       } catch (dbErr) {
         console.error("Error al guardar portal settings Beds24:", dbErr);
@@ -515,10 +516,28 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit, checkIn, checkOut } = body;
+    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit, checkIn, checkOut, portalSettings } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
+    }
+
+    // Guardar ajustes de portal si vienen en la petición
+    if (portalSettings) {
+      try {
+        const updateObj: any = {
+          booking_id: String(id)
+        };
+        if (portalSettings.showCardPayment !== undefined) updateObj.show_card_payment = portalSettings.showCardPayment;
+        if (portalSettings.transferAccount !== undefined) updateObj.transfer_account = portalSettings.transferAccount;
+        if (portalSettings.language !== undefined) updateObj.language = portalSettings.language;
+
+        await supabase
+          .from('booking_portal_settings')
+          .upsert(updateObj);
+      } catch (dbErr) {
+        console.error("[Reservas PUT] Error al guardar portal settings:", dbErr);
+      }
     }
 
     // 1. Intentamos buscar si la reserva es local en Supabase

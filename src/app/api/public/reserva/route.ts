@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
-import { normalizePhone } from '@/lib/whatsapp';
+import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
       // Obtener settings de pago
       const { data: portalSettings } = await supabase
         .from('booking_portal_settings')
-        .select('show_card_payment, transfer_account')
+        .select('show_card_payment, transfer_account, language')
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
@@ -102,7 +102,8 @@ export async function GET(req: Request) {
           booking_time: localRes.created_at || null,
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment ?? true,
-            transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander')
+            transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
+            language: portalSettings?.language || detectLanguageFromPhone(localRes.phone)
           }
         }
       });
@@ -195,7 +196,7 @@ export async function GET(req: Request) {
 
       const { data: portalSettings } = await supabase
         .from('booking_portal_settings')
-        .select('show_card_payment, transfer_account')
+        .select('show_card_payment, transfer_account, language')
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
@@ -250,7 +251,8 @@ export async function GET(req: Request) {
           booking_time: booking.booking_time || null,
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment ?? true,
-            transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander')
+            transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
+            language: portalSettings?.language || detectLanguageFromPhone(booking.phone || booking.mobile || booking.guest_phone)
           }
         }
       });
