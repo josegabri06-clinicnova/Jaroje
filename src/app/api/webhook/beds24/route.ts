@@ -72,6 +72,52 @@ export async function POST(req: Request) {
       console.error("Error al registrar log de webhook Beds24:", logErr);
     }
 
+    // Enviar WhatsApp de reservación confirmada (Mensaje 3) en segundo plano
+    if (bookingId) {
+      (async () => {
+        try {
+          const { getBeds24Token } = await import('@/lib/beds24');
+          const { sendTemplate3_ReservacionConfirmada } = await import('@/lib/whatsapp');
+          
+          const BEDS24_TOKEN = await getBeds24Token();
+          const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
+            headers: { 'token': BEDS24_TOKEN }
+          });
+          
+          if (b24Res.ok) {
+            const b24Json = await b24Res.json();
+            if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
+              const b = b24Json.data[0];
+              const phone = b.phone || b.mobile || b.guestPhone || '';
+              if (phone) {
+                const bookingForWA = {
+                  id: bookingId.toString(),
+                  guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || guestName || 'Huésped'),
+                  phone: phone,
+                  num_adult: Number(b.numAdult || 1),
+                  num_child: Number(b.numChild || 0)
+                };
+                
+                const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+                if (waRes.success) {
+                  await supabase.from('whatsapp_logs').insert([{
+                    reservation_id: bookingId.toString(),
+                    template_name: 'reservacion_confirmada',
+                    phone: phone
+                  }]);
+                  console.log(`[Webhook Beds24] WhatsApp reservacion_confirmada enviado a reserva ${bookingId}`);
+                } else {
+                  console.error(`[Webhook Beds24] Error al enviar WhatsApp:`, waRes.error);
+                }
+              }
+            }
+          }
+        } catch (waErr) {
+          console.error("[Webhook Beds24] Error en proceso de envío de WhatsApp:", waErr);
+        }
+      })();
+    }
+
     return NextResponse.json({ success: true, message: "Fechas bloqueadas en Jaroje App." });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
