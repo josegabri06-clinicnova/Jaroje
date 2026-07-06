@@ -452,7 +452,12 @@ export async function DELETE(req: Request) {
       if (b24Res.ok) {
         const b24Json = await b24Res.json();
         if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
-          bookingForWA = b24Json.data[0];
+          const b = b24Json.data[0];
+          bookingForWA = {
+            id: id.toString(),
+            guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || 'Huésped'),
+            phone: b.phone || b.mobile || b.guestPhone || ''
+          };
         }
       }
     } catch (err) {
