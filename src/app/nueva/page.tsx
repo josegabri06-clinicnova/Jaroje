@@ -376,7 +376,9 @@ export default function VercelActionForm() {
         name: rm.name,
         suggestedDailyRate,
         dailyRate,
-        roomTotal
+        roomTotal,
+        adults: dist.adults,
+        children: dist.children
       };
     });
 
@@ -669,6 +671,8 @@ export default function VercelActionForm() {
       for (const room of roomsToBook) {
         const matchedDetails = roomDetails.find(d => d.roomId === room.roomId && d.unitId === room.unitId);
         const roomTotal = matchedDetails ? matchedDetails.roomTotal : 0;
+        const roomAdults = matchedDetails ? (matchedDetails.adults ?? 1) : 1;
+        const roomChildren = matchedDetails ? (matchedDetails.children ?? 0) : 0;
 
         const payload = {
           roomId: room.roomId,
@@ -680,8 +684,8 @@ export default function VercelActionForm() {
           price: isBlock ? 0 : roomTotal,
           deposit: depositPerRoom,
           phone: isBlock ? '' : form.phone,
-          numAdult: isBlock ? 1 : (Number(form.numAdult) || 1),
-          numChild: isBlock ? 0 : (Number(form.numChild) || 0),
+          numAdult: isBlock ? 1 : roomAdults,
+          numChild: isBlock ? 0 : roomChildren,
           notes: isBlock ? '' : `${form.notes || ''}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`,
           portalSettings: {
             showCardPayment: form.showCardPayment,
