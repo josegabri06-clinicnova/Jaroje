@@ -41,6 +41,13 @@ export async function GET(req: Request) {
         .eq('reservation_id', String(bookingId))
         .maybeSingle();
 
+      // Obtener settings de pago
+      const { data: portalSettings } = await supabase
+        .from('booking_portal_settings')
+        .select('show_card_payment, transfer_account')
+        .eq('booking_id', String(bookingId))
+        .maybeSingle();
+
       return NextResponse.json({
         success: true,
         data: {
@@ -59,7 +66,11 @@ export async function GET(req: Request) {
           is_checked_out: checkinData?.status === 'checked_out',
           is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
           status: localRes.status || 'confirmed',
-          booking_time: localRes.created_at || null
+          booking_time: localRes.created_at || null,
+          portal_settings: {
+            show_card_payment: portalSettings?.show_card_payment ?? true,
+            transfer_account: portalSettings?.transfer_account ?? 'santander'
+          }
         }
       });
     }
@@ -149,6 +160,12 @@ export async function GET(req: Request) {
         .eq('reservation_id', String(bookingId))
         .maybeSingle();
 
+      const { data: portalSettings } = await supabase
+        .from('booking_portal_settings')
+        .select('show_card_payment, transfer_account')
+        .eq('booking_id', String(bookingId))
+        .maybeSingle();
+
       return NextResponse.json({
         success: true,
         data: {
@@ -167,7 +184,11 @@ export async function GET(req: Request) {
           is_checked_out: checkinData?.status === 'checked_out',
           is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
           status: booking.status || 'confirmed',
-          booking_time: booking.booking_time || null
+          booking_time: booking.booking_time || null,
+          portal_settings: {
+            show_card_payment: portalSettings?.show_card_payment ?? true,
+            transfer_account: portalSettings?.transfer_account ?? 'santander'
+          }
         }
       });
     }

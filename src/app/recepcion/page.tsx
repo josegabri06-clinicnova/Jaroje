@@ -467,6 +467,8 @@ export default function RecepcionPage() {
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
+  const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
+  const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
 
   // Estados para abono dedicado en Recepción
   const [showAbonoFlow, setShowAbonoFlow] = useState(false);
@@ -521,6 +523,27 @@ export default function RecepcionPage() {
       setExtensionPaymentMethod(null);
       setExtensionAccountId('');
       setExtensionLoading(false);
+
+      // Cargar ajustes de portal para la reserva seleccionada
+      setPortalShowCardPayment(true);
+      setPortalTransferAccount('santander');
+      if (selectedReserva.id !== 'walkin') {
+        (async () => {
+          try {
+            const { data, error } = await supabase
+              .from('booking_portal_settings')
+              .select('show_card_payment, transfer_account')
+              .eq('booking_id', String(selectedReserva.id))
+              .maybeSingle();
+            if (!error && data) {
+              setPortalShowCardPayment(data.show_card_payment);
+              setPortalTransferAccount(data.transfer_account);
+            }
+          } catch (e) {
+            console.error("Error loading portal settings:", e);
+          }
+        })();
+      }
     } else {
       setPaymentAmount('');
       setPaymentDescription('');
@@ -551,6 +574,25 @@ export default function RecepcionPage() {
       setExtensionLoading(false);
     }
   }, [selectedReserva]);
+
+  const handleUpdatePortalSettings = async (showCard: boolean, account: string) => {
+    if (!selectedReserva || selectedReserva.id === 'walkin') return;
+    try {
+      const { error } = await supabase
+        .from('booking_portal_settings')
+        .upsert({
+          booking_id: String(selectedReserva.id),
+          show_card_payment: showCard,
+          transfer_account: account
+        }, { onConflict: 'booking_id' });
+      if (error) throw error;
+      setPortalShowCardPayment(showCard);
+      setPortalTransferAccount(account);
+    } catch (err: any) {
+      console.error("Error saving portal settings:", err);
+      alert("Error al guardar ajustes de pago: " + err.message);
+    }
+  };
 
   // Sincronizar editedAdults y editedChildren con selectedReserva (por ejemplo, al cambiar en steppers de walk-in)
   useEffect(() => {
@@ -4457,6 +4499,57 @@ export default function RecepcionPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Ajustes del Portal del Huésped */}
+                  {selectedReserva.id !== 'walkin' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-indigo-650" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                          </svg>
+                          Ajustes de Pago en Portal
+                        </span>
+                        <span className="text-[9px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          Personalizado
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5 text-left">
+                          <label className="text-xs font-bold text-zinc-800">Botón Mercado Pago</label>
+                          <p className="text-[10px] text-zinc-400">Habilitar cobro con tarjeta en portal</p>
+                        </div>
+                        <button
+                          onClick={() => handleUpdatePortalSettings(!portalShowCardPayment, portalTransferAccount)}
+                          className={`w-11 h-6 rounded-full transition-colors relative outline-none flex items-center px-1 shrink-0 cursor-pointer ${
+                            portalShowCardPayment ? 'bg-indigo-600 justify-end' : 'bg-zinc-200 justify-start'
+                          }`}
+                        >
+                          <span className="w-4 h-4 bg-white rounded-full shadow-sm block" />
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5 text-left">
+                        <div className="space-y-0.5">
+                          <label className="text-xs font-bold text-zinc-800">Cuenta de Transferencia</label>
+                          <p className="text-[10px] text-zinc-400">Banco para depósito que se mostrará al huésped</p>
+                        </div>
+                        <select
+                          value={portalTransferAccount}
+                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, e.target.value)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
+                        >
+                          <option value="santander">SANTANDER (Laura Isabel Corral)</option>
+                          <option value="banamex">BANAMEX (Rolando Diaz)</option>
+                          <option value="hsbc">HSBC (Rolando Diaz)</option>
+                          <option value="wise">WISE USD (Rolando Diaz)</option>
+                          <option value="paypal">PAYPAL USD (Live Huatulco)</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
 
                   {/* 3. Habitación asignada */}
                   <div className="space-y-2">

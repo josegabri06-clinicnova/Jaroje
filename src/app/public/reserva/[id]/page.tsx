@@ -738,25 +738,29 @@ export default function PublicReservaPage() {
               </div>
 
               {/* Método 1: Tarjeta */}
-              <div className="space-y-2">
-                <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
-                <a 
-                  href="https://link.mercadopago.com.mx/jaroje" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <CreditCard size={18} />
-                  Pagar con Mercado Pago
-                </a>
-                <p className="text-[10px] text-zinc-500 italic text-center mt-1">Si realizas tu pago con tarjeta, no es necesario enviar comprobante.</p>
-              </div>
+              {(booking.portal_settings?.show_card_payment ?? true) && (
+                <>
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">Opción 1: Tarjeta de Crédito / Débito (Pasarela)</span>
+                    <a 
+                      href="https://link.mercadopago.com.mx/jaroje" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <CreditCard size={18} />
+                      Pagar con Mercado Pago
+                    </a>
+                    <p className="text-[10px] text-zinc-500 italic text-center mt-1">Si realizas tu pago con tarjeta, no es necesario enviar comprobante.</p>
+                  </div>
 
-              <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-zinc-200"></div>
-                <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">ó</span>
-                <div className="flex-grow border-t border-zinc-200"></div>
-              </div>
+                  <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-zinc-200"></div>
+                    <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">ó</span>
+                    <div className="flex-grow border-t border-zinc-200"></div>
+                  </div>
+                </>
+              )}
 
               {/* Método 2: Transferencia */}
               <div className="space-y-3 pt-2">

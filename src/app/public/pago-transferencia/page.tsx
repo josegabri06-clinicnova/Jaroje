@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { 
   Copy, 
   Check, 
@@ -31,6 +32,9 @@ export default function PagoTransferenciaPage() {
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  
+  const [transferAccount, setTransferAccount] = useState<string>('santander');
+  const [loadingAccount, setLoadingAccount] = useState<boolean>(true);
 
   useEffect(() => {
     if (rawAmount) {
@@ -40,6 +44,29 @@ export default function PagoTransferenciaPage() {
       }
     }
   }, [rawAmount]);
+
+  useEffect(() => {
+    if (!bookingId) {
+      setLoadingAccount(false);
+      return;
+    }
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('booking_portal_settings')
+          .select('transfer_account')
+          .eq('booking_id', String(bookingId))
+          .maybeSingle();
+        if (!error && data) {
+          setTransferAccount(data.transfer_account || 'santander');
+        }
+      } catch (err) {
+        console.error("Error loading transfer settings:", err);
+      } finally {
+        setLoadingAccount(false);
+      }
+    })();
+  }, [bookingId]);
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -92,6 +119,43 @@ export default function PagoTransferenciaPage() {
     });
   };
 
+  const allAccounts: Record<string, { banco: string; titular: string; cuenta?: string; clabe?: string; url?: string; isLink?: boolean; description?: string }> = {
+    santander: {
+      banco: 'SANTANDER',
+      titular: 'Laura Isabel Corral Dovalina',
+      cuenta: '60628351140',
+      clabe: '014060606283511403'
+    },
+    banamex: {
+      banco: 'BANAMEX',
+      titular: 'Rolando Diaz Ceballos',
+      cuenta: '70042002214',
+      clabe: '002634700420022141'
+    },
+    hsbc: {
+      banco: 'HSBC',
+      titular: 'Rolando Diaz Ceballos',
+      cuenta: '70042002214',
+      clabe: '002634700420022141'
+    },
+    wise: {
+      banco: 'WISE USD',
+      titular: 'Rolando Diaz Ceballos',
+      url: 'https://wise.com/pay/me/rolandod148',
+      isLink: true,
+      description: 'Por favor, realiza tu pago en dólares americanos (USD) a través de la plataforma segura de Wise.'
+    },
+    paypal: {
+      banco: 'PAYPAL USD',
+      titular: 'Live Huatulco',
+      url: 'https://www.paypal.me/livehuatulco',
+      isLink: true,
+      description: 'Por favor, realiza tu pago en dólares americanos (USD) a través de la plataforma segura de PayPal.'
+    }
+  };
+
+  const activeAccount = allAccounts[transferAccount] || allAccounts.santander;
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
@@ -107,6 +171,7 @@ export default function PagoTransferenciaPage() {
         formData.append('amount', String(amount));
         formData.append('name', String(name));
         formData.append('email', String(email));
+        formData.append('notes', `[Banco Destino: ${activeAccount.banco}]`);
         formData.append('file', fileToUpload);
 
         const res = await fetch('/api/payments/transfer-submit', {
@@ -127,14 +192,6 @@ export default function PagoTransferenciaPage() {
         setUploading(false);
       }
     }
-  };
-
-  const bankDetails = {
-    banco: 'Santander',
-    titular: 'Laura Isabel Corral Dovalina',
-    cuenta: '60628351140',
-    clabe: '014060606283511403',
-    concepto: bookingId || 'ID de la reserva'
   };
 
   return (
@@ -182,67 +239,113 @@ export default function PagoTransferenciaPage() {
               </div>
 
               {/* Bank Details Card */}
-              <div className="space-y-3.5">
-                <h3 className="text-[12px] font-extrabold text-zinc-400 uppercase tracking-wider px-1">Datos de Transferencia</h3>
-                
-                <div className="bg-white border border-zinc-200/80 rounded-2xl p-4.5 space-y-3.5 shadow-sm">
-                  
-                  {/* Banco */}
-                  <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase">Banco</span>
-                      <p className="text-sm font-bold text-zinc-900">{bankDetails.banco}</p>
-                    </div>
-                  </div>
-
-                  {/* Beneficiario */}
-                  <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase">Beneficiario</span>
-                      <p className="text-sm font-bold text-zinc-900">{bankDetails.titular}</p>
-                    </div>
-                  </div>
-
-                  {/* CLABE */}
-                  <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase">CLABE Interbancaria</span>
-                      <p className="text-sm font-black text-zinc-950 tracking-wider font-mono">{bankDetails.clabe}</p>
-                    </div>
-                    <button 
-                      onClick={() => copyToClipboard(bankDetails.clabe, 'clabe')}
-                      className="w-8 h-8 flex items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors"
-                      title="Copiar CLABE"
-                    >
-                      {copiedField === 'clabe' ? (
-                        <Check size={14} className="text-emerald-600" />
-                      ) : (
-                        <Copy size={14} className="text-zinc-500" />
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Concepto */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase">Concepto de Pago (Obligatorio)</span>
-                      <p className="text-sm font-black text-zinc-950 font-mono">{bankDetails.concepto}</p>
-                    </div>
-                    <button 
-                      onClick={() => copyToClipboard(String(bankDetails.concepto), 'concepto')}
-                      className="w-8 h-8 flex items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors"
-                      title="Copiar Concepto"
-                    >
-                      {copiedField === 'concepto' ? (
-                        <Check size={14} className="text-emerald-600" />
-                      ) : (
-                        <Copy size={14} className="text-zinc-500" />
-                      )}
-                    </button>
-                  </div>
-
+              {loadingAccount ? (
+                <div className="bg-white border border-zinc-200/80 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 shadow-sm">
+                  <Loader2 className="animate-spin text-indigo-600" size={24} />
+                  <p className="text-xs font-bold text-zinc-500">Cargando datos de transferencia...</p>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-3.5">
+                  <h3 className="text-[12px] font-extrabold text-zinc-400 uppercase tracking-wider px-1">Datos de Transferencia</h3>
+                  
+                  <div className="bg-white border border-zinc-200/80 rounded-2xl p-4.5 space-y-3.5 shadow-sm">
+                    
+                    {/* Banco */}
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+                      <div className="text-left">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase block">Banco</span>
+                        <p className="text-sm font-bold text-zinc-900">{activeAccount.banco}</p>
+                      </div>
+                    </div>
+
+                    {/* Beneficiario */}
+                    <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+                      <div className="text-left">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase block">Beneficiario</span>
+                        <p className="text-sm font-bold text-zinc-900">{activeAccount.titular}</p>
+                      </div>
+                    </div>
+
+                    {/* Enlace de Pago Seguro (Wise/PayPal) */}
+                    {activeAccount.isLink && (
+                      <div className="flex flex-col gap-2 border-b border-zinc-100 pb-3">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase text-left">Plataforma de Pago</span>
+                        <p className="text-[11px] text-zinc-500 italic text-left">{activeAccount.description}</p>
+                        <a
+                          href={activeAccount.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-xs py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1 animate-pulse"
+                        >
+                          <span>Pagar en {activeAccount.banco} ↗</span>
+                        </a>
+                      </div>
+                    )}
+
+                    {/* Cuenta */}
+                    {!activeAccount.isLink && activeAccount.cuenta && (
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+                        <div className="text-left">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase block">Número de Cuenta</span>
+                          <p className="text-sm font-black text-zinc-950 tracking-wider font-mono">{activeAccount.cuenta}</p>
+                        </div>
+                        <button 
+                          onClick={() => copyToClipboard(activeAccount.cuenta!, 'cuenta')}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors"
+                          title="Copiar Cuenta"
+                        >
+                          {copiedField === 'cuenta' ? (
+                            <Check size={14} className="text-emerald-600" />
+                          ) : (
+                            <Copy size={14} className="text-zinc-500" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* CLABE */}
+                    {!activeAccount.isLink && activeAccount.clabe && (
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+                        <div className="text-left">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase block">CLABE Interbancaria</span>
+                          <p className="text-sm font-black text-zinc-950 tracking-wider font-mono">{activeAccount.clabe}</p>
+                        </div>
+                        <button 
+                          onClick={() => copyToClipboard(activeAccount.clabe!, 'clabe')}
+                          className="w-8 h-8 flex items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors"
+                          title="Copiar CLABE"
+                        >
+                          {copiedField === 'clabe' ? (
+                            <Check size={14} className="text-emerald-600" />
+                          ) : (
+                            <Copy size={14} className="text-zinc-500" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Concepto */}
+                    <div className="flex items-center justify-between">
+                      <div className="text-left">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase block">Concepto de Pago (Obligatorio)</span>
+                        <p className="text-sm font-black text-zinc-950 font-mono">{bookingId || 'ID de la reserva'}</p>
+                      </div>
+                      <button 
+                        onClick={() => copyToClipboard(String(bookingId), 'concepto')}
+                        className="w-8 h-8 flex items-center justify-center bg-zinc-50 border border-zinc-200 rounded-lg hover:bg-zinc-100 transition-colors"
+                        title="Copiar Concepto"
+                      >
+                        {copiedField === 'concepto' ? (
+                          <Check size={14} className="text-emerald-600" />
+                        ) : (
+                          <Copy size={14} className="text-zinc-500" />
+                        )}
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+              )}
 
               {/* Uploader Section */}
               <div className="space-y-3.5">

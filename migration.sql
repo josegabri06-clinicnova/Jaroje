@@ -73,3 +73,29 @@ ON storage.objects
 FOR SELECT
 USING (bucket_id = 'transfer-receipts');
 
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- CONFIGURACIÓN DE PAGO POR RESERVACIÓN (PORTAL DEL HUÉSPED)
+-- ──────────────────────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.booking_portal_settings (
+    booking_id TEXT PRIMARY KEY,
+    show_card_payment BOOLEAN DEFAULT true,
+    transfer_account TEXT DEFAULT 'santander',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS
+ALTER TABLE public.booking_portal_settings ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de acceso público
+DROP POLICY IF EXISTS "Allow public select on booking_portal_settings" ON public.booking_portal_settings;
+CREATE POLICY "Allow public select on booking_portal_settings" ON public.booking_portal_settings FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Allow public insert on booking_portal_settings" ON public.booking_portal_settings;
+CREATE POLICY "Allow public insert on booking_portal_settings" ON public.booking_portal_settings FOR INSERT WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public update on booking_portal_settings" ON public.booking_portal_settings;
+CREATE POLICY "Allow public update on booking_portal_settings" ON public.booking_portal_settings FOR UPDATE USING (true) WITH CHECK (true);
+
+
