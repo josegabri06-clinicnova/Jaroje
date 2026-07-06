@@ -2040,10 +2040,13 @@ export default function ReservasList() {
                     <strong className="text-rose-800">{format(parseISO(r.booking_time.split(' ')[0] || r.booking_time.split('T')[0]), 'dd MMM yyyy', { locale: es })}</strong>
                     <span className="text-rose-500 ml-auto">
                       {(() => {
-                        const created = new Date(r.booking_time);
-                        const now = new Date();
-                        const diffDays = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
-                        return diffDays === 0 ? 'Hoy' : diffDays === 1 ? 'Hace 1 día' : `Hace ${diffDays} días`;
+                        const createdDate = new Date(r.booking_time);
+                        const today = new Date();
+                        const d1 = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate());
+                        const d2 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                        const diffTime = d2.getTime() - d1.getTime();
+                        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+                        return diffDays <= 0 ? 'Hoy' : diffDays === 1 ? 'Hace 1 día' : `Hace ${diffDays} días`;
                       })()}
                     </span>
                   </div>
