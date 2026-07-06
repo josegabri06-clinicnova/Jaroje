@@ -320,6 +320,8 @@ export default function VercelActionForm() {
       : defaultSurchargeTotal;
 
     const roomDetails = group.map((rm) => {
+      const dist = distributedGuests.find(d => d.roomId === rm.roomId && d.unitId === rm.unitId) || { adults: 1, children: 0 };
+
       // 1. Find dynamic price in inventory
       const roomGroup = inventory.find(g => g.roomId === rm.roomId);
       const unit = roomGroup?.units?.find((u: any) => u.unitId === rm.unitId);
