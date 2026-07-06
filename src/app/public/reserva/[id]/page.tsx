@@ -1116,6 +1116,45 @@ export default function PublicReservaPage() {
           </div>
         </div>
 
+        {/* 3.5. IDIOMA DE NOTIFICACIONES DE WHATSAPP */}
+        <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3">
+          <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
+            <MessageSquare size={18} className="text-indigo-600" />
+            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
+              {lang === 'en' ? 'WhatsApp Notification Language' : 'Idioma de Mensajes de WhatsApp'}
+            </h3>
+          </div>
+          <p className="text-xs text-zinc-650 leading-relaxed">
+            {lang === 'en' 
+              ? 'Choose the language in which you prefer to receive automatic booking updates, payment confirmations, and general reminders via WhatsApp.'
+              : 'Elige el idioma en el que prefieres recibir las confirmaciones de reserva, pagos y recordatorios automáticos por WhatsApp.'}
+          </p>
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={() => changeLanguage('es')}
+              className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                lang === 'es' 
+                  ? 'bg-zinc-900 border-zinc-900 text-amber-100 shadow-md font-extrabold' 
+                  : 'bg-[#FAF9F6] border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+              }`}
+            >
+              <span>Español 🇪🇸</span>
+              {lang === 'es' && <span className="text-[9px] bg-green-500/20 text-green-700 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wide">Activo</span>}
+            </button>
+            <button
+              onClick={() => changeLanguage('en')}
+              className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
+                lang === 'en' 
+                  ? 'bg-zinc-900 border-zinc-900 text-amber-100 shadow-md font-extrabold' 
+                  : 'bg-[#FAF9F6] border-zinc-200 text-zinc-700 hover:bg-zinc-100'
+              }`}
+            >
+              <span>English 🇺🇸</span>
+              {lang === 'en' && <span className="text-[9px] bg-green-500/20 text-green-700 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wide">Active</span>}
+            </button>
+          </div>
+        </div>
+
         {/* 4. ESTADO DE CUENTA */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
