@@ -63,15 +63,15 @@ export async function POST(req: Request) {
       const { data: accounts } = await supabase.from('accounts').select('*');
       let accountId = null;
       if (accounts && accounts.length > 0) {
-        const stripeAcc = accounts.find(a => a.name.toUpperCase().includes('STRIPE'));
+        const stripeAcc = accounts.find(a => (a.name || '').toUpperCase().includes('STRIPE'));
         if (stripeAcc) {
           accountId = stripeAcc.id;
         } else {
-          const mpAcc = accounts.find(a => a.name.toUpperCase().includes('MERCADO PAGO'));
+          const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO'));
           if (mpAcc) {
             accountId = mpAcc.id;
           } else {
-            const hsbcAcc = accounts.find(a => a.name.toUpperCase().includes('HSBC FISCAL'));
+            const hsbcAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC FISCAL'));
             if (hsbcAcc) {
               accountId = hsbcAcc.id;
             } else {

@@ -95,7 +95,7 @@ export async function POST(req: Request) {
         const { data: accounts } = await supabase.from('accounts').select('*');
         let accountId = null;
         if (accounts && accounts.length > 0) {
-          const santanderAcc = accounts.find(a => a.name.toUpperCase().includes('SANTANDER'));
+          const santanderAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
           if (santanderAcc) {
             accountId = santanderAcc.id;
           } else {

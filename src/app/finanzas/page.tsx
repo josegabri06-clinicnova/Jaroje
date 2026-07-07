@@ -331,7 +331,7 @@ export default function FinanzasPage() {
   const resolvePaymentMethod = (accountId: string) => {
     const acc = accounts.find(a => a.id === accountId);
     if (!acc) return 'transferencia';
-    if (acc.group_type === 'EFECTIVO' || acc.name.toUpperCase().includes('EFECTIVO')) {
+    if (acc.group_type === 'EFECTIVO' || (acc.name || '').toUpperCase().includes('EFECTIVO')) {
       return 'efectivo';
     }
     return 'transferencia';

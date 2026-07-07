@@ -2421,20 +2421,20 @@ export default function RecepcionPage() {
 
             if (channel === 'Airbnb') {
               netAcc = accounts.find(a => {
-                const name = a.name.toUpperCase();
+                const name = (a.name || '').toUpperCase();
                 return name === 'HSBC' || name === 'HSBC FISCAL' || name.includes('HSBC');
               });
               commAcc = accounts.find(a => {
-                const name = a.name.toUpperCase();
+                const name = (a.name || '').toUpperCase();
                 return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('AIRBNB');
               });
             } else if (channel === 'Booking.com') {
               netAcc = accounts.find(a => {
-                const name = a.name.toUpperCase();
+                const name = (a.name || '').toUpperCase();
                 return name === 'BOOKING' || (name.includes('BOOKING') && !name.includes('COMISIO') && !name.includes('COMISIÓ'));
               });
               commAcc = accounts.find(a => {
-                const name = a.name.toUpperCase();
+                const name = (a.name || '').toUpperCase();
                 return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('BOOKING');
               });
             }
@@ -2623,7 +2623,7 @@ export default function RecepcionPage() {
                 }
 
                 const commissionAcc = accounts.find(a =>
-                  a.name.toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
+                  (a.name || '').toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
                 );
 
                 if (otaSplit.commission > 0) {
@@ -2797,7 +2797,8 @@ export default function RecepcionPage() {
         setReservas(prev => prev.map(r => groupIds.includes(r.id) ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined, notes: r.id === selectedReserva.id ? checkInNotes : r.notes } : r));
       } else {
         // --- PROCESO INDIVIDUAL ESTÁNDAR ---
-        const { error: upsertErr } = await supabase.from('checkins').upsert({
+        try {
+          const { error: upsertErr } = await supabase.from('checkins').upsert({
           reservation_id: String(selectedReserva.id),
           guest_name: selectedReserva.guest_name,
           room: selectedReserva.room,
@@ -2862,20 +2863,20 @@ export default function RecepcionPage() {
 
           if (channel === 'Airbnb') {
             netAcc = accounts.find(a => {
-              const name = a.name.toUpperCase();
+              const name = (a.name || '').toUpperCase();
               return name === 'HSBC' || name === 'HSBC FISCAL' || name.includes('HSBC');
             });
             commAcc = accounts.find(a => {
-              const name = a.name.toUpperCase();
+              const name = (a.name || '').toUpperCase();
               return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('AIRBNB');
             });
           } else if (channel === 'Booking.com') {
             netAcc = accounts.find(a => {
-              const name = a.name.toUpperCase();
+              const name = (a.name || '').toUpperCase();
               return name === 'BOOKING' || (name.includes('BOOKING') && !name.includes('COMISIO') && !name.includes('COMISIÓ'));
             });
             commAcc = accounts.find(a => {
-              const name = a.name.toUpperCase();
+              const name = (a.name || '').toUpperCase();
               return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('BOOKING');
             });
           }
@@ -3064,7 +3065,7 @@ export default function RecepcionPage() {
             }
 
             const commissionAcc = accounts.find(a =>
-              a.name.toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
+              (a.name || '').toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
             );
 
             if (otaSplit.commission > 0) {
@@ -3238,6 +3239,12 @@ export default function RecepcionPage() {
             }
           }
         }
+      }
+      } catch (err: any) {
+        console.error("Error en processCheckIn (estándar):", err);
+        alert("Fallo de conexión o base de datos al procesar el Check-In: " + err.message);
+        setSubmitting(false);
+        return;
       }
     }
 

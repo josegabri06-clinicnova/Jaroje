@@ -1045,20 +1045,20 @@ export default function CalendarPage() {
 
       if (channel === 'Airbnb') {
         netAcc = accounts.find(a => {
-          const name = a.name.toUpperCase();
+          const name = (a.name || '').toUpperCase();
           return name === 'HSBC' || name === 'HSBC FISCAL' || name.includes('HSBC');
         });
         commAcc = accounts.find(a => {
-          const name = a.name.toUpperCase();
+          const name = (a.name || '').toUpperCase();
           return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('AIRBNB');
         });
       } else if (channel === 'Booking.com') {
         netAcc = accounts.find(a => {
-          const name = a.name.toUpperCase();
+          const name = (a.name || '').toUpperCase();
           return name === 'BOOKING' || (name.includes('BOOKING') && !name.includes('COMISIO') && !name.includes('COMISIÓ'));
         });
         commAcc = accounts.find(a => {
-          const name = a.name.toUpperCase();
+          const name = (a.name || '').toUpperCase();
           return (name.includes('COMISIO') || name.includes('COMISIÓ')) && name.includes('BOOKING');
         });
       }
@@ -1254,7 +1254,7 @@ export default function CalendarPage() {
 
         // 2. Egreso de comisión OTA
         const commissionAcc = accounts.find(a =>
-          a.name.toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
+          (a.name || '').toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
         );
 
         if (otaSplit.commission > 0) {
