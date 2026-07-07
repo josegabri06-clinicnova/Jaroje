@@ -1140,14 +1140,15 @@ export function getCapacityRules(
   roomNameOrId: string,
   customSettings?: Record<string, { base: number; max: number }>
 ): { base: number; max: number } {
-  const r = (roomNameOrId || '').toLowerCase();
+  const r = (roomNameOrId || '').toLowerCase().trim();
 
-  if (customSettings) {
+  if (customSettings && r) {
     if (customSettings[roomNameOrId]) {
       return customSettings[roomNameOrId];
     }
     for (const key of Object.keys(customSettings)) {
-      if (r.includes(key.toLowerCase()) || key.toLowerCase().includes(r)) {
+      const k = key.toLowerCase().trim();
+      if (k && (r === k || r.includes(k) || (k.length > 3 && k.includes(r)))) {
         return customSettings[key];
       }
     }

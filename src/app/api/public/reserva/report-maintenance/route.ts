@@ -9,7 +9,7 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { bookingId, type, description } = body;
 
-    if (!bookingId || !type || !description) {
+    if (!bookingId || !description) {
       return NextResponse.json({ success: false, error: 'Faltan parámetros obligatorios' }, { status: 400 });
     }
 
@@ -30,22 +30,23 @@ export async function POST(req: Request) {
         '5': '504', '6': '505', '7': '506', '8': '507'
       };
       const physicalName = localRes.unit_id ? (UNIT_TO_ROOM[localRes.unit_id] || localRes.unit_id) : '';
-      roomName = physicalName ? `Habitación ${physicalName}` : 'Local';
+      roomName = physicalName || 'Local';
       guestName = localRes.guest_name || 'Huésped';
     } else {
       // 2. Buscar en Beds24
       const allBeds24 = await getBeds24Bookings(true);
       const booking = allBeds24.find(r => r.id === id);
       if (booking) {
-        roomName = booking.room_name || `Habitación ${booking.roomId}`;
+        const match = (booking.room_name || '').match(/\((\d+)\)/);
+        roomName = match ? match[1] : (booking.room_name || `Habitación ${booking.roomId}`);
         guestName = booking.guest_name || 'Huésped';
       }
     }
 
     // 3. Insertar tarea de mantenimiento en la tabla 'tasks'
     const newTask = {
-      type: type || 'otro',
-      room: roomName,
+      type: type || 'Otro', // El lugar seleccionado en el portal (ej: "Alberca", "Mi Habitación (202)")
+      room: roomName, // La habitación del huésped que reportó
       description: description,
       status: 'nuevo',
       reported_by: `Huésped: ${guestName} (Reserva: ${bookingId})`,

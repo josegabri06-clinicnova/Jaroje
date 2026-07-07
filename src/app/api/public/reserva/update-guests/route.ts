@@ -119,8 +119,9 @@ export async function POST(req: Request) {
     }
 
     // 3.1. Validar capacidad máxima
+    const roomId = String(currentBooking.roomId || '');
     const roomName = currentBooking.roomName || '';
-    const rules = getCapacityRules(roomName, capacitySettings || undefined);
+    const rules = getCapacityRules(roomId || roomName, capacitySettings || undefined);
     if (totalNewGuests > rules.max) {
       return NextResponse.json({ 
         success: false, 

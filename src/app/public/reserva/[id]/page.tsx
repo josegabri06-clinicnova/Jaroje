@@ -467,7 +467,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     
     maintenanceBtn: '🛠 Reportar Incidencia de Mantenimiento',
     maintenanceTitle: 'Reportar Incidencia de Mantenimiento',
-    maintenanceTypeLabel: 'Tipo de Incidencia',
+    maintenanceTypeLabel: '¿Dónde está el problema?',
     maintenanceDescPlaceholder: 'Describe detalladamente el problema para poder ayudarte...',
     sendReport: 'Enviar Reporte',
     reportSuccess: '¡Reporte enviado con éxito! El personal de mantenimiento lo revisará de inmediato.'
@@ -578,7 +578,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     
     maintenanceBtn: '🛠 Report Maintenance Incident',
     maintenanceTitle: 'Report Maintenance Incident',
-    maintenanceTypeLabel: 'Type of Issue',
+    maintenanceTypeLabel: 'Where is the issue?',
     maintenanceDescPlaceholder: 'Describe the problem in detail so we can help you...',
     sendReport: 'Submit Report',
     reportSuccess: 'Report submitted successfully! The maintenance staff will review it shortly.'
@@ -957,18 +957,20 @@ export default function PublicReservaPage() {
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent)] pointer-events-none" />
         
         {/* Selector de Idioma Flotante Derecho */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-white/10 backdrop-blur-sm p-1 rounded-full border border-white/10 z-25 text-[9px] font-bold">
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1 rounded-full border border-white/20 z-20 text-[10.5px] font-bold shadow-md">
           <button 
             onClick={() => changeLanguage('es')}
-            className={`px-2 py-0.5 rounded-full transition-all cursor-pointer ${lang === 'es' ? 'bg-white text-zinc-950 shadow-sm' : 'text-white/70 hover:text-white'}`}
+            className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'es' ? 'bg-amber-100 text-zinc-950 shadow-sm font-black' : 'text-white/80 hover:text-white'}`}
           >
-            ESP 🇪🇸
+            <span>ESP</span>
+            <span>🇪🇸</span>
           </button>
           <button 
             onClick={() => changeLanguage('en')}
-            className={`px-2 py-0.5 rounded-full transition-all cursor-pointer ${lang === 'en' ? 'bg-white text-zinc-950 shadow-sm' : 'text-white/70 hover:text-white'}`}
+            className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'en' ? 'bg-amber-100 text-zinc-950 shadow-sm font-black' : 'text-white/80 hover:text-white'}`}
           >
-            ENG 🇺🇸
+            <span>ENG</span>
+            <span>🇺🇸</span>
           </button>
         </div>
 
@@ -1078,7 +1080,7 @@ export default function PublicReservaPage() {
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100 col-span-2">
               <span className="text-zinc-500 font-semibold block">{t.accommodation}</span>
-              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.room_name}</strong>
+              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.room_name.replace(/\s*\(\d+\)\s*$/, '').trim()}</strong>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
               <span className="text-zinc-500 font-semibold block">{t.checkin}</span>
@@ -1113,45 +1115,6 @@ export default function PublicReservaPage() {
                 )}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* 3.5. IDIOMA DE NOTIFICACIONES DE WHATSAPP */}
-        <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3">
-          <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <MessageSquare size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
-              {lang === 'en' ? 'WhatsApp Notification Language' : 'Idioma de Mensajes de WhatsApp'}
-            </h3>
-          </div>
-          <p className="text-xs text-zinc-650 leading-relaxed">
-            {lang === 'en' 
-              ? 'Choose the language in which you prefer to receive automatic booking updates, payment confirmations, and general reminders via WhatsApp.'
-              : 'Elige el idioma en el que prefieres recibir las confirmaciones de reserva, pagos y recordatorios automáticos por WhatsApp.'}
-          </p>
-          <div className="flex gap-3 pt-1">
-            <button
-              onClick={() => changeLanguage('es')}
-              className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
-                lang === 'es' 
-                  ? 'bg-zinc-900 border-zinc-900 text-amber-100 shadow-md font-extrabold' 
-                  : 'bg-[#FAF9F6] border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-              }`}
-            >
-              <span>Español 🇪🇸</span>
-              {lang === 'es' && <span className="text-[9px] bg-green-500/20 text-green-700 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wide">Activo</span>}
-            </button>
-            <button
-              onClick={() => changeLanguage('en')}
-              className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer border ${
-                lang === 'en' 
-                  ? 'bg-zinc-900 border-zinc-900 text-amber-100 shadow-md font-extrabold' 
-                  : 'bg-[#FAF9F6] border-zinc-200 text-zinc-700 hover:bg-zinc-100'
-              }`}
-            >
-              <span>English 🇺🇸</span>
-              {lang === 'en' && <span className="text-[9px] bg-green-500/20 text-green-700 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wide">Active</span>}
-            </button>
           </div>
         </div>
 
@@ -1270,6 +1233,14 @@ export default function PublicReservaPage() {
                       {t.payWithCard}
                     </a>
                     <p className="text-[10px] text-zinc-500 italic text-center mt-1">{t.cardNote}</p>
+                    
+                    <a 
+                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=mercadopago`}
+                      className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Upload size={14} className="text-zinc-600" />
+                      {lang === 'en' ? 'Upload Mercado Pago Receipt' : 'Subir Comprobante de Mercado Pago'}
+                    </a>
                   </div>
 
                   <div className="relative flex py-1 items-center">
@@ -1414,10 +1385,10 @@ export default function PublicReservaPage() {
             {t.talkReception}
           </a>
           {booking.status !== 'cancelled' && (
-            <button 
               onClick={() => {
                 setMaintenanceDesc('');
-                setMaintenanceType('otro');
+                const roomNum = booking.room_name.match(/\((\d+)\)/)?.[1] || booking.room_name.replace(/\D/g, '') || '';
+                setMaintenanceType(lang === 'en' ? `My Room (${roomNum})` : `Mi Habitación (${roomNum})`);
                 setMaintenanceError('');
                 setMaintenanceSuccess(false);
                 setShowMaintenanceModal(true);
@@ -1676,23 +1647,29 @@ export default function PublicReservaPage() {
                 </div>
               ) : (
                 <>
-                  {/* Categoría */}
+                  {/* Ubicación */}
                   <div className="space-y-1">
                     <label className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 block">
                       {t.maintenanceTypeLabel}
                     </label>
-                    <select
-                      value={maintenanceType}
-                      onChange={(e) => setMaintenanceType(e.target.value)}
-                      className="w-full bg-[#FAF9F6] border border-zinc-200 rounded-xl p-3 text-xs text-zinc-800 focus:outline-none focus:border-indigo-500 font-bold transition-all cursor-pointer"
-                    >
-                      <option value="plomería">{lang === 'en' ? 'Plumbing 🚰' : 'Plomería 🚰'}</option>
-                      <option value="electricidad">{lang === 'en' ? 'Electricity ⚡' : 'Electricidad ⚡'}</option>
-                      <option value="aire_acondicionado">{lang === 'en' ? 'Air Conditioning ❄️' : 'Aire acondicionado ❄️'}</option>
-                      <option value="limpieza">{lang === 'en' ? 'Cleaning 🧹' : 'Limpieza 🧹'}</option>
-                      <option value="cerrajería">{lang === 'en' ? 'Locksmith 🔑' : 'Cerrajería 🔑'}</option>
-                      <option value="otro">{lang === 'en' ? 'Other 🛠' : 'Otro 🛠'}</option>
-                    </select>
+                    {(() => {
+                      const roomNum = booking.room_name.match(/\((\d+)\)/)?.[1] || booking.room_name.replace(/\D/g, '') || '';
+                      const roomOptionVal = lang === 'en' ? `My Room (${roomNum})` : `Mi Habitación (${roomNum})`;
+                      return (
+                        <select
+                          value={maintenanceType}
+                          onChange={(e) => setMaintenanceType(e.target.value)}
+                          className="w-full bg-[#FAF9F6] border border-zinc-200 rounded-xl p-3 text-xs text-zinc-800 focus:outline-none focus:border-indigo-500 font-bold transition-all cursor-pointer"
+                        >
+                          <option value={roomOptionVal}>{roomOptionVal}</option>
+                          <option value="Alberca">{lang === 'en' ? 'Pool 🏊‍♂️' : 'Alberca 🏊‍♂️'}</option>
+                          <option value="Patio / Jardín">{lang === 'en' ? 'Patio / Garden 🏡' : 'Patio / Jardín 🏡'}</option>
+                          <option value="Entrada / Pasillos">{lang === 'en' ? 'Entrance / Corridors 🚪' : 'Entrada / Pasillos 🚪'}</option>
+                          <option value="Estacionamiento">{lang === 'en' ? 'Parking 🚗' : 'Estacionamiento 🚗'}</option>
+                          <option value="Otro">{lang === 'en' ? 'Other place 📍' : 'Otro lugar 📍'}</option>
+                        </select>
+                      );
+                    })()}
                   </div>
 
                   {/* Descripción */}
