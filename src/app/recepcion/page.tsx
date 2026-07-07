@@ -3246,6 +3246,7 @@ export default function RecepcionPage() {
         return;
       }
     }
+  }
 
     setShowCheckInModal(false);
     setSelectedReserva(null);
