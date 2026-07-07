@@ -953,11 +953,14 @@ export default function PublicReservaPage() {
   return (
     <div className="min-h-screen bg-[#F6F5F2] text-zinc-900 pb-16 font-sans">
       {/* Header Premium */}
-      <header className="bg-zinc-900 text-white text-center py-8 px-4 shadow-md relative overflow-hidden flex flex-col items-center">
+      <header className="bg-zinc-900 text-white text-center py-7 px-4 shadow-md relative overflow-hidden flex flex-col items-center">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent)] pointer-events-none" />
         
-        {/* Selector de Idioma Flotante Derecho */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1 rounded-full border border-white/20 z-20 text-[10.5px] font-bold shadow-md">
+        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-amber-100">{t.title}</h1>
+        <p className="text-zinc-400 text-[10.5px] mt-1 font-medium tracking-wide uppercase">{t.subtitle}</p>
+
+        {/* Selector de Idioma Centrado */}
+        <div className="mt-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1 rounded-full border border-white/20 z-20 text-[10px] font-bold shadow-md">
           <button 
             onClick={() => changeLanguage('es')}
             className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'es' ? 'bg-amber-100 text-zinc-950 shadow-sm font-black' : 'text-white/80 hover:text-white'}`}
@@ -973,9 +976,6 @@ export default function PublicReservaPage() {
             <span>🇺🇸</span>
           </button>
         </div>
-
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-amber-100">{t.title}</h1>
-        <p className="text-zinc-400 text-xs mt-1 font-medium tracking-wide uppercase">{t.subtitle}</p>
       </header>
 
       <main className="max-w-md mx-auto px-4 mt-6 space-y-5">
