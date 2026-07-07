@@ -473,7 +473,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     reportSuccess: '¡Reporte enviado con éxito! El personal de mantenimiento lo revisará de inmediato.'
   },
   en: {
-    title: 'JAROJE CONDOMINIUMS',
+    title: 'CONDOMINIOS JAROJE',
     subtitle: 'Your paradise in Huatulco, Oaxaca 🌴',
     loading: 'Loading your reservation details...',
     errorTitle: 'Oops! Something went wrong',
@@ -481,7 +481,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     whatsappContact: 'Contact on WhatsApp',
     
     state_solicitud: 'Request received',
-    state_pago_pendiente: 'Payment pending',
+    state_pago_pendiente: 'Awaiting Deposit',
     state_confirmada: 'Booking confirmed',
     state_checkin_pendiente: 'Check-in pending',
     state_hospedado: 'In-house',
@@ -511,11 +511,11 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     
     paymentTitle: 'Payment Methods',
     paymentTitlePending: 'Settle Remaining Balance',
-    selectAmount: 'Select amount to pay:',
+    selectAmount: 'Select Payment Amount:',
     anticipoSelector: 'Deposit (50%)',
     totalSelector: 'Total (100%)',
     amountSelected: 'Selected payment amount',
-    optionCard: 'Option 1: Credit / Debit Card (Gateway)',
+    optionCard: 'Option 1: Credit / Debit Card',
     payWithCard: 'Pay with Mercado Pago',
     cardNote: 'If you pay with a card, sending a receipt is not required.',
     optionTransfer: 'Option 2: Bank Transfer or Cash Deposit',
@@ -526,7 +526,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     capacity: (c: number) => `Capacity: ${c} Guests`,
     
     photosTitle: 'Photo Gallery',
-    photosDesc: 'View actual photos of your accommodation and the beautiful common areas of Jaroje Condominiums.',
+    photosDesc: 'View actual photos of your accommodation and the beautiful common areas of Condominios Jaroje.',
     commonAreas: 'Common Areas',
     bedroomPhotos: 'Accommodation Photos',
     instructionsTitle: 'Arrival Instructions',
@@ -555,12 +555,12 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     policyPets: 'No pets allowed under any circumstances.',
     policySmoke: '100% Smoke-free space (only smoking in designated outdoor areas permitted).',
     policyHours: 'Check-in time is from 3:00 PM to 8:00 PM. Check-out is at 12:00 PM.',
-    locationDesc: 'Jaroje Condominiums is located in Huatulco, Oaxaca. Click the button below to open the exact location in Google Maps:',
+    locationDesc: 'Condominios Jaroje is located in Huatulco, Oaxaca. Tap the button below to open our location in Google Maps:',
     talkReception: 'Chat with Reception on WhatsApp',
-    footerRights: '© 2026 Jaroje Condominiums. All rights reserved.',
+    footerRights: '© 2026 Condominios Jaroje. All rights reserved.',
     footerHelp: 'Need help? Write to our official WhatsApp: +52 958 116 8698',
     lightboxOf: 'of',
-    lightboxControls: 'Tap the sides to navigate • Jaroje Condominiums',
+    lightboxControls: 'Tap the sides to navigate • Condominios Jaroje',
 
     // New translations for guest modification and maintenance incidents
     editGuestsTitle: 'Modify Registered Guests',
@@ -576,8 +576,8 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     saving: 'Saving...',
     editBtn: 'Edit',
     
-    maintenanceBtn: '🛠 Report Maintenance Incident',
-    maintenanceTitle: 'Report Maintenance Incident',
+    maintenanceBtn: '🛠 Report a Maintenance Issue',
+    maintenanceTitle: 'Report a Maintenance Issue',
     maintenanceTypeLabel: 'Where is the issue?',
     maintenanceDescPlaceholder: 'Describe the problem in detail so we can help you...',
     sendReport: 'Submit Report',
@@ -901,7 +901,7 @@ export default function PublicReservaPage() {
   } else if (isCheckedIn) {
     currentState = 'hospedado';
     statusMessage = lang === 'en'
-      ? 'Welcome to Jaroje Condominiums! We hope you are enjoying your stay. If you need anything, our team is at your service.'
+      ? 'Welcome to Condominios Jaroje! We hope you are enjoying your stay. If you need anything, our team is at your service.'
       : '¡Bienvenido a Condominios Jaroje! Esperamos que estés disfrutando de tu estancia. Si necesitas algo, nuestro equipo está a tu disposición.';
   } else if (hasPaid && checkInLimit && today >= checkInLimit) {
     currentState = 'checkin_pendiente';
@@ -916,7 +916,7 @@ export default function PublicReservaPage() {
   } else if (hoursSinceCreation > 2) {
     currentState = 'pago_pendiente';
     statusMessage = lang === 'en'
-      ? 'Your reservation is pending payment. Please upload your deposit receipt to avoid automatic cancellation of your stay.'
+      ? 'Your reservation is awaiting payment. Please upload your deposit receipt to avoid automatic cancellation of your reservation.'
       : 'Tu reservación está pendiente de pago. Por favor, sube tu comprobante de anticipo para evitar la cancelación automática de tu estancia.';
   } else {
     currentState = 'solicitud';
@@ -928,7 +928,7 @@ export default function PublicReservaPage() {
   // Pasos de la barra de progreso
   const steps = [
     { label: lang === 'en' ? 'Request received' : 'Solicitud recibida', state: 'solicitud' },
-    { label: lang === 'en' ? 'Payment pending' : 'Pago pendiente', state: 'pago_pendiente' },
+    { label: lang === 'en' ? 'Awaiting Deposit' : 'Pago pendiente', state: 'pago_pendiente' },
     { label: lang === 'en' ? 'Booking confirmed' : 'Reservación confirmada', state: 'confirmada' },
     { label: lang === 'en' ? 'Check-in pending' : 'Check-in pending', state: 'checkin_pendiente' },
     { label: lang === 'en' ? 'In-house' : 'Hospedado', state: 'hospedado' },
@@ -1232,8 +1232,6 @@ export default function PublicReservaPage() {
                       <CreditCard size={18} />
                       {t.payWithCard}
                     </a>
-                    <p className="text-[10px] text-zinc-500 italic text-center mt-1">{t.cardNote}</p>
-                    
                     <a 
                       href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=mercadopago`}
                       className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"

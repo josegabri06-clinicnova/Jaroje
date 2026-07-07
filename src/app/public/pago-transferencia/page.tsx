@@ -54,7 +54,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     copyConcept: 'Copiar Concepto',
   },
   en: {
-    portalTitle: 'Jaroje Condominiums',
+    portalTitle: 'Condominios Jaroje',
     pageTitle: 'Payment by Bank Transfer',
     securePortal: 'Secure Portal',
     step1: '1. Transfer',
