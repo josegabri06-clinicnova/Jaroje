@@ -4513,7 +4513,7 @@ export default function RecepcionPage() {
                   </div>
 
                   {/* Ajustes del Portal del Huésped */}
-                  {selectedReserva.id !== 'walkin' && (
+                  {false && selectedReserva.id !== 'walkin' && (
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
                       <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -4585,7 +4585,7 @@ export default function RecepcionPage() {
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
                         <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedReserva.room || 'Sin asignar'}</p>
                       </div>
-                      {selectedReserva.status !== 'cancelled' && !selectedReserva.checked_out && !isReassigning && (
+                      {false && selectedReserva.status !== 'cancelled' && !selectedReserva.checked_out && !isReassigning && (
                         <button
                           onClick={() => setIsReassigning(true)}
                           className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
@@ -4784,7 +4784,7 @@ export default function RecepcionPage() {
                   </div>
                   {/* Notas del Huésped */}
                   {/* Notas del Huésped — editable durante el check-in */}
-                  {selectedReserva.id !== 'walkin' && (
+                  {false && selectedReserva.id !== 'walkin' && (
                     <div className="bg-amber-50/40 border border-amber-100 p-4 rounded-2xl mt-1">
                                            {showExtensionFlow ? (
                         <div className="bg-zinc-50 border border-zinc-200 p-4.5 rounded-2xl space-y-4 text-left animate-in fade-in duration-205">
@@ -5218,7 +5218,7 @@ export default function RecepcionPage() {
                   </div>
 
                   {/* Editar Número de Huéspedes */}
-                  {selectedReserva.id !== 'walkin' && (() => {
+                  {false && selectedReserva.id !== 'walkin' && (() => {
                     const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
                     return (
                       <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left animate-in fade-in duration-200">
