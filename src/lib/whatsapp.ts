@@ -91,7 +91,7 @@ export async function sendWhatsAppTemplate(
     }
 
     if (detectedLang === 'en') {
-      languageCode = 'en_US';
+      languageCode = 'en';
     }
 
     const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
