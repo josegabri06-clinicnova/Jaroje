@@ -565,7 +565,7 @@ export default function ReservasList() {
       const channel = selectedRes.channel || '';
       const isOtaAutomated = ['Airbnb', 'Booking.com'].includes(channel);
 
-      if (isOtaAutomated) {
+      if (isOtaAutomated && paymentAmountNum === 0) {
         let netAcc = null;
         let commAcc = null;
 

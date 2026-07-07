@@ -2857,7 +2857,7 @@ export default function RecepcionPage() {
         const channel = selectedReserva.channel || '';
         const isOtaAutomated = ['Airbnb', 'Booking.com'].includes(channel);
 
-        if (isOtaAutomated) {
+        if (isOtaAutomated && (!paymentAmount || Number(paymentAmount) === 0)) {
           let netAcc = null;
           let commAcc = null;
 

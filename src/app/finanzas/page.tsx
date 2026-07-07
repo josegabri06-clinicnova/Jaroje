@@ -100,7 +100,7 @@ export default function FinanzasPage() {
     'INV LAU',
     'BOOKING',
     'WISE',
-    'REVOLUT',
+    'PAYPAL',
     'BBVA €',
     'IBC ROL',
     'IBC LAU',
