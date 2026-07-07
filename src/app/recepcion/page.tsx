@@ -3239,7 +3239,6 @@ export default function RecepcionPage() {
             }
           }
         }
-      }
       } catch (err: any) {
         console.error("Error en processCheckIn (estándar):", err);
         alert("Fallo de conexión o base de datos al procesar el Check-In: " + err.message);
