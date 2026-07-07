@@ -2675,7 +2675,8 @@ export default function ReservasList() {
                   </div>
 
                   {/* Ajustes del Portal del Huésped */}
-                  <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
+                  {userRole === 'admin' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
                     <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                       <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
                         <svg className="w-3.5 h-3.5 text-indigo-650" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2737,6 +2738,7 @@ export default function ReservasList() {
                       </select>
                     </div>
                   </div>
+                )}
 
                   {/* 3. Habitación asignada */}
                   <div className="space-y-2">
