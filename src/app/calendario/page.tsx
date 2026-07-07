@@ -1974,11 +1974,15 @@ export default function CalendarPage() {
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
-                      <p className={`text-[15px] font-black mt-0.5 ${
-                        (Number(editedPrice || 0) - Number(editedDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-650'
-                      }`}>
-                        {fmtCurrency(Number(editedPrice || 0) - Number(editedDeposit || 0), selectedReserva.guest_name)}
-                      </p>
+                      {(() => {
+                        const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                        const balanceVal = isOta ? 0 : (Number(editedPrice || 0) - Number(editedDeposit || 0));
+                        return (
+                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                            {fmtCurrency(balanceVal, selectedReserva.guest_name)}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -2183,11 +2187,15 @@ export default function CalendarPage() {
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
-                      <p className={`text-[15px] font-black mt-0.5 ${
-                        (selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'
-                      }`}>
-                        {fmtCurrency(selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)), selectedReserva.guest_name)}
-                      </p>
+                      {(() => {
+                        const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                        const balanceVal = isOta ? 0 : (selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)));
+                        return (
+                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                            {fmtCurrency(balanceVal, selectedReserva.guest_name)}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -2483,9 +2491,11 @@ export default function CalendarPage() {
                           {(() => {
                             const totalVal = selectedReserva.price_estimate || 0;
                             const depositVal = selectedReserva.deposit || 0;
-                            const balanceVal = selectedReserva.balance !== undefined
+                            const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                            const isAutomatedOta = selectedReserva.channel && ['airbnb', 'booking'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                            const balanceVal = (isOta && !isAutomatedOta) ? 0 : (selectedReserva.balance !== undefined
                               ? selectedReserva.balance
-                              : totalVal - depositVal;
+                              : totalVal - depositVal);
 
                             if (balanceVal <= 0) {
                               return (
@@ -2652,13 +2662,13 @@ export default function CalendarPage() {
                             if (submitting) return true;
                             if (!dniPreview) return true; // DNI obligatorio
 
-                            const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedReserva.channel || '');
+                            const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
                             
-                            const pendingBalance = selectedReserva.balance !== undefined
+                            const pendingBalance = isOta ? 0 : (selectedReserva.balance !== undefined
                               ? selectedReserva.balance
-                              : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+                              : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
 
-                            if (!isAirbnbOrBooking && pendingBalance > 0) {
+                            if (!isOta && pendingBalance > 0) {
                               const currentPayment = Number(paymentAmount || 0);
                               if (!paymentMode) return true;
                               if (!selectedAccountId) return true;

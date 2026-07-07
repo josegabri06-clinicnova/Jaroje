@@ -2032,9 +2032,15 @@ export default function ReservasList() {
                   </div>
                   <div>
                     <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Adeudo</span>
-                    <span className={`font-black ${(r.balance ?? ((r.price_estimate || 0) - (r.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
-                      {fmtCurrency(r.balance ?? ((r.price_estimate || 0) - (r.deposit || 0)), r.guest_name)}
-                    </span>
+                    {(() => {
+                      const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => r.channel.toLowerCase().includes(c));
+                      const balanceVal = isOta ? 0 : (r.balance ?? ((r.price_estimate || 0) - (r.deposit || 0)));
+                      return (
+                        <span className={`font-black ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                          {fmtCurrency(balanceVal, r.guest_name)}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -2335,11 +2341,15 @@ export default function ReservasList() {
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
-                      <p className={`text-[15px] font-black mt-0.5 ${
-                        (Number(editPrice || 0) - Number(editDeposit || 0)) > 0 ? 'text-amber-600' : 'text-zinc-655'
-                      }`}>
-                        {fmtCurrency(Number(editPrice || 0) - Number(editDeposit || 0), selectedRes.guest_name)}
-                      </p>
+                      {(() => {
+                        const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                        const balanceVal = isOta ? 0 : (Number(editPrice || 0) - Number(editDeposit || 0));
+                        return (
+                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-655'}`}>
+                            {fmtCurrency(balanceVal, selectedRes.guest_name)}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -2422,9 +2432,11 @@ export default function ReservasList() {
 
                   {/* ADEUDO POR PAGAR DESGLOSADO */}
                   {(() => {
-                    const pendingBalance = selectedRes.balance !== undefined
+                    const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                    const isAutomatedOta = selectedRes.channel && ['airbnb', 'booking'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                    const pendingBalance = (isOta && !isAutomatedOta) ? 0 : (selectedRes.balance !== undefined
                       ? selectedRes.balance
-                      : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+                      : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0));
                     const depositVal = selectedRes.deposit || 0;
                     const totalVal = selectedRes.price_estimate || 0;
 
@@ -2823,7 +2835,8 @@ export default function ReservasList() {
                       </div>
                       <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
                         {groupBookings.map(b => {
-                          const bBal = b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0));
+                          const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
+                          const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
                           const isCurrent = String(b.id) === String(selectedRes.id);
                           return (
                             <div key={b.id} className={`flex justify-between items-center text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
@@ -2927,11 +2940,15 @@ export default function ReservasList() {
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
-                      <p className={`text-[15px] font-black mt-0.5 ${
-                        (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0))) > 0 ? 'text-amber-600' : 'text-zinc-650'
-                      }`}>
-                        {fmtCurrency(selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)), selectedRes.guest_name)}
-                      </p>
+                      {(() => {
+                        const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                        const balanceVal = isOta ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
+                        return (
+                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                            {fmtCurrency(balanceVal, selectedRes.guest_name)}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -3561,9 +3578,10 @@ export default function ReservasList() {
                       if (checkInLoading) return true;
                       if (!dniPreview) return true; // DNI obligatorio
                       
-                      const pendingBalance = selectedRes.balance !== undefined
+                      const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                      const pendingBalance = isOta ? 0 : (selectedRes.balance !== undefined
                         ? selectedRes.balance
-                        : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+                        : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0));
 
                       if (pendingBalance > 0) {
                         const currentPayment = Number(paymentAmount || 0);

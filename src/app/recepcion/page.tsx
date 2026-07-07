@@ -3566,7 +3566,9 @@ export default function RecepcionPage() {
                       const unit = getUnitDisplay(r.room);
                       const isPending = !r.checked_in;
                       const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
-                      const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+                      const rawBalance = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+                      const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => r.channel.toLowerCase().includes(c));
+                      const balanceVal = isOta ? 0 : rawBalance;
                       return (
                         <tr
                           key={r.id}
@@ -4756,18 +4758,17 @@ export default function RecepcionPage() {
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
-                      <p className={`text-[15px] font-black mt-0.5 ${
-                        (selectedReserva.id === 'walkin'
+                      {(() => {
+                        const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                        const balanceVal = isOta ? 0 : (selectedReserva.id === 'walkin'
                           ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
-                          : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0)))) > 0 ? 'text-amber-600' : 'text-zinc-650'
-                      }`}>
-                        {fmtCurrency(
-                          selectedReserva.id === 'walkin'
-                            ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
-                            : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0))),
-                          selectedReserva.guest_name
-                        )}
-                      </p>
+                          : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0))));
+                        return (
+                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                            {fmtCurrency(balanceVal, selectedReserva.guest_name)}
+                          </p>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -5443,9 +5444,10 @@ export default function RecepcionPage() {
                       ? Number(paymentAmount || 0)
                       : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
                     
-                    const balanceVal = payGroupConsolidated
+                    const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                    const balanceVal = isOta ? 0 : (payGroupConsolidated
                       ? directGroupTotalBalance
-                      : Math.max(0, totalVal - depositVal);
+                      : Math.max(0, totalVal - depositVal));
 
                     if (balanceVal <= 0) {
                       return (
@@ -5711,8 +5713,8 @@ export default function RecepcionPage() {
                       return false;
                     }
 
-                    const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedReserva.channel || '');
-                    if (isAirbnbOrBooking) return false;
+                    const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                    if (isOta) return false;
 
                     // Calcular balance pendiente
                     const pendingBalance = selectedReserva.id === 'walkin'
