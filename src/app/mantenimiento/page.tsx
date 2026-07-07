@@ -609,6 +609,22 @@ export default function MantenimientoPage() {
                   
                   {/* Action buttons */}
                   <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {filterStatus === 'nuevo' && (
+                      <>
+                        <button
+                          onClick={() => handleUpdateStatus(task.id, 'pendiente')}
+                          className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-purple-700 shadow-sm"
+                        >
+                          Aprobar ⏳
+                        </button>
+                        <button
+                          onClick={() => handleUpdateStatus(task.id, 'en_proceso')}
+                          className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-amber-600 shadow-sm"
+                        >
+                          Iniciar ⚡
+                        </button>
+                      </>
+                    )}
                     {filterStatus === 'pendiente' && (
                       <button
                         onClick={() => handleUpdateStatus(task.id, 'en_proceso')}
