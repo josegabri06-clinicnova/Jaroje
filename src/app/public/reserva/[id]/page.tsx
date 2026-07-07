@@ -1383,6 +1383,7 @@ export default function PublicReservaPage() {
             {t.talkReception}
           </a>
           {booking.status !== 'cancelled' && (
+            <button 
               onClick={() => {
                 setMaintenanceDesc('');
                 const roomNum = booking.room_name.match(/\((\d+)\)/)?.[1] || booking.room_name.replace(/\D/g, '') || '';
