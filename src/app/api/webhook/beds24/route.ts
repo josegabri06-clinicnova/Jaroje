@@ -43,65 +43,62 @@ export async function POST(req: Request) {
       console.error("Error al registrar log de webhook Beds24:", logErr);
     }
 
-    // Enviar WhatsApp de reservación confirmada (Mensaje 3) en segundo plano
+    // Enviar WhatsApp de reservación confirmada (Mensaje 3)
     if (bookingId) {
-      (async () => {
-        try {
-          const { getBeds24Token } = await import('@/lib/beds24');
-          const { sendTemplate3_ReservacionConfirmada } = await import('@/lib/whatsapp');
-          
-          const BEDS24_TOKEN = await getBeds24Token();
-          const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
-            headers: { 'token': BEDS24_TOKEN }
-          });
-          
-          if (b24Res.ok) {
-            const b24Json = await b24Res.json();
-            if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
-              const b = b24Json.data[0];
-              const phone = b.phone || b.mobile || b.guestPhone || '';
-              if (phone) {
-                // Inicializar la configuración de idioma y pagos en booking_portal_settings
-                try {
-                  const { detectLanguageFromPhone } = await import('@/lib/whatsapp');
-                  const autoLang = detectLanguageFromPhone(phone);
+      try {
+        const { getBeds24Token } = await import('@/lib/beds24');
+        const { sendTemplate3_ReservacionConfirmada } = await import('@/lib/whatsapp');
+        
+        const BEDS24_TOKEN = await getBeds24Token();
+        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
+          headers: { 'token': BEDS24_TOKEN }
+        });
+        
+        if (b24Res.ok) {
+          const b24Json = await b24Res.json();
+          if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
+            const b = b24Json.data[0];
+            const phone = b.phone || b.mobile || b.guestPhone || '';
+            if (phone) {
+              // Inicializar la configuración de idioma y pagos en booking_portal_settings
+              try {
+                const { detectLanguageFromPhone } = await import('@/lib/whatsapp');
+                const autoLang = detectLanguageFromPhone(phone);
+                
+                // Verificar si ya existe configuración para no pisarla
+                const { data: existingSettings } = await supabase
+                  .from('booking_portal_settings')
+                  .select('booking_id')
+                  .eq('booking_id', bookingId.toString())
+                  .maybeSingle();
                   
-                  // Verificar si ya existe configuración para no pisarla
-                  const { data: existingSettings } = await supabase
+                if (!existingSettings) {
+                  await supabase
                     .from('booking_portal_settings')
-                    .select('booking_id')
-                    .eq('booking_id', bookingId.toString())
-                    .maybeSingle();
-                    
-                  if (!existingSettings) {
-                    await supabase
-                      .from('booking_portal_settings')
-                      .insert({
-                        booking_id: bookingId.toString(),
-                        show_card_payment: true,
-                        transfer_account: 'santander',
-                        language: autoLang
-                      });
-                  }
-                } catch (settErr) {
-                  console.error("[Webhook Beds24] Error al inicializar portal settings:", settErr);
+                    .insert({
+                      booking_id: bookingId.toString(),
+                      show_card_payment: true,
+                      transfer_account: 'santander',
+                      language: autoLang
+                    });
                 }
+              } catch (settErr) {
+                console.error("[Webhook Beds24] Error al inicializar portal settings:", settErr);
+              }
 
-                // Evitar envíos duplicados concurrentes en el mismo minuto a este teléfono
-                const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
-                const { data: recentLogs } = await supabase
-                  .from('whatsapp_logs')
-                  .select('id')
-                  .eq('phone', phone)
-                  .eq('template_name', 'reservacion_confirmada')
-                  .gt('created_at', oneMinuteAgo)
-                  .limit(1);
+              // Evitar envíos duplicados concurrentes en el mismo minuto a este teléfono
+              const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
+              const { data: recentLogs } = await supabase
+                .from('whatsapp_logs')
+                .select('id')
+                .eq('phone', phone)
+                .eq('template_name', 'reservacion_confirmada')
+                .gt('created_at', oneMinuteAgo)
+                .limit(1);
 
-                if (recentLogs && recentLogs.length > 0) {
-                  console.log(`[Webhook Beds24] Omitiendo envío duplicado a ${phone} (ya se envió en el último minuto)`);
-                  return;
-                }
-
+              if (recentLogs && recentLogs.length > 0) {
+                console.log(`[Webhook Beds24] Omitiendo envío duplicado a ${phone} (ya se envió en el último minuto)`);
+              } else {
                 const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
                 const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
                 const isOTA = rawSource.includes('airbnb') || rawSource.includes('booking') || rawSource.includes('expedia')
@@ -140,10 +137,10 @@ export async function POST(req: Request) {
               }
             }
           }
-        } catch (waErr) {
-          console.error("[Webhook Beds24] Error en proceso de envío de WhatsApp:", waErr);
         }
-      })();
+      } catch (waErr) {
+        console.error("[Webhook Beds24] Error en proceso de envío de WhatsApp:", waErr);
+      }
     }
 
     return NextResponse.json({ success: true, message: "Fechas bloqueadas en Jaroje App." });
