@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getBeds24Bookings } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import {
+  sendTemplate1_SolicitudRecibida,
   sendTemplate2_UltimoAviso,
+  sendTemplate3_ReservacionConfirmada,
   sendTemplate5_PreparacionLlegada,
   sendTemplate7_SeguimientoSatisfaccion,
   sendTemplate8_SalidaCheckout,
@@ -133,6 +135,43 @@ export async function GET(req: Request) {
       if (!guestPhone) continue;
 
       const isDirect = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(booking.channel || '');
+
+      // --- REGLA 1 y 3 (FALLBACK): Mensajes Iniciales (Confirmación / Solicitud) ---
+      // Se envía si no se ha registrado ningún mensaje inicial y la reserva es reciente (creada en las últimas 48 horas)
+      const createdDate = booking.booking_time ? new Date(booking.booking_time) : null;
+      const hoursAgoCreation = createdDate ? (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60) : 999;
+      const isRecentBooking = hoursAgoCreation >= 0 && hoursAgoCreation <= 48;
+
+      if (isRecentBooking) {
+        const logKeyConfirm = `${bookingIdStr}_reservacion_confirmada`;
+        const logKeySolicitud = `${bookingIdStr}_solicitud_recibida`;
+        const logKeyAnticipo = `${bookingIdStr}_pago_anticipo_recibido`;
+        
+        if (!sentSet.has(logKeyConfirm) && !sentSet.has(logKeySolicitud) && !sentSet.has(logKeyAnticipo)) {
+          if (isDirect) {
+            if (Number(booking.deposit || 0) > 0) {
+              const res = await sendTemplate3_ReservacionConfirmada(booking);
+              if (res.success) {
+                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'reservacion_confirmada', phone: guestPhone }]);
+                reports.push(`Enviado Mensaje 3 (Confirmación Directa Fallback) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+              }
+            } else {
+              const res = await sendTemplate1_SolicitudRecibida(booking);
+              if (res.success) {
+                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'solicitud_recibida', phone: guestPhone }]);
+                reports.push(`Enviado Mensaje 1 (Solicitud Directa Fallback) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+              }
+            }
+          } else {
+            // Es OTA (Airbnb, Booking.com, Expedia)
+            const res = await sendTemplate3_ReservacionConfirmada(booking);
+            if (res.success) {
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'reservacion_confirmada', phone: guestPhone }]);
+              reports.push(`Enviado Mensaje 3 (Confirmación OTA Fallback) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            }
+          }
+        }
+      }
 
       // --- REGLA 2: Mensaje 2 - Último aviso para reservar ---
       // Se envía 23 horas después de crear la reserva si no tiene anticipo ($0)

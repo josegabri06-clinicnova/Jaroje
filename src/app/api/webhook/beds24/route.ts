@@ -131,22 +131,38 @@ export async function POST(req: Request) {
                   return;
                 }
 
+                const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+                const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+                const isOTA = rawSource.includes('airbnb') || rawSource.includes('booking') || rawSource.includes('expedia')
+                  || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
+
                 const bookingForWA = {
                   id: bookingId.toString(),
                   guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || guestName || 'Huésped'),
                   phone: phone,
                   num_adult: Number(b.numAdult || 1),
-                  num_child: Number(b.numChild || 0)
+                  num_child: Number(b.numChild || 0),
+                  deposit: Number(b.deposit || 0)
                 };
-                
-                const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+
+                let waRes;
+                let templateName = 'reservacion_confirmada';
+
+                if (!isOTA && bookingForWA.deposit === 0) {
+                  const { sendTemplate1_SolicitudRecibida } = await import('@/lib/whatsapp');
+                  waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
+                  templateName = 'solicitud_recibida';
+                } else {
+                  waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+                }
+
                 if (waRes.success) {
                   await supabase.from('whatsapp_logs').insert([{
                     reservation_id: bookingId.toString(),
-                    template_name: 'reservacion_confirmada',
+                    template_name: templateName,
                     phone: phone
                   }]);
-                  console.log(`[Webhook Beds24] WhatsApp reservacion_confirmada enviado a reserva ${bookingId}`);
+                  console.log(`[Webhook Beds24] WhatsApp ${templateName} enviado a reserva ${bookingId}`);
                 } else {
                   console.error(`[Webhook Beds24] Error al enviar WhatsApp:`, waRes.error);
                 }
