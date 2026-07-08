@@ -209,7 +209,7 @@ export async function sendWhatsAppTextMessage(
 
 
 // Helper para extraer el primer nombre
-function getFirstName(fullName: string): string {
+export function getFirstName(fullName: string): string {
   if (!fullName) return '';
   return fullName.trim().split(' ')[0];
 }
