@@ -14,36 +14,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan parámetros obligatorios' }, { status: 400 });
     }
 
-    // Buscamos si ya existe la habitación localmente, si no, intentamos asociarla o la dejamos pendiente.
-    // Para simplificar, insertamos directamente con el beds24_room_id mapeado a room_id si la DB lo permite
-    // Asumiendo que room_id es UUID pero Beds24 manda su propio ID, necesitamos mapearlo.
-    const { data: roomData, error: roomError } = await supabase
-      .from('rooms')
-      .select('id')
-      .eq('beds24_room_id', roomId)
-      .single();
 
-    if (roomError || !roomData) {
-      console.error("Habitación no mapeada:", roomId);
-      // Para MVP agresivo: seguimos adelante y guardamos el error o insertamos con room_id nulo para revisión
-      // En producción, retornamos error para que no bloquee en una habitación inexistente.
-    }
-
-    const { error } = await supabase.from('bookings').insert({
-      room_id: roomData?.id || null, // Relación con nuestra tabla
-      beds24_room_id: roomId.toString(),
-      beds24_booking_id: bookingId?.toString(),
-      check_in: checkIn,
-      check_out: checkOut,
-      source: source || 'beds24_webhook',
-      guest_name: guestName || 'Desconocido',
-      status: 'confirmed'
-    });
-
-    if (error) {
-      console.error(error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
 
     // Registrar log de auditoría 360 automatizado
     try {
