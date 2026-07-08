@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { addBeds24Payment, getBeds24Token } from '@/lib/beds24';
-import { sendWhatsAppTemplate } from '@/lib/whatsapp';
+import { sendWhatsAppTemplate, getFirstName } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,11 +141,23 @@ export async function POST(req: Request) {
           console.log(`[Approve Transfer] Sending WhatsApp pago_anticipo_recibido to ${phone}`);
           const formattedAmount = Number(amount).toLocaleString('es-MX', { maximumFractionDigits: 0 });
           const formattedBalance = Number(balance).toLocaleString('es-MX', { maximumFractionDigits: 0 });
-          const waRes = await sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', [guestName, formattedAmount, formattedBalance, linkPortal]);
+          const waRes = await sendWhatsAppTemplate(
+            phone,
+            'pago_anticipo_recibido',
+            [getFirstName(guestName), formattedAmount, formattedBalance],
+            [`public/reserva/${bookingId}`],
+            bookingId
+          );
           if (!waRes.success) console.warn("[Approve Transfer] WhatsApp send template failed:", waRes.error);
         } else {
           console.log(`[Approve Transfer] Sending WhatsApp confirm_reservacion to ${phone}`);
-          const waRes = await sendWhatsAppTemplate(phone, 'reservacion_confirmada', [guestName, linkPortal, guestsCount]);
+          const waRes = await sendWhatsAppTemplate(
+            phone,
+            'reservacion_confirmada',
+            [getFirstName(guestName), guestsCount],
+            [`public/reserva/${bookingId}`],
+            bookingId
+          );
           if (!waRes.success) console.warn("[Approve Transfer] WhatsApp send template failed:", waRes.error);
         }
       }
@@ -194,9 +206,14 @@ export async function POST(req: Request) {
 
       // Notificar rechazo vía WhatsApp
       if (phone) {
-        const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${bookingId}`;
         console.log(`[Reject Transfer] Sending WhatsApp reject alert to ${phone}`);
-        const waRes = await sendWhatsAppTemplate(phone, 'ultimo_aviso', [guestName, linkPortal]);
+        const waRes = await sendWhatsAppTemplate(
+          phone,
+          'ultimo_aviso',
+          [getFirstName(guestName)],
+          [`public/reserva/${bookingId}`],
+          bookingId
+        );
         if (!waRes.success) console.warn("[Reject Transfer] WhatsApp send template failed:", waRes.error);
       }
 

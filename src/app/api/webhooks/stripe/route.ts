@@ -128,14 +128,29 @@ export async function POST(req: Request) {
               const deposit = Number(rawB.deposit || 0);
               const balance = Math.max(0, price - deposit);
 
+              const { getFirstName } = await import('@/lib/whatsapp');
+              const firstName = getFirstName(formattedName);
+
               if (balance > 0) {
                 console.log(`[Stripe Webhook] Sending WhatsApp pago_anticipo_recibido to ${phone}`);
                 const formattedAmount = Number(amount).toLocaleString('es-MX', { maximumFractionDigits: 0 });
                 const formattedBalance = Number(balance).toLocaleString('es-MX', { maximumFractionDigits: 0 });
-                await sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', [formattedName, formattedAmount, formattedBalance, linkPortal]);
+                await sendWhatsAppTemplate(
+                  phone,
+                  'pago_anticipo_recibido',
+                  [firstName, formattedAmount, formattedBalance],
+                  [`public/reserva/${bookingId}`],
+                  bookingId
+                );
               } else {
                 console.log(`[Stripe Webhook] Sending WhatsApp reservacion_confirmada to ${phone}`);
-                await sendWhatsAppTemplate(phone, 'reservacion_confirmada', [formattedName, linkPortal, guestsCount]);
+                await sendWhatsAppTemplate(
+                  phone,
+                  'reservacion_confirmada',
+                  [firstName, guestsCount],
+                  [`public/reserva/${bookingId}`],
+                  bookingId
+                );
               }
             }
           }
