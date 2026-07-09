@@ -147,6 +147,78 @@ export async function sendWhatsAppTemplate(
       return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
     }
 
+    // Registrar el envío de plantilla en la tabla 'conversations'
+    try {
+      let summaryText = `[Plantilla: ${templateName}]`;
+      if (templateName === 'solicitud_recibida') {
+        summaryText = `📥 Solicitud de reservación recibida (Instrucciones de pago enviadas).`;
+      } else if (templateName === 'reservacion_confirmada') {
+        summaryText = `✅ Reservación confirmada. ¡Tu estancia está lista!`;
+      } else if (templateName === 'pago_anticipo_recibido') {
+        summaryText = `💰 Anticipo recibido registrado con éxito.`;
+      } else if (templateName === 'ultimo_aviso') {
+        summaryText = `⏳ Último aviso para confirmar tu reservación.`;
+      } else if (templateName === 'preparacion_llegada') {
+        summaryText = `🔑 Instrucciones de llegada e indicaciones del condominio enviadas.`;
+      } else if (templateName === 'bienvenida_checkin') {
+        summaryText = `👋 ¡Bienvenido! Check-in realizado.`;
+      } else if (templateName === 'seguimiento_satisfaccion') {
+        summaryText = `⭐ Seguimiento de satisfacción y asistencia.`;
+      } else if (templateName === 'salida_checkout') {
+        summaryText = `🚪 Instrucciones de salida y checkout.`;
+      } else if (templateName === 'comparte_experiencia') {
+        summaryText = `💬 Invitación a compartir experiencia y reseña en Google.`;
+      } else if (templateName === 'recibimiento_nuevamente') {
+        summaryText = `🔄 Invitación para recibirte nuevamente en el futuro.`;
+      }
+
+      const newMsg = {
+        role_manager: summaryText,
+        role_guest:   null,
+        role_bot:     null,
+        timestamp:    new Date().toISOString(),
+      };
+
+      // Buscar si ya existe una conversación
+      const { data: existing } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('guest_phone', cleanedPhone)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        const newMessages = [...(existing.messages || []), newMsg];
+        await supabase
+          .from('conversations')
+          .update({ 
+            messages: newMessages, 
+            timestamp: new Date().toISOString(),
+            resolved: false,
+            archived: false
+          })
+          .eq('id', existing.id);
+      } else {
+        const guestName = (parameters && parameters.length > 0) ? parameters[0] : 'Huésped';
+        await supabase
+          .from('conversations')
+          .insert({
+            id: `wa_${Date.now()}`,
+            guest_name: guestName,
+            guest_phone: cleanedPhone,
+            timestamp: new Date().toISOString(),
+            booking_created: false,
+            resolved: false,
+            archived: false,
+            human_mode: true,
+            messages: [newMsg],
+          });
+      }
+    } catch (convErr) {
+      console.error("[WhatsApp] Error al registrar plantilla en conversations:", convErr);
+    }
+
     return { success: true, data: resBody };
   } catch (err: any) {
     console.error(`Exception sending WhatsApp template ${templateName}:`, err);
