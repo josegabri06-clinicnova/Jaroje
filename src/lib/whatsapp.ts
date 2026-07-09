@@ -328,11 +328,8 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
-  const guestsCount = String(Number(booking.num_adult || 1) + Number(booking.num_child || 0));
-
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    guestsCount                       // {{2}} Huéspedes
+    getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
   const buttonParams = [
@@ -363,11 +360,8 @@ export async function sendTemplate5_PreparacionLlegada(booking: any) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
-  const guestsCount = String(Number(booking.num_adult || 1) + Number(booking.num_child || 0));
-
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
-    guestsCount                       // {{2}} Huéspedes
+    getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
   const buttonParams = [
@@ -442,7 +436,11 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any) {
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, undefined, booking.id);
+  const buttonParams = [
+    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+  ];
+
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, buttonParams, booking.id);
 }
 
 // 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)

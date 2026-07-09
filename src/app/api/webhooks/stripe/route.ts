@@ -147,7 +147,7 @@ export async function POST(req: Request) {
                 await sendWhatsAppTemplate(
                   phone,
                   'reservacion_confirmada',
-                  [firstName, guestsCount],
+                  [firstName],
                   [`public/reserva/${bookingId}`],
                   bookingId
                 );
