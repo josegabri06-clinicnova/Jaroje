@@ -4760,7 +4760,8 @@ export default function RecepcionPage() {
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
                         const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
-                        const balanceVal = isOta ? 0 : (selectedReserva.id === 'walkin'
+                        const isCheckedIn = selectedReserva.checked_in === true;
+                        const balanceVal = (isOta || isCheckedIn) ? 0 : (selectedReserva.id === 'walkin'
                           ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
                           : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0))));
                         return (

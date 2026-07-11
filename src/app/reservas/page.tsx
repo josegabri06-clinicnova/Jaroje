@@ -2355,7 +2355,8 @@ export default function ReservasList() {
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
                         const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                        const balanceVal = isOta ? 0 : (Number(editPrice || 0) - Number(editDeposit || 0));
+                        const isCheckedIn = selectedRes.checked_in === true;
+                        const balanceVal = (isOta || isCheckedIn) ? 0 : (Number(editPrice || 0) - Number(editDeposit || 0));
                         return (
                           <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-655'}`}>
                             {fmtCurrency(balanceVal, selectedRes.guest_name)}
@@ -2952,7 +2953,8 @@ export default function ReservasList() {
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
                         const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                        const balanceVal = isOta ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
+                        const isCheckedIn = selectedRes.checked_in === true;
+                        const balanceVal = (isOta || isCheckedIn) ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
                         return (
                           <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
                             {fmtCurrency(balanceVal, selectedRes.guest_name)}

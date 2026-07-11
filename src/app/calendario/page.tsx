@@ -1988,7 +1988,8 @@ export default function CalendarPage() {
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
                         const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
-                        const balanceVal = isOta ? 0 : (Number(editedPrice || 0) - Number(editedDeposit || 0));
+                        const isCheckedIn = selectedReserva.checked_in === true;
+                        const balanceVal = (isOta || isCheckedIn) ? 0 : (Number(editedPrice || 0) - Number(editedDeposit || 0));
                         return (
                           <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
                             {fmtCurrency(balanceVal, selectedReserva.guest_name)}
@@ -2201,7 +2202,8 @@ export default function CalendarPage() {
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
                         const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
-                        const balanceVal = isOta ? 0 : (selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)));
+                        const isCheckedIn = selectedReserva.checked_in === true;
+                        const balanceVal = (isOta || isCheckedIn) ? 0 : (selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)));
                         return (
                           <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
                             {fmtCurrency(balanceVal, selectedReserva.guest_name)}
