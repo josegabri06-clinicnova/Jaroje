@@ -177,11 +177,13 @@ export async function GET(req: Request) {
               check_in: rawB.arrival,
               check_out: rawB.departure,
               price: calculatedCharges,
+              price_estimate: calculatedCharges,
               deposit: depositVal,
               balance: balanceVal,
               nights,
               num_adult: Number(rawB.numAdult || 1),
               num_child: Number(rawB.numChild || 0),
+              guest_phone: rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || null,
               status: isCancelled ? 'cancelled' : 'confirmed',
               booking_time: rawB.bookingTime || rawB.arrival || null
             };
@@ -213,12 +215,18 @@ export async function GET(req: Request) {
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
         const mainName = cleanStr(booking.guest_name || '');
-        const mainPhone = booking.phone || booking.mobile || booking.guest_phone || '';
+        // El objeto de Beds24 usa 'guest_phone' (ver beds24.ts línea 1029)
+        const mainPhone = booking.guest_phone || booking.phone || booking.mobile || '';
         const phoneNum = mainPhone ? normalizePhone(mainPhone) : '';
 
         const siblingBeds24 = allBeds24.filter(r => {
-          if (r.check_in !== booking.check_in || r.id === booking.id || r.status === 'cancelled') return false;
-          const samePhone = phoneNum && r.phone && normalizePhone(r.phone) === phoneNum;
+          // Mismo check_in y check_out, diferente ID, no cancelada
+          if (r.check_in !== booking.check_in) return false;
+          if (r.check_out !== booking.check_out) return false;
+          if (r.id === booking.id) return false;
+          // Mismo teléfono o mismo nombre
+          const rPhone = r.guest_phone || r.phone || r.mobile || '';
+          const samePhone = phoneNum && rPhone && normalizePhone(rPhone) === phoneNum;
           const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
           return samePhone || sameName;
         });
@@ -260,7 +268,7 @@ export async function GET(req: Request) {
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment ?? true,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
-              language: portalSettings?.language || detectLanguageFromPhone(booking.phone || booking.mobile || booking.guest_phone)
+              language: portalSettings?.language || detectLanguageFromPhone(booking.guest_phone || booking.phone || booking.mobile)
             }
           }
         });
