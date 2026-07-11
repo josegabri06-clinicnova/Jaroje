@@ -11,7 +11,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole } from '@/lib/auth';
+import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import InventarioPage from '../inventario/page';
 import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit } from '@/lib/beds24';
@@ -785,10 +785,10 @@ export default function RecepcionPage() {
       alert('✅ Cambios guardados con éxito.');
       
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -907,10 +907,10 @@ export default function RecepcionPage() {
 
       // Registrar log de anticipo
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
 
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1056,10 +1056,10 @@ export default function RecepcionPage() {
       
       // C. Registrar Log de Empleado
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1135,9 +1135,9 @@ export default function RecepcionPage() {
       const totalAmount = Number(abonoAmount);
       const totalBalance = directGroupTotalBalance;
       const todayStr = new Date().toLocaleDateString('sv-SE');
-      const emp = getActiveEmployee('recepcion');
-      const employeeNum = emp?.employee_num || '999';
-      const employeeName = emp?.full_name || 'Administrador';
+      const emp = getOperatorForLog();
+      const employeeNum = emp.employee_num;
+      const employeeName = emp.full_name;
 
       // Procesar cada habitación del grupo proporcionalmente
       for (const booking of directGroupBookings) {
@@ -1272,10 +1272,10 @@ export default function RecepcionPage() {
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1462,7 +1462,7 @@ export default function RecepcionPage() {
     if (!selectedRoomForStatus) return;
     setStatusUpdating(true);
     
-    const emp = getActiveEmployee('recepcion');
+    const emp = getOperatorForLog();
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepción';
 
     try {
@@ -2136,7 +2136,7 @@ export default function RecepcionPage() {
     if (!selectedReserva) return;
     setSubmitting(true);
 
-    const emp = getActiveEmployee('recepcion');
+    const emp = getOperatorForLog();
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
 
     if (selectedReserva.id === 'walkin') {
@@ -3291,7 +3291,7 @@ export default function RecepcionPage() {
     // Marcar como checked_out localmente
     setReservas(prev => prev.map(res => res.id === r.id ? { ...res, checked_out: true } : res));
 
-    const emp = getActiveEmployee('recepcion');
+    const emp = getOperatorForLog();
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
 
     const { error } = await supabase.from('checkins').upsert({
@@ -5992,7 +5992,7 @@ export default function RecepcionPage() {
                   if (!form.description.trim()) return;
                   runWithSignature('mantenimiento', async () => {
                     setSubmitting(true);
-                    const emp = getActiveEmployee('recepcion');
+                    const emp = getOperatorForLog();
                     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepción';
                     
                     await fetch('/api/tasks', {
@@ -6069,7 +6069,7 @@ export default function RecepcionPage() {
       <EmployeeModal
         isOpen={showEmployeeModal}
         onClose={() => {
-          const emp = getActiveEmployee('recepcion');
+          const emp = getOperatorForLog();
           if (!emp) {
             const currentRole = typeof window !== 'undefined' ? localStorage.getItem('jaroje_role') : null;
             if (currentRole === 'admin') {

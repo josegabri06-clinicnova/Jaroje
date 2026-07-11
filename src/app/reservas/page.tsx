@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus } from 'lucide-react';
-import { getActiveEmployee, getRole } from '@/lib/auth';
+import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
@@ -448,10 +448,10 @@ export default function ReservasList() {
 
       // Registrar log de reasignación
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1040,10 +1040,10 @@ export default function ReservasList() {
       alert('✅ Reserva modificada con éxito.');
       
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1230,10 +1230,10 @@ export default function ReservasList() {
 
       // Registrar log de anticipo
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
 
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1380,10 +1380,10 @@ export default function ReservasList() {
       
       // C. Registrar Log de Empleado
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1459,9 +1459,9 @@ export default function ReservasList() {
       const totalAmount = Number(abonoAmount);
       const totalBalance = directGroupTotalBalance;
       const todayStr = new Date().toLocaleDateString('sv-SE');
-      const emp = getActiveEmployee('recepcion');
-      const employeeNum = emp?.employee_num || '999';
-      const employeeName = emp?.full_name || 'Administrador';
+      const emp = getOperatorForLog();
+      const employeeNum = emp.employee_num;
+      const employeeName = emp.full_name;
 
       for (const booking of directGroupBookings) {
         const bookingBalance = booking.balance !== undefined
@@ -1587,10 +1587,10 @@ export default function ReservasList() {
       setReservas(prev => prev.map(r => r.id === targetRes.id ? { ...r, is_acknowledged: true } : r));
 
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -1669,10 +1669,10 @@ export default function ReservasList() {
 
       // Registrar log de cancelación
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',

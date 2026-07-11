@@ -221,6 +221,81 @@ export function getActiveEmployee(module: 'recepcion' | 'limpieza' | 'mantenimie
   };
 }
 
+/**
+ * getOperatorForLog — helper centralizado para registrar quién ejecutó una acción en la auditoría.
+ *
+ * Lógica:
+ *  - Si el rol activo es 'admin', devuelve datos de Administrador (no busca la sesión de recepción).
+ *  - Si hay un empleado de recepción activo, lo devuelve.
+ *  - Si no hay nadie activo, devuelve un fallback genérico con el rol actual.
+ *
+ * Uso:  const op = getOperatorForLog();
+ *       // op.employee_num, op.full_name, op.department, op.module
+ */
+export function getOperatorForLog(): {
+  employee_num: string;
+  full_name: string;
+  department: string;
+  module: string;
+} {
+  if (typeof window === 'undefined') {
+    return { employee_num: 'SRV', full_name: 'Servidor', department: 'sistema', module: 'sistema' };
+  }
+
+  const role = getRole();
+
+  // Admin → siempre registrar como Administrador, NO leer sesión de recepción
+  if (role === 'admin') {
+    return {
+      employee_num: 'ADM',
+      full_name: 'Administrador',
+      department: 'admin',
+      module: 'admin',
+    };
+  }
+
+  // Recepción → leer el empleado que haya fichado en recepción
+  const empRec = getActiveEmployee('recepcion');
+  if (empRec) {
+    return {
+      employee_num: empRec.employee_num,
+      full_name: empRec.full_name,
+      department: empRec.department,
+      module: 'recepcion',
+    };
+  }
+
+  // Limpieza
+  const empLimp = getActiveEmployee('limpieza');
+  if (empLimp) {
+    return {
+      employee_num: empLimp.employee_num,
+      full_name: empLimp.full_name,
+      department: empLimp.department,
+      module: 'limpieza',
+    };
+  }
+
+  // Mantenimiento
+  const empMant = getActiveEmployee('mantenimiento');
+  if (empMant) {
+    return {
+      employee_num: empMant.employee_num,
+      full_name: empMant.full_name,
+      department: empMant.department,
+      module: 'mantenimiento',
+    };
+  }
+
+  // Fallback genérico
+  return {
+    employee_num: '999',
+    full_name: role === 'recepcion' ? 'Recepción' : 'Sistema',
+    department: role || 'sistema',
+    module: role || 'sistema',
+  };
+}
+
 // Establecer el empleado activo para un módulo específico
 export function setActiveEmployee(employee: Employee | null, module: 'recepcion' | 'limpieza' | 'mantenimiento'): void {
   if (typeof window === 'undefined') return;

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { getActiveEmployee, getAdminPin, getRole } from '@/lib/auth';
+import { getActiveEmployee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
@@ -615,10 +615,10 @@ export default function CalendarPage() {
       alert('✅ Cambios guardados con éxito.');
       
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -765,10 +765,10 @@ export default function CalendarPage() {
       }
 
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
 
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -825,9 +825,9 @@ export default function CalendarPage() {
       const totalAmount = Number(abonoAmount);
       const totalBalance = directGroupTotalBalance;
       const todayStr = new Date().toLocaleDateString('sv-SE');
-      const emp = getActiveEmployee('recepcion');
-      const employeeNum = emp?.employee_num || '999';
-      const employeeName = emp?.full_name || 'Administrador';
+      const emp = getOperatorForLog();
+      const employeeNum = emp.employee_num;
+      const employeeName = emp.full_name;
 
       for (const booking of directGroupBookings) {
         const bookingBalance = booking.balance !== undefined
@@ -940,10 +940,10 @@ export default function CalendarPage() {
       }
 
       try {
-        const emp = getActiveEmployee('recepcion');
-        const employeeNum = emp?.employee_num || '999';
-        const employeeName = emp?.full_name || 'Administrador';
-        const employeeDept = emp?.department || 'recepcion';
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
         
         await fetch('/api/employee-logs', {
           method: 'POST',
@@ -999,7 +999,7 @@ export default function CalendarPage() {
     if (!selectedReserva) return;
     setSubmitting(true);
 
-    const emp = getActiveEmployee('recepcion');
+    const emp = getOperatorForLog();
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Calendario';
 
     let finalDniUrl = null;
