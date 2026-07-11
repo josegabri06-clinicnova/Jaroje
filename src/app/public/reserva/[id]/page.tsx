@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { 
   Calendar, 
   User, 
@@ -673,12 +673,26 @@ function getCapacityRules(roomNameOrId: string) {
 export default function PublicReservaPage() {
   const params = useParams();
   const id = params?.id;
+  const searchParams = useSearchParams();
+  const queryLang = searchParams?.get('lang');
 
   const [booking, setBooking] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentSplit, setPaymentSplit] = useState<'50' | '100'>('50');
-  const [lang, setLang] = useState<'es' | 'en'>('es');
+  const [lang, setLang] = useState<'es' | 'en'>(() => {
+    if (queryLang === 'en' || queryLang === 'es') {
+      return queryLang as 'es' | 'en';
+    }
+    return 'es';
+  });
+
+  // Sincronizar idioma si cambia el parámetro de búsqueda
+  useEffect(() => {
+    if (queryLang === 'en' || queryLang === 'es') {
+      setLang(queryLang as 'es' | 'en');
+    }
+  }, [queryLang]);
 
   // Estados para Modal de Edición de Huéspedes
   const [showEditGuestsModal, setShowEditGuestsModal] = useState(false);

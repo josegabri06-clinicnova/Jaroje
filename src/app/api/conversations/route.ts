@@ -369,10 +369,21 @@ export async function POST(req: Request) {
 
       if (bookingId) {
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-        const portalUrl = `${siteUrl}/public/reserva/${bookingId}`;
-        finalBotResponse = `🔑 *Aquí tienes el enlace a tu reservación en tiempo real:*\n\n👉 ${portalUrl}\n\nDesde este portal puedes ver el estado de tu habitación, reglamento, datos de wifi y registrar pagos adicionales.`;
+        const isEnglish = guestMsgClean.includes('view my reservation') || guestMsgClean.includes('view_booking_');
+        const portalUrl = `${siteUrl}/public/reserva/${bookingId}?lang=${isEnglish ? 'en' : 'es'}`;
+        
+        if (isEnglish) {
+          finalBotResponse = `🔑 *Here is the link to your reservation in real time:*\n\n👉 ${portalUrl}\n\nFrom this portal you can view your room status, rules, wifi details and register additional payments.`;
+        } else {
+          finalBotResponse = `🔑 *Aquí tienes el enlace a tu reservación en tiempo real:*\n\n👉 ${portalUrl}\n\nDesde este portal puedes ver el estado de tu habitación, reglamento, datos de wifi y registrar pagos adicionales.`;
+        }
       } else {
-        finalBotResponse = `Hola. No logramos encontrar ninguna reservación activa vinculada a tu número de teléfono en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de forma manual de inmediato. 🌴`;
+        const isEnglish = guestMsgClean.includes('view my reservation') || guestMsgClean.includes('view_booking_');
+        if (isEnglish) {
+          finalBotResponse = `Hello. We were unable to find any active reservation linked to your phone number in our system.\n\nPlease provide us with your full name or your reservation code so that our front desk team can assist you manually right away. 🌴`;
+        } else {
+          finalBotResponse = `Hola. No logramos encontrar ninguna reservación activa vinculada a tu número de teléfono en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de forma manual de inmediato. 🌴`;
+        }
       }
     } else if (guestMsgClean.includes('reglas') || guestMsgClean.includes('wifi') || guestMsgClean.includes('wi-fi')) {
       finalBotResponse = "📶 *Información de Wi-Fi y Reglas de Jaroje* 🌴\n\n• *Red Wi-Fi:* Jaroje\n• *Contraseña:* HUXX2025\n• *Servicios:* Piscina, terraza y estacionamiento incluidos.\n• *Reglas de convivencia:* Favor de moderar el ruido a partir de las 10:00 PM para la comodidad de todos los huéspedes.\n\nCualquier otra duda o solicitud especial, escríbenos directamente aquí y te atenderemos con gusto.";

@@ -485,15 +485,14 @@ export async function DELETE(req: Request) {
 
     const dataB24 = await beds24Response.json();
 
-    // Validar errores individuales en el array de respuesta de Beds24 v2
-    if (dataB24 && Array.isArray(dataB24.data)) {
-      const firstResult = dataB24.data[0];
-      if (firstResult && firstResult.success === false) {
-        const errorMsg = firstResult.errors 
-          ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
-          : firstResult.message || 'Error individual al cancelar en Beds24';
-        return NextResponse.json({ error: `Beds24 rechazó la cancelación: ${errorMsg}` }, { status: 400 });
-      }
+    // Validar errores individuales en el array de respuesta de Beds24 v2 (soporta array directo u objeto con data)
+    const resultsArray = Array.isArray(dataB24) ? dataB24 : (dataB24 && Array.isArray(dataB24.data) ? dataB24.data : []);
+    const firstResult = resultsArray[0];
+    if (firstResult && firstResult.success === false) {
+      const errorMsg = firstResult.errors 
+        ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+        : firstResult.message || 'Error individual al cancelar en Beds24';
+      return NextResponse.json({ error: `Beds24 rechazó la cancelación: ${errorMsg}` }, { status: 400 });
     }
 
     // Enviar WhatsApp de disponibilidad liberada para Beds24
