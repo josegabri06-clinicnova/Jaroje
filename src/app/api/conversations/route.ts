@@ -319,6 +319,7 @@ export async function POST(req: Request) {
       isAutoReplyTriggered = true;
 
       let bookingId = '';
+      let guestNameFromSearch = ''; // Nombre del huésped encontrado por teléfono
       const payloadMatch = guestMsgClean.match(/view_booking_(\d+)/) || 
                            String(body.button_payload || '').toLowerCase().match(/view_booking_(\d+)/) ||
                            String(body.message_from_guest || '').toLowerCase().match(/view_booking_(\d+)/);
@@ -361,6 +362,7 @@ export async function POST(req: Request) {
               return dateB - dateA;
             });
             bookingId = String(matchingBookings[0].id);
+            guestNameFromSearch = matchingBookings[0].guest_name || '';
           }
         } catch (err) {
           console.error("Error buscando reserva por teléfono:", err);
@@ -368,14 +370,33 @@ export async function POST(req: Request) {
       }
 
       if (bookingId) {
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
         const isEnglish = guestMsgClean.includes('view my reservation') || guestMsgClean.includes('view_booking_');
-        const portalUrl = `${siteUrl}/public/reserva/${bookingId}?lang=${isEnglish ? 'en' : 'es'}`;
+        const lang = isEnglish ? 'en' : 'es';
+        // Buscar el nombre del huésped en el listado ya disponible para pasarlo al template
+        const guestNameForTemplate = guestNameFromSearch;
         
-        if (isEnglish) {
-          finalBotResponse = `🔑 *Here is the link to your reservation in real time:*\n\n👉 ${portalUrl}\n\nFrom this portal you can view your room status, rules, wifi details and register additional payments.`;
-        } else {
-          finalBotResponse = `🔑 *Aquí tienes el enlace a tu reservación en tiempo real:*\n\n👉 ${portalUrl}\n\nDesde este portal puedes ver el estado de tu habitación, reglamento, datos de wifi y registrar pagos adicionales.`;
+        // Enviar el nuevo template con botón CTA URL (en lugar de texto con link feo)
+        try {
+          const { sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
+          const templateResult = await sendTemplate_PortalHuespedLink(phone, bookingId, guestNameForTemplate, lang);
+          if (!templateResult.success) {
+            // Si falla el template, usar texto libre como fallback
+            const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+            const portalUrl = `${siteUrl}/public/reserva/${bookingId}?lang=${lang}`;
+            finalBotResponse = isEnglish
+              ? `🔑 *Here is the link to your reservation:*\n\n👉 ${portalUrl}`
+              : `🔑 *Aquí tienes el enlace a tu reservación:*\n\n👉 ${portalUrl}`;
+          } else {
+            // El template ya se envía directamente a Meta — no necesitamos enviar un mensaje adicional
+            finalBotResponse = null; // evitar el envío duplicado de texto
+          }
+        } catch (templateErr) {
+          console.error("Error enviando template portal_huesped_link:", templateErr);
+          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+          const portalUrl = `${siteUrl}/public/reserva/${bookingId}?lang=${lang}`;
+          finalBotResponse = isEnglish
+            ? `🔑 *Here is the link to your reservation:*\n\n👉 ${portalUrl}`
+            : `🔑 *Aquí tienes el enlace a tu reservación:*\n\n👉 ${portalUrl}`;
         }
       } else {
         const isEnglish = guestMsgClean.includes('view my reservation') || guestMsgClean.includes('view_booking_');
@@ -390,7 +411,8 @@ export async function POST(req: Request) {
       isAutoReplyTriggered = true;
     }
 
-    // Enviar respuesta automática por WhatsApp si se activó algún disparador (como botones rápidos)
+    // Enviar respuesta automática por WhatsApp si se activó algún disparador
+    // Solo enviar texto si finalBotResponse no es null (el template CTA lo envía directamente)
     if (isAutoReplyTriggered && finalBotResponse) {
       const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
       const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;

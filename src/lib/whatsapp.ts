@@ -187,6 +187,10 @@ export async function sendWhatsAppTemplate(
         summaryText = `💬 Invitación a compartir experiencia y reseña en Google.`;
       } else if (templateName === 'recibimiento_nuevamente') {
         summaryText = `🔄 Invitación para recibirte nuevamente en el futuro.`;
+      } else if (templateName === 'portal_huesped_link') {
+        summaryText = `🔗 Enlace al portal del huésped enviado como botón.`;
+      } else if (templateName === 'portal_huesped_link_en') {
+        summaryText = `🔗 Guest portal link sent as button.`;
       }
 
       const newMsg = {
@@ -481,4 +485,36 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any) {
   ];
 
   return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams, booking.id, 'quick_reply');
+}
+
+// 12. Portal del Huésped - Enlace como botón CTA URL (portal_huesped_link)
+// Se envía cuando el huésped pulsa el quick_reply "Ver mi reservación"
+// El template debe tener:
+//   BODY: "Hola {{1}}, aquí tienes acceso a tu reservación en tiempo real.
+//           Desde tu portal puedes ver el estado de tu habitación,
+//           reglamento, datos de WiFi y registrar pagos adicionales.✅"
+//   BUTTON (URL CTA): texto "Ver Mi Reservación" → URL: https://jaroje-app.vercel.app/public/reserva/{{1}}
+// NOTA: en el template URL de Meta, el {{1}} en la URL es el sufijo tras la URL base.
+// La URL base en Meta debe ser: https://jaroje-app.vercel.app/public/reserva/
+// Y el parámetro del botón será: "<bookingId>?lang=es" o "<bookingId>?lang=en"
+export async function sendTemplate_PortalHuespedLink(
+  phone: string,
+  bookingId: string | number,
+  guestName: string,
+  lang: 'es' | 'en' = 'es'
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const templateName = lang === 'en' ? 'portal_huesped_link_en' : 'portal_huesped_link';
+  const firstName = guestName ? guestName.split(' ')[0] : 'Huésped';
+
+  // Parámetro body: {{1}} = nombre del huésped
+  const bodyParams = [firstName];
+
+  // Parámetro botón URL: sufijo que se añade a la URL base del template en Meta
+  // URL base en Meta: https://jaroje-app.vercel.app/public/reserva/
+  // Sufijo: "<bookingId>?lang=es"
+  const buttonParams = [`${bookingId}?lang=${lang}`];
+
+  return sendWhatsAppTemplate(phone, templateName, bodyParams, buttonParams, bookingId, 'url');
 }
