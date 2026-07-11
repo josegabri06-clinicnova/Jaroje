@@ -4649,7 +4649,9 @@ export default function RecepcionPage() {
                           </label>
                           <select
                             value={targetRoomName}
-                            onChange={e => setTargetRoomName(e.target.value)}
+                            onChange={e => {
+                              setTargetRoomName(e.target.value);
+                            }}
                             disabled={loadingAvailability}
                             className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
                           >
@@ -4670,6 +4672,50 @@ export default function RecepcionPage() {
                             ))}
                           </select>
                         </div>
+
+                        {/* PREVIEW DE NUEVO PRECIO ANTES DE CONFIRMAR */}
+                        {targetRoomName && selectedReserva && (() => {
+                          const nights = selectedReserva.nights || 1;
+                          const checkIn = selectedReserva.check_in;
+                          const checkOut = selectedReserva.check_out;
+                          const numAdult = Number(selectedReserva.num_adult || 1);
+                          const numChild = Number(selectedReserva.num_child || 0);
+                          const newTotal = getDirectTotalForStay(targetRoomName, checkIn, checkOut, undefined, numAdult, numChild, capacitySettings || undefined);
+                          const newPPN = newTotal > 0 ? Math.round(newTotal / nights) : 0;
+                          const oldPPN = selectedReserva.price_per_night || Math.round(Number(selectedReserva.price_estimate || 0) / nights);
+                          const changed = newPPN !== oldPPN;
+                          if (newPPN === 0) return null;
+                          return (
+                            <div className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 ${
+                              changed ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'
+                            }`}>
+                              <div>
+                                <p className={`text-[9.5px] font-black uppercase tracking-widest ${
+                                  changed ? 'text-amber-700' : 'text-emerald-700'
+                                }`}>
+                                  {changed ? '⚠️ Nuevo precio estimado' : '✅ Mismo precio'}
+                                </p>
+                                <p className={`text-[17px] font-black mt-0.5 ${
+                                  changed ? 'text-amber-900' : 'text-emerald-900'
+                                }`}>
+                                  {fmtCurrency(newPPN, selectedReserva.guest_name)}
+                                  <span className="text-[11px] font-semibold ml-1 opacity-70">/ noche</span>
+                                </p>
+                                <p className="text-[11px] text-zinc-500 font-medium mt-0.5">
+                                  Total: {fmtCurrency(newTotal, selectedReserva.guest_name)}
+                                  {changed && <span className="ml-1.5 text-zinc-400 line-through">{fmtCurrency(Number(selectedReserva.price_estimate || 0), selectedReserva.guest_name)}</span>}
+                                </p>
+                              </div>
+                              {changed && (
+                                <div className="text-right">
+                                  <p className="text-[9px] text-amber-600 font-bold uppercase">Anterior</p>
+                                  <p className="text-[13px] font-extrabold text-amber-800">{fmtCurrency(oldPPN, selectedReserva.guest_name)}</p>
+                                  <p className="text-[10px] text-amber-600 font-semibold">/noche</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         <div className="flex gap-2">
                           <button
