@@ -86,18 +86,17 @@ export async function POST(req: Request) {
                 console.error("[Webhook Beds24] Error al inicializar portal settings:", settErr);
               }
 
-              // Evitar envíos duplicados concurrentes en el mismo minuto a este teléfono
-              const oneMinuteAgo = new Date(Date.now() - 60 * 1000).toISOString();
-              const { data: recentLogs } = await supabase
+              // Verificar por reservation_id si ya se envió un mensaje inicial (sin importar cuándo)
+              const bookingIdStr = bookingId.toString();
+              const { data: existingLog } = await supabase
                 .from('whatsapp_logs')
                 .select('id')
-                .eq('phone', phone)
-                .eq('template_name', 'reservacion_confirmada')
-                .gt('created_at', oneMinuteAgo)
+                .eq('reservation_id', bookingIdStr)
+                .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'pago_anticipo_recibido'])
                 .limit(1);
 
-              if (recentLogs && recentLogs.length > 0) {
-                console.log(`[Webhook Beds24] Omitiendo envío duplicado a ${phone} (ya se envió en el último minuto)`);
+              if (existingLog && existingLog.length > 0) {
+                console.log(`[Webhook Beds24] Omitiendo envío duplicado a reserva ${bookingIdStr} (ya se envió mensaje inicial)`);
               } else {
                 const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
                 const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
