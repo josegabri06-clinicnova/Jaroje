@@ -78,10 +78,13 @@ export const JAROJE_CATALOG: Record<string, any> = {
   '685326': { nombre: 'Apartamento 106', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
   '685327': { nombre: 'Apartamento 107', capacidad: 8, camas: '1 King, 4 Matrimoniales', amenities: 'Cocina completa, Alberca, Ubicación inigualable, 3 Baños', categoria: 'Condominio' },
 
-  // --- Casa Vacacional y Habitación 500 ---
+  // --- Casa Vacacional y Habitación 500 (Sencilla) ---
   '679093': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
   '679008': { nombre: 'Casa Vacacional de 3 dormitorios', capacidad: 12, camas: '2 King, 3 Matrimoniales', amenities: 'Casa completa, 12 personas, 5min playa', categoria: 'Casa' },
-  '685542': { nombre: 'Habitación 500', capacidad: 2, camas: '1 Cama King', amenities: 'WiFi, AC, Vista Premium', categoria: 'Estándar' },
+  // Habitación 500 – Sencilla (unitId 1)
+  '685542': { nombre: 'Habitación Sencilla (500)', capacidad: 2, camas: '2 camas individuales tipo litera', amenities: 'Baño privado, Mini split, Smart TV, WiFi. Planta baja.', categoria: 'Estándar' },
+  // Habitaciones 501-507 – Dobles (unitId 2-8)
+  '685542_501': { nombre: 'Habitación Doble (501-507)', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
 
   // Fallbacks genéricos
   'default_1': { nombre: 'Habitación Doble', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
@@ -1152,6 +1155,13 @@ export function getCapacityRules(
         return customSettings[key];
       }
     }
+  }
+  // Soporte para IDs virtuales de las locales 500-507
+  if (r === '685542_500') {
+    return { base: 2, max: 2 };
+  }
+  if (r === '685542_501' || r === '685542_501_507') {
+    return { base: 4, max: 4 };
   }
   // 500 es de 2 huéspedes únicamente
   if (r.includes('500')) {
