@@ -923,6 +923,8 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
     if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
     else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
     else if (rawSource.includes('expedia')) channel = 'Expedia';
+    else if (rawSource.includes('whatsapp') || rawSource.includes('n8n')) channel = 'WhatsApp';
+    else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24 = tráfico desde Google
 
     const arrivalDate = b.arrival ? new Date(b.arrival) : null;
     const departureDate = b.departure ? new Date(b.departure) : null;
@@ -975,8 +977,8 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
       if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
       else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
       else if (rawSource.includes('expedia')) channel = 'Expedia';
-      else if (rawSource.includes('whatsapp') || rawSource.includes('n8n')) channel = 'WhatsApp Bot';
-      else if (rawSource.includes('beds24')) channel = 'Beds24';
+      else if (rawSource.includes('whatsapp') || rawSource.includes('n8n') || rawSource.includes('wapp')) channel = 'WhatsApp';
+      else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24 = tráfico desde Google
 
       const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
 

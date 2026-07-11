@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, getAdminPin, getRole } from '@/lib/auth';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit } from '@/lib/beds24';
+import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -1917,13 +1918,11 @@ export default function CalendarPage() {
                     <span className="text-[10px] text-zinc-400 font-bold italic shrink-0">Bypass de reasignación*</span>
                   </div>
 
-                  {/* 4. Canal reservado (directo, Airbnb, Booking) */}
+                  {/* 4. Canal reservado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
-                      <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1">
-                        {selectedReserva.channel || 'Directo'}
-                      </span>
+                      {(() => { const badge = getChannelBadge(selectedReserva.channel); return (<span className={`px-2.5 py-1 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1 ${badge.className}`}>{badge.emoji} {badge.label}</span>); })()}
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold border ${
                       selectedReserva.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :
@@ -2149,13 +2148,11 @@ export default function CalendarPage() {
                     ); })()}
                   </div>
 
-                  {/* 4. Canal reservado (directo, Airbnb, Booking) */}
+                  {/* 4. Canal reservado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
-                      <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1">
-                        {selectedReserva.channel || 'Directo'}
-                      </span>
+                      {(() => { const badge = getChannelBadge(selectedReserva.channel); return (<span className={`px-2.5 py-1 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1 ${badge.className}`}>{badge.emoji} {badge.label}</span>); })()}
                     </div>
                     <span className={`px-2 py-0.5 rounded text-[9.5px] font-bold border ${
                       selectedReserva.status === 'confirmed' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' :

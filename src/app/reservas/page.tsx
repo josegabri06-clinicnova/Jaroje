@@ -7,12 +7,13 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
 import { computeOtaSplit, getCapacityRules } from '@/lib/beds24';
+import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TABS = ['Todas', 'Nuevas', 'Sin Anticipo', 'Directas', 'WhatsApp Bot', 'Airbnb', 'Booking.com', 'Completadas'];
+const TABS = ['Todas', 'Nuevas', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -130,7 +131,7 @@ async function compressImage(file: File): Promise<string> {
 
 function isReservationNew(r: any): boolean {
   if (!r || r.is_acknowledged || r.status === 'cancelled') return false;
-  const isDirect = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
+  const isDirect = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
   const hasNoDeposit = !r.deposit || Number(r.deposit) === 0;
   return !(isDirect && hasNoDeposit);
 }
@@ -1793,10 +1794,12 @@ export default function ReservasList() {
     let matchTab = true;
     if (activeTab === 'Nuevas') matchTab = isReservationNew(r);
     else if (activeTab === 'Sin Anticipo') {
-      const isDirectChannel = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
+      const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
       matchTab = isDirectChannel && (!r.deposit || r.deposit === 0);
     }
-    else if (activeTab === 'Directas') matchTab = r.channel === 'Directo' || r.channel === 'WhatsApp Bot' || r.channel === 'Beds24';
+    else if (activeTab === 'Directas') matchTab = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
+    else if (activeTab === 'WhatsApp') matchTab = r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
+    else if (activeTab === 'Google') matchTab = r.channel === 'Google';
     else if (activeTab !== 'Todas' && activeTab !== 'Completadas') matchTab = r.channel === activeTab;
 
     let matchDateRange = true;
@@ -1919,7 +1922,7 @@ export default function ReservasList() {
           const isSinAnticipo = t === 'Sin Anticipo';
           const nuevasCount = activeReservas.filter(isReservationNew).length;
           const sinAnticipoCount = activeReservas.filter(r => {
-            const isDirectChannel = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(r.channel || '');
+            const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
             return isDirectChannel && (!r.deposit || r.deposit === 0);
           }).length;
           const displayLabel = isNuevas && nuevasCount > 0 ? `Nuevas (${nuevasCount})` : isSinAnticipo && sinAnticipoCount > 0 ? `Sin Anticipo (${sinAnticipoCount})` : t;
@@ -2289,13 +2292,11 @@ export default function ReservasList() {
                     <span className="text-[10px] text-zinc-455 font-bold italic shrink-0">Bypass de reasignación*</span>
                   </div>
 
-                  {/* 4. Canal reservado (directo, Airbnb, Booking) */}
+                  {/* 4. Canal reservado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
-                      <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1">
-                        {selectedRes.channel || 'Directo'}
-                      </span>
+                      {(() => { const badge = getChannelBadge(selectedRes.channel); return (<span className={`px-2.5 py-1 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1 ${badge.className}`}>{badge.emoji} {badge.label}</span>); })()}
                     </div>
                     <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
                   </div>
@@ -2869,13 +2870,11 @@ export default function ReservasList() {
                     </div>
                   )}
 
-                  {/* 4. Canal reservado (directo, Airbnb, Booking) */}
+                  {/* 4. Canal reservado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
-                      <span className="px-2.5 py-1 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1">
-                        {selectedRes.channel || 'Directo'}
-                      </span>
+                      {(() => { const badge = getChannelBadge(selectedRes.channel); return (<span className={`px-2.5 py-1 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1 ${badge.className}`}>{badge.emoji} {badge.label}</span>); })()}
                     </div>
                     <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
                   </div>
