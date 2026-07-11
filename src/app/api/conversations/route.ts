@@ -27,6 +27,12 @@ function normalizePhone(rawPhone: string): string {
   return cleaned;
 }
 
+function cleanPhoneForCompare(phoneStr: string): string {
+  if (!phoneStr) return '';
+  const digits = phoneStr.replace(/\D/g, '');
+  return digits.substring(Math.max(0, digits.length - 10));
+}
+
 
 // ── GET: Obtener todas las conversaciones ─────────────────────────────────────
 export async function GET() {
@@ -289,6 +295,74 @@ export async function POST(req: Request) {
           }]);
       } catch (logErr) {
         console.error("Error logging human_mode_activated event:", logErr);
+      }
+    } else if (
+      guestMsgClean.includes('ver mi reserva') || 
+      guestMsgClean.includes('ver mi reservacion') || 
+      guestMsgClean.includes('ver mi reservación') || 
+      guestMsgClean.includes('view my reservation') || 
+      guestMsgClean.includes('view_booking_') || 
+      (body.button_payload && String(body.button_payload).toLowerCase().includes('view_booking_'))
+    ) {
+      forceHuman = true;
+      isAutoReplyTriggered = true;
+
+      let bookingId = '';
+      const payloadMatch = guestMsgClean.match(/view_booking_(\d+)/) || 
+                           String(body.button_payload || '').toLowerCase().match(/view_booking_(\d+)/) ||
+                           String(body.message_from_guest || '').toLowerCase().match(/view_booking_(\d+)/);
+      
+      if (payloadMatch) {
+        bookingId = payloadMatch[1];
+      }
+
+      if (!bookingId) {
+        try {
+          const { getBeds24Bookings } = await import('@/lib/beds24');
+          const [mappedBookings, localRes] = await Promise.all([
+            getBeds24Bookings().catch(() => []),
+            supabase.from('local_reservas').select('*').neq('status', 'cancelled')
+          ]);
+
+          const localBookings = localRes.data || [];
+          const allBookings = [
+            ...mappedBookings,
+            ...localBookings.map((b: any) => ({
+              id: b.id,
+              phone: b.phone || '',
+              guest_phone: b.phone || '',
+              mobile: b.phone || '',
+              status: b.status || 'confirmed',
+              check_in: b.check_in || b.arrival
+            }))
+          ];
+
+          const cleanSenderPhone = cleanPhoneForCompare(phone);
+          const matchingBookings = allBookings.filter((b: any) => {
+            if (b.status === 'cancelled') return false;
+            const bPhone = b.phone || b.mobile || b.guest_phone || '';
+            return cleanPhoneForCompare(bPhone) === cleanSenderPhone;
+          });
+
+          if (matchingBookings.length > 0) {
+            matchingBookings.sort((a: any, b: any) => {
+              const dateA = new Date(a.check_in || a.arrival || 0).getTime();
+              const dateB = new Date(b.check_in || b.arrival || 0).getTime();
+              return dateB - dateA;
+            });
+            bookingId = String(matchingBookings[0].id);
+          }
+        } catch (err) {
+          console.error("Error buscando reserva por teléfono:", err);
+        }
+      }
+
+      if (bookingId) {
+        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+        const portalUrl = `${siteUrl}/public/reserva/${bookingId}`;
+        finalBotResponse = `🔑 *Aquí tienes el enlace a tu reservación en tiempo real:*\n\n👉 ${portalUrl}\n\nDesde este portal puedes ver el estado de tu habitación, reglamento, datos de wifi y registrar pagos adicionales.`;
+      } else {
+        finalBotResponse = `Hola. No logramos encontrar ninguna reservación activa vinculada a tu número de teléfono en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de forma manual de inmediato. 🌴`;
       }
     } else if (guestMsgClean.includes('reglas') || guestMsgClean.includes('wifi') || guestMsgClean.includes('wi-fi')) {
       finalBotResponse = "📶 *Información de Wi-Fi y Reglas de Jaroje* 🌴\n\n• *Red Wi-Fi:* Jaroje\n• *Contraseña:* HUXX2025\n• *Servicios:* Piscina, terraza y estacionamiento incluidos.\n• *Reglas de convivencia:* Favor de moderar el ruido a partir de las 10:00 PM para la comodidad de todos los huéspedes.\n\nCualquier otra duda o solicitud especial, escríbenos directamente aquí y te atenderemos con gusto.";

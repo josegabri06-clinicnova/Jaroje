@@ -711,6 +711,9 @@ export default function VercelActionForm() {
 
         if (!bgRes.ok) throw new Error(responseData.error || `Error al registrar habitación ${room.name} en Beds24`);
 
+        // Extraer la ID de la reserva de forma robusta (soporta array directo u objeto envuelto)
+        const b24Id = String(responseData.data?.[0]?.id || responseData.data?.data?.[0]?.id || responseData.data?.bookId || '');
+
         // Registrar auditoría rica 360 por habitación
         try {
           const emp = getActiveEmployee('recepcion');
@@ -736,7 +739,7 @@ export default function VercelActionForm() {
               details: JSON.stringify({
                 text: isBlock 
                   ? `${form.guestName || 'Mantenimiento'} - Aplicó bloqueo físico en ${roomDisplayName} para fechas ${form.checkIn} a ${form.checkOut}.`
-                  : `${form.guestName || 'Huésped'} ${form.numAdult || 1}/${form.numChild || 0} (ID: ${responseData.data?.data?.[0]?.id || ''}) de la Habitación ${roomDisplayName} - Registró reserva manual desde ${form.checkIn} a ${form.checkOut} por $${roomTotal} (Anticipo: $${depositPerRoom}, vía ${form.channel}${totalRooms > 1 ? `, Grupo: Habs ${roomNamesList}` : ''}).`,
+                  : `${form.guestName || 'Huésped'} ${form.numAdult || 1}/${form.numChild || 0} (ID: ${b24Id}) de la Habitación ${roomDisplayName} - Registró reserva manual desde ${form.checkIn} a ${form.checkOut} por $${roomTotal} (Anticipo: $${depositPerRoom}, vía ${form.channel}${totalRooms > 1 ? `, Grupo: Habs ${roomNamesList}` : ''}).`,
                 reserva: {
                   guestName: form.guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa'),
                   roomId: room.roomId,
@@ -748,7 +751,7 @@ export default function VercelActionForm() {
                   deposit: depositPerRoom,
                   channel: form.channel,
                   isBlock,
-                  bookingId: responseData.data?.data?.[0]?.id || ''
+                  bookingId: b24Id
                 }
               })
             })
@@ -760,10 +763,9 @@ export default function VercelActionForm() {
         // Registrar en Supabase finances y actualizar balance de cuenta si hay anticipo/pago
         if (!isBlock && depositPerRoom > 0) {
           try {
-            const beds24BookingId = responseData.data?.data?.[0]?.id || '';
             const baseDesc = form.channel === 'Recepción'
-              ? `${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name} - Pago Walk-in`
-              : `${form.guestName}${beds24BookingId ? ` (ID: ${beds24BookingId})` : ''} - Hab ${room.name} - Anticipo`;
+              ? `${form.guestName}${b24Id ? ` (ID: ${b24Id})` : ''} - Hab ${room.name} - Pago Walk-in`
+              : `${form.guestName}${b24Id ? ` (ID: ${b24Id})` : ''} - Hab ${room.name} - Anticipo`;
             
             const currentDayStr = getLocalDateStr(new Date());
             // Si el check-in es retroactivo, registrar en esa fecha de check-in, si no, registrar hoy

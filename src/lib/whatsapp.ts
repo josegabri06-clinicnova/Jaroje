@@ -55,7 +55,8 @@ export async function sendWhatsAppTemplate(
   templateName: string,
   parameters: string[],
   buttonParameters?: string[],
-  bookingId?: string | number
+  bookingId?: string | number,
+  buttonType?: 'url' | 'quick_reply'
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   try {
     const token = process.env.WHATSAPP_TOKEN;
@@ -107,15 +108,31 @@ export async function sendWhatsAppTemplate(
     ];
 
     if (buttonParameters && buttonParameters.length > 0) {
-      components.push({
-        type: 'button',
-        sub_type: 'url',
-        index: '0',
-        parameters: buttonParameters.map(p => ({
-          type: 'text',
-          text: p || ''
-        }))
-      });
+      const isQuickReply = buttonType === 'quick_reply' || buttonParameters[0].startsWith('VIEW_BOOKING_');
+      
+      if (isQuickReply) {
+        components.push({
+          type: 'button',
+          sub_type: 'quick_reply',
+          index: '0',
+          parameters: [
+            {
+              type: 'payload',
+              payload: buttonParameters[0]
+            }
+          ]
+        });
+      } else {
+        components.push({
+          type: 'button',
+          sub_type: 'url',
+          index: '0',
+          parameters: buttonParameters.map(p => ({
+            type: 'text',
+            text: p || ''
+          }))
+        });
+      }
     }
 
     const payload = {
@@ -301,10 +318,10 @@ export async function sendTemplate1_SolicitudRecibida(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 2. Mensaje 2 - Último aviso para conservar la reservación (ultimo_aviso)
@@ -317,10 +334,10 @@ export async function sendTemplate2_UltimoAviso(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
@@ -333,10 +350,10 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
@@ -349,10 +366,10 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
@@ -365,10 +382,10 @@ export async function sendTemplate5_PreparacionLlegada(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
@@ -381,10 +398,10 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 7. Mensaje 7 - Seguimiento de satisfacción (seguimiento_satisfaccion)
@@ -397,10 +414,10 @@ export async function sendTemplate7_SeguimientoSatisfaccion(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 8. Mensaje 8 - Día de salida (salida_checkout)
@@ -437,10 +454,10 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, buttonParams, booking.id, 'quick_reply');
 }
 
 // 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)
@@ -460,8 +477,8 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any) {
   ];
 
   const buttonParams = [
-    `public/reserva/${booking.id}` // {{1}} Enlace dinámico para el botón
+    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams, booking.id);
+  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams, booking.id, 'quick_reply');
 }
