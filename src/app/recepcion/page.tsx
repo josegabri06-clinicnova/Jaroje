@@ -305,6 +305,7 @@ function getRoomOperationalStatus(
   if (isUpdatedToday) {
     if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Aviso Check Out)
     if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
+    if (dbStatus === 'limpieza_programada') return 'limpieza_programada'; // Amarillo (Programada manualmente hoy)
     if (dbStatus === 'limpia') {
       return hasResToday ? 'ocupada' : 'limpia'; // Si está reservada hoy, no se muestra limpia/disponible
     }
