@@ -3575,6 +3575,7 @@ export default function RecepcionPage() {
                     <tr className="border-b border-zinc-100 bg-zinc-50/30">
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Canal</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Pax</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
@@ -3591,7 +3592,7 @@ export default function RecepcionPage() {
                       const isPending = !r.checked_in;
                       const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
                       const rawBalance = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
-                      const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => r.channel.toLowerCase().includes(c));
+                      const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
                       const balanceVal = isOta ? 0 : rawBalance;
                       return (
                         <tr
@@ -3613,6 +3614,15 @@ export default function RecepcionPage() {
                           </td>
                           <td className="py-4 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
                             {r.guest_name}
+                          </td>
+                          <td className="py-4 px-4">
+                            {(() => {
+                              const ch = (r.channel || '').toLowerCase();
+                              if (ch.includes('airbnb')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 whitespace-nowrap">🏠 Airbnb</span>;
+                              if (ch.includes('booking')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">🔵 Booking</span>;
+                              if (ch.includes('expedia')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 whitespace-nowrap">✈️ Expedia</span>;
+                              return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">✅ Directa</span>;
+                            })()}
                           </td>
                           <td className="py-4 px-4 text-[12px] text-zinc-500 font-medium">
                             {r.guest_phone ? (

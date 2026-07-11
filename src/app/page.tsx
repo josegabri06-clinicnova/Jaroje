@@ -642,6 +642,7 @@ export default function AdminDashboard() {
                   <tr className="border-b border-zinc-100 bg-zinc-50/30">
                     <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
                     <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
+                    <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Canal</th>
                     <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
                     <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Pax</th>
                     <th className="py-3 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
@@ -670,6 +671,15 @@ export default function AdminDashboard() {
                         </td>
                         <td className="py-3 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
                           {r.guest_name}
+                        </td>
+                        <td className="py-3 px-4">
+                          {(() => {
+                            const ch = (r.channel || '').toLowerCase();
+                            if (ch.includes('airbnb')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 whitespace-nowrap">🏠 Airbnb</span>;
+                            if (ch.includes('booking')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">🔵 Booking</span>;
+                            if (ch.includes('expedia')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 whitespace-nowrap">✈️ Expedia</span>;
+                            return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">✅ Directa</span>;
+                          })()}
                         </td>
                         <td className="py-3 px-4 text-[12px] text-zinc-500 font-medium">
                           {r.guest_phone ? (
