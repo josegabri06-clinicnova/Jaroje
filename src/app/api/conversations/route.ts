@@ -29,8 +29,19 @@ function normalizePhone(rawPhone: string): string {
 
 function cleanPhoneForCompare(phoneStr: string): string {
   if (!phoneStr) return '';
-  const digits = phoneStr.replace(/\D/g, '');
-  return digits.substring(Math.max(0, digits.length - 10));
+  return phoneStr.replace(/\D/g, '');
+}
+
+function phonesMatch(phoneA: string, phoneB: string): boolean {
+  const cleanA = cleanPhoneForCompare(phoneA);
+  const cleanB = cleanPhoneForCompare(phoneB);
+  if (!cleanA || !cleanB) return false;
+  if (cleanA === cleanB) return true;
+
+  const minLength = 9;
+  const suffixA = cleanA.substring(Math.max(0, cleanA.length - minLength));
+  const suffixB = cleanB.substring(Math.max(0, cleanB.length - minLength));
+  return suffixA === suffixB;
 }
 
 
@@ -337,11 +348,10 @@ export async function POST(req: Request) {
             }))
           ];
 
-          const cleanSenderPhone = cleanPhoneForCompare(phone);
           const matchingBookings = allBookings.filter((b: any) => {
             if (b.status === 'cancelled') return false;
             const bPhone = b.phone || b.mobile || b.guest_phone || '';
-            return cleanPhoneForCompare(bPhone) === cleanSenderPhone;
+            return phonesMatch(bPhone, phone);
           });
 
           if (matchingBookings.length > 0) {
