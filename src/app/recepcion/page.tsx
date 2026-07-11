@@ -11,7 +11,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin } from '@/lib/auth';
+import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import InventarioPage from '../inventario/page';
 import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit } from '@/lib/beds24';
@@ -5155,18 +5155,20 @@ export default function RecepcionPage() {
                         </div>
                       ) : (
                         <div className="flex gap-2 w-full pt-1.5 border-t border-zinc-100">
-                          <button
-                            onClick={() => {
-                              setAbonoAmount('');
-                              setAbonoFlowPaymentMethod(null);
-                              setAbonoFlowAccountId('');
-                              setShowAbonoFlow(true);
-                              setShowExtensionFlow(false);
-                            }}
-                            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
-                          >
-                            💰 Registrar Anticipo
-                          </button>
+                          {getRole() !== 'recepcion' && (
+                            <button
+                              onClick={() => {
+                                setAbonoAmount('');
+                                setAbonoFlowPaymentMethod(null);
+                                setAbonoFlowAccountId('');
+                                setShowAbonoFlow(true);
+                                setShowExtensionFlow(false);
+                              }}
+                              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer"
+                            >
+                              💰 Registrar Anticipo
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               setExtensionNights(1);
