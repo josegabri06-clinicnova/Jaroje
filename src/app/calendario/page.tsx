@@ -931,7 +931,12 @@ export default function CalendarPage() {
 
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
+      // Notificar al usuario con info de precio si cambió
+      if (data.recalculated_price && data.old_price && data.recalculated_price !== data.old_price) {
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\n\n💰 Tarifa actualizada automáticamente:\n   Precio anterior: $${Number(data.old_price).toLocaleString('es-MX')}\n   Nuevo precio: $${Number(data.recalculated_price).toLocaleString('es-MX')}`);
+      } else {
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
+      }
 
       try {
         const emp = getActiveEmployee('recepcion');
@@ -950,12 +955,14 @@ export default function CalendarPage() {
             action: 'reasignacion_habitacion',
             room: targetRoomName,
             details: JSON.stringify({
-              text: `${selectedReserva.guest_name} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName} desde el Calendario.`,
+              text: `${selectedReserva.guest_name} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName} desde el Calendario.${data.recalculated_price ? ` Precio actualizado: $${data.old_price} → $${data.recalculated_price}` : ''}`,
               reasignacion: {
                 bookingId: selectedReserva.id,
                 guestName: selectedReserva.guest_name,
                 fromRoom: selectedReserva.room || 'Sin asignar',
-                toRoom: targetRoomName
+                toRoom: targetRoomName,
+                oldPrice: data.old_price || undefined,
+                newPrice: data.recalculated_price || undefined
               }
             })
           })
@@ -968,8 +975,13 @@ export default function CalendarPage() {
       setTargetRoomName('');
       
       const updatedRoomName = data.room_name || `Habitación ${targetRoomName}`;
-      setSelectedReserva((prev: any) => ({ ...prev, room: updatedRoomName }));
-      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, room: updatedRoomName, room_name: updatedRoomName } : r));
+      const priceUpdate: any = { room: updatedRoomName, room_name: updatedRoomName };
+      if (data.recalculated_price) {
+        priceUpdate.price_estimate = data.recalculated_price;
+        priceUpdate.balance = data.recalculated_price - (selectedReserva.deposit || 0);
+      }
+      setSelectedReserva((prev: any) => ({ ...prev, ...priceUpdate }));
+      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, ...priceUpdate } : r));
       
       setTimeout(() => {
         fetchData();
@@ -2375,18 +2387,20 @@ export default function CalendarPage() {
                           </button>
                         </div>
                       ) : (
-                        <button
-                          onClick={() => {
-                            setAbonoAmount('');
-                            setAbonoFlowPaymentMethod(null);
-                            setAbonoFlowAccountId('');
-                            setAbonoGrupalMode(false);
-                            setShowAbonoFlow(true);
-                          }}
-                          className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in"
-                        >
-                          💰 Registrar Anticipo
-                        </button>
+                        getRole() !== 'recepcion' && (
+                          <button
+                            onClick={() => {
+                              setAbonoAmount('');
+                              setAbonoFlowPaymentMethod(null);
+                              setAbonoFlowAccountId('');
+                              setAbonoGrupalMode(false);
+                              setShowAbonoFlow(true);
+                            }}
+                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in"
+                          >
+                            💰 Registrar Anticipo
+                          </button>
+                        )
                       )}
                     </div>
                   )}
@@ -2492,12 +2506,11 @@ export default function CalendarPage() {
                             const totalVal = selectedReserva.price_estimate || 0;
                             const depositVal = selectedReserva.deposit || 0;
                             const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
-                            const isAutomatedOta = selectedReserva.channel && ['airbnb', 'booking'].some(c => selectedReserva.channel.toLowerCase().includes(c));
-                            const balanceVal = (isOta && !isAutomatedOta) ? 0 : (selectedReserva.balance !== undefined
+                            const balanceVal = isOta ? 0 : (selectedReserva.balance !== undefined
                               ? selectedReserva.balance
                               : totalVal - depositVal);
 
-                            if (balanceVal <= 0) {
+                            if (balanceVal <= 0 && !isOta) {
                               return (
                                 <div className="bg-emerald-50 border border-emerald-250 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-in fade-in duration-300">
                                   <div className="space-y-0.5 text-left">

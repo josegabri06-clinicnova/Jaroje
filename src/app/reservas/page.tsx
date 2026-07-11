@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus } from 'lucide-react';
-import { getActiveEmployee } from '@/lib/auth';
+import { getActiveEmployee, getRole } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
@@ -438,7 +438,12 @@ export default function ReservasList() {
 
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
+      // Notificar al usuario con info de precio si cambió
+      if (data.recalculated_price && data.old_price && data.recalculated_price !== data.old_price) {
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\n\n💰 Tarifa actualizada automáticamente:\n   Precio anterior: $${Number(data.old_price).toLocaleString('es-MX')}\n   Nuevo precio: $${Number(data.recalculated_price).toLocaleString('es-MX')}`);
+      } else {
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
+      }
 
       // Registrar log de reasignación
       try {
@@ -458,12 +463,14 @@ export default function ReservasList() {
             action: 'reasignacion_habitacion',
             room: targetRoomName,
             details: JSON.stringify({
-              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName}.`,
+              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName}.${data.recalculated_price ? ` Precio actualizado: $${data.old_price} → $${data.recalculated_price}` : ''}`,
               reasignacion: {
                 bookingId: selectedRes.id,
                 guestName: selectedRes.guest_name,
                 fromRoom: selectedRes.room_name || 'Sin asignar',
-                toRoom: targetRoomName
+                toRoom: targetRoomName,
+                oldPrice: data.old_price || undefined,
+                newPrice: data.recalculated_price || undefined
               }
             })
           })
@@ -477,8 +484,13 @@ export default function ReservasList() {
       
       // Actualizar estado local reactivo al vuelo para evitar tiempos de espera
       const updatedRoomName = data.room_name || `Habitación ${targetRoomName}`;
-      setSelectedRes((prev: any) => ({ ...prev, room_name: updatedRoomName }));
-      setReservas(prev => prev.map(r => r.id === selectedRes.id ? { ...r, room_name: updatedRoomName } : r));
+      const priceUpdate: any = { room_name: updatedRoomName };
+      if (data.recalculated_price) {
+        priceUpdate.price_estimate = data.recalculated_price;
+        priceUpdate.balance = data.recalculated_price - (selectedRes.deposit || 0);
+      }
+      setSelectedRes((prev: any) => ({ ...prev, ...priceUpdate }));
+      setReservas(prev => prev.map(r => r.id === selectedRes.id ? { ...r, ...priceUpdate } : r));
       
       // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
       setTimeout(() => {
@@ -2433,14 +2445,14 @@ export default function ReservasList() {
                   {/* ADEUDO POR PAGAR DESGLOSADO */}
                   {(() => {
                     const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                    const isAutomatedOta = selectedRes.channel && ['airbnb', 'booking'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                    const pendingBalance = (isOta && !isAutomatedOta) ? 0 : (selectedRes.balance !== undefined
+                    const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedRes.channel || '');
+                    const pendingBalance = isOta ? 0 : (selectedRes.balance !== undefined
                       ? selectedRes.balance
                       : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0));
                     const depositVal = selectedRes.deposit || 0;
                     const totalVal = selectedRes.price_estimate || 0;
 
-                    if (pendingBalance <= 0) {
+                    if (pendingBalance <= 0 && !isAirbnbOrBooking) {
                       return (
                         <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between shadow-sm mb-4 animate-in fade-in duration-300">
                           <div className="space-y-0.5">
@@ -2459,8 +2471,6 @@ export default function ReservasList() {
                         </div>
                       );
                     }
-
-                    const isAirbnbOrBooking = ['Airbnb', 'Booking.com'].includes(selectedRes.channel || '');
 
                     if (isAirbnbOrBooking) {
                       const channel = selectedRes.channel || '';
@@ -3478,19 +3488,21 @@ export default function ReservasList() {
                         </div>
                       ) : (
                         <div className="flex gap-2 w-full pt-1.5 border-t border-zinc-100">
-                          <button
-                            onClick={() => {
-                              setAbonoAmount('');
-                              setAbonoPaymentMethod(null);
-                              setAbonoAccountId('');
-                              setAbonoGrupalMode(false);
-                              setShowAbonoFlow(true);
-                              setShowExtensionFlow(false);
-                            }}
-                            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer text-center"
-                          >
-                            💰 Registrar Anticipo
-                          </button>
+                          {getRole() !== 'recepcion' && (
+                            <button
+                              onClick={() => {
+                                setAbonoAmount('');
+                                setAbonoPaymentMethod(null);
+                                setAbonoAccountId('');
+                                setAbonoGrupalMode(false);
+                                setShowAbonoFlow(true);
+                                setShowExtensionFlow(false);
+                              }}
+                              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer text-center"
+                            >
+                              💰 Registrar Anticipo
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               setExtensionNights(1);

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import { 
   sendTemplate1_SolicitudRecibida, 
@@ -666,11 +666,15 @@ export async function PUT(req: Request) {
 
     const BEDS24_TOKEN = await getBeds24Token();
 
-    // 1. Obtener detalles actuales de la reserva (incluyendo invoice items) para actualizar la tarifa
+    // ── Recálculo automático de tarifas al reasignar habitación ──────────────
+    // Si solo viene roomName (reasignación pura, sin price explícito), obtenemos la reserva,
+    // consultamos las tarifas de la nueva habitación y recalculamos el total.
+    let recalculatedPrice: number | undefined = undefined;
     let currentBooking: any = null;
-    if (price !== undefined) {
+
+    // Siempre obtener la reserva actual si es reasignación O si se está cambiando el precio manualmente
+    if (roomName || price !== undefined) {
       try {
-        // Probamos primero con la sintaxis de array id[] que es recomendada en la API v2 de Beds24
         let getRes = await fetch(`https://api.beds24.com/v2/bookings?id[]=${id}&includeInvoiceItems=true`, {
           headers: { 
             'token': BEDS24_TOKEN,
@@ -679,7 +683,6 @@ export async function PUT(req: Request) {
         });
         let getJson = await getRes.json().catch(() => null);
 
-        // Si no se encuentra con la sintaxis id[], probamos con la sintaxis singular por si acaso
         if (!getJson || !getJson.data || getJson.data.length === 0) {
           console.log(`[Reservas PUT] No se encontró reserva usando id[]=${id}, probando fallback con id=${id}`);
           getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&includeInvoiceItems=true`, {
@@ -693,19 +696,64 @@ export async function PUT(req: Request) {
 
         if (getJson && getJson.data && getJson.data.length > 0) {
           currentBooking = getJson.data[0];
-          console.log(`[Reservas PUT] Reserva ${id} recuperada exitosamente para actualización de factura. Ítems: ${currentBooking.invoiceItems?.length || 0}`);
+          console.log(`[Reservas PUT] Reserva ${id} recuperada exitosamente. Ítems: ${currentBooking.invoiceItems?.length || 0}`);
         } else {
-          console.error(`[Reservas PUT] Error: no se pudo recuperar la reserva ${id} con id[] ni con id. Respuesta:`, getJson);
+          console.error(`[Reservas PUT] Error: no se pudo recuperar la reserva ${id}. Respuesta:`, getJson);
         }
       } catch (getErr) {
-        console.error("[Reservas PUT] Error fetching current booking for invoice update:", getErr);
+        console.error("[Reservas PUT] Error fetching current booking:", getErr);
       }
     }
 
-    if (price !== undefined) {
-      updatePayload.price = Number(price);
-      // Incluso si currentBooking es null (error de red/API), o si invoiceItems no es un array, definimos la factura.
-      // Pero si pudimos recuperar la reserva, actualizamos/borramos los ítems de cargo existentes de forma segura.
+    // Si es reasignación pura (sin price explícito), recalcular la tarifa
+    if (roomName && price === undefined && currentBooking) {
+      try {
+        const arrival = checkIn || currentBooking.arrival;
+        const departure = checkOut || currentBooking.departure;
+        const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : null;
+
+        if (arrival && departure && newRoomId) {
+          console.log(`[Reservas PUT] Recalculando tarifa para roomId=${newRoomId} del ${arrival} al ${departure}`);
+          const ratesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, arrival, departure);
+          const roomRates = ratesMap[newRoomId] || {};
+
+          // Sumar las tarifas diarias de cada noche
+          let totalNewPrice = 0;
+          let nightsCount = 0;
+          const startDate = new Date(arrival + 'T00:00:00');
+          const endDate = new Date(departure + 'T00:00:00');
+          const current = new Date(startDate);
+
+          while (current < endDate) {
+            const dateStr = current.toISOString().split('T')[0];
+            const dailyRate = roomRates[dateStr] || 0;
+            totalNewPrice += dailyRate;
+            nightsCount++;
+            current.setDate(current.getDate() + 1);
+          }
+
+          const oldPrice = currentBooking.price || 0;
+
+          if (totalNewPrice > 0 && totalNewPrice !== oldPrice) {
+            recalculatedPrice = totalNewPrice;
+            console.log(`[Reservas PUT] Tarifa recalculada: $${oldPrice} → $${totalNewPrice} (${nightsCount} noches en roomId ${newRoomId})`);
+          } else if (totalNewPrice === 0) {
+            console.warn(`[Reservas PUT] No se encontraron tarifas para roomId=${newRoomId} en el rango ${arrival} – ${departure}. Se mantiene el precio original $${oldPrice}.`);
+          } else {
+            console.log(`[Reservas PUT] Tarifa idéntica ($${oldPrice}), sin cambio.`);
+          }
+        }
+      } catch (rateErr) {
+        console.error("[Reservas PUT] Error recalculando tarifas en reasignación:", rateErr);
+      }
+    }
+
+    // Determinar el precio final a usar (explícito > recalculado > ninguno)
+    const finalPrice = price !== undefined ? Number(price) : recalculatedPrice;
+
+    if (finalPrice !== undefined) {
+      updatePayload.price = finalPrice;
+      // Actualizar la factura de Beds24 con el precio final (explícito o recalculado)
       const currentItems = (currentBooking && Array.isArray(currentBooking.invoiceItems)) ? currentBooking.invoiceItems : [];
       const charges = currentItems.filter((item: any) => Number(item.qty || 0) > 0);
       const invoiceItemsUpdate: any[] = [];
@@ -716,7 +764,7 @@ export async function PUT(req: Request) {
           id: firstCharge.id,
           description: firstCharge.description || "Room Charge",
           qty: 1,
-          amount: Number(price)
+          amount: finalPrice
         });
         for (let i = 1; i < charges.length; i++) {
           invoiceItemsUpdate.push({
@@ -731,7 +779,7 @@ export async function PUT(req: Request) {
         invoiceItemsUpdate.push({
           description: "Room Charge",
           qty: 1,
-          amount: Number(price)
+          amount: finalPrice
         });
       }
       updatePayload.invoiceItems = invoiceItemsUpdate;
@@ -794,6 +842,8 @@ export async function PUT(req: Request) {
       success: true, 
       message: `Reserva actualizada exitosamente.`, 
       room_name: displayRoomName,
+      recalculated_price: recalculatedPrice || undefined,
+      old_price: currentBooking?.price || undefined,
       data: dataB24 
     });
 
