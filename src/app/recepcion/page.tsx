@@ -1269,8 +1269,6 @@ export default function RecepcionPage() {
 
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
-
       try {
         const emp = getActiveEmployee('recepcion');
         const employeeNum = emp?.employee_num || '999';
@@ -1306,8 +1304,34 @@ export default function RecepcionPage() {
       setTargetRoomName('');
       
       const updatedRoomName = data.room_name || `Habitación ${targetRoomName}`;
-      setSelectedReserva((prev: any) => ({ ...prev, room: updatedRoomName }));
-      setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, room: updatedRoomName, room_name: updatedRoomName } : r));
+
+      // Si la API recalculó el precio, actualizar el price_estimate y balance en el estado local
+      const newPrice = data.recalculated_price;
+      const priceMsg = newPrice
+        ? `\n💰 Precio actualizado: $${Number(data.old_price || 0).toLocaleString('es-MX')} → $${Number(newPrice).toLocaleString('es-MX')}`
+        : '';
+      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.${priceMsg}`);
+
+      setSelectedReserva((prev: any) => ({
+        ...prev,
+        room: updatedRoomName,
+        ...(newPrice !== undefined ? {
+          price_estimate: newPrice,
+          balance: Math.max(0, newPrice - Number(prev?.deposit || 0))
+        } : {})
+      }));
+      setReservas(prev => prev.map(r => {
+        if (String(r.id) !== String(selectedReserva.id)) return r;
+        return {
+          ...r,
+          room: updatedRoomName,
+          room_name: updatedRoomName,
+          ...(newPrice !== undefined ? {
+            price_estimate: newPrice,
+            balance: Math.max(0, newPrice - Number(r.deposit || 0))
+          } : {})
+        };
+      }));
       
       // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
       setTimeout(() => {

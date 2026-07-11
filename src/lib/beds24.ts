@@ -374,10 +374,30 @@ export function getRealPrice(
 ): number {
   let id = String(roomId || '');
 
-  // Tarifa especial FIJA para habitación 500 (roomId 685542, unitId 1):
-  // $672.50 base por noche (el +19% impuestos se aplica en getDirectTotalForStay)
+  // Habitación 500 (roomId 685542, unitId 1): 50% de la tarifa dinámica de la Habitación Doble (679077)
   if (id === '685542' && String(unitId || '') === '1') {
-    return 672.50;
+    // Intentar obtener el 50% de la tarifa dinámica de la doble
+    if (beds24RatesMap && dateStr) {
+      const doubleRates = beds24RatesMap['679077'] || {};
+      const doubleRate = doubleRates[dateStr] || 0;
+      if (doubleRate > 0) {
+        return Math.ceil(doubleRate * 0.5 * 100) / 100;
+      }
+      // Buscar en las habitaciones doble hijas (685531-685536)
+      const dobleIds = ['685531','685532','685533','685534','685535','685536'];
+      for (const did of dobleIds) {
+        if (beds24RatesMap[did] && beds24RatesMap[did][dateStr]) {
+          return Math.ceil(beds24RatesMap[did][dateStr] * 0.5 * 100) / 100;
+        }
+      }
+    }
+    // Fallback estático: 50% del precio estático de la doble según temporada
+    const season = getSeason(dateStr);
+    const doublePrices = JAROJE_PRICES['679077'];
+    if (doublePrices) {
+      return Math.ceil(doublePrices[season] * 0.5 * 100) / 100;
+    }
+    return 1000; // fallback absoluto
   }
 
   // Mapear 685542 (Apartamentos Nuevos 501-507) a 679077 (Habitación Doble)
@@ -1146,6 +1166,14 @@ export function getCapacityRules(
   const r = (roomNameOrId || '').toLowerCase().trim();
 
   if (customSettings && r) {
+    // Para las habitaciones locales 500-507 (roomId 685542), distinguir por unitId si viene en el ID
+    // unitId 1 = hab 500, unitId 2-8 = hab 501-507
+    if (roomNameOrId === '685542') {
+      // Sin unitId adicional, consultar la key '685542_501' (las dobles) porque
+      // cuando se llama con solo el roomId, se asume el grupo 501-507
+      if (customSettings['685542_501']) return customSettings['685542_501'];
+      return { base: 4, max: 4 };
+    }
     if (customSettings[roomNameOrId]) {
       return customSettings[roomNameOrId];
     }
