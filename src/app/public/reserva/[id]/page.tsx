@@ -645,6 +645,22 @@ const compressImage = (file: File): Promise<Blob | File> => {
 
 // Cliente-side helper para obtener reglas de capacidad
 function getCapacityRules(roomNameOrId: string) {
+  // Si hay múltiples habitaciones (separadas por coma), sumar capacidades
+  const parts = roomNameOrId.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    let totalBase = 0;
+    let totalMax = 0;
+    parts.forEach(part => {
+      const rules = getCapacityRulesForSingle(part);
+      totalBase += rules.base;
+      totalMax += rules.max;
+    });
+    return { base: totalBase, max: totalMax };
+  }
+  return getCapacityRulesForSingle(roomNameOrId);
+}
+
+function getCapacityRulesForSingle(roomNameOrId: string) {
   const r = (roomNameOrId || '').toLowerCase();
   if (r.includes('500')) {
     return { base: 2, max: 2 };
@@ -831,7 +847,9 @@ export default function PublicReservaPage() {
   };
 
   function getRoomTypeKey(roomName: string): string {
-    const lower = (roomName || '').toLowerCase();
+    // Para múltiples habitaciones separadas por coma, usar el tipo de la primera
+    const firstRoom = (roomName || '').split(',')[0].trim();
+    const lower = firstRoom.toLowerCase();
     if (lower.includes('casa') || lower.includes('vacacional')) return 'casa';
     if (lower.includes('3 rec') || lower.includes('3 dormitorios') || lower.includes('101') || lower.includes('102') || lower.includes('103') || lower.includes('104') || lower.includes('105') || lower.includes('106') || lower.includes('107')) return '3rec';
     if (lower.includes('2 rec') || lower.includes('2 dormitorios') || lower.includes('201') || lower.includes('202') || lower.includes('203') || lower.includes('204') || lower.includes('205') || lower.includes('206')) return '2rec';
