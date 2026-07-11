@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { addBeds24Payment, getBeds24Token } from '@/lib/beds24';
-import { sendWhatsAppTemplate, getFirstName } from '@/lib/whatsapp';
+import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, getFirstName } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +30,10 @@ export async function POST(req: Request) {
       let phone = '';
       let price = 0;
       let guestsCount = '1';
+      let checkIn = '';
+      let checkOut = '';
+      let numAdult = 1;
+      let numChild = 0;
 
       if (localRes) {
         // Reserva local: Actualizar depósito en local_reservas
@@ -48,6 +52,10 @@ export async function POST(req: Request) {
         phone = localRes.phone || '';
         price = Number(localRes.price || 0);
         guestsCount = String(Number(localRes.num_adult || 1) + Number(localRes.num_child || 0));
+        checkIn = localRes.check_in || '';
+        checkOut = localRes.check_out || '';
+        numAdult = Number(localRes.num_adult || 1);
+        numChild = Number(localRes.num_child || 0);
       } else {
         // Reserva de Beds24: Registrar pago en Beds24
         const desc = `Abono por transferencia bancaria (Ref: ${receiptId.substring(0, 8)})`;
@@ -73,6 +81,10 @@ export async function POST(req: Request) {
               price = Number(rawB.price || 0);
               newDeposit = Number(rawB.deposit || 0);
               guestsCount = String(Number(rawB.numAdult || 1) + Number(rawB.numChild || 0));
+              checkIn = rawB.arrival || '';
+              checkOut = rawB.departure || '';
+              numAdult = Number(rawB.numAdult || 1);
+              numChild = Number(rawB.numChild || 0);
             }
           }
         } catch (errB24) {
@@ -134,31 +146,48 @@ export async function POST(req: Request) {
 
       // 3. Notificar vía WhatsApp
       if (phone) {
-        const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${bookingId}`;
         const balance = Math.max(0, price - newDeposit);
+        const bookingForWA = {
+          id: String(bookingId),
+          guest_name: guestName,
+          phone: phone,
+          price: price,
+          deposit: newDeposit,
+          last_payment_amount: Number(amount),
+          check_in: checkIn,
+          check_out: checkOut,
+          num_adult: numAdult,
+          num_child: numChild,
+          nights: checkIn && checkOut
+            ? Math.max(1, Math.round((new Date(checkOut).getTime() - new Date(checkIn).getTime()) / (1000 * 60 * 60 * 24)))
+            : 1
+        };
+
+        let waRes: { success: boolean; error?: string; data?: any };
+        let templateLogged = '';
 
         if (balance > 0) {
-          console.log(`[Approve Transfer] Sending WhatsApp pago_anticipo_recibido to ${phone}`);
-          const formattedAmount = Number(amount).toLocaleString('es-MX', { maximumFractionDigits: 0 });
-          const formattedBalance = Number(balance).toLocaleString('es-MX', { maximumFractionDigits: 0 });
-          const waRes = await sendWhatsAppTemplate(
-            phone,
-            'pago_anticipo_recibido',
-            [getFirstName(guestName), formattedAmount, formattedBalance],
-            [`public/reserva/${bookingId}`],
-            bookingId
-          );
-          if (!waRes.success) console.warn("[Approve Transfer] WhatsApp send template failed:", waRes.error);
+          // Pago parcial: Anticipo recibido (balance pendiente)
+          console.log(`[Approve Transfer] Sending WhatsApp pago_anticipo_recibido to ${phone} (saldo: $${balance})`);
+          waRes = await sendTemplate11_PagoAnticipoRecibido(bookingForWA);
+          templateLogged = 'pago_anticipo_recibido';
         } else {
-          console.log(`[Approve Transfer] Sending WhatsApp confirm_reservacion to ${phone}`);
-          const waRes = await sendWhatsAppTemplate(
-            phone,
-            'reservacion_confirmada',
-            [getFirstName(guestName)],
-            [`public/reserva/${bookingId}`],
-            bookingId
-          );
-          if (!waRes.success) console.warn("[Approve Transfer] WhatsApp send template failed:", waRes.error);
+          // Pago completo: Reservación confirmada
+          console.log(`[Approve Transfer] Sending WhatsApp reservacion_confirmada to ${phone} (pago completo)`);
+          waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+          templateLogged = 'reservacion_confirmada';
+        }
+
+        if (waRes.success) {
+          // Registrar en whatsapp_logs para evitar que el cron reenvíe mensajes
+          await supabase.from('whatsapp_logs').insert([{
+            reservation_id: String(bookingId),
+            template_name: templateLogged,
+            phone: phone
+          }]);
+          console.log(`[Approve Transfer] WhatsApp ${templateLogged} enviado y registrado en logs (reserva ${bookingId})`);
+        } else {
+          console.warn('[Approve Transfer] WhatsApp send template failed:', waRes.error);
         }
       }
 
@@ -206,15 +235,14 @@ export async function POST(req: Request) {
 
       // Notificar rechazo vía WhatsApp
       if (phone) {
-        console.log(`[Reject Transfer] Sending WhatsApp reject alert to ${phone}`);
-        const waRes = await sendWhatsAppTemplate(
-          phone,
-          'ultimo_aviso',
-          [getFirstName(guestName)],
-          [`public/reserva/${bookingId}`],
-          bookingId
-        );
-        if (!waRes.success) console.warn("[Reject Transfer] WhatsApp send template failed:", waRes.error);
+        console.log(`[Reject Transfer] Sending WhatsApp ultimo_aviso to ${phone}`);
+        const waRes = await sendTemplate2_UltimoAviso({
+          id: String(bookingId),
+          guest_name: guestName,
+          phone: phone,
+          deposit: 0
+        });
+        if (!waRes.success) console.warn('[Reject Transfer] WhatsApp send template failed:', waRes.error);
       }
 
       return NextResponse.json({ success: true });
