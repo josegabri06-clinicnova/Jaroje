@@ -6177,6 +6177,16 @@ export default function RecepcionPage() {
                         <span>Finalizar Limpieza (Marcar en Azul)</span>
                       </button>
                     )}
+
+                    {/* Botón especial: Programar limpieza en habitación ocupada */}
+                    {operStatus === 'ocupada' && (
+                      <button
+                        onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpieza_programada'))}
+                        className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
+                      >
+                        <span>🧹 Programar Limpieza Hoy</span>
+                      </button>
+                    )}
                     
                     <button
                       onClick={() => {

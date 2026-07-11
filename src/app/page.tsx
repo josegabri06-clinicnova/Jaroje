@@ -1393,6 +1393,16 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
+                    {/* Botón especial: Programar limpieza en habitación ocupada */}
+                    {operStatus === 'ocupada' && (
+                      <button
+                        onClick={() => handleUpdateRoomStatus('limpieza_programada')}
+                        className="w-full py-3.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-extrabold text-[12px] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+                      >
+                        <span>🧹 Programar Limpieza Hoy</span>
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         setShowRoomStatusModal(false);
