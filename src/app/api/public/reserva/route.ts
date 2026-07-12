@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -170,10 +170,24 @@ export async function GET(req: Request) {
 
             const isCancelled = String(rawB.status) === '0' || rawB.status === 'cancelled';
 
+            // Construir room_name con número de habitación usando el catálogo canónico
+            const rawRoomId = String(rawB.roomId || '');
+            const rawUnitId = String(rawB.unitId || '');
+            const catalogEntry = JAROJE_CATALOG[rawRoomId];
+            const unitName = getUnitName(rawRoomId, rawUnitId);
+            let resolvedRoomName: string;
+            if (catalogEntry) {
+              resolvedRoomName = unitName
+                ? (catalogEntry.nombre.includes(unitName) ? catalogEntry.nombre : `${catalogEntry.nombre} (${unitName})`)
+                : catalogEntry.nombre;
+            } else {
+              resolvedRoomName = rawB.roomName || (unitName ? `Habitación (${unitName})` : 'Habitación');
+            }
+
             booking = {
               id: rawB.id,
               guest_name: `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || 'Huésped',
-              room_name: rawB.roomName || 'Habitación',
+              room_name: resolvedRoomName,
               check_in: rawB.arrival,
               check_out: rawB.departure,
               price: calculatedCharges,
