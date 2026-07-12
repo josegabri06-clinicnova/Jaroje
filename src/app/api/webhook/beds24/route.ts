@@ -86,8 +86,17 @@ export async function POST(req: Request) {
                 console.error("[Webhook Beds24] Error al inicializar portal settings:", settErr);
               }
 
-              // Verificar por reservation_id si ya se envió un mensaje inicial (sin importar cuándo)
+              // ─────────────────────────────────────────────────────────────────
+              // DEDUPLICACIÓN DUAL
+              // 1) Por reservation_id exacto (misma habitación, mismo booking)
+              // 2) Por phone + ventana de 5 minutos (reservas multi-habitación:
+              //    el mismo huésped reserva varias habitaciones → Beds24 dispara
+              //    un webhook por cada una, con bookingId diferente)
+              // ─────────────────────────────────────────────────────────────────
               const bookingIdStr = bookingId.toString();
+              const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+              // 1. Deduplicación por bookingId exacto
               const { data: existingLog } = await supabase
                 .from('whatsapp_logs')
                 .select('id')
@@ -96,44 +105,65 @@ export async function POST(req: Request) {
                 .limit(1);
 
               if (existingLog && existingLog.length > 0) {
-                console.log(`[Webhook Beds24] Omitiendo envío duplicado a reserva ${bookingIdStr} (ya se envió mensaje inicial)`);
+                console.log(`[Webhook Beds24] Omitiendo duplicado exacto a reserva ${bookingIdStr}`);
               } else {
-                const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
-                const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
-                const isOTA = rawSource.includes('airbnb') || rawSource.includes('booking') || rawSource.includes('expedia')
-                  || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
+                // 2. Deduplicación por teléfono en ventana de 5 minutos
+                const { data: recentPhoneLog } = await supabase
+                  .from('whatsapp_logs')
+                  .select('id, reservation_id')
+                  .eq('phone', phone)
+                  .in('template_name', ['solicitud_recibida', 'reservacion_confirmada'])
+                  .gte('created_at', fiveMinutesAgo)
+                  .limit(1);
 
-                const bookingForWA = {
-                  id: bookingId.toString(),
-                  guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || guestName || 'Huésped'),
-                  phone: phone,
-                  num_adult: Number(b.numAdult || 1),
-                  num_child: Number(b.numChild || 0),
-                  deposit: Number(b.deposit || 0)
-                };
-
-                let waRes;
-                let templateName = 'reservacion_confirmada';
-
-                if (!isOTA && bookingForWA.deposit === 0) {
-                  const { sendTemplate1_SolicitudRecibida } = await import('@/lib/whatsapp');
-                  waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
-                  templateName = 'solicitud_recibida';
-                } else {
-                  waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
-                }
-
-                if (waRes.success) {
+                if (recentPhoneLog && recentPhoneLog.length > 0) {
+                  // Ya se envió plantilla a este teléfono hace menos de 5 min (multi-habitación)
+                  // Registrar en whatsapp_logs como "omitido" para trazabilidad, pero NO enviar WA
                   await supabase.from('whatsapp_logs').insert([{
-                    reservation_id: bookingId.toString(),
-                    template_name: templateName,
+                    reservation_id: bookingIdStr,
+                    template_name: 'omitido_multi_habitacion',
                     phone: phone
                   }]);
-                  console.log(`[Webhook Beds24] WhatsApp ${templateName} enviado a reserva ${bookingId}`);
+                  console.log(`[Webhook Beds24] Omitiendo duplicado multi-habitación para teléfono ${phone} (reserva ${bookingIdStr}, ya enviado a reserva ${recentPhoneLog[0].reservation_id})`);
                 } else {
-                  console.error(`[Webhook Beds24] Error al enviar WhatsApp:`, waRes.error);
-                }
-              }
+                  // Enviar plantilla (primer mensaje para este teléfono en esta ventana de tiempo)
+                  const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+                  const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+                  const isOTA = rawSource.includes('airbnb') || rawSource.includes('booking') || rawSource.includes('expedia')
+                    || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
+
+                  const bookingForWA = {
+                    id: bookingId.toString(),
+                    guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || guestName || 'Huésped'),
+                    phone: phone,
+                    num_adult: Number(b.numAdult || 1),
+                    num_child: Number(b.numChild || 0),
+                    deposit: Number(b.deposit || 0)
+                  };
+
+                  let waRes;
+                  let templateName = 'reservacion_confirmada';
+
+                  if (!isOTA && bookingForWA.deposit === 0) {
+                    const { sendTemplate1_SolicitudRecibida } = await import('@/lib/whatsapp');
+                    waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
+                    templateName = 'solicitud_recibida';
+                  } else {
+                    waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+                  }
+
+                  if (waRes.success) {
+                    await supabase.from('whatsapp_logs').insert([{
+                      reservation_id: bookingId.toString(),
+                      template_name: templateName,
+                      phone: phone
+                    }]);
+                    console.log(`[Webhook Beds24] WhatsApp ${templateName} enviado a reserva ${bookingId}`);
+                  } else {
+                    console.error(`[Webhook Beds24] Error al enviar WhatsApp:`, waRes.error);
+                  }
+                } // fin else deduplicación por teléfono
+              } // fin else deduplicación por bookingId
             }
           }
         }
