@@ -980,6 +980,21 @@ export default function PublicReservaPage() {
     : [...(PHOTO_CAPTIONS[roomTypeKey] || PHOTO_CAPTIONS['doble']), ...COMMON_CAPTIONS];
 
   const anticipoRequerido = Math.round(booking.price * 0.5);
+
+  // Cargo extra por huéspedes adicionales ($500 MXN por persona sobre capacidad base de 2)
+  const BASE_CAPACITY_PER_ROOM = 2;
+  const EXTRA_GUEST_CHARGE = 500;
+  const extraChargesTotal = (() => {
+    if (!booking.rooms_detail || booking.rooms_detail.length <= 1) return 0;
+    return booking.rooms_detail.reduce((acc: number, room: any) => {
+      const total = (room.num_adult || 0) + (room.num_child || 0);
+      const extra = Math.max(0, total - BASE_CAPACITY_PER_ROOM);
+      return acc + extra * EXTRA_GUEST_CHARGE;
+    }, 0);
+  })();
+  const totalConExtras = booking.price + extraChargesTotal;
+  const anticipoConExtras = Math.round(totalConExtras * 0.5);
+
   const t = TRANSLATIONS[lang];
 
   return (
@@ -1205,6 +1220,21 @@ export default function PublicReservaPage() {
               <span>{t.totalEstancia}</span>
               <strong className="text-zinc-900 font-extrabold">${booking.price.toLocaleString('es-MX')} MXN</strong>
             </div>
+            {extraChargesTotal > 0 && (
+              <div className="flex justify-between items-center text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 font-semibold">
+                <span className="flex items-center gap-1.5">
+                  <AlertTriangle size={12} className="text-amber-500 shrink-0" />
+                  {lang === 'en' ? 'Extra guests charge' : 'Cargo huéspedes extra'}
+                </span>
+                <strong className="font-black">+${extraChargesTotal.toLocaleString('es-MX')} MXN</strong>
+              </div>
+            )}
+            {extraChargesTotal > 0 && (
+              <div className="flex justify-between items-center text-zinc-800 border-t border-dashed border-zinc-200 pt-2">
+                <span className="font-bold">{lang === 'en' ? 'Total (with extras):' : 'Total con cargos extra:'}</span>
+                <strong className="text-zinc-900 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
+              </div>
+            )}
             {hasPaid ? (
               <>
                 <div className="flex justify-between items-center text-emerald-600 font-semibold bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
@@ -1213,14 +1243,16 @@ export default function PublicReservaPage() {
                 </div>
                 <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
                   <span className="font-bold">{t.saldoRestante}</span>
-                  <strong className="text-indigo-600 font-black text-base">${booking.balance.toLocaleString('es-MX')} MXN</strong>
+                  <strong className="text-indigo-600 font-black text-base">
+                    ${(Math.max(0, totalConExtras - booking.deposit)).toLocaleString('es-MX')} MXN
+                  </strong>
                 </div>
               </>
             ) : (
               <>
                 <div className="flex justify-between items-center text-indigo-600 font-semibold bg-indigo-50/50 px-3 py-2 rounded-xl border border-indigo-100/80">
                   <span>{t.anticipoRequerido}</span>
-                  <strong className="font-black">${anticipoRequerido.toLocaleString('es-MX')} MXN</strong>
+                  <strong className="font-black">${(extraChargesTotal > 0 ? anticipoConExtras : anticipoRequerido).toLocaleString('es-MX')} MXN</strong>
                 </div>
                 <div className="flex justify-between items-center text-zinc-500">
                   <span>{t.anticipoDepositado}</span>
@@ -1228,7 +1260,7 @@ export default function PublicReservaPage() {
                 </div>
                 <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
                   <span className="font-bold">{t.saldoRestante}</span>
-                  <strong className="text-indigo-600 font-black text-base">${booking.price.toLocaleString('es-MX')} MXN</strong>
+                  <strong className="text-indigo-600 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
                 </div>
               </>
             )}
