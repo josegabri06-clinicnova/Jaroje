@@ -813,6 +813,7 @@ export default function ReservasList() {
         } else {
           if (financeError) {
             console.error("Error al registrar ingreso en finanzas:", financeError);
+            alert(`⚠️ El check-in se guardó, pero hubo un error al registrar el pago en Finanzas: ${financeError.message || 'Error desconocido'}. Por favor registra el pago manualmente.`);
           }
         }
       }
@@ -3641,8 +3642,10 @@ export default function ReservasList() {
                         ? selectedRes.balance
                         : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0));
 
+                      const currentPayment = Number(paymentAmount || 0);
+                      // Si hay importe, siempre requiere cuenta destino
+                      if (currentPayment > 0 && !paymentReference.trim()) return true;
                       if (pendingBalance > 0) {
-                        const currentPayment = Number(paymentAmount || 0);
                         if (!paymentReference.trim()) return true;
                         if (currentPayment < pendingBalance) return true;
                       }
