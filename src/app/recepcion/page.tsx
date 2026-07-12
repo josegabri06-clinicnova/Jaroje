@@ -1364,7 +1364,7 @@ export default function RecepcionPage() {
   const [paymentDescription, setPaymentDescription] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [checkInNotes, setCheckInNotes] = useState('');
-  const [payGroupConsolidated, setPayGroupConsolidated] = useState(false);
+  const [payGroupConsolidated, setPayGroupConsolidated] = useState(true);
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
   const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
   const [pinInput, setPinInput] = useState('');
