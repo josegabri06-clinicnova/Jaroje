@@ -198,7 +198,7 @@ El hotel tiene sus habitaciones agrupadas físicamente de la siguiente forma, or
 
 2. INTEGRACIÓN META / WHATSAPP CLOUD API (COMUNICACIÓN OFICIAL)
 * La cuenta antigua de Meta y sus plantillas de nóminas han sido completamente retiradas del negocio. Las nóminas ya NO existen en el sistema.
-* Canal Oficial de WhatsApp del Hotel Jaroje: +34 659 28 60 72 (Phone ID: 1198960849956537).
+* Canal Oficial de WhatsApp del Hotel Jaroje: +52 958 587 8554 (Phone ID: 1123527040854101).
 * Plantilla Oficial de Presentación / Bienvenida: "presentacion_cliente_jaroje_2". Esta es la única plantilla aprobada por Meta para iniciar conversaciones de presentación con los huéspedes de forma automatizada o manual.
 
 3. INTERFAZ DE USUARIO (UX), NAVEGACIÓN Y ROLES DE STAYSYNC
