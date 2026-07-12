@@ -447,7 +447,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     locationDesc: 'Condominios Jaroje se encuentra en Huatulco, Oaxaca. Haz clic en el botón de abajo para abrir la ubicación exacta en Google Maps:',
     talkReception: 'Hablar con Recepción por WhatsApp',
     footerRights: '© 2026 Condominios Jaroje. Todos los derechos reservados.',
-    footerHelp: '¿Necesitas ayuda? Escríbenos a nuestro WhatsApp oficial: 958 116 8698',
+    footerHelp: '¿Necesitas ayuda? Escríbenos a nuestro WhatsApp oficial: 958 587 8554',
     lightboxOf: 'of',
     lightboxControls: 'Toca a los lados para navegar • Condominios Jaroje',
 
@@ -558,7 +558,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     locationDesc: 'Condominios Jaroje is located in Huatulco, Oaxaca. Tap the button below to open our location in Google Maps:',
     talkReception: 'Chat with Reception on WhatsApp',
     footerRights: '© 2026 Condominios Jaroje. All rights reserved.',
-    footerHelp: 'Need help? Write to our official WhatsApp: +52 958 116 8698',
+    footerHelp: 'Need help? Write to our official WhatsApp: +52 958 587 8554',
     lightboxOf: 'of',
     lightboxControls: 'Tap the sides to navigate • Condominios Jaroje',
 
@@ -881,7 +881,7 @@ export default function PublicReservaPage() {
           {error || (lang === 'en' ? 'The requested reservation does not exist or has been cancelled.' : 'La reservación solicitada no existe o ha sido cancelada.')}
         </p>
         <a 
-          href="https://wa.me/529581168698" 
+          href="https://wa.me/529585878554" 
           target="_blank" 
           rel="noopener noreferrer"
           className="bg-indigo-600 text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md hover:bg-indigo-700 transition-all cursor-pointer"
@@ -1481,7 +1481,7 @@ export default function PublicReservaPage() {
         {/* 10. HABLAR CON RECEPCIÓN */}
         <div className="pt-2 flex flex-col gap-2.5">
           <a 
-            href="https://wa.me/529581168698" 
+            href="https://wa.me/529585878554" 
             target="_blank" 
             rel="noopener noreferrer"
             className="w-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm py-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer text-center"

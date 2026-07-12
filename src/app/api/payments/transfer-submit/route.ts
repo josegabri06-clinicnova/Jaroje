@@ -61,8 +61,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Error al registrar la transferencia en base de datos.' }, { status: 500 });
     }
 
-    // 4. Enviar notificación por WhatsApp a Recepción (958 116 8698)
-    const receptionistPhone = '529581168698';
+    // 4. Enviar notificación por WhatsApp a Recepción (958 587 8554)
+    const receptionistPhone = '529585878554';
     const cleanGuestName = name || 'Invitado';
     const notificationBody = `🔔 *Nuevo Comprobante de Transferencia* 🔔\n\n*Huésped:* ${cleanGuestName}\n*Reserva:* #${bookingId}\n*Monto:* $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\nValida y aprueba esta transferencia aquí:\nhttps://jaroje-app.vercel.app/reservas?id=${bookingId}\n\nVer comprobante:\n${publicUrl}`;
 

@@ -527,7 +527,7 @@ export default function PagoTransferenciaPage() {
               {uploadedUrl && (
                 <div className="pt-2">
                   <a 
-                    href={`https://wa.me/529581168698?text=${encodeURIComponent(
+                    href={`https://wa.me/529585878554?text=${encodeURIComponent(
                       lang === 'en'
                         ? `Hi, I just uploaded the bank transfer receipt for my reservation #${bookingId}. You can view it here: ${uploadedUrl}`
                         : `Hola, acabo de subir el comprobante de mi reserva #${bookingId}. Puedes verlo aquí: ${uploadedUrl}`
@@ -549,7 +549,7 @@ export default function PagoTransferenciaPage() {
             <HelpCircle size={13} />
             {t.needHelp}
             <a 
-              href="https://wa.me/529581168698" 
+              href="https://wa.me/529585878554" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-zinc-650 hover:text-zinc-800 underline transition-colors"
