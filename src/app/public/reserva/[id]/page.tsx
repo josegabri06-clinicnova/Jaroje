@@ -1138,18 +1138,18 @@ export default function PublicReservaPage() {
                     const extraCharge = extraGuests * EXTRA_CHARGE;
                     return (
                       <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[15px]">🛏️</span>
-                            <strong className="text-zinc-900 font-bold text-[12px] leading-tight truncate">
+                        <div className="flex items-start gap-2">
+                          <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
+                          <div className="flex-1 min-w-0">
+                            <strong className="text-zinc-900 font-bold text-[12px] leading-tight block">
                               {room.room_name}
                             </strong>
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <Users size={11} className="text-zinc-400" />
-                            <span className="text-zinc-700 font-semibold text-[11.5px]">
-                              {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
-                            </span>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <Users size={10} className="text-zinc-400 shrink-0" />
+                              <span className="text-zinc-600 font-semibold text-[11px]">
+                                {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         {extraCharge > 0 && (
