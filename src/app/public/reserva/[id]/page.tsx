@@ -1140,8 +1140,8 @@ export default function PublicReservaPage() {
                       <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
                         <div className="flex items-start gap-2">
                           <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
-                          <div className="flex-1 min-w-0">
-                            <strong className="text-zinc-900 font-bold text-[12px] leading-tight block">
+                          <div className="flex-1">
+                            <strong style={{wordBreak: 'break-word', overflowWrap: 'anywhere'}} className="text-zinc-900 font-bold text-[12px] leading-tight block">
                               {room.room_name}
                             </strong>
                             <div className="flex items-center gap-1 mt-0.5">
