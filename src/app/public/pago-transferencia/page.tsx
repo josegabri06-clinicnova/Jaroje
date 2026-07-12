@@ -43,6 +43,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     supportFiles: 'Soporta imágenes (JPG, PNG) y PDF',
     receiptSubmitted: '¡Comprobante Enviado!',
     successDescription: (bookingId: string) => `Hemos recibido tu comprobante de transferencia con éxito para la reserva #${bookingId}.`,
+    validatingMessage: '📱 Su comprobante está siendo validado. Le avisaremos vía WhatsApp en cuanto sea aprobado.',
     validationTimesTitle: 'Lapsos de validación:',
     validationTime1: 'Lunes a Domingo (9:00 AM — 9:00 PM): 10 a 15 minutos.',
     validationTime2: 'Fuera de horario: Se validará a primera hora del día siguiente.',
@@ -77,6 +78,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     supportFiles: 'Supports images (JPG, PNG) and PDF',
     receiptSubmitted: 'Receipt Submitted!',
     successDescription: (bookingId: string) => `We have successfully received your transfer receipt for reservation #${bookingId}.`,
+    validatingMessage: '📱 Your receipt is being validated. We will notify you via WhatsApp once it is approved.',
     validationTimesTitle: 'Verification turnaround times:',
     validationTime1: 'Monday to Sunday (9:00 AM — 9:00 PM): 10 to 15 minutes.',
     validationTime2: 'After hours: Will be validated first thing the next morning.',
@@ -499,6 +501,16 @@ export default function PagoTransferenciaPage() {
                 <p className="text-xs text-zinc-500 max-w-xs mx-auto leading-relaxed">
                   {lang === 'en' ? 'We have successfully received your transfer receipt for reservation ' : 'Hemos recibido tu comprobante de transferencia con éxito para la reserva '}
                   <span className="font-bold text-zinc-800">#{bookingId}</span>.
+                </p>
+              </div>
+
+              {/* Banner de estado: comprobante en validación */}
+              <div className="bg-[#075E54] text-white rounded-2xl px-4 py-3.5 max-w-sm mx-auto flex items-start gap-3 shadow-md">
+                <div className="text-[22px] leading-none mt-0.5 shrink-0">📱</div>
+                <p className="text-[12.5px] font-semibold leading-snug text-left">
+                  {lang === 'en'
+                    ? 'Your receipt is being validated. We will notify you via WhatsApp once it is approved.'
+                    : 'Su comprobante está siendo validado. Le avisaremos vía WhatsApp en cuanto sea aprobado.'}
                 </p>
               </div>
 
