@@ -857,6 +857,38 @@ export default function ReservasList() {
         };
       });
 
+      // Registrar en Auditoría (employee_logs)
+      try {
+        const paymentAmountForLog = Number(paymentAmount || 0);
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: '999',
+            employee_name: 'Administrador',
+            department: 'recepcion',
+            module: 'recepcion',
+            action: 'check_in_procesado',
+            room: selectedRes.room_name || selectedRes.room || 'General',
+            booking_id: selectedRes.id,
+            amount: paymentAmountForLog > 0 ? paymentAmountForLog : undefined,
+            details: JSON.stringify({
+              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || selectedRes.room || 'General'} - Check-in procesado desde Admin.`,
+              checkin: {
+                bookingId: selectedRes.id,
+                guestName: selectedRes.guest_name,
+                room: selectedRes.room_name || selectedRes.room,
+                channel: selectedRes.channel || 'Directo',
+                paymentAmount: paymentAmountForLog,
+                paymentMethod: paymentMethod || 'N/A'
+              }
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error('Error registrando log de check-in en Admin:', logErr);
+      }
+
       alert('¡Check-in realizado con éxito!');
 
       // Enviar mensaje de bienvenida por WhatsApp en segundo plano (Mensaje 5)
