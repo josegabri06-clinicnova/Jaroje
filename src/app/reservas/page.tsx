@@ -2851,13 +2851,25 @@ export default function ReservasList() {
                           const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
                           const isCurrent = String(b.id) === String(selectedRes.id);
                           return (
-                            <div key={b.id} className={`flex justify-between items-center text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
-                              <span className="font-bold text-blue-800 flex items-center gap-1.5">
-                                <BedDouble size={11} className="text-blue-500" />
+                            <div key={b.id} className={`flex justify-between items-start text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
+                              <span className="font-bold text-blue-800 flex items-center gap-1.5 flex-wrap">
+                                <BedDouble size={11} className="text-blue-500 shrink-0" />
                                 {b.room_name || b.room}
                                 {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
+                                {/* Huéspedes de la habitación */}
+                                {(() => {
+                                  const total = (b.num_adult || 0) + (b.num_child || 0);
+                                  if (total === 0) return null;
+                                  const isExtra = total > 2;
+                                  return (
+                                    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-bold border ${isExtra ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`}>
+                                      👤 {total} {total === 1 ? 'huésped' : 'huéspedes'}
+                                      {isExtra && <span className="text-amber-500 font-black">+extra</span>}
+                                    </span>
+                                  );
+                                })()}
                               </span>
-                              <span className={`font-extrabold ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              <span className={`font-extrabold shrink-0 ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                                 {bBal > 0 ? `Adeudo: ${fmtCurrency(bBal, b.guest_name)}` : '✅ Pagado'}
                               </span>
                             </div>
