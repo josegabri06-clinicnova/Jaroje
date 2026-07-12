@@ -2860,7 +2860,8 @@ export default function ReservasList() {
                                 {(() => {
                                   const total = (b.num_adult || 0) + (b.num_child || 0);
                                   if (total === 0) return null;
-                                  const isExtra = total > 2;
+                                  const baseCapacity = getCapacityRules(b.room_name || b.room || '', capacitySettings || undefined).base;
+                                  const isExtra = total > baseCapacity;
                                   return (
                                     <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-bold border ${isExtra ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`}>
                                       👤 {total} {total === 1 ? 'huésped' : 'huéspedes'}

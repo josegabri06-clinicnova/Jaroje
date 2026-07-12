@@ -981,14 +981,14 @@ export default function PublicReservaPage() {
 
   const anticipoRequerido = Math.round(booking.price * 0.5);
 
-  // Cargo extra por huéspedes adicionales ($500 MXN por persona sobre capacidad base de 2)
-  const BASE_CAPACITY_PER_ROOM = 2;
+  // Cargo extra por huéspedes adicionales ($500 MXN por persona sobre la capacidad base de cada habitación)
   const EXTRA_GUEST_CHARGE = 500;
   const extraChargesTotal = (() => {
-    if (!booking.rooms_detail || booking.rooms_detail.length <= 1) return 0;
+    if (!booking.rooms_detail || booking.rooms_detail.length < 1) return 0;
     return booking.rooms_detail.reduce((acc: number, room: any) => {
       const total = (room.num_adult || 0) + (room.num_child || 0);
-      const extra = Math.max(0, total - BASE_CAPACITY_PER_ROOM);
+      const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
+      const extra = Math.max(0, total - baseCapacity);
       return acc + extra * EXTRA_GUEST_CHARGE;
     }, 0);
   })();
@@ -1132,9 +1132,9 @@ export default function PublicReservaPage() {
                 <div className="mt-1.5 space-y-2">
                   {booking.rooms_detail.map((room: any, idx: number) => {
                     const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
-                    const BASE_CAPACITY = 2; // Habitación doble: 2 personas sin cargo
+                    const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
                     const EXTRA_CHARGE = 500; // $500 MXN por persona extra
-                    const extraGuests = Math.max(0, totalGuests - BASE_CAPACITY);
+                    const extraGuests = Math.max(0, totalGuests - baseCapacity);
                     const extraCharge = extraGuests * EXTRA_CHARGE;
                     return (
                       <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
