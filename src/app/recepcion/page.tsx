@@ -424,6 +424,12 @@ export default function RecepcionPage() {
 
   // Inicializar Empleado Activo
   useEffect(() => {
+    const role = getRole();
+    // Admin no necesita fichar como empleado de recepción
+    if (role === 'admin') {
+      setActiveEmployeeState(null); // Admin opera sin empleado de recepción
+      return;
+    }
     const emp = getActiveEmployee('recepcion');
     setActiveEmployeeState(emp);
     if (!emp) {
@@ -437,6 +443,11 @@ export default function RecepcionPage() {
     callback: (...args: any[]) => void,
     payload?: any
   ) => {
+    // Admin puede actuar directamente sin fichar en recepción
+    if (getRole() === 'admin') {
+      callback(payload);
+      return;
+    }
     const emp = getActiveEmployee('recepcion');
     if (!emp) {
       setPendingAction({ type, payload, callback });
