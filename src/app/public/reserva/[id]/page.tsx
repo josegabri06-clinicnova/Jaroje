@@ -1112,7 +1112,50 @@ export default function PublicReservaPage() {
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100 col-span-2">
               <span className="text-zinc-500 font-semibold block">{t.accommodation}</span>
-              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.room_name.replace(/\s*\(\d+\)\s*$/, '').trim()}</strong>
+              {/* Desglose por habitación */}
+              {booking.rooms_detail && booking.rooms_detail.length > 1 ? (
+                <div className="mt-1.5 space-y-2">
+                  {booking.rooms_detail.map((room: any, idx: number) => {
+                    const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
+                    const BASE_CAPACITY = 2; // Habitación doble: 2 personas sin cargo
+                    const EXTRA_CHARGE = 500; // $500 MXN por persona extra
+                    const extraGuests = Math.max(0, totalGuests - BASE_CAPACITY);
+                    const extraCharge = extraGuests * EXTRA_CHARGE;
+                    return (
+                      <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[15px]">🛏️</span>
+                            <strong className="text-zinc-900 font-bold text-[12px] leading-tight truncate">
+                              {room.room_name}
+                            </strong>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <Users size={11} className="text-zinc-400" />
+                            <span className="text-zinc-700 font-semibold text-[11.5px]">
+                              {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
+                            </span>
+                          </div>
+                        </div>
+                        {extraCharge > 0 && (
+                          <div className="mt-1.5 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                            <AlertTriangle size={10} className="text-amber-500 shrink-0" />
+                            <span className="text-amber-700 text-[10.5px] font-semibold">
+                              {lang === 'en'
+                                ? `${extraGuests} extra guest(s) · +$${extraCharge.toLocaleString()} MXN`
+                                : `${extraGuests} huésped(es) extra · +$${extraCharge.toLocaleString()} MXN`}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">
+                  {booking.room_name.replace(/\s*\(\d+\)\s*$/, '').trim()}
+                </strong>
+              )}
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
               <span className="text-zinc-500 font-semibold block">{t.checkin}</span>

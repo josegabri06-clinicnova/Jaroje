@@ -226,6 +226,16 @@ export async function GET(req: Request) {
       let b24GroupBalance = Number(booking.balance || 0);
       let b24RoomNames = [booking.room_name || `Habitación ${booking.roomId}`];
 
+      // rooms_detail: desglose por habitación (nombre, num_adult, num_child)
+      const b24RoomsDetail: { room_name: string; room_id: string | number; num_adult: number; num_child: number }[] = [
+        {
+          room_name: booking.room_name || `Habitación ${(booking as any).roomId || ''}`,
+          room_id: booking.id,
+          num_adult: Number(booking.num_adult || 1),
+          num_child: Number(booking.num_child || 0),
+        }
+      ];
+
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
         const mainName = cleanStr(booking.guest_name || '');
@@ -256,6 +266,12 @@ export async function GET(req: Request) {
             b24GroupAdult += Number(s.num_adult || 0);
             b24GroupChild += Number(s.num_child || 0);
             b24RoomNames.push(s.room_name || `Habitación ${s.roomId}`);
+            b24RoomsDetail.push({
+              room_name: s.room_name || `Habitación ${s.roomId}`,
+              room_id: s.id,
+              num_adult: Number(s.num_adult || 1),
+              num_child: Number(s.num_child || 0),
+            });
           });
         }
 
@@ -265,6 +281,7 @@ export async function GET(req: Request) {
             id: booking.id,
             guest_name: booking.guest_name,
             room_name: b24RoomNames.join(', '),
+            rooms_detail: b24RoomsDetail,
             check_in: booking.check_in,
             check_out: booking.check_out,
             price: b24GroupPrice,
