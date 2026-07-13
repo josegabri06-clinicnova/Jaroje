@@ -13,16 +13,25 @@ export function detectLanguageFromPhone(phone: string): string {
   return 'es';
 }
 
-// Normaliza y limpia el número de teléfono para Meta Cloud API
+// Normaliza y limpia el número de teléfono para base de datos y búsqueda
 export function normalizePhone(phone: string): string {
   if (!phone) return '';
   let cleaned = phone.replace(/\D/g, '');
   if (cleaned.length === 10) {
-    cleaned = '52' + cleaned;
-  } else if (cleaned.startsWith('521') && cleaned.length === 13) {
-    cleaned = '52' + cleaned.slice(3);
+    cleaned = '521' + cleaned;
+  } else if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
+    cleaned = '521' + cleaned.substring(2);
   } else if (cleaned.length === 9) {
     cleaned = '34' + cleaned;
+  }
+  return cleaned;
+}
+
+// Limpia el teléfono específicamente para la llamada de Meta (removiendo el '1' de México)
+export function cleanPhoneForMeta(phone: string): string {
+  let cleaned = phone.replace(/\D/g, '');
+  if (cleaned.startsWith('521') && cleaned.length === 13) {
+    cleaned = '52' + cleaned.substring(3);
   }
   return cleaned;
 }
@@ -138,7 +147,7 @@ export async function sendWhatsAppTemplate(
     const payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to: cleanedPhone,
+      to: cleanPhoneForMeta(cleanedPhone),
       type: 'template',
       template: {
         name: templateName,
@@ -305,7 +314,7 @@ export async function sendWhatsAppTextMessage(
     const payload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to: cleanedPhone,
+      to: cleanPhoneForMeta(cleanedPhone),
       type: 'text',
       text: {
         body: body

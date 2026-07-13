@@ -11,19 +11,27 @@ const supabase = createClient(
 function normalizePhone(rawPhone: string): string {
   let cleaned = String(rawPhone || '').replace(/\D/g, '');
   
-  // Si tiene 10 dígitos (México sin lada), agregar '52'
+  // Si tiene 10 dígitos (México sin lada), agregar '521'
   if (cleaned.length === 10) {
-    cleaned = '52' + cleaned;
+    cleaned = '521' + cleaned;
   }
-  // Si empieza con '521' y tiene 13 dígitos, remover el '1'
-  if (cleaned.startsWith('521') && cleaned.length === 13) {
-    cleaned = '52' + cleaned.substring(3);
+  // Si tiene 12 dígitos y empieza con '52' pero no '521', agregar el '1' -> 521...
+  if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
+    cleaned = '521' + cleaned.substring(2);
   }
   // Si tiene 9 dígitos (España sin lada), agregar '34'
   if (cleaned.length === 9) {
     cleaned = '34' + cleaned;
   }
   
+  return cleaned;
+}
+
+function cleanPhoneForMeta(phone: string): string {
+  let cleaned = String(phone || '').replace(/\D/g, '');
+  if (cleaned.startsWith('521') && cleaned.length === 13) {
+    cleaned = '52' + cleaned.substring(3);
+  }
   return cleaned;
 }
 
@@ -535,7 +543,7 @@ export async function POST(req: Request) {
             },
             body: JSON.stringify({
               messaging_product: 'whatsapp',
-              to: phone,
+              to: cleanPhoneForMeta(phone),
               type: 'text',
               text: { body: finalBotResponse },
             }),
