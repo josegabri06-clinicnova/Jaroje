@@ -602,17 +602,17 @@ export default function ReservasList() {
           });
         }
 
-        let netRevenue = selectedRes.expected_payout || 0;
-        let commission = selectedRes.host_fee || 0;
+        let netRevenue = Number(selectedRes.expected_payout) || 0;
+        let commission = Number(selectedRes.host_fee) || 0;
         let taxesRetained = 0;
 
         if (netRevenue === 0 && commission === 0) {
           const balanceVal = selectedRes.balance !== undefined
-            ? selectedRes.balance
-            : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+            ? Number(selectedRes.balance)
+            : Number(selectedRes.price_estimate || 0) - Number(selectedRes.deposit || 0);
 
           const otaSplit = computeOtaSplit(
-            balanceVal > 0 ? balanceVal : (selectedRes.price_estimate || 0),
+            (isNaN(balanceVal) || balanceVal <= 0) ? Number(selectedRes.price_estimate || 0) : balanceVal,
             channel,
             selectedRes.room_name || '',
             selectedRes.check_in || '',
@@ -621,18 +621,22 @@ export default function ReservasList() {
             Number(selectedRes.num_adult || 1),
             Number(selectedRes.num_child || 0)
           );
-          netRevenue = otaSplit.netRevenue;
-          commission = otaSplit.commission;
-          taxesRetained = otaSplit.taxesRetained || 0;
+          netRevenue = Number(otaSplit.netRevenue) || 0;
+          commission = Number(otaSplit.commission) || 0;
+          taxesRetained = Number(otaSplit.taxesRetained) || 0;
         } else {
-          const totalEstimate = selectedRes.price_estimate || 0;
+          const totalEstimate = Number(selectedRes.price_estimate || 0);
           taxesRetained = channel === 'Airbnb' ? Math.max(0, totalEstimate - netRevenue - commission) : 0;
         }
+
+        if (isNaN(netRevenue)) netRevenue = 0;
+        if (isNaN(commission)) commission = 0;
 
         const baseDesc = `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Check-in automático (${channel})`;
 
         const netDesc = `${baseDesc} | Ingreso Neto`;
         let netRecordId = null;
+        const safeDateStr = new Date().toISOString().split('T')[0];
 
         if (netRevenue > 0) {
           const { data: netRows, error: netErr } = await supabase.from('finances').insert([{
@@ -642,7 +646,7 @@ export default function ReservasList() {
             description: `${netDesc} [Pending Sync: B24]`,
             payment_method: 'transferencia',
             account_id: netAcc?.id || null,
-            date: new Date().toISOString().split('T')[0]
+            date: safeDateStr
           }]).select();
 
           if (!netErr) {
@@ -665,7 +669,7 @@ export default function ReservasList() {
             description: commDesc,
             payment_method: 'transferencia',
             account_id: commAcc?.id || null,
-            date: new Date().toISOString().split('T')[0]
+            date: safeDateStr
           }]);
 
           if (!commErr && commAcc) {
