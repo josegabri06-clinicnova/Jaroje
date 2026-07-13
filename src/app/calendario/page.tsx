@@ -221,6 +221,7 @@ const getReservaStatusColor = (booking: any, todayStr: string) => {
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 export default function CalendarPage() {
   const router = useRouter();
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
   const [startDate, setStartDate] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = sessionStorage.getItem('jaroje_calendar_start_date');
@@ -1718,7 +1719,6 @@ export default function CalendarPage() {
   };
 
   // ── Stats strip ───────────────────────────────────────────────────────────
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
   const todayActive = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in))).length;
   const todayArrivals = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out).length;
   const todayDepartures = reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out).length;
