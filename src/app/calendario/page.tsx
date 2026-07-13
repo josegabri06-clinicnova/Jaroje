@@ -1647,6 +1647,44 @@ export default function CalendarPage() {
     fetchData();
   };
 
+  const handleRevertCheckIn = async () => {
+    if (!selectedReserva) return;
+    if (!confirm('¿Estás seguro de que deseas revertir el Check-In de esta reserva? Esto cambiará su estado a PENDIENTE DE CHECK IN.')) return;
+
+    try {
+      const { error: deleteErr } = await supabase
+        .from('checkins')
+        .delete()
+        .eq('reservation_id', String(selectedReserva.id));
+
+      if (deleteErr) throw deleteErr;
+
+      const operatorName = localStorage.getItem('jaroje_operator_name') || 'Admin';
+      const employeeNum = localStorage.getItem('jaroje_employee_num') || '0';
+
+      await fetch('/api/employee-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_num: employeeNum,
+          employee_name: operatorName,
+          department: 'Administración',
+          module: 'calendario',
+          action: 'revert_checkin',
+          room: selectedReserva.room || 'Sin Asignar',
+          details: `Admin revirtió el Check-In de la reserva ID ${selectedReserva.id} de ${selectedReserva.guest_name}.`
+        })
+      });
+
+      alert('✅ El check-in ha sido revertido exitosamente. La reserva ahora está Pendiente de Check-In.');
+      await fetchData();
+      setSelectedReserva(null);
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al revertir check-in: ${err.message}`);
+    }
+  };
+
   // Lock body scroll when any panel is open
   const panelOpen = !!selectedReserva || !!panelRoom || showCheckInModal || kpiModalType;
   useEffect(() => {
@@ -2576,20 +2614,31 @@ export default function CalendarPage() {
                           </button>
                         </div>
                       ) : (
-                        getRole() !== 'recepcion' && (
-                          <button
-                            onClick={() => {
-                              setAbonoAmount('');
-                              setAbonoFlowPaymentMethod(null);
-                              setAbonoFlowAccountId('');
-                              setAbonoGrupalMode(false);
-                              setShowAbonoFlow(true);
-                            }}
-                            className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in"
-                          >
-                            💰 Registrar Anticipo
-                          </button>
-                        )
+                        <div className="space-y-2 w-full">
+                          {getRole() !== 'recepcion' && (
+                            <button
+                              onClick={() => {
+                                setAbonoAmount('');
+                                setAbonoFlowPaymentMethod(null);
+                                setAbonoFlowAccountId('');
+                                setAbonoGrupalMode(false);
+                                setShowAbonoFlow(true);
+                              }}
+                              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in"
+                            >
+                              💰 Registrar Anticipo
+                            </button>
+                          )}
+
+                          {selectedReserva.checked_in && userRole === 'admin' && (
+                            <button
+                              onClick={handleRevertCheckIn}
+                              className="w-full py-3 bg-orange-650 hover:bg-orange-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 cursor-pointer animate-in fade-in"
+                            >
+                              ↩️ Revertir Check-In (Admin)
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}

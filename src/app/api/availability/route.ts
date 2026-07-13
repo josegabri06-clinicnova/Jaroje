@@ -130,7 +130,8 @@ export async function GET(req: Request) {
         // Hay solapamiento si la entrada de la reserva es ANTES de que el nuevo cliente salga,
         // Y la salida de la reserva es DESPUÉS de que el nuevo cliente entre.
         if (bIn < reqOut && bOut > reqIn) {
-          if (b.roomId) {
+          const uId = String(b.unitId ?? '').trim();
+          if (b.roomId && uId && uId !== '0') {
             const parent = getParentMapping(b.roomId, b.unitId);
             occupiedUnits.add(`${parent.roomId}_${parent.unitId}`);
           }

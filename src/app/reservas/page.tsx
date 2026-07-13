@@ -924,6 +924,55 @@ export default function ReservasList() {
     }
   };
 
+  const handleRevertCheckIn = async () => {
+    if (!selectedRes) return;
+    if (!confirm('¿Estás seguro de que deseas revertir el Check-In de esta reserva? Esto cambiará su estado a PENDIENTE DE CHECK IN.')) return;
+
+    try {
+      const { error: deleteErr } = await supabase
+        .from('checkins')
+        .delete()
+        .eq('reservation_id', String(selectedRes.id));
+
+      if (deleteErr) throw deleteErr;
+
+      const operatorName = localStorage.getItem('jaroje_operator_name') || 'Admin';
+      const employeeNum = localStorage.getItem('jaroje_employee_num') || '0';
+
+      await fetch('/api/employee-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_num: employeeNum,
+          employee_name: operatorName,
+          department: 'Administración',
+          module: 'reservas',
+          action: 'revert_checkin',
+          room: selectedRes.room_name || selectedRes.room || 'Sin Asignar',
+          details: `Admin revirtió el Check-In de la reserva ID ${selectedRes.id} de ${selectedRes.guest_name}.`
+        })
+      });
+
+      alert('✅ El check-in ha sido revertido exitosamente. La reserva ahora está Pendiente de Check-In.');
+      
+      setIsCheckedIn(false);
+      
+      setSelectedRes((prev: any) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          is_checked_in: false,
+          checked_in: false
+        };
+      });
+
+      await fetchReservas();
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al revertir check-in: ${err.message}`);
+    }
+  };
+
   const handleProcessTransferReceipt = async (receiptId: string, bookingId: string, amount: number, action: 'approve' | 'reject') => {
     if (!confirm(`¿Estás seguro de que deseas ${action === 'approve' ? 'APROBAR' : 'RECHAZAR'} esta transferencia bancaria de $${amount.toLocaleString('es-MX')} MXN?`)) {
       return;
@@ -3617,6 +3666,14 @@ export default function ReservasList() {
                     >
                       <FileText size={16} /> Ver Documento / Pasaporte
                     </a>
+                  )}
+                  {userRole === 'admin' && (
+                    <button
+                      onClick={handleRevertCheckIn}
+                      className="w-full bg-orange-650 hover:bg-orange-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 cursor-pointer animate-in fade-in"
+                    >
+                      ↩️ Revertir Check-In (Admin)
+                    </button>
                   )}
                 </div>
               ) : showPaymentFlow ? (
