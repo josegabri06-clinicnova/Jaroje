@@ -504,7 +504,12 @@ export default function RecepcionPage() {
   // Inicializar estados editados al cambiar de reserva
   useEffect(() => {
     setGroupRoomRates({});
-    setPayGroupConsolidated(false);
+    setPayGroupConsolidated(true);
+    setIsSplitPayment(false);
+    setPaymentMode2(null);
+    setPaymentAmount2('');
+    setSelectedAccountId2('');
+    setPaymentDescription2('');
     if (selectedReserva) {
       if (selectedReserva.id === 'walkin') {
         setPaymentAmount('0');
@@ -1365,6 +1370,11 @@ export default function RecepcionPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [checkInNotes, setCheckInNotes] = useState('');
   const [payGroupConsolidated, setPayGroupConsolidated] = useState(true);
+  const [isSplitPayment, setIsSplitPayment] = useState(false);
+  const [paymentMode2, setPaymentMode2] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
+  const [paymentAmount2, setPaymentAmount2] = useState('');
+  const [selectedAccountId2, setSelectedAccountId2] = useState<string>('');
+  const [paymentDescription2, setPaymentDescription2] = useState('');
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
   const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
   const [pinInput, setPinInput] = useState('');
@@ -1864,29 +1874,52 @@ export default function RecepcionPage() {
   useEffect(() => {
     if (!paymentMode) {
       setSelectedAccountId('');
-      return;
-    }
-    // Filtrar sobres/cuentas compatibles según reglas estrictas del cliente
-    const compatible = accounts.filter(acc => {
-      const name = acc.name.trim().toUpperCase();
-      if (paymentMode === 'efectivo') {
-        return name === 'EFECTIVO';
-      }
-      if (paymentMode === 'tarjeta') {
-        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-      }
-      if (paymentMode === 'transferencia') {
-        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-      }
-      return false;
-    });
-    // Auto-seleccionar la primera compatible
-    if (compatible.length > 0) {
-      setSelectedAccountId(compatible[0].id);
     } else {
-      setSelectedAccountId('');
+      const compatible = accounts.filter(acc => {
+        const name = acc.name.trim().toUpperCase();
+        if (paymentMode === 'efectivo') {
+          return name === 'EFECTIVO';
+        }
+        if (paymentMode === 'tarjeta') {
+          return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+        }
+        if (paymentMode === 'transferencia') {
+          return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+        }
+        return false;
+      });
+      if (compatible.length > 0) {
+        setSelectedAccountId(compatible[0].id);
+      } else {
+        setSelectedAccountId('');
+      }
     }
   }, [paymentMode, accounts]);
+
+  useEffect(() => {
+    if (!paymentMode2) {
+      setSelectedAccountId2('');
+    } else {
+      const compatible = accounts.filter(acc => {
+        const name = acc.name.trim().toUpperCase();
+        if (paymentMode2 === 'efectivo') {
+          return name === 'EFECTIVO';
+        }
+        if (paymentMode2 === 'tarjeta') {
+          return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+        }
+        if (paymentMode2 === 'transferencia') {
+          return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+        }
+        return false;
+      });
+      if (compatible.length > 0) {
+        setSelectedAccountId2(compatible[0].id);
+      } else {
+        setSelectedAccountId2('');
+      }
+    }
+  }, [paymentMode2, accounts]);
 
   useEffect(() => {
     if (showCheckInModal && selectedReserva && selectedReserva.id !== 'walkin') {
@@ -2150,6 +2183,97 @@ export default function RecepcionPage() {
     const emp = getOperatorForLog();
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
 
+    const registerSingleDirectPayment = async (
+      resId: string | number,
+      roomName: string,
+      mode: string,
+      amount: number,
+      accountId: string,
+      paymentDesc: string,
+      baseDesc: string,
+      isGroupWalkin: boolean = false
+    ) => {
+      const cleanAmountNum = Number(amount) || 0;
+      if (cleanAmountNum <= 0) return null;
+
+      const safeDateStr = todayStr || new Date().toLocaleDateString('sv-SE');
+      const matchedAccName = accounts.find(a => a.id === accountId)?.name || 'Desconocido';
+      
+      const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
+        type: 'ingreso',
+        amount: cleanAmountNum,
+        category: 'Reserva Directa',
+        description: paymentDesc ? `${paymentDesc} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+        payment_method: mode,
+        account_id: accountId || null,
+        date: safeDateStr
+      }).select();
+
+      if (insertErr) {
+        console.error("Error al registrar cobro:", insertErr);
+        alert(`⚠️ Error al registrar el cobro en Finanzas para la Habitación ${roomName}: ${insertErr.message}`);
+        return null;
+      }
+
+      const insertedRecordId = insertedRows?.[0]?.id;
+
+      if (accountId) {
+        const matchedAcc = accounts.find(a => a.id === accountId);
+        if (matchedAcc) {
+          await supabase.from('accounts').update({ balance: matchedAcc.balance + cleanAmountNum }).eq('id', accountId);
+        }
+      }
+
+      let syncedSuccess = false;
+      try {
+        const b24PayRes = await fetch('/api/reservas/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookId: resId,
+            amount: cleanAmountNum,
+            paymentMethod: mode,
+            employeeNum: emp?.employee_num || null,
+            description: paymentDesc || null
+          })
+        });
+        const payData = await b24PayRes.json();
+        if (b24PayRes.ok && payData.success) {
+          syncedSuccess = true;
+        } else {
+          console.error("Fallo de sincronización Beds24 de pago:", payData.error || 'Error desconocido');
+          alert(`⚠️ Sincronización Beds24 incompleta para Hab ${roomName}:\nSupabase se actualizó, pero Beds24 no pudo registrar el pago.\nDetalle: ${payData.error || 'Error desconocido'}.`);
+        }
+      } catch (payErr: any) {
+        console.error("Fallo de conexión al sincronizar pago con Beds24:", payErr);
+        alert(`⚠️ Error de Red / Conexión Beds24 para Hab ${roomName}:\nSupabase se actualizó, pero falló el envío a Beds24.\nDetalle: ${payErr.message || payErr}.`);
+      }
+
+      if (syncedSuccess && insertedRecordId) {
+        await supabase.from('finances').update({
+          description: paymentDesc ? `${paymentDesc} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+        }).eq('id', insertedRecordId);
+      }
+
+      if (emp && !isGroupWalkin) {
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'recepcion',
+            action: 'payment_received',
+            room: roomName,
+            details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${resId}) de la Habitación ${roomName} - Recibió pago de $${cleanAmountNum} vía ${mode} (Depositado en sobre: ${matchedAccName}).`
+          })
+        });
+      }
+
+      return insertedRecordId;
+    };
+
     if (selectedReserva.id === 'walkin') {
       try {
         const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
@@ -2276,10 +2400,152 @@ export default function RecepcionPage() {
 
         setReservas(prev => [...prev, ...bookedReservas]);
 
-        if (paymentMode && totalPayment > 0) {
+        if (isSplitPayment) {
+          const amt1 = Number(paymentAmount) || 0;
+          const amt2 = Number(paymentAmount2) || 0;
+          const totalPayment = amt1 + amt2;
+
+          if (totalPayment > 0) {
+            const baseDesc1 = `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} - Habs ${roomNamesList} (Operado por: ${operatorName}) (Parte 1/2: ${paymentMode}) [Reservas B24: ${bookedBeds24Ids.join(', ')}]`;
+            const { data: rows1, error: err1 } = await supabase.from('finances').insert({
+              type: 'ingreso',
+              amount: amt1,
+              category: 'Reserva Directa',
+              description: paymentDescription ? `${paymentDescription} - ${baseDesc1} [Pending Sync: B24]` : `${baseDesc1} [Pending Sync: B24]`,
+              payment_method: paymentMode,
+              account_id: selectedAccountId || null,
+              date: todayStr
+            }).select();
+
+            if (err1) {
+              console.error("Error al registrar pago 1 walkin:", err1);
+              alert(`⚠️ Error al registrar el pago 1 de Walk-in en Finanzas: ${err1.message}`);
+            } else if (selectedAccountId) {
+              const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+              if (matchedAcc) {
+                await supabase.from('accounts').update({ balance: matchedAcc.balance + amt1 }).eq('id', selectedAccountId);
+              }
+            }
+
+            const baseDesc2 = `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} - Habs ${roomNamesList} (Operado por: ${operatorName}) (Parte 2/2: ${paymentMode2}) [Reservas B24: ${bookedBeds24Ids.join(', ')}]`;
+            const { data: rows2, error: err2 } = await supabase.from('finances').insert({
+              type: 'ingreso',
+              amount: amt2,
+              category: 'Reserva Directa',
+              description: paymentDescription2 ? `${paymentDescription2} - ${baseDesc2} [Pending Sync: B24]` : `${baseDesc2} [Pending Sync: B24]`,
+              payment_method: paymentMode2,
+              account_id: selectedAccountId2 || null,
+              date: todayStr
+            }).select();
+
+            if (err2) {
+              console.error("Error al registrar pago 2 walkin:", err2);
+              alert(`⚠️ Error al registrar el pago 2 de Walk-in en Finanzas: ${err2.message}`);
+            } else if (selectedAccountId2) {
+              const matchedAcc = accounts.find(a => a.id === selectedAccountId2);
+              if (matchedAcc) {
+                await supabase.from('accounts').update({ balance: matchedAcc.balance + amt2 }).eq('id', selectedAccountId2);
+              }
+            }
+
+            let allSynced = true;
+            let syncErrors: string[] = [];
+
+            for (let i = 0; i < bookedBeds24Ids.length; i++) {
+              const bookId = bookedBeds24Ids[i];
+              const splitAmount = i === bookedBeds24Ids.length - 1
+                ? totalPayment - (depositPerRoom * (bookedBeds24Ids.length - 1))
+                : depositPerRoom;
+
+              const roomAmt1 = Math.round(splitAmount * (amt1 / totalPayment));
+              const roomAmt2 = splitAmount - roomAmt1;
+
+              if (roomAmt1 > 0) {
+                try {
+                  const b24PayRes = await fetch('/api/reservas/payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      bookId: bookId,
+                      amount: roomAmt1,
+                      paymentMethod: paymentMode,
+                      employeeNum: emp?.employee_num || null,
+                      description: paymentDescription || null
+                    })
+                  });
+                  const payData = await b24PayRes.json();
+                  if (!b24PayRes.ok || !payData.success) {
+                    allSynced = false;
+                    syncErrors.push(`Hab ${roomDetails[i].name} (Pago 1): ${payData.error || 'Error'}`);
+                  }
+                } catch (payErr: any) {
+                  allSynced = false;
+                  syncErrors.push(`Hab ${roomDetails[i].name} (Pago 1): ${payErr.message || payErr}`);
+                }
+              }
+
+              if (roomAmt2 > 0) {
+                try {
+                  const b24PayRes = await fetch('/api/reservas/payment', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      bookId: bookId,
+                      amount: roomAmt2,
+                      paymentMethod: paymentMode2,
+                      employeeNum: emp?.employee_num || null,
+                      description: paymentDescription2 || null
+                    })
+                  });
+                  const payData = await b24PayRes.json();
+                  if (!b24PayRes.ok || !payData.success) {
+                    allSynced = false;
+                    syncErrors.push(`Hab ${roomDetails[i].name} (Pago 2): ${payData.error || 'Error'}`);
+                  }
+                } catch (payErr: any) {
+                  allSynced = false;
+                  syncErrors.push(`Hab ${roomDetails[i].name} (Pago 2): ${payErr.message || payErr}`);
+                }
+              }
+            }
+
+            if (allSynced) {
+              if (rows1?.[0]?.id) {
+                await supabase.from('finances').update({
+                  description: paymentDescription ? `${paymentDescription} - ${baseDesc1} [Synced: B24]` : `${baseDesc1} [Synced: B24]`
+                }).eq('id', rows1[0].id);
+              }
+              if (rows2?.[0]?.id) {
+                await supabase.from('finances').update({
+                  description: paymentDescription2 ? `${paymentDescription2} - ${baseDesc2} [Synced: B24]` : `${baseDesc2} [Synced: B24]`
+                }).eq('id', rows2[0].id);
+              }
+            } else {
+              alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+            }
+
+            if (emp) {
+              const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+              const matchedAccName2 = accounts.find(a => a.id === selectedAccountId2)?.name || 'Desconocido';
+              await fetch('/api/employee-logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  employee_num: emp.employee_num,
+                  employee_name: emp.full_name,
+                  department: emp.department,
+                  module: 'recepcion',
+                  action: 'payment_received',
+                  room: `Grupo: ${roomNamesList}`,
+                  details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (Grupo: ${roomNamesList}) (ID: ${bookedBeds24Ids.join(', ')}) - Recibió pago mixto: $${amt1} vía ${paymentMode} (${matchedAccName}) y $${amt2} vía ${paymentMode2} (${matchedAccName2}).`
+                })
+              });
+            }
+          }
+        } else if (paymentMode && totalPayment > 0) {
           const baseDesc = `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} - Habs ${roomNamesList} (Operado por: ${operatorName}) [Reservas B24: ${bookedBeds24Ids.join(', ')}]`;
 
-          const { data: insertedRows } = await supabase.from('finances').insert({
+          const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
             type: 'ingreso',
             amount: totalPayment,
             category: 'Reserva Directa',
@@ -2289,71 +2555,76 @@ export default function RecepcionPage() {
             date: todayStr
           }).select();
 
-          const insertedRecordId = insertedRows?.[0]?.id;
+          if (insertErr) {
+            console.error("Error al registrar ingreso walkin:", insertErr);
+            alert(`⚠️ Error al registrar el cobro en Finanzas: ${insertErr.message}`);
+          } else {
+            const insertedRecordId = insertedRows?.[0]?.id;
 
-          if (selectedAccountId) {
-            const matchedAcc = accounts.find(a => a.id === selectedAccountId);
-            if (matchedAcc) {
-              const newBalance = matchedAcc.balance + totalPayment;
-              await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+            if (selectedAccountId) {
+              const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+              if (matchedAcc) {
+                const newBalance = matchedAcc.balance + totalPayment;
+                await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+              }
             }
-          }
 
-          let allSynced = true;
-          let syncErrors: string[] = [];
+            let allSynced = true;
+            let syncErrors: string[] = [];
 
-          for (let i = 0; i < bookedBeds24Ids.length; i++) {
-            const bookId = bookedBeds24Ids[i];
-            const splitAmount = i === bookedBeds24Ids.length - 1
-              ? totalPayment - (depositPerRoom * (bookedBeds24Ids.length - 1))
-              : depositPerRoom;
+            for (let i = 0; i < bookedBeds24Ids.length; i++) {
+              const bookId = bookedBeds24Ids[i];
+              const splitAmount = i === bookedBeds24Ids.length - 1
+                ? totalPayment - (depositPerRoom * (bookedBeds24Ids.length - 1))
+                : depositPerRoom;
 
-            try {
-              const b24PayRes = await fetch('/api/reservas/payment', {
+              try {
+                const b24PayRes = await fetch('/api/reservas/payment', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    bookId: bookId,
+                    amount: splitAmount,
+                    paymentMethod: paymentMode,
+                    employeeNum: emp?.employee_num || null,
+                    description: paymentDescription || null
+                  })
+                });
+                const payData = await b24PayRes.json();
+                if (!b24PayRes.ok || !payData.success) {
+                  allSynced = false;
+                  syncErrors.push(`Hab ${roomDetails[i].name}: ${payData.error || 'Error desconocido'}`);
+                }
+              } catch (payErr: any) {
+                allSynced = false;
+                syncErrors.push(`Hab ${roomDetails[i].name}: ${payErr.message || payErr}`);
+              }
+            }
+
+            if (allSynced && insertedRecordId) {
+              await supabase.from('finances').update({
+                description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+              }).eq('id', insertedRecordId);
+            } else {
+              alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+            }
+
+            if (emp) {
+              const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+              await fetch('/api/employee-logs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                  bookId: bookId,
-                  amount: splitAmount,
-                  paymentMethod: paymentMode,
-                  employeeNum: emp?.employee_num || null,
-                  description: paymentDescription || null
+                  employee_num: emp.employee_num,
+                  employee_name: emp.full_name,
+                  department: emp.department,
+                  module: 'recepcion',
+                  action: 'payment_received',
+                  room: `Grupo: ${roomNamesList}`,
+                  details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (Grupo: ${roomNamesList}) (ID: ${bookedBeds24Ids.join(', ')}) - Recibió pago total de $${totalPayment} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`
                 })
               });
-              const payData = await b24PayRes.json();
-              if (!b24PayRes.ok || !payData.success) {
-                allSynced = false;
-                syncErrors.push(`Hab ${roomDetails[i].name}: ${payData.error || 'Error desconocido'}`);
-              }
-            } catch (payErr: any) {
-              allSynced = false;
-              syncErrors.push(`Hab ${roomDetails[i].name}: ${payErr.message || payErr}`);
             }
-          }
-
-          if (allSynced && insertedRecordId) {
-            await supabase.from('finances').update({
-              description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
-            }).eq('id', insertedRecordId);
-          } else {
-            alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
-          }
-
-          if (emp) {
-            const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
-            await fetch('/api/employee-logs', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                employee_num: emp.employee_num,
-                employee_name: emp.full_name,
-                department: emp.department,
-                module: 'recepcion',
-                action: 'payment_received',
-                room: `Grupo: ${roomNamesList}`,
-                details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (Grupo: ${roomNamesList}) (ID: ${bookedBeds24Ids.join(', ')}) - Recibió pago total de $${totalPayment} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`
-              })
-            });
           }
         }
 
@@ -2376,7 +2647,10 @@ export default function RecepcionPage() {
 
       if (payGroupConsolidated) {
         // --- PROCESO GRUPAL CONSOLIDADO ---
-        const amountNum = Number(paymentAmount || 0);
+        const amt1 = Number(paymentAmount) || 0;
+        const amt2 = Number(paymentAmount2) || 0;
+        const totalPayment = isSplitPayment ? (amt1 + amt2) : Number(paymentAmount || 0);
+
         const sortedDirectRooms = [...directGroupBookings].filter(r => r.id !== selectedReserva.id);
         let allocatedSum = 0;
         const paymentSplits: Record<string, number> = {};
@@ -2384,12 +2658,12 @@ export default function RecepcionPage() {
         sortedDirectRooms.forEach(r => {
           const rBal = r.balance !== undefined ? r.balance : Math.max(0, (r.price_estimate || 0) - (r.deposit || 0));
           const rShare = directGroupTotalBalance > 0 
-            ? Math.round(amountNum * (rBal / directGroupTotalBalance)) 
+            ? Math.round(totalPayment * (rBal / directGroupTotalBalance)) 
             : 0;
           paymentSplits[r.id] = rShare;
           allocatedSum += rShare;
         });
-        paymentSplits[selectedReserva.id] = Math.max(0, amountNum - allocatedSum);
+        paymentSplits[selectedReserva.id] = Math.max(0, totalPayment - allocatedSum);
 
         for (const r of groupBookings) {
           // A. Guardar check-in local en Supabase
@@ -2621,6 +2895,39 @@ export default function RecepcionPage() {
                     })
                   })
                 });
+              }
+            }
+          } else if (isSplitPayment) {
+            const splitAmt = paymentSplits[r.id] || 0;
+            if (splitAmt > 0) {
+              const ratio1 = amt1 / totalPayment;
+              const splitAmt1 = Math.round(splitAmt * ratio1);
+              const splitAmt2 = splitAmt - splitAmt1;
+
+              if (splitAmt1 > 0) {
+                const baseDesc1 = `${r.guest_name || 'Huésped'} (ID: ${r.id}) - Hab ${r.room} - Cobro Check-in Grupo (Parte 1/2: ${paymentMode}) (Operado por: ${operatorName})`;
+                await registerSingleDirectPayment(
+                  r.id,
+                  r.room,
+                  paymentMode!,
+                  splitAmt1,
+                  selectedAccountId,
+                  paymentDescription,
+                  baseDesc1
+                );
+              }
+
+              if (splitAmt2 > 0) {
+                const baseDesc2 = `${r.guest_name || 'Huésped'} (ID: ${r.id}) - Hab ${r.room} - Cobro Check-in Grupo (Parte 2/2: ${paymentMode2}) (Operado por: ${operatorName})`;
+                await registerSingleDirectPayment(
+                  r.id,
+                  r.room,
+                  paymentMode2!,
+                  splitAmt2,
+                  selectedAccountId2,
+                  paymentDescription2,
+                  baseDesc2
+                );
               }
             }
           } else if (paymentMode) {
@@ -3085,6 +3392,35 @@ export default function RecepcionPage() {
               });
             }
           }
+        } else if (isSplitPayment) {
+          const amt1 = Number(paymentAmount) || 0;
+          const amt2 = Number(paymentAmount2) || 0;
+
+          if (amt1 > 0) {
+            const baseDesc1 = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in (Parte 1/2: ${paymentMode}) (Operado por: ${operatorName})`;
+            await registerSingleDirectPayment(
+              selectedReserva.id,
+              selectedReserva.room,
+              paymentMode!,
+              amt1,
+              selectedAccountId,
+              paymentDescription,
+              baseDesc1
+            );
+          }
+
+          if (amt2 > 0) {
+            const baseDesc2 = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in (Parte 2/2: ${paymentMode2}) (Operado por: ${operatorName})`;
+            await registerSingleDirectPayment(
+              selectedReserva.id,
+              selectedReserva.room,
+              paymentMode2!,
+              amt2,
+              selectedAccountId2,
+              paymentDescription2,
+              baseDesc2
+            );
+          }
         } else if (paymentMode && paymentAmount) {
           const amountNum = Number(paymentAmount);
           const baseDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Cobro Check-in (Operado por: ${operatorName})`;
@@ -3318,6 +3654,11 @@ export default function RecepcionPage() {
     setPaymentMode(null);
     setPaymentAmount('');
     setPaymentDescription('');
+    setPaymentMode2(null);
+    setPaymentAmount2('');
+    setPaymentDescription2('');
+    setSelectedAccountId2('');
+    setIsSplitPayment(false);
     setCheckInNotes('');
     setSelectedAccountId('');
     setSubmitting(false);
@@ -5686,116 +6027,336 @@ export default function RecepcionPage() {
                       })()
                     ) : (
                       <>
-                        <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Registrar Pago (Opcional)</h4>
-                        <div className="flex gap-2">
-                          {[
-                            { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                            { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                            { id: 'transferencia', label: 'Transferencia', icon: Send }
-                          ].map(m => (
-                            <button
-                              key={m.id}
-                              onClick={() => setPaymentMode(m.id as any)}
-                              className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                                paymentMode === m.id
-                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                                  : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
-                              }`}
-                            >
-                              <m.icon size={15} />
-                              <span className="text-[11px] font-bold">{m.label}</span>
-                            </button>
-                          ))}
-                        </div>
+                        {(() => {
+                          const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                          const totalVal = selectedReserva.id === 'walkin'
+                            ? (selectedReserva.price_estimate || 0)
+                            : Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0));
+                          const depositVal = selectedReserva.id === 'walkin'
+                            ? 0
+                            : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
+                          const totalDebt = isOta ? 0 : (payGroupConsolidated
+                            ? directGroupTotalBalance
+                            : Math.max(0, totalVal - depositVal));
 
-                        {paymentMode && (
-                          <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
-                            <div className="flex justify-between items-center">
-                              <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
-                                {selectedReserva.id === 'walkin' ? 'Pago Actual (Anticipo)' : 'Monto a cobrar'}
-                              </span>
-                            </div>
-                            <div className="relative text-left">
-                              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                              <input
-                                type="number"
-                                value={paymentAmount}
-                                onChange={e => {
-                                  if (selectedReserva.id !== 'walkin') {
-                                    setPaymentAmount(e.target.value);
-                                  }
-                                }}
-                                readOnly={selectedReserva.id === 'walkin'}
-                                placeholder="0.00"
-                                className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
-                                  selectedReserva.id === 'walkin'
-                                    ? 'bg-zinc-100 border-zinc-200/80 text-zinc-500 cursor-not-allowed'
-                                    : 'bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm'
-                                }`}
-                              />
-                            </div>
+                          return (
+                            <>
+                              <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider mb-2 flex items-center justify-between">
+                                <span>Registrar Pago (Opcional)</span>
+                              </h4>
+                              
+                              {selectedReserva.id !== 'walkin' && (
+                                <div className="flex items-center gap-2 mb-3 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/60 text-left">
+                                  <input
+                                    type="checkbox"
+                                    id="isSplitPayment"
+                                    checked={isSplitPayment}
+                                    onChange={e => {
+                                      const checked = e.target.checked;
+                                      setIsSplitPayment(checked);
+                                      if (checked) {
+                                        setPaymentAmount(String(Math.ceil(totalDebt / 2)));
+                                        setPaymentAmount2(String(Math.floor(totalDebt / 2)));
+                                        setPaymentMode('efectivo');
+                                        setPaymentMode2('tarjeta');
+                                      } else {
+                                        setPaymentAmount(totalDebt > 0 ? String(totalDebt) : '');
+                                        setPaymentAmount2('');
+                                        setPaymentMode(null);
+                                        setPaymentMode2(null);
+                                        setSelectedAccountId2('');
+                                      }
+                                    }}
+                                    className="w-4 h-4 text-zinc-950 border-zinc-300 rounded focus:ring-zinc-955 cursor-pointer"
+                                  />
+                                  <label htmlFor="isSplitPayment" className="text-[11px] font-extrabold text-zinc-700 cursor-pointer select-none uppercase tracking-wider">
+                                    Dividir pago (Pago Mixto)
+                                  </label>
+                                </div>
+                              )}
 
-                            {/* Selector de cuenta/sobre */}
-                            <div className="space-y-1.5 pt-1 text-left">
-                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                                ¿A qué sobre va el dinero?
-                              </label>
-                              <select
-                                value={selectedAccountId}
-                                onChange={e => setSelectedAccountId(e.target.value)}
-                                required
-                                className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
-                              >
-                                <option value="" disabled>Selecciona un sobre...</option>
-                                {accounts
-                                  .filter(acc => {
-                                    const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                    if (isUSD) {
-                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                      if (!isUSDAcc) return false;
+                              {isSplitPayment ? (
+                                <div className="space-y-4">
+                                  {/* Pago #1 */}
+                                  <div className="p-3.5 bg-zinc-50/50 border border-zinc-200/80 rounded-2xl space-y-3">
+                                    <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block text-left">
+                                      Pago #1
+                                    </span>
+                                    <div className="flex gap-1.5">
+                                      {[
+                                        { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                        { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                        { id: 'transferencia', label: 'Transferencia', icon: Send }
+                                      ].map(m => (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          onClick={() => setPaymentMode(m.id as any)}
+                                          className={`flex-1 py-2 border rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                            paymentMode === m.id
+                                              ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                              : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
+                                          }`}
+                                        >
+                                          <m.icon size={13} />
+                                          <span className="text-[10px] font-bold">{m.label}</span>
+                                        </button>
+                                      ))}
+                                    </div>
 
-                                      const name = acc.name.trim().toUpperCase();
-                                      if (paymentMode === 'efectivo') {
-                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                      }
-                                      return !name.includes('EFE') && !name.includes('CASH');
-                                    } else {
-                                      const name = acc.name.trim().toUpperCase();
-                                      if (paymentMode === 'efectivo') {
-                                        return name === 'EFECTIVO';
-                                      }
-                                      if (paymentMode === 'tarjeta') {
-                                        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                      }
-                                      if (paymentMode === 'transferencia') {
-                                        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                      }
-                                      return false;
-                                    }
-                                  })
-                                  .map(acc => (
-                                    <option key={acc.id} value={acc.id}>
-                                      {acc.name}
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
+                                    <div className="relative text-left">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                      <input
+                                        type="number"
+                                        value={paymentAmount}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          setPaymentAmount(val);
+                                          const valNum = Number(val) || 0;
+                                          setPaymentAmount2(Math.max(0, totalDebt - valNum).toString());
+                                        }}
+                                        placeholder="Monto 1"
+                                        className="w-full bg-white border border-zinc-200/80 rounded-xl p-2.5 pl-7 text-[14px] font-semibold transition-all outline-none focus:border-zinc-400 text-zinc-900"
+                                      />
+                                    </div>
 
-                            {/* Descripción opcional */}
-                            <div className="space-y-1.5 pt-1 text-left">
-                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                                Descripción (opcional)
-                              </label>
-                              <input
-                                type="text"
-                                value={paymentDescription}
-                                onChange={e => setPaymentDescription(e.target.value)}
-                                placeholder="Ej. S07 -EP, referencia de transferencia..."
-                                className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                              />
-                            </div>
-                          </div>
-                        )}
+                                    {paymentMode && (
+                                      <div className="space-y-1 text-left">
+                                        <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
+                                          Sobre Pago #1
+                                        </label>
+                                        <select
+                                          value={selectedAccountId}
+                                          onChange={e => setSelectedAccountId(e.target.value)}
+                                          required
+                                          className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                        >
+                                          <option value="" disabled>Seleccionar...</option>
+                                          {accounts
+                                            .filter(acc => {
+                                              const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                              if (isUSD) {
+                                                const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                if (!isUSDAcc) return false;
+                                                const name = acc.name.trim().toUpperCase();
+                                                if (paymentMode === 'efectivo') {
+                                                  return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                                }
+                                                return !name.includes('EFE') && !name.includes('CASH');
+                                              } else {
+                                                const name = acc.name.trim().toUpperCase();
+                                                if (paymentMode === 'efectivo') return name === 'EFECTIVO';
+                                                if (paymentMode === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                return false;
+                                              }
+                                            })
+                                            .map(acc => (
+                                              <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                            ))}
+                                        </select>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Pago #2 */}
+                                  <div className="p-3.5 bg-zinc-50/50 border border-zinc-200/80 rounded-2xl space-y-3">
+                                    <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block text-left">
+                                      Pago #2
+                                    </span>
+                                    <div className="flex gap-1.5">
+                                      {[
+                                        { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                        { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                        { id: 'transferencia', label: 'Transferencia', icon: Send }
+                                      ].map(m => (
+                                        <button
+                                          key={m.id}
+                                          type="button"
+                                          onClick={() => setPaymentMode2(m.id as any)}
+                                          className={`flex-1 py-2 border rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                            paymentMode2 === m.id
+                                              ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                              : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
+                                          }`}
+                                        >
+                                          <m.icon size={13} />
+                                          <span className="text-[10px] font-bold">{m.label}</span>
+                                        </button>
+                                      ))}
+                                    </div>
+
+                                    <div className="relative text-left">
+                                      <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                      <input
+                                        type="number"
+                                        value={paymentAmount2}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          setPaymentAmount2(val);
+                                          const valNum = Number(val) || 0;
+                                          setPaymentAmount(Math.max(0, totalDebt - valNum).toString());
+                                        }}
+                                        placeholder="Monto 2"
+                                        className="w-full bg-white border border-zinc-200/80 rounded-xl p-2.5 pl-7 text-[14px] font-semibold transition-all outline-none focus:border-zinc-400 text-zinc-900"
+                                      />
+                                    </div>
+
+                                    {paymentMode2 && (
+                                      <div className="space-y-1 text-left">
+                                        <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
+                                          Sobre Pago #2
+                                        </label>
+                                        <select
+                                          value={selectedAccountId2}
+                                          onChange={e => setSelectedAccountId2(e.target.value)}
+                                          required
+                                          className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                        >
+                                          <option value="" disabled>Seleccionar...</option>
+                                          {accounts
+                                            .filter(acc => {
+                                              const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                              if (isUSD) {
+                                                const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                if (!isUSDAcc) return false;
+                                                const name = acc.name.trim().toUpperCase();
+                                                if (paymentMode2 === 'efectivo') {
+                                                  return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                                }
+                                                return !name.includes('EFE') && !name.includes('CASH');
+                                              } else {
+                                                const name = acc.name.trim().toUpperCase();
+                                                if (paymentMode2 === 'efectivo') return name === 'EFECTIVO';
+                                                if (paymentMode2 === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                if (paymentMode2 === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                return false;
+                                              }
+                                            })
+                                            .map(acc => (
+                                              <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                            ))}
+                                        </select>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="flex gap-2">
+                                    {[
+                                      { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                      { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                      { id: 'transferencia', label: 'Transferencia', icon: Send }
+                                    ].map(m => (
+                                      <button
+                                        key={m.id}
+                                        onClick={() => setPaymentMode(m.id as any)}
+                                        className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                          paymentMode === m.id
+                                            ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                            : 'border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100'
+                                        }`}
+                                      >
+                                        <m.icon size={15} />
+                                        <span className="text-[11px] font-bold">{m.label}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  {paymentMode && (
+                                    <div className="space-y-2.5 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
+                                      <div className="flex justify-between items-center">
+                                        <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider">
+                                          {selectedReserva.id === 'walkin' ? 'Pago Actual (Anticipo)' : 'Monto a cobrar'}
+                                        </span>
+                                      </div>
+                                      <div className="relative text-left">
+                                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                        <input
+                                          type="number"
+                                          value={paymentAmount}
+                                          onChange={e => {
+                                            if (selectedReserva.id !== 'walkin') {
+                                              setPaymentAmount(e.target.value);
+                                            }
+                                          }}
+                                          readOnly={selectedReserva.id === 'walkin'}
+                                          placeholder="0.00"
+                                          className={`w-full border rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none ${
+                                            selectedReserva.id === 'walkin'
+                                              ? 'bg-zinc-100 border-zinc-200/80 text-zinc-500 cursor-not-allowed'
+                                              : 'bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm'
+                                          }`}
+                                        />
+                                      </div>
+
+                                      {/* Selector de cuenta/sobre */}
+                                      <div className="space-y-1.5 pt-1 text-left">
+                                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                          ¿A qué sobre va el dinero?
+                                        </label>
+                                        <select
+                                          value={selectedAccountId}
+                                          onChange={e => setSelectedAccountId(e.target.value)}
+                                          required
+                                          className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+                                        >
+                                          <option value="" disabled>Selecciona un sobre...</option>
+                                          {accounts
+                                            .filter(acc => {
+                                              const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                              if (isUSD) {
+                                                const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                if (!isUSDAcc) return false;
+
+                                                const name = acc.name.trim().toUpperCase();
+                                                if (paymentMode === 'efectivo') {
+                                                  return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                                }
+                                                return !name.includes('EFE') && !name.includes('CASH');
+                                              } else {
+                                                const name = acc.name.trim().toUpperCase();
+                                                if (paymentMode === 'efectivo') {
+                                                  return name === 'EFECTIVO';
+                                                }
+                                                if (paymentMode === 'tarjeta') {
+                                                  return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                }
+                                                if (paymentMode === 'transferencia') {
+                                                  return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                }
+                                                return false;
+                                              }
+                                            })
+                                            .map(acc => (
+                                              <option key={acc.id} value={acc.id}>
+                                                {acc.name}
+                                              </option>
+                                            ))}
+                                        </select>
+                                      </div>
+
+                                      {/* Descripción opcional */}
+                                      <div className="space-y-1.5 pt-1 text-left">
+                                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                          Descripción (opcional)
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={paymentDescription}
+                                          onChange={e => setPaymentDescription(e.target.value)}
+                                          placeholder="Ej. S07 -EP, referencia de transferencia..."
+                                          className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                                        />
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
                       </>
                     )}
                   </div>
@@ -5830,16 +6391,6 @@ export default function RecepcionPage() {
                       ) return true;
                     }
 
-                    if (payGroupConsolidated) {
-                      if (directGroupTotalBalance > 0) {
-                        const currentPayment = Number(paymentAmount || 0);
-                        if (!paymentMode) return true;
-                        if (!selectedAccountId) return true;
-                        if (currentPayment < directGroupTotalBalance) return true;
-                      }
-                      return false;
-                    }
-
                     const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
                     if (isOta) return false;
 
@@ -5849,6 +6400,26 @@ export default function RecepcionPage() {
                       : (selectedReserva.balance !== undefined
                           ? selectedReserva.balance
                           : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
+
+                    if (isSplitPayment) {
+                      const totalPaid = (Number(paymentAmount) || 0) + (Number(paymentAmount2) || 0);
+                      const targetBalance = payGroupConsolidated ? directGroupTotalBalance : pendingBalance;
+
+                      if (!paymentMode || !selectedAccountId) return true;
+                      if (!paymentMode2 || !selectedAccountId2) return true;
+                      if (targetBalance > 0 && totalPaid < targetBalance) return true;
+                      return false;
+                    }
+
+                    if (payGroupConsolidated) {
+                      if (directGroupTotalBalance > 0) {
+                        const currentPayment = Number(paymentAmount || 0);
+                        if (!paymentMode) return true;
+                        if (!selectedAccountId) return true;
+                        if (currentPayment < directGroupTotalBalance) return true;
+                      }
+                      return false;
+                    }
 
                     if (pendingBalance > 0) {
                       const currentPayment = Number(paymentAmount || 0);
