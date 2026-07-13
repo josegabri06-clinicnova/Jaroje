@@ -22,12 +22,22 @@ export async function GET(req: Request) {
     }
     const { data: convs, error: convErr } = await convQuery;
 
+    // Query webhook-debug from employee_logs
+    const { data: debugLogs, error: debugErr } = await supabase
+      .from('employee_logs')
+      .select('*')
+      .eq('employee_num', 'webhook-debug')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
     return NextResponse.json({
       success: true,
       logs,
       logError: logErr?.message,
       conversations: convs,
-      convError: convErr?.message
+      convError: convErr?.message,
+      webhookDebugLogs: debugLogs,
+      webhookDebugError: debugErr?.message
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message });

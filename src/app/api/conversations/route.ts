@@ -63,6 +63,22 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
+    
+    // Log de auditoría temporal para capturar TODOS los webhooks que recibe el bot
+    try {
+      const dbPhone = body.guest_phone || (body.action === 'start_new_chat' ? body.guestPhone : 'desconocido');
+      await supabase.from('employee_logs').insert([{
+        employee_num: 'webhook-debug',
+        employee_name: String(dbPhone).slice(0, 50),
+        department: 'recepcion',
+        module: 'recepcion',
+        action: 'webhook_received',
+        details: JSON.stringify(body).slice(0, 800),
+        created_at: new Date().toISOString()
+      }]);
+    } catch (dbLogErr) {
+      console.error("[Conversations Debug] Error escribiendo debug log en employee_logs:", dbLogErr);
+    }
     // ── MODO: Iniciar nuevo chat con plantilla ──────────────────────────────────
     if (body.action === 'start_new_chat') {
       const { guestName, guestPhone } = body;
