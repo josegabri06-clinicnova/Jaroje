@@ -3054,21 +3054,6 @@ export default function CalendarPage() {
                               </div>
                             );
                           })()}
-                                {/* Descripción opcional */}
-                                <div className="space-y-1.5 pt-1 text-left">
-                                  <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                                    Descripción (opcional)
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={paymentDescription}
-                                    onChange={e => setPaymentDescription(e.target.value)}
-                                    placeholder="Ej. S07 -EP, referencia de transferencia..."
-                                    className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                                  />
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </>
                       )}
