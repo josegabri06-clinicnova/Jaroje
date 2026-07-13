@@ -348,66 +348,94 @@ export async function POST(req: Request) {
 
       if (!bookingId) {
         try {
-          const { getBeds24Bookings } = await import('@/lib/beds24');
-          const [mappedBookings, localRes] = await Promise.all([
-            getBeds24Bookings().catch(() => []),
-            supabase.from('local_reservas').select('*').neq('status', 'cancelled')
-          ]);
+          // 1. Intentar obtener la última reserva notificada a este teléfono en whatsapp_logs
+          const { data: lastLog } = await supabase
+            .from('whatsapp_logs')
+            .select('reservation_id')
+            .eq('phone', phone)
+            .order('sent_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-          const localBookings = localRes.data || [];
-          const allBookings = [
-            ...mappedBookings,
-            ...localBookings.map((b: any) => ({
-              id: b.id,
-              phone: b.phone || '',
-              guest_phone: b.phone || '',
-              mobile: b.phone || '',
-              status: b.status || 'confirmed',
-              check_in: b.check_in || b.arrival,
-              guest_name: b.guest_name || ''
-            }))
-          ];
-
-          const matchingBookings = allBookings.filter((b: any) => {
-            if (b.status === 'cancelled') return false;
-            const bPhone = b.phone || b.mobile || b.guest_phone || '';
-            return phonesMatch(bPhone, phone);
-          });
-
-          if (matchingBookings.length > 0) {
-            const todayTime = new Date().setHours(0,0,0,0);
-            matchingBookings.sort((a: any, b: any) => {
-              const aIn = new Date(a.check_in || a.arrival || 0).getTime();
-              const aOut = new Date(a.check_out || a.departure || 0).getTime();
-              const bIn = new Date(b.check_in || b.arrival || 0).getTime();
-              const bOut = new Date(b.check_out || b.departure || 0).getTime();
-
-              const aIsCurrent = aIn <= todayTime && aOut >= todayTime;
-              const bIsCurrent = bIn <= todayTime && bOut >= todayTime;
-
-              if (aIsCurrent && !bIsCurrent) return -1;
-              if (!aIsCurrent && bIsCurrent) return 1;
-
-              // Si ambos son actuales o ninguno lo es, priorizar futuros
-              const aIsFuture = aIn > todayTime;
-              const bIsFuture = bIn > todayTime;
-
-              if (aIsFuture && !bIsFuture) return -1;
-              if (!aIsFuture && bIsFuture) return 1;
-
-              if (aIsFuture && bIsFuture) {
-                return aIn - bIn; // El futuro más cercano primero (ascendente)
-              }
-
-              // Ambos son pasados
-              return bOut - aOut; // El pasado más reciente primero (descendente)
-            });
-            
-            bookingId = String(matchingBookings[0].id);
-            guestNameFromSearch = matchingBookings[0].guest_name || '';
+          if (lastLog && lastLog.reservation_id) {
+            bookingId = lastLog.reservation_id;
+            console.log(`[Conversations WA] Usando fallback de whatsapp_logs para teléfono ${phone}: ID ${bookingId}`);
           }
-        } catch (err) {
-          console.error("Error buscando reserva por teléfono:", err);
+        } catch (logErr) {
+          console.error("[Conversations WA] Error al buscar fallback en whatsapp_logs:", logErr);
+        }
+
+        // 2. Si no se encontró en logs (o falló), buscar en las reservas por número de teléfono
+        if (!bookingId) {
+          try {
+            const { getBeds24Bookings } = await import('@/lib/beds24');
+            const [mappedBookings, localRes] = await Promise.all([
+              getBeds24Bookings().catch(() => []),
+              supabase.from('local_reservas').select('*')
+            ]);
+
+            const localBookings = localRes.data || [];
+            const allBookings = [
+              ...mappedBookings,
+              ...localBookings.map((b: any) => ({
+                id: b.id,
+                phone: b.phone || '',
+                guest_phone: b.phone || '',
+                mobile: b.phone || '',
+                status: b.status || 'confirmed',
+                check_in: b.check_in || b.arrival,
+                check_out: b.check_out || b.departure || '',
+                guest_name: b.guest_name || ''
+              }))
+            ];
+
+            const matchingBookings = allBookings.filter((b: any) => {
+              const bPhone = b.phone || b.mobile || b.guest_phone || '';
+              return phonesMatch(bPhone, phone);
+            });
+
+            if (matchingBookings.length > 0) {
+              const todayTime = new Date().setHours(0,0,0,0);
+              matchingBookings.sort((a: any, b: any) => {
+                const aCancelled = a.status === 'cancelled' || String(a.status) === '0';
+                const bCancelled = b.status === 'cancelled' || String(b.status) === '0';
+
+                // Priorizar no canceladas sobre canceladas
+                if (!aCancelled && bCancelled) return -1;
+                if (aCancelled && !bCancelled) return 1;
+
+                const aIn = new Date(a.check_in || a.arrival || 0).getTime();
+                const aOut = new Date(a.check_out || a.departure || 0).getTime();
+                const bIn = new Date(b.check_in || b.arrival || 0).getTime();
+                const bOut = new Date(b.check_out || b.departure || 0).getTime();
+
+                const aIsCurrent = aIn <= todayTime && aOut >= todayTime;
+                const bIsCurrent = bIn <= todayTime && bOut >= todayTime;
+
+                if (aIsCurrent && !bIsCurrent) return -1;
+                if (!aIsCurrent && bIsCurrent) return 1;
+
+                // Si ambos son actuales o ninguno lo es, priorizar futuros
+                const aIsFuture = aIn > todayTime;
+                const bIsFuture = bIn > todayTime;
+
+                if (aIsFuture && !bIsFuture) return -1;
+                if (!aIsFuture && bIsFuture) return 1;
+
+                if (aIsFuture && bIsFuture) {
+                  return aIn - bIn; // El futuro más cercano primero (ascendente)
+                }
+
+                // Ambos son pasados o ambos son cancelados
+                return bOut - aOut; // El más reciente primero (descendente)
+              });
+              
+              bookingId = String(matchingBookings[0].id);
+              guestNameFromSearch = matchingBookings[0].guest_name || '';
+            }
+          } catch (err) {
+            console.error("Error buscando reserva por teléfono:", err);
+          }
         }
       }
 
