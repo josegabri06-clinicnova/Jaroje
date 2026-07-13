@@ -345,7 +345,8 @@ export async function POST(req: Request) {
               guest_phone: b.phone || '',
               mobile: b.phone || '',
               status: b.status || 'confirmed',
-              check_in: b.check_in || b.arrival
+              check_in: b.check_in || b.arrival,
+              guest_name: b.guest_name || ''
             }))
           ];
 
@@ -370,9 +371,32 @@ export async function POST(req: Request) {
       }
 
       if (bookingId) {
+        // Si ya tenemos el bookingId (del payload del botón) pero no el nombre del huésped, buscarlo para personalizar
+        if (!guestNameFromSearch) {
+          try {
+            const { data: localB } = await supabase
+              .from('local_reservas')
+              .select('guest_name')
+              .eq('id', bookingId)
+              .maybeSingle();
+
+            if (localB && localB.guest_name) {
+              guestNameFromSearch = localB.guest_name;
+            } else {
+              const { getBeds24Bookings } = await import('@/lib/beds24');
+              const bookings = await getBeds24Bookings().catch(() => []);
+              const found = bookings.find((b: any) => String(b.id) === String(bookingId));
+              if (found && found.guest_name) {
+                guestNameFromSearch = found.guest_name;
+              }
+            }
+          } catch (err) {
+            console.error("Error buscando nombre de huésped por bookingId:", err);
+          }
+        }
+
         const isEnglish = guestMsgClean.includes('view my reservation') || guestMsgClean.includes('view_booking_');
         const lang = isEnglish ? 'en' : 'es';
-        // Buscar el nombre del huésped en el listado ya disponible para pasarlo al template
         const guestNameForTemplate = guestNameFromSearch;
         
         // Enviar el nuevo template con botón CTA URL (en lugar de texto con link feo)

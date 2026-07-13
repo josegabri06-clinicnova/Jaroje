@@ -147,7 +147,7 @@ export async function sendWhatsAppTemplate(
       }
     };
 
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -156,8 +156,44 @@ export async function sendWhatsAppTemplate(
       body: JSON.stringify(payload)
     });
 
-    const status = response.status;
-    const resBody = await response.json();
+    let status = response.status;
+    let resBody = await response.json();
+
+    // Auto-retry with alternative Spanish code if language is 'es_MX' or 'es' and it fails
+    if (status !== 200 && (languageCode === 'es_MX' || languageCode === 'es')) {
+      const altLang = languageCode === 'es_MX' ? 'es' : 'es_MX';
+      console.warn(`Meta API failed with ${status} for template ${templateName} (lang: ${languageCode}). Retrying with alternative Spanish: ${altLang}...`);
+      
+      const retryPayload = {
+        ...payload,
+        template: {
+          ...payload.template,
+          language: { code: altLang }
+        }
+      };
+
+      try {
+        const retryRes = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(retryPayload)
+        });
+
+        if (retryRes.ok) {
+          response = retryRes;
+          status = retryRes.status;
+          resBody = await retryRes.json();
+          console.log(`✅ Success retrying template ${templateName} with language: ${altLang}`);
+        } else {
+          console.warn(`Retry failed with alternative Spanish ${altLang}:`, await retryRes.clone().json());
+        }
+      } catch (retryErr) {
+        console.error(`Error during language retry for template ${templateName}:`, retryErr);
+      }
+    }
 
     if (status !== 200) {
       console.error(`Meta API error template ${templateName}:`, resBody);
@@ -506,7 +542,7 @@ export async function sendTemplate_PortalHuespedLink(
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const templateName = lang === 'en' ? 'portal_huesped_link_en' : 'portal_huesped_link';
-  const firstName = guestName ? guestName.split(' ')[0] : 'Huésped';
+  const firstName = (guestName || '').trim() ? (guestName || '').trim().split(' ')[0] : 'Huésped';
 
   // Parámetro body: {{1}} = nombre del huésped
   const bodyParams = [firstName];
