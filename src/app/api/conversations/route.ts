@@ -313,15 +313,33 @@ export async function POST(req: Request) {
       guestMsgClean.includes('ver mi reservación') || 
       guestMsgClean.includes('view my reservation') || 
       guestMsgClean.includes('view_booking_') || 
-      (body.button_payload && String(body.button_payload).toLowerCase().includes('view_booking_'))
+      (() => {
+        const rawPayload = String(
+          body.button_payload || 
+          (body.button && body.button.payload) || 
+          body.payload || 
+          body.buttonPayload || 
+          ''
+        ).toLowerCase();
+        return rawPayload.includes('view_booking_');
+      })()
     ) {
       forceHuman = true;
       isAutoReplyTriggered = true;
 
       let bookingId = '';
       let guestNameFromSearch = ''; // Nombre del huésped encontrado por teléfono
+      
+      const rawPayload = String(
+        body.button_payload || 
+        (body.button && body.button.payload) || 
+        body.payload || 
+        body.buttonPayload || 
+        ''
+      ).toLowerCase();
+
       const payloadMatch = guestMsgClean.match(/view_booking_(\d+)/) || 
-                           String(body.button_payload || '').toLowerCase().match(/view_booking_(\d+)/) ||
+                           rawPayload.match(/view_booking_(\d+)/) ||
                            String(body.message_from_guest || '').toLowerCase().match(/view_booking_(\d+)/);
       
       if (payloadMatch) {
@@ -357,11 +375,34 @@ export async function POST(req: Request) {
           });
 
           if (matchingBookings.length > 0) {
+            const todayTime = new Date().setHours(0,0,0,0);
             matchingBookings.sort((a: any, b: any) => {
-              const dateA = new Date(a.check_in || a.arrival || 0).getTime();
-              const dateB = new Date(b.check_in || b.arrival || 0).getTime();
-              return dateB - dateA;
+              const aIn = new Date(a.check_in || a.arrival || 0).getTime();
+              const aOut = new Date(a.check_out || a.departure || 0).getTime();
+              const bIn = new Date(b.check_in || b.arrival || 0).getTime();
+              const bOut = new Date(b.check_out || b.departure || 0).getTime();
+
+              const aIsCurrent = aIn <= todayTime && aOut >= todayTime;
+              const bIsCurrent = bIn <= todayTime && bOut >= todayTime;
+
+              if (aIsCurrent && !bIsCurrent) return -1;
+              if (!aIsCurrent && bIsCurrent) return 1;
+
+              // Si ambos son actuales o ninguno lo es, priorizar futuros
+              const aIsFuture = aIn > todayTime;
+              const bIsFuture = bIn > todayTime;
+
+              if (aIsFuture && !bIsFuture) return -1;
+              if (!aIsFuture && bIsFuture) return 1;
+
+              if (aIsFuture && bIsFuture) {
+                return aIn - bIn; // El futuro más cercano primero (ascendente)
+              }
+
+              // Ambos son pasados
+              return bOut - aOut; // El pasado más reciente primero (descendente)
             });
+            
             bookingId = String(matchingBookings[0].id);
             guestNameFromSearch = matchingBookings[0].guest_name || '';
           }
