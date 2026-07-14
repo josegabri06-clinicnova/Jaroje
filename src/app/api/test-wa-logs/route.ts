@@ -82,6 +82,28 @@ export async function GET(req: Request) {
       .select('*')
       .or('guest_name.ilike.%rolando%,guest_name.ilike.%jose%');
 
+    // Query Beds24 raw booking for diagnostics if test_booking_id is provided
+    const testBookingId = searchParams.get('test_booking_id') || '';
+    let b24BookingRaw = null;
+    let b24BookingError = null;
+    if (testBookingId) {
+      try {
+        const { getBeds24Token } = await import('@/lib/beds24');
+        const token = await getBeds24Token();
+        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${testBookingId}&includeInvoice=true`, {
+          headers: { 'token': token },
+          cache: 'no-store'
+        });
+        if (b24Res.ok) {
+          b24BookingRaw = await b24Res.json();
+        } else {
+          b24BookingError = `Beds24 API returned status ${b24Res.status}`;
+        }
+      } catch (err: any) {
+        b24BookingError = err.message;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       logs,
@@ -91,7 +113,9 @@ export async function GET(req: Request) {
       webhookDebugLogs: debugLogs,
       webhookDebugError: debugErr?.message,
       localReservasTest: testLocalRes,
-      localReservasError: localErr?.message
+      localReservasError: localErr?.message,
+      beds24BookingRaw: b24BookingRaw,
+      beds24BookingError: b24BookingError
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message });
