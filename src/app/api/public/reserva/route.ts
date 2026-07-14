@@ -15,6 +15,9 @@ export async function GET(req: Request) {
     }
 
     const bookingId = Number(id);
+    if (isNaN(bookingId) || !Number.isInteger(bookingId) || id.includes('{{')) {
+      return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
+    }
 
     // 1. Buscar en local_reservas de Supabase
     const { data: localRes } = await supabase

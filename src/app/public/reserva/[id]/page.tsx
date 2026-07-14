@@ -688,7 +688,8 @@ function getCapacityRulesForSingle(roomNameOrId: string) {
 
 export default function PublicReservaPage() {
   const params = useParams();
-  const id = params?.id;
+  const rawId = params?.id;
+  const id = rawId ? String(rawId).replace(/^(\{\{1\}\}|%7B%7B1%7D%7D)/, '') : '';
   const searchParams = useSearchParams();
   const queryLang = searchParams?.get('lang');
 
