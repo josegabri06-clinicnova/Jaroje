@@ -390,7 +390,7 @@ export async function POST(req: Request) {
           try {
             const { getBeds24Bookings } = await import('@/lib/beds24');
             const [mappedBookings, localRes] = await Promise.all([
-              getBeds24Bookings().catch(() => []),
+              getBeds24Bookings(true, true).catch(() => []),
               supabase.from('local_reservas').select('*')
             ]);
 

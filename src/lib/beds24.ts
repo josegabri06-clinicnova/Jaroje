@@ -846,7 +846,7 @@ export function extractOtaDetails(invoiceItems: any[]): OtaDetails {
 }
 
 // Obtener y mapear reservas activas (Backend Server-Side)
-export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
+export async function getBeds24Bookings(fast: boolean = false, includeCancelled: boolean = false): Promise<any[]> {
   const today = new Date();
   const fromDate = new Date(today);
   fromDate.setDate(today.getDate() - 180);
@@ -954,7 +954,7 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
 
   return bookingsArray
     .filter((b: any) => {
-      if (String(b.status) === '0' || b.status === 'cancelled') return false;
+      if (!includeCancelled && (String(b.status) === '0' || b.status === 'cancelled')) return false;
       const rId = String(b.roomId || '').trim();
       // Excluir habitaciones locales 500-507 que Beds24 no gestiona
       if (rId === LOCAL_ROOM_ID) return false;
@@ -1030,7 +1030,7 @@ export async function getBeds24Bookings(fast: boolean = false): Promise<any[]> {
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
         guest_phone: b.phone || b.mobile || b.guestPhone || b.guestMobile || null,
         guest_email: b.email || null,
-        status: b.status === 'black' ? 'black' : (b.status === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending',
+        status: (b.status === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (b.status === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending'),
         source: 'beds24',
         channel: channel,
         room_name: displayRoomName,
