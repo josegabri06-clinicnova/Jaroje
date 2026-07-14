@@ -41,15 +41,10 @@ function cleanPhoneForCompare(phoneStr: string): string {
 }
 
 function phonesMatch(phoneA: string, phoneB: string): boolean {
-  const cleanA = cleanPhoneForCompare(phoneA);
-  const cleanB = cleanPhoneForCompare(phoneB);
-  if (!cleanA || !cleanB) return false;
-  if (cleanA === cleanB) return true;
-
-  const minLength = 9;
-  const suffixA = cleanA.substring(Math.max(0, cleanA.length - minLength));
-  const suffixB = cleanB.substring(Math.max(0, cleanB.length - minLength));
-  return suffixA === suffixB;
+  const normA = normalizePhone(phoneA);
+  const normB = normalizePhone(phoneB);
+  if (!normA || !normB) return false;
+  return normA === normB;
 }
 
 
@@ -372,18 +367,19 @@ export async function POST(req: Request) {
 
       if (!bookingId) {
         try {
-          // 1. Intentar obtener la última reserva notificada a este teléfono en whatsapp_logs
+          // 1. Intentar obtener la última reserva notificada a este teléfono en whatsapp_logs (usando coincidencia flexible por sufijo)
+          const rawSuffix = phone.length > 9 ? phone.substring(phone.length - 9) : phone;
           const { data: lastLog } = await supabase
             .from('whatsapp_logs')
             .select('reservation_id')
-            .eq('phone', phone)
+            .or(`phone.eq.${phone},phone.eq.${rawSuffix},phone.like.%${rawSuffix}`)
             .order('sent_at', { ascending: false })
             .limit(1)
             .maybeSingle();
 
           if (lastLog && lastLog.reservation_id) {
             bookingId = lastLog.reservation_id;
-            console.log(`[Conversations WA] Usando fallback de whatsapp_logs para teléfono ${phone}: ID ${bookingId}`);
+            console.log(`[Conversations WA] Usando fallback de whatsapp_logs para teléfono ${phone} (sufijo ${rawSuffix}): ID ${bookingId}`);
           }
         } catch (logErr) {
           console.error("[Conversations WA] Error al buscar fallback en whatsapp_logs:", logErr);
