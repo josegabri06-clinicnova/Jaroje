@@ -76,6 +76,12 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: false })
       .limit(20);
 
+    // Query local_reservas for test names to see if they are in the database
+    const { data: testLocalRes, error: localErr } = await supabase
+      .from('local_reservas')
+      .select('*')
+      .or('guest_name.ilike.%rolando%,guest_name.ilike.%jose%');
+
     return NextResponse.json({
       success: true,
       logs,
@@ -83,7 +89,9 @@ export async function GET(req: Request) {
       conversations: convs,
       convError: convErr?.message,
       webhookDebugLogs: debugLogs,
-      webhookDebugError: debugErr?.message
+      webhookDebugError: debugErr?.message,
+      localReservasTest: testLocalRes,
+      localReservasError: localErr?.message
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message });
