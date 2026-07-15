@@ -285,6 +285,22 @@ export async function sendWhatsAppTemplate(
       console.error("[WhatsApp] Error al registrar plantilla en conversations:", convErr);
     }
 
+    // Registrar el envío de plantilla en whatsapp_logs para trazabilidad y búsquedas
+    if (bookingId) {
+      try {
+        await supabase.from('whatsapp_logs').insert([{
+          reservation_id: String(bookingId),
+          template_name: templateName,
+          phone: cleanedPhone,
+          sent_at: new Date().toISOString(),
+          status: 'sent'
+        }]);
+        console.log(`[WhatsApp Logs] ✅ Registrado envío de plantilla ${templateName} para reserva ${bookingId} al teléfono ${cleanedPhone}`);
+      } catch (logErr) {
+        console.error("[WhatsApp Logs] Error al registrar en whatsapp_logs:", logErr);
+      }
+    }
+
     return { success: true, data: resBody };
   } catch (err: any) {
     console.error(`Exception sending WhatsApp template ${templateName}:`, err);
