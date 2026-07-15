@@ -3954,6 +3954,7 @@ export default function RecepcionPage() {
                   <thead>
                     <tr className="border-b border-zinc-100 bg-zinc-50/30">
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Canal</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
@@ -3962,7 +3963,6 @@ export default function RecepcionPage() {
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Total</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Adeudo</th>
-                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
@@ -3991,6 +3991,24 @@ export default function RecepcionPage() {
                             <span className="inline-flex items-center justify-center font-extrabold text-[12px] bg-zinc-900 text-white rounded-lg px-2.5 py-1 min-w-[36px]">
                               {unit}
                             </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {r.checked_in ? (
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
+                                <CheckCircle2 size={12} /> En Casa
+                              </span>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedReserva(r);
+                                  setShowCheckInModal(true);
+                                }}
+                                className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                              >
+                                Check-In
+                              </button>
+                            )}
                           </td>
                           <td className="py-4 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
                             {r.guest_name}
@@ -4049,24 +4067,6 @@ export default function RecepcionPage() {
                               </span>
                             )}
                           </td>
-                          <td className="py-4 px-4 text-center">
-                            {r.checked_in ? (
-                              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100">
-                                <CheckCircle2 size={12} /> En Casa
-                              </span>
-                            ) : (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedReserva(r);
-                                  setShowCheckInModal(true);
-                                }}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
-                              >
-                                Check-In
-                              </button>
-                            )}
-                          </td>
                         </tr>
                       );
                     })}
@@ -4100,15 +4100,15 @@ export default function RecepcionPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse min-w-[850px]">
                   <thead>
-                    <tr className="border-b border-zinc-100 bg-zinc-50/30">
+                  <tr className="border-b border-zinc-100 bg-zinc-50/30">
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Unidad</th>
+                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Huésped</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Teléfono</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Noches</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Total</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-right">Tarifa</th>
                       <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Estado</th>
-                      <th className="py-3.5 px-4 text-[10px] font-bold text-zinc-400 uppercase tracking-wider text-center">Acción</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
@@ -4129,6 +4129,21 @@ export default function RecepcionPage() {
                             <span className="inline-flex items-center justify-center font-extrabold text-[12px] bg-zinc-900 text-white rounded-lg px-2.5 py-1 min-w-[36px]">
                               {unit}
                             </span>
+                          </td>
+                          <td className="py-4 px-4 text-center">
+                            {isPending ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  runWithSignature('checkout', (reserva) => processCheckOut(reserva), r);
+                                }}
+                                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                              >
+                                Dar Salida
+                              </button>
+                            ) : (
+                              <span className="text-[11px] text-zinc-400 font-bold">Listo ✓</span>
+                            )}
                           </td>
                           <td className="py-4 px-4 font-semibold text-zinc-950 text-[13px] max-w-[140px] truncate">
                             {r.guest_name}
@@ -4167,21 +4182,6 @@ export default function RecepcionPage() {
                               <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-100">
                                 <CircleDot size={10} className="animate-pulse" /> Pendiente Out
                               </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-4 text-center">
-                            {isPending ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  runWithSignature('checkout', (reserva) => processCheckOut(reserva), r);
-                                }}
-                                className="bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[11px] py-1.5 px-3 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
-                              >
-                                Dar Salida
-                              </button>
-                            ) : (
-                              <span className="text-[11px] text-zinc-400 font-bold">Listo ✓</span>
                             )}
                           </td>
                         </tr>
