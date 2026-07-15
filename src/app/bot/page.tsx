@@ -91,6 +91,7 @@ export default function BotPage() {
   };
   // Altura del viewport adaptada al teclado en dispositivos móviles
   const [viewportHeight, setViewportHeight] = useState('100vh');
+  const [isMobile, setIsMobile] = useState(false);
 
   const fetchConversations = async () => {
     setIsLoading(true);
@@ -231,7 +232,9 @@ export default function BotPage() {
 
     const updateHeight = () => {
       const vv = window.visualViewport;
-      if (vv && window.innerWidth < 768) {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (vv && mobile) {
         setViewportHeight(`${vv.height}px`);
         window.scrollTo(0, 0); // Prevenir el desplazamiento automático indeseado del layout
       } else {
@@ -511,8 +514,9 @@ export default function BotPage() {
       <div className={`flex-1 flex flex-col h-full bg-[#efeae2] relative ${activeConvId ? 'flex' : 'hidden md:flex'}`}>
         {activeConv ? (
           <div 
-            className="flex flex-col h-full w-full bg-[#efeae2]"
+            className={`${isMobile ? 'fixed top-0 left-0 right-0 z-[100]' : 'relative w-full h-full'} flex flex-col bg-[#efeae2]`}
             style={{ 
+              height: isMobile ? viewportHeight : '100%',
               backgroundImage: 'radial-gradient(#dfdcd6 0.8px, transparent 0.8px), radial-gradient(#dfdcd6 0.8px, #efeae2 0.8px)',
               backgroundSize: '12px 12px',
               backgroundPosition: '0 0, 6px 6px'
