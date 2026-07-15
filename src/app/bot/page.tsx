@@ -89,8 +89,8 @@ export default function BotPage() {
       setIsStartingChat(false);
     }
   };
-  // Offset del teclado virtual (visualViewport API — funciona en iOS Safari y Android)
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  // Altura del viewport adaptada al teclado en dispositivos móviles
+  const [viewportHeight, setViewportHeight] = useState('100vh');
 
   const fetchConversations = async () => {
     setIsLoading(true);
@@ -225,20 +225,30 @@ export default function BotPage() {
   };
 
 
-  // visualViewport: detecta el teclado en iOS Safari y Android
+  // visualViewport: adapta el tamaño del contenedor en dispositivos móviles cuando el teclado se abre
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.visualViewport) return;
-    const vv = window.visualViewport!;
-    const update = () => {
-      // Espacio que el teclado ocupa = altura total - altura visible del viewport
-      const offset = window.innerHeight - vv.height - vv.offsetTop;
-      setKeyboardOffset(Math.max(0, offset));
+    if (typeof window === 'undefined') return;
+
+    const updateHeight = () => {
+      const vv = window.visualViewport;
+      if (vv && window.innerWidth < 768) {
+        setViewportHeight(`${vv.height}px`);
+        window.scrollTo(0, 0); // Prevenir el desplazamiento automático indeseado del layout
+      } else {
+        setViewportHeight('100vh');
+      }
     };
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
+
+    updateHeight();
+
+    window.visualViewport?.addEventListener('resize', updateHeight);
+    window.visualViewport?.addEventListener('scroll', updateHeight);
+    window.addEventListener('resize', updateHeight);
+
     return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
+      window.visualViewport?.removeEventListener('resize', updateHeight);
+      window.visualViewport?.removeEventListener('scroll', updateHeight);
+      window.removeEventListener('resize', updateHeight);
     };
   }, []);
 
@@ -327,7 +337,10 @@ export default function BotPage() {
   }
 
   return (
-    <div className="flex h-screen w-full bg-[#f0f2f5] overflow-hidden">
+    <div 
+      className="flex w-full bg-[#f0f2f5] overflow-hidden"
+      style={{ height: viewportHeight }}
+    >
       {/* Columna Izquierda: Lista de Conversaciones */}
       <div className={`w-full md:w-[350px] lg:w-[400px] border-r border-zinc-200 bg-white flex flex-col h-full shrink-0 ${activeConvId ? 'hidden md:flex' : 'flex'}`}>
         <div className="flex-1 flex flex-col h-full overflow-y-auto px-5 pt-5 pb-24 space-y-5">
@@ -498,9 +511,8 @@ export default function BotPage() {
       <div className={`flex-1 flex flex-col h-full bg-[#efeae2] relative ${activeConvId ? 'flex' : 'hidden md:flex'}`}>
         {activeConv ? (
           <div 
-            className="absolute inset-0 flex flex-col h-full w-full bg-[#efeae2] z-[100] md:z-0"
+            className="flex flex-col h-full w-full bg-[#efeae2]"
             style={{ 
-              paddingBottom: keyboardOffset,
               backgroundImage: 'radial-gradient(#dfdcd6 0.8px, transparent 0.8px), radial-gradient(#dfdcd6 0.8px, #efeae2 0.8px)',
               backgroundSize: '12px 12px',
               backgroundPosition: '0 0, 6px 6px'
