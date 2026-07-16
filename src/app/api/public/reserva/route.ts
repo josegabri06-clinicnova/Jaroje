@@ -108,6 +108,7 @@ export async function GET(req: Request) {
           is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
           status: localRes.status || 'confirmed',
           booking_time: localRes.created_at || null,
+          channel: 'Directo',
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment ?? true,
             transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
@@ -299,6 +300,7 @@ export async function GET(req: Request) {
             is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
             status: booking.status || 'confirmed',
             booking_time: booking.booking_time || null,
+            channel: booking.channel || 'Directo',
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment ?? true,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),

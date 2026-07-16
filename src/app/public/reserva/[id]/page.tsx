@@ -22,7 +22,8 @@ import {
   X,
   Home,
   Info,
-  MessageSquare
+  MessageSquare,
+  Edit
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -713,6 +714,7 @@ export default function PublicReservaPage() {
 
   // Estados para Modal de Edición de Huéspedes
   const [showEditGuestsModal, setShowEditGuestsModal] = useState(false);
+  const [showOtaWarningModal, setShowOtaWarningModal] = useState(false);
   const [tempAdults, setTempAdults] = useState(1);
   const [tempChildren, setTempChildren] = useState(0);
   const [isUpdatingGuests, setIsUpdatingGuests] = useState(false);
@@ -926,7 +928,7 @@ export default function PublicReservaPage() {
     statusMessage = lang === 'en'
       ? 'This reservation has been cancelled and the room availability has been released.'
       : 'Esta reservación ha sido cancelada y la disponibilidad de la habitación ha sido liberada.';
-  } else if (isCheckedOut || (checkInDate && today > new Date(booking.check_out))) {
+  } else if (isCheckedOut || (isCheckedIn && checkInDate && today > new Date(booking.check_out))) {
     currentState = 'finalizada';
     statusMessage = lang === 'en'
       ? 'Thank you for staying with us! We hope to see you again soon in Huatulco. Have a safe trip back!'
@@ -1124,7 +1126,14 @@ export default function PublicReservaPage() {
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
               <span className="text-zinc-500 font-semibold block">{t.bookingId}</span>
-              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{booking.id}</strong>
+              <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5 flex items-center gap-1.5 flex-wrap">
+                <span>{booking.id}</span>
+                {booking.channel && (
+                  <span className="text-[9px] bg-zinc-200/80 text-zinc-600 font-extrabold px-1.5 py-0.5 rounded-md border border-zinc-300/35 uppercase tracking-wide">
+                    {booking.channel}
+                  </span>
+                )}
+              </strong>
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100 col-span-2">
               <span className="text-zinc-500 font-semibold block">{t.accommodation}</span>
@@ -1189,18 +1198,23 @@ export default function PublicReservaPage() {
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100 flex flex-col justify-between">
               <span className="text-zinc-500 font-semibold block">{lang === 'en' ? 'Registered Guests' : 'Huéspedes registrados'}</span>
-              <div className="flex items-center justify-between mt-0.5">
+              <div className="flex items-center justify-between mt-1">
                 <strong className="text-zinc-900 font-bold text-[13px]">{t.guests(booking.num_adult + booking.num_child)}</strong>
                 {booking.status !== 'cancelled' && (
                   <button
                     onClick={() => {
-                      setTempAdults(booking.num_adult || 1);
-                      setTempChildren(booking.num_child || 0);
-                      setUpdateGuestsError('');
-                      setShowEditGuestsModal(true);
+                      if (isOta) {
+                        setShowOtaWarningModal(true);
+                      } else {
+                        setTempAdults(booking.num_adult || 1);
+                        setTempChildren(booking.num_child || 0);
+                        setUpdateGuestsError('');
+                        setShowEditGuestsModal(true);
+                      }
                     }}
-                    className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer"
+                    className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-1 rounded-lg border border-indigo-200/50 transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1 uppercase tracking-wider"
                   >
+                    <Edit size={10} strokeWidth={2.5} className="shrink-0" />
                     {t.editBtn}
                   </button>
                 )}
@@ -1721,6 +1735,54 @@ export default function PublicReservaPage() {
                   {t.confirmChanges}
                 </button>
               </div>
+            </div>
+        </div>
+      )}
+
+      {/* MODAL ADVERTENCIA PARA OTAs */}
+      {showOtaWarningModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-150 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <h3 className="font-black text-zinc-900 text-base uppercase tracking-wider">
+                {lang === 'en' ? 'Modify Booking' : 'Modificar Reserva'}
+              </h3>
+              <button 
+                onClick={() => setShowOtaWarningModal(false)}
+                className="text-zinc-400 hover:text-zinc-650 p-1.5 rounded-full hover:bg-zinc-100 transition-all cursor-pointer animate-none"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4 text-sm text-zinc-650 leading-relaxed font-medium">
+              <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center mx-auto border border-amber-100 mb-2">
+                <Info size={24} />
+              </div>
+              <p className="text-center text-zinc-800 font-extrabold text-[14px]">
+                {lang === 'en' 
+                  ? `Reservation via ${booking.channel}` 
+                  : `Reservación realizada mediante ${booking.channel}`}
+              </p>
+              <p className="text-center text-xs">
+                {lang === 'en'
+                  ? `Since your booking was made through ${booking.channel}, we are unable to modify the guest details directly from this portal.`
+                  : `Dado que tu reservación se realizó a través de ${booking.channel}, no es posible modificar el número de huéspedes o la distribución desde este portal.`}
+              </p>
+              <p className="text-center text-xs text-zinc-500">
+                {lang === 'en'
+                  ? `Please log in to your ${booking.channel} account to request any modifications. This ensures your rates, policies, and booking details stay correctly updated.`
+                  : `Por favor, ingresa a tu cuenta en la aplicación o página de ${booking.channel} para solicitar el cambio. Esto garantiza que tus tarifas, políticas e información queden actualizados de forma segura.`}
+              </p>
+            </div>
+
+            <div className="mt-6">
+              <button
+                onClick={() => setShowOtaWarningModal(false)}
+                className="w-full py-3.5 bg-zinc-950 hover:bg-black text-white font-bold text-xs rounded-xl uppercase tracking-wider transition-all shadow-md active:scale-98 cursor-pointer"
+              >
+                {lang === 'en' ? 'Close' : 'Cerrar'}
+              </button>
             </div>
           </div>
         </div>
