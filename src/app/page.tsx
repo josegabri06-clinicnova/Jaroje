@@ -388,6 +388,37 @@ export default function AdminDashboard() {
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr).slice(0, 5);
 
   // WhatsApp — semáforo de urgencia
+  const findAllReservationsForContact = (phone: string, name: string) => {
+    const clean = (p: string) => p.replace(/\D/g, '');
+    const pClean = clean(phone || '');
+    
+    const today = new Date().toLocaleDateString('sv-SE');
+    const activeFuture = reservas.filter(r => r.check_out >= today && r.status !== 'cancelled');
+    
+    let matched: any[] = [];
+
+    if (pClean.length >= 10) {
+      const pLast10 = pClean.slice(-10);
+      matched = activeFuture.filter(r => {
+        const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
+        return rPhone.endsWith(pLast10);
+      });
+    }
+
+    if (matched.length === 0 && name) {
+      const cleanName = (n: string) => n.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const gName = cleanName(name);
+      if (gName.length > 2) {
+        matched = activeFuture.filter(r => {
+          const rName = cleanName(r.guest_name || '');
+          return rName.includes(gName) || gName.includes(rName);
+        });
+      }
+    }
+
+    return matched;
+  };
+
   const now = Date.now();
   const chatsConUrgencia = conversations
     .filter(c => !c.resolved)
@@ -578,6 +609,11 @@ export default function AdminDashboard() {
           <div className="space-y-2">
             {chatsConUrgencia.slice(0, 3).map(c => {
               const urgency = getUrgencyColor(c.minutesSince);
+              const convRes = findAllReservationsForContact(c.guest_phone, c.guest_name);
+              const primaryRes = convRes[0] || null;
+              const displayName = primaryRes ? primaryRes.guest_name : c.guest_name;
+              const hasDifferentWaName = primaryRes && c.guest_name && primaryRes.guest_name.toLowerCase() !== c.guest_name.toLowerCase();
+
               return (
                 <div
                   key={c.id}
@@ -587,14 +623,21 @@ export default function AdminDashboard() {
                   <div className="relative shrink-0">
                     <div className="w-9 h-9 rounded-full bg-white border border-zinc-200 flex items-center justify-center">
                       <span className="text-[13px] font-bold text-zinc-700">
-                        {(c.guest_name || '?').charAt(0).toUpperCase()}
+                        {(displayName || '?').charAt(0).toUpperCase()}
                       </span>
                     </div>
                     <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${urgency.dot}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-[14px] font-bold text-zinc-900 truncate">{c.guest_name || c.guest_phone}</p>
+                      <p className="text-[14px] font-bold text-zinc-900 truncate flex items-center gap-1.5">
+                        <span className="truncate">{displayName}</span>
+                        {hasDifferentWaName && (
+                          <span className="text-[11px] text-zinc-400 font-normal truncate max-w-[90px] shrink-0">
+                            ({c.guest_name})
+                          </span>
+                        )}
+                      </p>
                       <span className={`text-[10px] font-bold shrink-0 ml-2 ${urgency.text}`}>
                         {c.minutesSince < 60
                           ? `${Math.round(c.minutesSince)}m`
