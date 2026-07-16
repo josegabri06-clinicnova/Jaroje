@@ -610,7 +610,7 @@ export default function BotPage() {
                         <p className="text-[14px] font-bold text-zinc-900 truncate leading-tight">{activeConv.guest_name}</p>
                         {primaryRes && (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-150 shrink-0">
-                            Hab {getUnitDisplay(primaryRes.room || primaryRes.roomName)}
+                            Hab {getUnitDisplay(primaryRes.room_name)}
                             {activeReservations.length > 1 ? ` (+${activeReservations.length - 1})` : ''}
                           </span>
                         )}
@@ -908,7 +908,7 @@ export default function BotPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Unidad / Habitación</span>
                         <span className="text-[13px] font-black text-zinc-900 bg-white border border-zinc-200 px-2.5 py-0.5 rounded-xl font-mono">
-                          Hab {getUnitDisplay(res.room || res.roomName)}
+                          Hab {getUnitDisplay(res.room_name)}
                         </span>
                       </div>
 
