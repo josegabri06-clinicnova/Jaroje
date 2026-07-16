@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X, Archive, BedDouble, Calendar, ExternalLink, Wallet } from 'lucide-react';
+import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X, Archive, BedDouble, Calendar, ExternalLink, Wallet, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
@@ -41,6 +41,7 @@ export default function BotPage() {
   const [conversations, setConversations]   = useState<Conversation[]>([]);
   const [reservas, setReservas]             = useState<any[]>([]);
   const [showResDetailModal, setShowResDetailModal] = useState(false);
+  const [showGuestPortalIframe, setShowGuestPortalIframe] = useState<string | null>(null);
   const [isLoading, setIsLoading]           = useState(true);
   const [hasRealData, setHasRealData]       = useState(false);
   // Solo guardamos el ID — la conversación activa se DERIVA del estado principal
@@ -984,12 +985,12 @@ export default function BotPage() {
                         <button
                           onClick={() => {
                             setShowResDetailModal(false);
-                            router.push(`/reservas?id=${res.id}`);
+                            setShowGuestPortalIframe(String(res.id));
                           }}
-                          className="w-full py-2.5 bg-zinc-900 hover:bg-black text-white font-bold text-[11px] rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                          className="w-full py-2.5 bg-zinc-900 hover:bg-black text-white font-bold text-[11.5px] rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer font-sans"
                         >
-                          <ExternalLink size={12} />
-                          <span>Detalle completo de esta reserva</span>
+                          <Eye size={12} />
+                          <span>Ver Portal del Huésped (Vista Previa)</span>
                         </button>
                       </div>
                     </div>
@@ -1000,6 +1001,44 @@ export default function BotPage() {
           </div>
         );
       })()}
+
+      {/* MODAL Iframe VISTA PREVIA DEL PORTAL */}
+      {showGuestPortalIframe && (
+        <div 
+          className="fixed inset-0 bg-black/80 backdrop-blur-md z-[300] flex flex-col p-4 md:p-6 animate-in fade-in duration-200"
+          onClick={() => setShowGuestPortalIframe(null)}
+        >
+          <div 
+            className="bg-[#F6F5F2] w-full max-w-lg mx-auto rounded-3xl overflow-hidden flex flex-col flex-1 shadow-2xl border border-zinc-150 animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header de la Vista previa */}
+            <div className="bg-white px-5 py-4 border-b border-zinc-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-[12px] font-black text-zinc-900 uppercase tracking-wider font-sans">
+                  Vista Previa del Portal (Huésped)
+                </span>
+              </div>
+              <button
+                onClick={() => setShowGuestPortalIframe(null)}
+                className="bg-zinc-900 hover:bg-black text-white px-4 py-1.5 rounded-xl text-[11px] font-extrabold transition-all active:scale-95 cursor-pointer uppercase tracking-wider shadow-sm flex items-center gap-1.5"
+              >
+                <X size={12} />
+                <span>Cerrar Vista y Regresar</span>
+              </button>
+            </div>
+            {/* Iframe */}
+            <div className="flex-1 w-full bg-white relative">
+              <iframe
+                src={`/public/reserva/${showGuestPortalIframe}`}
+                className="w-full h-full border-none"
+                title="Vista previa del portal"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
