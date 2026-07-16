@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X, Archive, BedDouble, Calendar, ExternalLink, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -36,6 +37,7 @@ function BubbleWA({ size = 16 }: { size?: number }) {
 }
 
 export default function BotPage() {
+  const router = useRouter();
   const [conversations, setConversations]   = useState<Conversation[]>([]);
   const [reservas, setReservas]             = useState<any[]>([]);
   const [showResDetailModal, setShowResDetailModal] = useState(false);
