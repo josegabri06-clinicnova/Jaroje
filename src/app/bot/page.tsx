@@ -378,7 +378,9 @@ export default function BotPage() {
     if (matched.length === 0 && guestName) {
       const cleanName = (n: string) => n.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const gName = cleanName(guestName);
-      if (gName.length > 2) {
+      const nameWords = gName.split(/\s+/).filter(Boolean);
+      // Evitar emparejar por nombres genéricos de una sola palabra (ej: "Jose", "Laura") para prevenir colisiones masivas
+      if (gName.length > 2 && nameWords.length >= 2) {
         matched = activeFuture.filter(r => {
           const rName = cleanName(r.guest_name || '');
           return rName.includes(gName) || gName.includes(rName);
