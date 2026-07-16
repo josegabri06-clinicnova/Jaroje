@@ -985,7 +985,7 @@ export async function getBeds24Bookings(fast: boolean = false, includeCancelled:
       const roomData = getRoomMetadata(b.roomId, b.roomName);
       let pricePerNight = (b.price !== undefined && b.price !== null && b.price !== '') ? (Number(b.price) / nights) : null;
       const hasInvoiceItems = Array.isArray(b.invoiceItems) && b.invoiceItems.length > 0;
-      if (!isOTA && (pricePerNight === null || (pricePerNight < 1 && !hasInvoiceItems))) {
+      if (!isOTA && pricePerNight === null) {
         pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap, String(b.unitId || ''), dynamicSettings);
       } else if (isOTA && pricePerNight === null) {
         pricePerNight = 0;
