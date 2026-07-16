@@ -211,32 +211,43 @@ export async function sendWhatsAppTemplate(
 
     // Registrar el envío de plantilla en la tabla 'conversations'
     try {
-      let summaryText = `[Plantilla: ${templateName}]`;
-      if (templateName === 'solicitud_recibida') {
-        summaryText = `📥 Solicitud de reservación recibida (Instrucciones de pago enviadas).`;
-      } else if (templateName === 'reservacion_confirmada') {
-        summaryText = `✅ Reservación confirmada. ¡Tu estancia está lista!`;
-      } else if (templateName === 'pago_anticipo_recibido') {
-        summaryText = `💰 Anticipo recibido registrado con éxito.`;
-      } else if (templateName === 'ultimo_aviso') {
-        summaryText = `⏳ Último aviso para confirmar tu reservación.`;
-      } else if (templateName === 'preparacion_llegada') {
-        summaryText = `🔑 Instrucciones de llegada e indicaciones del condominio enviadas.`;
-      } else if (templateName === 'bienvenida_checkin') {
-        summaryText = `👋 ¡Bienvenido! Check-in realizado.`;
-      } else if (templateName === 'seguimiento_satisfaccion') {
-        summaryText = `⭐ Seguimiento de satisfacción y asistencia.`;
-      } else if (templateName === 'salida_checkout') {
-        summaryText = `🚪 Instrucciones de salida y checkout.`;
-      } else if (templateName === 'comparte_experiencia') {
-        summaryText = `💬 Invitación a compartir experiencia y reseña en Google.`;
-      } else if (templateName === 'recibimiento_nuevamente') {
-        summaryText = `🔄 Invitación para recibirte nuevamente en el futuro.`;
-      } else if (templateName === 'portal_huesped_link') {
-        summaryText = `🔗 Enlace al portal del huésped enviado como botón.`;
-      } else if (templateName === 'portal_huesped_link_en') {
-        summaryText = `🔗 Guest portal link sent as button.`;
-      }
+      const getTemplateText = (tName: string, params: string[]) => {
+        const name = params[0] || 'Huésped';
+        switch (tName) {
+          case 'solicitud_recibida':
+            return `¡Hola ${name}!\nHemos recibido tu solicitud de reservación en Condominios Jaroje. Tu habitación está pre-reservada.\n\nPara completar tu reservación, revisar el desglose y realizar tu depósito de garantía, por favor ingresa a tu portal del huésped.\n\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'ultimo_aviso':
+            return `¡Hola ${name}!\nTe recordamos que tienes una solicitud de reservación pendiente. Es necesario completar tu anticipo para garantizar tu estancia y evitar que se libere la habitación.\n\nRevisa todos los detalles y métodos de pago aquí:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'reservacion_confirmada':
+            return `¡Hola ${name}!\nNos complace informarte que tu reservación en Condominios Jaroje está oficialmente *CONFIRMADA*. ¡Tu estancia en Huatulco está lista! 🎉\n\nPuedes consultar el reglamento, la ubicación y todos los detalles en tu portal:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'disponibilidad_liberada':
+            return `Hola ${name}.\nTe informamos que, al no recibir la confirmación de tu anticipo, la disponibilidad de tu habitación ha sido liberada.\n\nSi aún deseas hospedarte con nosotros, puedes consultar disponibilidad en el portal o escribirnos:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Reservación]`;
+          case 'preparacion_llegada':
+            return `¡Hola ${name}!\nYa nos estamos preparando para tu llegada a Condominios Jaroje. En tu portal de huésped encontrarás las instrucciones de llegada, indicaciones para llegar y datos importantes.\n\nPor favor, revísalo aquí:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'bienvenida_checkin':
+            return `¡Hola ${name}!\nTe damos la más cordial bienvenida a Condominios Jaroje. Esperamos que disfrutes al máximo de tu estancia en Huatulco. 🌴☀️\n\nRecuerda que en tu portal puedes consultar la clave de WiFi, el reglamento y solicitar servicios adicionales:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'seguimiento_satisfaccion':
+            return `Hola ${name}.\nEsperamos que estés disfrutando tu estancia. ¿Todo va bien en tu condominio? Si requieres asistencia, toallas extra, reportar algún detalle o tienes alguna sugerencia, no dudes en escribirnos por aquí o revisar tu portal:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'salida_checkout':
+            return `Hola ${name}.\nTe recordamos que hoy es tu día de salida. El horario de checkout es antes de las 11:00 AM.\n\nEsperamos que hayas tenido una estancia increíble. Puedes ver las indicaciones de salida en tu portal:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]`;
+          case 'comparte_experiencia':
+            return `Hola ${name}.\nAgradecemos mucho tu preferencia. Nos ayudaría muchísimo si compartes tu experiencia dejándonos una reseña en Google Maps para seguir mejorando. ¡Buen viaje de regreso! ✈️\n\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]`;
+          case 'recibimiento_nuevamente':
+            return `¡Hola ${name}!\nEsperamos que hayas regresado con bien a casa. Nos encantaría recibirte nuevamente en Condominios Jaroje en tus próximas vacaciones en Huatulco.\n\nConsulta tus beneficios de cliente frecuente aquí:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'pago_anticipo_recibido':
+            const abonado = params[1] || '$0.00';
+            const saldo = params[2] || '$0.00';
+            return `¡Hola ${name}!\nHemos registrado con éxito tu pago por la cantidad de *${abonado} MXN*.\n\nTu saldo pendiente actual es de *${saldo} MXN*.\n\nRevisa tu estado de cuenta actualizado aquí:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'portal_huesped_link':
+            return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅\n\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
+          case 'portal_huesped_link_en':
+            return `Hello ${name}, here is your access to your real-time booking details. From your portal you can view your room status, guidelines, WiFi info, and record additional payments.✅\n\n🔗 *Guest Portal:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Button: View My Booking]`;
+          default:
+            return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
+        }
+      };
+
+      const summaryText = getTemplateText(templateName, parameters).replace('[BOOKID]', String(bookingId || ''));
 
       const newMsg = {
         role_manager: summaryText,
