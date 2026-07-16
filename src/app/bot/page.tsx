@@ -541,13 +541,29 @@ export default function BotPage() {
                       </div>
 
                       {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-0.5">
-                          <p className="text-[13px] font-bold text-zinc-900 truncate leading-tight">{conv.guest_name}</p>
-                          <span className="text-[10px] font-medium text-zinc-400 shrink-0 ml-2">{formatTime(conv.timestamp)}</span>
-                        </div>
-                        <p className="text-[12px] font-semibold text-zinc-400 truncate leading-normal">{preview}</p>
-                      </div>
+                      {(() => {
+                        const convRes = findAllReservationsForContact(conv.guest_phone, conv.guest_name);
+                        const primaryRes = convRes[0] || null;
+                        const displayName = primaryRes ? primaryRes.guest_name : conv.guest_name;
+                        const hasDifferentWaName = primaryRes && conv.guest_name && primaryRes.guest_name.toLowerCase() !== conv.guest_name.toLowerCase();
+
+                        return (
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <p className="text-[13px] font-bold text-zinc-900 truncate leading-tight flex items-center gap-1.5">
+                                <span className="truncate">{displayName}</span>
+                                {hasDifferentWaName && (
+                                  <span className="text-[10px] text-zinc-400 font-normal truncate max-w-[80px] shrink-0">
+                                    ({conv.guest_name})
+                                  </span>
+                                )}
+                              </p>
+                              <span className="text-[10px] font-medium text-zinc-400 shrink-0 ml-2">{formatTime(conv.timestamp)}</span>
+                            </div>
+                            <p className="text-[12px] font-semibold text-zinc-400 truncate leading-normal">{preview}</p>
+                          </div>
+                        );
+                      })()}
 
                       {/* Badges & Acciones */}
                       <div className="flex items-center gap-2 shrink-0">
@@ -597,6 +613,9 @@ export default function BotPage() {
                 {(() => {
                   const activeReservations = findAllReservationsForContact(activeConv.guest_phone, activeConv.guest_name);
                   const primaryRes = activeReservations[0] || null;
+                  const displayName = primaryRes ? primaryRes.guest_name : activeConv.guest_name;
+                  const hasDifferentWaName = primaryRes && activeConv.guest_name && primaryRes.guest_name.toLowerCase() !== activeConv.guest_name.toLowerCase();
+
                   return (
                     <div 
                       className="min-w-0 cursor-pointer hover:bg-zinc-50 rounded-xl px-2 py-1 transition-colors select-none"
@@ -607,7 +626,14 @@ export default function BotPage() {
                       }}
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <p className="text-[14px] font-bold text-zinc-900 truncate leading-tight">{activeConv.guest_name}</p>
+                        <p className="text-[14px] font-bold text-zinc-900 truncate leading-tight">
+                          {displayName}
+                          {hasDifferentWaName && (
+                            <span className="text-[10.5px] text-zinc-400 font-normal ml-1 shrink-0">
+                              ({activeConv.guest_name})
+                            </span>
+                          )}
+                        </p>
                         {primaryRes && (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-150 shrink-0">
                             Hab {getUnitDisplay(primaryRes.room_name)}
@@ -892,7 +918,13 @@ export default function BotPage() {
                 </div>
                 <h4 className="text-[16px] font-black text-zinc-950 tracking-tight font-sans">Reservaciones del Cliente</h4>
                 <p className="text-[12px] text-zinc-500 font-bold mt-0.5">
-                  {activeConv.guest_name} · {activeReservations.length} {activeReservations.length === 1 ? 'reserva' : 'reservas'}
+                  {primaryRes ? primaryRes.guest_name : activeConv.guest_name}
+                  {primaryRes && activeConv.guest_name && primaryRes.guest_name.toLowerCase() !== activeConv.guest_name.toLowerCase() && (
+                    <span className="text-[10px] text-zinc-400 font-normal ml-1">
+                      ({activeConv.guest_name})
+                    </span>
+                  )}
+                  {" · "}{activeReservations.length} {activeReservations.length === 1 ? 'reserva' : 'reservas'}
                 </p>
               </div>
 
