@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from 'react';
-import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X, Archive } from 'lucide-react';
+import { MessageCircle, CheckCheck, Bot, Clock, RefreshCw, Trash2, Phone, Wifi, WifiOff, User, Send, ChevronLeft, ToggleLeft, ToggleRight, Plus, X, Archive, BedDouble, Calendar, ExternalLink, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
@@ -37,6 +37,8 @@ function BubbleWA({ size = 16 }: { size?: number }) {
 
 export default function BotPage() {
   const [conversations, setConversations]   = useState<Conversation[]>([]);
+  const [reservas, setReservas]             = useState<any[]>([]);
+  const [showResDetailModal, setShowResDetailModal] = useState(false);
   const [isLoading, setIsLoading]           = useState(true);
   const [hasRealData, setHasRealData]       = useState(false);
   // Solo guardamos el ID — la conversación activa se DERIVA del estado principal
@@ -96,11 +98,20 @@ export default function BotPage() {
   const fetchConversations = async () => {
     setIsLoading(true);
     try {
-      const res  = await fetch('/api/conversations');
+      const [res, resReservas] = await Promise.all([
+        fetch('/api/conversations'),
+        fetch('/api/reservas').catch(() => null)
+      ]);
       const json = await res.json();
       if (json.success && json.data) {
         setConversations(json.data);
         setHasRealData(json.data.length > 0);
+      }
+      if (resReservas) {
+        const jsonRes = await resReservas.json();
+        if (jsonRes.success) {
+          setReservas(jsonRes.data || []);
+        }
       }
     } catch (e) {
       console.error('Error al cargar conversaciones', e);
@@ -329,7 +340,48 @@ export default function BotPage() {
     } catch { return ts; }
   };
 
-  // ── VI  // Helper de DoubleCheck de WhatsApp
+  // Limpiar y formatear número de habitación para mostrar en badges
+  const getUnitDisplay = (roomStr: string) => {
+    if (!roomStr) return '';
+    const parenMatch = roomStr.match(/\(([^)]+)\)/);
+    if (parenMatch) return parenMatch[1];
+    const numMatch = roomStr.match(/(\d+)\s*$/);
+    if (numMatch) return numMatch[1];
+    return roomStr;
+  };
+
+  // Buscar reservación correspondiente al número de teléfono o nombre del contacto
+  const findReservationForContact = (guestPhone: string | undefined, guestName: string | undefined) => {
+    if (!guestPhone) return null;
+    
+    // Normalizar números de teléfono (solo números, comparar últimos 10 dígitos)
+    const clean = (p: string) => p.replace(/\D/g, '');
+    const pClean = clean(guestPhone);
+    
+    if (pClean.length >= 10) {
+      const pLast10 = pClean.slice(-10);
+      const found = reservas.find(r => {
+        const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
+        return rPhone.endsWith(pLast10);
+      });
+      if (found) return found;
+    }
+
+    // Si no encuentra por teléfono, intentar coincidencia de nombre (aproximado)
+    if (guestName) {
+      const cleanName = (n: string) => n.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const gName = cleanName(guestName);
+      const found = reservas.find(r => {
+        const rName = cleanName(r.guest_name || '');
+        return rName.includes(gName) || gName.includes(rName);
+      });
+      if (found) return found;
+    }
+
+    return null;
+  };
+
+  // Helper de DoubleCheck de WhatsApp
   function DoubleCheckSVG({ className }: { className?: string }) {
     return (
       <svg viewBox="0 0 16 15" width="16" height="15" className={className} fill="none">
@@ -534,10 +586,39 @@ export default function BotPage() {
                 <div className="w-9 h-9 rounded-full bg-[#25D366]/10 border border-[#25D366]/20 flex items-center justify-center shrink-0">
                   <BubbleWA size={18} />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-[14px] font-bold text-zinc-900 truncate leading-tight">{activeConv.guest_name}</p>
-                  <p className="text-[11px] font-semibold text-zinc-400 mt-0.5">{activeConv.guest_phone}</p>
-                </div>
+                {(() => {
+                  const activeRes = findReservationForContact(activeConv.guest_phone, activeConv.guest_name);
+                  return (
+                    <div 
+                      className="min-w-0 cursor-pointer hover:bg-zinc-50 rounded-xl px-2 py-1 transition-colors select-none"
+                      onClick={() => {
+                        if (activeRes) {
+                          setShowResDetailModal(true);
+                        }
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-[14px] font-bold text-zinc-900 truncate leading-tight">{activeConv.guest_name}</p>
+                        {activeRes && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-150 shrink-0">
+                            Hab {getUnitDisplay(activeRes.room || activeRes.roomName)}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] font-semibold text-zinc-400 mt-0.5 flex items-center gap-1.5 truncate">
+                        <span>{activeConv.guest_phone}</span>
+                        {activeRes && (
+                          <>
+                            <span>·</span>
+                            <span className="text-zinc-500 font-bold">{activeRes.channel}</span>
+                            <span>·</span>
+                            <span className="text-zinc-500 font-bold">Llega: {format(new Date(activeRes.check_in + 'T12:00:00'), 'd MMM', { locale: es })}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Botones de acción */}
@@ -773,6 +854,101 @@ export default function BotPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Detalles de Reserva Superpuesta */}
+      {showResDetailModal && activeConv && (() => {
+        const activeRes = findReservationForContact(activeConv.guest_phone, activeConv.guest_name);
+        if (!activeRes) return null;
+
+        const nightsCount = activeRes.nights || 1;
+        const totalRevenue = activeRes.price || activeRes.price_estimate || 0;
+        const deposit = activeRes.deposit || 0;
+        const balance = Math.max(0, totalRevenue - deposit);
+
+        return (
+          <div 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[250] flex items-center justify-center p-4" 
+            onClick={() => setShowResDetailModal(false)}
+          >
+            <div 
+              className="bg-white rounded-3xl w-full max-w-sm p-6 relative shadow-2xl animate-in fade-in zoom-in-95 duration-200" 
+              onClick={e => e.stopPropagation()}
+            >
+              <button 
+                onClick={() => setShowResDetailModal(false)}
+                className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center hover:bg-zinc-100 rounded-full text-zinc-400 transition-colors"
+              >
+                <X size={16} />
+              </button>
+
+              <div className="flex flex-col items-center text-center pb-4 border-b border-zinc-100">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-3">
+                  <BedDouble size={24} />
+                </div>
+                <h4 className="text-[16px] font-black text-zinc-950 tracking-tight font-sans">Detalles de Reserva</h4>
+                <p className="text-[12px] text-zinc-500 font-bold mt-0.5">{activeRes.guest_name || activeConv.guest_name}</p>
+              </div>
+
+              <div className="py-4 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Habitación / Unidad</span>
+                  <span className="text-[13px] font-black text-zinc-900 bg-zinc-100 px-2.5 py-1 rounded-xl font-mono">
+                    Hab {getUnitDisplay(activeRes.room || activeRes.roomName)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Fechas de Estancia</span>
+                  <span className="text-[13px] font-bold text-zinc-900 flex items-center gap-1 font-sans">
+                    <Calendar size={13} className="text-zinc-400" />
+                    {format(new Date(activeRes.check_in + 'T12:00:00'), 'd MMM', { locale: es })} - {format(new Date(activeRes.check_out + 'T12:00:00'), 'd MMM', { locale: es })}
+                    <span className="text-[11px] text-zinc-400">({nightsCount} {nightsCount === 1 ? 'noche' : 'noches'})</span>
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Canal / Origen</span>
+                  <span className={`text-[11px] font-black px-2.5 py-1 rounded-xl border font-sans ${
+                    activeRes.channel === 'Airbnb' ? 'bg-rose-50 border-rose-150 text-rose-700' :
+                    activeRes.channel === 'Booking.com' ? 'bg-blue-50 border-blue-150 text-blue-700' :
+                    'bg-emerald-50 border-emerald-150 text-emerald-700'
+                  }`}>
+                    {activeRes.channel}
+                  </span>
+                </div>
+
+                <div className="border-t border-dashed border-zinc-150 pt-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-[12px] font-medium text-zinc-650">
+                    <span>Tarifa Total</span>
+                    <span>MX${totalRevenue.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[12px] font-medium text-emerald-650">
+                    <span>Anticipo Depositado</span>
+                    <span>MX${deposit.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[13px] font-black text-zinc-950 pt-1">
+                    <span>Saldo Pendiente</span>
+                    <span className="text-amber-600">MX${balance.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    setShowResDetailModal(false);
+                    router.push(`/reservas?id=${activeRes.id}`);
+                  }}
+                  className="w-full py-3.5 bg-zinc-950 hover:bg-black text-white font-bold text-[13px] rounded-2xl transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                >
+                  <ExternalLink size={14} />
+                  <span>Ver Detalle de Reservación</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
