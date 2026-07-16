@@ -350,35 +350,36 @@ export default function BotPage() {
     return roomStr;
   };
 
-  // Buscar reservación correspondiente al número de teléfono o nombre del contacto
-  const findReservationForContact = (guestPhone: string | undefined, guestName: string | undefined) => {
-    if (!guestPhone) return null;
+  // Buscar todas las reservaciones correspondientes al número de teléfono o nombre del contacto
+  const findAllReservationsForContact = (guestPhone: string | undefined, guestName: string | undefined) => {
+    if (!guestPhone) return [];
     
     // Normalizar números de teléfono (solo números, comparar últimos 10 dígitos)
     const clean = (p: string) => p.replace(/\D/g, '');
     const pClean = clean(guestPhone);
     
+    let matched: any[] = [];
+
     if (pClean.length >= 10) {
       const pLast10 = pClean.slice(-10);
-      const found = reservas.find(r => {
+      matched = reservas.filter(r => {
         const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
         return rPhone.endsWith(pLast10);
       });
-      if (found) return found;
     }
 
     // Si no encuentra por teléfono, intentar coincidencia de nombre (aproximado)
-    if (guestName) {
+    if (matched.length === 0 && guestName) {
       const cleanName = (n: string) => n.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const gName = cleanName(guestName);
-      const found = reservas.find(r => {
+      matched = reservas.filter(r => {
         const rName = cleanName(r.guest_name || '');
         return rName.includes(gName) || gName.includes(rName);
       });
-      if (found) return found;
     }
 
-    return null;
+    // Ordenar de más reciente check-in a más antiguo
+    return matched.sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
   };
 
   // Helper de DoubleCheck de WhatsApp
@@ -587,32 +588,34 @@ export default function BotPage() {
                   <BubbleWA size={18} />
                 </div>
                 {(() => {
-                  const activeRes = findReservationForContact(activeConv.guest_phone, activeConv.guest_name);
+                  const activeReservations = findAllReservationsForContact(activeConv.guest_phone, activeConv.guest_name);
+                  const primaryRes = activeReservations[0] || null;
                   return (
                     <div 
                       className="min-w-0 cursor-pointer hover:bg-zinc-50 rounded-xl px-2 py-1 transition-colors select-none"
                       onClick={() => {
-                        if (activeRes) {
+                        if (activeReservations.length > 0) {
                           setShowResDetailModal(true);
                         }
                       }}
                     >
                       <div className="flex items-center gap-1.5 min-w-0">
                         <p className="text-[14px] font-bold text-zinc-900 truncate leading-tight">{activeConv.guest_name}</p>
-                        {activeRes && (
+                        {primaryRes && (
                           <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-150 shrink-0">
-                            Hab {getUnitDisplay(activeRes.room || activeRes.roomName)}
+                            Hab {getUnitDisplay(primaryRes.room || primaryRes.roomName)}
+                            {activeReservations.length > 1 ? ` (+${activeReservations.length - 1})` : ''}
                           </span>
                         )}
                       </div>
                       <p className="text-[11px] font-semibold text-zinc-400 mt-0.5 flex items-center gap-1.5 truncate">
                         <span>{activeConv.guest_phone}</span>
-                        {activeRes && (
+                        {primaryRes && (
                           <>
                             <span>·</span>
-                            <span className="text-zinc-500 font-bold">{activeRes.channel}</span>
+                            <span className="text-zinc-500 font-bold">{primaryRes.channel}</span>
                             <span>·</span>
-                            <span className="text-zinc-500 font-bold">Llega: {format(new Date(activeRes.check_in + 'T12:00:00'), 'd MMM', { locale: es })}</span>
+                            <span className="text-zinc-500 font-bold">Llega: {format(new Date(primaryRes.check_in + 'T12:00:00'), 'd MMM', { locale: es })}</span>
                           </>
                         )}
                       </p>
@@ -857,13 +860,8 @@ export default function BotPage() {
 
       {/* Modal de Detalles de Reserva Superpuesta */}
       {showResDetailModal && activeConv && (() => {
-        const activeRes = findReservationForContact(activeConv.guest_phone, activeConv.guest_name);
-        if (!activeRes) return null;
-
-        const nightsCount = activeRes.nights || 1;
-        const totalRevenue = activeRes.price || activeRes.price_estimate || 0;
-        const deposit = activeRes.deposit || 0;
-        const balance = Math.max(0, totalRevenue - deposit);
+        const activeReservations = findAllReservationsForContact(activeConv.guest_phone, activeConv.guest_name);
+        if (activeReservations.length === 0) return null;
 
         return (
           <div 
@@ -871,7 +869,7 @@ export default function BotPage() {
             onClick={() => setShowResDetailModal(false)}
           >
             <div 
-              className="bg-white rounded-3xl w-full max-w-sm p-6 relative shadow-2xl animate-in fade-in zoom-in-95 duration-200" 
+              className="bg-white rounded-3xl w-full max-w-md p-6 relative shadow-2xl animate-in fade-in zoom-in-95 duration-200" 
               onClick={e => e.stopPropagation()}
             >
               <button 
@@ -885,65 +883,78 @@ export default function BotPage() {
                 <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 mb-3">
                   <BedDouble size={24} />
                 </div>
-                <h4 className="text-[16px] font-black text-zinc-950 tracking-tight font-sans">Detalles de Reserva</h4>
-                <p className="text-[12px] text-zinc-500 font-bold mt-0.5">{activeRes.guest_name || activeConv.guest_name}</p>
+                <h4 className="text-[16px] font-black text-zinc-950 tracking-tight font-sans">Reservaciones del Cliente</h4>
+                <p className="text-[12px] text-zinc-500 font-bold mt-0.5">
+                  {activeConv.guest_name} · {activeReservations.length} {activeReservations.length === 1 ? 'reserva' : 'reservas'}
+                </p>
               </div>
 
-              <div className="py-4 space-y-3.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Habitación / Unidad</span>
-                  <span className="text-[13px] font-black text-zinc-900 bg-zinc-100 px-2.5 py-1 rounded-xl font-mono">
-                    Hab {getUnitDisplay(activeRes.room || activeRes.roomName)}
-                  </span>
-                </div>
+              <div className="py-4 max-h-[50vh] overflow-y-auto space-y-4 pr-1 scrollbar-thin">
+                {activeReservations.map((res, index) => {
+                  const nightsCount = res.nights || 1;
+                  const totalRevenue = res.price || res.price_estimate || 0;
+                  const deposit = res.deposit || 0;
+                  const balance = Math.max(0, totalRevenue - deposit);
 
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Fechas de Estancia</span>
-                  <span className="text-[13px] font-bold text-zinc-900 flex items-center gap-1 font-sans">
-                    <Calendar size={13} className="text-zinc-400" />
-                    {format(new Date(activeRes.check_in + 'T12:00:00'), 'd MMM', { locale: es })} - {format(new Date(activeRes.check_out + 'T12:00:00'), 'd MMM', { locale: es })}
-                    <span className="text-[11px] text-zinc-400">({nightsCount} {nightsCount === 1 ? 'noche' : 'noches'})</span>
-                  </span>
-                </div>
+                  return (
+                    <div key={res.id || index} className="bg-zinc-50 border border-zinc-150 rounded-2xl p-4 space-y-3.5 hover:border-zinc-200 transition-colors">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Unidad / Habitación</span>
+                        <span className="text-[13px] font-black text-zinc-900 bg-white border border-zinc-200 px-2.5 py-0.5 rounded-xl font-mono">
+                          Hab {getUnitDisplay(res.room || res.roomName)}
+                        </span>
+                      </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Canal / Origen</span>
-                  <span className={`text-[11px] font-black px-2.5 py-1 rounded-xl border font-sans ${
-                    activeRes.channel === 'Airbnb' ? 'bg-rose-50 border-rose-150 text-rose-700' :
-                    activeRes.channel === 'Booking.com' ? 'bg-blue-50 border-blue-150 text-blue-700' :
-                    'bg-emerald-50 border-emerald-150 text-emerald-700'
-                  }`}>
-                    {activeRes.channel}
-                  </span>
-                </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Fechas de Estancia</span>
+                        <span className="text-[12px] font-bold text-zinc-900 flex items-center gap-1 font-sans">
+                          <Calendar size={12} className="text-zinc-400" />
+                          {format(new Date(res.check_in + 'T12:00:00'), 'd MMM', { locale: es })} - {format(new Date(res.check_out + 'T12:00:00'), 'd MMM', { locale: es })}
+                          <span className="text-[10px] text-zinc-400 font-medium">({nightsCount} {nightsCount === 1 ? 'noche' : 'noches'})</span>
+                        </span>
+                      </div>
 
-                <div className="border-t border-dashed border-zinc-150 pt-3.5 space-y-2">
-                  <div className="flex items-center justify-between text-[12px] font-medium text-zinc-650">
-                    <span>Tarifa Total</span>
-                    <span>MX${totalRevenue.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[12px] font-medium text-emerald-650">
-                    <span>Anticipo Depositado</span>
-                    <span>MX${deposit.toLocaleString()}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[13px] font-black text-zinc-950 pt-1">
-                    <span>Saldo Pendiente</span>
-                    <span className="text-amber-600">MX${balance.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Canal / Origen</span>
+                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-xl border font-sans ${
+                          res.channel === 'Airbnb' ? 'bg-rose-50 border-rose-150 text-rose-700' :
+                          res.channel === 'Booking.com' ? 'bg-blue-50 border-blue-150 text-blue-700' :
+                          'bg-emerald-50 border-emerald-150 text-emerald-700'
+                        }`}>
+                          {res.channel}
+                        </span>
+                      </div>
 
-              <div className="pt-2">
-                <button
-                  onClick={() => {
-                    setShowResDetailModal(false);
-                    router.push(`/reservas?id=${activeRes.id}`);
-                  }}
-                  className="w-full py-3.5 bg-zinc-950 hover:bg-black text-white font-bold text-[13px] rounded-2xl transition-all active:scale-[0.98] shadow-lg flex items-center justify-center gap-1.5 cursor-pointer font-sans"
-                >
-                  <ExternalLink size={14} />
-                  <span>Ver Detalle de Reservación</span>
-                </button>
+                      <div className="border-t border-dashed border-zinc-200 pt-3 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-medium text-zinc-650">
+                          <span>Tarifa Total</span>
+                          <span>MX${totalRevenue.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] font-medium text-emerald-650">
+                          <span>Anticipo</span>
+                          <span>MX${deposit.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[12px] font-black text-zinc-950 pt-0.5">
+                          <span>Pendiente</span>
+                          <span className="text-amber-600">MX${balance.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-1">
+                        <button
+                          onClick={() => {
+                            setShowResDetailModal(false);
+                            router.push(`/reservas?id=${res.id}`);
+                          }}
+                          className="w-full py-2.5 bg-zinc-900 hover:bg-black text-white font-bold text-[11px] rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer font-sans"
+                        >
+                          <ExternalLink size={12} />
+                          <span>Detalle completo de esta reserva</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
