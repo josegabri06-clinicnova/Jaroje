@@ -594,7 +594,7 @@ export default function RecepcionPage() {
       setExtensionAccountId('');
       setExtensionLoading(false);
     }
-  }, [selectedReserva]);
+  }, [selectedReserva?.id]);
 
   const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string) => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return;
