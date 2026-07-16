@@ -1736,6 +1736,7 @@ export default function PublicReservaPage() {
                 </button>
               </div>
             </div>
+          </div>
         </div>
       )}
 
