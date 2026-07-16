@@ -590,7 +590,7 @@ export default function BotPage() {
       <div className={`flex-1 flex flex-col h-full bg-[#efeae2] relative ${activeConvId ? 'flex' : 'hidden md:flex'}`}>
         {activeConv ? (
           <div 
-            className={`${isMobile ? 'fixed top-0 left-0 right-0 z-[100]' : 'relative w-full h-full'} flex flex-col bg-[#efeae2]`}
+            className={`${isMobile ? 'fixed top-0 left-0 right-0 z-40 pb-[calc(64px+env(safe-area-inset-bottom,0px))] focus-within:pb-0' : 'relative w-full h-full'} flex flex-col bg-[#efeae2]`}
             style={{ 
               height: isMobile ? viewportHeight : '100%',
               backgroundImage: 'radial-gradient(#dfdcd6 0.8px, transparent 0.8px), radial-gradient(#dfdcd6 0.8px, #efeae2 0.8px)',
