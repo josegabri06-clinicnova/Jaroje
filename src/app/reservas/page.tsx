@@ -2785,7 +2785,10 @@ export default function ReservasList() {
                   </div>
 
                   {/* Ajustes del Portal del Huésped */}
-                  {userRole === 'admin' && (
+                  {userRole === 'admin' && 
+                   selectedReserva.id !== 'walkin' &&
+                   !['Airbnb', 'Booking.com', 'Expedia'].includes(selectedReserva.channel || '') && 
+                   Number(selectedReserva.deposit || 0) === 0 && (
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
                     <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                       <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
