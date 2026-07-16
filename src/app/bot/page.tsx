@@ -350,9 +350,12 @@ export default function BotPage() {
     return roomStr;
   };
 
-  // Buscar todas las reservaciones correspondientes al número de teléfono o nombre del contacto
+  // Buscar todas las reservaciones activas o futuras correspondientes al número de teléfono o nombre del contacto
   const findAllReservationsForContact = (guestPhone: string | undefined, guestName: string | undefined) => {
     if (!guestPhone) return [];
+    
+    // Filtrar solo las reservaciones activas o futuras (check-out hoy o después)
+    const activeFuture = reservas.filter(r => r.check_out >= todayStr);
     
     // Normalizar números de teléfono (solo números, comparar últimos 10 dígitos)
     const clean = (p: string) => p.replace(/\D/g, '');
@@ -362,24 +365,26 @@ export default function BotPage() {
 
     if (pClean.length >= 10) {
       const pLast10 = pClean.slice(-10);
-      matched = reservas.filter(r => {
+      matched = activeFuture.filter(r => {
         const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
         return rPhone.endsWith(pLast10);
       });
     }
 
-    // Si no encuentra por teléfono, intentar coincidencia de nombre (aproximado)
+    // Si no encuentra por teléfono, intentar coincidencia de nombre (aproximado) en reservas activas/futuras
     if (matched.length === 0 && guestName) {
       const cleanName = (n: string) => n.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       const gName = cleanName(guestName);
-      matched = reservas.filter(r => {
-        const rName = cleanName(r.guest_name || '');
-        return rName.includes(gName) || gName.includes(rName);
-      });
+      if (gName.length > 2) {
+        matched = activeFuture.filter(r => {
+          const rName = cleanName(r.guest_name || '');
+          return rName.includes(gName) || gName.includes(rName);
+        });
+      }
     }
 
-    // Ordenar de más reciente check-in a más antiguo
-    return matched.sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
+    // Ordenar de más reciente check-in a más lejano futuro
+    return matched.sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime());
   };
 
   // Helper de DoubleCheck de WhatsApp
