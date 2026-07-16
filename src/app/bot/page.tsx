@@ -374,19 +374,6 @@ export default function BotPage() {
       });
     }
 
-    // Si no encuentra por teléfono, intentar coincidencia de nombre (aproximado) en reservas activas/futuras
-    if (matched.length === 0 && guestName) {
-      const cleanName = (n: string) => n.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const gName = cleanName(guestName);
-      const nameWords = gName.split(/\s+/).filter(Boolean);
-      // Evitar emparejar por nombres genéricos de una sola palabra (ej: "Jose", "Laura") para prevenir colisiones masivas
-      if (gName.length > 2 && nameWords.length >= 2) {
-        matched = activeFuture.filter(r => {
-          const rName = cleanName(r.guest_name || '');
-          return rName.includes(gName) || gName.includes(rName);
-        });
-      }
-    }
 
     // Ordenar de más reciente check-in a más lejano futuro
     return matched.sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime());
