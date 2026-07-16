@@ -395,16 +395,15 @@ export default function AdminDashboard() {
     const today = new Date().toLocaleDateString('sv-SE');
     const activeFuture = reservas.filter(r => r.check_out >= today && r.status !== 'cancelled');
     
-    let matched: any[] = [];
-
-    if (pClean.length >= 10) {
-      const pLast10 = pClean.slice(-10);
-              matched = activeFuture.filter(r => {
-        const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
-        return rPhone.endsWith(pLast10);
-      });
-    }
-
+    const matched = activeFuture.filter(r => {
+      const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
+      if (pClean.length < 7 || rPhone.length < 7) return false;
+      // Comparación flexible de los últimos dígitos según el tamaño del número más corto (máximo 10 dígitos)
+      const minLen = Math.min(pClean.length, rPhone.length, 10);
+      const lastP = pClean.slice(-minLen);
+      const lastR = rPhone.slice(-minLen);
+      return lastP === lastR;
+    });
 
     return matched;
   };

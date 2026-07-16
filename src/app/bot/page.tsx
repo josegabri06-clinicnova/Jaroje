@@ -360,19 +360,19 @@ export default function BotPage() {
     // Filtrar solo las reservaciones activas o futuras (check-out hoy o después)
     const activeFuture = reservas.filter(r => r.check_out >= todayStr);
     
-    // Normalizar números de teléfono (solo números, comparar últimos 10 dígitos)
+    // Normalizar y comparar de forma flexible números de teléfono de cualquier país
     const clean = (p: string) => p.replace(/\D/g, '');
     const pClean = clean(guestPhone);
     
-    let matched: any[] = [];
-
-    if (pClean.length >= 10) {
-      const pLast10 = pClean.slice(-10);
-      matched = activeFuture.filter(r => {
-        const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
-        return rPhone.endsWith(pLast10);
-      });
-    }
+    const matched = activeFuture.filter(r => {
+      const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
+      if (pClean.length < 7 || rPhone.length < 7) return false;
+      // Comparación flexible de los últimos dígitos según el tamaño del número más corto (máximo 10 dígitos)
+      const minLen = Math.min(pClean.length, rPhone.length, 10);
+      const lastP = pClean.slice(-minLen);
+      const lastR = rPhone.slice(-minLen);
+      return lastP === lastR;
+    });
 
 
     // Ordenar de más reciente check-in a más lejano futuro
