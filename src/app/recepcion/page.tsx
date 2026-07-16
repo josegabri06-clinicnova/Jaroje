@@ -4928,6 +4928,45 @@ export default function RecepcionPage() {
                     </div>
                   </div>
 
+                  {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp */}
+                  {selectedReserva.id !== 'walkin' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2 mt-1">
+                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
+                        <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                        </svg>
+                        Mensaje de Bienvenida (Link de Portal)
+                      </span>
+                      <p className="text-[11px] text-zinc-400 leading-normal mb-2 text-left">
+                        Genera un mensaje personalizado con el enlace de acceso directo al portal de este huésped para enviarlo por el chat de Booking.com, Airbnb, Expedia o WhatsApp.
+                      </p>
+                      <button
+                        onClick={() => {
+                          const guestFirstName = selectedReserva.guest_name ? selectedReserva.guest_name.trim().split(' ')[0] : 'Huésped';
+                          const roomDisplay = selectedReserva.room_name || selectedReserva.room || 'Sin asignar';
+                          const link = `https://jaroje-app.vercel.app/public/reserva/${selectedReserva.id}`;
+                          
+                          const message = `🏨 *Condominios JAROJE Huatulco*\n\n¡Hola ${guestFirstName}!\n\nConfirmamos tu reservación para el departamento:\n*${roomDisplay}*\n\n📅 Entrada: ${selectedReserva.check_in}\n📅 Salida: ${selectedReserva.check_out}\n\nPara ver los detalles de tu estancia, indicaciones de llegada, ubicación exacta, reglamento del condominio y contraseña de WiFi, accede a tu Portal del Huésped aquí:\n👇👇👇\n${link}\n\n¡Esperamos recibirte pronto!`;
+                          
+                          navigator.clipboard.writeText(message).then(() => {
+                            alert("📋 ¡Mensaje personalizado copiado al portapapeles! Listo para pegar en Booking, Airbnb o WhatsApp.");
+                          }).catch(err => {
+                            console.error("No se pudo copiar", err);
+                            alert("Error al copiar al portapapeles.");
+                          });
+                        }}
+                        className="w-full bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
+                      >
+                        <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        Copiar Mensaje de Bienvenida
+                      </button>
+                    </div>
+                  )}
+
                   {/* Ajustes del Portal del Huésped */}
                   {false && selectedReserva.id !== 'walkin' && (
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
