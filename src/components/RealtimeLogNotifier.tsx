@@ -83,18 +83,53 @@ export default function RealtimeLogNotifier() {
 
           // Títulos de acciones amigables
           const friendlyActions: Record<string, string> = {
+            // Sesiones y Turnos
             'inicio_sesion_turno': 'Inicio de Turno',
-            'check_in': 'Check-In Procesado',
-            'check_out': 'Check-Out Procesado',
-            'movimiento_financiero': 'Movimiento Financiero',
-            'incidencia_mantenimiento': 'Incidencia Reportada',
+            'inicio_sesion': 'Inicio de Sesión',
+            'start_new_chat': 'Chat Iniciado 💬',
+            // Reservas
+            'check_in': 'Check-In Procesado 🔑',
+            'check_in_procesado': 'Check-In Guardado 🔑',
+            'check_out': 'Check-Out Procesado 🚪',
+            'revert_checkin': 'Check-In Revertido ↩️',
+            'reserva_creada': 'Nueva Reserva Manual 📅',
+            'reserva_creada_webhook': 'Nueva Reserva Recibida 📥',
+            'reserva_modificada': 'Reserva Modificada ✏️',
+            'reserva_modificada_admin': 'Reserva Modificada (Admin) ✏️',
+            'reserva_cancelada': 'Reserva Cancelada ✕',
+            'reserva_enterado': 'Reserva Enterada ✅',
+            'reasignacion_habitacion': 'Habitación Reasignada 🔁',
+            'bloqueo_habitacion': 'Bloqueo Físico de Unidad 🔒',
+            'walk_in': 'Reserva Walk-In Registrada 🚶',
+            // Finanzas y Caja
+            'movimiento_financiero': 'Movimiento de Caja 💵',
+            'payment_received': 'Pago Registrado 💰',
+            'abono_registrado': 'Abono Registrado 💰',
+            'abono_grupal_registrado': 'Abono Grupal Registrado 💰',
+            'payment_reconciled': 'Pago Conciliado ✅',
+            'renombrar_cuenta': 'Cuenta Renombrada ✏️',
+            // Estancias
+            'estancia_extendida': 'Estancia Extendida ⏳',
+            'estancia_extendida_admin': 'Estancia Extendida (Admin) ⏳',
+            // Mantenimiento
+            'incidencia_mantenimiento': 'Incidencia Reportada 🛠',
             'report_maintenance': 'Daño Técnico Reportado 🛠',
-            'human_mode_activated': 'Ayuda Requerida ⚠️',
-            'cambio_estado_incidencia': 'Tarea Actualizada',
-            'ajuste_stock': 'Ajuste de Stock',
-            'nuevo_articulo': 'Artículo Creado',
-            'actualizacion_articulo': 'Inventario Actualizado',
-            'eliminar_articulo': 'Artículo Eliminado',
+            'cambio_estado_tarea': 'Estado de Tarea Modificado ⚙️',
+            'cambio_estado_incidencia': 'Incidencia Actualizada ⚙️',
+            'actualizacion_tarea': 'Tarea Actualizada ⚙️',
+            'resolucion_mantenimiento': 'Incidencia Resuelta ✅',
+            'eliminacion_tarea': 'Tarea Eliminada ✕',
+            // Inventario
+            'ajuste_stock': 'Ajuste de Almacén 📦',
+            'nuevo_articulo': 'Artículo Creado 📦',
+            'actualizacion_articulo': 'Parámetros Actualizados 📦',
+            'eliminar_articulo': 'Artículo Eliminado ✕',
+            // Otros / Bot
+            'human_mode_activated': 'Ayuda Requerida (Bot Off) ⚠️',
+            'toggle_archive': 'Chat Archivado/Desarchivado 📁',
+            'toggle_mode': 'Modo Bot Alternado 🤖',
+            'webhook_received': 'Notificación Recibida 📥',
+            'change_room_status': 'Estado de Habitación Cambiado 🧹',
           };
           const friendlyTitle = friendlyActions[actionText] || actionText.replace(/_/g, ' ');
 
