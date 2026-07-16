@@ -398,7 +398,7 @@ export default function AdminDashboard() {
       const lastText = lastMsg?.role_guest || lastMsg?.role_bot || '(sin texto)';
       return { ...c, minutesSince, lastText, lastTime };
     })
-    .sort((a, b) => b.minutesSince - a.minutesSince); // más urgentes primero
+    .sort((a, b) => a.minutesSince - b.minutesSince); // más recientes primero
 
   const getUrgencyColor = (mins: number) => {
     if (mins > 120) return { dot: 'bg-red-500', bg: 'bg-red-50 border-red-100', text: 'text-red-700', label: 'Sin respuesta' };
