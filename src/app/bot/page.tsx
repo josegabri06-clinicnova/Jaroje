@@ -895,6 +895,7 @@ export default function BotPage() {
       {showResDetailModal && activeConv && (() => {
         const activeReservations = findAllReservationsForContact(activeConv.guest_phone, activeConv.guest_name);
         if (activeReservations.length === 0) return null;
+        const primaryRes = activeReservations[0] || null;
 
         return (
           <div 
