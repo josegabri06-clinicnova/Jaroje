@@ -604,9 +604,11 @@ export default function StaffPage() {
         operStatus === 'sucio_checkout' || 
         operStatus === 'en_limpieza' || 
         operStatus === 'limpieza_programada' ||
-        dbStatus === 'limpia' ||
-        (dbStatus === 'disponible' && isDbStatusUpdatedToday) ||
-        ((dbStatus === 'sucio_checkout' || dbStatus === 'en_limpieza') && isDbStatusUpdatedToday)
+        dbStatus === 'sucio_checkout' ||
+        dbStatus === 'en_limpieza' ||
+        dbStatus === 'limpieza_programada' ||
+        (dbStatus === 'limpia' && isDbStatusUpdatedToday) ||
+        (dbStatus === 'disponible' && isDbStatusUpdatedToday)
       )) {
         list.push({
           room: r,
