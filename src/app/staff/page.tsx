@@ -270,6 +270,14 @@ export default function StaffPage() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<RoomStatus[]>([]);
   const [mainTab, setMainTab] = useState<'tareas' | 'housekeeping'>('tareas');
+
+  // Mantenimiento Programado Preventivo State
+  const [viewMode, setViewMode] = useState<'tasks' | 'schedules'>('tasks');
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+  const [schedRoom, setSchedRoom] = useState('General');
+  const [schedDesc, setSchedDesc] = useState('');
+  const [schedPeriod, setSchedPeriod] = useState('1 month');
   
   const [employeesList, setEmployeesList] = useState<Employee[]>([]);
   const [assignments, setAssignments] = useState<Record<string, { employeeNum: string; notes: string }>>({});
@@ -504,6 +512,7 @@ export default function StaffPage() {
   useEffect(() => {
     setTodayStr(getLocalDateStr());
     fetchData();
+    fetchSchedules();
 
     // ── SUPABASE REALTIME EN TIEMPO REAL PARA ROOM_STATUS ──
     const channel = supabase
@@ -991,6 +1000,246 @@ export default function StaffPage() {
     setImagePreview(null);
     setImagePreviews([]);
     setShowForm(true);
+  };
+
+  const logEmployeeAction = async (action: string, room: string, details: string) => {
+    try {
+      const emp = getActiveEmployee('mantenimiento');
+      const payload = {
+        employee_num: emp?.employee_num || '000',
+        employee_name: emp?.full_name || 'Admin',
+        department: emp?.department || 'mantenimiento',
+        module: 'mantenimiento',
+        action,
+        room: room || 'General',
+        details
+      };
+      
+      await fetch('/api/employee-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.error("Error logging maintenance audit event:", e);
+    }
+  };
+
+  const fetchSchedules = async () => {
+    setLoadingSchedules(true);
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'maintenance_schedules')
+        .maybeSingle();
+      
+      if (data && data.value) {
+        const list = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        setSchedules(list || []);
+        await checkAndTriggerSchedules(list || []);
+      } else {
+        setSchedules([]);
+      }
+    } catch (e) {
+      console.error("Error al cargar programaciones:", e);
+    } finally {
+      setLoadingSchedules(false);
+    }
+  };
+
+  const checkAndTriggerSchedules = async (schedulesList: any[]) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    let updated = false;
+    const newSchedules = [...schedulesList];
+    
+    for (let i = 0; i < newSchedules.length; i++) {
+      const item = newSchedules[i];
+      const nextDate = new Date(item.next_trigger);
+      nextDate.setHours(0,0,0,0);
+      
+      if (nextDate <= today) {
+        console.log(`[Mantenimiento Programado] Executing scheduled recurrence task for Hab ${item.room}: ${item.description}`);
+        
+        const payload = {
+          room: item.room,
+          description: `[PROGRAMADO] ${item.description}`,
+          type: 'mantenimiento',
+          status: 'nuevo',
+          reported_by: 'Sistema',
+          direction: 'admin_to_staff'
+        };
+        
+        try {
+          const { data: insertData, error } = await supabase.from('tasks').insert([payload]).select();
+          if (error) throw error;
+          
+          const insertedId = insertData?.[0]?.id || '';
+          
+          await logEmployeeAction(
+            'report_maintenance_scheduled', 
+            item.room, 
+            `Tarea programada auto-creada en ${item.room}: ${item.description}`
+          );
+          
+          const nowIso = new Date().toISOString();
+          item.last_triggered = nowIso;
+          
+          const nextTriggerDate = new Date();
+          const periodParts = item.period.split(' ');
+          const val = parseInt(periodParts[0]) || 1;
+          const unit = periodParts[1] || 'month';
+          
+          if (unit.startsWith('week')) {
+            nextTriggerDate.setDate(nextTriggerDate.getDate() + (val * 7));
+          } else if (unit.startsWith('month')) {
+            nextTriggerDate.setMonth(nextTriggerDate.getMonth() + val);
+          } else if (unit.startsWith('year')) {
+            nextTriggerDate.setFullYear(nextTriggerDate.getFullYear() + val);
+          } else if (unit.startsWith('day')) {
+            nextTriggerDate.setDate(nextTriggerDate.getDate() + val);
+          } else {
+            nextTriggerDate.setMonth(nextTriggerDate.getMonth() + 1);
+          }
+          
+          item.next_trigger = nextTriggerDate.toISOString();
+          updated = true;
+          
+        } catch (err) {
+          console.error("Error al disparar tarea programada:", err);
+        }
+      }
+    }
+    
+    if (updated) {
+      try {
+        await supabase
+          .from('settings')
+          .upsert({ key: 'maintenance_schedules', value: JSON.stringify(newSchedules) }, { onConflict: 'key' });
+        setSchedules(newSchedules);
+      } catch (err) {
+        console.error("Error al guardar programaciones actualizadas:", err);
+      }
+    }
+  };
+
+  const handleSaveSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedDesc.trim()) {
+      alert("Por favor ingresa la descripción.");
+      return;
+    }
+    
+    const newSched = {
+      id: Date.now().toString(),
+      room: schedRoom,
+      description: schedDesc,
+      period: schedPeriod,
+      next_trigger: new Date().toISOString(),
+      last_triggered: null
+    };
+    
+    const list = [...schedules, newSched];
+    setSchedules(list);
+    
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'maintenance_schedules', value: JSON.stringify(list) }, { onConflict: 'key' });
+      
+      if (error) throw error;
+      
+      alert("📅 Mantenimiento programado con éxito.");
+      setSchedDesc('');
+      fetchSchedules();
+    } catch (err) {
+      console.error(err);
+      alert("Error al guardar la programación.");
+    }
+  };
+
+  const forceExecuteSchedule = async (scheduleItem: any) => {
+    if (!confirm(`¿Seguro que deseas forzar la ejecución de la tarea para ${scheduleItem.room} ahora mismo?`)) return;
+    
+    const payload = {
+      room: scheduleItem.room,
+      description: `[FORZADO MANUAL] ${scheduleItem.description}`,
+      type: 'mantenimiento',
+      status: 'nuevo',
+      reported_by: 'Mantenimiento',
+      direction: 'admin_to_staff'
+    };
+    
+    try {
+      const { data: insertData, error } = await supabase.from('tasks').insert([payload]).select();
+      if (error) throw error;
+      
+      const insertedId = insertData?.[0]?.id || '';
+      
+      await logEmployeeAction(
+        'report_maintenance_scheduled_forced', 
+        scheduleItem.room, 
+        `Tarea programada forzada manualmente en ${scheduleItem.room}: ${scheduleItem.description}`
+      );
+      
+      const nowIso = new Date().toISOString();
+      scheduleItem.last_triggered = nowIso;
+      
+      const nextTriggerDate = new Date();
+      const periodParts = scheduleItem.period.split(' ');
+      const val = parseInt(periodParts[0]) || 1;
+      const unit = periodParts[1] || 'month';
+      
+      if (unit.startsWith('week')) {
+        nextTriggerDate.setDate(nextTriggerDate.getDate() + (val * 7));
+      } else if (unit.startsWith('month')) {
+        nextTriggerDate.setMonth(nextTriggerDate.getMonth() + val);
+      } else if (unit.startsWith('year')) {
+        nextTriggerDate.setFullYear(nextTriggerDate.getFullYear() + val);
+      } else if (unit.startsWith('day')) {
+        nextTriggerDate.setDate(nextTriggerDate.getDate() + val);
+      } else {
+        nextTriggerDate.setMonth(nextTriggerDate.getMonth() + 1);
+      }
+      
+      scheduleItem.next_trigger = nextTriggerDate.toISOString();
+      
+      const list = schedules.map(s => s.id === scheduleItem.id ? scheduleItem : s);
+      
+      await supabase
+        .from('settings')
+        .upsert({ key: 'maintenance_schedules', value: JSON.stringify(list) }, { onConflict: 'key' });
+      
+      alert("✅ Tarea creada con éxito y programación actualizada.");
+      fetchSchedules();
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert("Error al forzar la ejecución de la programación.");
+    }
+  };
+
+  const deleteSchedule = async (id: string) => {
+    if (!confirm("¿Seguro que deseas eliminar esta programación recurrente?")) return;
+    
+    const list = schedules.filter(s => s.id !== id);
+    setSchedules(list);
+    
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'maintenance_schedules', value: JSON.stringify(list) }, { onConflict: 'key' });
+      
+      if (error) throw error;
+      
+      alert("🗑️ Programación eliminada.");
+      fetchSchedules();
+    } catch (err) {
+      console.error(err);
+      alert("Error al eliminar la programación.");
+    }
   };
 
   const handleCopyReport = () => {
@@ -1495,210 +1744,325 @@ export default function StaffPage() {
               <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Gestión de Tareas y Reportes</p>
             </div>
 
-            {/* KPIs Grid 2x2 para Móviles */}
-            <div className="grid grid-cols-2 gap-2.5 select-none">
-              {/* NUEVOS */}
-              <div 
-                onClick={() => setTaskTab('nuevos')}
-                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
-                  taskTab === 'nuevos' 
-                    ? 'bg-purple-50/10 border-purple-600 ring-2 ring-purple-500/10 shadow-md' 
-                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+            {/* Selector de Vista (Incidencias vs Programado) */}
+            <div className="flex bg-zinc-100/80 p-1 rounded-2xl w-fit border border-zinc-200/50 shadow-inner mb-2 select-none">
+              <button
+                onClick={() => setViewMode('tasks')}
+                className={`px-4 py-2 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+                  viewMode === 'tasks' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/20' : 'text-zinc-500 hover:text-zinc-800 bg-transparent'
                 }`}
               >
-                <span className="text-[20px] font-black text-purple-650 leading-none">
-                  {nuevos.length}
-                </span>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Nuevos</p>
-              </div>
-
-              {/* PENDIENTES */}
-              <div 
-                onClick={() => setTaskTab('pendientes')}
-                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
-                  taskTab === 'pendientes' 
-                    ? 'bg-amber-50/10 border-amber-500 ring-2 ring-amber-500/10 shadow-md' 
-                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                🔧 Incidencias
+              </button>
+              <button
+                onClick={() => setViewMode('schedules')}
+                className={`px-4 py-2 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+                  viewMode === 'schedules' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/20' : 'text-zinc-500 hover:text-zinc-800 bg-transparent'
                 }`}
               >
-                <span className="text-[20px] font-black text-amber-500 leading-none">
-                  {pendientes.length}
-                </span>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Pendientes</p>
-              </div>
-
-              {/* EN PROCESO */}
-              <div 
-                onClick={() => setTaskTab('en_proceso')}
-                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
-                  taskTab === 'en_proceso' 
-                    ? 'bg-blue-50/10 border-blue-500 ring-2 ring-blue-500/10 shadow-md' 
-                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
-                }`}
-              >
-                <span className="text-[20px] font-black text-blue-500 leading-none">
-                  {enProceso.length}
-                </span>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
-              </div>
-
-              {/* RESUELTAS */}
-              <div 
-                onClick={() => setTaskTab('resueltos')}
-                className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
-                  taskTab === 'resueltos' 
-                    ? 'bg-emerald-50/10 border-emerald-600 ring-2 ring-emerald-500/10 shadow-md' 
-                    : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
-                }`}
-              >
-                <span className="text-[20px] font-black text-emerald-650 leading-none">
-                  {resueltos.filter(t => {
-                    if (!t.resolved_at) return false;
-                    const todayStr = new Date().toISOString().split('T')[0];
-                    return t.resolved_at.split('T')[0] === todayStr;
-                  }).length}
-                </span>
-                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>
-              </div>
+                📅 Programado
+              </button>
             </div>
 
-            {/* Barra de Búsqueda Interactiva */}
-            <div className="flex gap-2 items-center">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  placeholder="Buscar por descripción o habitación..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-white border border-zinc-200 rounded-2xl pl-10 pr-4 py-2.5 outline-none text-[13px] font-medium text-zinc-900 placeholder-zinc-400 focus:ring-2 focus:ring-zinc-900/5 focus:border-zinc-300 transition-all shadow-sm"
-                />
-                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                  </svg>
-                </div>
-                {searchQuery && (
-                  <button 
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 active:scale-95 transition-transform"
+            {viewMode === 'tasks' ? (
+              <>
+                {/* KPIs Grid 2x2 para Móviles */}
+                <div className="grid grid-cols-2 gap-2.5 select-none">
+                  {/* NUEVOS */}
+                  <div 
+                    onClick={() => setTaskTab('nuevos')}
+                    className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                      taskTab === 'nuevos' 
+                        ? 'bg-purple-50/10 border-purple-600 ring-2 ring-purple-500/10 shadow-md' 
+                        : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                    }`}
                   >
-                    <X size={12} strokeWidth={3} />
-                  </button>
-                )}
-              </div>
-            </div>
+                    <span className="text-[20px] font-black text-purple-650 leading-none">
+                      {nuevos.length}
+                    </span>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Nuevos</p>
+                  </div>
 
-            {/* Listado de Incidencias */}
-            <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col divide-y divide-zinc-100 overflow-hidden">
-              {(() => {
-                const list = taskTab === 'nuevos' ? filteredNuevos
-                           : taskTab === 'pendientes' ? filteredPendientes
-                           : taskTab === 'en_proceso' ? filteredEnProceso
-                           : filteredResueltos;
+                  {/* PENDIENTES */}
+                  <div 
+                    onClick={() => setTaskTab('pendientes')}
+                    className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                      taskTab === 'pendientes' 
+                        ? 'bg-amber-50/10 border-amber-500 ring-2 ring-amber-500/10 shadow-md' 
+                        : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                    }`}
+                  >
+                    <span className="text-[20px] font-black text-amber-500 leading-none">
+                      {pendientes.length}
+                    </span>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Pendientes</p>
+                  </div>
 
-                if (list.length === 0) {
-                  return (
-                    <div className="p-8 text-center text-zinc-400 text-[13px] font-semibold flex flex-col items-center justify-center gap-2">
-                      <CheckCircle2 size={24} className="text-zinc-300" />
-                      <span>No hay tareas en este estado.</span>
+                  {/* EN PROCESO */}
+                  <div 
+                    onClick={() => setTaskTab('en_proceso')}
+                    className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                      taskTab === 'en_proceso' 
+                        ? 'bg-blue-50/10 border-blue-500 ring-2 ring-blue-500/10 shadow-md' 
+                        : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                    }`}
+                  >
+                    <span className="text-[20px] font-black text-blue-500 leading-none">
+                      {enProceso.length}
+                    </span>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
+                  </div>
+
+                  {/* RESUELTAS */}
+                  <div 
+                    onClick={() => setTaskTab('resueltos')}
+                    className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                      taskTab === 'resueltos' 
+                        ? 'bg-emerald-50/10 border-emerald-600 ring-2 ring-emerald-500/10 shadow-md' 
+                        : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                    }`}
+                  >
+                    <span className="text-[20px] font-black text-emerald-650 leading-none">
+                      {resueltos.filter(t => {
+                        if (!t.resolved_at) return false;
+                        const todayStr = new Date().toISOString().split('T')[0];
+                        return t.resolved_at.split('T')[0] === todayStr;
+                      }).length}
+                    </span>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>
+                  </div>
+                </div>
+
+                {/* Barra de Búsqueda Interactiva */}
+                <div className="flex gap-2 items-center">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      placeholder="Buscar por descripción o habitación..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-white border border-zinc-200 rounded-2xl pl-10 pr-4 py-2.5 outline-none text-[13px] font-medium text-zinc-900 placeholder-zinc-400 focus:ring-2 focus:ring-zinc-900/5 focus:border-zinc-300 transition-all shadow-sm"
+                    />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                      </svg>
                     </div>
-                  );
-                }
+                    {searchQuery && (
+                      <button 
+                        type="button"
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-400 hover:text-zinc-600 active:scale-95 transition-transform"
+                      >
+                        <X size={12} strokeWidth={3} />
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                return list.map(t => {
-                  const cfg = TYPE_CFG[t.type] || TYPE_CFG['otro'];
-                  const Icon = cfg.icon;
-                  const dateStr = t.created_at ? format(new Date(t.created_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
-                  const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy HH:mm', { locale: es }) : '';
+                {/* Listado de Incidencias */}
+                <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col divide-y divide-zinc-100 overflow-hidden">
+                  {(() => {
+                    const list = taskTab === 'nuevos' ? filteredNuevos
+                               : taskTab === 'pendientes' ? filteredPendientes
+                               : taskTab === 'en_proceso' ? filteredEnProceso
+                               : filteredResueltos;
 
-                  return (
-                    <div key={t.id} className="p-4 flex flex-col gap-3.5 hover:bg-zinc-50 transition-colors duration-150">
-                      <div className="flex gap-3.5">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border ${cfg.bg} ${cfg.text}`}>
-                          <Icon size={18} strokeWidth={2.5} />
+                    if (list.length === 0) {
+                      return (
+                        <div className="p-8 text-center text-zinc-400 text-[13px] font-semibold flex flex-col items-center justify-center gap-2">
+                          <CheckCircle2 size={24} className="text-zinc-300" />
+                          <span>No hay tareas en este estado.</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-bold text-zinc-900 leading-snug whitespace-pre-line">
-                            {t.description}
-                          </p>
-                        </div>
-                      </div>
+                      );
+                    }
 
-                      {/* Carrusel de fotos de incidencia si existen */}
-                      {renderTaskImagesCarousel(t)}
+                    return list.map(t => {
+                      const cfg = TYPE_CFG[t.type] || TYPE_CFG['otro'];
+                      const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(t.room);
+                      const displayRoom = isRoom ? `Habitación ${t.room}` : t.room;
+                      const dateStr = format(new Date(t.created_at), "d MMM, HH:mm", { locale: es });
+                      const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), "d MMM, HH:mm", { locale: es }) : '';
 
-                      {/* Foto de cierre si existe */}
-                      {t.resolution_photo_url && (
-                        <div className="space-y-1 mt-1 pl-1">
-                          <span className="text-[9.5px] font-black text-zinc-400 uppercase tracking-wider block">Evidencia de Cierre</span>
-                          <div className="rounded-2xl overflow-hidden border border-zinc-200 max-w-sm">
-                            <a href={t.resolution_photo_url} target="_blank" rel="noreferrer">
-                              <img src={t.resolution_photo_url} alt="Evidencia de Cierre" className="w-full max-h-40 object-cover" />
-                            </a>
+                      return (
+                        <div 
+                          key={t.id} 
+                          className="p-4 flex flex-col gap-2.5 active:bg-zinc-50/50 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div 
+                              onClick={() => openDetailsModal(t)}
+                              className="flex-1 cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${cfg.bg} ${cfg.text} border border-zinc-100`}>
+                                  <cfg.icon size={11} strokeWidth={2.5} />
+                                  <span>{cfg.label}</span>
+                                </span>
+                                <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
+                                  {dateStr}
+                                </span>
+                              </div>
+                              
+                              <p className="text-[12.5px] font-bold text-zinc-850 mt-2 leading-snug whitespace-pre-line text-left">
+                                {t.description}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1.5 shrink-0 select-none">
+                              <span className="text-[11px] font-black text-zinc-650 bg-zinc-100 border border-zinc-150 px-2 py-0.5 rounded-lg">
+                                {displayRoom}
+                              </span>
+                              
+                              {/* Botones de acción según estado */}
+                              {taskTab === 'nuevos' && (
+                                <button
+                                  onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                                  className="px-2.5 py-1.5 bg-purple-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-purple-700 transition-all text-center"
+                                >
+                                  Aceptar ⚡
+                                </button>
+                              )}
+                              {taskTab === 'pendientes' && (
+                                <button
+                                  onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
+                                  className="px-2.5 py-1.5 bg-amber-500 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-amber-600 transition-all text-center"
+                                >
+                                  Iniciar ⚡
+                                </button>
+                              )}
+                              {taskTab === 'en_proceso' && (
+                                <>
+                                  <button
+                                    onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                                    className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-250"
+                                  >
+                                    Regresar ↩
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenResolveModal(t)}
+                                    className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-emerald-700 transition-all text-center"
+                                  >
+                                    Terminar ✅
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
 
-                      {/* Footer de Tarjeta con Datos y Acciones */}
-                      <div className="flex items-center justify-between gap-2 mt-1 pt-2.5 border-t border-zinc-100/60 pl-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-650">
-                            Hab: {t.room}
-                          </span>
-                          <span className="text-[10px] font-semibold text-zinc-400">
-                            {format(new Date(t.created_at), 'd MMM', { locale: es })}
-                          </span>
-                          <span className="text-[10px] font-bold text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded border border-zinc-200">
-                            De: {t.reported_by || 'Admin'}
-                          </span>
-                        </div>
-
-                        {/* Botones táctiles rápidos adaptados a la app móvil de personal */}
-                        <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                          {taskTab === 'nuevos' && (
-                            <button
-                              onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                              className="px-2.5 py-1.5 bg-zinc-900 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-zinc-800 transition-all text-center"
-                            >
-                              Revisar ✓
-                            </button>
-                          )}
-                          {taskTab === 'pendientes' && (
-                            <button
-                              onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
-                              className="px-2.5 py-1.5 bg-amber-500 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-amber-600 transition-all text-center"
-                            >
-                              Iniciar ⚡
-                            </button>
-                          )}
-                          {taskTab === 'en_proceso' && (
-                            <>
-                              <button
-                                onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                                className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-250"
-                              >
-                                Regresar ↩
-                              </button>
-                              <button
-                                onClick={() => handleOpenResolveModal(t)}
-                                className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-emerald-700 transition-all text-center"
-                              >
-                                Terminar ✅
-                              </button>
-                            </>
+                          {taskTab === 'resueltos' && (
+                            <div className="flex items-center gap-1.5 text-[11px] font-black text-emerald-600 pl-1 pt-1.5 border-t border-zinc-100/50">
+                              <CheckCheck size={13} />
+                              <span>Cerrado: {resolvedStr}</span>
+                            </div>
                           )}
                         </div>
-                      </div>
-
-                      {taskTab === 'resueltos' && (
-                        <div className="flex items-center gap-1.5 text-[11px] font-black text-emerald-600 pl-1 pt-1.5 border-t border-zinc-100/50">
-                          <CheckCheck size={13} />
-                          <span>Cerrado: {resolvedStr}</span>
-                        </div>
-                      )}
+                      );
+                    });
+                  })()}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {/* Formulario para agregar programación */}
+                <div className="bg-white border border-zinc-200/80 rounded-[28px] p-5 shadow-sm space-y-4">
+                  <h4 className="text-[13px] font-black text-zinc-950 uppercase tracking-wider">Nueva Tarea Recurrente</h4>
+                  <div className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">Ubicación</label>
+                      <select 
+                        value={schedRoom} 
+                        onChange={e => setSchedRoom(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                      >
+                        {ROOMS.map(r => {
+                          const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(r);
+                          return (
+                            <option key={r} value={r}>
+                              {isRoom ? `Habitación ${r}` : r}
+                            </option>
+                          );
+                        })}
+                      </select>
                     </div>
-                  );
+
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">Frecuencia</label>
+                      <select 
+                        value={schedPeriod} 
+                        onChange={e => setSchedPeriod(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                      >
+                        <option value="1 week">Cada Semana</option>
+                        <option value="2 weeks">Cada 2 Semanas</option>
+                        <option value="1 month">Cada Mes</option>
+                        <option value="3 months">Cada 3 Meses</option>
+                        <option value="6 months">Cada 6 Meses</option>
+                        <option value="1 year">Cada Año</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">Descripción de la Tarea</label>
+                      <textarea 
+                        value={schedDesc} 
+                        onChange={e => setSchedDesc(e.target.value)}
+                        placeholder="Ej. Revisar aire acondicionado y control remoto, cambio de focos..."
+                        rows={3}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] font-medium text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 resize-none"
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleSaveSchedule}
+                      disabled={!schedDesc.trim() || loadingSchedules}
+                      className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold py-3.5 px-4 rounded-xl text-[12px] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98]"
+                    >
+                      <Plus size={14} />
+                      <span>Agregar Tarea Recurrente</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Listado de programaciones */}
+                <div className="space-y-3">
+                  <h4 className="text-[13px] font-black text-zinc-950 uppercase tracking-wider">Tareas Recurrentes Activas</h4>
+                  {loadingSchedules ? (
+                    <div className="p-8 text-center text-zinc-400 text-[12px] font-semibold">Cargando programaciones...</div>
+                  ) : schedules.length === 0 ? (
+                    <div className="bg-white border border-zinc-200/85 rounded-3xl p-8 text-center shadow-sm flex flex-col items-center justify-center gap-2">
+                      <span className="text-[12px] font-bold text-zinc-400">No hay tareas recurrentes programadas.</span>
+                    </div>
+                  ) : (
+                    schedules.map((item) => {
+                      const nextExec = new Date(item.next_trigger);
+                      const lastExec = item.last_triggered ? new Date(item.last_triggered) : null;
+                      const isOverdue = nextExec <= new Date();
+                      
+                      const periodLabels: Record<string, string> = {
+                        '1 week': 'Cada Semana',
+                        '2 weeks': 'Cada 2 Semanas',
+                        '1 month': 'Cada Mes',
+                        '3 months': 'Cada 3 Meses',
+                        '6 months': 'Cada 6 Meses',
+                        '1 year': 'Cada Año'
+                      };
+                      const freqText = periodLabels[item.period] || item.period;
+
+                      return (
+                        <div key={item.id} className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm space-y-3 flex flex-col hover:border-zinc-300 transition-colors">
+                          <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                              📍 {item.room}
+                            </span>
+                            <span className="text-[9.5px] font-bold text-zinc-400">
+                              🔄 {freqText}
+                            </span>
+                          </div>
+                          
+                          <p className="text-[12px] font-bold text-zinc-800 leading-snug whitespace-pre-line text-left">
+                            {item.description}
+                          </p>
                 });
               })()}
             </div>
