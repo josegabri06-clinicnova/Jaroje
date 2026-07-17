@@ -80,6 +80,22 @@ export async function sendWhatsAppTemplate(
       return { success: false, error: 'Formato de teléfono no válido' };
     }
 
+    // Verificar si los envíos automáticos de WhatsApp están deshabilitados en la base de datos
+    try {
+      const { data: disableSetting } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'disable_automatic_whatsapp')
+        .maybeSingle();
+
+      if (disableSetting && (disableSetting.value === true || disableSetting.value === 'true')) {
+        console.log(`[WhatsApp API] Envíos automáticos pausados por configuración (disable_automatic_whatsapp: true)`);
+        return { success: true, data: { status: 'paused', message: 'WhatsApp automatizado pausado por administrador.' } };
+      }
+    } catch (e) {
+      console.error("Error al consultar configuración de pausa de WhatsApp:", e);
+    }
+
     // Resolve language preference
     let languageCode = 'es_MX';
     let detectedLang = detectLanguageFromPhone(phone);

@@ -168,6 +168,7 @@ export default function ReservasList() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(0);
 
   // Estados para edición de reserva (Admin)
   const [isEditingRes, setIsEditingRes] = useState(false);
@@ -2794,53 +2795,176 @@ export default function ReservasList() {
                     </div>
                   </div>
 
-                  {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp (Solo para flujo de reservas nuevas) */}
-                  {isReservationNew(selectedRes) && selectedRes.id !== 'walkin' && (
-                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2 mt-1 animate-in fade-in duration-200">
-                      <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
-                        <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                        </svg>
-                        Mensaje de Bienvenida (Sin Enlaces)
-                      </span>
-                      <p className="text-[11px] text-zinc-400 leading-normal mb-2 text-left">
-                        Copia el mensaje de bienvenida sin enlaces (ideal para Booking.com y Airbnb, que bloquean links externos). El portal se envía automáticamente por WhatsApp.
-                      </p>
-                      <button
-                        onClick={() => {
-                          const guestFirstName = selectedRes.guest_name ? selectedRes.guest_name.trim().split(' ')[0] : 'Huésped';
-                          const message = `🏖️ ¡Gracias por reservar en Condominios Jaroje!\n\n` +
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `¡Será un gusto recibirte en Huatulco! 🌴\n\n` +
-                            `Hemos preparado tu Portal del Huésped, donde encontrarás toda la información sobre tu reservación y estancia.\n\n` +
-                            `En él podrás consultar:\n\n` +
-                            `•  📋 Datos de tu reservación.\n` +
-                            `•  🏡 Información y fotografías de tu alojamiento.\n` +
-                            `•  📍 Cómo llegar.\n` +
-                            `•  🚪 Acceso y guía de llegada.\n` +
-                            `•  📖 Políticas del alojamiento.\n` +
-                            `•  📶 WiFi y datos de tu estancia.\n` +
-                            `•  🌴 Recomendaciones para disfrutar Huatulco.\n\n` +
-                            `📲 Muy pronto recibirás en el WhatsApp registrado en tu reservación el acceso a tu Portal del Huésped.\n\n` +
-                            `Si tienes cualquier duda, estaremos encantados de ayudarte.\n\n` +
-                            `¡Te esperamos! ☀️`;
-                          
+                  {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp (Solo para flujo de reservas nuevas y con selector multimensaje para Admin) */}
+                  {selectedRes.id !== 'walkin' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                          </svg>
+                          Plantillas de Mensajes
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest">Seleccionar Plantilla de Mensaje</label>
+                        <select 
+                          value={selectedMessageIndex}
+                          onChange={(e) => setSelectedMessageIndex(Number(e.target.value))}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[12px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
+                        >
+                          <option value={0}>Mensaje 1: Solicitud de Reservación Recibida</option>
+                          <option value={1}>Mensaje 2: Recordatorio de Anticipo (Vence en 1h)</option>
+                          <option value={2}>Mensaje 3: Confirmación de Pago y Reservación</option>
+                          <option value={3}>Mensaje 4: Disponibilidad Liberada (Cancelación)</option>
+                          <option value={4}>Mensaje 5: Pre-Arrival / Todo listo para tu llegada</option>
+                          <option value={5}>Mensaje 6: Check-in / Bienvenido a Condominios Jaroje</option>
+                          <option value={6}>Mensaje 7: Seguimiento durante estancia (Día 2)</option>
+                          <option value={7}>Mensaje 8: Pre Check-Out (7:00 AM)</option>
+                          <option value={8}>Mensaje 9: Post Check-Out / Califica tu estancia</option>
+                          <option value={9}>Mensaje 10: Retargeting / Saludo posterior</option>
+                        </select>
+                      </div>
+
+                      {(() => {
+                        const guestFirstName = selectedRes.guest_name ? selectedRes.guest_name.trim().split(' ')[0] : 'Huésped';
+                        const link = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}`;
+
+                        const templates = [
+                          // Mensaje 1
+                          `*📋 Reservación recibida*\n` +
+                          `Hola, ${guestFirstName}.\n\n` +
+                          `¡Gracias por elegir *Condominios Jaroje* para tus próximas vacaciones en Huatulco! 🌴\n\n` +
+                          `En tu *Portal del Huésped* encontrarás *toda la información sobre tu reservación*, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n` +
+                          `👇 *Portal del Huésped*\n` +
+                          `${link}`,
+
+                          // Mensaje 2
+                          `*⏳ Último aviso para conservar tu reservación (vence en 1 hora)*\n` +
+                          `Hola, ${guestFirstName}.\n\n` +
+                          `Tu reservación está a punto de vencer. *Solo falta realizar tu depósito* dentro del tiempo indicado para conservarla.\n\n` +
+                          `En *"Realizar depósito"* encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n` +
+                          `👇 *Portal del Huésped / Depósito*\n` +
+                          `${link}`,
+
+                          // Mensaje 3
+                          `*🎉 ¡Tu reservación está confirmada!*\n` +
+                          `¡Excelente, ${guestFirstName}!\n\n` +
+                          `Nos da mucho gusto confirmar que tu reservación ya quedó lista. *Estamos listos para recibirte.*\n\n` +
+                          `En *"Mi reservación"* podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n` +
+                          `👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
+                          `👇 *Mi reservación*\n` +
+                          `${link}`,
+
+                          // Mensaje 4
+                          `*😔 Disponibilidad liberada*\n` +
+                          `Hola, ${guestFirstName}.\n\n` +
+                          `Lamentamos mucho que la disponibilidad de tu alojamiento haya sido liberada. Esperamos tener la oportunidad de recibirte nuevamente.\n\n` +
+                          `Si aún deseas hospedarte con nosotros, presiona *"Recuperar mi reservación"* para verificar si aún es posible recuperarla.\n\n` +
+                          `👇 *Recuperar reservación*\n` +
+                          `${link}`,
+
+                          // Mensaje 5
+                          `*🚗 Todo listo para tu llegada*\n` +
+                          `Hola, ${guestFirstName}.\n\n` +
+                          `¡Ya falta muy poco para recibirte en *Condominios Jaroje*! Queremos que tu llegada sea lo más cómoda posible.\n\n` +
+                          `👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
+                          `En *"Mi reservación"* encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n` +
+                          `*¿Llegarás después de las 8:00 p.m.?* Avísanos con anticipación para recibirte.\n\n` +
+                          `¡Te deseamos un excelente viaje!\n\n` +
+                          `👇 *Indicaciones y código de acceso*\n` +
+                          `${link}`,
+
+                          // Mensaje 6
+                          `*🏡 ¡Bienvenido a Condominios Jaroje!*\n` +
+                          `¡Qué gusto recibirte, ${guestFirstName}!\n\n` +
+                          `Esperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\n\n` +
+                          `En *"Mi estancia"* encontrarás el código del portón, la red WiFi, la contraseña, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para disfrutar tu estancia.\n\n` +
+                          `Deseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n` +
+                          `👇 *Datos de WiFi y Contraseña*\n` +
+                          `${link}`,
+
+                          // Mensaje 7
+                          `*😊 ¿Cómo va tu estancia?*\n` +
+                          `Buenos días, ${guestFirstName}.\n\n` +
+                          `Queremos asegurarnos de que todo esté transcurriendo como esperabas.\n\n` +
+                          `Si hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n` +
+                          `👇 *Reportar incidencia / Soporte*\n` +
+                          `${link}`,
+
+                          // Mensaje 8
+                          `*🚪 Check-out 12:00 p.m.*\n` +
+                          `Muy buenos días, ${guestFirstName}.\n\n` +
+                          `Hoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n\n` +
+                          `*Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.*\n\n` +
+                          `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
+                          `Si consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.\n\n` +
+                          `👇 *Escribir reseña*\n` +
+                          `${link}`,
+
+                          // Mensaje 9
+                          `*⭐ ¿Cómo estuvo tu experiencia?*\n` +
+                          `Hola, ${guestFirstName}.\n\n` +
+                          `Esperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\n\n` +
+                          `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
+                          `Si tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n` +
+                          `👇 *Calificar alojamiento*\n` +
+                          `${link}`,
+
+                          // Mensaje 10
+                          `*🌴 ¡Nos encantará recibirte nuevamente!*\n` +
+                          `Hola de nuevo, ${guestFirstName}.\n\n` +
+                          `Hoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\n` +
+                          `Si estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En *"Reservar nuevamente"* podrás consultar disponibilidad y comenzar una nueva reservación.\n\n` +
+                          `👇 *Reservar nuevamente*\n` +
+                          `${link}`
+                        ];
+
+                        const message = templates[selectedMessageIndex] || templates[0];
+
+                        const handleCopy = () => {
                           navigator.clipboard.writeText(message).then(() => {
-                            alert("📋 ¡Mensaje personalizado sin enlaces copiado al portapapeles! Listo para pegar en Booking o Airbnb.");
+                            alert(`📋 ¡Mensaje ${selectedMessageIndex + 1} copiado con éxito al portapapeles!`);
                           }).catch(err => {
-                            console.error("No se pudo copiar", err);
+                            console.error(err);
                             alert("Error al copiar al portapapeles.");
                           });
-                        }}
-                        className="w-full bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm"
-                      >
-                        <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>
-                        Copiar Mensaje de Bienvenida
-                      </button>
+                        };
+
+                        const handleSendWhatsApp = () => {
+                          let cleanPhone = String(selectedRes.guest_phone || '').trim().replace(/[+\s-()]/g, '');
+                          if (cleanPhone && !cleanPhone.startsWith('52') && cleanPhone.length === 10) {
+                            cleanPhone = '52' + cleanPhone; // Lada de México
+                          }
+                          const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+                          window.open(url, '_blank');
+                        };
+
+                        return (
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleCopy}
+                              className="flex-1 bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-sm border border-zinc-950"
+                            >
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                              </svg>
+                              <span>Copiar Texto</span>
+                            </button>
+                            <button
+                              onClick={handleSendWhatsApp}
+                              className="flex-1 bg-[#25D366] hover:bg-[#20ba59] text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-sm border border-[#25D366]"
+                            >
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                              </svg>
+                              <span>Enviar WhatsApp</span>
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

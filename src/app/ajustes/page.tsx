@@ -44,11 +44,15 @@ export default function AjustesPage() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     perfil: false,
     seguridad: false,
+    whatsapp: false,
     contable: false,
     tarifas: false,
     empleados: false,
     depuracion: false,
   });
+
+  const [disableAutoWA, setDisableAutoWA] = useState(false);
+  const [savingAutoWA, setSavingAutoWA] = useState(false);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -371,6 +375,42 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchDisableAutoWA = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'disable_automatic_whatsapp')
+        .maybeSingle();
+      if (!error && data) {
+        setDisableAutoWA(data.value === true || data.value === 'true');
+      } else {
+        setDisableAutoWA(false);
+      }
+    } catch (e) {
+      console.error('Error fetching disable auto WA setting:', e);
+    }
+  };
+
+  const handleToggleAutoWA = async (checked: boolean) => {
+    setSavingAutoWA(true);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'disable_automatic_whatsapp', value: String(checked) }, { onConflict: 'key' });
+      
+      if (error) throw error;
+      setDisableAutoWA(checked);
+      setToastMessage(checked ? "⏸️ WhatsApp automático pausado." : "▶️ WhatsApp automático activado.");
+      setTimeout(() => setToastMessage(''), 3000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Error al actualizar configuración de WhatsApp: ${err.message}`);
+    } finally {
+      setSavingAutoWA(false);
+    }
+  };
+
   const fetchPasskeys = async () => {
     try {
       const { data, error } = await supabase
@@ -440,6 +480,7 @@ export default function AjustesPage() {
     fetchAccounts();
     fetchPasskeys();
     fetchRecoveryKey();
+    fetchDisableAutoWA();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
@@ -972,6 +1013,42 @@ export default function AjustesPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* 2.5. MENSAJERÍA WHATSAPP */}
+      <CollapsibleSection
+        id="whatsapp"
+        icon={<Sparkles size={15} strokeWidth={2.5} className="text-[#25D366]" />}
+        title="Mensajería WhatsApp"
+        isOpen={expandedSections.whatsapp}
+        onToggle={() => toggleSection('whatsapp')}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between py-2">
+            <div className="flex flex-col flex-1 pr-4">
+              <span className="text-[14px] font-bold text-zinc-800">Pausar Envíos Automáticos</span>
+              <span className="text-[11px] text-zinc-400 mt-1 font-sans leading-normal">
+                Si activas esta opción, el sistema dejará de enviar de forma automatizada los mensajes de reserva, confirmación de pago, check-in, check-out, etc.
+              </span>
+            </div>
+            <div className="flex items-center shrink-0">
+              <button
+                type="button"
+                onClick={() => handleToggleAutoWA(!disableAutoWA)}
+                disabled={savingAutoWA}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer focus:outline-none ${
+                  disableAutoWA ? 'bg-rose-500' : 'bg-zinc-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    disableAutoWA ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </div>
       </CollapsibleSection>
