@@ -2063,9 +2063,42 @@ export default function StaffPage() {
                           <p className="text-[12px] font-bold text-zinc-800 leading-snug whitespace-pre-line text-left">
                             {item.description}
                           </p>
-                });
-              })()}
-            </div>
+                          <div className="border-t border-zinc-100/70 pt-2.5 space-y-1 text-[10px] font-medium text-zinc-500">
+                            <div className="flex justify-between">
+                              <span>Último trigger:</span>
+                              <span className="font-bold text-zinc-700">
+                                {lastExec ? format(lastExec, "d MMM yyyy", { locale: es }) : 'Nunca ⏳'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Próximo trigger:</span>
+                              <span className={`font-bold ${isOverdue ? 'text-rose-600 animate-pulse font-black' : 'text-zinc-700'}`}>
+                                {format(nextExec, "d MMM yyyy", { locale: es })} {isOverdue && '⚠️'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 pt-1">
+                            <button
+                              onClick={() => forceExecuteSchedule(item)}
+                              className="flex-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-250 font-bold text-[11px] py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] cursor-pointer"
+                            >
+                              <span>⚙️ Forzar Hoy</span>
+                            </button>
+                            <button
+                              onClick={() => deleteSchedule(item.id)}
+                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-250 font-bold text-[11px] px-3 py-2 rounded-lg flex items-center justify-center transition-all active:scale-[0.98] cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
