@@ -1390,27 +1390,6 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva?.check_in, selectedReserva?.check_out]);
 
-  // Inicializar notas editables y mapa de huéspedes del grupo al abrir el modal de check-in
-  useEffect(() => {
-    if (selectedReserva) {
-      setCheckInNotes(selectedReserva.notes || '');
-      
-      const initialMap: Record<string, { adults: number; children: number }> = {};
-      initialMap[String(selectedReserva.id)] = {
-        adults: Number(selectedReserva.num_adult || 1),
-        children: Number(selectedReserva.num_child || 0)
-      };
-      
-      siblingBookings.forEach(sib => {
-        initialMap[String(sib.id)] = {
-          adults: Number(sib.num_adult || 1),
-          children: Number(sib.num_child || 0)
-        };
-      });
-      setGroupGuestsMap(initialMap);
-    }
-  }, [selectedReserva?.id, siblingBookings]);
-
   // Buscar reservas del mismo grupo (mismo check_in, no checked_in, mismo nombre o teléfono)
   const siblingBookings = useMemo(() => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return [];
@@ -1435,6 +1414,27 @@ export default function RecepcionPage() {
     if (!selectedReserva) return [];
     return [selectedReserva, ...siblingBookings];
   }, [selectedReserva, siblingBookings]);
+
+  // Inicializar notas editables y mapa de huéspedes del grupo al abrir el modal de check-in
+  useEffect(() => {
+    if (selectedReserva) {
+      setCheckInNotes(selectedReserva.notes || '');
+      
+      const initialMap: Record<string, { adults: number; children: number }> = {};
+      initialMap[String(selectedReserva.id)] = {
+        adults: Number(selectedReserva.num_adult || 1),
+        children: Number(selectedReserva.num_child || 0)
+      };
+      
+      siblingBookings.forEach(sib => {
+        initialMap[String(sib.id)] = {
+          adults: Number(sib.num_adult || 1),
+          children: Number(sib.num_child || 0)
+        };
+      });
+      setGroupGuestsMap(initialMap);
+    }
+  }, [selectedReserva?.id, siblingBookings]);
 
   const isOtaRoom = (r: Reserva) => ['Airbnb', 'Booking.com'].includes(r.channel || '');
 
