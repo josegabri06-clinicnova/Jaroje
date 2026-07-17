@@ -945,8 +945,9 @@ export default function MantenimientoPage() {
             );
           })
         )}
-      </>
-    ) : (
+      </div>
+    </>
+  ) : (
       // VISTA DE MANTENIMIENTO PROGRAMADO
       <div className="space-y-6 animate-in fade-in duration-200">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
