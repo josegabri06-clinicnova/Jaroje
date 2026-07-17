@@ -2208,6 +2208,16 @@ export default function ReservasList() {
                 <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">ID: {selectedRes.id || selectedRes.room_id || 'N/A'}</p>
               </div>
               <div className="flex items-center gap-2">
+                {userRole === 'admin' && selectedRes.id !== 'walkin' && (
+                  <a
+                    href={`/public/reserva/${selectedRes.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-2.5 py-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 border border-blue-150 hover:bg-blue-100 rounded-lg transition-all flex items-center gap-1 cursor-pointer select-none"
+                  >
+                    🌐 Portal
+                  </a>
+                )}
                 {selectedRes.status !== 'cancelled' && userRole === 'admin' && (
                   <button
                     onClick={() => setIsEditingRes(!isEditingRes)}
@@ -2784,27 +2794,40 @@ export default function ReservasList() {
                     </div>
                   </div>
 
-                  {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp */}
-                  {selectedRes.id !== 'walkin' && (
-                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2 mt-1">
+                  {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp (Solo para flujo de reservas nuevas) */}
+                  {isReservationNew(selectedRes) && selectedRes.id !== 'walkin' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2 mt-1 animate-in fade-in duration-200">
                       <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
                         <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
                         </svg>
-                        Mensaje de Bienvenida (Link de Portal)
+                        Mensaje de Bienvenida (Sin Enlaces)
                       </span>
                       <p className="text-[11px] text-zinc-400 leading-normal mb-2 text-left">
-                        Genera un mensaje personalizado con el enlace de acceso directo al portal de este huésped para enviarlo por el chat de Booking.com, Airbnb, Expedia o WhatsApp.
+                        Copia el mensaje de bienvenida sin enlaces (ideal para Booking.com y Airbnb, que bloquean links externos). El portal se envía automáticamente por WhatsApp.
                       </p>
                       <button
                         onClick={() => {
                           const guestFirstName = selectedRes.guest_name ? selectedRes.guest_name.trim().split(' ')[0] : 'Huésped';
-                          const link = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}`;
-                          
-                          const message = `🏖️ *¡Gracias por reservar con Condominios Jaroje!*\n\nHola, *${guestFirstName}*.\n\n¡Nos da mucho gusto recibirte en Huatulco! 🌴\n\nHemos preparado tu *Portal del Huésped*, donde encontrarás toda la información sobre tu reservación y estancia.\n\n👇 *Mi reservación*\n${link}\n\nEn él encontrarás todo lo necesario para tu estancia, incluyendo:\n\n•  📋 *Datos de tu reservación.*\n•  🏡 *Información y fotografías de tu alojamiento.*\n•  📍 *Cómo llegar.*\n•  🚪 *Acceso y guía de llegada.*\n•  📖 *Políticas del alojamiento.*\n•  📶 *WiFi y datos de tu estancia.*\n•  🌴 *Recomendaciones para disfrutar Huatulco.*\n\nSi tienes cualquier duda, estaremos encantados de ayudarte.\n\n*¡Te esperamos!* ☀️`;
+                          const message = `🏖️ ¡Gracias por reservar en Condominios Jaroje!\n\n` +
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `¡Será un gusto recibirte en Huatulco! 🌴\n\n` +
+                            `Hemos preparado tu Portal del Huésped, donde encontrarás toda la información sobre tu reservación y estancia.\n\n` +
+                            `En él podrás consultar:\n\n` +
+                            `•  📋 Datos de tu reservación.\n` +
+                            `•  🏡 Información y fotografías de tu alojamiento.\n` +
+                            `•  📍 Cómo llegar.\n` +
+                            `•  🚪 Acceso y guía de llegada.\n` +
+                            `•  📖 Políticas del alojamiento.\n` +
+                            `•  📶 WiFi y datos de tu estancia.\n` +
+                            `•  🌴 Recomendaciones para disfrutar Huatulco.\n\n` +
+                            `📲 Muy pronto recibirás en el WhatsApp registrado en tu reservación el acceso a tu Portal del Huésped.\n\n` +
+                            `Si tienes cualquier duda, estaremos encantados de ayudarte.\n\n` +
+                            `¡Te esperamos! ☀️`;
                           
                           navigator.clipboard.writeText(message).then(() => {
-                            alert("📋 ¡Mensaje personalizado copiado al portapapeles! Listo para pegar en Booking, Airbnb o WhatsApp.");
+                            alert("📋 ¡Mensaje personalizado sin enlaces copiado al portapapeles! Listo para pegar en Booking o Airbnb.");
                           }).catch(err => {
                             console.error("No se pudo copiar", err);
                             alert("Error al copiar al portapapeles.");
