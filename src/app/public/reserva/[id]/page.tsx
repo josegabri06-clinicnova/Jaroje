@@ -1224,66 +1224,68 @@ export default function PublicReservaPage() {
         </div>
 
         {/* 4. ESTADO DE CUENTA */}
-        <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
-          <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
-            <Clock size={18} className="text-indigo-600" />
-            <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{t.accountTitle}</h3>
-          </div>
-
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between items-center text-zinc-650">
-              <span>{t.totalEstancia}</span>
-              <strong className="text-zinc-900 font-extrabold">${booking.price.toLocaleString('es-MX')} MXN</strong>
+        {!isOta && (
+          <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-3.5">
+            <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
+              <Clock size={18} className="text-indigo-600" />
+              <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{t.accountTitle}</h3>
             </div>
-            {extraChargesTotal > 0 && (
-              <div className="flex justify-between items-center text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 font-semibold">
-                <span className="flex items-center gap-1.5">
-                  <AlertTriangle size={12} className="text-amber-500 shrink-0" />
-                  {lang === 'en' ? 'Extra guests charge' : 'Cargo huéspedes extra'}
-                </span>
-                <strong className="font-black">+${extraChargesTotal.toLocaleString('es-MX')} MXN</strong>
+
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between items-center text-zinc-650">
+                <span>{t.totalEstancia}</span>
+                <strong className="text-zinc-900 font-extrabold">${booking.price.toLocaleString('es-MX')} MXN</strong>
               </div>
-            )}
-            {extraChargesTotal > 0 && (
-              <div className="flex justify-between items-center text-zinc-800 border-t border-dashed border-zinc-200 pt-2">
-                <span className="font-bold">{lang === 'en' ? 'Total (with extras):' : 'Total con cargos extra:'}</span>
-                <strong className="text-zinc-900 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
-              </div>
-            )}
-            {hasPaid ? (
-              <>
-                <div className="flex justify-between items-center text-emerald-600 font-semibold bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
-                  <span className="flex items-center gap-1">{t.anticipoRecibido}</span>
-                  <strong className="font-black">${booking.deposit.toLocaleString('es-MX')} MXN</strong>
+              {extraChargesTotal > 0 && (
+                <div className="flex justify-between items-center text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 font-semibold">
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle size={12} className="text-amber-500 shrink-0" />
+                    {lang === 'en' ? 'Extra guests charge' : 'Cargo huéspedes extra'}
+                  </span>
+                  <strong className="font-black">+${extraChargesTotal.toLocaleString('es-MX')} MXN</strong>
                 </div>
-                <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
-                  <span className="font-bold">{t.saldoRestante}</span>
-                  <strong className="text-indigo-600 font-black text-base">
-                    ${(Math.max(0, totalConExtras - booking.deposit)).toLocaleString('es-MX')} MXN
-                  </strong>
+              )}
+              {extraChargesTotal > 0 && (
+                <div className="flex justify-between items-center text-zinc-800 border-t border-dashed border-zinc-200 pt-2">
+                  <span className="font-bold">{lang === 'en' ? 'Total (with extras):' : 'Total con cargos extra:'}</span>
+                  <strong className="text-zinc-900 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
                 </div>
-              </>
-            ) : (
-              <>
-                <div className="flex justify-between items-center text-indigo-600 font-semibold bg-indigo-50/50 px-3 py-2 rounded-xl border border-indigo-100/80">
-                  <span>{t.anticipoRequerido}</span>
-                  <strong className="font-black">${(extraChargesTotal > 0 ? anticipoConExtras : anticipoRequerido).toLocaleString('es-MX')} MXN</strong>
-                </div>
-                <div className="flex justify-between items-center text-zinc-500">
-                  <span>{t.anticipoDepositado}</span>
-                  <strong className="font-bold">$0 MXN</strong>
-                </div>
-                <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
-                  <span className="font-bold">{t.saldoRestante}</span>
-                  <strong className="text-indigo-600 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
-                </div>
-              </>
-            )}
+              )}
+              {hasPaid ? (
+                <>
+                  <div className="flex justify-between items-center text-emerald-600 font-semibold bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
+                    <span className="flex items-center gap-1">{t.anticipoRecibido}</span>
+                    <strong className="font-black">${booking.deposit.toLocaleString('es-MX')} MXN</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
+                    <span className="font-bold">{t.saldoRestante}</span>
+                    <strong className="text-indigo-600 font-black text-base">
+                      ${(Math.max(0, totalConExtras - booking.deposit)).toLocaleString('es-MX')} MXN
+                    </strong>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center text-indigo-600 font-semibold bg-indigo-50/50 px-3 py-2 rounded-xl border border-indigo-100/80">
+                    <span>{t.anticipoRequerido}</span>
+                    <strong className="font-black">${(extraChargesTotal > 0 ? anticipoConExtras : anticipoRequerido).toLocaleString('es-MX')} MXN</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-zinc-500">
+                    <span>{t.anticipoDepositado}</span>
+                    <strong className="font-bold">$0 MXN</strong>
+                  </div>
+                  <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
+                    <span className="font-bold">{t.saldoRestante}</span>
+                    <strong className="text-indigo-600 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* 5. PAGO / CARGA DE COMPROBANTE (Solo cuando aplica saldo pendiente) */}
-        {booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (() => {
+        {!isOta && booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (() => {
           const targetAmount = booking.deposit === 0 
             ? (paymentSplit === '50' ? booking.price * 0.5 : booking.price)
             : booking.balance;
