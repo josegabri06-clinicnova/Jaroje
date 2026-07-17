@@ -3644,7 +3644,7 @@ export default function ReservasList() {
                               💰 Registrar Anticipo
                             </button>
                           )}
-                          {(getRole() === 'admin' || selectedReserva.checked_in) && (
+                          {(getRole() === 'admin' || selectedRes?.checked_in) && (
                             <button
                               onClick={() => {
                                 setExtensionNights(1);
