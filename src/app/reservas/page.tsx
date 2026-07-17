@@ -169,6 +169,7 @@ export default function ReservasList() {
   const [endDate, setEndDate] = useState('');
   const [userRole, setUserRole] = useState<string | null>(null);
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(0);
+  const [sendingTemplate, setSendingTemplate] = useState<boolean>(false);
 
   // Estados para edición de reserva (Admin)
   const [isEditingRes, setIsEditingRes] = useState(false);
@@ -2966,16 +2967,114 @@ export default function ReservasList() {
                           window.open(url, '_blank');
                         };
 
+                        const apiTemplates = [
+                          null,
+                          'solicitud_recibida',
+                          'ultimo_aviso',
+                          'reservacion_confirmada',
+                          'disponibilidad_liberada',
+                          'preparacion_llegada',
+                          'bienvenida_checkin',
+                          'seguimiento_satisfaccion',
+                          'salida_checkout',
+                          'comparte_experiencia',
+                          'recibimiento_nuevamente'
+                        ];
+                        const apiTemplateKey = apiTemplates[selectedMessageIndex];
+
+                        const handleSendApiTemplate = async () => {
+                          if (!apiTemplateKey) return;
+                          
+                          let cleanPhone = String(selectedRes.guest_phone || '').replace(/\D/g, '');
+                          if (!cleanPhone) {
+                            alert("⚠️ Esta reservación no tiene un teléfono registrado para el envío de la plantilla.");
+                            return;
+                          }
+
+                          setSendingTemplate(true);
+                          try {
+                            const res = await fetch('/api/whatsapp/send-template', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                template: apiTemplateKey,
+                                booking: selectedRes
+                              })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              alert(`✅ ¡Mensaje enviado con éxito por la API oficial!\nEl huésped recibirá el formato nativo con botones interactivos y sin links visibles.`);
+                            } else {
+                              alert(`❌ Error al enviar la plantilla: ${data.error || 'Error desconocido'}`);
+                            }
+                          } catch (err: any) {
+                            console.error(err);
+                            alert(`❌ Error de red al enviar la plantilla: ${err.message || err}`);
+                          } finally {
+                            setSendingTemplate(false);
+                          }
+                        };
+
+                        if (selectedMessageIndex === 0) {
+                          return (
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(message).then(() => {
+                                  alert("📋 ¡Mensaje OTA copiado al portapapeles! Listo para pegar en la plataforma de Booking o Airbnb.");
+                                }).catch(err => {
+                                  console.error("Error al copiar:", err);
+                                  alert("Error al copiar al portapapeles.");
+                                });
+                              }}
+                              className="w-full bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-sm border border-zinc-950"
+                            >
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                              </svg>
+                              <span>Copiar Mensaje de Bienvenida</span>
+                            </button>
+                          );
+                        }
+
                         return (
-                          <button
-                            onClick={handleCopyAndSend}
-                            className="w-full bg-[#25D366] hover:bg-[#20ba59] active:scale-98 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border border-[#25D366]"
-                          >
-                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                            </svg>
-                            <span>Copiar y Enviar WhatsApp</span>
-                          </button>
+                          <div className="flex flex-col gap-2.5">
+                            {/* Botón Principal: Enviar Plantilla Oficial API con botones nativos */}
+                            <button
+                              onClick={handleSendApiTemplate}
+                              disabled={sendingTemplate}
+                              className="w-full bg-[#25D366] hover:bg-[#20ba59] disabled:bg-[#25D366]/65 active:scale-95 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border border-[#25D366] disabled:cursor-not-allowed"
+                            >
+                              {sendingTemplate ? (
+                                <>
+                                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                  </svg>
+                                  <span>Enviando botones oficiales...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                                  </svg>
+                                  <span>Enviar Botones Oficiales (API Cloud)</span>
+                                </>
+                              )}
+                            </button>
+
+                            {/* Botón Secundario: Copiar y Enviar Manual */}
+                            <button
+                              onClick={handleCopyAndSend}
+                              className="w-full bg-zinc-800 hover:bg-zinc-900 active:scale-95 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border border-zinc-900"
+                            >
+                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                              </svg>
+                              <span>Copiar y Enviar Manual</span>
+                            </button>
+                          </div>
                         );
                       })()}
                     </div>
