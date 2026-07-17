@@ -38,40 +38,40 @@ export async function POST(req: Request) {
 
     switch (template) {
       case 'solicitud_recibida':
-        res = await sendTemplate1_SolicitudRecibida(booking);
+        res = await sendTemplate1_SolicitudRecibida(booking, true);
         break;
       case 'ultimo_aviso':
-        res = await sendTemplate2_UltimoAviso(booking);
+        res = await sendTemplate2_UltimoAviso(booking, true);
         break;
       case 'reservacion_confirmada':
-        res = await sendTemplate3_ReservacionConfirmada(booking);
+        res = await sendTemplate3_ReservacionConfirmada(booking, true);
         break;
       case 'disponibilidad_liberada':
-        res = await sendTemplate4_DisponibilidadLiberada(booking);
+        res = await sendTemplate4_DisponibilidadLiberada(booking, true);
         break;
       case 'preparacion_llegada':
-        res = await sendTemplate5_PreparacionLlegada(booking);
+        res = await sendTemplate5_PreparacionLlegada(booking, true);
         break;
       case 'bienvenida_checkin':
-        res = await sendTemplate6_BienvenidaCheckin(booking);
+        res = await sendTemplate6_BienvenidaCheckin(booking, true);
         break;
       case 'seguimiento_satisfaccion':
-        res = await sendTemplate7_SeguimientoSatisfaccion(booking);
+        res = await sendTemplate7_SeguimientoSatisfaccion(booking, true);
         break;
       case 'checkout_manana':
       case 'salida_checkout':
-        res = await sendTemplate8_SalidaCheckout(booking);
+        res = await sendTemplate8_SalidaCheckout(booking, true);
         break;
       case 'recordatorio_opinion':
       case 'comparte_experiencia':
-        res = await sendTemplate9_ComparteExperiencia(booking);
+        res = await sendTemplate9_ComparteExperiencia(booking, true);
         break;
       case 'recordatorio_estancia_anterior':
       case 'recibimiento_nuevamente':
-        res = await sendTemplate10_RecibimientoNuevamente(booking);
+        res = await sendTemplate10_RecibimientoNuevamente(booking, true);
         break;
       case 'pago_anticipo_recibido':
-        res = await sendTemplate11_PagoAnticipoRecibido(booking);
+        res = await sendTemplate11_PagoAnticipoRecibido(booking, true);
         break;
       default:
         return NextResponse.json({

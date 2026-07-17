@@ -65,7 +65,8 @@ export async function sendWhatsAppTemplate(
   parameters: string[],
   buttonParameters?: string[],
   bookingId?: string | number,
-  buttonType?: 'url' | 'quick_reply'
+  buttonType?: 'url' | 'quick_reply',
+  bypassPause: boolean = false
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   try {
     const token = process.env.WHATSAPP_TOKEN;
@@ -80,20 +81,22 @@ export async function sendWhatsAppTemplate(
       return { success: false, error: 'Formato de teléfono no válido' };
     }
 
-    // Verificar si los envíos automáticos de WhatsApp están deshabilitados en la base de datos
-    try {
-      const { data: disableSetting } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'disable_automatic_whatsapp')
-        .maybeSingle();
+    // Verificar si los envíos automáticos de WhatsApp están deshabilitados en la base de datos (solo si no es un envío manual)
+    if (!bypassPause) {
+      try {
+        const { data: disableSetting } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'disable_automatic_whatsapp')
+          .maybeSingle();
 
-      if (disableSetting && (disableSetting.value === true || disableSetting.value === 'true')) {
-        console.log(`[WhatsApp API] Envíos automáticos pausados por configuración (disable_automatic_whatsapp: true)`);
-        return { success: true, data: { status: 'paused', message: 'WhatsApp automatizado pausado por administrador.' } };
+        if (disableSetting && (disableSetting.value === true || disableSetting.value === 'true')) {
+          console.log(`[WhatsApp API] Envíos automáticos pausados por configuración (disable_automatic_whatsapp: true)`);
+          return { success: true, data: { status: 'paused', message: 'WhatsApp automatizado pausado por administrador.' } };
+        }
+      } catch (e) {
+        console.error("Error al consultar configuración de pausa de WhatsApp:", e);
       }
-    } catch (e) {
-      console.error("Error al consultar configuración de pausa de WhatsApp:", e);
     }
 
     // Resolve language preference
@@ -401,7 +404,7 @@ function getPublicReservaLink(bookingId: string | number): string {
 }
 
 // 1. Mensaje 1 - Solicitud de reservación recibida (solicitud_recibida)
-export async function sendTemplate1_SolicitudRecibida(booking: any) {
+export async function sendTemplate1_SolicitudRecibida(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -413,11 +416,11 @@ export async function sendTemplate1_SolicitudRecibida(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 2. Mensaje 2 - Último aviso para conservar la reservación (ultimo_aviso)
-export async function sendTemplate2_UltimoAviso(booking: any) {
+export async function sendTemplate2_UltimoAviso(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -429,11 +432,11 @@ export async function sendTemplate2_UltimoAviso(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
-export async function sendTemplate3_ReservacionConfirmada(booking: any) {
+export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -445,11 +448,11 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
-export async function sendTemplate4_DisponibilidadLiberada(booking: any) {
+export async function sendTemplate4_DisponibilidadLiberada(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -461,11 +464,11 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
-export async function sendTemplate5_PreparacionLlegada(booking: any) {
+export async function sendTemplate5_PreparacionLlegada(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -477,11 +480,11 @@ export async function sendTemplate5_PreparacionLlegada(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
-export async function sendTemplate6_BienvenidaCheckin(booking: any) {
+export async function sendTemplate6_BienvenidaCheckin(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -493,11 +496,11 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 7. Mensaje 7 - Seguimiento de satisfacción (seguimiento_satisfaccion)
-export async function sendTemplate7_SeguimientoSatisfaccion(booking: any) {
+export async function sendTemplate7_SeguimientoSatisfaccion(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -509,11 +512,11 @@ export async function sendTemplate7_SeguimientoSatisfaccion(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 8. Mensaje 8 - Día de salida (salida_checkout)
-export async function sendTemplate8_SalidaCheckout(booking: any) {
+export async function sendTemplate8_SalidaCheckout(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -521,11 +524,11 @@ export async function sendTemplate8_SalidaCheckout(booking: any) {
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'salida_checkout', params, undefined, booking.id);
+  return sendWhatsAppTemplate(phone, 'salida_checkout', params, undefined, booking.id, undefined, bypassPause);
 }
 
 // 9. Mensaje 9 - Comparte tu experiencia (comparte_experiencia)
-export async function sendTemplate9_ComparteExperiencia(booking: any) {
+export async function sendTemplate9_ComparteExperiencia(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -533,11 +536,11 @@ export async function sendTemplate9_ComparteExperiencia(booking: any) {
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'comparte_experiencia', params, undefined, booking.id);
+  return sendWhatsAppTemplate(phone, 'comparte_experiencia', params, undefined, booking.id, undefined, bypassPause);
 }
 
 // 10. Mensaje 10 - ¡Nos encantaría recibirte nuevamente! (recibimiento_nuevamente)
-export async function sendTemplate10_RecibimientoNuevamente(booking: any) {
+export async function sendTemplate10_RecibimientoNuevamente(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -549,11 +552,11 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)
-export async function sendTemplate11_PagoAnticipoRecibido(booking: any) {
+export async function sendTemplate11_PagoAnticipoRecibido(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -572,7 +575,7 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any) {
     `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
   ];
 
-  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams, booking.id, 'quick_reply');
+  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams, booking.id, 'quick_reply', bypassPause);
 }
 
 // 12. Portal del Huésped - Enlace como botón CTA URL (portal_huesped_link)
