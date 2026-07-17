@@ -2814,16 +2814,17 @@ export default function ReservasList() {
                           onChange={(e) => setSelectedMessageIndex(Number(e.target.value))}
                           className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[12px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
                         >
-                          <option value={0}>Mensaje 1: Solicitud de Reservación Recibida</option>
-                          <option value={1}>Mensaje 2: Recordatorio de Anticipo (Vence en 1h)</option>
-                          <option value={2}>Mensaje 3: Confirmación de Pago y Reservación</option>
-                          <option value={3}>Mensaje 4: Disponibilidad Liberada (Cancelación)</option>
-                          <option value={4}>Mensaje 5: Pre-Arrival / Todo listo para tu llegada</option>
-                          <option value={5}>Mensaje 6: Check-in / Bienvenido a Condominios Jaroje</option>
-                          <option value={6}>Mensaje 7: Seguimiento durante estancia (Día 2)</option>
-                          <option value={7}>Mensaje 8: Pre Check-Out (7:00 AM)</option>
-                          <option value={8}>Mensaje 9: Post Check-Out / Califica tu estancia</option>
-                          <option value={9}>Mensaje 10: Retargeting / Saludo posterior</option>
+                          <option value={0}>Mensaje Bienvenida OTA (Sin Enlaces)</option>
+                          <option value={1}>Mensaje 1: Solicitud de Reservación Recibida</option>
+                          <option value={2}>Mensaje 2: Recordatorio de Anticipo (Vence en 1h)</option>
+                          <option value={3}>Mensaje 3: Confirmación de Pago y Reservación</option>
+                          <option value={4}>Mensaje 4: Disponibilidad Liberada (Cancelación)</option>
+                          <option value={5}>Mensaje 5: Pre-Arrival / Todo listo para tu llegada</option>
+                          <option value={6}>Mensaje 6: Check-in / Bienvenido a Condominios Jaroje</option>
+                          <option value={7}>Mensaje 7: Seguimiento durante estancia (Día 2)</option>
+                          <option value={8}>Mensaje 8: Pre Check-Out (7:00 AM)</option>
+                          <option value={9}>Mensaje 9: Post Check-Out / Califica tu estancia</option>
+                          <option value={10}>Mensaje 10: Retargeting / Saludo posterior</option>
                         </select>
                       </div>
 
@@ -2832,6 +2833,23 @@ export default function ReservasList() {
                         const link = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}`;
 
                         const templates = [
+                          // Mensaje de Bienvenida OTA (Sin Enlaces)
+                          `🏖️ ¡Gracias por reservar en Condominios Jaroje!\n\n` +
+                          `Hola, ${guestFirstName}.\n\n` +
+                          `¡Será un gusto recibirte en Huatulco! 🌴\n\n` +
+                          `Hemos preparado tu Portal del Huésped, donde encontrarás toda la información sobre tu reservación y estancia.\n\n` +
+                          `En él podrás consultar:\n\n` +
+                          `•  📋 Datos de tu reservación.\n` +
+                          `•  🏡 Información y fotografías de tu alojamiento.\n` +
+                          `•  📍 Cómo llegar.\n` +
+                          `•  🚪 Acceso y guía de llegada.\n` +
+                          `•  📖 Políticas del alojamiento.\n` +
+                          `•  📶 WiFi y datos de tu estancia.\n` +
+                          `•  🌴 Recomendaciones para disfrutar Huatulco.\n\n` +
+                          `📲 Muy pronto recibirás en el WhatsApp registrado en tu reservación el acceso a tu Portal del Huésped.\n\n` +
+                          `Si tienes cualquier duda, estaremos encantados de ayudarte.\n\n` +
+                          `¡Te esperamos! ☀️`,
+
                           // Mensaje 1
                           `*📋 Reservación recibida*\n` +
                           `Hola, ${guestFirstName}.\n\n` +
@@ -2923,16 +2941,13 @@ export default function ReservasList() {
 
                         const message = templates[selectedMessageIndex] || templates[0];
 
-                        const handleCopy = () => {
-                          navigator.clipboard.writeText(message).then(() => {
-                            alert(`📋 ¡Mensaje ${selectedMessageIndex + 1} copiado con éxito al portapapeles!`);
-                          }).catch(err => {
-                            console.error(err);
-                            alert("Error al copiar al portapapeles.");
+                        const handleCopyAndSend = () => {
+                          // 1. Copiar al portapapeles en segundo plano
+                          navigator.clipboard.writeText(message).catch(err => {
+                            console.error("Error al copiar al portapapeles:", err);
                           });
-                        };
 
-                        const handleSendWhatsApp = () => {
+                          // 2. Formatear el teléfono y abrir WhatsApp de forma síncrona en el contexto del click
                           let cleanPhone = String(selectedRes.guest_phone || '').trim().replace(/[+\s-()]/g, '');
                           if (cleanPhone && !cleanPhone.startsWith('52') && cleanPhone.length === 10) {
                             cleanPhone = '52' + cleanPhone; // Lada de México
@@ -2942,27 +2957,15 @@ export default function ReservasList() {
                         };
 
                         return (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleCopy}
-                              className="flex-1 bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-sm border border-zinc-950"
-                            >
-                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                              </svg>
-                              <span>Copiar Texto</span>
-                            </button>
-                            <button
-                              onClick={handleSendWhatsApp}
-                              className="flex-1 bg-[#25D366] hover:bg-[#20ba59] text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-95 shadow-sm border border-[#25D366]"
-                            >
-                              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                              </svg>
-                              <span>Enviar WhatsApp</span>
-                            </button>
-                          </div>
+                          <button
+                            onClick={handleCopyAndSend}
+                            className="w-full bg-[#25D366] hover:bg-[#20ba59] active:scale-98 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border border-[#25D366]"
+                          >
+                            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                            </svg>
+                            <span>Copiar y Enviar WhatsApp</span>
+                          </button>
                         );
                       })()}
                     </div>
