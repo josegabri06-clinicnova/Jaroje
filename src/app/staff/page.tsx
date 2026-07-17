@@ -1166,7 +1166,7 @@ export default function StaffPage() {
 
               {/* Conteo por estados */}
               <div className="grid grid-cols-4 gap-1.5">
-                <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-2 text-center shadow-sm">
+                <div className="bg-emerald-50/50 border-2 border-emerald-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-emerald-700">
                     {ROOMS.filter(r => {
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
@@ -1176,7 +1176,7 @@ export default function StaffPage() {
                   </span>
                   <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
                 </div>
-                <div className="bg-amber-50 border border-amber-100 rounded-xl p-2 text-center shadow-sm">
+                <div className="bg-amber-50/50 border-2 border-amber-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-amber-700">
                     {ROOMS.filter(r => {
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
@@ -1187,7 +1187,7 @@ export default function StaffPage() {
                   </span>
                   <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
                 </div>
-                <div className="bg-rose-50 border border-rose-100 rounded-xl p-2 text-center shadow-sm">
+                <div className="bg-rose-50/50 border-2 border-rose-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-rose-700">
                     {ROOMS.filter(r => {
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
@@ -1197,7 +1197,7 @@ export default function StaffPage() {
                   </span>
                   <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
                 </div>
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-2 text-center shadow-sm">
+                <div className="bg-blue-50/50 border-2 border-blue-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-blue-700">
                     {ROOMS.filter(r => {
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
@@ -1234,23 +1234,23 @@ export default function StaffPage() {
                         const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
                         const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, (dbStatusObj as any)?.updated_at);
 
-                        let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-350';
+                        let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
                         let dotClass = 'bg-zinc-300';
                         if (operStatus === 'disponible') {
-                          colorClasses = 'bg-emerald-500 text-white border-emerald-700 shadow-emerald-200/40';
-                          dotClass = 'bg-emerald-100';
+                          colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
+                          dotClass = 'bg-emerald-250';
                         } else if (operStatus === 'limpia') {
-                          colorClasses = 'bg-blue-500 text-white border-blue-700 shadow-blue-200/40';
-                          dotClass = 'bg-blue-100';
+                          colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                          dotClass = 'bg-blue-250';
                         } else if (operStatus === 'sucio_checkout') {
-                          colorClasses = 'bg-rose-500 text-white border-rose-700 shadow-rose-200/40';
-                          dotClass = 'bg-rose-100';
+                          colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
+                          dotClass = 'bg-rose-250';
                         } else if (operStatus === 'salida_hoy') {
-                          colorClasses = 'bg-rose-50 text-rose-800 border-rose-500 shadow-rose-100/30';
-                          dotClass = 'bg-rose-500';
+                          colorClasses = 'bg-rose-50 text-rose-700 border-rose-200 shadow-rose-50/20';
+                          dotClass = 'bg-rose-400';
                         } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
-                          colorClasses = 'bg-amber-400 text-zinc-950 border-amber-600 shadow-amber-200/40';
-                          dotClass = 'bg-amber-800';
+                          colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                          dotClass = 'bg-amber-250';
                         }
 
                         return (
@@ -1262,7 +1262,7 @@ export default function StaffPage() {
                                 setShowStatusModal(true);
                               }
                             }}
-                            className={`aspect-square rounded-2xl border-[3px] flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                            className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
                           >
                             <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
                             <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
