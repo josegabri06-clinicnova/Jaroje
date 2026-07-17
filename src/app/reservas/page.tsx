@@ -2947,11 +2947,21 @@ export default function ReservasList() {
                             console.error("Error al copiar al portapapeles:", err);
                           });
 
-                          // 2. Formatear el teléfono y abrir WhatsApp de forma síncrona en el contexto del click
-                          let cleanPhone = String(selectedRes.guest_phone || '').trim().replace(/[+\s-()]/g, '');
-                          if (cleanPhone && !cleanPhone.startsWith('52') && cleanPhone.length === 10) {
-                            cleanPhone = '52' + cleanPhone; // Lada de México
+                          // 2. Extraer únicamente los dígitos numéricos
+                          let cleanPhone = String(selectedRes.guest_phone || '').replace(/\D/g, '');
+
+                          // Si no hay teléfono registrado, no redirigir a un link roto (404)
+                          if (!cleanPhone) {
+                            alert("⚠️ Esta reservación no tiene un teléfono registrado. El mensaje ha sido copiado al portapapeles para que puedas pegarlo manualmente.");
+                            return;
                           }
+
+                          // Si es un número local de México (10 dígitos), anteponer 52 (Lada de México)
+                          if (cleanPhone.length === 10) {
+                            cleanPhone = '52' + cleanPhone;
+                          }
+
+                          // 3. Abrir WhatsApp de forma síncrona en el contexto del click
                           const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
                           window.open(url, '_blank');
                         };
