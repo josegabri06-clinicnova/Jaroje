@@ -170,6 +170,7 @@ export default function ReservasList() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(0);
   const [sendingTemplate, setSendingTemplate] = useState<boolean>(false);
+  const [showGuestPortalIframe, setShowGuestPortalIframe] = useState<string | null>(null);
 
   // Estados para edición de reserva (Admin)
   const [isEditingRes, setIsEditingRes] = useState(false);
@@ -2211,14 +2212,12 @@ export default function ReservasList() {
               </div>
               <div className="flex items-center gap-2">
                 {userRole === 'admin' && selectedRes.id !== 'walkin' && (
-                  <a
-                    href={`/public/reserva/${selectedRes.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => setShowGuestPortalIframe(String(selectedRes.id))}
                     className="px-2.5 py-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 border border-blue-150 hover:bg-blue-100 rounded-lg transition-all flex items-center gap-1 cursor-pointer select-none"
                   >
                     🌐 Portal
-                  </a>
+                  </button>
                 )}
                 {selectedRes.status !== 'cancelled' && userRole === 'admin' && (
                   <button
@@ -2797,7 +2796,7 @@ export default function ReservasList() {
                   </div>
 
                   {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp (Solo para flujo de reservas nuevas y con selector multimensaje para Admin) */}
-                  {selectedRes.id !== 'walkin' && (
+                  {userRole === 'admin' && selectedRes.id !== 'walkin' && (
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
                       <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -4098,6 +4097,44 @@ export default function ReservasList() {
               </button>
             </div>
             
+          </div>
+        </div>
+      )}
+
+      {/* Modal Vista Previa del Portal (Huésped) */}
+      {showGuestPortalIframe && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          onClick={() => setShowGuestPortalIframe(null)}
+        >
+          <div 
+            className="bg-[#F6F5F2] w-full max-w-lg mx-auto rounded-3xl overflow-hidden flex flex-col h-[90vh] shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header de la Vista previa */}
+            <div className="bg-white px-5 py-4 border-b border-zinc-150 flex items-center justify-between shrink-0 font-sans">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-[12px] font-black text-zinc-900 uppercase tracking-wider">
+                  Vista Previa del Portal (Huésped)
+                </span>
+              </div>
+              <button
+                onClick={() => setShowGuestPortalIframe(null)}
+                className="bg-zinc-900 hover:bg-black text-white px-4 py-1.5 rounded-xl text-[11px] font-extrabold transition-all active:scale-95 cursor-pointer uppercase tracking-wider shadow-sm flex items-center gap-1.5"
+              >
+                <X size={12} />
+                <span>Cerrar Vista y Regresar</span>
+              </button>
+            </div>
+            {/* Iframe */}
+            <div className="flex-1 w-full bg-white relative">
+              <iframe
+                src={`/public/reserva/${showGuestPortalIframe}`}
+                className="w-full h-full border-none"
+                title="Vista previa del portal"
+              />
+            </div>
           </div>
         </div>
       )}
