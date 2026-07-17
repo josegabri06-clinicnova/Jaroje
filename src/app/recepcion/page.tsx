@@ -466,6 +466,7 @@ export default function RecepcionPage() {
   const [editedPhone, setEditedPhone] = useState('');
   const [editedAdults, setEditedAdults] = useState(1);
   const [editedChildren, setEditedChildren] = useState(0);
+  const [groupGuestsMap, setGroupGuestsMap] = useState<Record<string, { adults: number; children: number }>>({});
   const [editedPrice, setEditedPrice] = useState('');
   const [editedDailyRate, setEditedDailyRate] = useState('');
   const [editedDeposit, setEditedDeposit] = useState('');
@@ -1389,12 +1390,26 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva?.check_in, selectedReserva?.check_out]);
 
-  // Inicializar notas editables al abrir el modal de check-in
+  // Inicializar notas editables y mapa de huéspedes del grupo al abrir el modal de check-in
   useEffect(() => {
     if (selectedReserva) {
       setCheckInNotes(selectedReserva.notes || '');
+      
+      const initialMap: Record<string, { adults: number; children: number }> = {};
+      initialMap[String(selectedReserva.id)] = {
+        adults: Number(selectedReserva.num_adult || 1),
+        children: Number(selectedReserva.num_child || 0)
+      };
+      
+      siblingBookings.forEach(sib => {
+        initialMap[String(sib.id)] = {
+          adults: Number(sib.num_adult || 1),
+          children: Number(sib.num_child || 0)
+        };
+      });
+      setGroupGuestsMap(initialMap);
     }
-  }, [selectedReserva?.id]);
+  }, [selectedReserva?.id, siblingBookings]);
 
   // Buscar reservas del mismo grupo (mismo check_in, no checked_in, mismo nombre o teléfono)
   const siblingBookings = useMemo(() => {
@@ -2684,8 +2699,15 @@ export default function RecepcionPage() {
             continue;
           }
 
-          // B. Sincronizar notas si es la principal y cambiaron
-          if (r.id === selectedReserva.id && checkInNotes !== (selectedReserva.notes || '')) {
+          // B. Sincronizar notas y huéspedes si cambiaron
+          const rId = String(r.id);
+          const guests = groupGuestsMap[rId] || { adults: Number(r.num_adult || 1), children: Number(r.num_child || 0) };
+          const notesToSync = r.id === selectedReserva.id ? checkInNotes : (r.notes || '');
+
+          const guestsChanged = guests.adults !== Number(r.num_adult) || guests.children !== Number(r.num_child);
+          const notesChanged = r.id === selectedReserva.id && checkInNotes !== (selectedReserva.notes || '');
+
+          if (notesChanged || guestsChanged) {
             try {
               await fetch('/api/reservas', {
                 method: 'PUT',
@@ -2693,15 +2715,15 @@ export default function RecepcionPage() {
                 body: JSON.stringify({
                   id: r.id,
                   phone: r.guest_phone || '',
-                  numAdult: r.num_adult || 1,
-                  numChild: r.num_child || 0,
+                  numAdult: guests.adults,
+                  numChild: guests.children,
                   price: r.price_estimate || 0,
                   deposit: r.deposit || 0,
-                  notes: checkInNotes
+                  notes: notesToSync
                 })
               });
             } catch (notesErr) {
-              console.error('No se pudieron sincronizar notas a Beds24:', notesErr);
+              console.error(`No se pudieron sincronizar datos de Habitación ${r.room} a Beds24:`, notesErr);
             }
           }
 
@@ -2717,7 +2739,7 @@ export default function RecepcionPage() {
                 module: 'recepcion',
                 action: 'check_in',
                 room: r.room,
-                details: `${r.guest_name || 'Huésped'} ${r.num_adult || 1}/${r.num_child || 0} (ID: ${r.id}) de la Habitación ${r.room} (Grupo Consolidado) - Registró Check-In.`
+                details: `${r.guest_name || 'Huésped'} ${guests.adults}/${guests.children} (ID: ${r.id}) de la Habitación ${r.room} (Grupo Consolidado) - Registró Check-In.`
               })
             });
           }
@@ -3157,7 +3179,21 @@ export default function RecepcionPage() {
         }
 
         const groupIds = groupBookings.map(g => g.id);
-        setReservas(prev => prev.map(r => groupIds.includes(r.id) ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined, notes: r.id === selectedReserva.id ? checkInNotes : r.notes } : r));
+        setReservas(prev => prev.map(r => {
+          if (groupIds.includes(r.id)) {
+            const rId = String(r.id);
+            const guests = groupGuestsMap[rId] || { adults: Number(r.num_adult || 1), children: Number(r.num_child || 0) };
+            return {
+              ...r,
+              checked_in: true,
+              dni_image: finalDniUrl || undefined,
+              num_adult: guests.adults,
+              num_child: guests.children,
+              notes: r.id === selectedReserva.id ? checkInNotes : r.notes
+            };
+          }
+          return r;
+        }));
       } else {
         // --- PROCESO INDIVIDUAL ESTÁNDAR ---
         try {
@@ -3179,7 +3215,10 @@ export default function RecepcionPage() {
           return;
         }
 
-        if (checkInNotes !== (selectedReserva.notes || '')) {
+        const guestsChanged = editedAdults !== Number(selectedReserva.num_adult) || editedChildren !== Number(selectedReserva.num_child);
+        const notesChanged = checkInNotes !== (selectedReserva.notes || '');
+
+        if (notesChanged || guestsChanged) {
           try {
             await fetch('/api/reservas', {
               method: 'PUT',
@@ -3187,19 +3226,26 @@ export default function RecepcionPage() {
               body: JSON.stringify({
                 id: selectedReserva.id,
                 phone: selectedReserva.guest_phone || '',
-                numAdult: selectedReserva.num_adult || 1,
-                numChild: selectedReserva.num_child || 0,
+                numAdult: editedAdults,
+                numChild: editedChildren,
                 price: selectedReserva.price_estimate || 0,
                 deposit: selectedReserva.deposit || 0,
                 notes: checkInNotes
               })
             });
           } catch (notesErr) {
-            console.error('No se pudieron sincronizar notas a Beds24:', notesErr);
+            console.error('No se pudieron sincronizar notas y huéspedes a Beds24:', notesErr);
           }
         }
 
-        setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined, notes: checkInNotes } : r));
+        setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { 
+          ...r, 
+          checked_in: true, 
+          dni_image: finalDniUrl || undefined,
+          num_adult: editedAdults,
+          num_child: editedChildren,
+          notes: checkInNotes 
+        } : r));
 
         if (emp) {
           await fetch('/api/employee-logs', {
@@ -3212,7 +3258,7 @@ export default function RecepcionPage() {
               module: 'recepcion',
               action: 'check_in',
               room: selectedReserva.room,
-              details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Registró Check-In.`
+              details: `${selectedReserva.guest_name || 'Huésped'} ${editedAdults}/${editedChildren} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Registró Check-In.`
             })
           });
         }
@@ -5713,128 +5759,194 @@ export default function RecepcionPage() {
 
                   {/* Editar Número de Huéspedes */}
                   {selectedReserva.id !== 'walkin' && (() => {
-                    const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
+                    const roomsToRender = payGroupConsolidated ? groupBookings : [selectedReserva];
                     return (
-                      <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left animate-in fade-in duration-200">
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Editar Número de Huéspedes</span>
-                        <div className="grid grid-cols-2 gap-3.5">
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Adultos</label>
-                            <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
-                              <button
-                                type="button"
-                                onClick={() => setEditedAdults(prev => Math.max(1, prev - 1))}
-                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
-                              >
-                                <Minus size={14} strokeWidth={2.5} />
-                              </button>
-                              <input 
-                                type="number" 
-                                required
-                                min={1}
-                                className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                value={editedAdults}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  if (val === '') {
-                                    setEditedAdults('' as any);
-                                    return;
-                                  }
-                                  const num = Number(val);
-                                  if (isNaN(num)) return;
-                                  const maxAllowed = Math.max(1, rules.max - Number(editedChildren || 0));
-                                  setEditedAdults(Math.min(maxAllowed, Math.max(1, num)));
-                                }}
-                                onBlur={() => {
-                                  const num = Math.max(1, Number(editedAdults) || 1);
-                                  const maxAllowed = Math.max(1, rules.max - Number(editedChildren || 0));
-                                  setEditedAdults(Math.min(maxAllowed, num));
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setEditedAdults(prev => (prev + Number(editedChildren || 0) < rules.max ? prev + 1 : prev))}
-                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
-                              >
-                                <Plus size={14} strokeWidth={2.5} />
-                              </button>
-                            </div>
-                          </div>
-                          <div className="space-y-1.5">
-                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Niños</label>
-                            <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-12 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
-                              <button
-                                type="button"
-                                onClick={() => setEditedChildren(prev => Math.max(0, prev - 1))}
-                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
-                              >
-                                <Minus size={14} strokeWidth={2.5} />
-                              </button>
-                              <input 
-                                type="number" 
-                                required
-                                min={0}
-                                className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[15px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                value={editedChildren}
-                                onChange={e => {
-                                  const val = e.target.value;
-                                  if (val === '') {
-                                    setEditedChildren('' as any);
-                                    return;
-                                  }
-                                  const num = Number(val);
-                                  if (isNaN(num)) return;
-                                  const maxAllowed = Math.max(0, rules.max - Number(editedAdults || 0));
-                                  setEditedChildren(Math.min(maxAllowed, Math.max(0, num)));
-                                }}
-                                onBlur={() => {
-                                  const num = Math.max(0, Number(editedChildren) || 0);
-                                  const maxAllowed = Math.max(0, rules.max - Number(editedAdults || 0));
-                                  setEditedChildren(Math.min(maxAllowed, num));
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setEditedChildren(prev => (Number(editedAdults || 0) + prev < rules.max ? prev + 1 : prev))}
-                                className="w-10 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
-                              >
-                                <Plus size={14} strokeWidth={2.5} />
-                              </button>
-                            </div>
-                          </div>
+                      <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-4 shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left animate-in fade-in duration-200">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
+                          {payGroupConsolidated ? 'Editar Huéspedes por Habitación' : 'Editar Número de Huéspedes'}
+                        </span>
+                        
+                        <div className="space-y-4">
+                          {roomsToRender.map((r, idx) => {
+                            const rules = getCapacityRules(r.room, capacitySettings || undefined);
+                            const rId = String(r.id);
+                            const guests = groupGuestsMap[rId] || { adults: Number(r.num_adult || 1), children: Number(r.num_child || 0) };
+                            
+                            const setAdultsVal = (val: number) => {
+                              setGroupGuestsMap(prev => {
+                                const next = { ...prev };
+                                next[rId] = { ...guests, adults: val };
+                                return next;
+                              });
+                              if (String(r.id) === String(selectedReserva.id)) {
+                                setEditedAdults(val);
+                              }
+                            };
+                            
+                            const setChildrenVal = (val: number) => {
+                              setGroupGuestsMap(prev => {
+                                const next = { ...prev };
+                                next[rId] = { ...guests, children: val };
+                                return next;
+                              });
+                              if (String(r.id) === String(selectedReserva.id)) {
+                                setEditedChildren(val);
+                              }
+                            };
+
+                            return (
+                              <div key={rId} className={`space-y-2 ${idx > 0 ? 'border-t border-zinc-200/60 pt-3' : ''}`}>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[12px] font-bold text-zinc-800">
+                                    Hab {r.room} {String(r.id) === String(selectedReserva.id) && <span className="text-[9px] font-extrabold text-blue-600 bg-blue-100 px-1 py-0.5 rounded ml-1">Principal</span>}
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-zinc-500 bg-zinc-200/50 px-2.5 py-0.5 rounded-full">
+                                    Máx: {rules.max} personas
+                                  </span>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-3.5">
+                                  <div className="space-y-1.5">
+                                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Adultos</label>
+                                    <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-11 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                                      <button
+                                        type="button"
+                                        onClick={() => setAdultsVal(Math.max(1, guests.adults - 1))}
+                                        className="w-9 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                                      >
+                                        <Minus size={13} strokeWidth={2.5} />
+                                      </button>
+                                      <input 
+                                        type="number" 
+                                        required
+                                        min={1}
+                                        className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[14px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        value={guests.adults}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          if (val === '') return;
+                                          const num = Number(val);
+                                          if (isNaN(num)) return;
+                                          const maxAllowed = Math.max(1, rules.max - guests.children);
+                                          setAdultsVal(Math.min(maxAllowed, Math.max(1, num)));
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (guests.adults + guests.children < rules.max) {
+                                            setAdultsVal(guests.adults + 1);
+                                          }
+                                        }}
+                                        className="w-9 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                                      >
+                                        <Plus size={13} strokeWidth={2.5} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="space-y-1.5">
+                                    <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">Niños</label>
+                                    <div className="flex items-center w-full bg-white border border-zinc-200/80 rounded-xl h-11 focus-within:border-zinc-400 focus-within:ring-4 focus-within:ring-zinc-900/5 transition-all">
+                                      <button
+                                        type="button"
+                                        onClick={() => setChildrenVal(Math.max(0, guests.children - 1))}
+                                        className="w-9 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-r border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-l-xl select-none"
+                                      >
+                                        <Minus size={13} strokeWidth={2.5} />
+                                      </button>
+                                      <input 
+                                        type="number" 
+                                        required
+                                        min={0}
+                                        className="flex-1 min-w-0 h-full text-center bg-transparent border-0 text-zinc-900 font-semibold text-[14px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        value={guests.children}
+                                        onChange={e => {
+                                          const val = e.target.value;
+                                          if (val === '') return;
+                                          const num = Number(val);
+                                          if (isNaN(num)) return;
+                                          const maxAllowed = Math.max(0, rules.max - guests.adults);
+                                          setChildrenVal(Math.min(maxAllowed, Math.max(0, num)));
+                                        }}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (guests.adults + guests.children < rules.max) {
+                                            setChildrenVal(guests.children + 1);
+                                          }
+                                        }}
+                                        className="w-9 h-full flex items-center justify-center text-zinc-500 hover:text-zinc-800 transition-colors border-l border-zinc-200/50 hover:bg-zinc-100/50 active:bg-zinc-100 rounded-r-xl select-none"
+                                      >
+                                        <Plus size={13} strokeWidth={2.5} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
                   })()}
 
-                  {/* Resumen de Huéspedes (Igual que se maneja en Reservas) */}
+                  {/* Resumen de Huéspedes (Igual que se maneja en Reservas, pero sensible a grupos) */}
                   {(() => {
                     if (selectedReserva.id === 'walkin') return null;
-                    const rules = getCapacityRules(selectedReserva.room, capacitySettings || undefined);
-                    const totalGuests = Number(editedAdults || 0) + Number(editedChildren || 0);
-                    const extraGuests = Math.max(0, totalGuests - rules.base);
-                    const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
-                    const costPerNight = extraGuests * extraGuestPrice;
-                    const totalCost = costPerNight * (selectedReserva.nights || 1);
+                    
+                    const roomsToSum = payGroupConsolidated ? groupBookings : [selectedReserva];
+                    let totalAdultsSum = 0;
+                    let totalChildrenSum = 0;
+                    let totalCapacityLimit = 0;
+                    let totalBaseCapacity = 0;
+                    let totalExtraGuests = 0;
+                    let totalCost = 0;
+                    let totalCostPerNight = 0;
+                    
+                    roomsToSum.forEach(r => {
+                      const rules = getCapacityRules(r.room, capacitySettings || undefined);
+                      const rId = String(r.id);
+                      const guests = groupGuestsMap[rId] || { adults: Number(r.num_adult || 1), children: Number(r.num_child || 0) };
+                      
+                      totalAdultsSum += guests.adults;
+                      totalChildrenSum += guests.children;
+                      totalCapacityLimit += rules.max;
+                      totalBaseCapacity += rules.base;
+                      
+                      const extra = Math.max(0, (guests.adults + guests.children) - rules.base);
+                      totalExtraGuests += extra;
+                      const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+                      const costPerNight = extra * extraGuestPrice;
+                      totalCostPerNight += costPerNight;
+                      totalCost += costPerNight * (r.nights || 1);
+                    });
+                    
+                    const totalGuestsSum = totalAdultsSum + totalChildrenSum;
 
                     return (
-                      <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-2 text-left shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                      <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-2 text-left shadow-[0_2px_8px_rgba(0,0,0,0.01)] animate-in fade-in duration-200">
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Resumen de Huéspedes</span>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">
+                            {payGroupConsolidated ? 'Resumen de Huéspedes (Grupo)' : 'Resumen de Huéspedes'}
+                          </span>
                           <span className="text-[10px] font-bold text-zinc-500 bg-zinc-200/60 px-2 py-0.5 rounded-full">
-                            {rules.max > rules.base 
-                              ? `Incluidas: ${rules.base} | Con cargo: ${rules.max - rules.base} (Máx: ${rules.max})` 
-                              : `Permitidas: ${rules.base}`}
+                            {totalCapacityLimit > totalBaseCapacity 
+                              ? `Incluidas: ${totalBaseCapacity} | Máx: ${totalCapacityLimit}` 
+                              : `Permitidas: ${totalBaseCapacity}`}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-[13px] font-semibold text-zinc-800">
                           <span>Total Huéspedes:</span>
-                          <span>{totalGuests} ({editedAdults}A / {editedChildren}N)</span>
+                          <span className="font-extrabold">
+                            {totalGuestsSum} ({totalAdultsSum}A / {totalChildrenSum}N)
+                          </span>
                         </div>
-                        {extraGuests > 0 && (
+                        {totalExtraGuests > 0 && (
                           <div className="border-t border-zinc-200/60 pt-2 flex justify-between items-center text-[12px] text-amber-600 font-bold">
-                            <span>Huéspedes adicionales con costo ({extraGuests}):</span>
-                            <span>${costPerNight.toLocaleString('es-MX')}/noche (Total: ${totalCost.toLocaleString('es-MX')})</span>
+                            <span>Huéspedes adicionales con costo ({totalExtraGuests}):</span>
+                            <span>${totalCostPerNight.toLocaleString('es-MX')}/noche (Total: ${totalCost.toLocaleString('es-MX')})</span>
                           </div>
                         )}
                       </div>
