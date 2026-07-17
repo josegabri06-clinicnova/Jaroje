@@ -319,8 +319,12 @@ export default function AdminDashboard() {
       llegan.forEach((r, idx) => {
         const room = getUnitDisplay(r.room_name || r.room || '');
         const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
+        
+        // Si es una OTA (Airbnb, Booking.com, Expedia), el cobro lo maneja la plataforma (por lo tanto, para recepción está Pagado)
+        const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
         const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
-        const balanceStr = balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`;
+        const balanceStr = isOTA ? `(Pagado ✓)` : (balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`);
+        
         text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} (${paxTotal} pax) - Canal: ${r.channel || 'Directo'} ${balanceStr}\n`;
       });
     }
