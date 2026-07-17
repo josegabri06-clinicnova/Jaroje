@@ -4944,10 +4944,9 @@ export default function RecepcionPage() {
                       <button
                         onClick={() => {
                           const guestFirstName = selectedReserva.guest_name ? selectedReserva.guest_name.trim().split(' ')[0] : 'Huésped';
-                          const roomDisplay = selectedReserva.room_name || selectedReserva.room || 'Sin asignar';
                           const link = `https://jaroje-app.vercel.app/public/reserva/${selectedReserva.id}`;
                           
-                          const message = `🏨 *Condominios JAROJE Huatulco*\n\n¡Hola ${guestFirstName}!\n\nConfirmamos tu reservación para el departamento:\n*${roomDisplay}*\n\n📅 Entrada: ${selectedReserva.check_in}\n📅 Salida: ${selectedReserva.check_out}\n\nPara ver los detalles de tu estancia, indicaciones de llegada, ubicación exacta, reglamento del condominio y contraseña de WiFi, accede a tu Portal del Huésped aquí:\n👇👇👇\n${link}\n\n¡Esperamos recibirte pronto!`;
+                          const message = `🏖️ *¡Gracias por reservar con Condominios Jaroje!*\n\nHola, *${guestFirstName}*.\n\n¡Nos da mucho gusto recibirte en Huatulco! 🌴\n\nHemos preparado tu *Portal del Huésped*, donde encontrarás toda la información sobre tu reservación y estancia.\n\n👇 *Mi reservación*\n${link}\n\nEn él encontrarás todo lo necesario para tu estancia, incluyendo:\n\n•  📋 *Datos de tu reservación.*\n•  🏡 *Información y fotografías de tu alojamiento.*\n•  📍 *Cómo llegar.*\n•  🚪 *Acceso y guía de llegada.*\n•  📖 *Políticas del alojamiento.*\n•  📶 *WiFi y datos de tu estancia.*\n•  🌴 *Recomendaciones para disfrutar Huatulco.*\n\nSi tienes cualquier duda, estaremos encantados de ayudarte.\n\n*¡Te esperamos!* ☀️`;
                           
                           navigator.clipboard.writeText(message).then(() => {
                             alert("📋 ¡Mensaje personalizado copiado al portapapeles! Listo para pegar en Booking, Airbnb o WhatsApp.");
