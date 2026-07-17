@@ -2790,8 +2790,14 @@ export default function ReservasList() {
                       <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 mb-1">
                         <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-                          <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-                                              onClick={() => {
+                        </svg>
+                        Mensaje de Bienvenida (Link de Portal)
+                      </span>
+                      <p className="text-[11px] text-zinc-400 leading-normal mb-2 text-left">
+                        Genera un mensaje personalizado con el enlace de acceso directo al portal de este huésped para enviarlo por el chat de Booking.com, Airbnb, Expedia o WhatsApp.
+                      </p>
+                      <button
+                        onClick={() => {
                           const guestFirstName = selectedRes.guest_name ? selectedRes.guest_name.trim().split(' ')[0] : 'Huésped';
                           const link = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}`;
                           
