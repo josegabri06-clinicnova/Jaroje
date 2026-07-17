@@ -2014,8 +2014,8 @@ export default function StaffPage() {
                   </div>
 
                   <div className="pt-2 space-y-2">
-                    {/* Botón especial: Programar limpieza en habitación ocupada */}
-                    {operStatus === 'ocupada' && (
+                    {/* Botón especial: Programar limpieza en habitación ocupada o disponible */}
+                    {(operStatus === 'ocupada' || operStatus === 'disponible') && (
                       <button
                         onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: 'limpieza_programada' })}
                         className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
