@@ -5683,7 +5683,7 @@ export default function RecepcionPage() {
                               💰 Registrar Anticipo
                             </button>
                           )}
-                          {(getRole() === 'admin' || selectedReserva.checked_in) && (
+                          {(getRole() === 'admin' || selectedReserva.checked_in || (selectedReserva.check_in && selectedReserva.check_in <= (todayStr || new Date().toLocaleDateString('sv-SE')))) && (
                             <button
                               onClick={() => {
                                 setExtensionNights(1);
