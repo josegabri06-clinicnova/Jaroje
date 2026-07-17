@@ -5683,7 +5683,7 @@ export default function RecepcionPage() {
                               💰 Registrar Anticipo
                             </button>
                           )}
-                          {selectedReserva.checked_in && (
+                          {(getRole() === 'admin' || selectedReserva.checked_in) && (
                             <button
                               onClick={() => {
                                 setExtensionNights(1);

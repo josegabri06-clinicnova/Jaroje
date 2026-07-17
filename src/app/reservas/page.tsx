@@ -3644,20 +3644,22 @@ export default function ReservasList() {
                               💰 Registrar Anticipo
                             </button>
                           )}
-                          <button
-                            onClick={() => {
-                              setExtensionNights(1);
-                              setExtensionCustomPrice('');
-                              setExtensionRegisterPayment(true);
-                              setExtensionPaymentMethod(null);
-                              setExtensionAccountId('');
-                              setShowExtensionFlow(true);
-                              setShowAbonoFlow(false);
-                            }}
-                            className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-600/10 cursor-pointer text-center"
-                          >
-                            🗓️ Extender Estancia
-                          </button>
+                          {(getRole() === 'admin' || selectedReserva.checked_in) && (
+                            <button
+                              onClick={() => {
+                                setExtensionNights(1);
+                                setExtensionCustomPrice('');
+                                setExtensionRegisterPayment(true);
+                                setExtensionPaymentMethod(null);
+                                setExtensionAccountId('');
+                                setShowExtensionFlow(true);
+                                setShowAbonoFlow(false);
+                              }}
+                              className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-600/10 cursor-pointer text-center"
+                            >
+                              🗓️ Extender Estancia
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
