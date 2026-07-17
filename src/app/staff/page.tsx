@@ -613,9 +613,7 @@ export default function StaffPage() {
         operStatus === 'sucio_checkout' || 
         operStatus === 'en_limpieza' || 
         operStatus === 'limpieza_programada' ||
-        dbStatus === 'sucio_checkout' ||
-        dbStatus === 'en_limpieza' ||
-        dbStatus === 'limpieza_programada' ||
+        ((dbStatus === 'sucio_checkout' || dbStatus === 'en_limpieza' || dbStatus === 'limpieza_programada') && isDbStatusUpdatedToday) ||
         (dbStatus === 'limpia' && isDbStatusUpdatedToday) ||
         (dbStatus === 'disponible' && isDbStatusUpdatedToday)
       )) {
