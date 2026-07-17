@@ -146,6 +146,62 @@ export default function InventarioPage() {
     localStorage.setItem('jaroje_inventory_categories', JSON.stringify(updated));
   };
 
+  const handleClearAllInventory = async () => {
+    const pin = prompt("⚠️ ATENCIÓN: Esta acción eliminará permanentemente TODOS los artículos del inventario. Para confirmar, ingresa el PIN de Administrador:");
+    if (!pin) return;
+    
+    try {
+      setIsLoading(true);
+      // Validar PIN
+      const { data: pinSetting, error: pinErr } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'pin_admin')
+        .maybeSingle();
+      
+      if (pinErr) throw pinErr;
+      const dbAdminPin = pinSetting?.value || '1234';
+      
+      if (pin !== dbAdminPin) {
+        alert("❌ PIN incorrecto. Operación cancelada.");
+        setIsLoading(false);
+        return;
+      }
+      
+      const { error: deleteErr } = await supabase
+        .from('inventory')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Borrar todo
+        
+      if (deleteErr) throw deleteErr;
+      
+      // Registrar log de auditoría
+      const activeEmp = getActiveEmployee('recepcion');
+      await fetch('/api/employee-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_num: activeEmp?.employee_num || '000',
+          employee_name: activeEmp?.full_name || 'Admin',
+          department: 'recepcion',
+          module: 'inventario',
+          action: 'vaciar_inventario_completo',
+          room: 'General',
+          details: 'El administrador vació por completo el catálogo de artículos de inventario de Jaroje OS.'
+        })
+      });
+      
+      alert("✅ El inventario ha sido vaciado por completo.");
+      fetchInventory();
+      setShowCategoryModal(false);
+    } catch (e) {
+      console.error(e);
+      alert("Error al vaciar el inventario.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAddCategory = (name: string) => {
     const clean = name.trim();
     if (!clean) return;
@@ -1108,12 +1164,20 @@ export default function InventarioPage() {
               ))}
             </div>
 
-            <div className="pt-2 shrink-0">
+            <div className="pt-2 shrink-0 space-y-2 select-none">
               <button 
                 onClick={() => setShowCategoryModal(false)}
                 className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-xl transition-all duration-300 text-[13px] active:scale-[0.96] cursor-pointer text-center"
               >
                 Listo
+              </button>
+              
+              <button
+                onClick={handleClearAllInventory}
+                className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-extrabold rounded-xl transition-all text-xs active:scale-[0.96] cursor-pointer text-center flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Vaciar Todo el Inventario</span>
               </button>
             </div>
           </div>

@@ -845,8 +845,40 @@ export function extractOtaDetails(invoiceItems: any[]): OtaDetails {
   };
 }
 
-// Obtener y mapear reservas activas (Backend Server-Side)
-export async function getBeds24Bookings(fast: boolean = false, includeCancelled: boolean = false): Promise<any[]> {
+// Variables globales de caché para evitar cuellos de botella bajo concurrencia
+let cachedBookingsPromise: Promise<any[]> | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 30000; // 30 segundos de ciclo de vida (TTL)
+
+// Obtener y mapear reservas activas (Backend Server-Side) con caché
+export async function getBeds24Bookings(
+  fast: boolean = false,
+  includeCancelled: boolean = false,
+  bypassCache: boolean = false
+): Promise<any[]> {
+  const now = Date.now();
+  if (!bypassCache && cachedBookingsPromise && (now - cacheTimestamp < CACHE_TTL_MS)) {
+    console.log("[Beds24 Cache] Reutilizando promesa de caché activa.");
+    return cachedBookingsPromise;
+  }
+
+  cacheTimestamp = now;
+  cachedBookingsPromise = (async () => {
+    try {
+      const result = await doFetchAndMapBeds24Bookings(fast, includeCancelled);
+      return result;
+    } catch (err) {
+      cachedBookingsPromise = null;
+      cacheTimestamp = 0;
+      throw err;
+    }
+  })();
+
+  return cachedBookingsPromise;
+}
+
+// Realizar la llamada HTTP real y procesar el mapeado
+async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancelled: boolean = false): Promise<any[]> {
   const today = new Date();
   const fromDate = new Date(today);
   fromDate.setDate(today.getDate() - 180);

@@ -597,13 +597,15 @@ export default function StaffPage() {
       }
 
       // 3. Fallback Unificador: Si la habitación está en estado sucio o limpieza y no tiene una reserva activa hoy
-      // registrada en la lista, se agrega de forma automática para mantener una sincronización visual del 100%.
+      // registrada en la lista, o si ya fue marcada como limpia (azul) o disponible (verde) hoy, se agrega.
       const alreadyAdded = list.some(item => item.room === r);
       const isDbStatusUpdatedToday = dbStatusObj?.updated_at ? isDateToday(dbStatusObj.updated_at) : false;
       if (!alreadyAdded && (
         operStatus === 'sucio_checkout' || 
         operStatus === 'en_limpieza' || 
         operStatus === 'limpieza_programada' ||
+        dbStatus === 'limpia' ||
+        (dbStatus === 'disponible' && isDbStatusUpdatedToday) ||
         ((dbStatus === 'sucio_checkout' || dbStatus === 'en_limpieza') && isDbStatusUpdatedToday)
       )) {
         list.push({
@@ -611,7 +613,7 @@ export default function StaffPage() {
           type: (operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'checkout' : 'stayover',
           dbStatus,
           operStatus,
-          guestName: (operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'Check-Out' : 'Limpieza Programada',
+          guestName: (operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'Check-Out' : (dbStatus === 'limpia' ? 'Limpia' : 'Servicio'),
           keysReturned: operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout',
           reserva: null,
           isUpdatedToday: isDbStatusUpdatedToday
@@ -1000,13 +1002,13 @@ export default function StaffPage() {
       return;
     }
 
-    const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
+    const dateStr = format(new Date(), "EEEE, d 'de' MMMM · HH:mm 'hrs'", { locale: es });
     let text = `📋 *REPORTE DIARIO DE LIMPIEZA*\n🏨 *Jaroje Condominios*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
     if (allRooms.length > 0) {
       text += `*Habitaciones por Limpieza:*\n`;
       allRooms.forEach((task, idx) => {
-        const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
+        const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
         const typeLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
         const statusLabel = isFinished 
           ? 'Limpia ✅' 
@@ -1232,23 +1234,23 @@ export default function StaffPage() {
                         const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
                         const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, (dbStatusObj as any)?.updated_at);
 
-                        let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                        let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-350';
                         let dotClass = 'bg-zinc-300';
                         if (operStatus === 'disponible') {
-                          colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
-                          dotClass = 'bg-emerald-250';
+                          colorClasses = 'bg-emerald-500 text-white border-emerald-700 shadow-emerald-200/40';
+                          dotClass = 'bg-emerald-100';
                         } else if (operStatus === 'limpia') {
-                          colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
-                          dotClass = 'bg-blue-250';
+                          colorClasses = 'bg-blue-500 text-white border-blue-700 shadow-blue-200/40';
+                          dotClass = 'bg-blue-100';
                         } else if (operStatus === 'sucio_checkout') {
-                          colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
-                          dotClass = 'bg-rose-250';
+                          colorClasses = 'bg-rose-500 text-white border-rose-700 shadow-rose-200/40';
+                          dotClass = 'bg-rose-100';
                         } else if (operStatus === 'salida_hoy') {
-                          colorClasses = 'bg-rose-50 text-rose-700 border-rose-200 shadow-rose-50/20';
-                          dotClass = 'bg-rose-455';
+                          colorClasses = 'bg-rose-50 text-rose-800 border-rose-500 shadow-rose-100/30';
+                          dotClass = 'bg-rose-500';
                         } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
-                          colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
-                          dotClass = 'bg-amber-250';
+                          colorClasses = 'bg-amber-400 text-zinc-950 border-amber-600 shadow-amber-200/40';
+                          dotClass = 'bg-amber-800';
                         }
 
                         return (
@@ -1260,7 +1262,7 @@ export default function StaffPage() {
                                 setShowStatusModal(true);
                               }
                             }}
-                            className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                            className={`aspect-square rounded-2xl border-[3px] flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
                           >
                             <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
                             <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />

@@ -860,7 +860,7 @@ export default function RecepcionPage() {
       
       // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
       setTimeout(() => {
-        fetchData();
+        fetchData(true);
       }, 3000);
     } catch (err: any) {
       console.error(err);
@@ -971,7 +971,7 @@ export default function RecepcionPage() {
 
       // Refrescar en segundo plano tras delay
       setTimeout(() => {
-        fetchData();
+        fetchData(true);
       }, 3000);
     } catch (err: any) {
       console.error(err);
@@ -1131,7 +1131,7 @@ export default function RecepcionPage() {
       
       // E. Refrescar datos en segundo plano
       setTimeout(() => {
-        fetchData();
+        fetchData(true);
       }, 3000);
       
     } catch (err: any) {
@@ -1250,7 +1250,7 @@ export default function RecepcionPage() {
       setAbonoFlowAccountId('');
       alert(`✅ Anticipo grupal de ${fmtCurrency(totalAmount, selectedReserva.guest_name)} distribuido en ${directGroupBookings.length} habitaciones.`);
 
-      setTimeout(() => { fetchData(); }, 3000);
+      setTimeout(() => { fetchData(true); }, 3000);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al registrar anticipo grupal:\n\n${err.message}`);
@@ -1353,7 +1353,7 @@ export default function RecepcionPage() {
       
       // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
       setTimeout(() => {
-        fetchData();
+        fetchData(true);
       }, 3000);
     } catch (err: any) {
       console.error(err);
@@ -1514,7 +1514,7 @@ export default function RecepcionPage() {
             })
           });
         }
-        fetchData();
+        fetchData(true);
         setShowRoomStatusModal(false);
       } else {
         alert('Error al actualizar el estado: ' + json.error);
@@ -1985,10 +1985,10 @@ export default function RecepcionPage() {
     }
   };
 
-  const fetchData = async () => {
+  const fetchData = async (bypassCache = false) => {
     try {
       const [r, t, inv, chk, acc, rms, prc, psRes, capRes] = await Promise.all([
-        fetch('/api/reservas?t=' + Date.now()),
+        fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
         fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
         supabase.from('checkins').select('*'),
@@ -2146,7 +2146,7 @@ export default function RecepcionPage() {
               by: updated.updated_by || 'Personal'
             });
             playPremiumNotificationSound();
-            fetchData(); // Sincronizar datos de inmediato sin recargar
+            fetchData(true); // Sincronizar datos de inmediato sin recargar
           }
         }
       )
@@ -3662,7 +3662,7 @@ export default function RecepcionPage() {
     setCheckInNotes('');
     setSelectedAccountId('');
     setSubmitting(false);
-    fetchData();
+    fetchData(true);
   };
 
   const processCheckOut = async (r: Reserva) => {
@@ -3740,7 +3740,7 @@ export default function RecepcionPage() {
       });
     }
 
-    fetchData();
+    fetchData(true);
     alert(`Check-out de ${r.guest_name} completado. Habitación ${roomNumber} marcada en limpieza.`);
   };
 
@@ -4273,23 +4273,23 @@ export default function RecepcionPage() {
                         const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
                         const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
 
-                        let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                        let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-350';
                         let dotClass = 'bg-zinc-300';
                         if (operStatus === 'disponible') {
-                          colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
-                          dotClass = 'bg-emerald-250';
+                          colorClasses = 'bg-emerald-500 text-white border-emerald-700 shadow-emerald-200/40';
+                          dotClass = 'bg-emerald-100';
                         } else if (operStatus === 'limpia') {
-                          colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
-                          dotClass = 'bg-blue-250';
+                          colorClasses = 'bg-blue-500 text-white border-blue-700 shadow-blue-200/40';
+                          dotClass = 'bg-blue-100';
                         } else if (operStatus === 'sucio_checkout') {
-                          colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
-                          dotClass = 'bg-rose-250';
+                          colorClasses = 'bg-rose-500 text-white border-rose-700 shadow-rose-200/40';
+                          dotClass = 'bg-rose-100';
                         } else if (operStatus === 'salida_hoy') {
-                          colorClasses = 'bg-rose-50/90 text-rose-700 border-rose-200 shadow-rose-50/20';
-                          dotClass = 'bg-rose-400';
+                          colorClasses = 'bg-rose-50/90 text-rose-800 border-rose-500 shadow-rose-100/30';
+                          dotClass = 'bg-rose-500';
                         } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
-                          colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
-                          dotClass = 'bg-amber-250';
+                          colorClasses = 'bg-amber-400 text-zinc-950 border-amber-600 shadow-amber-200/40';
+                          dotClass = 'bg-amber-800';
                         }
 
                         return (
@@ -4306,7 +4306,7 @@ export default function RecepcionPage() {
                               } as any);
                               setShowRoomStatusModal(true);
                             }}
-                            className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                            className={`aspect-square rounded-2xl border-[3px] flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
                           >
                             <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
                             <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
@@ -4894,6 +4894,16 @@ export default function RecepcionPage() {
                           ({selectedReserva.num_adult || 1}A{Number(selectedReserva.num_child) > 0 ? ` / ${selectedReserva.num_child}N` : ''})
                         </span>
                       </h4>
+                      {siblingBookings.length > 0 && (() => {
+                        const totalGroupAdults = groupBookings.reduce((sum, b) => sum + Number(b.num_adult || 1), 0);
+                        const totalGroupChildren = groupBookings.reduce((sum, b) => sum + Number(b.num_child || 0), 0);
+                        const totalGroupGuests = totalGroupAdults + totalGroupChildren;
+                        return (
+                          <span className="inline-flex items-center gap-1.5 text-[9px] font-black text-indigo-700 bg-indigo-50 border border-indigo-150 px-2.5 py-0.5 rounded-full uppercase tracking-wider mt-1.5">
+                            🏨 Total Grupo: {totalGroupAdults}A{totalGroupChildren > 0 ? ` / ${totalGroupChildren}N` : ''} ({totalGroupGuests} pax) en {groupBookings.length} hab.
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -5673,20 +5683,22 @@ export default function RecepcionPage() {
                               💰 Registrar Anticipo
                             </button>
                           )}
-                          <button
-                            onClick={() => {
-                              setExtensionNights(1);
-                              setExtensionCustomPrice('');
-                              setExtensionRegisterPayment(true);
-                              setExtensionPaymentMethod(null);
-                              setExtensionAccountId('');
-                              setShowExtensionFlow(true);
-                              setShowAbonoFlow(false);
-                            }}
-                            className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-600/10 cursor-pointer"
-                          >
-                            🗓️ Extender Estancia
-                          </button>
+                          {selectedReserva.checked_in && (
+                            <button
+                              onClick={() => {
+                                setExtensionNights(1);
+                                setExtensionCustomPrice('');
+                                setExtensionRegisterPayment(true);
+                                setExtensionPaymentMethod(null);
+                                setExtensionAccountId('');
+                                setShowExtensionFlow(true);
+                                setShowAbonoFlow(false);
+                              }}
+                              className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-600/10 cursor-pointer"
+                            >
+                              🗓️ Extender Estancia
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -6911,8 +6923,8 @@ export default function RecepcionPage() {
                       </button>
                     )}
 
-                    {/* Botón especial: Programar limpieza en habitación ocupada */}
-                    {operStatus === 'ocupada' && (
+                    {/* Botón especial: Programar limpieza en habitación ocupada o disponible */}
+                    {(operStatus === 'ocupada' || operStatus === 'disponible') && (
                       <button
                         onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpieza_programada'))}
                         className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"

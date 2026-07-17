@@ -169,12 +169,12 @@ export default function AdminDashboard() {
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
   const [toastMsg, setToastMsg] = useState('');
 
-  const fetchAll = async (silent = false) => {
+  const fetchAll = async (silent = false, bypassCache = false) => {
     if (!silent) setIsLoading(true);
     setTokenError(false);
     try {
       const [resRes, convRes, roomsRes, tasksRes, chkRes] = await Promise.all([
-        fetch('/api/reservas?t=' + Date.now()).catch(() => null),
+        fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()).catch(() => null),
         fetch('/api/conversations?t=' + Date.now()).catch(() => null),
         fetch('/api/room-status?t=' + Date.now()).catch(() => null),
         fetch('/api/tasks?t=' + Date.now()).catch(() => null),
@@ -445,7 +445,7 @@ export default function AdminDashboard() {
             <span className="text-[13px] font-medium text-zinc-500 capitalize">{hoy}</span>
           </div>
         </div>
-        <button onClick={() => fetchAll()} disabled={isLoading}
+        <button onClick={() => fetchAll(false, true)} disabled={isLoading}
           className="w-9 h-9 flex items-center justify-center bg-white border border-zinc-200 rounded-xl shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
           <RefreshCw size={15} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
         </button>
@@ -1063,23 +1063,23 @@ export default function AdminDashboard() {
                     const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum)) || { room_number: roomNum, id: roomNum };
                     const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
 
-                    let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-200';
+                    let colorClasses = 'bg-zinc-100 text-zinc-500 border-zinc-350';
                     let dotClass = 'bg-zinc-300';
                     if (operStatus === 'disponible') {
-                      colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
-                      dotClass = 'bg-emerald-250';
+                      colorClasses = 'bg-emerald-500 text-white border-emerald-700 shadow-emerald-200/40';
+                      dotClass = 'bg-emerald-100';
                     } else if (operStatus === 'limpia') {
-                      colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
-                      dotClass = 'bg-blue-250';
+                      colorClasses = 'bg-blue-500 text-white border-blue-700 shadow-blue-200/40';
+                      dotClass = 'bg-blue-100';
                     } else if (operStatus === 'sucio_checkout') {
-                      colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
-                      dotClass = 'bg-rose-250';
+                      colorClasses = 'bg-rose-500 text-white border-rose-700 shadow-rose-200/40';
+                      dotClass = 'bg-rose-100';
                     } else if (operStatus === 'salida_hoy') {
-                      colorClasses = 'bg-rose-50/90 text-rose-700 border-rose-200 shadow-rose-50/20';
-                      dotClass = 'bg-rose-400';
+                      colorClasses = 'bg-rose-50/90 text-rose-800 border-rose-500 shadow-rose-100/30';
+                      dotClass = 'bg-rose-500';
                     } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
-                      colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
-                      dotClass = 'bg-amber-250';
+                      colorClasses = 'bg-amber-400 text-zinc-950 border-amber-600 shadow-amber-200/40';
+                      dotClass = 'bg-amber-800';
                     }
 
                     return (
@@ -1096,7 +1096,7 @@ export default function AdminDashboard() {
                           });
                           setShowRoomStatusModal(true);
                         }}
-                        className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                        className={`aspect-square rounded-2xl border-[3px] flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
                       >
                         <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
                         <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
@@ -1440,8 +1440,8 @@ export default function AdminDashboard() {
                       </div>
                     )}
 
-                    {/* Botón especial: Programar limpieza en habitación ocupada */}
-                    {operStatus === 'ocupada' && (
+                    {/* Botón especial: Programar limpieza en habitación ocupada o disponible */}
+                    {(operStatus === 'ocupada' || operStatus === 'disponible') && (
                       <button
                         onClick={() => handleUpdateRoomStatus('limpieza_programada')}
                         className="w-full py-3.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-extrabold text-[12px] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"

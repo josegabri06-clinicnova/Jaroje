@@ -50,6 +50,14 @@ export default function MantenimientoPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('todos');
 
+  // Mantenimiento Programado Preventivo State
+  const [viewMode, setViewMode] = useState<'tasks' | 'schedules'>('tasks');
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
+  const [schedRoom, setSchedRoom] = useState('General');
+  const [schedDesc, setSchedDesc] = useState('');
+  const [schedPeriod, setSchedPeriod] = useState('1 month');
+
   // Edit/Create Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -128,8 +136,123 @@ export default function MantenimientoPage() {
     setIsLoading(false);
   };
 
+  const checkAndTriggerSchedules = async (schedulesList: any[]) => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    
+    let updated = false;
+    const newSchedules = [...schedulesList];
+    
+    for (let i = 0; i < newSchedules.length; i++) {
+      const item = newSchedules[i];
+      const nextDate = new Date(item.next_trigger);
+      nextDate.setHours(0,0,0,0);
+      
+      if (nextDate <= today) {
+        console.log(`[Mantenimiento Programado] Ejecutando tarea automática para Hab ${item.room}: ${item.description}`);
+        
+        // 1. Insertar tarea en Supabase
+        const payload = {
+          room: item.room,
+          description: `[PROGRAMADO] ${item.description}`,
+          type: 'mantenimiento',
+          status: 'nuevo',
+          reported_by: 'Sistema',
+          direction: 'admin_to_staff'
+        };
+        
+        try {
+          const { data: insertData, error } = await supabase.from('tasks').insert([payload]).select();
+          if (error) throw error;
+          
+          const insertedId = insertData?.[0]?.id || '';
+          
+          // Registrar log de auditoría
+          await logAudit(
+            'report_maintenance_scheduled', 
+            item.room, 
+            JSON.stringify({
+              text: `Tarea programada auto-creada en ${item.room}: ${item.description}`,
+              mantenimiento: {
+                taskId: insertedId,
+                room: item.room,
+                description: item.description,
+                status: 'nuevo',
+                type: 'mantenimiento',
+                reported_by: 'Sistema'
+              }
+            })
+          );
+          
+          // 2. Actualizar el registro del item en la programación
+          const nowIso = new Date().toISOString();
+          item.last_triggered = nowIso;
+          
+          // Calcular la siguiente ejecución
+          const nextTriggerDate = new Date();
+          const periodParts = item.period.split(' ');
+          const val = parseInt(periodParts[0]) || 1;
+          const unit = periodParts[1] || 'month';
+          
+          if (unit.startsWith('week')) {
+            nextTriggerDate.setDate(nextTriggerDate.getDate() + (val * 7));
+          } else if (unit.startsWith('month')) {
+            nextTriggerDate.setMonth(nextTriggerDate.getMonth() + val);
+          } else if (unit.startsWith('year')) {
+            nextTriggerDate.setFullYear(nextTriggerDate.getFullYear() + val);
+          } else if (unit.startsWith('day')) {
+            nextTriggerDate.setDate(nextTriggerDate.getDate() + val);
+          } else {
+            nextTriggerDate.setMonth(nextTriggerDate.getMonth() + 1);
+          }
+          
+          item.next_trigger = nextTriggerDate.toISOString();
+          updated = true;
+          
+        } catch (err) {
+          console.error("Error al disparar tarea programada:", err);
+        }
+      }
+    }
+    
+    if (updated) {
+      try {
+        await supabase
+          .from('settings')
+          .upsert({ key: 'maintenance_schedules', value: JSON.stringify(newSchedules) }, { onConflict: 'key' });
+        setSchedules(newSchedules);
+      } catch (err) {
+        console.error("Error al guardar programaciones actualizadas:", err);
+      }
+    }
+  };
+
+  const fetchSchedules = async () => {
+    setLoadingSchedules(true);
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'maintenance_schedules')
+        .maybeSingle();
+      
+      if (data && data.value) {
+        const list = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        setSchedules(list || []);
+        await checkAndTriggerSchedules(list || []);
+      } else {
+        setSchedules([]);
+      }
+    } catch (e) {
+      console.error("Error al cargar programaciones:", e);
+    } finally {
+      setLoadingSchedules(false);
+    }
+  };
+
   useEffect(() => {
     fetchTasks();
+    fetchSchedules();
     
     // Abrir automáticamente el modal si viene desde el botón FAB (+)
     if (typeof window !== 'undefined') {
@@ -252,6 +375,150 @@ export default function MantenimientoPage() {
       alert('Error al resolver la tarea.');
     }
     setIsSaving(false);
+  };
+
+  const handleAddSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!schedDesc.trim()) return alert("Ingresa una descripción.");
+    
+    // Calcular primera ejecución: hoy + periodo
+    const nextTriggerDate = new Date();
+    const periodParts = schedPeriod.split(' ');
+    const val = parseInt(periodParts[0]) || 1;
+    const unit = periodParts[1] || 'month';
+    
+    if (unit.startsWith('week')) {
+      nextTriggerDate.setDate(nextTriggerDate.getDate() + (val * 7));
+    } else if (unit.startsWith('month')) {
+      nextTriggerDate.setMonth(nextTriggerDate.getMonth() + val);
+    } else if (unit.startsWith('year')) {
+      nextTriggerDate.setFullYear(nextTriggerDate.getFullYear() + val);
+    } else if (unit.startsWith('day')) {
+      nextTriggerDate.setDate(nextTriggerDate.getDate() + val);
+    }
+    
+    const newSchedule = {
+      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9),
+      room: schedRoom,
+      description: schedDesc.trim(),
+      period: schedPeriod,
+      last_triggered: null,
+      next_trigger: nextTriggerDate.toISOString()
+    };
+    
+    const updatedSchedules = [...schedules, newSchedule];
+    
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'maintenance_schedules', value: JSON.stringify(updatedSchedules) }, { onConflict: 'key' });
+        
+      if (error) throw error;
+      
+      setSchedules(updatedSchedules);
+      setSchedDesc('');
+      alert("📅 Mantenimiento programado con éxito.");
+    } catch (err) {
+      console.error(err);
+      alert("Error al guardar la programación.");
+    }
+  };
+
+  const handleDeleteSchedule = async (id: string) => {
+    if (!confirm("¿Seguro que deseas eliminar esta programación recurrente?")) return;
+    
+    const updatedSchedules = schedules.filter(s => s.id !== id);
+    
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'maintenance_schedules', value: JSON.stringify(updatedSchedules) }, { onConflict: 'key' });
+        
+      if (error) throw error;
+      
+      setSchedules(updatedSchedules);
+    } catch (err) {
+      console.error(err);
+      alert("Error al eliminar la programación.");
+    }
+  };
+
+  const handleForceTriggerSchedule = async (scheduleItem: any) => {
+    if (!confirm(`¿Deseas generar la tarea "${scheduleItem.description}" en la lista de NUEVOS inmediatamente?`)) return;
+    
+    const payload = {
+      room: scheduleItem.room,
+      description: `[PROGRAMADO] ${scheduleItem.description}`,
+      type: 'mantenimiento',
+      status: 'nuevo',
+      reported_by: 'Sistema',
+      direction: 'admin_to_staff'
+    };
+    
+    try {
+      const { data: insertData, error: insError } = await supabase.from('tasks').insert([payload]).select();
+      if (insError) throw insError;
+      
+      const insertedId = insertData?.[0]?.id || '';
+      
+      // Registrar log de auditoría
+      await logAudit(
+        'report_maintenance_scheduled_forced', 
+        scheduleItem.room, 
+        JSON.stringify({
+          text: `Tarea programada forzada manualmente en ${scheduleItem.room}: ${scheduleItem.description}`,
+          mantenimiento: {
+            taskId: insertedId,
+            room: scheduleItem.room,
+            description: scheduleItem.description,
+            status: 'nuevo',
+            type: 'mantenimiento',
+            reported_by: 'Sistema'
+          }
+        })
+      );
+      
+      // Actualizar fechas
+      const nowIso = new Date().toISOString();
+      const nextTriggerDate = new Date();
+      const periodParts = scheduleItem.period.split(' ');
+      const val = parseInt(periodParts[0]) || 1;
+      const unit = periodParts[1] || 'month';
+      
+      if (unit.startsWith('week')) {
+        nextTriggerDate.setDate(nextTriggerDate.getDate() + (val * 7));
+      } else if (unit.startsWith('month')) {
+        nextTriggerDate.setMonth(nextTriggerDate.getMonth() + val);
+      } else if (unit.startsWith('year')) {
+        nextTriggerDate.setFullYear(nextTriggerDate.getFullYear() + val);
+      } else if (unit.startsWith('day')) {
+        nextTriggerDate.setDate(nextTriggerDate.getDate() + val);
+      }
+      
+      const updatedSchedules = schedules.map(s => {
+        if (s.id === scheduleItem.id) {
+          return {
+            ...s,
+            last_triggered: nowIso,
+            next_trigger: nextTriggerDate.toISOString()
+          };
+        }
+        return s;
+      });
+      
+      const { error: saveError } = await supabase
+        .from('settings')
+        .upsert({ key: 'maintenance_schedules', value: JSON.stringify(updatedSchedules) }, { onConflict: 'key' });
+        
+      if (saveError) throw saveError;
+      
+      setSchedules(updatedSchedules);
+      fetchTasks();
+      alert("✅ Tarea creada con éxito y programación actualizada.");
+    } catch (err) {
+      console.error(err);
+      alert("Error al forzar la ejecución de la programación.");
+    }
   };
 
   const handleSaveDirect = async (e: React.FormEvent) => {
@@ -460,8 +727,30 @@ export default function MantenimientoPage() {
         </div>
       </div>
 
-      {/* KPIs Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 select-none">
+      {/* Selector de Vista (Incidencias vs Programado) */}
+      <div className="flex bg-zinc-100/80 p-1.5 rounded-2xl w-fit border border-zinc-200/50 shadow-inner mb-2 select-none">
+        <button
+          onClick={() => setViewMode('tasks')}
+          className={`px-4 py-2 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+            viewMode === 'tasks' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/20' : 'text-zinc-500 hover:text-zinc-800 bg-transparent'
+          }`}
+        >
+          🔧 Incidencias
+        </button>
+        <button
+          onClick={() => setViewMode('schedules')}
+          className={`px-4 py-2 text-[11px] font-black rounded-xl transition-all cursor-pointer ${
+            viewMode === 'schedules' ? 'bg-white text-zinc-950 shadow-sm border border-zinc-200/20' : 'text-zinc-500 hover:text-zinc-800 bg-transparent'
+          }`}
+        >
+          📅 Mantenimiento Programado
+        </button>
+      </div>
+
+      {viewMode === 'tasks' ? (
+        <>
+          {/* KPIs Grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 select-none">
         {/* NUEVOS */}
         <div 
           onClick={() => setFilterStatus('nuevo')}
@@ -656,7 +945,176 @@ export default function MantenimientoPage() {
             );
           })
         )}
+      </>
+    ) : (
+      // VISTA DE MANTENIMIENTO PROGRAMADO
+      <div className="space-y-6 animate-in fade-in duration-200">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+          
+          {/* Formulario Agregar Programación */}
+          <div className="bg-white border border-zinc-200/80 rounded-3xl p-5 shadow-[0_2px_12px_rgba(0,0,0,0.02)] space-y-4">
+            <div>
+              <h3 className="text-[16px] font-black text-zinc-900 uppercase tracking-wide">Nueva Programación</h3>
+              <p className="text-[11px] text-zinc-400 font-bold mt-0.5">Define una tarea de mantenimiento preventiva recurrente</p>
+            </div>
+            
+            <form onSubmit={handleAddSchedule} className="space-y-4">
+              {/* Habitación / Ubicación */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-550 uppercase tracking-widest pl-0.5 block">Ubicación</label>
+                <select
+                  value={schedRoom}
+                  onChange={e => setSchedRoom(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-zinc-900 font-bold text-[13px] outline-none focus:ring-2 focus:ring-zinc-950/5 transition-all cursor-pointer"
+                >
+                  <option value="General">📍 General (Áreas Comunes)</option>
+                  <option value="Alberca">🏊 Alberca</option>
+                  <option value="Cocina">🍳 Cocina / Terraza</option>
+                  <option value="Recepción">🛎️ Recepción</option>
+                  <optgroup label="Habitaciones">
+                    {['101','102','103','104','105','106','107','201','202','203','204','205','206','301','302','303','304','305','306','401','402','501','502','503','504','505','506','507'].map(rm => (
+                      <option key={rm} value={rm}>Habitación {rm}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {/* Frecuencia / Periodo */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-550 uppercase tracking-widest pl-0.5 block">Frecuencia de Ejecución</label>
+                <select
+                  value={schedPeriod}
+                  onChange={e => setSchedPeriod(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl p-3 text-zinc-900 font-bold text-[13px] outline-none focus:ring-2 focus:ring-zinc-950/5 transition-all cursor-pointer"
+                >
+                  <option value="1 week">Cada Semana ⏳</option>
+                  <option value="2 weeks">Cada 2 Semanas 🗓️</option>
+                  <option value="1 month">Cada Mes 📅</option>
+                  <option value="3 months">Cada 3 Meses 🗓️</option>
+                  <option value="6 months">Cada 6 Meses 🔄</option>
+                  <option value="1 year">Cada Año 🎯</option>
+                </select>
+              </div>
+
+              {/* Descripción */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-zinc-555 uppercase tracking-widest pl-0.5 block">Descripción de la Tarea</label>
+                <textarea
+                  rows={3}
+                  required
+                  value={schedDesc}
+                  onChange={e => setSchedDesc(e.target.value)}
+                  placeholder="Ej. Limpieza de filtros de aire acondicionado, revisión de pintura..."
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-950/5 resize-none font-semibold text-zinc-900 leading-relaxed"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 bg-zinc-900 hover:bg-zinc-950 text-white font-extrabold text-[12.5px] uppercase tracking-wider rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <span>Programar Pendiente 📅</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Listado de Programaciones */}
+          <div className="md:col-span-2 space-y-3.5">
+            <div className="flex items-center justify-between pl-1">
+              <div>
+                <h3 className="text-[15px] font-black text-zinc-900 uppercase tracking-wide">Tareas Recurrentes Activas</h3>
+                <p className="text-[11px] text-zinc-400 font-bold mt-0.5">
+                  {schedules.length} programación{schedules.length !== 1 ? 'es' : ''} registrada{schedules.length !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </div>
+
+            {schedules.length === 0 ? (
+              <div className="bg-white border border-zinc-200/80 rounded-3xl p-12 text-center shadow-[0_2px_12px_rgba(0,0,0,0.01)] flex flex-col items-center justify-center gap-3">
+                <div className="w-12 h-12 bg-zinc-50 border border-zinc-100 rounded-2xl flex items-center justify-center text-zinc-400 text-lg">
+                  📅
+                </div>
+                <div>
+                  <h4 className="text-[14px] font-bold text-zinc-800">No hay tareas recurrentes programadas</h4>
+                  <p className="text-[11.5px] text-zinc-400 font-bold mt-1">Usa el panel de la izquierda para agregar la primera.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {schedules.map((item) => {
+                  const nextExec = new Date(item.next_trigger);
+                  const lastExec = item.last_triggered ? new Date(item.last_triggered) : null;
+                  const isOverdue = nextExec <= new Date();
+                  
+                  const periodLabels: Record<string, string> = {
+                    '1 week': 'Cada Semana',
+                    '2 weeks': 'Cada 2 Semanas',
+                    '1 month': 'Cada Mes',
+                    '3 months': 'Cada 3 Meses',
+                    '6 months': 'Cada 6 Meses',
+                    '1 year': 'Cada Año'
+                  };
+                  const freqText = periodLabels[item.period] || item.period;
+
+                  return (
+                    <div 
+                      key={item.id}
+                      className="bg-white border border-zinc-200/80 rounded-2xl p-4.5 shadow-[0_2px_10px_rgba(0,0,0,0.015)] flex flex-col justify-between space-y-4 hover:border-zinc-300 transition-colors"
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="inline-flex items-center gap-1 text-[9.5px] font-black text-indigo-700 bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                            📍 {item.room}
+                          </span>
+                          <span className="text-[10px] font-bold text-zinc-400">
+                            🔄 {freqText}
+                          </span>
+                        </div>
+                        
+                        <p className="text-[13px] font-bold text-zinc-850 leading-snug whitespace-pre-line">
+                          {item.description}
+                        </p>
+                      </div>
+
+                      <div className="border-t border-zinc-100/70 pt-3 space-y-1.5 text-[11px] font-medium text-zinc-500">
+                        <div className="flex justify-between">
+                          <span>Último trigger:</span>
+                          <span className="font-bold text-zinc-700">
+                            {lastExec ? format(lastExec, "d MMM yyyy", { locale: es }) : 'Nunca ⏳'}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Próximo trigger:</span>
+                          <span className={`font-bold ${isOverdue ? 'text-rose-600 animate-pulse font-black' : 'text-zinc-700'}`}>
+                            {format(nextExec, "d MMM yyyy", { locale: es })} {isOverdue && '⚠️'}
+                          </span>
+                        </div>
+                        
+                        <div className="flex gap-2 pt-2 border-t border-zinc-100/50 mt-1">
+                          <button
+                            onClick={() => handleForceTriggerSchedule(item)}
+                            className="flex-1 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[10.5px] font-black uppercase tracking-wider flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                          >
+                            ⚡ Lanzar Ya
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSchedule(item.id)}
+                            className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center transition-colors cursor-pointer"
+                            title="Eliminar Programación"
+                          >
+                            <Trash2 size={13} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+    )}
 
       {/* Edit/Create Modal */}
       {showModal && (

@@ -18,10 +18,11 @@ const UNIT_TO_ROOM: Record<string, string> = {
 // unitIds disponibles para auto-asignación OTA (501-507 = unitId 2-8)
 const OTA_ASSIGNABLE_UNITS = ['2', '3', '4', '5', '6', '7', '8'];
 
-// GET: Obtener todas las reservas activas procesadas desde Beds24 y locales de Supabase
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const mappedBookings = await getBeds24Bookings();
+    const { searchParams } = new URL(req.url);
+    const bypassCache = searchParams.get('bypassCache') === 'true';
+    const mappedBookings = await getBeds24Bookings(false, false, bypassCache);
     
     // Obtener reservas locales de Supabase
     let localBookings: any[] = [];
