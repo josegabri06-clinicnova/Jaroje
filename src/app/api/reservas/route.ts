@@ -758,7 +758,9 @@ export async function PUT(req: Request) {
       }
     }
 
-    // Si es reasignación pura (sin price explícito), recalcular la tarifa
+    // Si es reasignación pura (sin price explícito), NO recalculamos ni sobreescribimos la tarifa automáticamente.
+    // Esto previene que se altere la tarifa original o el acuerdo comercial del huésped al cambiar físicamente de cuarto.
+    /*
     if (roomName && price === undefined && currentBooking) {
       try {
         const arrival = checkIn || currentBooking.arrival;
@@ -800,6 +802,7 @@ export async function PUT(req: Request) {
         console.error("[Reservas PUT] Error recalculando tarifas en reasignación:", rateErr);
       }
     }
+    */
 
     // Determinar el precio final a usar (explícito > recalculado > ninguno)
     const finalPrice = price !== undefined ? Number(price) : recalculatedPrice;
