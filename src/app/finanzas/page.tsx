@@ -1693,6 +1693,7 @@ export default function FinanzasPage() {
                     <>
                       <option>Reserva Directa</option>
                       <option>Walk In</option>
+                      <option>Check In</option>
                       <option>Ingreso Extra</option>
                       <option>Booking</option>
                       <option>Airbnb</option>

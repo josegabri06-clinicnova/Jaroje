@@ -2217,7 +2217,7 @@ export default function RecepcionPage() {
       const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
         type: 'ingreso',
         amount: cleanAmountNum,
-        category: 'Reserva Directa',
+        category: 'Check In',
         description: paymentDesc ? `${paymentDesc} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
         payment_method: mode,
         account_id: accountId || null,
@@ -2425,7 +2425,7 @@ export default function RecepcionPage() {
             const { data: rows1, error: err1 } = await supabase.from('finances').insert({
               type: 'ingreso',
               amount: amt1,
-              category: 'Reserva Directa',
+              category: 'Walk In',
               description: paymentDescription ? `${paymentDescription} - ${baseDesc1} [Pending Sync: B24]` : `${baseDesc1} [Pending Sync: B24]`,
               payment_method: paymentMode,
               account_id: selectedAccountId || null,
@@ -2446,7 +2446,7 @@ export default function RecepcionPage() {
             const { data: rows2, error: err2 } = await supabase.from('finances').insert({
               type: 'ingreso',
               amount: amt2,
-              category: 'Reserva Directa',
+              category: 'Walk In',
               description: paymentDescription2 ? `${paymentDescription2} - ${baseDesc2} [Pending Sync: B24]` : `${baseDesc2} [Pending Sync: B24]`,
               payment_method: paymentMode2,
               account_id: selectedAccountId2 || null,
@@ -2563,7 +2563,7 @@ export default function RecepcionPage() {
           const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
             type: 'ingreso',
             amount: totalPayment,
-            category: 'Reserva Directa',
+            category: 'Walk In',
             description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
             payment_method: paymentMode,
             account_id: selectedAccountId || null,
@@ -2805,7 +2805,7 @@ export default function RecepcionPage() {
               const { data: netRows } = await supabase.from('finances').insert({
                 type: 'ingreso',
                 amount: netRevenue,
-                category: 'Reserva Directa',
+                category: 'Check In',
                 description: `${netDesc} [Pending Sync: B24]`,
                 payment_method: 'transferencia',
                 account_id: netAcc?.id || null,
@@ -2884,7 +2884,7 @@ export default function RecepcionPage() {
                       finance: {
                         type: 'ingreso',
                         amount: netRevenue,
-                        category: 'Reserva Directa',
+                        category: 'Check In',
                         account: matchedAccName,
                         description: `${r.guest_name || 'Huésped'} (ID: ${r.id}) - Hab ${r.room} - Ingreso Neto OTA (${channel})`
                       }
@@ -2975,7 +2975,7 @@ export default function RecepcionPage() {
                 const { data: netRows, error: netErr } = await supabase.from('finances').insert({
                   type: 'ingreso',
                   amount: isNaN(cleanNetRevenue) ? 0 : cleanNetRevenue,
-                  category: 'Reserva Directa',
+                  category: 'Check In',
                   description: paymentDescription ? `${paymentDescription} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
                   payment_method: 'transferencia',
                   account_id: selectedAccountId || null,
@@ -3066,7 +3066,7 @@ export default function RecepcionPage() {
                           finance: {
                             type: 'ingreso',
                             amount: otaSplit.netRevenue,
-                            category: 'Reserva Directa',
+                            category: 'Check In',
                             account: matchedAccName,
                             description: `${r.guest_name || 'Huésped'} (ID: ${r.id}) - Hab ${r.room} - Ingreso Neto OTA (${otaSplit.channelLabel})`
                           }
@@ -3076,6 +3076,9 @@ export default function RecepcionPage() {
                   }
 
                   if (otaSplit.commission > 0) {
+                    const commissionAcc = accounts.find(a =>
+                      (a.name || '').toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
+                    );
                     const commAccName = commissionAcc?.name || 'COMISIÓN AIRBNB';
                     await fetch('/api/employee-logs', {
                       method: 'POST',
@@ -3108,7 +3111,7 @@ export default function RecepcionPage() {
                 const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
                   type: 'ingreso',
                   amount: isNaN(cleanSplitAmt) ? 0 : cleanSplitAmt,
-                  category: 'Reserva Directa',
+                  category: 'Check In',
                   description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
                   payment_method: paymentMode,
                   account_id: selectedAccountId || null,
@@ -3324,7 +3327,7 @@ export default function RecepcionPage() {
             const { data: netRows } = await supabase.from('finances').insert({
               type: 'ingreso',
               amount: netRevenue,
-              category: 'Reserva Directa',
+              category: 'Check In',
               description: `${netDesc} [Pending Sync: B24]`,
               payment_method: 'transferencia',
               account_id: netAcc?.id || null,
@@ -3403,7 +3406,7 @@ export default function RecepcionPage() {
                     finance: {
                       type: 'ingreso',
                       amount: netRevenue,
-                      category: 'Reserva Directa',
+                      category: 'Check In',
                       account: matchedAccName,
                       description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Ingreso Neto OTA (${channel})`
                     }
@@ -3485,7 +3488,7 @@ export default function RecepcionPage() {
             const { data: netRows } = await supabase.from('finances').insert({
               type: 'ingreso',
               amount: otaSplit.netRevenue,
-              category: 'Reserva Directa',
+              category: 'Check In',
               description: paymentDescription ? `${paymentDescription} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
               payment_method: 'transferencia',
               account_id: selectedAccountId || null,
@@ -3572,7 +3575,7 @@ export default function RecepcionPage() {
                       finance: {
                         type: 'ingreso',
                         amount: otaSplit.netRevenue,
-                        category: 'Reserva Directa',
+                        category: 'Check In',
                         account: matchedAccName,
                         description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Ingreso Neto OTA (${otaSplit.channelLabel})`
                       }
@@ -3613,7 +3616,7 @@ export default function RecepcionPage() {
             const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
               type: 'ingreso',
               amount: isNaN(cleanAmountNum) ? 0 : cleanAmountNum,
-              category: 'Reserva Directa',
+              category: 'Check In',
               description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
               payment_method: paymentMode,
               account_id: selectedAccountId || null,

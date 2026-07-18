@@ -1069,7 +1069,7 @@ export default function CalendarPage() {
       const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
         type: 'ingreso',
         amount: cleanAmountNum,
-        category: 'Reserva Directa',
+        category: 'Check In',
         description: paymentDesc ? `${paymentDesc} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
         payment_method: mode,
         account_id: accountId || null,
@@ -1251,7 +1251,7 @@ export default function CalendarPage() {
         const { data: netRows } = await supabase.from('finances').insert({
           type: 'ingreso',
           amount: netRevenue,
-          category: 'Reserva Directa',
+          category: 'Check In',
           description: `${netDesc} [Pending Sync: B24]`,
           payment_method: 'transferencia',
           account_id: netAcc?.id || null,
@@ -1330,7 +1330,7 @@ export default function CalendarPage() {
                 finance: {
                   type: 'ingreso',
                   amount: netRevenue,
-                  category: 'Reserva Directa',
+                  category: 'Check In',
                   account: matchedAccName,
                   description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Ingreso Neto OTA (${channel})`
                 }
@@ -1420,7 +1420,7 @@ export default function CalendarPage() {
         const { data: netRows, error: netErr } = await supabase.from('finances').insert({
           type: 'ingreso',
           amount: isNaN(cleanNetRevenue) ? 0 : cleanNetRevenue,
-          category: 'Reserva Directa',
+          category: 'Check In',
           description: paymentDescription ? `${paymentDescription} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
           payment_method: 'transferencia',
           account_id: selectedAccountId || null,
@@ -1516,7 +1516,7 @@ export default function CalendarPage() {
                   finance: {
                     type: 'ingreso',
                     amount: otaSplit.netRevenue,
-                    category: 'Reserva Directa',
+                    category: 'Check In',
                     account: matchedAccName,
                     description: `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Ingreso Neto OTA (${otaSplit.channelLabel})`
                   }
@@ -1526,6 +1526,9 @@ export default function CalendarPage() {
           }
 
           if (otaSplit.commission > 0) {
+            const commissionAcc = accounts.find(a =>
+              (a.name || '').toUpperCase().replace(/\s+/g, ' ').includes(otaSplit.channelLabel.toUpperCase().replace('.COM', '').replace('.', '').trim())
+            );
             const commAccName = commissionAcc?.name || 'COMISIÓN AIRBNB';
             await fetch('/api/employee-logs', {
               method: 'POST',
@@ -1558,7 +1561,7 @@ export default function CalendarPage() {
         const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
           type: 'ingreso',
           amount: amountNum,
-          category: 'Reserva Directa',
+          category: 'Check In',
           description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
           payment_method: paymentMode,
           account_id: selectedAccountId || null,

@@ -771,10 +771,12 @@ export default function VercelActionForm() {
             // Si el check-in es retroactivo, registrar en esa fecha de check-in, si no, registrar hoy
             const financeDate = form.checkIn && form.checkIn < currentDayStr ? form.checkIn : currentDayStr;
 
+            const financeCategory = form.channel === 'Recepción' ? 'Walk In' : 'Reserva Directa';
+
             const { error: financeErr } = await supabase.from('finances').insert({
               type: 'ingreso',
               amount: depositPerRoom,
-              category: 'Alojamiento',
+              category: financeCategory,
               description: baseDesc,
               payment_method: formPaymentMethod,
               account_id: formAccountId,
