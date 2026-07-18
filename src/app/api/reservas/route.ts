@@ -758,17 +758,21 @@ export async function PUT(req: Request) {
       }
     }
 
-    // Si es reasignación pura (sin price explícito), NO recalculamos ni sobreescribimos la tarifa automáticamente.
-    // Esto previene que se altere la tarifa original o el acuerdo comercial del huésped al cambiar físicamente de cuarto.
-    /*
-    if (roomName && price === undefined && currentBooking) {
+    // Recalcular tarifa si hay cambios reales en las fechas o en el tipo de habitación (roomId)
+    if (price === undefined && currentBooking) {
       try {
         const arrival = checkIn || currentBooking.arrival;
         const departure = checkOut || currentBooking.departure;
-        const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : null;
+        const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : (currentBooking.roomId ? String(currentBooking.roomId) : null);
 
-        if (arrival && departure && newRoomId) {
-          console.log(`[Reservas PUT] Recalculando tarifa para roomId=${newRoomId} del ${arrival} al ${departure}`);
+        // Detectar si hay cambios reales respecto a los valores actuales
+        const arrivalChanged = arrival && arrival !== currentBooking.arrival;
+        const departureChanged = departure && departure !== currentBooking.departure;
+        const roomTypeChanged = newRoomId && currentBooking.roomId && String(newRoomId) !== String(currentBooking.roomId);
+
+        // Solo recalcular si cambiaron las fechas O el tipo de habitación
+        if ((arrivalChanged || departureChanged || roomTypeChanged) && arrival && departure && newRoomId) {
+          console.log(`[Reservas PUT] Detectado cambio que requiere recálculo (Tarifas). RoomId=${newRoomId} del ${arrival} al ${departure}`);
           const ratesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, arrival, departure);
           const roomRates = ratesMap[newRoomId] || {};
 
@@ -791,18 +795,19 @@ export async function PUT(req: Request) {
 
           if (totalNewPrice > 0 && totalNewPrice !== oldPrice) {
             recalculatedPrice = totalNewPrice;
-            console.log(`[Reservas PUT] Tarifa recalculada: $${oldPrice} → $${totalNewPrice} (${nightsCount} noches en roomId ${newRoomId})`);
+            console.log(`[Reservas PUT] Tarifa recalculada automáticamente: $${oldPrice} → $${totalNewPrice} (${nightsCount} noches en roomId ${newRoomId})`);
           } else if (totalNewPrice === 0) {
             console.warn(`[Reservas PUT] No se encontraron tarifas para roomId=${newRoomId} en el rango ${arrival} – ${departure}. Se mantiene el precio original $${oldPrice}.`);
           } else {
             console.log(`[Reservas PUT] Tarifa idéntica ($${oldPrice}), sin cambio.`);
           }
+        } else {
+          console.log(`[Reservas PUT] Reasignación interna o sin cambios en parámetros clave (Mismo tipo de habitación y fechas). Manteniendo precio original.`);
         }
       } catch (rateErr) {
         console.error("[Reservas PUT] Error recalculando tarifas en reasignación:", rateErr);
       }
     }
-    */
 
     // Determinar el precio final a usar (explícito > recalculado > ninguno)
     const finalPrice = price !== undefined ? Number(price) : recalculatedPrice;
