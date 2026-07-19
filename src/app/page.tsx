@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { format, addDays, formatDistanceToNow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
+import { getSeason } from '@/lib/beds24';
 
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -298,7 +299,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCopyDailyReport = () => {
+  const handleCopyDailyReport = async () => {
     if (reservas.length === 0) {
       alert("No hay datos de reservaciones cargados para generar el reporte.");
       return;
@@ -358,6 +359,71 @@ export default function AdminDashboard() {
       });
     }
     text += `\n`;
+
+    // --- TARIFAS ESTACIONALES DINÁMICAS ---
+    const todayISO = getLocalDateStr(new Date());
+    const currentSeason = getSeason(todayISO);
+    const seasonLabels: Record<string, string> = {
+      baja: 'BAJA',
+      media: 'MEDIA',
+      media_alta: 'MEDIA-ALTA',
+      alta: 'ALTA'
+    };
+
+    // Tarifas de fallback por defecto (con impuestos +19% e indexadas por temporada)
+    let doublePrice = 2000;
+    let cond1Price = 3000;
+    let cond2Price = 4000;
+    let cond3Price = 6000;
+    let casaPrice = 8000;
+
+    const seasonFallbacks: Record<string, { double: number; cond1: number; cond2: number; cond3: number; casa: number }> = {
+      baja: { double: 1600, cond1: 2400, cond2: 3200, cond3: 4800, casa: 6400 },
+      media: { double: 1900, cond1: 2850, cond2: 3800, cond3: 5700, casa: 7600 },
+      media_alta: { double: 2000, cond1: 3000, cond2: 4000, cond3: 6000, casa: 8000 },
+      alta: { double: 2200, cond1: 3300, cond2: 4400, cond3: 6600, casa: 8800 }
+    };
+
+    const fallbacks = seasonFallbacks[currentSeason] || seasonFallbacks.media_alta;
+    doublePrice = fallbacks.double;
+    cond1Price = fallbacks.cond1;
+    cond2Price = fallbacks.cond2;
+    cond3Price = fallbacks.cond3;
+    casaPrice = fallbacks.casa;
+
+    try {
+      const resPrices = await fetch('/api/beds24-prices?t=' + Date.now());
+      const jsonPrices = await resPrices.json();
+      if (jsonPrices.success && Array.isArray(jsonPrices.rooms)) {
+        const getPriceForToday = (roomId: string) => {
+          const roomObj = jsonPrices.rooms.find((r: any) => r.id === roomId);
+          if (roomObj && Array.isArray(roomObj.seasonBlocks)) {
+            const matchedBlock = roomObj.seasonBlocks.find((b: any) => todayISO >= b.from && todayISO <= b.to);
+            if (matchedBlock) return matchedBlock.priceDirecto;
+            
+            const seasonBlock = roomObj.seasonBlocks.find((b: any) => b.season === currentSeason);
+            if (seasonBlock) return seasonBlock.priceDirecto;
+          }
+          return null;
+        };
+
+        doublePrice = getPriceForToday('679077') || doublePrice;
+        cond1Price = getPriceForToday('679087') || cond1Price;
+        cond2Price = getPriceForToday('679091') || cond2Price;
+        cond3Price = getPriceForToday('679092') || cond3Price;
+        casaPrice = getPriceForToday('679093') || casaPrice;
+      }
+    } catch (e) {
+      console.warn("No se pudieron cargar tarifas de Ajustes, usando fallback:", e);
+    }
+
+    const label = seasonLabels[currentSeason] || 'MEDIA-ALTA';
+    text += `💰 *TARIFA TEMP ${label}*\n`;
+    text += `• Habitación doble: $${doublePrice}\n`;
+    text += `• Condominio 1 dormitorio: $${cond1Price}\n`;
+    text += `• Condominio 2 dormitorios: $${cond2Price}\n`;
+    text += `• Condominio 3 dormitorios: $${cond3Price}\n`;
+    text += `• Casa vacacional: $${casaPrice}\n\n`;
 
     text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
 

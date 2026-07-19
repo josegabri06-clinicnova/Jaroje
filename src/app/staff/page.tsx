@@ -1296,30 +1296,6 @@ export default function StaffPage() {
       text += `${generalObservations.trim()}\n\n`;
     }
 
-    // Agregar tarifas estacionales según la temporada actual
-    const currentSeason = getSeason(getLocalDateStr(new Date()));
-    const seasonLabels: Record<string, string> = {
-      baja: 'BAJA',
-      media: 'MEDIA',
-      media_alta: 'MEDIA-ALTA',
-      alta: 'ALTA'
-    };
-    const seasonRates: Record<string, { double: number; cond1: number; cond2: number; cond3: number; casa: number }> = {
-      baja: { double: 1600, cond1: 2400, cond2: 3200, cond3: 4800, casa: 6400 },
-      media: { double: 1900, cond1: 2850, cond2: 3800, cond3: 5700, casa: 7600 },
-      media_alta: { double: 2000, cond1: 3000, cond2: 4000, cond3: 6000, casa: 8000 },
-      alta: { double: 2200, cond1: 3300, cond2: 4400, cond3: 6600, casa: 8800 }
-    };
-    const label = seasonLabels[currentSeason] || 'MEDIA-ALTA';
-    const rates = seasonRates[currentSeason] || seasonRates.media_alta;
-
-    text += `💰 *TARIFA TEMP ${label}*\n`;
-    text += `• Habitación doble: $${rates.double}\n`;
-    text += `• Condominio 1 dormitorio: $${rates.cond1}\n`;
-    text += `• Condominio 2 dormitorios: $${rates.cond2}\n`;
-    text += `• Condominio 3 dormitorios: $${rates.cond3}\n`;
-    text += `• Casa vacacional: $${rates.casa}\n\n`;
-
     text += `_Generado automáticamente desde Jaroje OS_`;
 
     navigator.clipboard.writeText(text).then(() => {
