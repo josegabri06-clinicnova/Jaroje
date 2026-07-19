@@ -568,7 +568,7 @@ export async function DELETE(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit, checkIn, checkOut, portalSettings } = body;
+    const { id, roomName, guestName, phone, numAdult, numChild, price, notes, deposit, checkIn, checkOut, portalSettings, preview } = body;
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
@@ -600,6 +600,16 @@ export async function PUT(req: Request) {
       .maybeSingle();
 
     if (localRes) {
+      if (preview) {
+        return NextResponse.json({
+          success: true,
+          preview: true,
+          old_price: localRes.price || 0,
+          recalculated_price: localRes.price || 0,
+          price_changed: false,
+          same_room_type: true
+        });
+      }
       // Es local! Modificar localmente
       const localUpdate: any = {};
       if (guestName) localUpdate.guest_name = guestName;
@@ -809,8 +819,30 @@ export async function PUT(req: Request) {
       }
     }
 
-    // Determinar el precio final a usar (explícito > recalculado > ninguno)
-    const finalPrice = price !== undefined ? Number(price) : recalculatedPrice;
+    // Si es una petición de vista previa, retornar el precio calculado y no realizar cambios en Beds24/Supabase
+    if (preview) {
+      const currentRoomId = currentBooking?.roomId ? String(currentBooking.roomId) : null;
+      const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : currentRoomId;
+      const roomTypeChanged = currentRoomId && newRoomId && currentRoomId !== newRoomId;
+
+      return NextResponse.json({
+        success: true,
+        preview: true,
+        old_price: currentBooking?.price || 0,
+        recalculated_price: recalculatedPrice !== undefined ? recalculatedPrice : (currentBooking?.price || 0),
+        price_changed: recalculatedPrice !== undefined && recalculatedPrice !== currentBooking?.price,
+        same_room_type: !roomTypeChanged
+      });
+    }
+
+    // Determinar el precio final a usar (explícito > recalculado > original)
+    // Si no hay recálculo automático y no viene un precio explícito, enviamos el precio actual de la reserva.
+    // Esto previene que los servidores de Beds24 recalculen e impongan tarifas por defecto.
+    const finalPrice = price !== undefined 
+      ? Number(price) 
+      : (recalculatedPrice !== undefined 
+          ? recalculatedPrice 
+          : (currentBooking ? Number(currentBooking.price) : undefined));
 
     if (finalPrice !== undefined) {
       updatePayload.price = finalPrice;
