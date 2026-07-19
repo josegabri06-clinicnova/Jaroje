@@ -765,6 +765,7 @@ export default function AdminDashboard() {
                     const unit = getUnitDisplay(r.room || r.room_name || '');
                     const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
                     const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+                    const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
                     return (
                       <tr
                         key={r.id}
@@ -840,7 +841,11 @@ export default function AdminDashboard() {
                           ${dailyRate.toLocaleString('es-MX') || '—'}
                         </td>
                         <td className="py-3 px-4 text-right text-[13px]">
-                          {balanceVal > 0 ? (
+                          {isOTA ? (
+                            <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                              $0.00
+                            </span>
+                          ) : balanceVal > 0 ? (
                             <span className="text-rose-600 font-bold bg-rose-50 px-2 py-0.5 rounded border border-rose-100">
                               ${balanceVal.toLocaleString('es-MX')}
                             </span>
