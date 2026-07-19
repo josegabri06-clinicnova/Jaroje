@@ -1265,7 +1265,7 @@ export default function StaffPage() {
     if (allRooms.length > 0) {
       text += `*Habitaciones por Limpieza:*\n`;
       allRooms.forEach((task, idx) => {
-        const isFinished = task.dbStatus === 'limpia' || (task.dbStatus === 'disponible' && task.isUpdatedToday);
+        const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
         const typeLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
         const statusLabel = isFinished 
           ? 'Limpia ✅' 
