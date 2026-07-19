@@ -1981,7 +1981,7 @@ export default function StaffPage() {
                         onChange={e => setSchedRoom(e.target.value)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
                       >
-                        {ROOMS.map(r => {
+                        {MTTO_LOCATIONS.map(r => {
                           const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(r);
                           return (
                             <option key={r} value={r}>
