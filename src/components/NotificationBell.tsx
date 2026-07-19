@@ -113,8 +113,16 @@ function parseLogDetails(detailsStr: string | null | undefined): { text: string;
     if (accMatch) account = accMatch[1].trim();
     
     let category = 'Ajuste';
-    const catMatch = detailsStr.match(/\(([A-Za-záéíóúüñ\s]+)\)/);
-    if (catMatch) category = catMatch[1].trim();
+    if (lowerDetails.includes('check-in') || lowerDetails.includes('checkin')) {
+      category = 'Check In';
+    } else if (lowerDetails.includes('walk-in') || lowerDetails.includes('walkin')) {
+      category = 'Walk In';
+    } else if (lowerDetails.includes('check-out') || lowerDetails.includes('checkout')) {
+      category = 'Check Out';
+    } else {
+      const catMatch = detailsStr.match(/\(([A-Za-záéíóúüñ\s]+)\)/);
+      if (catMatch) category = catMatch[1].trim();
+    }
     
     return {
       text: detailsStr,
