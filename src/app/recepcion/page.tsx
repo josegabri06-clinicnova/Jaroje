@@ -330,9 +330,13 @@ function getRoomOperationalStatus(
     const diffTime = Math.abs(todayDate.getTime() - checkInDate.getTime());
     const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
 
+    const isTwoDayRoom = ['401'].includes(roomNum);
     const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','501','402'].includes(roomNum);
     const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(roomNum);
 
+    if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) {
+      return 'limpieza_programada'; // Amarillo automático cada 2 días (Stayover cada 2 días)
+    }
     if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
       return 'limpieza_programada'; // Amarillo automático por 3er día (Stayover cada 3er día)
     }
