@@ -521,14 +521,25 @@ export default function ReservasList() {
           const isCompleted = found.is_checked_out || found.check_out < today;
           setActiveTab(isCompleted ? 'Completadas' : 'Todas');
         }
-        // Limpiar el parámetro de la URL inmediatamente para evitar que
-        // el efecto vuelva a ejecutarse y reabra el modal al cerrarlo
-        window.history.replaceState(null, '', '/reservas');
       }
     }
   // Solo depende de 'reservas': se ejecuta una vez al cargar los datos
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reservas]);
+
+  // Sincronizar el parámetro de la URL con el estado de la reserva activa
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (selectedRes) {
+        window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('id')) {
+          window.history.replaceState(null, '', '/reservas');
+        }
+      }
+    }
+  }, [selectedRes]);
 
   const handleConfirmCheckIn = async () => {
     setCheckInLoading(true);

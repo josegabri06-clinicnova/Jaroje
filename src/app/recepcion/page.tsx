@@ -1616,7 +1616,6 @@ export default function RecepcionPage() {
         setSelectedReserva(match);
         setShowCheckInModal(true);
       }
-      router.replace('/recepcion');
     } else if (paramCheckout) {
       const match = reservas.find(r => String(r.id) === String(paramCheckout));
       if (match && !match.checked_out) {
@@ -1625,6 +1624,20 @@ export default function RecepcionPage() {
       router.replace('/recepcion');
     }
   }, [searchParams, reservas]);
+
+  // Sincronizar el parámetro de la URL de recepción con el estado del modal de check-in activo
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (selectedReserva && showCheckInModal && selectedReserva.id !== 'walkin') {
+        window.history.replaceState(null, '', `/recepcion?checkin=${selectedReserva.id}`);
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('checkin')) {
+          window.history.replaceState(null, '', '/recepcion');
+        }
+      }
+    }
+  }, [selectedReserva, showCheckInModal]);
 
   const distributeGuestsInRooms = (rooms: any[], numAdults: number, numChildren: number) => {
     let adultsLeft = Math.max(0, numAdults);
