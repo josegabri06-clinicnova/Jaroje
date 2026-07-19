@@ -776,30 +776,52 @@ export async function PUT(req: Request) {
         const arrival = checkIn || currentBooking.arrival;
         const departure = checkOut || currentBooking.departure;
         const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : (currentBooking.roomId ? String(currentBooking.roomId) : null);
+        const newUnitId = updatePayload.unitId ? String(updatePayload.unitId) : (currentBooking.unitId ? String(currentBooking.unitId) : '1');
 
         const { getParentMapping, getAverageRatesForDates } = await import('@/lib/beds24');
         const currentParent = getParentMapping(currentBooking.roomId, currentBooking.unitId || '1');
-        const newParent = getParentMapping(newRoomId, updatePayload.unitId || currentBooking.unitId || '1');
+        const newParent = getParentMapping(newRoomId, newUnitId);
 
         // Detectar si hay cambios reales respecto a los valores actuales
         const arrivalChanged = arrival && arrival !== currentBooking.arrival;
         const departureChanged = departure && departure !== currentBooking.departure;
         const roomTypeChanged = currentParent.roomId !== newParent.roomId;
+        // También detectar cambio de unitId dentro del mismo tipo (ej: 301 → 302)
+        const unitChanged = roomName && (String(currentBooking.roomId) !== String(newRoomId) || String(currentBooking.unitId || '1') !== String(newUnitId));
 
-        // Solo recalcular si cambiaron las fechas O el tipo de habitación (padre)
-        if ((arrivalChanged || departureChanged || roomTypeChanged) && arrival && departure && newRoomId) {
-          console.log(`[Reservas PUT] Detectado cambio que requiere recálculo (Tarifas). Tipo de habitación actual = ${currentParent.roomId}, Nuevo = ${newParent.roomId}. Rango: ${arrival} al ${departure}`);
+        // Recalcular si cambiaron las fechas, el tipo de habitación, o se reasignó a otra unidad
+        if ((arrivalChanged || departureChanged || roomTypeChanged || unitChanged) && arrival && departure && newRoomId) {
+          console.log(`[Reservas PUT] Detectado cambio que requiere recálculo (Tarifas). roomId actual=${currentBooking.roomId} unit=${currentBooking.unitId}, Nuevo roomId=${newRoomId} unit=${newUnitId}. Padre actual=${currentParent.roomId}, Padre nuevo=${newParent.roomId}. Rango: ${arrival} al ${departure}`);
           
           const ratesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, arrival, departure);
           const nightsCount = Math.round((new Date(departure + 'T12:00:00').getTime() - new Date(arrival + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24));
           
+          // Cargar dynamicSettings de Supabase para multiplicadores de canal y descuentos por estancia
+          let dynamicSettings: any = null;
+          try {
+            const { data: settingsData } = await supabase
+              .from('settings')
+              .select('value')
+              .eq('key', 'pricing_unit_settings')
+              .maybeSingle();
+            if (settingsData && settingsData.value) {
+              dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+            }
+          } catch (dsErr) {
+            console.warn("[Reservas PUT] No se pudieron cargar dynamicSettings:", dsErr);
+          }
+
+          // Detectar canal de la reserva para aplicar multiplicadores correctos
+          const rawSource = String(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''}`).toLowerCase();
+
           const averagePrice = getAverageRatesForDates(
             newParent.roomId,
             arrival,
             departure,
-            currentBooking.referer || 'Directo',
+            rawSource || 'Directo',
             ratesMap,
-            newParent.unitId
+            newParent.unitId,
+            dynamicSettings
           );
           
           const totalNewPrice = Math.round(averagePrice * nightsCount);
@@ -807,14 +829,14 @@ export async function PUT(req: Request) {
 
           if (totalNewPrice > 0 && totalNewPrice !== oldPrice) {
             recalculatedPrice = totalNewPrice;
-            console.log(`[Reservas PUT] Tarifa recalculada automáticamente usando getAverageRatesForDates: $${oldPrice} → $${totalNewPrice} (${nightsCount} noches)`);
+            console.log(`[Reservas PUT] Tarifa recalculada automáticamente usando getAverageRatesForDates: $${oldPrice} → $${totalNewPrice} (${nightsCount} noches, avg $${averagePrice}/noche)`);
           } else if (totalNewPrice === 0) {
             console.warn(`[Reservas PUT] No se encontraron tarifas para roomId=${newParent.roomId} en el rango ${arrival} – ${departure}. Se mantiene el precio original $${oldPrice}.`);
           } else {
             console.log(`[Reservas PUT] Tarifa idéntica ($${oldPrice}), sin cambio.`);
           }
         } else {
-          console.log(`[Reservas PUT] Reasignación interna o sin cambios en parámetros clave (Mismo tipo de habitación y fechas). Manteniendo precio original.`);
+          console.log(`[Reservas PUT] Sin cambios en parámetros clave. Manteniendo precio original.`);
         }
       } catch (rateErr) {
         console.error("[Reservas PUT] Error recalculando tarifas en reasignación:", rateErr);

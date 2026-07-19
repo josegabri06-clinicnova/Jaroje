@@ -424,12 +424,46 @@ export default function ReservasList() {
       alert(`⚠️ No se puede reasignar a la habitación ${targetRoomName} porque la capacidad máxima es de ${rules.max} personas y la reserva tiene ${totalGuests} huéspedes.`);
       return;
     }
-    
-    const confirmChange = confirm(`⚠️ ¿Estás seguro de que deseas reasignar la reserva de ${selectedRes.guest_name} a la habitación ${targetRoomName}?\n\nEsto actualizará la asignación en Beds24 y sincronizará la habitación en tu registro local de Supabase.`);
-    if (!confirmChange) return;
 
     setReassignLoading(true);
     try {
+      // 1. Consultar vista previa de tarifa ANTES de confirmar
+      const previewRes = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedRes.id,
+          roomName: targetRoomName,
+          preview: true
+        })
+      });
+      const previewData = await previewRes.json();
+
+      if (!previewRes.ok) throw new Error(previewData.error || 'Error al consultar la tarifa');
+
+      // 2. Construir mensaje de confirmación con info de tarifa
+      let confirmMsg = `⚠️ ¿Estás seguro de que deseas reasignar la reserva de ${selectedRes.guest_name} a la habitación ${targetRoomName}?\n\nEsto actualizará la asignación en Beds24 y sincronizará la habitación en tu registro local de Supabase.`;
+
+      if (previewData.price_changed) {
+        const oldP = Number(previewData.old_price).toLocaleString('es-MX');
+        const newP = Number(previewData.recalculated_price).toLocaleString('es-MX');
+        confirmMsg += `\n\n💰 CAMBIO DE TARIFA DETECTADO:\n   Precio actual: MX$${oldP}\n   Nuevo precio: MX$${newP}`;
+        if (previewData.same_room_type) {
+          confirmMsg += `\n   (Mismo tipo de habitación, tarifa ajustada por configuración)`;
+        } else {
+          confirmMsg += `\n   (Diferente tipo de habitación)`;
+        }
+      } else {
+        confirmMsg += `\n\n✅ La tarifa se mantiene sin cambios (MX$${Number(previewData.old_price || selectedRes.price_estimate || 0).toLocaleString('es-MX')}).`;
+      }
+
+      const confirmChange = confirm(confirmMsg);
+      if (!confirmChange) {
+        setReassignLoading(false);
+        return;
+      }
+
+      // 3. Ejecutar la reasignación real
       const res = await fetch('/api/reservas', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -442,9 +476,9 @@ export default function ReservasList() {
 
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      // Notificar al usuario con info de precio si cambió
+      // Notificar al usuario resultado final
       if (data.recalculated_price && data.old_price && data.recalculated_price !== data.old_price) {
-        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\n\n💰 Tarifa actualizada automáticamente:\n   Precio anterior: $${Number(data.old_price).toLocaleString('es-MX')}\n   Nuevo precio: $${Number(data.recalculated_price).toLocaleString('es-MX')}`);
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\n\n💰 Tarifa actualizada automáticamente:\n   Precio anterior: MX$${Number(data.old_price).toLocaleString('es-MX')}\n   Nuevo precio: MX$${Number(data.recalculated_price).toLocaleString('es-MX')}`);
       } else {
         alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
       }
