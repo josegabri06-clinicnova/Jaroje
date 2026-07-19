@@ -775,39 +775,39 @@ export async function PUT(req: Request) {
         const departure = checkOut || currentBooking.departure;
         const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : (currentBooking.roomId ? String(currentBooking.roomId) : null);
 
+        const { getParentMapping, getAverageRatesForDates } = await import('@/lib/beds24');
+        const currentParent = getParentMapping(currentBooking.roomId, currentBooking.unitId || '1');
+        const newParent = getParentMapping(newRoomId, updatePayload.unitId || currentBooking.unitId || '1');
+
         // Detectar si hay cambios reales respecto a los valores actuales
         const arrivalChanged = arrival && arrival !== currentBooking.arrival;
         const departureChanged = departure && departure !== currentBooking.departure;
-        const roomTypeChanged = newRoomId && currentBooking.roomId && String(newRoomId) !== String(currentBooking.roomId);
+        const roomTypeChanged = currentParent.roomId !== newParent.roomId;
 
-        // Solo recalcular si cambiaron las fechas O el tipo de habitación
+        // Solo recalcular si cambiaron las fechas O el tipo de habitación (padre)
         if ((arrivalChanged || departureChanged || roomTypeChanged) && arrival && departure && newRoomId) {
-          console.log(`[Reservas PUT] Detectado cambio que requiere recálculo (Tarifas). RoomId=${newRoomId} del ${arrival} al ${departure}`);
+          console.log(`[Reservas PUT] Detectado cambio que requiere recálculo (Tarifas). Tipo de habitación actual = ${currentParent.roomId}, Nuevo = ${newParent.roomId}. Rango: ${arrival} al ${departure}`);
+          
           const ratesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, arrival, departure);
-          const roomRates = ratesMap[newRoomId] || {};
-
-          // Sumar las tarifas diarias de cada noche
-          let totalNewPrice = 0;
-          let nightsCount = 0;
-          const startDate = new Date(arrival + 'T00:00:00');
-          const endDate = new Date(departure + 'T00:00:00');
-          const current = new Date(startDate);
-
-          while (current < endDate) {
-            const dateStr = current.toISOString().split('T')[0];
-            const dailyRate = roomRates[dateStr] || 0;
-            totalNewPrice += dailyRate;
-            nightsCount++;
-            current.setDate(current.getDate() + 1);
-          }
-
+          const nightsCount = Math.round((new Date(departure + 'T12:00:00').getTime() - new Date(arrival + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24));
+          
+          const averagePrice = getAverageRatesForDates(
+            newParent.roomId,
+            arrival,
+            departure,
+            currentBooking.referer || 'Directo',
+            ratesMap,
+            newParent.unitId
+          );
+          
+          const totalNewPrice = Math.round(averagePrice * nightsCount);
           const oldPrice = currentBooking.price || 0;
 
           if (totalNewPrice > 0 && totalNewPrice !== oldPrice) {
             recalculatedPrice = totalNewPrice;
-            console.log(`[Reservas PUT] Tarifa recalculada automáticamente: $${oldPrice} → $${totalNewPrice} (${nightsCount} noches en roomId ${newRoomId})`);
+            console.log(`[Reservas PUT] Tarifa recalculada automáticamente usando getAverageRatesForDates: $${oldPrice} → $${totalNewPrice} (${nightsCount} noches)`);
           } else if (totalNewPrice === 0) {
-            console.warn(`[Reservas PUT] No se encontraron tarifas para roomId=${newRoomId} en el rango ${arrival} – ${departure}. Se mantiene el precio original $${oldPrice}.`);
+            console.warn(`[Reservas PUT] No se encontraron tarifas para roomId=${newParent.roomId} en el rango ${arrival} – ${departure}. Se mantiene el precio original $${oldPrice}.`);
           } else {
             console.log(`[Reservas PUT] Tarifa idéntica ($${oldPrice}), sin cambio.`);
           }
@@ -823,7 +823,11 @@ export async function PUT(req: Request) {
     if (preview) {
       const currentRoomId = currentBooking?.roomId ? String(currentBooking.roomId) : null;
       const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : currentRoomId;
-      const roomTypeChanged = currentRoomId && newRoomId && currentRoomId !== newRoomId;
+      
+      const { getParentMapping } = await import('@/lib/beds24');
+      const currentParent = getParentMapping(currentBooking?.roomId, currentBooking?.unitId || '1');
+      const newParent = getParentMapping(newRoomId, updatePayload.unitId || currentBooking?.unitId || '1');
+      const roomTypeChanged = currentParent.roomId !== newParent.roomId;
 
       return NextResponse.json({
         success: true,
