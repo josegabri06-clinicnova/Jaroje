@@ -13,7 +13,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TABS = ['Todas', 'Nuevas', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas'];
+const TABS = ['Todas', 'Nuevas', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -1044,7 +1044,7 @@ export default function ReservasList() {
       };
 
       const [res, chk, acc, capRes, trData] = await Promise.all([
-        fetch('/api/reservas?t=' + Date.now()),
+        fetch('/api/reservas?includeCancelled=true&t=' + Date.now()),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
         supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle(),
@@ -1867,26 +1867,36 @@ export default function ReservasList() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Reservas activas operativas (próximas): no han completado el checkout Y su fecha de entrada es hoy o futura.
+  // Reservas activas operativas (próximas): no han completado el checkout, su fecha de entrada es hoy o futura y no están canceladas.
   // Ordenadas de la más próxima a la más lejana (orden cronológico ascendente).
   const activeReservas = reservas
-    .filter(r => !r.is_checked_out && r.check_in >= todayStr)
+    .filter(r => r.status !== 'cancelled' && !r.is_checked_out && r.check_in >= todayStr)
     .sort((a, b) => {
       const compareIn = (a.check_in || '').localeCompare(b.check_in || '');
       if (compareIn !== 0) return compareIn;
       return (a.check_out || '').localeCompare(b.check_out || '');
     });
-  // Reservas completadas / pasadas / activas en curso: ya hicieron checkout O la fecha de entrada ya transcurrió.
+  // Reservas completadas / pasadas / activas en curso: ya hicieron checkout O la fecha de entrada ya transcurrió, y no están canceladas.
   // Ordenadas de la más nueva a la más antigua (primero Salen hoy).
   const completedReservas = reservas
-    .filter(r => r.is_checked_out || r.check_in < todayStr)
+    .filter(r => r.status !== 'cancelled' && (r.is_checked_out || r.check_in < todayStr))
     .sort((a, b) => {
       const compareOut = (b.check_out || '').localeCompare(a.check_out || '');
       if (compareOut !== 0) return compareOut;
       return (b.check_in || '').localeCompare(a.check_in || '');
     });
+  // Reservas canceladas: tienen estatus cancelado
+  const cancelledReservas = reservas
+    .filter(r => r.status === 'cancelled')
+    .sort((a, b) => {
+      return (b.check_in || '').localeCompare(a.check_in || '');
+    });
 
-  const filtered = (activeTab === 'Completadas' ? completedReservas : activeReservas).filter(r => {
+  const baseList = activeTab === 'Canceladas'
+    ? cancelledReservas
+    : (activeTab === 'Completadas' ? completedReservas : activeReservas);
+
+  const filtered = baseList.filter(r => {
     const matchSearch = !search || 
       normalizeText(r.guest_name).includes(normalizeText(search)) ||
       r.id?.toString().includes(search);

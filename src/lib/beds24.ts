@@ -629,9 +629,12 @@ async function _doRefresh(): Promise<string> {
 
 
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
-export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string): Promise<any[]> {
+export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false): Promise<any[]> {
   const BEDS24_TOKEN = await getBeds24Token();
   let url = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
+  if (includeCancelled) {
+    url += '&status=new,confirmed,request,cancelled,black,inquiry';
+  }
   let bookingsArray: any[] = [];
   let hasNextPage = true;
 
@@ -847,7 +850,9 @@ export function extractOtaDetails(invoiceItems: any[]): OtaDetails {
 
 // Variables globales de caché para evitar cuellos de botella bajo concurrencia
 let cachedBookingsPromise: Promise<any[]> | null = null;
+let cachedAllBookingsPromise: Promise<any[]> | null = null;
 let cacheTimestamp = 0;
+let cacheAllTimestamp = 0;
 const CACHE_TTL_MS = 30000; // 30 segundos de ciclo de vida (TTL)
 
 // Obtener y mapear reservas activas (Backend Server-Side) con caché
@@ -857,24 +862,41 @@ export async function getBeds24Bookings(
   bypassCache: boolean = false
 ): Promise<any[]> {
   const now = Date.now();
-  if (!bypassCache && cachedBookingsPromise && (now - cacheTimestamp < CACHE_TTL_MS)) {
-    console.log("[Beds24 Cache] Reutilizando promesa de caché activa.");
+  if (includeCancelled) {
+    if (!bypassCache && cachedAllBookingsPromise && (now - cacheAllTimestamp < CACHE_TTL_MS)) {
+      console.log("[Beds24 Cache] Reutilizando promesa de caché activa (con canceladas).");
+      return cachedAllBookingsPromise;
+    }
+    cacheAllTimestamp = now;
+    cachedAllBookingsPromise = (async () => {
+      try {
+        const result = await doFetchAndMapBeds24Bookings(fast, true);
+        return result;
+      } catch (err) {
+        cachedAllBookingsPromise = null;
+        cacheAllTimestamp = 0;
+        throw err;
+      }
+    })();
+    return cachedAllBookingsPromise;
+  } else {
+    if (!bypassCache && cachedBookingsPromise && (now - cacheTimestamp < CACHE_TTL_MS)) {
+      console.log("[Beds24 Cache] Reutilizando promesa de caché activa.");
+      return cachedBookingsPromise;
+    }
+    cacheTimestamp = now;
+    cachedBookingsPromise = (async () => {
+      try {
+        const result = await doFetchAndMapBeds24Bookings(fast, false);
+        return result;
+      } catch (err) {
+        cachedBookingsPromise = null;
+        cacheTimestamp = 0;
+        throw err;
+      }
+    })();
     return cachedBookingsPromise;
   }
-
-  cacheTimestamp = now;
-  cachedBookingsPromise = (async () => {
-    try {
-      const result = await doFetchAndMapBeds24Bookings(fast, includeCancelled);
-      return result;
-    } catch (err) {
-      cachedBookingsPromise = null;
-      cacheTimestamp = 0;
-      throw err;
-    }
-  })();
-
-  return cachedBookingsPromise;
 }
 
 // Realizar la llamada HTTP real y procesar el mapeado
@@ -890,7 +912,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
   // 1. Obtener token y reservas raw
   const token = await getBeds24Token();
-  const bookingsArray = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
+  const bookingsArray = await fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo, includeCancelled);
 
   // Cargar dynamicSettings de precios
   let dynamicSettings: any = null;

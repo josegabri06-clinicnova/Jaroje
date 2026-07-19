@@ -22,16 +22,18 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const bypassCache = searchParams.get('bypassCache') === 'true';
-    const mappedBookings = await getBeds24Bookings(false, false, bypassCache);
+    const includeCancelled = searchParams.get('includeCancelled') === 'true';
+    const mappedBookings = await getBeds24Bookings(false, includeCancelled, bypassCache);
     
     // Obtener reservas locales de Supabase
     let localBookings: any[] = [];
     let localRawData: any[] = [];
     try {
-      const { data } = await supabase
-        .from('local_reservas')
-        .select('*')
-        .neq('status', 'cancelled');
+      let localQuery = supabase.from('local_reservas').select('*');
+      if (!includeCancelled) {
+        localQuery = localQuery.neq('status', 'cancelled');
+      }
+      const { data } = await localQuery;
       
       if (data) {
         localRawData = data;
