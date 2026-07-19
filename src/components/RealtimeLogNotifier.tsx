@@ -71,6 +71,8 @@ export default function RealtimeLogNotifier() {
           console.log('Nuevo log de empleado detectado en tiempo real:', payload.new);
           
           const newLog = payload.new;
+          if (newLog.action === 'inicio_sesion_turno') return;
+          
           const logKey = `log_${newLog.id}`;
 
           // Evitar notificaciones duplicadas

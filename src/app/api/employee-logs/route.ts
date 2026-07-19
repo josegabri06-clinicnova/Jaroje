@@ -73,7 +73,8 @@ export async function GET(req: Request) {
 
     let query = supabase
       .from('employee_logs')
-      .select('*');
+      .select('*')
+      .neq('action', 'inicio_sesion_turno');
 
     if (moduleParam) {
       query = query.eq('module', moduleParam);

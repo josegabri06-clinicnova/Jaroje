@@ -469,6 +469,7 @@ export function NotificationBell() {
         { event: 'INSERT', schema: 'public', table: 'employee_logs' },
         (payload: any) => {
           const newLog = payload.new;
+          if (newLog.action === 'inicio_sesion_turno') return;
           
           setLogs(prev => {
             if (prev.some(item => String(item.id) === String(newLog.id))) return prev;
