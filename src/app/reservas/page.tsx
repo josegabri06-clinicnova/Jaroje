@@ -4079,6 +4079,14 @@ export default function ReservasList() {
                 </div>
               ) : (
                 (() => {
+                  if (selectedRes.status === 'cancelled') {
+                    return (
+                      <div className="w-full bg-rose-50 text-rose-600 font-bold text-[14.5px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-rose-200 shadow-sm">
+                        <AlertCircle size={18} className="text-rose-500" />
+                        <span>Reserva Cancelada ✕</span>
+                      </div>
+                    );
+                  }
                   if (selectedRes.is_checked_out) {
                     return (
                       <div className="flex flex-col gap-2 w-full">
