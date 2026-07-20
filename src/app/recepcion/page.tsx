@@ -1671,13 +1671,16 @@ export default function RecepcionPage() {
       if (selectedReserva && showCheckInModal && selectedReserva.id !== 'walkin') {
         window.history.replaceState(null, '', `/recepcion?checkin=${selectedReserva.id}`);
       } else {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('checkin')) {
-          window.history.replaceState(null, '', '/recepcion');
+        // Solo limpiar el parámetro si ya se cargaron las reservas (evita race condition en mount)
+        if (reservas.length > 0) {
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('checkin')) {
+            window.history.replaceState(null, '', '/recepcion');
+          }
         }
       }
     }
-  }, [selectedReserva, showCheckInModal]);
+  }, [selectedReserva, showCheckInModal, reservas.length]);
 
   const distributeGuestsInRooms = (rooms: any[], numAdults: number, numChildren: number) => {
     let adultsLeft = Math.max(0, numAdults);

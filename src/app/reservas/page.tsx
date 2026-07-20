@@ -571,13 +571,16 @@ export default function ReservasList() {
       if (selectedRes) {
         window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
       } else {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('id')) {
-          window.history.replaceState(null, '', '/reservas');
+        // Solo limpiar el parámetro si ya se cargaron las reservas (evita race condition en mount)
+        if (reservas.length > 0) {
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('id')) {
+            window.history.replaceState(null, '', '/reservas');
+          }
         }
       }
     }
-  }, [selectedRes]);
+  }, [selectedRes, reservas.length]);
 
   const handleConfirmCheckIn = async () => {
     setCheckInLoading(true);

@@ -1,13 +1,16 @@
 const fs = require('fs');
 const path = require('path');
 
-// Intentar leer las credenciales desde .env.local
+// Intentar leer las credenciales desde .env o .env.local
 let token = "EAAbzeVoWZBjABRrv209MbeNXiULGolmZA8RDe0AMBlWZCPmSfSQnFFLdf9iYNDlWA6xH5ZBAeDa6mYDue6NKP6gkSLj0Q7FKFZCn7gooXYjKQfZBCQJOhgqJaf957q5cfmzWQIWtm8uALdyf6EhycVa7ewwBBFWaPet7vZBzFLIsdH6ZAa3gPZBXSk5f3wAGZCVQZDZD";
-let phoneId = "1198968849956637";
+let phoneId = "1182889501581631";
 
-const envPath = path.resolve(process.cwd(), '.env.local');
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf8');
+const envLocalPath = path.resolve(process.cwd(), '.env.local');
+const envPath = path.resolve(process.cwd(), '.env');
+const chosenPath = fs.existsSync(envLocalPath) ? envLocalPath : (fs.existsSync(envPath) ? envPath : null);
+
+if (chosenPath) {
+  const envContent = fs.readFileSync(chosenPath, 'utf8');
   const tokenMatch = envContent.match(/WHATSAPP_TOKEN\s*=\s*(.+)/);
   if (tokenMatch) {
     token = tokenMatch[1].replace(/["']/g, '').trim();
@@ -37,7 +40,8 @@ const allowedTemplates = [
   'seguimiento_satisfaccion',
   'salida_checkout',
   'comparte_experiencia',
-  'recibimiento_nuevamente'
+  'recibimiento_nuevamente',
+  'pago_anticipo_recibido'
 ];
 if (!allowedTemplates.includes(templateName)) {
   console.log(`\n❌ Error: La plantilla '${templateName}' no está en la lista de prueba.`);
@@ -55,38 +59,52 @@ if (cleanedPhone.length === 10) {
   cleanedPhone = '34' + cleanedPhone;
 }
 
-// Construir parámetros dinámicamente según la plantilla
+// Construir parámetros de cuerpo dinámicamente según la plantilla
 const parameters = [
   { type: 'text', text: 'Huésped de Prueba' } // {{1}} Nombre
 ];
 
-if ([
-  'solicitud_recibida', 
-  'ultimo_aviso', 
-  'disponibilidad_liberada', 
-  'bienvenida_checkin', 
-  'seguimiento_satisfaccion'
-].includes(templateName)) {
-  parameters.push({
-    type: 'text',
-    text: 'https://jaroje-app.vercel.app/public/reserva/TEST_123' // {{2}} LinkPortal
-  });
-} else if ([
-  'reservacion_confirmada', 
-  'preparacion_llegada'
-].includes(templateName)) {
-  parameters.push({
-    type: 'text',
-    text: 'https://jaroje-app.vercel.app/public/reserva/TEST_123' // {{2}} LinkPortal
-  });
-  parameters.push({
-    type: 'text',
-    text: '4' // {{3}} Huéspedes
-  });
+if (templateName === 'pago_anticipo_recibido') {
+  parameters.push({ type: 'text', text: '1,500' });  // {{2}} MontoAbonado
+  parameters.push({ type: 'text', text: '3,000' });  // {{3}} SaldoPendiente
 }
 
 async function run() {
   const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+
+  const components = [
+    {
+      type: 'body',
+      parameters: parameters
+    }
+  ];
+
+  const urlTemplates = [
+    'solicitud_recibida',
+    'ultimo_aviso',
+    'reservacion_confirmada',
+    'disponibilidad_liberada',
+    'preparacion_llegada',
+    'bienvenida_checkin',
+    'seguimiento_satisfaccion',
+    'recibimiento_nuevamente',
+    'pago_anticipo_recibido'
+  ];
+
+  if (urlTemplates.includes(templateName)) {
+    components.push({
+      type: 'button',
+      sub_type: 'url',
+      index: '0',
+      parameters: [
+        {
+          type: 'text',
+          text: `TEST_123?lang=es`
+        }
+      ]
+    });
+  }
+
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
@@ -95,12 +113,7 @@ async function run() {
     template: {
       name: templateName,
       language: { code: 'es_MX' },
-      components: [
-        {
-          type: 'body',
-          parameters: parameters
-        }
-      ]
+      components: components
     }
   };
 

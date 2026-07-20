@@ -123,6 +123,30 @@ export async function sendWhatsAppTemplate(
       languageCode = 'en';
     }
 
+    const urlTemplates = [
+      'solicitud_recibida',
+      'ultimo_aviso',
+      'reservacion_confirmada',
+      'disponibilidad_liberada',
+      'preparacion_llegada',
+      'bienvenida_checkin',
+      'seguimiento_satisfaccion',
+      'recibimiento_nuevamente',
+      'pago_anticipo_recibido',
+      'portal_huesped_link',
+      'portal_huesped_link_en'
+    ];
+
+    let resolvedButtonType = buttonType;
+    let finalButtonParams = buttonParameters;
+
+    if (urlTemplates.includes(templateName)) {
+      resolvedButtonType = 'url';
+      if (bookingId) {
+        finalButtonParams = [`${bookingId}?lang=${detectedLang}`];
+      }
+    }
+
     const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
 
     const components: any[] = [
@@ -135,8 +159,8 @@ export async function sendWhatsAppTemplate(
       }
     ];
 
-    if (buttonParameters && buttonParameters.length > 0) {
-      const isQuickReply = buttonType === 'quick_reply' || buttonParameters[0].startsWith('VIEW_BOOKING_');
+    if (finalButtonParams && finalButtonParams.length > 0) {
+      const isQuickReply = resolvedButtonType === 'quick_reply' || finalButtonParams[0].startsWith('VIEW_BOOKING_');
       
       if (isQuickReply) {
         components.push({
@@ -146,7 +170,7 @@ export async function sendWhatsAppTemplate(
           parameters: [
             {
               type: 'payload',
-              payload: buttonParameters[0]
+              payload: finalButtonParams[0]
             }
           ]
         });
@@ -155,7 +179,7 @@ export async function sendWhatsAppTemplate(
           type: 'button',
           sub_type: 'url',
           index: '0',
-          parameters: buttonParameters.map(p => ({
+          parameters: finalButtonParams.map(p => ({
             type: 'text',
             text: p || ''
           }))
@@ -412,11 +436,7 @@ export async function sendTemplate1_SolicitudRecibida(booking: any, bypassPause:
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 2. Mensaje 2 - Último aviso para conservar la reservación (ultimo_aviso)
@@ -428,11 +448,7 @@ export async function sendTemplate2_UltimoAviso(booking: any, bypassPause: boole
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
@@ -444,11 +460,7 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPa
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
@@ -460,11 +472,7 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any, bypassP
     getFirstName(booking.guest_name) // {{1}} Nombre en el cuerpo del mensaje
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
@@ -476,11 +484,7 @@ export async function sendTemplate5_PreparacionLlegada(booking: any, bypassPause
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
@@ -492,11 +496,7 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any, bypassPause:
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 7. Mensaje 7 - Seguimiento de satisfacción (seguimiento_satisfaccion)
@@ -508,11 +508,7 @@ export async function sendTemplate7_SeguimientoSatisfaccion(booking: any, bypass
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 8. Mensaje 8 - Día de salida (salida_checkout)
@@ -548,11 +544,7 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any, bypass
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)
@@ -571,11 +563,7 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any, bypassPa
     formatCurrency(bal)                    // {{3}} SaldoPendiente
   ];
 
-  const buttonParams = [
-    `VIEW_BOOKING_${booking.id}` // Payload para el botón Quick Reply
-  ];
-
-  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, buttonParams, booking.id, 'quick_reply', bypassPause);
+  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 12. Portal del Huésped - Enlace como botón CTA URL (portal_huesped_link)
