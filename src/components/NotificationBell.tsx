@@ -18,7 +18,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot' | 'finanzas' | 'tarea' | 'sesion' | 'inventario';
+type EventType = 'checkin' | 'checkout' | 'booking' | 'block' | 'conflict' | 'bot' | 'finanzas' | 'tarea' | 'sesion' | 'inventario' | 'limpieza';
 
 interface Task {
   id: string;
@@ -67,6 +67,7 @@ const LOG_CFG: Record<string, { label: string; dot: string; textColor: string; b
   tarea:      { label: 'Incidencia',    dot: '#ef4444', textColor: '#b91c1c', bgColor: '#fef2f2', borderColor: '#fecaca', icon: Wrench },
   sesion:     { label: 'Sesión / Firma',dot: '#3b82f6', textColor: '#1d4ed8', bgColor: '#eff6ff', borderColor: '#bfdbfe', icon: UserCheck },
   inventario: { label: 'Almacén',       dot: '#f59e0b', textColor: '#b45309', bgColor: '#fffbeb', borderColor: '#fde68a', icon: Package },
+  limpieza:   { label: 'Limpieza',      dot: '#f59e0b', textColor: '#b45309', bgColor: '#fffbeb', borderColor: '#fde68a', icon: Sparkles },
 };
 
 const ICONS: Record<string, React.ElementType> = {
@@ -184,7 +185,9 @@ const mapLogsToEvents = (logsData: any[]): HistoryEvent[] => {
       type = 'checkout';
     } else if (actionLower.includes('finan') || actionLower.includes('movimiento') || actionLower.includes('transac') || actionLower.includes('pago') || actionLower.includes('nomina')) {
       type = 'finanzas';
-    } else if (actionLower.includes('incidencia') || actionLower.includes('limpieza') || actionLower.includes('mantenimiento') || actionLower.includes('tarea')) {
+    } else if (actionLower.includes('room_status') || actionLower.includes('limpieza') || actionLower.includes('clean')) {
+      type = 'limpieza';
+    } else if (actionLower.includes('incidencia') || actionLower.includes('mantenimiento') || actionLower.includes('tarea')) {
       type = 'tarea';
     } else if (actionLower.includes('sesion') || actionLower.includes('turno') || actionLower.includes('firma')) {
       type = 'sesion';
@@ -554,7 +557,7 @@ export function NotificationBell() {
       matchModule = ev.module.toLowerCase() === moduleFilter.toLowerCase() || ev.type === moduleFilter;
       if (moduleFilter === 'finanzas' && ev.type === 'finanzas') matchModule = true;
       if (moduleFilter === 'mantenimiento' && (ev.type === 'tarea' || ev.module === 'mantenimiento')) matchModule = true;
-      if (moduleFilter === 'recepcion' && (ev.type === 'checkin' || ev.type === 'checkout' || ev.type === 'booking')) matchModule = true;
+      if (moduleFilter === 'recepcion' && (ev.type === 'checkin' || ev.type === 'checkout' || ev.type === 'booking' || ev.type === 'limpieza')) matchModule = true;
       if (moduleFilter === 'inventario' && (ev.type === 'inventario' || ev.module === 'inventario')) matchModule = true;
       if (moduleFilter === 'bot' && (ev.type === 'bot' || ev.module === 'bot')) matchModule = true;
     }
@@ -828,19 +831,27 @@ export function NotificationBell() {
       <div
         key={ev.id}
         onClick={() => openEventDetails(ev)}
-        className="p-3.5 flex items-center gap-3 hover:bg-zinc-50/80 transition-colors cursor-pointer group border border-zinc-100 rounded-2xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
+        className="p-3.5 flex flex-col gap-2 hover:bg-zinc-50/80 transition-colors cursor-pointer group border border-zinc-100 rounded-2xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.01)]"
       >
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${cfg.bgColor} ${cfg.borderColor}`}>
-          <Icon size={16} color={cfg.textColor} strokeWidth={2.5} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 justify-between">
-            <p className="text-[13px] font-bold text-zinc-900 leading-tight truncate">{ev.title.split(' · ')[0]}</p>
-            <span className="text-[9px] font-semibold text-zinc-400 shrink-0">{ev.time}</span>
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${cfg.bgColor} ${cfg.borderColor}`}>
+            <Icon size={16} color={cfg.textColor} strokeWidth={2.5} />
           </div>
-          <p className="text-[11px] font-medium text-zinc-500 mt-0.5 truncate">{ev.desc}</p>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 justify-between">
+              <p className="text-[13px] font-bold text-zinc-900 leading-tight truncate">{ev.title.split(' · ')[0]}</p>
+              <span className="text-[9px] font-semibold text-zinc-400 shrink-0">{ev.time}</span>
+            </div>
+            <p className="text-[11px] font-medium text-zinc-500 mt-0.5 truncate">{ev.desc}</p>
+          </div>
         </div>
-        <ChevronRight size={14} className="text-zinc-300 group-hover:translate-x-0.5 transition-transform" />
+        
+        <div className="flex items-center justify-between text-[9px] text-zinc-400 font-bold border-t border-zinc-100/50 pt-1.5">
+          <span className="flex items-center gap-1">
+            👤 Operador: <span className="text-zinc-650 capitalize truncate max-w-[120px]">{ev.employee_name}</span>
+          </span>
+          <span className="text-[8px] text-zinc-300 font-black tracking-wider uppercase">{cfg.label}</span>
+        </div>
       </div>
     );
   };
