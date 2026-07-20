@@ -345,14 +345,14 @@ function getRoomOperationalStatus(
     }
   }
 
-  // Buscar si tiene salida programada hoy (Check-out)
+  // Buscar si tiene salida programada hoy o pendiente en el pasado (Check-out)
   const isSalidaHoy = activeReservations.some(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
-    return rRoom.includes(roomNum) && r.check_out === todayStr && !r.checked_out;
+    return rRoom.includes(roomNum) && r.check_out <= todayStr && r.checked_in && !r.checked_out && r.status !== 'cancelled';
   });
 
   if (isSalidaHoy) {
-    return 'salida_hoy'; // Rojo muy tenue por checkout programado hoy
+    return 'salida_hoy'; // Rojo muy tenue por checkout programado hoy/pendiente
   }
 
   // Si no necesita limpieza, y está reservada/ocupada hoy, se muestra sin color (ocupada)
@@ -2234,7 +2234,7 @@ export default function RecepcionPage() {
   }, [reservas, todayStr]);
 
   const salidas = useMemo(() => {
-    return reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out);
+    return reservas.filter(r => r.check_out <= todayStr && r.checked_in && !r.checked_out && r.status !== 'cancelled');
   }, [reservas, todayStr]);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
