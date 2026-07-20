@@ -112,9 +112,9 @@ export async function POST(req: Request) {
         console.error("Copilot local_reservas fetch error:", localDbErr);
       }
 
-      const active = allReservas.filter((r: any) => r.check_in <= todayStr && r.check_out > todayStr);
-      const llegadasHoy = allReservas.filter((r: any) => r.check_in === todayStr);
-      const salidasHoy = allReservas.filter((r: any) => r.check_out === todayStr);
+      const active = allReservas.filter((r: any) => r.status !== 'cancelled' && r.check_in <= todayStr && r.check_out > todayStr);
+      const llegadasHoy = allReservas.filter((r: any) => r.status !== 'cancelled' && r.check_in === todayStr);
+      const salidasHoy = allReservas.filter((r: any) => r.status !== 'cancelled' && r.check_out === todayStr);
       
       // Ordenación cronológica ascendente para facilitar búsqueda a la IA
       const sortedReservas = [...allReservas].sort((a: any, b: any) => 

@@ -313,9 +313,9 @@ export default function AdminDashboard() {
     }
 
     const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
-    const llegan = reservas.filter(r => r.check_in === todayStr);
-    const salen = reservas.filter(r => r.check_out === todayStr);
-    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in);
+    const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled');
+    const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled');
+    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled');
 
     let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *Condominios Jaroje*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
@@ -456,7 +456,7 @@ export default function AdminDashboard() {
     return () => clearInterval(interval);
   }, []);
   const llegadasHoy = useMemo(() => {
-    return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
+    return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled');
   }, [reservas, todayStr]);
 
   const salidasHoy = useMemo(() => {
@@ -465,7 +465,7 @@ export default function AdminDashboard() {
     const limitStr = limit.toISOString().split('T')[0];
     return reservas.filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled');
   }, [reservas, todayStr]);
-  const proximasLlegadas = reservas.filter(r => r.check_in > todayStr).slice(0, 5);
+  const proximasLlegadas = reservas.filter(r => r.check_in > todayStr && r.status !== 'cancelled').slice(0, 5);
 
   // WhatsApp — semáforo de urgencia
   const findAllReservationsForContact = (phone: string, name: string) => {
