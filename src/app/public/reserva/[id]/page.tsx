@@ -441,7 +441,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     capacityLabel: 'Huéspedes',
     tapToZoom: '🔍 Toca cualquier imagen para abrir en pantalla completa',
     stayGuide: 'Para garantizar una estancia agradable a todos nuestros huéspedes, te pedimos revisar la guía digital de tu alojamiento:',
-    stayGuideBtn: '📖 Ver Fotografías y Guía del Alojamiento',
+    stayGuideBtn: 'GUÍA DE ALOJAMIENTO Y FOTOS',
     stayPolicies: '🚫 Políticas Básicas',
     policyPets: 'No se admiten mascotas bajo ningún concepto.',
     policySmoke: 'Espacio 100% libre de humo (solo permitido fumar en áreas exteriores designadas).',
@@ -553,7 +553,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     capacityLabel: 'Guests',
     tapToZoom: '🔍 Tap any image to open in full screen',
     stayGuide: 'To ensure a pleasant stay for all our guests, please review your accommodation digital guide:',
-    stayGuideBtn: '📖 View Photos and Accommodation Guide',
+    stayGuideBtn: 'ACCOMMODATION GUIDE AND PHOTOS',
     stayPolicies: '🚫 Basic Policies',
     policyPets: 'No pets allowed under any circumstances.',
     policySmoke: '100% Smoke-free space (only smoking in designated outdoor areas permitted).',
@@ -1434,10 +1434,7 @@ export default function PublicReservaPage() {
                   onClick={() => handleOpenLightbox(index)}
                   className="flex-shrink-0 w-64 h-44 rounded-2xl overflow-hidden snap-center relative cursor-pointer border border-zinc-200/70 shadow-sm hover:scale-[1.02] transition-transform duration-300"
                 >
-                  <img src={src} alt={captions[index]} className="w-full h-full object-cover" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex items-end p-3">
-                    <span className="text-white text-[11px] font-semibold tracking-wide drop-shadow-sm">{captions[index]}</span>
-                  </div>
+                  <img src={src} alt="Alojamiento" className="w-full h-full object-cover" />
                 </div>
               ))}
             </div>
@@ -1453,7 +1450,6 @@ export default function PublicReservaPage() {
           </div>
 
           <div className="space-y-3 text-xs leading-relaxed text-zinc-650">
-            <p>{t.stayGuide}</p>
             <a 
               href="https://www.condominiosjaroje.com"
               target="_blank"
@@ -1462,6 +1458,38 @@ export default function PublicReservaPage() {
             >
               {t.stayGuideBtn}
             </a>
+
+            {/* WiFi Block */}
+            {hasPaid ? (
+              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3.5 mt-2 space-y-2.5">
+                <span className="text-zinc-600 font-bold uppercase text-[10px] tracking-wide block text-center">
+                  {lang === 'en' ? '📶 Wi-Fi Network & Password' : '📶 Red Wi-Fi y Claves'}
+                </span>
+                <div className="flex justify-around items-center gap-2">
+                  <div className="text-center">
+                    <span className="text-zinc-500 text-[10px] block">
+                      {lang === 'en' ? 'Network' : 'Red Wi-Fi'}
+                    </span>
+                    <strong className="text-zinc-900 text-sm font-extrabold select-all">Jaroje</strong>
+                  </div>
+                  <div className="w-px h-8 bg-zinc-200" />
+                  <div className="text-center">
+                    <span className="text-zinc-500 text-[10px] block">
+                      {lang === 'en' ? 'Password' : 'Contraseña'}
+                    </span>
+                    <strong className="text-zinc-900 text-sm font-extrabold select-all">HUXX2025</strong>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-3 mt-2 text-center">
+                <span className="text-amber-800 text-[10.5px] font-bold block">
+                  {lang === 'en' 
+                    ? '📶 Wi-Fi details and access codes will be enabled automatically once your deposit is registered.'
+                    : '📶 Los datos de Wi-Fi y claves se habilitarán automáticamente una vez registrado tu anticipo.'}
+                </span>
+              </div>
+            )}
 
             <div className="bg-[#FAF9F6] border border-zinc-200/50 rounded-xl p-3 space-y-2 mt-2">
               <h4 className="font-extrabold text-zinc-900 uppercase text-[10px] tracking-wide">{t.stayPolicies}</h4>
@@ -1560,7 +1588,7 @@ export default function PublicReservaPage() {
                 className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-2xl" 
               />
               <span className="text-white/90 text-sm font-semibold mt-4 text-center select-none bg-black/40 px-4 py-1.5 rounded-full">
-                {captions[activePhotoIndex]} ({activePhotoIndex + 1} {t.lightboxOf} {photos.length})
+                {activePhotoIndex + 1} {t.lightboxOf} {photos.length}
               </span>
             </div>
 
