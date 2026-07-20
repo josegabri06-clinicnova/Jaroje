@@ -123,11 +123,17 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     'https://www.condominiosjaroje.com/images/habitacion_estandar/HAB-DOBLE%20(4).jpg'
   ],
   '1rec': [
-    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(1).jpg',
-    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(2).jpg',
-    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(3).jpg',
-    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(4).jpg',
-    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(5).jpg'
+    '/images/1rec/20260303_204624000_iOS 2.JPG',
+    '/images/1rec/IMG_9427.JPG',
+    '/images/1rec/20260303_204624000_iOS.JPG',
+    '/images/1rec/20260303_204624000_iOS 1.JPG',
+    '/images/1rec/20260303_204624000_iOS 3.JPG',
+    '/images/1rec/IMG_9429.JPG',
+    '/images/1rec/IMG_5759.JPG',
+    '/images/1rec/2693a365-5329-4d57-bdb7-b52d9e64a6f9.JPG',
+    '/images/1rec/IMG_0004.JPG',
+    '/images/1rec/IMG_0018.JPG',
+    '/images/1rec/IMG_0028.JPG'
   ],
   '2rec': [
     'https://www.condominiosjaroje.com/images/condominios2R/condominios2R%20(1).jpg',
@@ -142,28 +148,52 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     'https://www.condominiosjaroje.com/images/condominios2R/condominios2R%20(10).jpg'
   ],
   '3rec': [
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-1.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-2.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-3.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-4.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-5.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-6.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-7.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-8.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-9.jpg',
-    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-10.jpg'
+    '/images/3rec/20260303_013342000_iOS 5.JPG',
+    '/images/3rec/20260303_013342000_iOS 10.JPG',
+    '/images/3rec/20260303_013342000_iOS 1 2.JPG',
+    '/images/3rec/20260303_013342000_iOS 6.JPG',
+    '/images/3rec/20260303_013342000_iOS 2.JPG',
+    '/images/3rec/20260303_013342000_iOS 1 1.JPG',
+    '/images/3rec/20260303_013342000_iOS 8.JPG',
+    '/images/3rec/20260303_013342000_iOS 7.JPG',
+    '/images/3rec/IMG_9425.JPG',
+    '/images/3rec/20260303_013342000_iOS 4.JPG',
+    '/images/3rec/20260303_013342000_iOS 9.JPG',
+    '/images/3rec/20260303_013342000_iOS.JPG',
+    '/images/3rec/20260303_013342000_iOS 1.JPG',
+    '/images/3rec/20260303_013342000_iOS 3.JPG',
+    '/images/3rec/IMG_9426.JPG',
+    '/images/3rec/IMG_0015.JPG',
+    '/images/3rec/IMG_0026.JPG',
+    '/images/3rec/2693a365-5329-4d57-bdb7-b52d9e64a6f9.JPG',
+    '/images/3rec/IMG_0004.JPG',
+    '/images/3rec/IMG_0018.JPG',
+    '/images/3rec/IMG_0028.JPG'
   ],
   'casa': [
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(1).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(2).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(3).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(4).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(5).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(6).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(7).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(8).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(9).jpg',
-    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(10).jpg'
+    '/images/casa/20260303_204337431_iOS.JPG',
+    '/images/casa/20260303_204337610_iOS.JPG',
+    '/images/casa/20260303_204337777_iOS.JPG',
+    '/images/casa/20260303_204337948_iOS.JPG',
+    '/images/casa/20260303_204338114_iOS.JPG',
+    '/images/casa/20260303_204338284_iOS.JPG',
+    '/images/casa/20260303_204338455_iOS.JPG',
+    '/images/casa/20260303_204338621_iOS.JPG',
+    '/images/casa/20260303_204338960_iOS.JPG',
+    '/images/casa/20260303_204339129_iOS.JPG',
+    '/images/casa/20260303_210407915_iOS.JPG',
+    '/images/casa/IMG_9430.JPG',
+    '/images/casa/IMG_9432.JPG',
+    '/images/casa/20260303_204339297_iOS.JPG',
+    '/images/casa/20260303_204338786_iOS.JPG',
+    '/images/casa/IMG_9431.JPG',
+    '/images/casa/IMG_0012.JPG',
+    '/images/casa/2693a365-5329-4d57-bdb7-b52d9e64a6f9.JPG',
+    '/images/casa/IMG_0010.JPG',
+    '/images/casa/IMG_0008.JPG',
+    '/images/casa/IMG_0004.JPG',
+    '/images/casa/IMG_0018.JPG',
+    '/images/casa/IMG_0028.JPG'
   ]
 };
 
@@ -985,10 +1015,10 @@ export default function PublicReservaPage() {
   const featuresData = ROOM_FEATURES[roomTypeKey] || ROOM_FEATURES['doble'];
 
   // Fotos y descripciones del Carrusel
-  const photos = [...(ROOM_PHOTOS[roomTypeKey] || ROOM_PHOTOS['doble']), ...COMMON_PHOTOS];
-  const captions = lang === 'en'
-    ? [...(PHOTO_CAPTIONS_EN[roomTypeKey] || PHOTO_CAPTIONS_EN['doble']), ...COMMON_CAPTIONS_EN]
-    : [...(PHOTO_CAPTIONS[roomTypeKey] || PHOTO_CAPTIONS['doble']), ...COMMON_CAPTIONS];
+  const photos = (roomTypeKey === 'doble' || roomTypeKey === '2rec')
+    ? [...(ROOM_PHOTOS[roomTypeKey] || ROOM_PHOTOS['doble']), ...COMMON_PHOTOS]
+    : (ROOM_PHOTOS[roomTypeKey] || ROOM_PHOTOS['doble']);
+  const captions = Array(photos.length).fill('');
 
   const anticipoRequerido = Math.round(booking.price * 0.5);
 
