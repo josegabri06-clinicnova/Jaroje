@@ -515,7 +515,9 @@ export async function DELETE(req: Request) {
           bookingForWA = {
             id: id.toString(),
             guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || 'Huésped'),
-            phone: b.phone || b.mobile || b.guestPhone || ''
+            phone: b.phone || b.mobile || b.guestPhone || '',
+            arrival: b.arrival || null,
+            departure: b.departure || null
           };
         }
       }
@@ -524,13 +526,21 @@ export async function DELETE(req: Request) {
     }
 
     // 1. Cancelar en Beds24
+    const cancelPayload: any = {
+      bookId: Number(id),
+      status: 0 // 0 es el estado cancelado en Beds24 v2 (tipo entero)
+    };
+    if (bookingForWA?.arrival) {
+      cancelPayload.arrival = bookingForWA.arrival;
+    }
+    if (bookingForWA?.departure) {
+      cancelPayload.departure = bookingForWA.departure;
+    }
+
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify([{
-        bookId: Number(id),
-        status: 0 // 0 es el estado cancelado en Beds24 v2 (tipo entero)
-      }])
+      body: JSON.stringify([cancelPayload])
     });
 
     if (!beds24Response.ok) {
