@@ -517,7 +517,9 @@ export async function DELETE(req: Request) {
             guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || 'Huésped'),
             phone: b.phone || b.mobile || b.guestPhone || '',
             arrival: b.arrival || null,
-            departure: b.departure || null
+            departure: b.departure || null,
+            roomId: b.roomId || null,
+            unitId: b.unitId || null
           };
         }
       }
@@ -535,6 +537,12 @@ export async function DELETE(req: Request) {
     }
     if (bookingForWA?.departure) {
       cancelPayload.departure = bookingForWA.departure;
+    }
+    if (bookingForWA?.roomId) {
+      cancelPayload.roomId = Number(bookingForWA.roomId);
+    }
+    if (bookingForWA?.unitId) {
+      cancelPayload.unitId = Number(bookingForWA.unitId);
     }
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
