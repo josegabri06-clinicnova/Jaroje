@@ -100,7 +100,7 @@ export function BottomNav() {
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-t border-zinc-200/80 pb-safe">
       <div className="flex justify-around items-center px-2 py-2 pb-3 max-w-md mx-auto">
         {[
-          { href: '/', icon: <Home size={22} />, label: 'Panel' },
+          { href: '/panel', icon: <Home size={22} />, label: 'Panel' },
           { href: '/calendario', icon: <CalendarIcon size={22} />, label: 'Calendario' },
           { href: '/reservas',  icon: <ListIcon size={22} />, label: 'Reservas' },
           { href: '/ajustes',   icon: <Settings size={22} />,   label: 'Ajustes' },

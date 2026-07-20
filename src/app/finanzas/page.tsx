@@ -1156,7 +1156,7 @@ export default function FinanzasPage() {
         )}
 
         <Link 
-          href="/"
+          href="/panel"
           className="text-[13px] font-bold text-zinc-400 hover:text-white transition-colors bg-white/5 px-4 py-2 rounded-xl border border-white/5"
         >
           Volver al Inicio

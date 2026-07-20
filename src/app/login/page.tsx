@@ -105,9 +105,9 @@ export default function LoginPage() {
   // Si ya hay sesión, redirigir
   useEffect(() => {
     const role = localStorage.getItem('jaroje_role');
-    if (role === 'admin') router.replace('/');
+    if (role === 'admin') router.replace('/calendario');
     if (role === 'staff_limpieza' || role === 'staff_mantenimiento') router.replace('/staff');
-    if (role === 'recepcion') router.replace('/recepcion');
+    if (role === 'recepcion') router.replace('/calendario');
   }, [router]);
 
   // Tap en el logo 5 veces → mostrar reset de emergencia
@@ -149,8 +149,8 @@ export default function LoginPage() {
             if (typeof window !== 'undefined') {
               sessionStorage.setItem('jaroje_session_pin', next);
             }
-            if (mode === 'admin') router.replace('/');
-            else if (mode === 'recepcion') router.replace('/recepcion');
+            if (mode === 'admin') router.replace('/calendario');
+            else if (mode === 'recepcion') router.replace('/calendario');
             else router.replace('/staff');
           }
         } catch {

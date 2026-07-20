@@ -40,8 +40,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     // Si está autenticado e intenta ir a /login, redirigir a su panel por defecto
     if (pathname === '/login') {
-      if (stored === 'admin') router.replace('/');
-      else if (stored === 'recepcion') router.replace('/recepcion');
+      if (stored === 'admin' || stored === 'recepcion') router.replace('/calendario');
       else router.replace('/staff');
       return;
     }
@@ -58,7 +57,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!isAllowed) {
       console.warn(`Acceso denegado a ${pathname} para el rol ${stored}. Redirigiendo...`);
       if (stored === 'recepcion') {
-        router.replace('/recepcion');
+        router.replace('/calendario');
       } else {
         router.replace('/staff');
       }
