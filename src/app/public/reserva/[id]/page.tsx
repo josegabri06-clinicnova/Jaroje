@@ -381,10 +381,11 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     partialPaymentTitle: 'Saldo Pendiente',
     partialPaymentDesc: (deposit: string, balance: string) => `Has cubierto tu anticipo de $${deposit} MXN. Recuerda liquidar el saldo restante de $${balance} MXN antes de tu llegada o en recepción durante tu check-in.`,
     
-    summaryTitle: 'Resumen de tu Estancia',
+    summaryTitle: 'Detalles de tu reservación',
     guest: 'Huésped',
     bookingId: 'ID de Reserva',
-    accommodation: 'Alojamiento (se garantiza el tipo de habitación)',
+    accommodation: 'Alojamiento (El número del departamento se asigna al llegar)',
+    unregisteredGuestNote: '(Huésped no registrado $1000 por noche)',
     checkin: 'Fecha de Llegada',
     checkinTime: '(Check-in: 3:00 PM)',
     checkout: 'Fecha de Salida',
@@ -492,10 +493,11 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     partialPaymentTitle: 'Balance Due',
     partialPaymentDesc: (deposit: string, balance: string) => `You have paid your deposit of $${deposit} MXN. Please remember to settle the remaining balance of $${balance} MXN before your arrival or at the front desk during check-in.`,
     
-    summaryTitle: 'Your Stay Summary',
+    summaryTitle: 'Your Reservation Details',
     guest: 'Guest',
     bookingId: 'Reservation ID',
-    accommodation: 'Accommodation (room type is guaranteed)',
+    accommodation: 'Accommodation (Apartment number is assigned upon arrival)',
+    unregisteredGuestNote: '(Unregistered guest $1000 per night)',
     checkin: 'Arrival Date',
     checkinTime: '(Check-in: 3:00 PM)',
     checkout: 'Departure Date',
@@ -1198,8 +1200,11 @@ export default function PublicReservaPage() {
             </div>
             <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100 flex flex-col justify-between">
               <span className="text-zinc-500 font-semibold block">{lang === 'en' ? 'Registered Guests' : 'Huéspedes registrados'}</span>
-              <div className="flex items-center justify-between mt-1">
-                <strong className="text-zinc-900 font-bold text-[13px]">{t.guests(booking.num_adult + booking.num_child)}</strong>
+              <div className="flex items-center justify-between mt-1 gap-2">
+                <div className="flex flex-col">
+                  <strong className="text-zinc-900 font-bold text-[13px]">{t.guests(booking.num_adult + booking.num_child)}</strong>
+                  <span className="text-red-600 text-[9px] font-bold mt-0.5 leading-tight">{t.unregisteredGuestNote}</span>
+                </div>
                 {booking.status !== 'cancelled' && (
                   <button
                     onClick={() => {
