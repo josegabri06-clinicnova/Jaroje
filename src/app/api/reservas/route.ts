@@ -505,7 +505,8 @@ export async function DELETE(req: Request) {
     // Obtener detalles de la reserva de Beds24 antes de cancelarla
     let bookingForWA: any = null;
     try {
-      const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${id}`, {
+      // Agregamos un rango de fechas muy amplio para asegurar que encuentre reservas futuras o pasadas por ID
+      const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31&includeCancelled=true`, {
         headers: { 'token': BEDS24_TOKEN }
       });
       if (b24Res.ok) {
@@ -525,6 +526,12 @@ export async function DELETE(req: Request) {
       }
     } catch (err) {
       console.error("Error fetching reservation from Beds24 before cancellation:", err);
+    }
+
+    if (!bookingForWA) {
+      return NextResponse.json({ 
+        error: "Beds24 no devolvió los detalles de la reserva. Verifique que el ID de reserva sea correcto." 
+      }, { status: 400 });
     }
 
     // 1. Cancelar en Beds24

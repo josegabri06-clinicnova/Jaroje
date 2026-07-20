@@ -1,3 +1,6 @@
+const dns = require('dns');
+dns.setDefaultResultOrder('ipv4first');
+
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
@@ -21,16 +24,10 @@ envContent.split('\n').forEach(line => {
 const supabaseUrl = env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Error: Supabase URL or Key not found in .env');
-  process.exit(1);
-}
-
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
   try {
-    // 1. Obtener token de Beds24
     console.log('Fetching beds24_auth table row 1...');
     const { data: auth, error: authErr } = await supabase
       .from('beds24_auth')
@@ -42,25 +39,22 @@ async function run() {
       throw new Error('Supabase error: ' + authErr.message);
     }
 
-    const token = auth.temp_token;
     console.log('Beds24 temp_token retrieved successfully.');
-
-    // 2. Consultar reserva
+    
+    // Consultar la reserva en local_reservas
     const bookingId = '90131016';
-    console.log(`Fetching booking ${bookingId} from Beds24...`);
-    const res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
-      headers: {
-        'token': token
-      }
-    });
+    console.log(`Searching for booking ${bookingId} in local_reservas...`);
+    const { data: localRes, error: resErr } = await supabase
+      .from('local_reservas')
+      .select('*')
+      .eq('id', bookingId)
+      .maybeSingle();
 
-    if (!res.ok) {
-      throw new Error(`Beds24 API returned status ${res.status}: ${await res.text()}`);
+    if (resErr) {
+      console.error('Error fetching local reservation:', resErr);
+    } else {
+      console.log('Local reservation data:', JSON.stringify(localRes, null, 2));
     }
-
-    const data = await res.json();
-    console.log('Booking details JSON structure:');
-    console.log(JSON.stringify(data, null, 2));
 
   } catch (err) {
     console.error('Run failed:', err);
