@@ -883,6 +883,15 @@ let cacheTimestamp = 0;
 let cacheAllTimestamp = 0;
 const CACHE_TTL_MS = 30000; // 30 segundos de ciclo de vida (TTL)
 
+// Función para limpiar/invalidar el caché de Beds24 (útil tras POST/PUT/DELETE)
+export function clearBeds24Cache() {
+  console.log("[Beds24 Cache] Invalidando y limpiando la caché global de reservas.");
+  cachedBookingsPromise = null;
+  cachedAllBookingsPromise = null;
+  cacheTimestamp = 0;
+  cacheAllTimestamp = 0;
+}
+
 // Obtener y mapear reservas activas (Backend Server-Side) con caché
 export async function getBeds24Bookings(
   fast: boolean = false,

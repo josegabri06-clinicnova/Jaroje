@@ -1833,6 +1833,9 @@ export default function ReservasList() {
       }
 
       setSelectedRes(null);
+      if (typeof window !== 'undefined') {
+        window.history.replaceState(null, '', '/reservas');
+      }
       
       // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
       setTimeout(() => {
@@ -1943,7 +1946,7 @@ export default function ReservasList() {
     else if (activeTab === 'Directas') matchTab = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
     else if (activeTab === 'WhatsApp') matchTab = r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
     else if (activeTab === 'Google') matchTab = r.channel === 'Google';
-    else if (activeTab !== 'Todas' && activeTab !== 'Completadas') matchTab = r.channel === activeTab;
+    else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas') matchTab = r.channel === activeTab;
 
     let matchDateRange = true;
     if (startDate && endDate) {

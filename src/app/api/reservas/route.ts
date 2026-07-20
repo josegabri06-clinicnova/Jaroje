@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import { 
   sendTemplate1_SolicitudRecibida, 
@@ -444,6 +444,9 @@ export async function POST(req: Request) {
       })();
     }
 
+    // Invalidar caché tras creación
+    clearBeds24Cache();
+
     return NextResponse.json({ success: true, message: "Reserva registrada en Beds24.", data: dataB24 });
 
   } catch (err: any) {
@@ -558,6 +561,9 @@ export async function DELETE(req: Request) {
         console.error("[Reservas DELETE] Error sending WhatsApp cancellation for Beds24 booking:", waErr);
       }
     }
+
+    // Invalidar caché de Beds24 ya que acabamos de cancelar una reserva
+    clearBeds24Cache();
 
     return NextResponse.json({ success: true, message: "Reserva cancelada en Beds24 y liberada localmente.", data: dataB24 });
 
@@ -958,6 +964,9 @@ export async function PUT(req: Request) {
         return NextResponse.json({ error: `Beds24 rechazó la actualización: ${errorMsg}` }, { status: 400 });
       }
     }
+
+    // Invalidar caché tras modificación
+    clearBeds24Cache();
 
     return NextResponse.json({ 
       success: true, 
