@@ -536,8 +536,8 @@ export async function DELETE(req: Request) {
 
     // 1. Cancelar en Beds24
     const cancelPayload: any = {
-      bookId: Number(id),
-      status: 0 // 0 es el estado cancelado en Beds24 v2 (tipo entero)
+      id: Number(id),
+      status: 'cancelled'
     };
     if (bookingForWA?.arrival) {
       cancelPayload.arrival = bookingForWA.arrival;
@@ -572,8 +572,9 @@ export async function DELETE(req: Request) {
     const resultsArray = Array.isArray(dataB24) ? dataB24 : (dataB24 && Array.isArray(dataB24.data) ? dataB24.data : []);
     const firstResult = resultsArray[0];
     if (firstResult && firstResult.success === false) {
-      // Volcamos todo el objeto firstResult para ver exactamente qué responde Beds24 en el celular
-      const errorMsg = JSON.stringify(firstResult);
+      const errorMsg = firstResult.errors 
+        ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+        : firstResult.message || 'Error individual al cancelar en Beds24';
       return NextResponse.json({ error: `Beds24 rechazó la cancelación: ${errorMsg}` }, { status: 400 });
     }
 
