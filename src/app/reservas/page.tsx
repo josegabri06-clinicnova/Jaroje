@@ -1969,6 +1969,21 @@ export default function ReservasList() {
     return matchSearch && matchTab && matchDateRange;
   });
 
+  const tabLabel = (() => {
+    switch (activeTab) {
+      case 'Todas': return 'activas';
+      case 'Nuevas': return 'nuevas';
+      case 'Sin Anticipo': return 'sin anticipo';
+      case 'Directas': return 'directas';
+      case 'WhatsApp': return 'vía WhatsApp';
+      case 'Airbnb': return 'de Airbnb';
+      case 'Booking': return 'de Booking.com';
+      case 'Completadas': return 'completadas';
+      case 'Canceladas': return 'canceladas';
+      default: return 'activas';
+    }
+  })();
+
   const totalRevenue = filtered.reduce((sum: number, r: any) => sum + (r.price_estimate || 0), 0);
 
   return (
@@ -1978,7 +1993,7 @@ export default function ReservasList() {
         <div>
           <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Reservas</h2>
           <p className="text-[13px] font-medium text-zinc-500 mt-0.5">
-            {isLoading ? '...' : `${activeReservas.length} activas · MX$${totalRevenue.toLocaleString('es-MX')} estimado`}
+            {isLoading ? '...' : `${filtered.length} ${tabLabel} · MX$${totalRevenue.toLocaleString('es-MX')} estimado`}
           </p>
         </div>
         <div className="flex items-center gap-2">
