@@ -671,31 +671,29 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
   };
 
   const baseUrl = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
-
   if (includeCancelled) {
     try {
-      // Llamadas en paralelo para evitar latencia
-      const [activeBookings, cancelledBookingsString, cancelledBookingsNumeric] = await Promise.all([
-        fetchPage(baseUrl),
-        fetchPage(`${baseUrl}&status=cancelled`),
-        fetchPage(`${baseUrl}&status=0`)
+      // Llamadas en paralelo con tolerancia a fallos
+      const [activeBookings, cancelledBookings] = await Promise.all([
+        fetchPage(baseUrl).catch(err => {
+          console.error("[Beds24 API] Fallo al obtener activas:", err);
+          throw err; // Si fallan las activas, sí lanzamos el error porque el listado estaría incompleto
+        }),
+        fetchPage(`${baseUrl}&status=cancelled`).catch(err => {
+          console.warn("[Beds24 API] Fallo silencioso al obtener canceladas (se omite para no romper el flujo principal):", err);
+          return []; // Si fallan las canceladas, devolvemos un array vacío para no afectar el resto de la app
+        })
       ]);
 
       const combined = [...activeBookings];
       const activeIds = new Set(activeBookings.map(b => String(b.id)));
       
-      // Combinar canceladas (de ambas llamadas) evitando duplicados
-      const mergeCancelled = (list: any[]) => {
-        list.forEach(b => {
-          if (!activeIds.has(String(b.id))) {
-            combined.push(b);
-            activeIds.add(String(b.id)); // Prevenir duplicados entre las dos consultas de canceladas
-          }
-        });
-      };
-
-      mergeCancelled(cancelledBookingsString);
-      mergeCancelled(cancelledBookingsNumeric);
+      // Combinar canceladas evitando duplicados
+      cancelledBookings.forEach(b => {
+        if (!activeIds.has(String(b.id))) {
+          combined.push(b);
+        }
+      });
 
       return combined;
     } catch (err) {
