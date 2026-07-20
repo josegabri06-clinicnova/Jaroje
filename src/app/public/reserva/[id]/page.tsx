@@ -443,6 +443,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     tapToZoom: '🔍 Toca cualquier imagen para abrir en pantalla completa',
     stayGuide: 'Para garantizar una estancia agradable a todos nuestros huéspedes, te pedimos revisar la guía digital de tu alojamiento:',
     stayGuideBtn: 'GUÍA DE ALOJAMIENTO Y FOTOS',
+    wifiInfoBtn: 'WiFi, claves e información',
     stayPolicies: '🚫 Políticas Básicas',
     policyPets: 'No se admiten mascotas bajo ningún concepto.',
     policySmoke: 'Espacio 100% libre de humo (solo permitido fumar en áreas exteriores designadas).',
@@ -556,6 +557,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     tapToZoom: '🔍 Tap any image to open in full screen',
     stayGuide: 'To ensure a pleasant stay for all our guests, please review your accommodation digital guide:',
     stayGuideBtn: 'ACCOMMODATION GUIDE AND PHOTOS',
+    wifiInfoBtn: 'WiFi, keys & info',
     stayPolicies: '🚫 Basic Policies',
     policyPets: 'No pets allowed under any circumstances.',
     policySmoke: '100% Smoke-free space (only smoking in designated outdoor areas permitted).',
@@ -732,6 +734,7 @@ export default function PublicReservaPage() {
   const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState('');
   const [maintenanceSuccess, setMaintenanceSuccess] = useState(false);
+  const [showWifiInfo, setShowWifiInfo] = useState(false);
 
   const changeLanguage = async (newLang: 'es' | 'en') => {
     setLang(newLang);
@@ -1199,32 +1202,36 @@ export default function PublicReservaPage() {
               <span className="text-zinc-500 font-semibold block">{lang === 'en' ? 'Nights' : 'Estancia'}</span>
               <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">{t.nights(booking.nights)}</strong>
             </div>
-            <div className="bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100 flex flex-col justify-between">
-              <span className="text-zinc-500 font-semibold block">{lang === 'en' ? 'Registered Guests' : 'Huéspedes registrados'}</span>
-              <div className="flex items-center justify-between mt-1 gap-2">
-                <div className="flex flex-col">
-                  <strong className="text-zinc-900 font-bold text-[13px]">{t.guests(booking.num_adult + booking.num_child)}</strong>
-                  <span className="text-red-600 text-[9px] font-bold mt-0.5 leading-tight">{t.unregisteredGuestNote}</span>
-                </div>
-                {booking.status !== 'cancelled' && (
-                  <button
-                    onClick={() => {
-                      if (isOta) {
-                        setShowOtaWarningModal(true);
-                      } else {
-                        setTempAdults(booking.num_adult || 1);
-                        setTempChildren(booking.num_child || 0);
-                        setUpdateGuestsError('');
-                        setShowEditGuestsModal(true);
-                      }
-                    }}
-                    className="text-[10px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold px-2.5 py-1 rounded-lg border border-indigo-200/50 transition-all cursor-pointer shadow-xs active:scale-95 flex items-center gap-1 uppercase tracking-wider"
-                  >
-                    <Edit size={10} strokeWidth={2.5} className="shrink-0" />
-                    {t.editBtn}
-                  </button>
-                )}
+            <div className="bg-[#FAF9F6] p-3 rounded-xl border border-zinc-100 flex flex-col justify-between min-h-[110px]">
+              <div>
+                <span className="text-zinc-500 font-semibold block mb-1">
+                  {lang === 'en' ? 'Registered Guests' : 'Huéspedes registrados'}
+                </span>
+                <span className="text-zinc-900 font-bold text-[13px] block">
+                  {t.guests(booking.num_adult + booking.num_child)}
+                </span>
+                <span className="text-zinc-700 text-[9.5px] font-normal mt-1 block leading-tight">
+                  {t.unregisteredGuestNote}
+                </span>
               </div>
+              {booking.status !== 'cancelled' && (
+                <button
+                  onClick={() => {
+                    if (isOta) {
+                      setShowOtaWarningModal(true);
+                    } else {
+                      setTempAdults(booking.num_adult || 1);
+                      setTempChildren(booking.num_child || 0);
+                      setUpdateGuestsError('');
+                      setShowEditGuestsModal(true);
+                    }
+                  }}
+                  className="w-full mt-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[10px] rounded-lg border border-indigo-200/50 transition-all cursor-pointer shadow-xs active:scale-95 flex items-center justify-center gap-1 uppercase tracking-wider"
+                >
+                  <Edit size={10} strokeWidth={2.5} className="shrink-0" />
+                  {t.editBtn}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1460,26 +1467,96 @@ export default function PublicReservaPage() {
 
             {/* WiFi Block */}
             {hasPaid ? (
-              <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-3.5 mt-2 space-y-2.5">
-                <span className="text-zinc-600 font-bold uppercase text-[10px] tracking-wide block text-center">
-                  {lang === 'en' ? '📶 Wi-Fi Network & Password' : '📶 Red Wi-Fi y Claves'}
-                </span>
-                <div className="flex justify-around items-center gap-2">
-                  <div className="text-center">
-                    <span className="text-zinc-500 text-[10px] block">
-                      {lang === 'en' ? 'Network' : 'Red Wi-Fi'}
-                    </span>
-                    <strong className="text-zinc-900 text-sm font-extrabold select-all">Jaroje</strong>
+              <>
+                <button
+                  onClick={() => setShowWifiInfo(!showWifiInfo)}
+                  className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold rounded-xl text-center flex items-center justify-center gap-2 border border-zinc-350/40 transition-all cursor-pointer select-none"
+                >
+                  <span>📶</span>
+                  {t.wifiInfoBtn}
+                  <span className="text-[10px] text-zinc-400">
+                    {showWifiInfo ? '▲' : '▼'}
+                  </span>
+                </button>
+                {showWifiInfo && (
+                  <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4.5 space-y-4 animate-in fade-in slide-in-from-top-3 duration-200">
+                    {/* Wi-Fi & Keys Section */}
+                    <div className="space-y-2 text-left">
+                      <h4 className="font-extrabold text-zinc-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-1">
+                        🔑 {lang === 'en' ? 'Access & Credentials' : 'Acceso y Claves'}
+                      </h4>
+                      <div className="grid grid-cols-3 gap-2 text-[11px]">
+                        <div className="bg-white p-2 rounded-lg border border-zinc-150 text-center">
+                          <span className="text-zinc-500 block text-[9px] font-semibold uppercase">{lang === 'en' ? 'WiFi Network' : 'Red WiFi'}</span>
+                          <strong className="text-zinc-900 font-extrabold select-all">JAROJE</strong>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-zinc-150 text-center">
+                          <span className="text-zinc-500 block text-[9px] font-semibold uppercase">{lang === 'en' ? 'Password' : 'Contraseña'}</span>
+                          <strong className="text-zinc-900 font-extrabold select-all">HUXX2025</strong>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-zinc-150 text-center">
+                          <span className="text-zinc-500 block text-[9px] font-semibold uppercase">{lang === 'en' ? 'Gate Code' : 'Código de Portón'}</span>
+                          <strong className="text-zinc-900 font-extrabold select-all">3456</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Important Info Section */}
+                    <div className="space-y-2 text-left">
+                      <h4 className="font-extrabold text-zinc-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-1">
+                        ℹ️ {lang === 'en' ? 'Important Information' : 'Información importante'}
+                      </h4>
+                      <ul className="space-y-1.5 pl-1 text-[11.5px] text-zinc-700">
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-zinc-400 shrink-0">•</span>
+                          <span>{lang === 'en' ? 'Dry towels available at reception.' : 'Toallas secas disponibles en recepción.'}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-zinc-400 shrink-0">•</span>
+                          <span>{lang === 'en' ? 'Exclusive access for registered guests.' : 'Acceso exclusivo para huéspedes registrados.'}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-zinc-400 shrink-0">•</span>
+                          <span>{lang === 'en' ? 'No pets allowed.' : 'No se admiten mascotas.'}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-zinc-400 shrink-0">•</span>
+                          <span>{lang === 'en' ? '100% smoke-free property.' : 'Propiedad 100% libre de humo.'}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-zinc-400 shrink-0">•</span>
+                          <span>{lang === 'en' ? 'The hotel is not responsible for valuables.' : 'El hotel no se hace responsable por objetos de valor.'}</span>
+                        </li>
+                        <li className="flex items-start gap-1.5">
+                          <span className="text-zinc-400 shrink-0">•</span>
+                          <span>{lang === 'en' ? 'Parking subject to availability.' : 'Estacionamiento sujeto a disponibilidad.'}</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    {/* Schedules Section */}
+                    <div className="space-y-2 text-left">
+                      <h4 className="font-extrabold text-zinc-900 text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-b border-zinc-150 pb-1">
+                        ⏰ {lang === 'en' ? 'Schedules' : 'Horarios'}
+                      </h4>
+                      <div className="grid grid-cols-3 gap-2 text-[11px] text-zinc-700">
+                        <div className="bg-white p-2 rounded-lg border border-zinc-150 text-center flex flex-col justify-center">
+                          <span className="text-zinc-500 block text-[9px] font-semibold uppercase">{lang === 'en' ? 'Pool' : 'Alberca'}</span>
+                          <span className="font-bold text-zinc-800 leading-tight">9:00 – 22:00</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-zinc-150 text-center flex flex-col justify-center">
+                          <span className="text-zinc-500 block text-[9px] font-semibold uppercase">{lang === 'en' ? 'Reception' : 'Recepción'}</span>
+                          <span className="font-bold text-zinc-800 leading-tight">8:00 – 20:00</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-lg border border-zinc-150 text-center flex flex-col justify-center">
+                          <span className="text-zinc-500 block text-[9px] font-semibold uppercase">WhatsApp</span>
+                          <span className="font-bold text-zinc-800 leading-tight">9:00 – 16:00</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="w-px h-8 bg-zinc-200" />
-                  <div className="text-center">
-                    <span className="text-zinc-500 text-[10px] block">
-                      {lang === 'en' ? 'Password' : 'Contraseña'}
-                    </span>
-                    <strong className="text-zinc-900 text-sm font-extrabold select-all">HUXX2025</strong>
-                  </div>
-                </div>
-              </div>
+                )}
+              </>
             ) : (
               <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-3 mt-2 text-center">
                 <span className="text-amber-800 text-[10.5px] font-bold block">
