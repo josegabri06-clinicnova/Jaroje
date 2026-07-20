@@ -378,7 +378,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     state_finalizada: 'Finalizada',
     
     stateTitle: 'Estado de la Reservación',
-    partialPaymentTitle: 'Pago Parcial: Saldo Pendiente',
+    partialPaymentTitle: 'Saldo Pendiente',
     partialPaymentDesc: (deposit: string, balance: string) => `Has cubierto tu anticipo de $${deposit} MXN. Recuerda liquidar el saldo restante de $${balance} MXN antes de tu llegada o en recepción durante tu check-in.`,
     
     summaryTitle: 'Resumen de tu Estancia',
@@ -489,7 +489,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     state_finalizada: 'Completed',
     
     stateTitle: 'Reservation Status',
-    partialPaymentTitle: 'Partial Payment: Balance Due',
+    partialPaymentTitle: 'Balance Due',
     partialPaymentDesc: (deposit: string, balance: string) => `You have paid your deposit of $${deposit} MXN. Please remember to settle the remaining balance of $${balance} MXN before your arrival or at the front desk during check-in.`,
     
     summaryTitle: 'Your Stay Summary',
