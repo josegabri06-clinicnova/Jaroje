@@ -1402,14 +1402,9 @@ export default function PublicReservaPage() {
           </div>
 
           <div className="space-y-3.5">
-            <div className="bg-[#FAF9F6] border border-zinc-200/40 rounded-xl p-3 flex justify-between items-center text-xs">
+            <div className="bg-[#FAF9F6] border border-zinc-200/40 rounded-xl p-3 flex items-center text-xs">
               <span className="text-zinc-700 font-extrabold uppercase tracking-wide">
                 {lang === 'en' ? (ROOM_FEATURES_EN[roomTypeKey]?.title || ROOM_FEATURES_EN['doble'].title) : featuresData.title}
-              </span>
-              <span className="bg-indigo-600 text-white font-extrabold text-[9px] px-2.5 py-1 rounded-full uppercase tracking-wider text-center">
-                {lang === 'en'
-                  ? `Capacity included: ${getCapacityRules(booking.room_name).base} | Max capacity: ${getCapacityRules(booking.room_name).max}`
-                  : `Capacidad sin costo: ${getCapacityRules(booking.room_name).base} | Máxima permitida: ${getCapacityRules(booking.room_name).max}`}
               </span>
             </div>
 
