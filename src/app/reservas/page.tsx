@@ -1901,19 +1901,18 @@ export default function ReservasList() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // Reservas activas operativas (próximas): no han completado el checkout, su fecha de entrada es hoy o futura y no están canceladas.
-  // Ordenadas de la más próxima a la más lejana (orden cronológico ascendente).
+  // Reservas activas operativas: no canceladas, no con checkout hecho, y su fecha de SALIDA es hoy o futura
+  // Esto incluye reservas en curso (check-in ya ocurrió, huésped en el hotel) y reservas próximas.
   const activeReservas = reservas
-    .filter(r => r.status !== 'cancelled' && !r.is_checked_out && r.check_in >= todayStr)
+    .filter(r => r.status !== 'cancelled' && !r.is_checked_out && r.check_out >= todayStr)
     .sort((a, b) => {
       const compareIn = (a.check_in || '').localeCompare(b.check_in || '');
       if (compareIn !== 0) return compareIn;
       return (a.check_out || '').localeCompare(b.check_out || '');
     });
-  // Reservas completadas / pasadas / activas en curso: ya hicieron checkout O la fecha de entrada ya transcurrió, y no están canceladas.
-  // Ordenadas de la más nueva a la más antigua (primero Salen hoy).
+  // Reservas completadas / pasadas: ya hicieron checkout O la fecha de SALIDA ya transcurrió, y no están canceladas.
   const completedReservas = reservas
-    .filter(r => r.status !== 'cancelled' && (r.is_checked_out || r.check_in < todayStr))
+    .filter(r => r.status !== 'cancelled' && (r.is_checked_out || r.check_out < todayStr))
     .sort((a, b) => {
       const compareOut = (b.check_out || '').localeCompare(a.check_out || '');
       if (compareOut !== 0) return compareOut;
