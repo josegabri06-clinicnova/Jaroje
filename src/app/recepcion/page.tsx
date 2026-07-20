@@ -345,10 +345,13 @@ function getRoomOperationalStatus(
     }
   }
 
-  // Buscar si tiene salida programada hoy o pendiente en el pasado (Check-out)
+  // Buscar si tiene salida programada hoy o pendiente en el pasado (Check-out, máx 5 días)
+  const limit = new Date();
+  limit.setDate(limit.getDate() - 5);
+  const limitStr = limit.toISOString().split('T')[0];
   const isSalidaHoy = activeReservations.some(r => {
     const rRoom = String(r.room || '').replace(/[\s()]/g, '');
-    return rRoom.includes(roomNum) && r.check_out <= todayStr && r.checked_in && !r.checked_out && r.status !== 'cancelled';
+    return rRoom.includes(roomNum) && r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled';
   });
 
   if (isSalidaHoy) {
@@ -2234,7 +2237,10 @@ export default function RecepcionPage() {
   }, [reservas, todayStr]);
 
   const salidas = useMemo(() => {
-    return reservas.filter(r => r.check_out <= todayStr && r.checked_in && !r.checked_out && r.status !== 'cancelled');
+    const limit = new Date();
+    limit.setDate(limit.getDate() - 5);
+    const limitStr = limit.toISOString().split('T')[0];
+    return reservas.filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled');
   }, [reservas, todayStr]);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
