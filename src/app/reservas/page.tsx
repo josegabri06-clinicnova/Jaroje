@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
@@ -137,6 +138,7 @@ function isReservationNew(r: any): boolean {
 }
 
 export default function ReservasList() {
+  const searchParams = useSearchParams();
   const [reservas, setReservas] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -544,8 +546,7 @@ export default function ReservasList() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && reservas.length > 0) {
-      const params = new URLSearchParams(window.location.search);
-      const searchId = params.get('id');
+      const searchId = searchParams.get('id');
       if (searchId) {
         const found = reservas.find(r => r.id.toString() === searchId);
         if (found) {
@@ -553,13 +554,16 @@ export default function ReservasList() {
           setSearch(searchId);
           const today = new Date().toISOString().split('T')[0];
           const isCompleted = found.is_checked_out || found.check_out < today;
-          setActiveTab(isCompleted ? 'Completadas' : 'Todas');
+          const isCancelled = found.status === 'cancelled' || found.status === '0';
+          if (isCancelled) {
+            setActiveTab('Canceladas');
+          } else {
+            setActiveTab(isCompleted ? 'Completadas' : 'Todas');
+          }
         }
       }
     }
-  // Solo depende de 'reservas': se ejecuta una vez al cargar los datos
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reservas]);
+  }, [reservas, searchParams]);
 
   // Sincronizar el parámetro de la URL con el estado de la reserva activa
   useEffect(() => {
