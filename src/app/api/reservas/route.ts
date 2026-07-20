@@ -529,7 +529,7 @@ export async function DELETE(req: Request) {
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify([{
         id: Number(id),
-        status: "cancelled"
+        status: "0" // 0 es el estado cancelado en Beds24 v2
       }])
     });
 

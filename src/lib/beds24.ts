@@ -675,20 +675,27 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
   if (includeCancelled) {
     try {
       // Llamadas en paralelo para evitar latencia
-      const [activeBookings, cancelledBookings] = await Promise.all([
+      const [activeBookings, cancelledBookingsString, cancelledBookingsNumeric] = await Promise.all([
         fetchPage(baseUrl),
-        fetchPage(`${baseUrl}&status=cancelled`)
+        fetchPage(`${baseUrl}&status=cancelled`),
+        fetchPage(`${baseUrl}&status=0`)
       ]);
 
       const combined = [...activeBookings];
       const activeIds = new Set(activeBookings.map(b => String(b.id)));
       
-      // Combinar canceladas evitando duplicados
-      cancelledBookings.forEach(b => {
-        if (!activeIds.has(String(b.id))) {
-          combined.push(b);
-        }
-      });
+      // Combinar canceladas (de ambas llamadas) evitando duplicados
+      const mergeCancelled = (list: any[]) => {
+        list.forEach(b => {
+          if (!activeIds.has(String(b.id))) {
+            combined.push(b);
+            activeIds.add(String(b.id)); // Prevenir duplicados entre las dos consultas de canceladas
+          }
+        });
+      };
+
+      mergeCancelled(cancelledBookingsString);
+      mergeCancelled(cancelledBookingsNumeric);
 
       return combined;
     } catch (err) {
