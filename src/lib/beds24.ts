@@ -631,45 +631,73 @@ async function _doRefresh(): Promise<string> {
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
 export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false): Promise<any[]> {
   const BEDS24_TOKEN = await getBeds24Token();
-  let url = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
-  if (includeCancelled) {
-    url += '&status=new,confirmed,request,cancelled,black,inquiry';
-  }
-  let bookingsArray: any[] = [];
-  let hasNextPage = true;
 
-  while (hasNextPage) {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      cache: 'no-store'
-    });
+  const fetchPage = async (apiUrl: string) => {
+    let bookings: any[] = [];
+    let url = apiUrl;
+    let hasNextPage = true;
 
-    if (res.status === 401 || res.status === 403) {
-      throw new Error('TOKEN_EXPIRED');
-    }
+    while (hasNextPage) {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
 
-    if (!res.ok) {
-      throw new Error(`Error BEDS24 ${res.status}: ${await res.text()}`);
-    }
-
-    const dataB24 = await res.json();
-    if (dataB24.data && Array.isArray(dataB24.data)) {
-      bookingsArray = bookingsArray.concat(dataB24.data);
-    }
-
-    // Seguir el enlace de la siguiente página si existe
-    if (dataB24.pages && dataB24.pages.nextPageExists && dataB24.pages.nextPageLink) {
-      url = dataB24.pages.nextPageLink;
-      if (url.startsWith('/')) {
-        url = `https://api.beds24.com${url}`;
+      if (res.status === 401 || res.status === 403) {
+        throw new Error('TOKEN_EXPIRED');
       }
-    } else {
-      hasNextPage = false;
-    }
-  }
 
-  return bookingsArray;
+      if (!res.ok) {
+        throw new Error(`Error BEDS24 ${res.status}: ${await res.text()}`);
+      }
+
+      const dataB24 = await res.json();
+      if (dataB24.data && Array.isArray(dataB24.data)) {
+        bookings = bookings.concat(dataB24.data);
+      }
+
+      // Seguir el enlace de la siguiente página si existe
+      if (dataB24.pages && dataB24.pages.nextPageExists && dataB24.pages.nextPageLink) {
+        url = dataB24.pages.nextPageLink;
+        if (url.startsWith('/')) {
+          url = `https://api.beds24.com${url}`;
+        }
+      } else {
+        hasNextPage = false;
+      }
+    }
+    return bookings;
+  };
+
+  const baseUrl = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
+
+  if (includeCancelled) {
+    try {
+      // Llamadas en paralelo para evitar latencia
+      const [activeBookings, cancelledBookings] = await Promise.all([
+        fetchPage(baseUrl),
+        fetchPage(`${baseUrl}&status=cancelled`)
+      ]);
+
+      const combined = [...activeBookings];
+      const activeIds = new Set(activeBookings.map(b => String(b.id)));
+      
+      // Combinar canceladas evitando duplicados
+      cancelledBookings.forEach(b => {
+        if (!activeIds.has(String(b.id))) {
+          combined.push(b);
+        }
+      });
+
+      return combined;
+    } catch (err) {
+      console.error("[Beds24 API] Error al obtener reservas combinadas:", err);
+      throw err;
+    }
+  } else {
+    return fetchPage(baseUrl);
+  }
 }
 
 // Obtener mapa de tarifas diarias desde Beds24 API v2 (para el rango de fechas solicitado)
