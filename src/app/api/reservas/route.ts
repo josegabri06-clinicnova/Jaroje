@@ -52,6 +52,7 @@ export async function GET(req: Request) {
             unitId: Number(b.unit_id),
             roomName: `Habitación ${physicalName}`,
             room_name: `Habitación ${physicalName}`,
+            room: physicalName || '',
             arrival: b.check_in,
             departure: b.check_out,
             check_in: b.check_in,
@@ -141,6 +142,7 @@ export async function GET(req: Request) {
             localBookings.push({
               id: inserted.id, roomId: 685542, unitId: Number(randomUnit),
               roomName: `Habitación ${roomName}`, room_name: `Habitación ${roomName}`,
+              room: roomName || '',
               arrival: ota.check_in, departure: ota.check_out,
               check_in: ota.check_in, check_out: ota.check_out,
               guest_name: ota.guest_name, firstName: ota.guest_name, lastName: '',

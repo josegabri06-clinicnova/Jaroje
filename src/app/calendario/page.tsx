@@ -96,6 +96,17 @@ function getBookingForRoomDay(
   dayStr: string
 ): any | null {
   return reservas.find(r => {
+    // 1. Coincidencia exacta por la propiedad 'room' (si está definida)
+    if (r.room) {
+      return r.room === room && r.check_in <= dayStr && r.check_out > dayStr;
+    }
+    // 2. Coincidencia exacta extrayendo el número de habitación de 3 dígitos
+    const match = (r.room_name || '').match(/\((\d{3})\)/) || (r.room_name || '').match(/(\d{3})$/) || (r.room_name || '').match(/\b(\d{3})\b/);
+    const extractedRoom = match ? match[1] : null;
+    if (extractedRoom) {
+      return extractedRoom === room && r.check_in <= dayStr && r.check_out > dayStr;
+    }
+    // 3. Fallback original
     const roomMatch = (r.room_name || '').includes(room);
     return roomMatch && r.check_in <= dayStr && r.check_out > dayStr;
   }) || null;

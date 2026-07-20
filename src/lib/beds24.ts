@@ -458,8 +458,25 @@ export function getRealPrice(
 // Obtener metadata de la habitación
 export function getRoomMetadata(roomId: string | null | undefined, roomName: string | null | undefined) {
   const id = String(roomId || '');
-  if (JAROJE_CATALOG[id]) return JAROJE_CATALOG[id];
   const lowerName = (roomName || '').toLowerCase();
+
+  if (id === '685542') {
+    if (
+      lowerName.includes('doble') || 
+      lowerName.includes('501') || 
+      lowerName.includes('502') || 
+      lowerName.includes('503') || 
+      lowerName.includes('504') || 
+      lowerName.includes('505') || 
+      lowerName.includes('506') || 
+      lowerName.includes('507')
+    ) {
+      return JAROJE_CATALOG['685542_501'];
+    }
+    return JAROJE_CATALOG['685542'];
+  }
+
+  if (JAROJE_CATALOG[id]) return JAROJE_CATALOG[id];
   if (lowerName.includes('estándar') || lowerName.includes('estandar') || lowerName.includes('standard')) return JAROJE_CATALOG['default_1'];
   if (lowerName.includes('3') && lowerName.includes('rec')) return JAROJE_CATALOG['default_4'];
   if (lowerName.includes('2') && lowerName.includes('rec')) return JAROJE_CATALOG['default_3'];
@@ -1130,6 +1147,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         source: 'beds24',
         channel: channel,
         room_name: displayRoomName,
+        room: unitName || '',
         room_id: b.roomId,
         nights: nights,
         price_estimate: totalRevenue,
