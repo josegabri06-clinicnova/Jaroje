@@ -393,10 +393,10 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     nights: (n: number) => `${n} noche${n !== 1 ? 's' : ''}`,
     guests: (g: number) => `${g} persona${g !== 1 ? 's' : ''}`,
     
-    accountTitle: 'Estado de Cuenta',
+    accountTitle: 'Resumen de pagos',
     totalEstancia: 'Total de la estancia:',
     anticipoRecibido: 'Anticipo Recibido:',
-    saldoRestante: 'Saldo restante (adeudo):',
+    saldoRestante: 'Saldo pendiente:',
     anticipoRequerido: 'Anticipo Requerido (50%):',
     anticipoDepositado: 'Anticipo depositado:',
     
@@ -406,7 +406,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     anticipoSelector: 'Anticipo (50%)',
     totalSelector: 'Total (100%)',
     amountSelected: 'Monto a pagar seleccionado',
-    optionCard: 'Opción 1: Tarjeta de Crédito / Débito (Pasarela)',
+    optionCard: 'Opción 1: Tarjeta de Crédito / Débito',
     payWithCard: 'Pagar con Mercado Pago',
     cardNote: 'Si realizas tu pago con tarjeta, no es necesario enviar comprobante.',
     optionTransfer: 'Opción 2: Transferencia o Depósito Bancario',
@@ -505,10 +505,10 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     nights: (n: number) => `${n} night${n !== 1 ? 's' : ''}`,
     guests: (g: number) => `${g} guest${g !== 1 ? 's' : ''}`,
     
-    accountTitle: 'Statement of Account',
+    accountTitle: 'Payment Summary',
     totalEstancia: 'Total stay amount:',
     anticipoRecibido: 'Deposit Received:',
-    saldoRestante: 'Remaining balance (due):',
+    saldoRestante: 'Balance due:',
     anticipoRequerido: 'Required Deposit (50%):',
     anticipoDepositado: 'Deposit paid:',
     
