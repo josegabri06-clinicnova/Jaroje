@@ -280,6 +280,46 @@ const resolveDeepLink = (log: any) => {
   return null;
 };
 
+// ── WHITELIST DE AUDITORÍA ────────────────────────────────────────────────────
+// Solo estos tipos de evento se muestran en el historial de auditoría.
+const AUDIT_ALLOWED_ACTIONS = new Set([
+  // Reservaciones
+  'reserva_creada', 'reserva_creada_webhook', 'reserva_cancelada',
+  // Check In / Walk In / Check Out
+  'check_in', 'check_in_procesado', 'walk_in', 'check_out',
+  // Reasignación y extensión
+  'reasignacion_habitacion', 'estancia_extendida', 'estancia_extendida_admin',
+  // Limpieza
+  'change_room_status',
+  // Mantenimiento
+  'incidencia_mantenimiento', 'report_maintenance', 'resolucion_mantenimiento',
+  // Finanzas — acciones explícitas
+  'movimiento_financiero', 'payment_received', 'abono_registrado',
+  'abono_grupal_registrado', 'payment_reconciled', 'traspaso_fondos',
+  'cierre_caja', 'apertura_caja', 'gasto_registrado', 'ingreso_registrado',
+  'nomina_registrada', 'renombrar_cuenta',
+]);
+const AUDIT_FINANCE_MODULES = new Set(['finanzas', 'caja', 'pagos']);
+
+function isAllowedAuditLog(log: any): boolean {
+  const action = (log.action || '').toLowerCase();
+  const module = (log.module || '').toLowerCase();
+
+  if (AUDIT_ALLOWED_ACTIONS.has(log.action)) return true;
+  if (AUDIT_FINANCE_MODULES.has(module)) return true;
+  if (
+    action.includes('finan') || action.includes('movimiento') ||
+    action.includes('pago') || action.includes('payment') ||
+    action.includes('abono') || action.includes('transac') ||
+    action.includes('nomina') || action.includes('caja') ||
+    action.includes('traspaso') || action.includes('cierre') ||
+    action.includes('apertura') || action.includes('gasto') ||
+    action.includes('ingreso')
+  ) return true;
+
+  return false;
+}
+
 export default function HistorialPage() {
   const router = useRouter();
   const [rawLogs, setRawLogs] = useState<any[]>([]);
@@ -627,29 +667,24 @@ export default function HistorialPage() {
   }, [searchQuery, moduleFilter, dateRangePill, customStartDate, customEndDate, groupBy]);
 
   const mapLogsToEvents = (logsData: any[]): HistoryEvent[] => {
-    return logsData.map((log: any) => {
+    // Filtrar solo los eventos autorizados en auditoría
+    const filteredLogs = logsData.filter(isAllowedAuditLog);
+
+    return filteredLogs.map((log: any) => {
       const actionLower = (log.action || '').toLowerCase();
       const moduleLower = (log.module || '').toLowerCase();
       
       let type: EventType = 'booking';
-      if (actionLower.includes('checkin') || actionLower.includes('check-in')) {
+      if (actionLower.includes('checkin') || actionLower.includes('check-in') || actionLower === 'check_in' || actionLower === 'check_in_procesado') {
         type = 'checkin';
-      } else if (actionLower.includes('checkout') || actionLower.includes('check-out')) {
+      } else if (actionLower.includes('checkout') || actionLower.includes('check-out') || actionLower === 'check_out') {
         type = 'checkout';
-      } else if (actionLower.includes('finan') || actionLower.includes('movimiento') || actionLower.includes('transac') || actionLower.includes('pago') || actionLower.includes('nomina')) {
+      } else if (actionLower.includes('finan') || actionLower.includes('movimiento') || actionLower.includes('transac') || actionLower.includes('pago') || actionLower.includes('nomina') || AUDIT_FINANCE_MODULES.has(moduleLower)) {
         type = 'finanzas';
-      } else if (actionLower.includes('incidencia') || actionLower.includes('limpieza') || actionLower.includes('mantenimiento') || actionLower.includes('tarea')) {
+      } else if (actionLower.includes('incidencia') || actionLower.includes('limpieza') || actionLower.includes('mantenimiento') || actionLower.includes('tarea') || actionLower === 'change_room_status') {
         type = 'tarea';
-      } else if (actionLower.includes('sesion') || actionLower.includes('turno') || actionLower.includes('firma')) {
-        type = 'sesion';
-      } else if (moduleLower.includes('inventario') || actionLower.includes('stock') || actionLower.includes('articulo') || actionLower.includes('almacen')) {
-        type = 'inventario';
       } else if (actionLower.includes('bloqueo') || actionLower.includes('block')) {
         type = 'block';
-      } else if (actionLower.includes('bot') || moduleLower.includes('bot') || moduleLower.includes('webhook')) {
-        type = 'bot';
-      } else if (actionLower.includes('conflicto') || actionLower.includes('canal') || actionLower.includes('error')) {
-        type = 'conflict';
       }
       
       const d = new Date(log.created_at);
@@ -669,55 +704,66 @@ export default function HistorialPage() {
       const rawDateStr = log.created_at.split('T')[0];
       
       let rawAction = log.action;
+
+      // Detectar procedencia/canal para nuevas reservaciones
+      const detailsStr = log.details || '';
+      let channelLabel = '';
+      if (rawAction === 'reserva_creada_webhook' || rawAction === 'reserva_creada') {
+        const detLower = detailsStr.toLowerCase();
+        if (detLower.includes('airbnb')) channelLabel = ' (Airbnb)';
+        else if (detLower.includes('booking')) channelLabel = ' (Booking)';
+        else if (detLower.includes('expedia')) channelLabel = ' (Expedia)';
+        else if (detLower.includes('google')) channelLabel = ' (Google)';
+        else if (detLower.includes('whatsapp')) channelLabel = ' (WhatsApp)';
+        else channelLabel = ' (Directo)';
+      }
+
       const friendlyActions: Record<string, string> = {
-        // Sesiones y Turnos
-        'inicio_sesion_turno': 'Inicio de Turno',
-        'inicio_sesion': 'Inicio de Sesión',
-        'start_new_chat': 'Chat Iniciado 💬',
         // Reservas
-        'check_in': 'Check-In Procesado 🔑',
-        'check_in_procesado': 'Check-In Guardado 🔑',
-        'check_out': 'Check-Out Procesado 🚪',
-        'revert_checkin': 'Check-In Revertido ↩️',
-        'reserva_creada': 'Nueva Reserva Manual 📅',
-        'reserva_creada_webhook': 'Nueva Reserva Recibida 📥',
-        'reserva_modificada': 'Reserva Modificada ✏️',
-        'reserva_modificada_admin': 'Reserva Modificada (Admin) ✏️',
-        'reserva_cancelada': 'Reserva Cancelada ✕',
-        'reserva_enterado': 'Reserva Enterada ✅',
-        'reasignacion_habitacion': 'Habitación Reasignada 🔁',
-        'bloqueo_habitacion': 'Bloqueo Físico de Unidad 🔒',
-        'walk_in': 'Reserva Walk-In Registrada 🚶',
-        // Finanzas y Caja
+        'reserva_creada': `Nueva Reserva${channelLabel} 📅`,
+        'reserva_creada_webhook': `Nueva Reserva${channelLabel} 📥`,
+        'reserva_cancelada': 'Disponibilidad Liberada 🔓',
+        // Check In / Walk In / Check Out
+        'check_in': 'Check-In 🔑',
+        'check_in_procesado': 'Check-In 🔑',
+        'walk_in': 'Walk-In 🚶',
+        'check_out': 'Check-Out 🚪',
+        // Reasignación
+        'reasignacion_habitacion': 'Reasignación de Habitación 🔁',
+        // Extensión de estancias
+        'estancia_extendida': 'Extensión de Estancia ⏳',
+        'estancia_extendida_admin': 'Extensión de Estancia (Admin) ⏳',
+        // Limpieza
+        'change_room_status': 'Limpieza 🧹',
+        // Mantenimiento
+        'incidencia_mantenimiento': 'Nuevo Reporte de Mantenimiento 🛠',
+        'report_maintenance': 'Nuevo Reporte de Mantenimiento 🛠',
+        'resolucion_mantenimiento': 'Mantenimiento Completado ✅',
+        // Finanzas
         'movimiento_financiero': 'Movimiento de Caja 💵',
         'payment_received': 'Pago Registrado 💰',
         'abono_registrado': 'Abono Registrado 💰',
         'abono_grupal_registrado': 'Abono Grupal Registrado 💰',
         'payment_reconciled': 'Pago Conciliado ✅',
+        'traspaso_fondos': 'Traspaso de Fondos 🔄',
+        'cierre_caja': 'Cierre de Caja 🔒',
+        'apertura_caja': 'Apertura de Caja 🔓',
+        'gasto_registrado': 'Gasto Registrado 📤',
+        'ingreso_registrado': 'Ingreso Registrado 📥',
+        'nomina_registrada': 'Nómina Registrada 💼',
         'renombrar_cuenta': 'Cuenta Renombrada ✏️',
-        // Estancias
-        'estancia_extendida': 'Estancia Extendida ⏳',
-        'estancia_extendida_admin': 'Estancia Extendida (Admin) ⏳',
-        // Mantenimiento
-        'incidencia_mantenimiento': 'Incidencia Reportada 🛠',
-        'report_maintenance': 'Daño Técnico Reportado 🛠',
-        'cambio_estado_tarea': 'Estado de Tarea Modificado ⚙️',
-        'cambio_estado_incidencia': 'Incidencia Actualizada ⚙️',
-        'actualizacion_tarea': 'Tarea Actualizada ⚙️',
-        'resolucion_mantenimiento': 'Incidencia Resuelta ✅',
-        'eliminacion_tarea': 'Tarea Eliminada ✕',
-        // Inventario
-        'ajuste_stock': 'Ajuste de Almacén 📦',
-        'nuevo_articulo': 'Artículo Creado 📦',
-        'actualizacion_articulo': 'Parámetros Actualizados 📦',
-        'eliminar_articulo': 'Artículo Eliminado ✕',
-        // Otros / Bot
-        'human_mode_activated': 'Ayuda Requerida (Bot Off) ⚠️',
-        'toggle_archive': 'Chat Archivado/Desarchivado 📁',
-        'toggle_mode': 'Modo Bot Alternado 🤖',
-        'webhook_received': 'Notificación Recibida 📥',
-        'change_room_status': 'Estado de Habitación Cambiado 🧹',
       };
+
+      // Para change_room_status, detectar si es programación forzada o limpieza terminada
+      if (rawAction === 'change_room_status') {
+        const detLower = detailsStr.toLowerCase();
+        if (detLower.includes('limpia') || detLower.includes('completada') || detLower.includes('terminada') || detLower.includes('✅')) {
+          friendlyActions['change_room_status'] = 'Limpieza Terminada ✅';
+        } else if (detLower.includes('forzada') || detLower.includes('programación') || detLower.includes('asignada')) {
+          friendlyActions['change_room_status'] = 'Limpieza Programada 🧹';
+        }
+      }
+
       const friendlyTitle = friendlyActions[rawAction] || rawAction.replace(/_/g, ' ');
 
       let title = friendlyTitle;
@@ -778,7 +824,6 @@ export default function HistorialPage() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'employee_logs' },
         (payload: any) => {
-          console.log('Realtime Postgres Insert Recibida:', payload.new);
           const newLog = payload.new;
           
           // Prevenir duplicados locales
@@ -789,16 +834,17 @@ export default function HistorialPage() {
             return updated;
           });
 
-          // Disparar chime de audio ante cualquier nuevo evento en el historial
-          playIncidentSound();
+          // Solo disparar chime y toast para eventos que pasan el filtro de auditoría
+          if (isAllowedAuditLog(newLog)) {
+            playIncidentSound();
 
-          // Mostrar Banner Toast Flotante Premium
-          setToastLog(newLog);
-          setShowToast(true);
-          if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-          toastTimeoutRef.current = setTimeout(() => {
-            setShowToast(false);
-          }, 8000);
+            setToastLog(newLog);
+            setShowToast(true);
+            if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+            toastTimeoutRef.current = setTimeout(() => {
+              setShowToast(false);
+            }, 8000);
+          }
         }
       )
       .subscribe();
@@ -909,9 +955,6 @@ export default function HistorialPage() {
     if (item.type === 'finanzas' || item.module === 'finanzas') groupName = 'Finanzas y Caja';
     else if (item.type === 'tarea' || item.module === 'mantenimiento' || item.module === 'limpieza') groupName = 'Mantenimiento y Limpieza';
     else if (item.type === 'checkin' || item.type === 'checkout' || item.type === 'booking' || item.module === 'recepcion') groupName = 'Recepción y Reservas';
-    else if (item.type === 'inventario' || item.module === 'inventario') groupName = 'Inventario y Stock';
-    else if (item.type === 'bot' || item.module === 'bot') groupName = 'WhatsApp Bot';
-    else if (item.type === 'sesion') groupName = 'Sesiones y Personal';
 
     if (!acc[groupName]) acc[groupName] = [];
     acc[groupName].push(item);
