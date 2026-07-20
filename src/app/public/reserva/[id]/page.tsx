@@ -2,15 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { 
-  Calendar, 
-  User, 
-  MapPin, 
-  Copy, 
-  Check, 
-  CreditCard, 
-  FileText, 
-  Clock, 
+import {
+  Calendar,
+  User,
+  MapPin,
+  Copy,
+  Check,
+  CreditCard,
+  FileText,
+  Clock,
   HelpCircle,
   Users,
   Compass,
@@ -23,7 +23,8 @@ import {
   Home,
   Info,
   MessageSquare,
-  Edit
+  Edit,
+  LogOut
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -122,17 +123,11 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     'https://www.condominiosjaroje.com/images/habitacion_estandar/HAB-DOBLE%20(4).jpg'
   ],
   '1rec': [
-    '/images/1rec/2693a365-5329-4d57-bdb7-b52d9e64a6f9.JPG',
-    '/images/1rec/20260303_204624000_iOS 1.JPG',
-    '/images/1rec/20260303_204624000_iOS 2.JPG',
-    '/images/1rec/20260303_204624000_iOS 3.JPG',
-    '/images/1rec/20260303_204624000_iOS.JPG',
-    '/images/1rec/IMG_0004.JPG',
-    '/images/1rec/IMG_0018.JPG',
-    '/images/1rec/IMG_0028.JPG',
-    '/images/1rec/IMG_5759.JPG',
-    '/images/1rec/IMG_9427.JPG',
-    '/images/1rec/IMG_9429.JPG'
+    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(1).jpg',
+    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(2).jpg',
+    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(3).jpg',
+    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(4).jpg',
+    'https://www.condominiosjaroje.com/images/LOFT/LOFT%20(5).jpg'
   ],
   '2rec': [
     'https://www.condominiosjaroje.com/images/condominios2R/condominios2R%20(1).jpg',
@@ -147,52 +142,28 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     'https://www.condominiosjaroje.com/images/condominios2R/condominios2R%20(10).jpg'
   ],
   '3rec': [
-    '/images/3rec/2693a365-5329-4d57-bdb7-b52d9e64a6f9.JPG',
-    '/images/3rec/20260303_013342000_iOS 1 1.JPG',
-    '/images/3rec/20260303_013342000_iOS 1 2.JPG',
-    '/images/3rec/20260303_013342000_iOS 1.JPG',
-    '/images/3rec/20260303_013342000_iOS 2.JPG',
-    '/images/3rec/20260303_013342000_iOS 3.JPG',
-    '/images/3rec/20260303_013342000_iOS 4.JPG',
-    '/images/3rec/20260303_013342000_iOS 5.JPG',
-    '/images/3rec/20260303_013342000_iOS 6.JPG',
-    '/images/3rec/20260303_013342000_iOS 7.JPG',
-    '/images/3rec/20260303_013342000_iOS 8.JPG',
-    '/images/3rec/20260303_013342000_iOS 9.JPG',
-    '/images/3rec/20260303_013342000_iOS 10.JPG',
-    '/images/3rec/20260303_013342000_iOS.JPG',
-    '/images/3rec/IMG_0004.JPG',
-    '/images/3rec/IMG_0015.JPG',
-    '/images/3rec/IMG_0018.JPG',
-    '/images/3rec/IMG_0026.JPG',
-    '/images/3rec/IMG_0028.JPG',
-    '/images/3rec/IMG_9425.JPG',
-    '/images/3rec/IMG_9426.JPG'
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-1.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-2.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-3.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-4.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-5.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-6.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-7.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-8.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-9.jpg',
+    'https://www.condominiosjaroje.com/images/condominios3R/condominios3R-10.jpg'
   ],
   'casa': [
-    '/images/casa/2693a365-5329-4d57-bdb7-b52d9e64a6f9.JPG',
-    '/images/casa/20260303_204337431_iOS.JPG',
-    '/images/casa/20260303_204337610_iOS.JPG',
-    '/images/casa/20260303_204337777_iOS.JPG',
-    '/images/casa/20260303_204337948_iOS.JPG',
-    '/images/casa/20260303_204338114_iOS.JPG',
-    '/images/casa/20260303_204338284_iOS.JPG',
-    '/images/casa/20260303_204338455_iOS.JPG',
-    '/images/casa/20260303_204338621_iOS.JPG',
-    '/images/casa/20260303_204338786_iOS.JPG',
-    '/images/casa/20260303_204338960_iOS.JPG',
-    '/images/casa/20260303_204339129_iOS.JPG',
-    '/images/casa/20260303_204339297_iOS.JPG',
-    '/images/casa/20260303_210407915_iOS.JPG',
-    '/images/casa/IMG_0004.JPG',
-    '/images/casa/IMG_0008.JPG',
-    '/images/casa/IMG_0010.JPG',
-    '/images/casa/IMG_0012.JPG',
-    '/images/casa/IMG_0018.JPG',
-    '/images/casa/IMG_0028.JPG',
-    '/images/casa/IMG_9430.JPG',
-    '/images/casa/IMG_9431.JPG',
-    '/images/casa/IMG_9432.JPG'
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(1).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(2).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(3).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(4).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(5).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(6).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(7).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(8).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(9).jpg',
+    'https://www.condominiosjaroje.com/images/casadelujo/CASADELUJO%20(10).jpg'
   ]
 };
 
@@ -399,18 +370,18 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     errorTitle: '¡Ups! Algo salió mal',
     errorText: 'La reservación solicitada no existe o ha sido cancelada.',
     whatsappContact: 'Contactar por WhatsApp',
-    
+
     state_solicitud: 'Solicitud recibida',
     state_pago_pendiente: 'Pago pendiente',
     state_confirmada: 'Reservación confirmada',
     state_checkin_pendiente: 'Check-in pendiente',
     state_hospedado: 'Hospedado',
     state_finalizada: 'Finalizada',
-    
+
     stateTitle: 'Estado de la Reservación',
     partialPaymentTitle: 'Saldo Pendiente',
     partialPaymentDesc: (deposit: string, balance: string) => `Has cubierto tu anticipo de $${deposit} MXN. Recuerda liquidar el saldo restante de $${balance} MXN antes de tu llegada o en recepción durante tu check-in.`,
-    
+
     summaryTitle: 'Detalles de tu reservación',
     guest: 'Huésped',
     bookingId: 'ID de Reserva',
@@ -422,14 +393,14 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     checkoutTime: '(Check-out: 12:00 PM)',
     nights: (n: number) => `${n} noche${n !== 1 ? 's' : ''}`,
     guests: (g: number) => `${g} persona${g !== 1 ? 's' : ''}`,
-    
+
     accountTitle: 'Resumen de pagos',
     totalEstancia: 'Total de la estancia:',
     anticipoRecibido: 'Anticipo Recibido:',
     saldoRestante: 'Saldo pendiente:',
     anticipoRequerido: 'Anticipo Requerido (50%):',
     anticipoDepositado: 'Anticipo depositado:',
-    
+
     paymentTitle: 'Formas de Pago',
     paymentTitlePending: 'Liquidar Saldo Pendiente',
     selectAmount: 'Selecciona el monto a abonar:',
@@ -442,10 +413,10 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     optionTransfer: 'Opción 2: Transferencia o Depósito Bancario',
     payWithTransfer: 'Pagar por Transferencia Bancaria',
     transferNote: 'Obtén la cuenta CLABE oficial y reporta tu comprobante de inmediato al panel de staySync.',
-    
+
     featuresTitle: 'Características del Alojamiento',
     capacity: (c: number) => `Capacidad: ${c} Huéspedes`,
-    
+
     photosTitle: 'Galería de Imágenes',
     photosDesc: 'Visualiza las fotos reales de tu alojamiento y las hermosas áreas comunes de Condominios Jaroje.',
     commonAreas: 'Áreas Comunes',
@@ -461,13 +432,13 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     lastMinuteDesc: 'Si estimas llegar después de las 8:00 PM, avísanos con anticipación.',
     registerTitle: 'Registro y Firma',
     registerDesc: 'Al llegar a recepción, te ayudaremos a firmar digitalmente tu contrato de hospedaje.',
-    
+
     room_casa: 'Casa Vacacional de 3 Dormitorios',
     room_3rec: 'Condominio de 3 Recámaras',
     room_2rec: 'Condominio de 2 Recámaras',
     room_1rec: 'Condominio de 1 Recámara',
     room_doble: 'Habitación Doble',
-    
+
     capacityLabel: 'Huéspedes',
     tapToZoom: '🔍 Toca cualquier imagen para abrir en pantalla completa',
     stayGuide: 'Para garantizar una estancia agradable a todos nuestros huéspedes, te pedimos revisar la guía digital de tu alojamiento:',
@@ -476,8 +447,8 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     policyPets: 'No se admiten mascotas bajo ningún concepto.',
     policySmoke: 'Espacio 100% libre de humo (solo permitido fumar en áreas exteriores designadas).',
     policyHours: 'El horario de entrada es de 3:00 PM a 8:00 PM. Salida a las 12:00 PM.',
-    locationDesc: 'Condominios Jaroje se encuentra en Huatulco, Oaxaca. Haz clic en el botón de abajo para abrir la ubicación exacta en Google Maps:',
-    talkReception: 'Hablar con Recepción por WhatsApp',
+    locationDesc: 'Hotel y Condominios Jaroje\nCalle Mixie, Manzana 3, Lote 4 Sector M, Bahía de Santa Cruz Huatulco\nSanta María Huatulco, Oaxaca, C.P. 70987.',
+    talkReception: 'Hablar con nosotros',
     footerRights: '© 2026 Condominios Jaroje. Todos los derechos reservados.',
     footerHelp: '¿Necesitas ayuda? Escríbenos a nuestro WhatsApp oficial: 958 587 8554',
     lightboxOf: 'of',
@@ -496,8 +467,9 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     confirmChanges: 'Confirmar Cambios',
     saving: 'Guardando...',
     editBtn: 'Editar',
-    
-    maintenanceBtn: '🛠 Reportar Incidencia de Mantenimiento',
+    exitBtn: 'Salir del portal',
+
+    maintenanceBtn: '🛠 Reportar un problema',
     maintenanceTitle: 'Reportar Incidencia de Mantenimiento',
     maintenanceTypeLabel: '¿Dónde está el problema?',
     maintenanceDescPlaceholder: 'Describe detalladamente el problema para poder ayudarte...',
@@ -511,18 +483,18 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     errorTitle: 'Oops! Something went wrong',
     errorText: 'The requested reservation does not exist or has been cancelled.',
     whatsappContact: 'Contact on WhatsApp',
-    
+
     state_solicitud: 'Request received',
     state_pago_pendiente: 'Awaiting Deposit',
     state_confirmada: 'Booking confirmed',
     state_checkin_pendiente: 'Check-in pending',
     state_hospedado: 'In-house',
     state_finalizada: 'Completed',
-    
+
     stateTitle: 'Reservation Status',
     partialPaymentTitle: 'Balance Due',
     partialPaymentDesc: (deposit: string, balance: string) => `You have paid your deposit of $${deposit} MXN. Please remember to settle the remaining balance of $${balance} MXN before your arrival or at the front desk during check-in.`,
-    
+
     summaryTitle: 'Your Reservation Details',
     guest: 'Guest',
     bookingId: 'Reservation ID',
@@ -534,14 +506,14 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     checkoutTime: '(Check-out: 12:00 PM)',
     nights: (n: number) => `${n} night${n !== 1 ? 's' : ''}`,
     guests: (g: number) => `${g} guest${g !== 1 ? 's' : ''}`,
-    
+
     accountTitle: 'Payment Summary',
     totalEstancia: 'Total stay amount:',
     anticipoRecibido: 'Deposit Received:',
     saldoRestante: 'Balance due:',
     anticipoRequerido: 'Required Deposit (50%):',
     anticipoDepositado: 'Deposit paid:',
-    
+
     paymentTitle: 'Payment Methods',
     paymentTitlePending: 'Settle Remaining Balance',
     selectAmount: 'Select Payment Amount:',
@@ -554,10 +526,10 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     optionTransfer: 'Option 2: Bank Transfer or Cash Deposit',
     payWithTransfer: 'Pay by Bank Transfer',
     transferNote: 'Obtain the official bank details and upload your receipt directly to staySync.',
-    
+
     featuresTitle: 'Accommodation Features',
     capacity: (c: number) => `Capacity: ${c} Guests`,
-    
+
     photosTitle: 'Photo Gallery',
     photosDesc: 'View actual photos of your accommodation and the beautiful common areas of Condominios Jaroje.',
     commonAreas: 'Common Areas',
@@ -573,13 +545,13 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     lastMinuteDesc: 'If you expect to arrive after 8:00 PM, please notify us in advance.',
     registerTitle: 'Registration & Signing',
     registerDesc: 'Upon arrival at the front desk, we will help you digitally sign your lodging agreement.',
-    
+
     room_casa: '3-Bedroom Vacation Home',
     room_3rec: '3-Bedroom Condominium',
     room_2rec: '2-Bedroom Condominium',
     room_1rec: '1-Bedroom Condominium',
     room_doble: 'Double Room',
-    
+
     capacityLabel: 'Guests',
     tapToZoom: '🔍 Tap any image to open in full screen',
     stayGuide: 'To ensure a pleasant stay for all our guests, please review your accommodation digital guide:',
@@ -588,8 +560,8 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     policyPets: 'No pets allowed under any circumstances.',
     policySmoke: '100% Smoke-free space (only smoking in designated outdoor areas permitted).',
     policyHours: 'Check-in time is from 3:00 PM to 8:00 PM. Check-out is at 12:00 PM.',
-    locationDesc: 'Condominios Jaroje is located in Huatulco, Oaxaca. Tap the button below to open our location in Google Maps:',
-    talkReception: 'Chat with Reception on WhatsApp',
+    locationDesc: 'Hotel & Condominios Jaroje\nCalle Mixie, Manzana 3, Lote 4 Sector M, Bahía de Santa Cruz Huatulco\nSanta María Huatulco, Oaxaca, C.P. 70987.',
+    talkReception: 'Talk with us',
     footerRights: '© 2026 Condominios Jaroje. All rights reserved.',
     footerHelp: 'Need help? Write to our official WhatsApp: +52 958 587 8554',
     lightboxOf: 'of',
@@ -608,8 +580,9 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     confirmChanges: 'Confirm Changes',
     saving: 'Saving...',
     editBtn: 'Edit',
-    
-    maintenanceBtn: '🛠 Report a Maintenance Issue',
+    exitBtn: 'Exit portal',
+
+    maintenanceBtn: '🛠 Report a problem',
     maintenanceTitle: 'Report a Maintenance Issue',
     maintenanceTypeLabel: 'Where is the issue?',
     maintenanceDescPlaceholder: 'Describe the problem in detail so we can help you...',
@@ -796,7 +769,7 @@ export default function PublicReservaPage() {
 
       try {
         const fileToUpload = await compressImage(file);
-        
+
         const formData = new FormData();
         formData.append('id', String(id));
         formData.append('file', fileToUpload);
@@ -857,8 +830,8 @@ export default function PublicReservaPage() {
     if (!dateStr) return '—';
     try {
       return format(
-        parseISO(dateStr), 
-        lang === 'en' ? "MMMM dd, yyyy" : "dd 'de' MMMM, yyyy", 
+        parseISO(dateStr),
+        lang === 'en' ? "MMMM dd, yyyy" : "dd 'de' MMMM, yyyy",
         lang === 'en' ? undefined : { locale: es }
       );
     } catch (e) {
@@ -915,9 +888,9 @@ export default function PublicReservaPage() {
         <p className="text-zinc-600 text-sm mb-6">
           {error || (lang === 'en' ? 'The requested reservation does not exist or has been cancelled.' : 'La reservación solicitada no existe o ha sido cancelada.')}
         </p>
-        <a 
-          href="https://wa.me/529585878554" 
-          target="_blank" 
+        <a
+          href="https://wa.me/529585878554"
+          target="_blank"
           rel="noopener noreferrer"
           className="bg-indigo-600 text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md hover:bg-indigo-700 transition-all cursor-pointer"
         >
@@ -1037,20 +1010,20 @@ export default function PublicReservaPage() {
       {/* Header Premium */}
       <header className="bg-zinc-900 text-white text-center py-7 px-4 shadow-md relative overflow-hidden flex flex-col items-center">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent)] pointer-events-none" />
-        
+
         <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-amber-100">{t.title}</h1>
         <p className="text-zinc-400 text-[10.5px] mt-1 font-medium tracking-wide uppercase">{t.subtitle}</p>
 
         {/* Selector de Idioma Centrado */}
         <div className="mt-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1 rounded-full border border-white/20 z-20 text-[10px] font-bold shadow-md">
-          <button 
+          <button
             onClick={() => changeLanguage('es')}
             className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'es' ? 'bg-amber-100 text-zinc-950 shadow-sm font-black' : 'text-white/80 hover:text-white'}`}
           >
             <span>ESP</span>
             <span>🇪🇸</span>
           </button>
-          <button 
+          <button
             onClick={() => changeLanguage('en')}
             className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'en' ? 'bg-amber-100 text-zinc-950 shadow-sm font-black' : 'text-white/80 hover:text-white'}`}
           >
@@ -1078,16 +1051,16 @@ export default function PublicReservaPage() {
             <div className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block border-b border-zinc-100 pb-1.5 mb-2.5">
               {t.stateTitle}
             </div>
-            
+
             <div className="flex justify-between items-center relative select-none px-1 overflow-x-auto scrollbar-none gap-4">
               {/* Línea gris de fondo */}
               <div className="absolute left-0 right-0 top-[14px] h-[3px] bg-zinc-100 rounded-full z-0" />
-              
+
               {/* Línea coloreada de progreso activo */}
-              <div 
-                className="absolute left-0 top-[14px] h-[3px] bg-indigo-600 rounded-full transition-all duration-500 z-0" 
-                style={{ 
-                  width: `${(Math.max(0, activeIndex) / (steps.length - 1)) * 100}%` 
+              <div
+                className="absolute left-0 top-[14px] h-[3px] bg-indigo-600 rounded-full transition-all duration-500 z-0"
+                style={{
+                  width: `${(Math.max(0, activeIndex) / (steps.length - 1)) * 100}%`
                 }}
               />
 
@@ -1096,21 +1069,19 @@ export default function PublicReservaPage() {
                 const isActive = idx === activeIndex;
                 return (
                   <div key={step.state} className="flex flex-col items-center relative z-10 flex-shrink-0">
-                    <div 
-                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${
-                        isCompleted 
-                          ? 'bg-indigo-600 text-white shadow-sm' 
-                          : isActive 
-                            ? 'bg-white border-2 border-indigo-600 text-indigo-600 shadow-md ring-4 ring-indigo-50 animate-pulse' 
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all duration-300 ${isCompleted
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : isActive
+                            ? 'bg-white border-2 border-indigo-600 text-indigo-600 shadow-md ring-4 ring-indigo-50 animate-pulse'
                             : 'bg-white border border-zinc-250 text-zinc-400'
-                      }`}
+                        }`}
                     >
                       {isCompleted ? <Check size={14} className="stroke-[3]" /> : idx + 1}
                     </div>
-                    <span 
-                      className={`text-[8.5px] mt-1.5 font-bold tracking-tight text-center max-w-[62px] block leading-tight ${
-                        isActive ? 'text-indigo-600 font-black' : isCompleted ? 'text-zinc-700' : 'text-zinc-400'
-                      }`}
+                    <span
+                      className={`text-[8.5px] mt-1.5 font-bold tracking-tight text-center max-w-[62px] block leading-tight ${isActive ? 'text-indigo-600 font-black' : isCompleted ? 'text-zinc-700' : 'text-zinc-400'
+                        }`}
                     >
                       {step.label}
                     </span>
@@ -1183,7 +1154,7 @@ export default function PublicReservaPage() {
                         <div className="flex items-start gap-2">
                           <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
                           <div className="flex-1">
-                            <strong style={{wordBreak: 'break-word', overflowWrap: 'anywhere'}} className="text-zinc-900 font-bold text-[12px] leading-tight block">
+                            <strong style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} className="text-zinc-900 font-bold text-[12px] leading-tight block">
                               {room.room_name}
                             </strong>
                             <div className="flex items-center gap-1 mt-0.5">
@@ -1321,7 +1292,7 @@ export default function PublicReservaPage() {
 
         {/* 5. PAGO / CARGA DE COMPROBANTE (Solo cuando aplica saldo pendiente) */}
         {!isOta && booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (() => {
-          const targetAmount = booking.deposit === 0 
+          const targetAmount = booking.deposit === 0
             ? (paymentSplit === '50' ? booking.price * 0.5 : booking.price)
             : booking.balance;
 
@@ -1341,11 +1312,10 @@ export default function PublicReservaPage() {
                   <div className="grid grid-cols-2 gap-2 bg-zinc-50 p-1 rounded-xl border border-zinc-200/40 shadow-inner">
                     <button
                       onClick={() => setPaymentSplit('50')}
-                      className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${
-                        paymentSplit === '50'
+                      className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${paymentSplit === '50'
                           ? 'bg-indigo-600 text-white shadow-md'
                           : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
-                      }`}
+                        }`}
                     >
                       <span>{t.anticipoSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '50' ? 'text-indigo-200' : 'text-zinc-500'}`}>
@@ -1354,11 +1324,10 @@ export default function PublicReservaPage() {
                     </button>
                     <button
                       onClick={() => setPaymentSplit('100')}
-                      className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${
-                        paymentSplit === '100'
+                      className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center ${paymentSplit === '100'
                           ? 'bg-indigo-600 text-white shadow-md'
                           : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
-                      }`}
+                        }`}
                     >
                       <span>{t.totalSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '100' ? 'text-indigo-200' : 'text-zinc-500'}`}>
@@ -1382,16 +1351,16 @@ export default function PublicReservaPage() {
                 <>
                   <div className="space-y-2">
                     <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">{t.optionCard}</span>
-                    <a 
-                      href="https://link.mercadopago.com.mx/jaroje" 
-                      target="_blank" 
+                    <a
+                      href="https://link.mercadopago.com.mx/jaroje"
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <CreditCard size={18} />
                       {t.payWithCard}
                     </a>
-                    <a 
+                    <a
                       href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=mercadopago`}
                       className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                     >
@@ -1411,7 +1380,7 @@ export default function PublicReservaPage() {
               {/* Método 2: Transferencia */}
               <div className="space-y-3 pt-2">
                 <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">{t.optionTransfer}</span>
-                <a 
+                <a
                   href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}`}
                   className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
@@ -1459,7 +1428,7 @@ export default function PublicReservaPage() {
           <div className="relative group">
             <div className="flex gap-3 overflow-x-auto snap-x scrollbar-none pb-2 px-1">
               {photos.map((src, index) => (
-                <div 
+                <div
                   key={index}
                   onClick={() => handleOpenLightbox(index)}
                   className="flex-shrink-0 w-64 h-44 rounded-2xl overflow-hidden snap-center relative cursor-pointer border border-zinc-200/70 shadow-sm hover:scale-[1.02] transition-transform duration-300"
@@ -1480,7 +1449,7 @@ export default function PublicReservaPage() {
           </div>
 
           <div className="space-y-3 text-xs leading-relaxed text-zinc-650">
-            <a 
+            <a
               href="https://www.condominiosjaroje.com"
               target="_blank"
               rel="noopener noreferrer"
@@ -1514,7 +1483,7 @@ export default function PublicReservaPage() {
             ) : (
               <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-3 mt-2 text-center">
                 <span className="text-amber-800 text-[10.5px] font-bold block">
-                  {lang === 'en' 
+                  {lang === 'en'
                     ? '📶 Wi-Fi details and access codes will be enabled automatically once your deposit is registered.'
                     : '📶 Los datos de Wi-Fi y claves se habilitarán automáticamente una vez registrado tu anticipo.'}
                 </span>
@@ -1540,8 +1509,8 @@ export default function PublicReservaPage() {
           </div>
 
           <div className="space-y-3 text-xs">
-            <p className="text-zinc-650 leading-relaxed">{t.locationDesc}</p>
-            <a 
+            <p className="text-zinc-650 leading-relaxed whitespace-pre-line">{t.locationDesc}</p>
+            <a
               href="https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic"
               target="_blank"
               rel="noopener noreferrer"
@@ -1553,11 +1522,11 @@ export default function PublicReservaPage() {
           </div>
         </div>
 
-        {/* 10. HABLAR CON RECEPCIÓN */}
+        {/* 10. BOTONES DE ACCIÓN FINAL */}
         <div className="pt-2 flex flex-col gap-2.5">
-          <a 
-            href="https://wa.me/529585878554" 
-            target="_blank" 
+          <a
+            href="https://wa.me/529585878554"
+            target="_blank"
             rel="noopener noreferrer"
             className="w-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm py-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
           >
@@ -1565,7 +1534,7 @@ export default function PublicReservaPage() {
             {t.talkReception}
           </a>
           {booking.status !== 'cancelled' && (
-            <button 
+            <button
               onClick={() => {
                 setMaintenanceDesc('');
                 const roomNum = booking.room_name.match(/\((\d+)\)/)?.[1] || booking.room_name.replace(/\D/g, '') || '';
@@ -1579,6 +1548,13 @@ export default function PublicReservaPage() {
               {t.maintenanceBtn}
             </button>
           )}
+          <a
+            href="https://www.condominiosjaroje.com"
+            className="w-full bg-zinc-200 hover:bg-zinc-300 text-zinc-700 font-extrabold text-sm py-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer text-center border border-zinc-300"
+          >
+            <LogOut size={16} />
+            {t.exitBtn}
+          </a>
         </div>
 
       </main>
@@ -1594,7 +1570,7 @@ export default function PublicReservaPage() {
         <div className="fixed inset-0 bg-black/95 z-50 flex flex-col justify-between p-4 md:p-8">
           {/* Botón Cerrar */}
           <div className="flex justify-end">
-            <button 
+            <button
               onClick={() => setLightboxOpen(false)}
               className="text-white/80 hover:text-white p-2 rounded-full bg-white/10 hover:bg-white/20 transition-all cursor-pointer"
             >
@@ -1604,7 +1580,7 @@ export default function PublicReservaPage() {
 
           {/* Visor de imagen */}
           <div className="flex-grow flex items-center justify-center relative">
-            <button 
+            <button
               onClick={(e) => handlePrevPhoto(photos, e)}
               className="absolute left-2 md:left-6 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all cursor-pointer select-none"
             >
@@ -1612,17 +1588,17 @@ export default function PublicReservaPage() {
             </button>
 
             <div className="max-w-4xl max-h-[70vh] flex flex-col items-center">
-              <img 
-                src={photos[activePhotoIndex]} 
-                alt={captions[activePhotoIndex]} 
-                className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-2xl" 
+              <img
+                src={photos[activePhotoIndex]}
+                alt={captions[activePhotoIndex]}
+                className="max-w-full max-h-[65vh] object-contain rounded-lg shadow-2xl"
               />
               <span className="text-white/90 text-sm font-semibold mt-4 text-center select-none bg-black/40 px-4 py-1.5 rounded-full">
                 {activePhotoIndex + 1} {t.lightboxOf} {photos.length}
               </span>
             </div>
 
-            <button 
+            <button
               onClick={(e) => handleNextPhoto(photos, e)}
               className="absolute right-2 md:right-6 text-white/80 hover:text-white p-3 rounded-full bg-white/10 hover:bg-white/20 transition-all cursor-pointer select-none"
             >
@@ -1642,7 +1618,7 @@ export default function PublicReservaPage() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-150 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
               <h3 className="font-black text-zinc-900 text-base uppercase tracking-wider">{t.editGuestsTitle}</h3>
-              <button 
+              <button
                 onClick={() => setShowEditGuestsModal(false)}
                 className="text-zinc-400 hover:text-zinc-650 p-1.5 rounded-full hover:bg-zinc-100 transition-all cursor-pointer animate-none"
               >
@@ -1808,7 +1784,7 @@ export default function PublicReservaPage() {
               <h3 className="font-black text-zinc-900 text-base uppercase tracking-wider">
                 {lang === 'en' ? 'Modify Booking' : 'Modificar Reserva'}
               </h3>
-              <button 
+              <button
                 onClick={() => setShowOtaWarningModal(false)}
                 className="text-zinc-400 hover:text-zinc-650 p-1.5 rounded-full hover:bg-zinc-100 transition-all cursor-pointer animate-none"
               >
@@ -1821,8 +1797,8 @@ export default function PublicReservaPage() {
                 <Info size={24} />
               </div>
               <p className="text-center text-zinc-800 font-extrabold text-[14px]">
-                {lang === 'en' 
-                  ? `Reservation via ${booking.channel}` 
+                {lang === 'en'
+                  ? `Reservation via ${booking.channel}`
                   : `Reservación realizada mediante ${booking.channel}`}
               </p>
               <p className="text-center text-xs">
@@ -1855,7 +1831,7 @@ export default function PublicReservaPage() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-150 animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
               <h3 className="font-black text-zinc-900 text-base uppercase tracking-wider">{t.maintenanceTitle}</h3>
-              <button 
+              <button
                 onClick={() => setShowMaintenanceModal(false)}
                 className="text-zinc-400 hover:text-zinc-650 p-1.5 rounded-full hover:bg-zinc-100 transition-all cursor-pointer animate-none"
               >
