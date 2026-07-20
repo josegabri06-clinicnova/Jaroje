@@ -96,19 +96,21 @@ function getBookingForRoomDay(
   dayStr: string
 ): any | null {
   return reservas.find(r => {
-    // 1. Coincidencia exacta por la propiedad 'room' (si está definida)
-    if (r.room) {
-      return r.room === room && r.check_in <= dayStr && r.check_out > dayStr;
+    // Ignorar reservas canceladas en el calendario
+    if (r.status === 'cancelled' || r.status === 'cancelado') {
+      return false;
     }
-    // 2. Coincidencia exacta extrayendo el número de habitación de 3 dígitos
-    const match = (r.room_name || '').match(/\((\d{3})\)/) || (r.room_name || '').match(/(\d{3})$/) || (r.room_name || '').match(/\b(\d{3})\b/);
+
+    // Intentamos extraer el número de habitación de 3 dígitos (ej: '101') del room o room_name
+    const matchSource = `${r.room || ''} | ${r.room_name || ''}`;
+    const match = matchSource.match(/\((\d{3})\)/) || matchSource.match(/(\d{3})$/) || matchSource.match(/\b(\d{3})\b/);
     const extractedRoom = match ? match[1] : null;
-    if (extractedRoom) {
-      return extractedRoom === room && r.check_in <= dayStr && r.check_out > dayStr;
-    }
-    // 3. Fallback original
-    const roomMatch = (r.room_name || '').includes(room);
-    return roomMatch && r.check_in <= dayStr && r.check_out > dayStr;
+
+    const isMatch = (extractedRoom === room) || 
+                    (r.room === room) || 
+                    (r.room_name || '').includes(room);
+
+    return isMatch && r.check_in <= dayStr && r.check_out > dayStr;
   }) || null;
 }
 
