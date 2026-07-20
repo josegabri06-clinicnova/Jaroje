@@ -76,7 +76,8 @@ export async function GET(req: Request) {
             channel: b.channel || 'Recepción',
             isLocal: true,
             booking_time: b.created_at || b.check_in || null,
-            nights
+            nights,
+            cancelled_at: b.status === 'cancelled' ? (b.updated_at || b.created_at || null) : null
           };
         });
       }

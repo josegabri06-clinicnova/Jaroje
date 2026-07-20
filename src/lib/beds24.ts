@@ -1143,7 +1143,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         taxes: taxInfo,
         expected_payout: otaDetails.expectedPayout,
         host_fee: otaDetails.hostFee,
-        booking_time: b.bookingTime || b.arrival || null
+        booking_time: b.bookingTime || b.arrival || null,
+        cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null
       };
     });
 }

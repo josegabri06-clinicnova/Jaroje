@@ -1932,7 +1932,9 @@ export default function ReservasList() {
   const cancelledReservas = reservas
     .filter(r => r.status === 'cancelled')
     .sort((a, b) => {
-      return (b.check_in || '').localeCompare(a.check_in || '');
+      const dateA = a.cancelled_at || a.booking_time || a.check_in || '';
+      const dateB = b.cancelled_at || b.booking_time || b.check_in || '';
+      return dateB.localeCompare(dateA);
     });
 
   const baseList = activeTab === 'Canceladas'
