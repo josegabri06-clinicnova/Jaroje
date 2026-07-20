@@ -1270,7 +1270,7 @@ export default function ReservasList() {
     const mainName = cleanStr(selectedRes.guest_name || '');
     const mainPhone = (selectedRes.guest_phone || '').trim();
     return reservas.filter(r => {
-      if (r.check_in !== selectedRes.check_in || r.id === selectedRes.id || r.is_checked_out) return false;
+      if (r.check_in !== selectedRes.check_in || r.id === selectedRes.id || r.is_checked_out || r.status === 'cancelled' || r.status === '0') return false;
       const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone;
       const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
       return samePhone || sameName;
@@ -2183,7 +2183,7 @@ export default function ReservasList() {
                           const mainName = cleanStr(r.guest_name || '');
                           const mainPhone = (r.guest_phone || '').trim();
                           const siblings = reservas.filter(o => {
-                            if (o.check_in !== r.check_in || o.id === r.id || o.is_checked_out) return false;
+                            if (o.check_in !== r.check_in || o.id === r.id || o.is_checked_out || o.status === 'cancelled' || o.status === '0') return false;
                             const samePhone = mainPhone && o.guest_phone && o.guest_phone.trim() === mainPhone;
                             const sameName = mainName && o.guest_name && (cleanStr(o.guest_name).includes(mainName) || mainName.includes(cleanStr(o.guest_name)));
                             return samePhone || sameName;
