@@ -462,7 +462,7 @@ export default function AdminDashboard() {
   const todasLlegadasHoy = useMemo(() => {
     return reservas.filter(r => 
       r.status !== 'cancelled' && 
-      (r.check_in === todayStr || (r.check_in < todayStr && !r.checked_in))
+      r.check_in === todayStr
     );
   }, [reservas, todayStr]);
 
@@ -474,13 +474,10 @@ export default function AdminDashboard() {
   }, [reservas, todayStr]);
 
   const todasSalidasHoy = useMemo(() => {
-    const limit = new Date();
-    limit.setDate(limit.getDate() - 5);
-    const limitStr = limit.toISOString().split('T')[0];
     return reservas.filter(r => 
       r.status !== 'cancelled' &&
       r.checked_in &&
-      (r.check_out === todayStr || (r.check_out < todayStr && r.check_out >= limitStr && !r.checked_out))
+      r.check_out === todayStr
     );
   }, [reservas, todayStr]);
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr && r.status !== 'cancelled').slice(0, 5);

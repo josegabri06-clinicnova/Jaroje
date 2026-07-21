@@ -2246,7 +2246,7 @@ export default function RecepcionPage() {
   const todasLlegadas = useMemo(() => {
     return reservas.filter(r => 
       r.status !== 'cancelled' && 
-      (r.check_in === todayStr || (r.check_in < todayStr && !r.checked_in))
+      r.check_in === todayStr
     );
   }, [reservas, todayStr]);
 
@@ -2258,13 +2258,10 @@ export default function RecepcionPage() {
   }, [reservas, todayStr]);
 
   const todasSalidas = useMemo(() => {
-    const limit = new Date();
-    limit.setDate(limit.getDate() - 5);
-    const limitStr = limit.toISOString().split('T')[0];
     return reservas.filter(r => 
       r.status !== 'cancelled' &&
       r.checked_in &&
-      (r.check_out === todayStr || (r.check_out < todayStr && r.check_out >= limitStr && !r.checked_out))
+      r.check_out === todayStr
     );
   }, [reservas, todayStr]);
 
