@@ -320,38 +320,40 @@ export async function POST(req: Request) {
 
     const BEDS24_TOKEN = await getBeds24Token();
 
-    const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+    const bookingPayload = [{
+      roomId: finalRoomId,
+      unitId: finalUnitId,
+      roomQty: 1,
+      arrival: checkIn,
+      departure: checkOut,
+      ...(() => {
+        const fullName = guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa');
+        const parts = fullName.trim().split(/\s+/);
+        return parts.length > 1
+          ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
+          : { firstName: fullName.trim(), lastName: '' };
+      })(),
+      status: isBlock ? "black" : (Number(deposit || 0) > 0 ? "confirmed" : "request"),
+      ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
+      ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
+      ...(!isBlock ? {
+        mobile: phone || '',
+        phone: phone || '',
+        numAdult: numAdult !== undefined ? Number(numAdult) : 1,
+        numChild: numChild !== undefined ? Number(numChild) : 0,
+        notes: notes || '',
+        comments: notes || ''
+      } : {}),
+      actions: {
+        checkAvailability: true,
+        assignBooking: true
+      }
+    }];
+
+    let beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify([{
-        roomId: finalRoomId,
-        unitId: finalUnitId,
-        roomQty: 1,
-        arrival: checkIn,
-        departure: checkOut,
-        ...(() => {
-          const fullName = guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa');
-          const parts = fullName.trim().split(/\s+/);
-          return parts.length > 1
-            ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
-            : { firstName: fullName.trim(), lastName: '' };
-        })(),
-        status: isBlock ? "black" : (Number(deposit || 0) > 0 ? "confirmed" : "request"),
-        ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
-        ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
-        ...(!isBlock ? {
-          mobile: phone || '',
-          phone: phone || '',
-          numAdult: numAdult !== undefined ? Number(numAdult) : 1,
-          numChild: numChild !== undefined ? Number(numChild) : 0,
-          notes: notes || '',
-          comments: notes || ''
-        } : {}),
-        actions: {
-          checkAvailability: true,
-          assignBooking: true
-        }
-      }])
+      body: JSON.stringify(bookingPayload)
     });
 
     if (beds24Response.status === 429) {
@@ -360,7 +362,7 @@ export async function POST(req: Request) {
       beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
         method: 'POST',
         headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify([/* re-send payload */])
+        body: JSON.stringify(bookingPayload)
       });
     }
 
