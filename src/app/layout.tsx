@@ -7,6 +7,8 @@ import RealtimeLogNotifier from '@/components/RealtimeLogNotifier';
 
 import { LayoutWrapper } from '@/components/LayoutWrapper';
 
+import { Beds24RateLimitBanner } from '@/components/Beds24RateLimitBanner';
+
 const inter = Inter({ 
   subsets: ['latin'],
   display: 'swap',
@@ -40,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.className} bg-[#fafafa] text-zinc-900 min-h-screen flex flex-col selection:bg-zinc-200 overscroll-none`}>
         <AuthGuard>
+          <Beds24RateLimitBanner />
           <RealtimeLogNotifier />
           <LayoutWrapper>
             {children}
