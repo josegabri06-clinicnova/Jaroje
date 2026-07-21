@@ -1143,7 +1143,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
         guest_phone: b.phone || b.mobile || b.guestPhone || b.guestMobile || null,
         guest_email: b.email || null,
-        status: (b.status === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (b.status === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending'),
+        status: (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending'),
         source: 'beds24',
         channel: channel,
         room_name: displayRoomName,
@@ -1224,7 +1224,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
     {
       id: Number(bookId),
       bookId: Number(bookId),
-      status: 'confirmed',
+      status: 1, // 1 = Confirmed in Beds24 API V2
       deposit: newDeposit,
       invoiceItems: [
         {

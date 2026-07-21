@@ -85,7 +85,9 @@ export async function POST(req: Request) {
         'Content-Type': 'application/json' 
       },
       body: JSON.stringify([{
+        id: Number(bookId),
         bookId: Number(bookId),
+        status: 1, // 1 = Confirmed in Beds24 API V2
         invoiceItems: [
           {
             description: description,

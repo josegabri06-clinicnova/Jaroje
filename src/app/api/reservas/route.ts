@@ -336,7 +336,7 @@ export async function POST(req: Request) {
             ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
             : { firstName: fullName.trim(), lastName: '' };
         })(),
-        status: isBlock ? "black" : (Number(deposit || 0) > 0 ? "confirmed" : "request"),
+        status: isBlock ? 4 : (Number(deposit || 0) > 0 ? 1 : 3), // 1 = Confirmed, 3 = Request, 4 = Black/Block
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
         ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
         ...(!isBlock ? {
@@ -540,7 +540,7 @@ export async function DELETE(req: Request) {
     // 1. Cancelar en Beds24
     const cancelPayload: any = {
       id: Number(id),
-      status: 'cancelled'
+      status: 0 // 0 = Cancelled
     };
     if (bookingForWA?.arrival) {
       cancelPayload.arrival = bookingForWA.arrival;
