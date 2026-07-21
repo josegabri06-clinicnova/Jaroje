@@ -2243,11 +2243,29 @@ export default function RecepcionPage() {
     return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
   }, [reservas, todayStr]);
 
+  const todasLlegadas = useMemo(() => {
+    return reservas.filter(r => 
+      r.status !== 'cancelled' && 
+      (r.check_in === todayStr || (r.check_in < todayStr && !r.checked_in))
+    );
+  }, [reservas, todayStr]);
+
   const salidas = useMemo(() => {
     const limit = new Date();
     limit.setDate(limit.getDate() - 5);
     const limitStr = limit.toISOString().split('T')[0];
     return reservas.filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled');
+  }, [reservas, todayStr]);
+
+  const todasSalidas = useMemo(() => {
+    const limit = new Date();
+    limit.setDate(limit.getDate() - 5);
+    const limitStr = limit.toISOString().split('T')[0];
+    return reservas.filter(r => 
+      r.status !== 'cancelled' &&
+      r.checked_in &&
+      (r.check_out === todayStr || (r.check_out < todayStr && r.check_out >= limitStr && !r.checked_out))
+    );
   }, [reservas, todayStr]);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -4000,7 +4018,7 @@ export default function RecepcionPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-emerald-600">
-                {llegadas.length}
+                {todasLlegadas.length}
               </p>
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan hoy</p>
             </button>
@@ -4009,7 +4027,7 @@ export default function RecepcionPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-amber-500">
-                {salidas.length}
+                {todasSalidas.length}
               </p>
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
             </button>
@@ -7123,11 +7141,11 @@ export default function RecepcionPage() {
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-          filtered = llegadas;
+          filtered = todasLlegadas;
         } else if (kpiModalType === 'salen') {
           title = 'Salidas Hoy';
           badgeColor = 'bg-zinc-150 text-zinc-700 border border-zinc-200';
-          filtered = salidas;
+          filtered = todasSalidas;
         }
 
         return (

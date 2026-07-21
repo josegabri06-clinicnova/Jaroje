@@ -1814,9 +1814,27 @@ export default function CalendarPage() {
   };
 
   // ── Stats strip ───────────────────────────────────────────────────────────
+  const todasLlegadas = useMemo(() => {
+    return reservas.filter(r => 
+      r.status !== 'cancelled' && 
+      (r.check_in === todayStr || (r.check_in < todayStr && !r.checked_in))
+    );
+  }, [reservas, todayStr]);
+
+  const todasSalidas = useMemo(() => {
+    const limit = new Date();
+    limit.setDate(limit.getDate() - 5);
+    const limitStr = limit.toISOString().split('T')[0];
+    return reservas.filter(r => 
+      r.status !== 'cancelled' &&
+      r.checked_in &&
+      (r.check_out === todayStr || (r.check_out < todayStr && r.check_out >= limitStr && !r.checked_out))
+    );
+  }, [reservas, todayStr]);
+
   const todayActive = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in))).length;
-  const todayArrivals = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out).length;
-  const todayDepartures = reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out).length;
+  const todayArrivals = todasLlegadas.length;
+  const todayDepartures = todasSalidas.length;
 
   return (
     <div className="pb-28 bg-[#f8f8fa] min-h-screen">
@@ -3321,11 +3339,11 @@ export default function CalendarPage() {
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-          filtered = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
+          filtered = todasLlegadas;
         } else if (kpiModalType === 'salen') {
-          title = 'Pendientes por Salir';
+          title = 'Salidas Hoy';
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
-          filtered = reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out);
+          filtered = todasSalidas;
         }
 
         return (

@@ -459,11 +459,29 @@ export default function AdminDashboard() {
     return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled');
   }, [reservas, todayStr]);
 
+  const todasLlegadasHoy = useMemo(() => {
+    return reservas.filter(r => 
+      r.status !== 'cancelled' && 
+      (r.check_in === todayStr || (r.check_in < todayStr && !r.checked_in))
+    );
+  }, [reservas, todayStr]);
+
   const salidasHoy = useMemo(() => {
     const limit = new Date();
     limit.setDate(limit.getDate() - 5);
     const limitStr = limit.toISOString().split('T')[0];
     return reservas.filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled');
+  }, [reservas, todayStr]);
+
+  const todasSalidasHoy = useMemo(() => {
+    const limit = new Date();
+    limit.setDate(limit.getDate() - 5);
+    const limitStr = limit.toISOString().split('T')[0];
+    return reservas.filter(r => 
+      r.status !== 'cancelled' &&
+      r.checked_in &&
+      (r.check_out === todayStr || (r.check_out < todayStr && r.check_out >= limitStr && !r.checked_out))
+    );
   }, [reservas, todayStr]);
   const proximasLlegadas = reservas.filter(r => r.check_in > todayStr && r.status !== 'cancelled').slice(0, 5);
 
@@ -637,7 +655,7 @@ export default function AdminDashboard() {
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-emerald-600">
-            {llegadasHoy.length}
+            {todasLlegadasHoy.length}
           </p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Llegan hoy</p>
         </button>
@@ -646,7 +664,7 @@ export default function AdminDashboard() {
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-amber-500">
-            {salidasHoy.length}
+            {todasSalidasHoy.length}
           </p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
         </button>
@@ -1563,11 +1581,11 @@ export default function AdminDashboard() {
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
-          filtered = llegadasHoy;
+          filtered = todasLlegadasHoy;
         } else if (kpiModalType === 'salen') {
           title = 'Salidas Hoy';
           badgeColor = 'bg-zinc-150 text-zinc-700 border border-zinc-200';
-          filtered = salidasHoy;
+          filtered = todasSalidasHoy;
         }
 
         return (
