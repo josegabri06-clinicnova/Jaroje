@@ -823,8 +823,8 @@ export async function PUT(req: Request) {
         // También detectar cambio de unitId dentro del mismo tipo (ej: 301 → 302)
         const unitChanged = roomName && (String(currentBooking.roomId) !== String(newRoomId) || String(currentBooking.unitId || '1') !== String(newUnitId));
 
-        // Recalcular si cambiaron las fechas, el tipo de habitación, o se reasignó a otra unidad
-        if ((arrivalChanged || departureChanged || roomTypeChanged || unitChanged) && arrival && departure && newRoomId) {
+        // Recalcular si cambiaron las fechas o el tipo de habitación (no si se reasignó a otra unidad del mismo tipo)
+        if ((arrivalChanged || departureChanged || roomTypeChanged) && arrival && departure && newRoomId) {
           console.log(`[Reservas PUT] Detectado cambio que requiere recálculo (Tarifas). roomId actual=${currentBooking.roomId} unit=${currentBooking.unitId}, Nuevo roomId=${newRoomId} unit=${newUnitId}. Padre actual=${currentParent.roomId}, Padre nuevo=${newParent.roomId}. Rango: ${arrival} al ${departure}`);
           
           const ratesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, arrival, departure);

@@ -1268,6 +1268,10 @@ export default function RecepcionPage() {
   };
 
   const handleReassignRoom = async () => {
+    if (getRole() !== 'admin') {
+      alert('⚠️ Sólo los administradores pueden reasignar habitaciones.');
+      return;
+    }
     if (!selectedReserva || !targetRoomName) return;
 
     // Validar capacidad máxima de la nueva habitación
@@ -5136,7 +5140,7 @@ export default function RecepcionPage() {
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
                         <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedReserva.room || 'Sin asignar'}</p>
                       </div>
-                      {selectedReserva.status !== 'cancelled' && !selectedReserva.checked_out && !isReassigning && (
+                      {getRole() === 'admin' && selectedReserva.status !== 'cancelled' && !selectedReserva.checked_out && !isReassigning && (
                         <button
                           onClick={() => setIsReassigning(true)}
                           className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
