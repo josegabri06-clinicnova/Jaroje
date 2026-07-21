@@ -655,11 +655,21 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
     let hasNextPage = true;
 
     while (hasNextPage) {
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         method: 'GET',
         headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
         cache: 'no-store'
       });
+
+      if (res.status === 429) {
+        console.warn('[Beds24 GET] Rate limit (429) detectado. Reintentando en 2.5 segundos...');
+        await new Promise(r => setTimeout(r, 2500));
+        res = await fetch(url, {
+          method: 'GET',
+          headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+      }
 
       if (res.status === 401 || res.status === 403) {
         throw new Error('TOKEN_EXPIRED');

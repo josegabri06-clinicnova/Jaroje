@@ -354,10 +354,25 @@ export async function POST(req: Request) {
       }])
     });
 
+    if (beds24Response.status === 429) {
+      console.warn('[Beds24 POST] Rate limit (429) detectado. Reintentando en 2.5 segundos...');
+      await new Promise(res => setTimeout(res, 2500));
+      beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+        method: 'POST',
+        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify([/* re-send payload */])
+      });
+    }
+
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
       if (data && data.id) {
         await supabase.from('local_reservas').delete().eq('id', data.id);
+      }
+      if (beds24Response.status === 429 || errText.includes('Credit limit exceeded')) {
+        return NextResponse.json({ 
+          error: '⏳ El servidor de Beds24 está temporalmente en su límite de solicitudes por minuto. Por favor, reintenta en 10 segundos.' 
+        }, { status: 429 });
       }
       throw new Error(`Beds24 rechazó la reserva: ${errText}`);
     }
@@ -549,14 +564,29 @@ export async function DELETE(req: Request) {
       status: 'cancelled'
     };
 
-    const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+    let beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify([cancelPayload])
     });
 
+    if (beds24Response.status === 429) {
+      console.warn('[Beds24 DELETE] Rate limit (429) detectado. Reintentando en 2.5 segundos...');
+      await new Promise(res => setTimeout(res, 2500));
+      beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+        method: 'POST',
+        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify([cancelPayload])
+      });
+    }
+
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
+      if (beds24Response.status === 429 || errText.includes('Credit limit exceeded')) {
+        return NextResponse.json({ 
+          error: '⏳ El servidor de Beds24 está temporalmente en su límite de solicitudes por minuto. Por favor, reintenta en 10 segundos.' 
+        }, { status: 429 });
+      }
       throw new Error(`Beds24 rechazó la cancelación: ${errText}`);
     }
 
@@ -937,14 +967,29 @@ export async function PUT(req: Request) {
     }
 
     // 1. Modificar en Beds24
-    const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+    let beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
       body: JSON.stringify([updatePayload])
     });
 
+    if (beds24Response.status === 429) {
+      console.warn('[Beds24 PUT] Rate limit (429) detectado. Reintentando en 2.5 segundos...');
+      await new Promise(res => setTimeout(res, 2500));
+      beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+        method: 'POST',
+        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify([updatePayload])
+      });
+    }
+
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
+      if (beds24Response.status === 429 || errText.includes('Credit limit exceeded')) {
+        return NextResponse.json({ 
+          error: '⏳ El servidor de Beds24 está temporalmente en su límite de solicitudes por minuto. Por favor, reintenta en 10 segundos.' 
+        }, { status: 429 });
+      }
       throw new Error(`Beds24 rechazó la modificación: ${errText}`);
     }
 
