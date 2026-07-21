@@ -14,7 +14,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TABS = ['Todas', 'Nuevas', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas'];
+const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -1977,6 +1977,9 @@ export default function ReservasList() {
     
     let matchTab = true;
     if (activeTab === 'Nuevas') matchTab = isReservationNew(r);
+    else if (activeTab === 'Por Aprobar') {
+      matchTab = Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending');
+    }
     else if (activeTab === 'Sin Anticipo') {
       const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
       matchTab = isDirectChannel && (!r.deposit || r.deposit === 0);
@@ -2002,6 +2005,7 @@ export default function ReservasList() {
     switch (activeTab) {
       case 'Todas': return 'activas';
       case 'Nuevas': return 'nuevas';
+      case 'Por Aprobar': return 'pendientes de aprobación';
       case 'Sin Anticipo': return 'sin anticipo';
       case 'Directas': return 'directas';
       case 'WhatsApp': return 'vía WhatsApp';
@@ -2119,20 +2123,33 @@ export default function ReservasList() {
         {TABS.map(t => {
           const isNuevas = t === 'Nuevas';
           const isSinAnticipo = t === 'Sin Anticipo';
+          const isPorAprobar = t === 'Por Aprobar';
+          
           const nuevasCount = activeReservas.filter(isReservationNew).length;
           const sinAnticipoCount = activeReservas.filter(r => {
             const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
             return isDirectChannel && (!r.deposit || r.deposit === 0);
           }).length;
-          const displayLabel = isNuevas && nuevasCount > 0 ? `Nuevas (${nuevasCount})` : isSinAnticipo && sinAnticipoCount > 0 ? `Sin Anticipo (${sinAnticipoCount})` : t;
+          const porAprobarCount = activeReservas.filter(r => 
+            Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending')
+          ).length;
+
+          const displayLabel = isNuevas && nuevasCount > 0 
+            ? `Nuevas (${nuevasCount})` 
+            : isSinAnticipo && sinAnticipoCount > 0 
+              ? `Sin Anticipo (${sinAnticipoCount})` 
+              : isPorAprobar && porAprobarCount > 0
+                ? `Por Aprobar (${porAprobarCount})`
+                : t;
+
           return (
             <button
               key={t}
               onClick={() => setActiveTab(t)}
               className={`whitespace-nowrap px-3.5 py-1.5 rounded-full text-[12px] font-semibold transition-all active:scale-[0.98] flex items-center gap-1.5 ${
                 activeTab === t
-                  ? (isSinAnticipo ? 'bg-rose-600 text-white shadow-sm' : 'bg-zinc-900 text-white shadow-sm')
-                  : (isSinAnticipo && sinAnticipoCount > 0 ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100' : 'bg-white text-zinc-650 border border-zinc-200/80 hover:bg-zinc-50')
+                  ? (isSinAnticipo ? 'bg-rose-600 text-white shadow-sm' : isPorAprobar ? 'bg-amber-500 text-white shadow-sm' : 'bg-zinc-900 text-white shadow-sm')
+                  : (isSinAnticipo && sinAnticipoCount > 0 ? 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100' : isPorAprobar && porAprobarCount > 0 ? 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100' : 'bg-white text-zinc-650 border border-zinc-200/80 hover:bg-zinc-50')
               }`}
             >
               <span>{displayLabel}</span>
@@ -2141,6 +2158,9 @@ export default function ReservasList() {
               )}
               {isSinAnticipo && sinAnticipoCount > 0 && (
                 <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse inline-block" />
+              )}
+              {isPorAprobar && porAprobarCount > 0 && (
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block" />
               )}
             </button>
           );
