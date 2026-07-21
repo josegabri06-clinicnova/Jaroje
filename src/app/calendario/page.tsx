@@ -1001,23 +1001,50 @@ export default function CalendarPage() {
 
       const { old_price, recalculated_price, price_changed, same_room_type } = previewData;
 
-      // 2. Formular mensaje de confirmación mostrando el cambio de precio antes de aplicar
-      let confirmMsg = `⚠️ ¿Estás seguro de que deseas reasignar la reserva de ${selectedReserva.guest_name} a la habitación ${targetRoomName}?\n\n`;
+      // 2. Determinar precio y solicitar confirmación / ajuste manual
+      let finalPriceToSend: number | undefined = undefined;
+      const oldPVal = Number(old_price || selectedReserva.price_estimate || 0);
+      const newPVal = Number(recalculated_price || oldPVal);
+      const oldP = oldPVal.toLocaleString('es-MX');
+      const newP = newPVal.toLocaleString('es-MX');
 
+      let promptMsg = '';
       if (price_changed) {
-        confirmMsg += `💰 ATENCIÓN: Esta reasignación cambiará la tarifa de la reserva:\n`;
-        confirmMsg += `   • Tarifa actual: $${Number(old_price).toLocaleString('es-MX')}\n`;
-        confirmMsg += `   • Nueva tarifa calculada: $${Number(recalculated_price).toLocaleString('es-MX')}\n\n`;
-        confirmMsg += `Pulsa ACEPTAR para proceder aplicando la nueva tarifa o CANCELAR para abortar.`;
+        promptMsg = 
+          `💰 CAMBIO DE TARIFA DETECTADO (Diferente tipo de habitación):\n\n` +
+          `• Tarifa original: MX$${oldP}\n` +
+          `• Nueva tarifa calculada: MX$${newP}\n\n` +
+          `¿Qué tarifa deseas aplicar?\n` +
+          `- Escribe "original" (o déjalo así) para conservar la tarifa original (MX$${oldP})\n` +
+          `- Escribe "nuevo" para aplicar la nueva tarifa calculada (MX$${newP})\n` +
+          `- O escribe un número entero para ingresar un precio personalizado (ej. 25000):`;
       } else {
-        confirmMsg += `💵 La tarifa de la reserva se mantendrá idéntica ($${Number(old_price).toLocaleString('es-MX')}).\n\n`;
-        confirmMsg += `Pulsa ACEPTAR para proceder con la reasignación.`;
+        promptMsg =
+          `💵 LA TARIFA SE MANTENDRÁ IGUAL: MX$${oldP}\n\n` +
+          `¿Deseas modificar la tarifa manualmente para esta reasignación?\n` +
+          `- Escribe "original" (o déjalo así/pulsa Aceptar) para mantener MX$${oldP}\n` +
+          `- O escribe un número entero para ingresar un precio personalizado (ej. 25000):`;
       }
 
-      const confirmChange = confirm(confirmMsg);
-      if (!confirmChange) {
+      const userInput = prompt(promptMsg, "original");
+      if (userInput === null) {
         setReassignLoading(false);
         return;
+      }
+
+      const cleanInput = userInput.trim().toLowerCase();
+      if (cleanInput === 'original' || cleanInput === '') {
+        finalPriceToSend = oldPVal;
+      } else if (cleanInput === 'nuevo' && price_changed) {
+        finalPriceToSend = newPVal;
+      } else {
+        const parsed = parseInt(cleanInput.replace(/[^0-9]/g, ''), 10);
+        if (isNaN(parsed) || parsed <= 0) {
+          alert('⚠️ Precio inválido. Se conservará la tarifa original.');
+          finalPriceToSend = oldPVal;
+        } else {
+          finalPriceToSend = parsed;
+        }
       }
 
       // 3. Ejecutar la reasignación real en Beds24 y Supabase
@@ -1027,20 +1054,14 @@ export default function CalendarPage() {
         body: JSON.stringify({
           id: selectedReserva.id,
           roomName: targetRoomName,
-          // Si cambió el precio, lo enviamos explícitamente para que se actualice.
-          // Si no cambió, omitimos 'price' para que use la tarifa original (evitando recalcular en Beds24).
-          price: price_changed ? recalculated_price : undefined
+          price: finalPriceToSend
         })
       });
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      if (price_changed) {
-        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\n\n💰 Tarifa actualizada:\n   Nueva tarifa: $${Number(recalculated_price).toLocaleString('es-MX')}`);
-      } else {
-        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.`);
-      }
+      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\n\n💰 Tarifa aplicada: MX$${Number(finalPriceToSend).toLocaleString('es-MX')}`);
 
       try {
         const emp = getOperatorForLog();
