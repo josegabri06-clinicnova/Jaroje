@@ -87,7 +87,7 @@ export async function POST(req: Request) {
       body: JSON.stringify([{
         id: Number(bookId),
         bookId: Number(bookId),
-        status: 1, // 1 = Confirmed in Beds24 API V2
+        status: '1', // '1' = Confirmed in Beds24 API V2
         invoiceItems: [
           {
             description: description,
