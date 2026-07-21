@@ -997,6 +997,10 @@ export default function ReservasList() {
   };
 
   const handleProcessTransferReceipt = async (receiptId: string, bookingId: string, amount: number, action: 'approve' | 'reject') => {
+    if (getRole() !== 'admin') {
+      alert('⚠️ Solo los administradores pueden confirmar o rechazar comprobantes de transferencia.');
+      return;
+    }
     if (!confirm(`¿Estás seguro de que deseas ${action === 'approve' ? 'APROBAR' : 'RECHAZAR'} esta transferencia bancaria de $${amount.toLocaleString('es-MX')} MXN?`)) {
       return;
     }
@@ -3536,7 +3540,7 @@ export default function ReservasList() {
                                   <span>Ver Comprobante Subido ↗</span>
                                 </a>
 
-                                {isPending && (
+                                {isPending && userRole === 'admin' && (
                                   <div className="space-y-2 pt-1.5">
                                     <textarea
                                       value={rejectionNotes[receipt.id] || ''}
@@ -3565,8 +3569,12 @@ export default function ReservasList() {
                                         )}
                                       </button>
                                     </div>
-                                  </div>
-                                )}
+                                 )}
+                                 {isPending && userRole !== 'admin' && (
+                                   <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold p-2.5 rounded-lg text-center mt-2">
+                                     🔒 Pendiente de aprobación por Administrador
+                                   </div>
+                                 )}
                               </div>
                             </div>
                           );
