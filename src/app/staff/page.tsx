@@ -333,6 +333,34 @@ export default function StaffPage() {
   const [showForm, setShowForm] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedTaskForDetails, setSelectedTaskForDetails] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+
+  const openDetailsModal = (task: Task) => {
+    setSelectedTaskForDetails(task);
+    setShowDetailsModal(true);
+  };
+
+  const handleDeleteTask = async (task: Task) => {
+    if (!confirm("⚠️ ¿Estás seguro de que deseas eliminar este reporte de mantenimiento? Esta acción no se puede deshacer.")) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`/api/tasks?id=${task.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al eliminar la tarea');
+      
+      alert('🗑️ Reporte eliminado exitosamente.');
+      setShowDetailsModal(false);
+      fetchData(); // recargar tareas
+    } catch (e: any) {
+      alert(`❌ Error al eliminar:\n\n${e.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
   
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -933,30 +961,63 @@ export default function StaffPage() {
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
     const finalImagePayload = imagePreviews.length > 0 ? JSON.stringify(imagePreviews) : imagePreview;
 
-    await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin', image_base64: finalImagePayload }),
-    });
+    if (editingTask) {
+      await fetch('/api/tasks', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingTask.id,
+          description: form.description,
+          room: form.room,
+          type: form.type
+        })
+      });
 
-    // Registrar log de auditoría
-    if (emp) {
-      try {
-        await fetch('/api/employee-logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            employee_num: emp.employee_num,
-            employee_name: emp.full_name,
-            department: emp.department,
-            module: emp.department,
-            action: 'report_maintenance',
-            room: form.room,
-            details: `Reportó daño técnico/incidencia en ${['General', 'Cocina', 'Recepción', 'Alberca'].includes(form.room) ? form.room : `Habitación ${form.room}`}: ${form.description}`
-          })
-        });
-      } catch (e) {
-        console.error('Error registrando log de reporte mtto:', e);
+      if (emp) {
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: emp.department,
+              action: 'edit_maintenance',
+              room: form.room,
+              details: `Editó reporte de incidencia en ${['General', 'Cocina', 'Recepción', 'Alberca'].includes(form.room) ? form.room : `Habitación ${form.room}`}. Nueva descripción: ${form.description}`
+            })
+          });
+        } catch (e) {
+          console.error('Error registrando log de edicion mtto:', e);
+        }
+      }
+    } else {
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin', image_base64: finalImagePayload }),
+      });
+
+      // Registrar log de auditoría
+      if (emp) {
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: emp.department,
+              action: 'report_maintenance',
+              room: form.room,
+              details: `Reportó daño técnico/incidencia en ${['General', 'Cocina', 'Recepción', 'Alberca'].includes(form.room) ? form.room : `Habitación ${form.room}`}: ${form.description}`
+            })
+          });
+        } catch (e) {
+          console.error('Error registrando log de reporte mtto:', e);
+        }
       }
     }
 
@@ -966,6 +1027,7 @@ export default function StaffPage() {
     setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: 'General', description: '' });
     setImagePreview(null);
     setImagePreviews([]);
+    setEditingTask(null);
     setShowForm(false);
     fetchData();
     setSubmitting(false);
@@ -2119,7 +2181,6 @@ export default function StaffPage() {
         </div>
       )}
 
-      {/* ── MODAL REPORTE DE INCIDENCIA (CENTRADO PREMIUM COMO ADMIN) ── */}
       {showForm && (
         <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div onClick={() => setShowForm(false)} className="absolute inset-0" />
@@ -2129,10 +2190,14 @@ export default function StaffPage() {
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-zinc-900 flex items-center gap-2">
                 <Wrench size={20} className="text-rose-500 animate-pulse" />
-                Reportar MTTO
+                {editingTask ? 'Editar Reporte de MTTO' : 'Reportar MTTO'}
               </h3>
               <button 
-                onClick={() => setShowForm(false)} 
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingTask(null);
+                  setForm({ type: isMantenimiento ? 'mantenimiento' : 'limpieza', room: 'General', description: '' });
+                }} 
                 className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
               >
                 <X size={16} strokeWidth={3} />
@@ -2172,64 +2237,66 @@ export default function StaffPage() {
                 </select>
               </div>
 
-              {/* Foto Evidencia (Múltiple) */}
-              <div>
-                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Falla (Opcional - Múltiple)</label>
-                <input 
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleImage}
-                  className="hidden"
-                />
-                <div className="flex gap-2 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => fileRef.current?.click()}
-                    className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                  >
-                    <Camera size={16} />
-                    <span>Tomar Foto</span>
-                  </button>
-                  {imagePreviews.length > 0 && (
+              {/* Foto Evidencia (Múltiple) - Solo si no está editando */}
+              {!editingTask && (
+                <div>
+                  <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Falla (Opcional - Múltiple)</label>
+                  <input 
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImage}
+                    className="hidden"
+                  />
+                  <div className="flex gap-2 mb-3">
                     <button
                       type="button"
-                      onClick={() => {
-                        setImagePreviews([]);
-                        setImagePreview(null);
-                      }}
-                      className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                      onClick={() => fileRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
-                      Limpiar Todo
+                      <Camera size={16} />
+                      <span>Tomar Foto</span>
                     </button>
+                    {imagePreviews.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setImagePreviews([]);
+                          setImagePreview(null);
+                        }}
+                        className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                      >
+                        Limpiar Todo
+                      </button>
+                    )}
+                  </div>
+                  {imagePreviews.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2 bg-zinc-50 border border-zinc-200/50 p-3 rounded-2xl">
+                      {imagePreviews.map((img, idx) => (
+                        <div key={idx} className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-square">
+                          <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover" />
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const filtered = imagePreviews.filter((_, i) => i !== idx);
+                              setImagePreviews(filtered);
+                              if (filtered.length > 0) {
+                                setImagePreview(filtered[0]);
+                              } else {
+                                setImagePreview(null);
+                              }
+                            }}
+                            className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80 shadow"
+                          >
+                            <X size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-                {imagePreviews.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2 bg-zinc-50 border border-zinc-200/50 p-3 rounded-2xl">
-                    {imagePreviews.map((img, idx) => (
-                      <div key={idx} className="relative rounded-xl overflow-hidden border border-zinc-200 aspect-square">
-                        <img src={img} alt={`Evidencia ${idx}`} className="w-full h-full object-cover" />
-                        <button 
-                          type="button"
-                          onClick={() => {
-                            const filtered = imagePreviews.filter((_, i) => i !== idx);
-                            setImagePreviews(filtered);
-                            if (filtered.length > 0) {
-                              setImagePreview(filtered[0]);
-                            } else {
-                              setImagePreview(null);
-                            }
-                          }}
-                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 flex items-center justify-center text-white cursor-pointer hover:bg-black/80 shadow"
-                        >
-                          <X size={10} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Botón de Envío */}
               <button 
@@ -2239,13 +2306,173 @@ export default function StaffPage() {
                 className="w-full bg-zinc-950 hover:bg-zinc-900 text-white font-extrabold py-4 rounded-2xl text-[14px] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg active:scale-98"
               >
                 <Send size={14} />
-                <span>{submitting ? 'Enviando Reporte...' : 'Enviar Reporte al Administrador'}</span>
+                <span>{submitting ? 'Guardando...' : (editingTask ? 'Actualizar Reporte ✓' : 'Enviar Reporte al Administrador')}</span>
               </button>
 
             </form>
           </div>
         </div>
       )}
+
+      {/* ── MODAL DETALLES DE INCIDENCIA (GUEST/STAFF STYLE SHEET) ── */}
+      {showDetailsModal && selectedTaskForDetails && (() => {
+        const t = selectedTaskForDetails;
+        const cfg = TYPE_CFG[t.type] || TYPE_CFG['otro'];
+        const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(t.room);
+        const displayRoom = isRoom ? `Habitación ${t.room}` : t.room;
+        const dateStr = format(new Date(t.created_at), "d MMM, HH:mm", { locale: es });
+        const hasPermission = role === 'admin' || role === 'staff_mantenimiento';
+
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-zinc-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div onClick={() => setShowDetailsModal(false)} className="absolute inset-0" />
+            <div className="relative bg-white w-full max-w-md rounded-[32px] p-6 shadow-2xl animate-in slide-in-from-bottom-8 duration-300 max-h-[90vh] overflow-y-auto mx-auto space-y-6">
+              
+              {/* Header */}
+              <div className="flex justify-between items-center pb-3 border-b border-zinc-100">
+                <h3 className="text-lg font-bold text-zinc-900 font-extrabold">Detalles de Incidencia</h3>
+                <button 
+                  onClick={() => setShowDetailsModal(false)} 
+                  className="w-8 h-8 flex items-center justify-center bg-zinc-100 rounded-full text-zinc-500 hover:bg-zinc-200 transition-colors"
+                >
+                  <X size={16} strokeWidth={3} />
+                </button>
+              </div>
+
+              {/* Contenido */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center bg-zinc-50 p-4 rounded-2xl border border-zinc-200/50">
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block font-bold">Ubicación</span>
+                    <span className="text-[15px] font-extrabold text-zinc-805">{displayRoom}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block font-bold">Estado</span>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg mt-1 inline-block ${
+                      t.status === 'nuevo' ? 'bg-purple-50 border border-purple-100 text-purple-650' :
+                      t.status === 'pendiente' ? 'bg-amber-50 border border-amber-100 text-amber-650' :
+                      t.status === 'en_proceso' ? 'bg-blue-50 border border-blue-100 text-blue-650' :
+                      'bg-emerald-50 border border-emerald-100 text-emerald-650'
+                    }`}>
+                      {t.status === 'nuevo' ? 'Nuevo' :
+                       t.status === 'pendiente' ? 'Pendiente' :
+                       t.status === 'en_proceso' ? 'En Proceso' : 'Resuelto'}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block font-bold mb-1">Descripción</span>
+                  <p className="text-[13px] text-zinc-800 font-medium whitespace-pre-line bg-zinc-50/50 p-4 border border-zinc-200/40 rounded-2xl leading-relaxed text-left">
+                    {t.description}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-[12px] pt-2 border-t border-zinc-100">
+                  <div>
+                    <span className="text-zinc-400 font-bold block text-[9px] uppercase tracking-wider">Reportado por</span>
+                    <span className="font-extrabold text-zinc-700">{t.reported_by}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 font-bold block text-[9px] uppercase tracking-wider">Fecha</span>
+                    <span className="font-extrabold text-zinc-700">{dateStr}</span>
+                  </div>
+                </div>
+
+                {/* Foto Evidencia */}
+                {renderTaskImagesCarousel(t)}
+              </div>
+
+              {/* Botones de acción del flujo + administración */}
+              <div className="pt-4 border-t border-zinc-100 flex flex-col gap-2">
+                
+                {/* Flujo de Estados Operativos */}
+                {t.status === 'nuevo' && (
+                  <button
+                    onClick={() => {
+                      runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente');
+                      setShowDetailsModal(false);
+                    }}
+                    className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-extrabold rounded-2xl transition-all shadow-md text-[13px] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Aceptar Tarea ⚡</span>
+                  </button>
+                )}
+
+                {t.status === 'pendiente' && (
+                  <button
+                    onClick={() => {
+                      runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso');
+                      setShowDetailsModal(false);
+                    }}
+                    className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-white font-extrabold rounded-2xl transition-all shadow-md text-[13px] flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Iniciar Trabajo Activo ⚡</span>
+                  </button>
+                )}
+
+                {t.status === 'en_proceso' && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente');
+                        setShowDetailsModal(false);
+                      }}
+                      className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 font-extrabold rounded-2xl transition-all text-[13px] flex items-center justify-center cursor-pointer"
+                    >
+                      <span>Pausar ↩</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowDetailsModal(false);
+                        handleOpenResolveModal(t);
+                      }}
+                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl transition-all shadow-md text-[13px] flex items-center justify-center cursor-pointer"
+                    >
+                      <span>Terminar ✓</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Edición y Eliminación (ADMIN y MTTO) */}
+                {hasPermission && (
+                  <div className="flex gap-2 mt-2 pt-2 border-t border-zinc-100">
+                    <button
+                      onClick={() => {
+                        setShowDetailsModal(false);
+                        setEditingTask(t);
+                        setForm({
+                          type: t.type,
+                          room: t.room,
+                          description: t.description
+                        });
+                        setShowForm(true);
+                      }}
+                      className="flex-1 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl transition-all border border-blue-200 text-[13px] flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      Editar ✏️
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTask(t)}
+                      className="flex-1 py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all border border-rose-200 text-[13px] flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      Eliminar 🗑️
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setShowDetailsModal(false)}
+                  className="w-full py-3 bg-zinc-50 hover:bg-zinc-100 text-zinc-550 font-bold rounded-xl transition-all border border-zinc-200/60 text-[13px] flex items-center justify-center cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── MODAL DETALLE / FINALIZACIÓN DE LIMPIEZA (BOTTOM SHEET STAFF OPERATIVO CERRADO) ── */}
       {showStatusModal && selectedRoom && (() => {

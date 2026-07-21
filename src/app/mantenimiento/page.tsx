@@ -44,6 +44,7 @@ const ROOMS = ['General', '101','102','103','104','105','106','107','201','202',
 export default function MantenimientoPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const role = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_role') || null) : null;
   
   // Filter
   const [filterStatus, setFilterStatus] = useState<'nuevo' | 'pendiente' | 'en_proceso' | 'resuelta'>('nuevo');
@@ -87,6 +88,37 @@ export default function MantenimientoPage() {
   const openDetailsModal = (task: Task) => {
     setSelectedTaskForDetails(task);
     setShowDetailsModal(true);
+  };
+
+  const handleDeleteTask = async (task: Task) => {
+    if (!confirm("⚠️ ¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.")) return;
+    setIsLoading(true);
+    try {
+      const res = await fetch(`/api/tasks?id=${task.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Error al eliminar la tarea');
+      
+      await logAudit(
+        'eliminacion_tarea', 
+        task.room, 
+        JSON.stringify({
+          text: `Tarea eliminada desde los detalles por el usuario. Descripción original: ${task.description}`,
+          mantenimiento: {
+            taskId: task.id,
+            room: task.room,
+            description: task.description,
+            status: 'eliminada'
+          }
+        })
+      );
+      
+      alert('🗑️ Tarea eliminada exitosamente.');
+      setShowDetailsModal(false);
+      fetchTasks();
+    } catch (e: any) {
+      alert(`Error al eliminar: ${e.message}`);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logAudit = async (action: string, room: string, details: string) => {
@@ -1538,6 +1570,26 @@ export default function MantenimientoPage() {
                     className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-lg text-[14px] flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <span>Terminar y Cerrar ✅</span>
+                  </button>
+                </div>
+              )}
+
+              {(role === 'admin' || role === 'staff_mantenimiento') && (
+                <div className="flex gap-2.5 mt-2 pt-2 border-t border-zinc-100">
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(false);
+                      openModal(selectedTaskForDetails);
+                    }}
+                    className="flex-1 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-xl transition-all border border-blue-200 text-[13px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    Editar ✏️
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTask(selectedTaskForDetails)}
+                    className="flex-1 py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all border border-rose-200 text-[13px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    Eliminar 🗑️
                   </button>
                 </div>
               )}
