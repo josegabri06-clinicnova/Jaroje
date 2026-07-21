@@ -3577,6 +3577,7 @@ export default function ReservasList() {
                                         )}
                                       </button>
                                     </div>
+                                  </div>
                                  )}
                                  {isPending && userRole !== 'admin' && (
                                    <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold p-2.5 rounded-lg text-center mt-2">
