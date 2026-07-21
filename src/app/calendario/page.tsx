@@ -981,87 +981,27 @@ export default function CalendarPage() {
     }
     if (!selectedReserva || !targetRoomName) return;
     
+    const oldPVal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
+    const oldP = oldPVal.toLocaleString('es-MX');
+
+    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá sin cambios.`)) {
+      return;
+    }
+
     setReassignLoading(true);
     try {
-      // 1. Obtener vista previa del cambio de tarifa
-      const previewRes = await fetch('/api/reservas', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: selectedReserva.id,
-          roomName: targetRoomName,
-          preview: true
-        })
-      });
-      const previewData = await previewRes.json();
-
-      if (!previewRes.ok) {
-        throw new Error(previewData.error || 'Error al obtener vista previa de la reasignación');
-      }
-
-      const { old_price, recalculated_price, price_changed, same_room_type } = previewData;
-
-      // 2. Determinar precio y solicitar confirmación / ajuste manual
-      let finalPriceToSend: number | undefined = undefined;
-      const oldPVal = Number(old_price || selectedReserva.price_estimate || 0);
-      const newPVal = Number(recalculated_price || oldPVal);
-      const oldP = oldPVal.toLocaleString('es-MX');
-      const newP = newPVal.toLocaleString('es-MX');
-
-      let promptMsg = '';
-      if (price_changed) {
-        promptMsg = 
-          `💰 CAMBIO DE TARIFA DETECTADO (Diferente tipo de habitación):\n\n` +
-          `• Tarifa original: MX$${oldP}\n` +
-          `• Nueva tarifa calculada: MX$${newP}\n\n` +
-          `¿Qué tarifa deseas aplicar?\n` +
-          `- Escribe "original" (o déjalo así) para conservar la tarifa original (MX$${oldP})\n` +
-          `- Escribe "nuevo" para aplicar la nueva tarifa calculada (MX$${newP})\n` +
-          `- O escribe un número entero para ingresar un precio personalizado (ej. 25000):`;
-      } else {
-        promptMsg =
-          `💵 LA TARIFA SE MANTENDRÁ IGUAL: MX$${oldP}\n\n` +
-          `¿Deseas modificar la tarifa manualmente para esta reasignación?\n` +
-          `- Escribe "original" (o déjalo así/pulsa Aceptar) para mantener MX$${oldP}\n` +
-          `- O escribe un número entero para ingresar un precio personalizado (ej. 25000):`;
-      }
-
-      const userInput = prompt(promptMsg, "original");
-      if (userInput === null) {
-        setReassignLoading(false);
-        return;
-      }
-
-      const cleanInput = userInput.trim().toLowerCase();
-      if (cleanInput === 'original' || cleanInput === '') {
-        finalPriceToSend = oldPVal;
-      } else if (cleanInput === 'nuevo' && price_changed) {
-        finalPriceToSend = newPVal;
-      } else {
-        const parsed = parseInt(cleanInput.replace(/[^0-9]/g, ''), 10);
-        if (isNaN(parsed) || parsed <= 0) {
-          alert('⚠️ Precio inválido. Se conservará la tarifa original.');
-          finalPriceToSend = oldPVal;
-        } else {
-          finalPriceToSend = parsed;
-        }
-      }
-
-      // 3. Ejecutar la reasignación real en Beds24 y Supabase
       const res = await fetch('/api/reservas', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedReserva.id,
-          roomName: targetRoomName,
-          price: finalPriceToSend
+          roomName: targetRoomName
         })
       });
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\n\n💰 Tarifa aplicada: MX$${Number(finalPriceToSend).toLocaleString('es-MX')}`);
+      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}. La tarifa de MX$${oldP} se mantuvo sin cambios.`);
 
       try {
         const emp = getOperatorForLog();

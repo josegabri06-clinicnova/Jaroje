@@ -1268,11 +1268,19 @@ export default function RecepcionPage() {
   };
 
   const handleReassignRoom = async () => {
-    if (getRole() !== 'admin') {
-      alert('⚠️ Sólo los administradores pueden reasignar habitaciones.');
+    if (!selectedReserva || !targetRoomName) return;
+
+    const userRole = getRole();
+    const currentRoomClean = (selectedReserva.room || '').replace(/[^0-9]/g, '');
+    const targetRoomClean = targetRoomName.replace(/[^0-9]/g, '');
+    const currentGroup = PHYSICAL_ROOM_GROUPS.find(g => g.rooms.includes(currentRoomClean));
+    const targetGroup = PHYSICAL_ROOM_GROUPS.find(g => g.rooms.includes(targetRoomClean));
+
+    // Si NO es admin y el destino es de otra categoría/tipo de habitación, bloquear
+    if (userRole !== 'admin' && currentGroup && targetGroup && currentGroup.category !== targetGroup.category) {
+      alert(`⚠️ El personal de recepción solo puede reasignar a habitaciones del mismo tipo (${currentGroup.category}).`);
       return;
     }
-    if (!selectedReserva || !targetRoomName) return;
 
     // Validar capacidad máxima de la nueva habitación
     const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
@@ -1282,81 +1290,27 @@ export default function RecepcionPage() {
       return;
     }
 
+    const oldPVal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
+    const oldP = oldPVal.toLocaleString('es-MX');
+
+    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá sin cambios.`)) {
+      return;
+    }
+
     setReassignLoading(true);
     try {
-      // 1. Consultar vista previa de tarifa ANTES de confirmar
-      const previewRes = await fetch('/api/reservas', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: selectedReserva.id,
-          roomName: targetRoomName,
-          preview: true
-        })
-      });
-      const previewData = await previewRes.json();
-
-      if (!previewRes.ok) throw new Error(previewData.error || 'Error al consultar la tarifa');
-
-      // 2. Determinar precio y solicitar confirmación / ajuste manual
-      let finalPriceToSend: number | undefined = undefined;
-      const oldPVal = Number(previewData.old_price || selectedReserva.price_estimate || 0);
-      const newPVal = Number(previewData.recalculated_price || oldPVal);
-      const oldP = oldPVal.toLocaleString('es-MX');
-      const newP = newPVal.toLocaleString('es-MX');
-
-      let promptMsg = '';
-      if (previewData.price_changed) {
-        promptMsg = 
-          `💰 CAMBIO DE TARIFA DETECTADO (Diferente tipo de habitación):\n\n` +
-          `• Tarifa original: MX$${oldP}\n` +
-          `• Nueva tarifa calculada: MX$${newP}\n\n` +
-          `¿Qué tarifa deseas aplicar?\n` +
-          `- Escribe "original" (o déjalo así) para conservar la tarifa original (MX$${oldP})\n` +
-          `- Escribe "nuevo" para aplicar la nueva tarifa calculada (MX$${newP})\n` +
-          `- O escribe un número entero para ingresar un precio personalizado (ej. 25000):`;
-      } else {
-        promptMsg =
-          `💵 LA TARIFA SE MANTENDRÁ IGUAL: MX$${oldP}\n\n` +
-          `¿Deseas modificar la tarifa manualmente para esta reasignación?\n` +
-          `- Escribe "original" (o déjalo así/pulsa Aceptar) para mantener MX$${oldP}\n` +
-          `- O escribe un número entero para ingresar un precio personalizado (ej. 25000):`;
-      }
-
-      const userInput = prompt(promptMsg, "original");
-      if (userInput === null) {
-        setReassignLoading(false);
-        return;
-      }
-
-      const cleanInput = userInput.trim().toLowerCase();
-      if (cleanInput === 'original' || cleanInput === '') {
-        finalPriceToSend = oldPVal;
-      } else if (cleanInput === 'nuevo' && previewData.price_changed) {
-        finalPriceToSend = newPVal;
-      } else {
-        const parsed = parseInt(cleanInput.replace(/[^0-9]/g, ''), 10);
-        if (isNaN(parsed) || parsed <= 0) {
-          alert('⚠️ Precio inválido. Se conservará la tarifa original.');
-          finalPriceToSend = oldPVal;
-        } else {
-          finalPriceToSend = parsed;
-        }
-      }
-
-      // 3. Ejecutar la reasignación real
       const res = await fetch('/api/reservas', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedReserva.id,
-          roomName: targetRoomName,
-          price: finalPriceToSend
+          roomName: targetRoomName
         })
       });
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
+
+      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}. La tarifa de MX$${oldP} se mantuvo sin cambios.`);
 
       try {
         const emp = getOperatorForLog();
@@ -5193,12 +5147,23 @@ export default function RecepcionPage() {
                     {isReassigning && (() => {
                       const LOCAL_ROOMS = ['500','501','502','503','504','505','506','507'];
                       const isLocalBooking = LOCAL_ROOMS.some(lr => (selectedReserva.room || '').includes(lr));
+                      const userRole = getRole();
+                      const currentRoomClean = (selectedReserva.room || '').replace(/[^0-9]/g, '');
+                      const currentGroup = PHYSICAL_ROOM_GROUPS.find(g => g.rooms.includes(currentRoomClean));
+
                       const filteredGroups = PHYSICAL_ROOM_GROUPS
                         .map(group => ({
                           ...group,
                           rooms: group.rooms.filter(r => isLocalBooking ? LOCAL_ROOMS.includes(r) : !LOCAL_ROOMS.includes(r))
                         }))
-                        .filter(group => group.rooms.length > 0);
+                        .filter(group => {
+                          if (group.rooms.length === 0) return false;
+                          // Si NO es admin, restringir ÚNICAMENTE a la misma categoría/grupo que la habitación actual
+                          if (userRole !== 'admin' && currentGroup) {
+                            return group.category === currentGroup.category;
+                          }
+                          return true;
+                        });
                       return (
                       <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200 text-left">
                         <div>
