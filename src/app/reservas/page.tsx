@@ -1924,8 +1924,12 @@ export default function ReservasList() {
       matchTab = Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending');
     }
     else if (activeTab === 'Sin Anticipo') {
+      const isOtaBooking = ['airbnb', 'booking', 'expedia'].some(c => 
+        (r.channel || '').toLowerCase().includes(c) || 
+        (r.guest_name || '').toLowerCase().includes(c)
+      );
       const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-      matchTab = isDirectChannel && (!r.deposit || r.deposit === 0);
+      matchTab = isDirectChannel && !isOtaBooking && (!r.deposit || r.deposit === 0);
     }
     else if (activeTab === 'Directas') matchTab = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
     else if (activeTab === 'WhatsApp') matchTab = r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
@@ -2070,8 +2074,12 @@ export default function ReservasList() {
           
           const nuevasCount = activeReservas.filter(isReservationNew).length;
           const sinAnticipoCount = activeReservas.filter(r => {
+            const isOtaBooking = ['airbnb', 'booking', 'expedia'].some(c => 
+              (r.channel || '').toLowerCase().includes(c) || 
+              (r.guest_name || '').toLowerCase().includes(c)
+            );
             const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-            return isDirectChannel && (!r.deposit || r.deposit === 0);
+            return isDirectChannel && !isOtaBooking && (!r.deposit || r.deposit === 0);
           }).length;
           const porAprobarCount = activeReservas.filter(r => 
             Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending')

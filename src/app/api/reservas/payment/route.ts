@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token, getBeds24Bookings } from '@/lib/beds24';
+import { getBeds24Token, getBeds24Bookings, clearBeds24Cache } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import { sendTemplate3_ReservacionConfirmada } from '@/lib/whatsapp';
 
@@ -74,8 +74,29 @@ export async function POST(req: Request) {
 
     const BEDS24_TOKEN = await getBeds24Token();
 
+    // Consultar el depósito actual en Beds24 para acumular el nuevo depósito
+    let currentDeposit = 0;
+    try {
+      const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}`, {
+        headers: { 'token': BEDS24_TOKEN },
+        cache: 'no-store'
+      });
+      if (b24Res.ok) {
+        const b24Data = await b24Res.json();
+        const bItem = Array.isArray(b24Data?.data) ? b24Data.data[0] : (Array.isArray(b24Data) ? b24Data[0] : null);
+        if (bItem) {
+          currentDeposit = Number(bItem.deposit || 0);
+        }
+      }
+    } catch (e) {
+      console.warn("No se pudo obtener el depósito previo de Beds24:", e);
+    }
+
+    const newDeposit = currentDeposit + Number(amount);
+
     // Estructurar el pago según la especificación contable de Beds24 API v2:
     // - Las entradas de dinero (pagos recibidos) se mandan con qty = -1 y price = valor positivo.
+    // - Se envía deposit: newDeposit para que el resumen del depósito se actualice explícitamente.
     const description = customDescription || `Cobro Check-In ${paymentMethod.toUpperCase()}${employeeNum ? ` (Operador: ${employeeNum})` : ''} [Jaroje OS]`;
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
@@ -88,6 +109,7 @@ export async function POST(req: Request) {
         id: Number(bookId),
         bookId: Number(bookId),
         status: 'confirmed', // 'confirmed' = Confirmed in Beds24 API V2
+        deposit: newDeposit,
         invoiceItems: [
           {
             description: description,
@@ -104,6 +126,7 @@ export async function POST(req: Request) {
     }
 
     const dataB24 = await beds24Response.json();
+    clearBeds24Cache();
 
     // Enviar confirmación por WhatsApp en segundo plano para Beds24
     (async () => {

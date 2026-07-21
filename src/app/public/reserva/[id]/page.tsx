@@ -970,7 +970,10 @@ export default function PublicReservaPage() {
   const isCheckedIn = booking.is_checked_in;
   const isCheckedOut = booking.is_checked_out;
   const hasPaid = booking.deposit > 0 || booking.is_acknowledged;
-  const isOta = ['Airbnb', 'Booking.com', 'Expedia'].includes(booking.channel || '');
+  const rawChannel = (booking.channel || '').toLowerCase();
+  const rawName = (booking.guest_name || '').toLowerCase();
+  const rawNotes = (booking.notes || '').toLowerCase();
+  const isOta = ['airbnb', 'booking', 'expedia'].some(c => rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c));
 
   // Fechas clave
   const checkInDate = booking.check_in ? new Date(booking.check_in) : null;
@@ -1054,6 +1057,7 @@ export default function PublicReservaPage() {
   // Cargo extra por huéspedes adicionales ($500 MXN por persona sobre la capacidad base de cada habitación)
   const EXTRA_GUEST_CHARGE = 500;
   const extraChargesTotal = (() => {
+    if (isOta) return 0; // OTAs (Expedia, Booking, Airbnb) tienen tarifa fija en booking.price sin cargos extra automáticos
     if (!booking.rooms_detail || booking.rooms_detail.length < 1) return 0;
     return booking.rooms_detail.reduce((acc: number, room: any) => {
       const total = (room.num_adult || 0) + (room.num_child || 0);
