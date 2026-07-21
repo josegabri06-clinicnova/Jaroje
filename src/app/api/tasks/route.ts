@@ -78,6 +78,43 @@ export async function POST(req: Request) {
   }
 }
 
+// ── PUT ───────────────────────────────────────────────────────────────────────
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { id, description, room, type, status } = body;
+
+    if (!id) {
+      return NextResponse.json({ success: false, error: 'Falta el ID de la tarea' }, { status: 400 });
+    }
+
+    const updateFields: any = {};
+    if (description !== undefined) updateFields.description = description;
+    if (room !== undefined) updateFields.room = room;
+    if (type !== undefined) updateFields.type = type;
+    if (status !== undefined) {
+      updateFields.status = status;
+      if (status === 'resuelta') {
+        updateFields.resolved_at = new Date().toISOString();
+      }
+    }
+
+    const { data, error } = await supabase
+      .from('tasks')
+      .update(updateFields)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true, task: data });
+  } catch (err: any) {
+    console.error("Error al actualizar tarea:", err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
+  }
+}
+
 // ── DELETE ────────────────────────────────────────────────────────────────────
 export async function DELETE(req: Request) {
   try {
