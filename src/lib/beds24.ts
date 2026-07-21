@@ -1224,7 +1224,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
     {
       id: Number(bookId),
       bookId: Number(bookId),
-      status: '1', // '1' = Confirmed in Beds24 API V2
+      status: 'confirmed',
       deposit: newDeposit,
       invoiceItems: [
         {

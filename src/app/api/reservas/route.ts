@@ -336,7 +336,7 @@ export async function POST(req: Request) {
             ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
             : { firstName: fullName.trim(), lastName: '' };
         })(),
-        status: isBlock ? "4" : (Number(deposit || 0) > 0 ? "1" : "3"), // "1" = Confirmed, "3" = Request, "4" = Black/Block
+        status: isBlock ? "black" : (Number(deposit || 0) > 0 ? "confirmed" : "request"),
         ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
         ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
         ...(!isBlock ? {
@@ -544,22 +544,10 @@ export async function DELETE(req: Request) {
     }
 
     // 1. Cancelar en Beds24
-    const cancelPayload: any = {
+    const cancelPayload = {
       id: Number(id),
-      status: "0" // "0" = Cancelled
+      status: 'cancelled'
     };
-    if (bookingForWA?.arrival) {
-      cancelPayload.arrival = bookingForWA.arrival;
-    }
-    if (bookingForWA?.departure) {
-      cancelPayload.departure = bookingForWA.departure;
-    }
-    if (bookingForWA?.roomId) {
-      cancelPayload.roomId = Number(bookingForWA.roomId);
-    }
-    if (bookingForWA?.unitId) {
-      cancelPayload.unitId = Number(bookingForWA.unitId);
-    }
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
