@@ -36,6 +36,35 @@ function BubbleWA({ size = 16 }: { size?: number }) {
   );
 }
 
+function parseTemplateMessage(text: string) {
+  if (!text) return { isTemplate: false, cleanText: text, buttons: [] };
+  const isTemplate = text.includes('[Botón:') || text.includes('[Button:') || text.includes('🔗') || text.includes('⚡ Plantilla');
+  
+  const buttons: string[] = [];
+  const buttonRegex = /\[(?:Botón|Button):\s*([^\]]+)\]/g;
+  let match;
+  while ((match = buttonRegex.exec(text)) !== null) {
+    buttons.push(match[1].trim());
+  }
+
+  const cleanText = text.replace(/\[(?:Botón|Button):\s*([^\]]+)\]/g, '').trim();
+  return { isTemplate, cleanText, buttons };
+}
+
+const META_TEMPLATES = [
+  { key: 'solicitud_recibida', name: '📩 Mensaje 1 - Solicitud de Reservación Recibida', desc: 'Pre-reservación con link al Portal del Huésped' },
+  { key: 'ultimo_aviso', name: '⚠️ Mensaje 2 - Último Aviso de Anticipo (1 hr)', desc: 'Recordatorio urgente previo a liberar la habitación' },
+  { key: 'reservacion_confirmada', name: '✅ Mensaje 3 - Confirmación de Reserva y Pago', desc: 'Reserva confirmada con mapa y reglamento' },
+  { key: 'disponibilidad_liberada', name: '🔓 Mensaje 4 - Disponibilidad Liberada', desc: 'Aviso de cancelación por falta de anticipo' },
+  { key: 'preparacion_llegada', name: '🧳 Mensaje 5 - Preparación para la Llegada', desc: 'Instrucciones de llegada (2 días antes)' },
+  { key: 'bienvenida_checkin', name: '🌴 Mensaje 6 - Bienvenida Check-in', desc: 'Bienvenida con clave WiFi y reglamento' },
+  { key: 'seguimiento_satisfaccion', name: '💬 Mensaje 7 - Pregunta de Satisfacción', desc: 'Seguimiento de estancia (Día 2)' },
+  { key: 'salida_checkout', name: '🔑 Mensaje 8 - Recordatorio Check-out', desc: 'Aviso de salida antes de las 11:00 AM' },
+  { key: 'comparte_experiencia', name: '⭐ Mensaje 9 - Encuesta y Google Maps', desc: 'Solicitud de reseña en Google Maps' },
+  { key: 'recibimiento_nuevamente', name: '🔄 Mensaje 10 - Cliente Frecuente (30 días)', desc: 'Invitación a regresar 30 días después' },
+  { key: 'portal_huesped_link', name: '📲 Enlace Portal del Huésped', desc: 'Acceso directo a su reservación en tiempo real' }
+];
+
 export default function BotPage() {
   const router = useRouter();
   const [conversations, setConversations]   = useState<Conversation[]>([]);
@@ -44,8 +73,6 @@ export default function BotPage() {
   const [showGuestPortalIframe, setShowGuestPortalIframe] = useState<string | null>(null);
   const [isLoading, setIsLoading]           = useState(true);
   const [hasRealData, setHasRealData]       = useState(false);
-  // Solo guardamos el ID — la conversación activa se DERIVA del estado principal
-  // Así cuando el polling actualiza conversations, el chat se actualiza solo
   const [activeConvId, setActiveConvId]     = useState<string | null>(null);
   const activeConv = conversations.find(c => c.id === activeConvId) ?? null;
   const [replyText, setReplyText]           = useState('');
@@ -59,6 +86,11 @@ export default function BotPage() {
   const [newChatPhone, setNewChatPhone]         = useState('');
   const [isStartingChat, setIsStartingChat]     = useState(false);
   const [newChatError, setNewChatError]         = useState<string | null>(null);
+
+  // Estados para enviar plantilla Meta desde el inbox activo
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState('solicitud_recibida');
+  const [isSendingTemplate, setIsSendingTemplate] = useState(false);
 
   const messagesEndRef                      = useRef<HTMLDivElement>(null);
 
@@ -92,6 +124,41 @@ export default function BotPage() {
       setNewChatError(err.message);
     } finally {
       setIsStartingChat(false);
+    }
+  };
+
+  const sendTemplateFromInbox = async (templateKey: string) => {
+    if (!activeConv) return;
+    setIsSendingTemplate(true);
+    try {
+      const activeReservations = findAllReservationsForContact(activeConv.guest_phone, activeConv.guest_name);
+      const primaryRes = activeReservations[0] || {
+        id: `loc_${Date.now()}`,
+        guest_name: activeConv.guest_name,
+        phone: activeConv.guest_phone,
+        check_in: new Date().toISOString().split('T')[0],
+        check_out: new Date(Date.now() + 86400000).toISOString().split('T')[0]
+      };
+
+      const res = await fetch('/api/whatsapp/send-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: templateKey,
+          booking: primaryRes
+        })
+      });
+
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Error al enviar plantilla');
+
+      setShowTemplateModal(false);
+      await fetchConversations();
+      setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } catch (err: any) {
+      alert(`Error al enviar plantilla por WhatsApp: ${err.message}`);
+    } finally {
+      setIsSendingTemplate(false);
     }
   };
   // Altura del viewport adaptada al teclado en dispositivos móviles
@@ -745,20 +812,41 @@ export default function BotPage() {
                   )}
 
                   {/* Gerente (Enviado - Derecha) */}
-                  {msg.role_manager && (
-                    <div className="flex justify-end items-end mb-1">
-                      <div className="max-w-[75%] bg-[#d9fdd3] text-zinc-900 px-4 py-2.5 rounded-[16px] rounded-tr-none shadow-[0_1px_0.5px_rgba(0,0,0,0.12)] relative border border-[#c4ebd1]/40">
-                        <div className="flex items-center gap-1 mb-1.5 select-none">
-                          <span className="text-[9px] font-extrabold text-indigo-700 bg-indigo-50/60 px-1.5 py-0.5 rounded border border-indigo-250/20">👤 Tú</span>
-                        </div>
-                        <p className="text-[13px] font-medium leading-snug whitespace-pre-wrap">{msg.role_manager}</p>
-                        <div className="text-[9px] mt-1 text-zinc-500 flex items-center justify-end gap-0.5 select-none font-semibold">
-                          {format(new Date(msg.timestamp), 'HH:mm')}
-                          <DoubleCheckSVG className="text-[#53bdeb] ml-1 shrink-0" />
+                  {msg.role_manager && (() => {
+                    const { isTemplate, cleanText, buttons } = parseTemplateMessage(msg.role_manager);
+                    return (
+                      <div className="flex justify-end items-end mb-1">
+                        <div className={`max-w-[85%] sm:max-w-[78%] text-zinc-900 px-4 py-3 rounded-[18px] rounded-tr-none shadow-[0_1px_0.5px_rgba(0,0,0,0.12)] relative border ${
+                          isTemplate ? 'bg-[#e7f8ec] border-[#b5e7c3]' : 'bg-[#d9fdd3] border-[#c4ebd1]/40'
+                        }`}>
+                          <div className="flex items-center justify-between gap-2 mb-1.5 select-none">
+                            <span className={`text-[9.5px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md flex items-center gap-1 border ${
+                              isTemplate ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs' : 'text-indigo-700 bg-indigo-50/60 border-indigo-250/20'
+                            }`}>
+                              {isTemplate ? '⚡ Plantilla Meta WhatsApp' : '👤 Tú'}
+                            </span>
+                          </div>
+
+                          <p className="text-[13px] font-medium leading-relaxed whitespace-pre-wrap text-zinc-900">{cleanText}</p>
+
+                          {buttons.length > 0 && (
+                            <div className="mt-2.5 pt-2 border-t border-emerald-250/60 space-y-1.5">
+                              {buttons.map((btnText, bIdx) => (
+                                <div key={bIdx} className="bg-white/90 border border-emerald-300/80 text-emerald-800 text-[12px] font-bold py-1.5 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                                  <span className="text-[11px]">🔘</span> {btnText}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="text-[9px] mt-1.5 text-zinc-500 flex items-center justify-end gap-0.5 select-none font-semibold">
+                            {format(new Date(msg.timestamp), 'HH:mm')}
+                            <DoubleCheckSVG className="text-[#53bdeb] ml-1 shrink-0" />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -766,6 +854,16 @@ export default function BotPage() {
 
             {/* Input Bar */}
             <div className="bg-[#f0f2f5] px-4 py-3 flex items-center gap-2 border-t border-zinc-150 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowTemplateModal(true)}
+                title="Enviar Plantilla Oficial de Meta WhatsApp"
+                disabled={!activeConv.human_mode || sending}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold px-3.5 py-2.5 rounded-2xl text-[12px] flex items-center gap-1.5 transition-all shadow-sm active:scale-95 shrink-0 cursor-pointer"
+              >
+                <span>⚡</span>
+                <span className="hidden sm:inline">Plantilla Meta</span>
+              </button>
               <input
                 type="text"
                 value={replyText}
@@ -1024,6 +1122,151 @@ export default function BotPage() {
                 className="w-full h-full border-none"
                 title="Vista previa del portal"
               />
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL PARA SELECCIONAR Y ENVIAR PLANTILLA META */}
+      {showTemplateModal && activeConv && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-md z-[300] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setShowTemplateModal(false)}
+        >
+          <div 
+            className="bg-white w-full max-w-xl rounded-3xl overflow-hidden shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header Modal */}
+            <div className="bg-zinc-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⚡</span>
+                <div>
+                  <h3 className="text-[15px] font-black tracking-tight leading-none">Plantillas Oficiales Meta WhatsApp</h3>
+                  <p className="text-[11px] font-semibold text-zinc-400 mt-0.5">Para: {activeConv.guest_name} ({activeConv.guest_phone})</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Selector y Vista Previa */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              <div>
+                <label className="block text-[11px] font-black uppercase tracking-wider text-zinc-500 mb-1.5">
+                  Selecciona la Plantilla de Meta a Enviar:
+                </label>
+                <select
+                  value={selectedTemplateKey}
+                  onChange={e => setSelectedTemplateKey(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-300 rounded-2xl px-4 py-3 text-[13.5px] font-bold text-zinc-900 focus:outline-none focus:border-emerald-500 transition-all cursor-pointer"
+                >
+                  {META_TEMPLATES.map(t => (
+                    <option key={t.key} value={t.key}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] font-medium text-zinc-500 mt-1.5 italic">
+                  {META_TEMPLATES.find(t => t.key === selectedTemplateKey)?.desc}
+                </p>
+              </div>
+
+              {/* Vista previa en Vivo de cómo le aparecerá al cliente en WhatsApp */}
+              <div className="bg-[#efeae2] p-4 rounded-2xl border border-zinc-300/80 space-y-2">
+                <div className="flex items-center justify-between text-[10.5px] font-black text-emerald-800 uppercase tracking-wider">
+                  <span>📱 Vista Previa Real en WhatsApp del Cliente</span>
+                  <span className="bg-emerald-600 text-white px-2 py-0.5 rounded-md text-[9px]">Oficial Meta Cloud API</span>
+                </div>
+
+                <div className="bg-white rounded-2xl p-4 shadow-sm border border-emerald-250/30 space-y-2.5">
+                  <div className="flex items-center gap-1.5 border-b border-zinc-100 pb-1.5">
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/50">
+                      ⚡ WhatsApp Template: {selectedTemplateKey}
+                    </span>
+                  </div>
+
+                  <p className="text-[13px] font-medium text-zinc-900 leading-relaxed whitespace-pre-wrap">
+                    {(() => {
+                      const name = activeConv.guest_name || 'Huésped';
+                      switch (selectedTemplateKey) {
+                        case 'solicitud_recibida':
+                          return `¡Hola ${name}!\nHemos recibido tu solicitud de reservación en Condominios Jaroje. Tu habitación está pre-reservada.\n\nPara completar tu reservación, revisar el desglose y realizar tu depósito de garantía, por favor ingresa a tu portal del huésped.\n\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'ultimo_aviso':
+                          return `¡Hola ${name}!\nTe recordamos que tienes una solicitud de reservación pendiente. Es necesario completar tu anticipo para garantizar tu estancia y evitar que se libere la habitación.\n\nRevisa todos los detalles y métodos de pago aquí:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'reservacion_confirmada':
+                          return `¡Hola ${name}!\nNos complace informarte que tu reservación en Condominios Jaroje está oficialmente *CONFIRMADA*. ¡Tu estancia en Huatulco está lista! 🎉\n\nPuedes consultar el reglamento, la ubicación y todos los detalles en tu portal:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'disponibilidad_liberada':
+                          return `Hola ${name}.\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona "Verificar disponibilidad" para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n🔗 Verificar disponibilidad: https://beds24.com/booking2.php?propid=327286&lang=es`;
+                        case 'preparacion_llegada':
+                          return `¡Hola ${name}!\nYa nos estamos preparando para tu llegada a Condominios Jaroje. En tu portal de huésped encontrarás las instrucciones de llegada, indicaciones para llegar y datos importantes.\n\nPor favor, revísalo aquí:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'bienvenida_checkin':
+                          return `¡Hola ${name}!\nTe damos la más cordial bienvenida a Condominios Jaroje. Esperamos que disfrutes al máximo de tu estancia en Huatulco. 🌴☀️\n\nRecuerda que en tu portal puedes consultar la clave de WiFi, el reglamento y solicitar servicios adicionales:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'seguimiento_satisfaccion':
+                          return `Hola ${name}.\nEsperamos que estés disfrutando tu estancia. ¿Todo va bien en tu condominio? Si requieres asistencia, toallas extra, reportar algún detalle o tienes alguna sugerencia, no dudes en escribirnos por aquí o revisar tu portal:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'salida_checkout':
+                          return `Hola ${name}.\nTe recordamos que hoy es tu día de salida. El horario de checkout es antes de las 11:00 AM.\n\nEsperamos que hayas tenido una estancia increíble. Puedes ver las indicaciones de salida en tu portal:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'comparte_experiencia':
+                          return `Hola ${name}.\nAgradecemos mucho tu preferencia. Nos ayudaría muchísimo si compartes tu experiencia dejándonos una reseña en Google Maps para seguir mejorando. ¡Buen viaje de regreso! ✈️`;
+                        case 'recibimiento_nuevamente':
+                          return `¡Hola ${name}!\nEsperamos que hayas regresado con bien a casa. Nos encantaría recibirte nuevamente en Condominios Jaroje en tus próximas vacaciones en Huatulco.\n\nConsulta tus beneficios de cliente frecuente aquí:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        case 'portal_huesped_link':
+                          return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅\n\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                        default:
+                          return `[Plantilla Meta ${selectedTemplateKey}]`;
+                      }
+                    })()}
+                  </p>
+
+                  <div className="pt-2 border-t border-zinc-100 flex flex-col gap-1.5">
+                    {selectedTemplateKey === 'disponibilidad_liberada' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🌐</span> Verificar disponibilidad (Beds24)
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>↩️</span> Hablar con nosotros
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'salida_checkout' || selectedTemplateKey === 'comparte_experiencia' ? null : (
+                      <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                        <span>🔘</span> Ver Mi Reservación
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Modal con Botón de Envío */}
+            <div className="bg-zinc-50 px-6 py-4 border-t border-zinc-200 flex items-center justify-end gap-3 shrink-0">
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                disabled={isSendingTemplate}
+                className="px-4 py-2.5 rounded-xl border border-zinc-300 text-zinc-700 text-[12.5px] font-bold hover:bg-zinc-100 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => sendTemplateFromInbox(selectedTemplateKey)}
+                disabled={isSendingTemplate}
+                className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[13px] font-black px-6 py-2.5 rounded-xl transition-all active:scale-95 shadow-md flex items-center gap-2 cursor-pointer"
+              >
+                {isSendingTemplate ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    <span>Enviando por WhatsApp API...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} />
+                    <span>Enviar Plantilla Ahora</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
