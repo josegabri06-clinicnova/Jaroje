@@ -957,6 +957,7 @@ export default function StaffPage() {
     if (!form.description.trim()) return;
     setSubmitting(true);
 
+    const isEditing = !!editingTask;
     const emp = getActiveEmployee(currentDept);
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
     const finalImagePayload = imagePreviews.length > 0 ? JSON.stringify(imagePreviews) : imagePreview;
@@ -1032,8 +1033,8 @@ export default function StaffPage() {
     fetchData();
     setSubmitting(false);
 
-    // Si es reporte de MANTENIMIENTO → copiar al clipboard y abrir grupo WhatsApp MTTO
-    if (reportedForm.type === 'mantenimiento') {
+    // Si es reporte NUEVO de MANTENIMIENTO → copiar al clipboard y abrir grupo WhatsApp MTTO
+    if (!isEditing && reportedForm.type === 'mantenimiento') {
       const dateStr = format(new Date(), "EEEE, d 'de' MMMM · HH:mm", { locale: es });
       const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(reportedForm.room);
       const ubicacion = isRoom ? `Habitación ${reportedForm.room}` : reportedForm.room;
@@ -1057,6 +1058,9 @@ export default function StaffPage() {
 
       // Abrir grupo de WhatsApp de Mantenimiento
       window.open('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', '_blank');
+    } else if (isEditing) {
+      setSuccessMsg('✅ ¡Reporte actualizado con éxito!');
+      setTimeout(() => setSuccessMsg(''), 3000);
     } else {
       setSuccessMsg('¡Reporte enviado con éxito!');
       setTimeout(() => setSuccessMsg(''), 3000);
@@ -2452,12 +2456,14 @@ export default function StaffPage() {
                     >
                       Editar ✏️
                     </button>
-                    <button
-                      onClick={() => handleDeleteTask(t)}
-                      className="flex-1 py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all border border-rose-200 text-[13px] flex items-center justify-center gap-1.5 cursor-pointer"
-                    >
-                      Eliminar 🗑️
-                    </button>
+                    {role === 'admin' && (
+                      <button
+                        onClick={() => handleDeleteTask(t)}
+                        className="flex-1 py-3 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl transition-all border border-rose-200 text-[13px] flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        Eliminar 🗑️
+                      </button>
+                    )}
                   </div>
                 )}
 
