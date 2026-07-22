@@ -570,7 +570,7 @@ export default function StaffPage() {
   }, []);
 
   const llegadas = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
-  const salidas  = reservas.filter(r => r.check_out === todayStr && r.checked_in && !r.checked_out);
+  const salidas  = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
   const ocupadas = reservas.filter(r => r.check_out > todayStr && r.checked_in);
 
   const getScheduledCleanings = (): CleanTask[] => {
@@ -584,7 +584,7 @@ export default function StaffPage() {
       // 1. Verificar si es salida hoy (Check-out)
       const salidaRes = reservas.find(res => {
         const rRoom = String(res.room || '').replace(/[\s()]/g, '');
-        return rRoom.includes(r) && res.check_out === todayStr && res.checked_in;
+        return rRoom.includes(r) && res.check_out === todayStr && !res.checked_out;
       });
       
       if (salidaRes) {
@@ -1515,7 +1515,12 @@ export default function StaffPage() {
                     {ROOMS.filter(r => {
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                      return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'sucio_checkout';
+                      const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                      if (s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout') return true;
+                      return reservas.some(res => {
+                        const rRoom = String(res.room || '').replace(/[\s()]/g, '');
+                        return rRoom.includes(r) && res.check_out === todayStr && !res.checked_out;
+                      });
                     }).length}
                   </span>
                   <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
