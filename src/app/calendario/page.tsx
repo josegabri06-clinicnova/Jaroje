@@ -1786,7 +1786,6 @@ export default function CalendarPage() {
   const todasSalidas = useMemo(() => {
     return reservas.filter(r => 
       r.status !== 'cancelled' &&
-      r.checked_in &&
       r.check_out === todayStr
     );
   }, [reservas, todayStr]);
@@ -1839,7 +1838,7 @@ export default function CalendarPage() {
           className="bg-amber-50 border border-amber-100 rounded-2xl p-3 text-center cursor-pointer hover:bg-amber-100/65 hover:border-amber-200 active:scale-95 transition-all outline-none block w-full"
         >
           <p className="text-[20px] font-bold text-amber-700">{todayDepartures}</p>
-          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Por salir</p>
+          <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide">Salen hoy</p>
         </button>
       </div>
 

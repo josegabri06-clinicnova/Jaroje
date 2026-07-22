@@ -476,7 +476,6 @@ export default function AdminDashboard() {
   const todasSalidasHoy = useMemo(() => {
     return reservas.filter(r => 
       r.status !== 'cancelled' &&
-      r.checked_in &&
       r.check_out === todayStr
     );
   }, [reservas, todayStr]);

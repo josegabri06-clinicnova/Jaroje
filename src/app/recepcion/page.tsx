@@ -2243,7 +2243,6 @@ export default function RecepcionPage() {
   const todasSalidas = useMemo(() => {
     return reservas.filter(r => 
       r.status !== 'cancelled' &&
-      r.checked_in &&
       r.check_out === todayStr
     );
   }, [reservas, todayStr]);
