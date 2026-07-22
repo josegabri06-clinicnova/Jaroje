@@ -664,11 +664,7 @@ export default function AdminDashboard() {
               const dbStatus = getRoomDbStatus(r, roomStatuses);
               const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
               const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-              if (s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout') return true;
-              return reservas.some(res => {
-                const rRoom = String(res.room || '').replace(/[\s()]/g, '');
-                return rRoom.includes(r) && res.check_out === todayStr;
-              });
+              return s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout';
             }).length}
           </p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
@@ -1127,11 +1123,7 @@ export default function AdminDashboard() {
                   const dbStatus = getRoomDbStatus(r, roomStatuses);
                   const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                   const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-                  if (s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout') return true;
-                  return reservas.some(res => {
-                    const rRoom = String(res.room || '').replace(/[\s()]/g, '');
-                    return rRoom.includes(r) && res.check_out === todayStr;
-                  });
+                  return s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout';
                 }).length}
               </span>
               <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
