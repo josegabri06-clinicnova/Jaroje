@@ -1388,13 +1388,16 @@ export default function RecepcionPage() {
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');
+  const ENVELOPES = Array.from({ length: 99 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [selectedEnvelope, setSelectedEnvelope] = useState<string>('');
   const [checkInNotes, setCheckInNotes] = useState('');
   const [payGroupConsolidated, setPayGroupConsolidated] = useState(true);
   const [isSplitPayment, setIsSplitPayment] = useState(false);
   const [paymentMode2, setPaymentMode2] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount2, setPaymentAmount2] = useState('');
   const [selectedAccountId2, setSelectedAccountId2] = useState<string>('');
+  const [selectedEnvelope2, setSelectedEnvelope2] = useState<string>('');
   const [paymentDescription2, setPaymentDescription2] = useState('');
   const [isPriceUnlocked, setIsPriceUnlocked] = useState(false);
   const [isDailyRateEdited, setIsDailyRateEdited] = useState(false);
@@ -2354,6 +2357,17 @@ export default function RecepcionPage() {
     };
 
     if (selectedReserva.id === 'walkin') {
+      if (paymentMode === 'efectivo' && !selectedEnvelope) {
+        alert('⚠️ Por favor selecciona el número de sobre (S01 - S99) donde guardarás el efectivo.');
+        setSubmitting(false);
+        return;
+      }
+      if (isSplitPayment && paymentMode2 === 'efectivo' && !selectedEnvelope2) {
+        alert('⚠️ Por favor selecciona el número de sobre (S01 - S99) para el pago 2 en efectivo.');
+        setSubmitting(false);
+        return;
+      }
+
       try {
         const group = selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0
           ? selectedReserva.groupRooms
@@ -2713,6 +2727,17 @@ export default function RecepcionPage() {
         return;
       }
     } else {
+      if (paymentMode === 'efectivo' && !selectedEnvelope) {
+        alert('⚠️ Por favor selecciona el número de sobre (S01 - S99) donde guardarás el efectivo.');
+        setSubmitting(false);
+        return;
+      }
+      if (isSplitPayment && paymentMode2 === 'efectivo' && !selectedEnvelope2) {
+        alert('⚠️ Por favor selecciona el número de sobre (S01 - S99) para el pago 2 en efectivo.');
+        setSubmitting(false);
+        return;
+      }
+
       let finalDniUrl = null;
       if (dniFile) {
         const fileExt = dniFile.name.split('.').pop() || 'jpg';
@@ -6338,38 +6363,48 @@ export default function RecepcionPage() {
                                     {paymentMode && (
                                       <div className="space-y-1 text-left">
                                         <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
-                                          Sobre Pago #1
+                                          {paymentMode === 'efectivo' ? 'Sobre Pago #1 (Efectivo)' : 'Sobre / Cuenta Pago #1'}
                                         </label>
-                                        <select
-                                          value={selectedAccountId}
-                                          onChange={e => setSelectedAccountId(e.target.value)}
-                                          required
-                                          className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
-                                        >
-                                          <option value="" disabled>Seleccionar...</option>
-                                          {accounts
-                                            .filter(acc => {
-                                              const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                              if (isUSD) {
-                                                const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                                if (!isUSDAcc) return false;
-                                                const name = acc.name.trim().toUpperCase();
-                                                if (paymentMode === 'efectivo') {
-                                                  return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                                }
-                                                return !name.includes('EFE') && !name.includes('CASH');
-                                              } else {
-                                                const name = acc.name.trim().toUpperCase();
-                                                if (paymentMode === 'efectivo') return name === 'EFECTIVO';
-                                                if (paymentMode === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                                if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                                return false;
-                                              }
-                                            })
-                                            .map(acc => (
-                                              <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                        {paymentMode === 'efectivo' ? (
+                                          <select
+                                            value={selectedEnvelope}
+                                            onChange={e => setSelectedEnvelope(e.target.value)}
+                                            required
+                                            className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                          >
+                                            <option value="" disabled>Seleccionar sobre (S01 - S99)...</option>
+                                            {ENVELOPES.map(env => (
+                                              <option key={env} value={env}>{env}</option>
                                             ))}
-                                        </select>
+                                          </select>
+                                        ) : (
+                                          <select
+                                            value={selectedAccountId}
+                                            onChange={e => setSelectedAccountId(e.target.value)}
+                                            required
+                                            className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                          >
+                                            <option value="" disabled>Seleccionar...</option>
+                                            {accounts
+                                              .filter(acc => {
+                                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                                if (isUSD) {
+                                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                  if (!isUSDAcc) return false;
+                                                  const name = acc.name.trim().toUpperCase();
+                                                  return !name.includes('EFE') && !name.includes('CASH');
+                                                } else {
+                                                  const name = acc.name.trim().toUpperCase();
+                                                  if (paymentMode === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                  if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                  return false;
+                                                }
+                                              })
+                                              .map(acc => (
+                                                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                              ))}
+                                          </select>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -6420,38 +6455,48 @@ export default function RecepcionPage() {
                                     {paymentMode2 && (
                                       <div className="space-y-1 text-left">
                                         <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
-                                          Sobre Pago #2
+                                          {paymentMode2 === 'efectivo' ? 'Sobre Pago #2 (Efectivo)' : 'Sobre / Cuenta Pago #2'}
                                         </label>
-                                        <select
-                                          value={selectedAccountId2}
-                                          onChange={e => setSelectedAccountId2(e.target.value)}
-                                          required
-                                          className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
-                                        >
-                                          <option value="" disabled>Seleccionar...</option>
-                                          {accounts
-                                            .filter(acc => {
-                                              const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                              if (isUSD) {
-                                                const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                                if (!isUSDAcc) return false;
-                                                const name = acc.name.trim().toUpperCase();
-                                                if (paymentMode2 === 'efectivo') {
-                                                  return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                                }
-                                                return !name.includes('EFE') && !name.includes('CASH');
-                                              } else {
-                                                const name = acc.name.trim().toUpperCase();
-                                                if (paymentMode2 === 'efectivo') return name === 'EFECTIVO';
-                                                if (paymentMode2 === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                                if (paymentMode2 === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                                return false;
-                                              }
-                                            })
-                                            .map(acc => (
-                                              <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                        {paymentMode2 === 'efectivo' ? (
+                                          <select
+                                            value={selectedEnvelope2}
+                                            onChange={e => setSelectedEnvelope2(e.target.value)}
+                                            required
+                                            className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                          >
+                                            <option value="" disabled>Seleccionar sobre (S01 - S99)...</option>
+                                            {ENVELOPES.map(env => (
+                                              <option key={env} value={env}>{env}</option>
                                             ))}
-                                        </select>
+                                          </select>
+                                        ) : (
+                                          <select
+                                            value={selectedAccountId2}
+                                            onChange={e => setSelectedAccountId2(e.target.value)}
+                                            required
+                                            className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                          >
+                                            <option value="" disabled>Seleccionar...</option>
+                                            {accounts
+                                              .filter(acc => {
+                                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                                if (isUSD) {
+                                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                  if (!isUSDAcc) return false;
+                                                  const name = acc.name.trim().toUpperCase();
+                                                  return !name.includes('EFE') && !name.includes('CASH');
+                                                } else {
+                                                  const name = acc.name.trim().toUpperCase();
+                                                  if (paymentMode2 === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                  if (paymentMode2 === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                  return false;
+                                                }
+                                              })
+                                              .map(acc => (
+                                                <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                              ))}
+                                          </select>
+                                        )}
                                       </div>
                                     )}
                                   </div>
@@ -6509,47 +6554,50 @@ export default function RecepcionPage() {
                                       {/* Selector de cuenta/sobre */}
                                       <div className="space-y-1.5 pt-1 text-left">
                                         <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                                          ¿A qué sobre va el dinero?
+                                          {paymentMode === 'efectivo' ? '¿En qué sobre va a colocarse el efectivo?' : '¿A qué cuenta va el dinero?'}
                                         </label>
-                                        <select
-                                          value={selectedAccountId}
-                                          onChange={e => setSelectedAccountId(e.target.value)}
-                                          required
-                                          className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
-                                        >
-                                          <option value="" disabled>Selecciona un sobre...</option>
-                                          {accounts
-                                            .filter(acc => {
-                                              const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                              if (isUSD) {
-                                                const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                                if (!isUSDAcc) return false;
-
-                                                const name = acc.name.trim().toUpperCase();
-                                                if (paymentMode === 'efectivo') {
-                                                  return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                                }
-                                                return !name.includes('EFE') && !name.includes('CASH');
-                                              } else {
-                                                const name = acc.name.trim().toUpperCase();
-                                                if (paymentMode === 'efectivo') {
-                                                  return name === 'EFECTIVO';
-                                                }
-                                                if (paymentMode === 'tarjeta') {
-                                                  return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                                }
-                                                if (paymentMode === 'transferencia') {
-                                                  return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                                }
-                                                return false;
-                                              }
-                                            })
-                                            .map(acc => (
-                                              <option key={acc.id} value={acc.id}>
-                                                {acc.name}
-                                              </option>
+                                        {paymentMode === 'efectivo' ? (
+                                          <select
+                                            value={selectedEnvelope}
+                                            onChange={e => setSelectedEnvelope(e.target.value)}
+                                            required
+                                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+                                          >
+                                            <option value="" disabled>Selecciona el número de sobre (S01 - S99)...</option>
+                                            {ENVELOPES.map(env => (
+                                              <option key={env} value={env}>{env}</option>
                                             ))}
-                                        </select>
+                                          </select>
+                                        ) : (
+                                          <select
+                                            value={selectedAccountId}
+                                            onChange={e => setSelectedAccountId(e.target.value)}
+                                            required
+                                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+                                          >
+                                            <option value="" disabled>Selecciona una cuenta...</option>
+                                            {accounts
+                                              .filter(acc => {
+                                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                                if (isUSD) {
+                                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                  if (!isUSDAcc) return false;
+                                                  const name = acc.name.trim().toUpperCase();
+                                                  return !name.includes('EFE') && !name.includes('CASH');
+                                                } else {
+                                                  const name = acc.name.trim().toUpperCase();
+                                                  if (paymentMode === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                  if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                  return false;
+                                                }
+                                              })
+                                              .map(acc => (
+                                                <option key={acc.id} value={acc.id}>
+                                                  {acc.name}
+                                                </option>
+                                              ))}
+                                          </select>
+                                        )}
                                       </div>
 
                                       {/* Descripción opcional */}
