@@ -6728,7 +6728,10 @@ export default function RecepcionPage() {
                               )}
                             </>
                           );
-            </div>
+                        })()}
+                      </>
+                    )}
+                  </div>
 
             {/* Acción de Envío */}
             {!selectedReserva.checked_in && (
