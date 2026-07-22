@@ -4500,7 +4500,7 @@ export default function RecepcionPage() {
                           colorClasses = 'bg-amber-400 text-amber-950 border-amber-500 shadow-amber-100/30 font-extrabold';
                           dotClass = 'bg-amber-250';
                         } else if (operStatus === 'ocupada') {
-                          colorClasses = 'bg-zinc-600 text-white border-zinc-700 shadow-zinc-100/20';
+                          colorClasses = 'bg-zinc-100 text-zinc-800 border-zinc-300 shadow-sm font-extrabold hover:bg-zinc-200';
                           dotClass = 'bg-zinc-400';
                         }
 
