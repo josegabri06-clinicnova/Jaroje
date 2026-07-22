@@ -1979,27 +1979,38 @@ export default function RecepcionPage() {
     }
   }, [paymentMode2, accounts]);
 
+  const checkInModalInitializedRef = useRef<string | null>(null);
+
   useEffect(() => {
+    if (!showCheckInModal) {
+      checkInModalInitializedRef.current = null;
+      return;
+    }
+
     if (showCheckInModal && selectedReserva && selectedReserva.id !== 'walkin') {
-      if (payGroupConsolidated) {
-        if (directGroupTotalBalance > 0) {
-          setPaymentAmount(directGroupTotalBalance.toString());
+      const modalKey = `${selectedReserva.id}-${payGroupConsolidated}`;
+      if (checkInModalInitializedRef.current !== modalKey) {
+        checkInModalInitializedRef.current = modalKey;
+        if (payGroupConsolidated) {
+          if (directGroupTotalBalance > 0) {
+            setPaymentAmount(directGroupTotalBalance.toString());
+          } else {
+            setPaymentAmount('');
+          }
         } else {
-          setPaymentAmount('');
-        }
-      } else {
-        const balanceVal = selectedReserva.balance !== undefined
-          ? selectedReserva.balance
-          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
-        
-        if (balanceVal > 0) {
-          setPaymentAmount(balanceVal.toString());
-        } else {
-          setPaymentAmount('');
+          const balanceVal = selectedReserva.balance !== undefined
+            ? selectedReserva.balance
+            : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+          
+          if (balanceVal > 0) {
+            setPaymentAmount(balanceVal.toString());
+          } else {
+            setPaymentAmount('');
+          }
         }
       }
     }
-  }, [showCheckInModal, selectedReserva, payGroupConsolidated, directGroupTotalBalance]);
+  }, [showCheckInModal, selectedReserva?.id, payGroupConsolidated, directGroupTotalBalance]);
 
   useEffect(() => {
     if (selectedReserva && selectedReserva.id === 'walkin') {
