@@ -48,33 +48,42 @@ function postJson(url, host, body) {
 }
 
 function getPartitionHost(token) {
-  return new Promise((resolve, reject) => {
-    const url = `https://sharedstreams.icloud.com/${token}/sharedstreams/webstream`;
-    const parsedUrl = new URL(url);
-    const options = {
-      hostname: parsedUrl.hostname,
-      port: 443,
-      path: parsedUrl.pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+  return new Promise(async (resolve, reject) => {
+    const partitionHosts = [
+      'p48-sharedstreams.icloud.com',
+      'p01-sharedstreams.icloud.com',
+      'p24-sharedstreams.icloud.com',
+      'p100-sharedstreams.icloud.com'
+    ];
+    for (const hostName of partitionHosts) {
+      try {
+        const result = await new Promise((resResolve, resReject) => {
+          const req = https.request({
+            hostname: hostName,
+            port: 443,
+            path: `/${token}/sharedstreams/webstream`,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          }, (res) => {
+            const redirectHost = res.headers['x-apple-mme-host'];
+            if (redirectHost) {
+              resResolve(redirectHost);
+            } else if (res.statusCode === 200 || res.statusCode === 330) {
+              resResolve(hostName);
+            } else {
+              resReject(new Error(`Status ${res.statusCode}`));
+            }
+          });
+          req.on('error', resReject);
+          req.write(JSON.stringify({ streamCtag: null }));
+          req.end();
+        });
+        if (result) return resolve(result);
+      } catch (e) {
+        // try next host
       }
-    };
-    const req = https.request(options, (res) => {
-      const host = res.headers['x-apple-mme-host'];
-      if (host) {
-        resolve(host);
-      } else if (res.statusCode === 330 && res.headers['location']) {
-        const locUrl = new URL(res.headers['location']);
-        resolve(locUrl.hostname);
-      } else {
-        // Fallback to base
-        resolve(parsedUrl.hostname);
-      }
-    });
-    req.on('error', reject);
-    req.write(JSON.stringify({ streamCtag: null }));
-    req.end();
+    }
+    resolve('p48-sharedstreams.icloud.com');
   });
 }
 
@@ -204,12 +213,30 @@ async function run() {
   }
   
   console.log('\n\n--- IMPORT COMPLETED ---');
-  console.log('Use the following arrays to update your files:\n');
   
-  for (const [key, files] of Object.entries(results)) {
-    console.log(`Array for [${key}]:`);
-    console.log(JSON.stringify(files, null, 2));
-    console.log();
+  const pagePath = path.join(__dirname, 'src', 'app', 'public', 'reserva', '[id]', 'page.tsx');
+  if (fs.existsSync(pagePath)) {
+    let content = fs.readFileSync(pagePath, 'utf8');
+
+    if (results['general'] && results['general'].length > 0) {
+      const commonStr = `const COMMON_PHOTOS = [\n` +
+        results['general'].map(f => `  "${f}"`).join(',\n') +
+        `\n];`;
+      content = content.replace(/const COMMON_PHOTOS = \[\s*[\s\S]*?\n\];/, commonStr);
+    }
+
+    if (results['doble'] && results['1rec'] && results['2rec'] && results['3rec'] && results['casa']) {
+      const roomPhotosStr = `const ROOM_PHOTOS: Record<string, string[]> = {\n` +
+        `  'doble': [\n` + results['doble'].map(f => `    "${f}"`).join(',\n') + `\n  ],\n` +
+        `  '1rec': [\n` + results['1rec'].map(f => `    "${f}"`).join(',\n') + `\n  ],\n` +
+        `  '2rec': [\n` + results['2rec'].map(f => `    "${f}"`).join(',\n') + `\n  ],\n` +
+        `  '3rec': [\n` + results['3rec'].map(f => `    "${f}"`).join(',\n') + `\n  ],\n` +
+        `  'casa': [\n` + results['casa'].map(f => `    "${f}"`).join(',\n') + `\n  ]\n};`;
+      content = content.replace(/const ROOM_PHOTOS: Record<string, string\[\]> = \{\s*[\s\S]*?\n\};/, roomPhotosStr);
+    }
+
+    fs.writeFileSync(pagePath, content, 'utf8');
+    console.log('\n✅ src/app/public/reserva/[id]/page.tsx ha sido actualizado automáticamente con la nueva lista ordenada de fotos!');
   }
 }
 
