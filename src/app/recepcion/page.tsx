@@ -508,10 +508,36 @@ export default function RecepcionPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar la observación');
-      setSelectedReserva((prev: any) => prev ? { ...prev, notes: editedNotes, comments: editedNotes } : null);
-      setReservas((prev: any[]) => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, notes: editedNotes, comments: editedNotes } : r));
+      
+      const newNote = (editedNotes || '').trim();
+      setSelectedReserva((prev: any) => prev ? { ...prev, notes: newNote, comments: newNote } : null);
+      setReservas((prev: any[]) => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, notes: newNote, comments: newNote } : r));
       setIsEditingNotes(false);
-      alert('✅ Observación guardada con éxito.');
+
+      if (newNote) {
+        const emp = getOperatorForLog();
+        const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepción';
+        const dateFormatted = format(new Date(), "dd/MM/yyyy · HH:mm", { locale: es });
+        const roomStr = selectedReserva.room ? `Habitación ${selectedReserva.room}` : 'Gral';
+
+        const waText =
+          `📌 *OBSERVACIÓN DE RESERVA (RECEPCIÓN)*\n` +
+          `🏨 *Jaroje Condominios*\n\n` +
+          `🏠 *Ubicación:* ${roomStr}\n` +
+          `👤 *Huésped:* ${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id})\n` +
+          `👤 *Atendió:* ${operatorName}\n\n` +
+          `📝 *Observación:*\n"${newNote}"\n\n` +
+          `⏰ _Registrado el ${dateFormatted}_`;
+
+        try {
+          await navigator.clipboard.writeText(waText);
+        } catch (e) {}
+
+        window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+        alert('✅ Observación guardada con éxito.\n📋 ¡Reporte copiado! Abriendo grupo de WhatsApp Recepción...');
+      } else {
+        alert('✅ Observación borrada con éxito.');
+      }
     } catch (err: any) {
       alert(`⚠️ ${err.message || 'Error al guardar observación'}`);
     } finally {
@@ -5914,21 +5940,6 @@ export default function RecepcionPage() {
                   )}
                 </div>
               )}
-
-              {!selectedReserva.checked_in && (
-                <>
-                  {/* Observaciones de la Reserva en Check-In */}
-                  <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl text-left space-y-1 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
-                        <FileText size={13} className="text-amber-600" />
-                        Observaciones de la Reserva
-                      </span>
-                    </div>
-                    <p className="text-[12px] font-bold text-amber-950 bg-white/80 p-2.5 rounded-xl border border-amber-200/60 whitespace-pre-line leading-relaxed">
-                      {selectedReserva.notes || selectedReserva.comments || <span className="text-amber-700/60 font-normal italic">Sin observaciones especiales registradas.</span>}
-                    </p>
-                  </div>
 
                   {/* DNI Scanner */}
                   <div className="space-y-2">
