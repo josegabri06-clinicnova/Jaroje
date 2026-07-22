@@ -1470,7 +1470,18 @@ export default function StaffPage() {
               onClick={() => setKpiModalType('salen')}
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
-              <p className="text-[20px] font-bold text-amber-500">{salidas.length}</p>
+              <p className="text-[20px] font-bold text-amber-500">
+                {ROOMS.filter(r => {
+                  const dbStatus = getRoomDbStatus(r, roomStatuses);
+                  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+                  const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                  if (s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout') return true;
+                  return reservas.some(res => {
+                    const rRoom = String(res.room || '').replace(/[\s()]/g, '');
+                    return rRoom.includes(r) && res.check_out === todayStr;
+                  });
+                }).length}
+              </p>
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
             </button>
           </div>
@@ -1492,6 +1503,7 @@ export default function StaffPage() {
                 <div className="bg-emerald-50/50 border-2 border-emerald-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-emerald-700">
                     {ROOMS.filter(r => {
+                      if (['500','501','502','503','504','505','506','507'].includes(r)) return false; // Excluir 500-507 del indicador de disponibles
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'disponible';
@@ -1519,7 +1531,7 @@ export default function StaffPage() {
                       if (s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout') return true;
                       return reservas.some(res => {
                         const rRoom = String(res.room || '').replace(/[\s()]/g, '');
-                        return rRoom.includes(r) && res.check_out === todayStr && !res.checked_out;
+                        return rRoom.includes(r) && res.check_out === todayStr;
                       });
                     }).length}
                   </span>
