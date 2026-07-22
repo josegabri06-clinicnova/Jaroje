@@ -508,7 +508,7 @@ export default function RecepcionPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar la observación');
-      
+
       const newNote = (editedNotes || '').trim();
       setSelectedReserva((prev: any) => prev ? { ...prev, notes: newNote, comments: newNote } : null);
       setReservas((prev: any[]) => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, notes: newNote, comments: newNote } : r));
@@ -5941,6 +5941,8 @@ export default function RecepcionPage() {
                 </div>
               )}
 
+              {!selectedReserva.checked_in && (
+                <>
                   {/* DNI Scanner */}
                   <div className="space-y-2">
                     <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Identificación (DNI/Pasaporte)</h4>
@@ -6732,7 +6734,9 @@ export default function RecepcionPage() {
                       </>
                     )}
                   </div>
-                )}
+                </>
+              )}
+
             </div>
 
             {/* Acción de Envío */}
