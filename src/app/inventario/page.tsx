@@ -439,24 +439,6 @@ export default function InventarioPage() {
     setUpdatingId(null);
   };
 
-  const handleAddItem = async () => {
-    if (!formName.trim()) return;
-    setIsSubmitting(true);
-    
-    let empName = 'Administrador';
-    let empNum = '999';
-    let empDept = 'Administración';
-    
-    const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
-      .map(dept => getActiveEmployee(dept as any))
-      .find(emp => emp !== null);
-      
-    if (activeEmp) {
-      empName = activeEmp.full_name;
-      empNum = activeEmp.employee_num;
-      empDept = activeEmp.department;
-    }
-
   const executeInventoryDbAction = async (
     action: 'insert' | 'update',
     payload: { item_name: string; category: string; stock: number; min_stock: number },
