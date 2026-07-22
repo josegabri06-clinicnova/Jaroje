@@ -1194,27 +1194,27 @@ export default function BotPage() {
                       const name = activeConv.guest_name || 'Huésped';
                       switch (selectedTemplateKey) {
                         case 'solicitud_recibida':
-                          return `¡Hola ${name}!\nHemos recibido tu solicitud de reservación en Condominios Jaroje. Tu habitación está pre-reservada.\n\nPara completar tu reservación, revisar el desglose y realizar tu depósito de garantía, por favor ingresa a tu portal del huésped.\n\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `📋 *Solicitud de reservación recibida (24 h para confirmar)*\nHola, ${name}.\n¡Gracias por elegir *Condominios Jaroje* para tus próximas vacaciones en Huatulco! 🌴\nEn tu ”Portal del Huésped” encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.`;
                         case 'ultimo_aviso':
-                          return `¡Hola ${name}!\nTe recordamos que tienes una solicitud de reservación pendiente. Es necesario completar tu anticipo para garantizar tu estancia y evitar que se libere la habitación.\n\nRevisa todos los detalles y métodos de pago aquí:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `⏳ *Último recordatorio (queda 1 hora para confirmar tu reservación)*\nHola, ${name}.\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente *1 hora.*\nEn “Realizar depósito” encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.`;
                         case 'reservacion_confirmada':
-                          return `¡Hola ${name}!\nNos complace informarte que tu reservación en Condominios Jaroje está oficialmente *CONFIRMADA*. ¡Tu estancia en Huatulco está lista! 🎉\n\nPuedes consultar el reglamento, la ubicación y todos los detalles en tu portal:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `🎉 *¡Tu reservación está confirmada!*\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. *Estamos listos para recibirte.*\n\nEn *"Portal del Huésped"* podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.`;
                         case 'disponibilidad_liberada':
-                          return `Hola ${name}.\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona "Verificar disponibilidad" para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n🔗 Verificar disponibilidad: https://beds24.com/booking2.php?propid=327286&lang=es`;
+                          return `😔 *Disponibilidad liberada*\nHola, ${name}.\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, *la disponibilidad de tu alojamiento fue liberada.*\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.`;
                         case 'preparacion_llegada':
-                          return `¡Hola ${name}!\nYa nos estamos preparando para tu llegada a Condominios Jaroje. En tu portal de huésped encontrarás las instrucciones de llegada, indicaciones para llegar y datos importantes.\n\nPor favor, revísalo aquí:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `🚗 *Todo listo para tu llegada*\nHola, ${name}.\n¡Ya falta muy poco para recibirte en *Condominios Jaroje*! Queremos que tu llegada sea lo más cómoda posible.\n👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\nEn *"Mi reservación"* encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n*¿Llegarás después de las 8:00 p.m.?* Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!`;
                         case 'bienvenida_checkin':
-                          return `¡Hola ${name}!\nTe damos la más cordial bienvenida a Condominios Jaroje. Esperamos que disfrutes al máximo de tu estancia en Huatulco. 🌴☀️\n\nRecuerda que en tu portal puedes consultar la clave de WiFi, el reglamento y solicitar servicios adicionales:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `🏡 *¡Bienvenido a Condominios Jaroje!*\n¡Qué gusto recibirte, ${name}!\nEsperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\nEn *“Mi estancia”* encontrarás *el código del portón, la red WiFi y su contraseña,* las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\nSi durante tu estancia necesitas *reportar algún detalle de mantenimiento* podrás hacerlo desde *“Mi estancia”.*\nDeseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.`;
                         case 'seguimiento_satisfaccion':
-                          return `Hola ${name}.\nEsperamos que estés disfrutando tu estancia. ¿Todo va bien en tu condominio? Si requieres asistencia, toallas extra, reportar algún detalle o tienes alguna sugerencia, no dudes en escribirnos por aquí o revisar tu portal:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `😊 *¿Cómo va tu estancia?*\nBuenos días, ${name}.\nQueremos asegurarnos de que todo esté transcurriendo como esperabas.\nSi hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n👇 *Mi estancia*`;
                         case 'salida_checkout':
-                          return `Hola ${name}.\nTe recordamos que hoy es tu día de salida. El horario de checkout es antes de las 11:00 AM.\n\nEsperamos que hayas tenido una estancia increíble. Puedes ver las indicaciones de salida en tu portal:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `🚪 *Check-out 12:00 p.m.*\nMuy buenos días, ${name}.\nHoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n*Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.*\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\nSi consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.`;
                         case 'comparte_experiencia':
-                          return `Hola ${name}.\nAgradecemos mucho tu preferencia. Nos ayudaría muchísimo si compartes tu experiencia dejándonos una reseña en Google Maps para seguir mejorando. ¡Buen viaje de regreso! ✈️`;
+                          return `⭐ *¿Cómo estuvo tu experiencia?*\nHola, ${name}.\nEsperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\nSi tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.`;
                         case 'recibimiento_nuevamente':
-                          return `¡Hola ${name}!\nEsperamos que hayas regresado con bien a casa. Nos encantaría recibirte nuevamente en Condominios Jaroje en tus próximas vacaciones en Huatulco.\n\nConsulta tus beneficios de cliente frecuente aquí:\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `🌴 *¡Nos encantará recibirte nuevamente!*\nHola de nuevo, ${name}.\nHoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\nSi estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En *"Verificar disponibilidad"* podrás consultar disponibilidad y comenzar una nueva reservación.`;
                         case 'portal_huesped_link':
-                          return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅\n\n🔗 Portal del Huésped: https://jaroje-app.vercel.app/public/reserva/...`;
+                          return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅`;
                         default:
                           return `[Plantilla Meta ${selectedTemplateKey}]`;
                       }
@@ -1222,18 +1222,87 @@ export default function BotPage() {
                   </p>
 
                   <div className="pt-2 border-t border-zinc-100 flex flex-col gap-1.5">
-                    {selectedTemplateKey === 'disponibilidad_liberada' ? (
+                    {selectedTemplateKey === 'solicitud_recibida' ? (
                       <>
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>🌐</span> Verificar disponibilidad (Beds24)
+                          <span>🌐</span> Portal del Huésped
                         </div>
                         <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>↩️</span> Hablar con nosotros
+                          <span>💬</span> Hablar con nosotros
                         </div>
                       </>
-                    ) : selectedTemplateKey === 'salida_checkout' || selectedTemplateKey === 'comparte_experiencia' ? null : (
+                    ) : selectedTemplateKey === 'ultimo_aviso' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>💳</span> Realizar depósito
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>💬</span> Hablar con nosotros
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'reservacion_confirmada' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🌐</span> Portal del Huésped
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>📍</span> Cómo llegar
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>💬</span> Hablar con nosotros
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'disponibilidad_liberada' || selectedTemplateKey === 'recibimiento_nuevamente' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🌐</span> Verificar disponibilidad
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>💬</span> Hablar con nosotros
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'preparacion_llegada' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🌐</span> Mi reservación
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>📍</span> Cómo llegar
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>📶</span> WiFi y Claves
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'bienvenida_checkin' || selectedTemplateKey === 'seguimiento_satisfaccion' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🏡</span> Mi estancia
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>📶</span> WiFi y Claves
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'salida_checkout' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>⭐</span> Escribir reseña
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>💬</span> Hablar con nosotros
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'comparte_experiencia' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>⭐</span> Califica tu alojamiento
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>💬</span> Hablar con nosotros
+                        </div>
+                      </>
+                    ) : (
                       <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                        <span>🔘</span> Ver Mi Reservación
+                        <span>🌐</span> Portal del Huésped
                       </div>
                     )}
                   </div>
