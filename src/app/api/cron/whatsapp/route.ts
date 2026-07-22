@@ -114,7 +114,7 @@ export async function GET(req: Request) {
 
     const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
 
-    // 5. Calcular variables de tiempo en México (CST/CDT)
+    // 5. Calcular variables de tiempo en México (CST/CDT - GMT-6)
     const mexicoTime = getMexicoTime();
     const currentHour = mexicoTime.getHours();
 
@@ -122,154 +122,141 @@ export async function GET(req: Request) {
     const tomorrowStr = new Date(mexicoTime.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const yesterdayStr = new Date(mexicoTime.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     
-    // Rango de fechas aproximadas para fidelización (Mensaje 9)
-    const sixMonthsAgoStr = new Date(mexicoTime.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const twelveMonthsAgoStr = new Date(mexicoTime.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // Rango de fechas para fidelización Mensaje 10 (5 meses = 150 días, 10 meses = 300 días)
+    const fiveMonthsAgoCheckinStr = new Date(mexicoTime.getTime() - 150 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const tenMonthsAgoCheckinStr = new Date(mexicoTime.getTime() - 300 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const reports: string[] = [];
 
-    // 6. Recorrer reservaciones y validar reglas
+    // Helper para verificar si existió una incidencia grave (urgencia alta en mantenimiento) durante la estancia
+    const hasHighUrgencyIncident = async (roomName: string, checkIn: string, checkOut: string): Promise<boolean> => {
+      try {
+        if (!roomName) return false;
+        const cleanRoom = roomName.replace(/[^0-9]/g, '');
+        if (!cleanRoom) return false;
+
+        const { data: incidents } = await supabase
+          .from('mantenimiento')
+          .select('id, room, urgency, created_at')
+          .or('urgency.eq.alta,urgency.eq.Alta,urgency.eq.high')
+          .gte('created_at', `${checkIn}T00:00:00Z`);
+
+        if (!incidents || incidents.length === 0) return false;
+
+        return incidents.some(inc => {
+          const incRoomClean = (inc.room || '').replace(/[^0-9]/g, '');
+          return incRoomClean === cleanRoom;
+        });
+      } catch (e) {
+        console.error("Error al consultar incidencias de mantenimiento:", e);
+        return false;
+      }
+    };
+
+    // 6. Recorrer reservaciones y aplicar reglas de Floren
     for (const booking of allBookings) {
       const bookingIdStr = String(booking.id);
       const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
       if (!guestPhone) continue;
 
-      const isDirect = ['Directo', 'WhatsApp Bot', 'Beds24', 'Recepción'].includes(booking.channel || '');
-
-      // --- REGLA 1 y 3 (FALLBACK): Mensajes Iniciales (Confirmación / Solicitud) ---
-      // Se envía si no se ha registrado ningún mensaje inicial y la reserva es reciente (creada en las últimas 48 horas)
-      const createdDate = booking.booking_time ? new Date(booking.booking_time) : null;
-      const hoursAgoCreation = createdDate ? (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60) : 999;
-      const isRecentBooking = hoursAgoCreation >= 0 && hoursAgoCreation <= 48;
-
-      if (isRecentBooking) {
-        const logKeyConfirm = `${bookingIdStr}_reservacion_confirmada`;
-        const logKeySolicitud = `${bookingIdStr}_solicitud_recibida`;
-        const logKeyAnticipo = `${bookingIdStr}_pago_anticipo_recibido`;
-        
-        if (!sentSet.has(logKeyConfirm) && !sentSet.has(logKeySolicitud) && !sentSet.has(logKeyAnticipo)) {
-          if (isDirect) {
-            if (Number(booking.deposit || 0) > 0) {
-              const res = await sendTemplate3_ReservacionConfirmada(booking);
-              if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'reservacion_confirmada', phone: guestPhone }]);
-                reports.push(`Enviado Mensaje 3 (Confirmación Directa Fallback) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-              }
-            } else {
-              const res = await sendTemplate1_SolicitudRecibida(booking);
-              if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'solicitud_recibida', phone: guestPhone }]);
-                reports.push(`Enviado Mensaje 1 (Solicitud Directa Fallback) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-              }
-            }
-          } else {
-            // Es OTA (Airbnb, Booking.com, Expedia)
-            const res = await sendTemplate3_ReservacionConfirmada(booking);
-            if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'reservacion_confirmada', phone: guestPhone }]);
-              reports.push(`Enviado Mensaje 3 (Confirmación OTA Fallback) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            }
+      // --- MENSAJE 4: Disponibilidad Liberada (Automático en Cancelaciones) ---
+      if (booking.status === 'cancelled') {
+        const logKey = `${bookingIdStr}_disponibilidad_liberada`;
+        if (!sentSet.has(logKey)) {
+          const res = await sendTemplate4_DisponibilidadLiberada(booking);
+          if (res.success) {
+            await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'disponibilidad_liberada', phone: guestPhone }]);
+            reports.push(`Enviado Mensaje 4 (Disponibilidad Liberada) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
+        continue;
       }
 
-      // --- REGLA 2: Mensaje 2 - Último aviso para reservar ---
-      // Se envía 23 horas después de crear la reserva si no tiene anticipo ($0)
-      if (isDirect && Number(booking.deposit || 0) === 0 && booking.booking_time) {
-        const createdDate = new Date(booking.booking_time);
-        const hoursAgo = (new Date().getTime() - createdDate.getTime()) / (1000 * 60 * 60);
-        
-        // Rango de tolerancia de 22 a 24 horas
-        if (hoursAgo >= 22.5 && hoursAgo <= 24.5) {
-          const logKey = `${bookingIdStr}_ultimo_aviso`;
-          if (!sentSet.has(logKey)) {
-            const res = await sendTemplate2_UltimoAviso(booking);
-            if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'ultimo_aviso', phone: guestPhone }]);
-              reports.push(`Enviado Mensaje 2 (Último aviso) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            }
-          }
-        }
-      }
-
-      // --- REGLA 5: Mensaje 5 - Preparación para tu llegada ---
-      // Se envía típicamente a las 9 A.M. del día previo al check-in (tomorrowStr).
-      // Para reservas de último minuto:
-      // - Si entra hoy para mañana, y ya pasó de las 9 A.M., se envía en la siguiente corrida del cron (currentHour > 9).
-      // - Si entra hoy para hoy mismo (mismo día de entrada, todayStr), se envía de inmediato.
-      const isTomorrowScheduled = booking.check_in === tomorrowStr && currentHour === 9;
-      const isTomorrowLastMinute = booking.check_in === tomorrowStr && currentHour > 9;
-      const isSameDayBooking = booking.check_in === todayStr;
-
-      if (isTomorrowScheduled || isTomorrowLastMinute || isSameDayBooking) {
+      // --- MENSAJE 5: Todo listo para su llegada (6:00 PM del día anterior) ---
+      if (booking.check_in === tomorrowStr && currentHour === 18) {
         const logKey = `${bookingIdStr}_preparacion_llegada`;
         if (!sentSet.has(logKey)) {
           const res = await sendTemplate5_PreparacionLlegada(booking);
           if (res.success) {
             await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 5 (Prep llegada) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            reports.push(`Enviado Mensaje 5 (Prep llegada 6PM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
 
-      // --- REGLA 7: Mensaje 7 - Seguimiento de satisfacción ---
-      // Se envía a las 10:00 A.M. del segundo día de estancia (noches >= 2)
+      // --- MENSAJE 6: Bienvenidos a Condominios Jaroje (Automático en Check-In) ---
+      if (booking.checked_in || booking.status === 'checked_in') {
+        const logKey = `${bookingIdStr}_bienvenida_checkin`;
+        if (!sentSet.has(logKey)) {
+          const res = await sendTemplate6_BienvenidaCheckin(booking);
+          if (res.success) {
+            await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'bienvenida_checkin', phone: guestPhone }]);
+            reports.push(`Enviado Mensaje 6 (Bienvenida Check-In) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+          }
+        }
+      }
+
+      // --- MENSAJE 7: ¿Cómo va tu estancia? (10:00 AM del 2º día de estancia, noches >= 2) ---
       if (booking.check_in === yesterdayStr && Number(booking.nights || 1) >= 2 && currentHour === 10) {
         const logKey = `${bookingIdStr}_seguimiento_satisfaccion`;
         if (!sentSet.has(logKey)) {
           const res = await sendTemplate7_SeguimientoSatisfaccion(booking);
           if (res.success) {
             await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 7 (Satisfacción) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            reports.push(`Enviado Mensaje 7 (Satisfacción 10AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
 
-      // --- REGLA 8: Mensaje 8 - Día de salida (salida_checkout) ---
-      // Se envía a las 7:00 A.M. del día de la salida (check_out === hoy)
+      // --- MENSAJE 8: Check-out 12:00 p.m. (7:00 AM del día del Check-Out) ---
       if (booking.check_out === todayStr && currentHour === 7) {
         const logKey = `${bookingIdStr}_salida_checkout`;
         if (!sentSet.has(logKey)) {
           const res = await sendTemplate8_SalidaCheckout(booking);
           if (res.success) {
             await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'salida_checkout', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 8 (Salida Checkout) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            reports.push(`Enviado Mensaje 8 (Salida Checkout 7AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
 
-      // --- REGLA 9: Mensaje 9 - Comparte tu experiencia ---
-      // Se envía a las 7:00 P.M. del día de la salida (check_out === hoy)
-      if (booking.check_out === todayStr && currentHour === 19) {
+      // --- MENSAJE 9: ¿Cómo estuvo tu experiencia? (10:00 AM del día siguiente al Check-Out) ---
+      // Condición de exclusión: OMITIR si existió un reporte en mantenimiento con urgencia alta durante la estancia
+      if (booking.check_out === yesterdayStr && currentHour === 10) {
         const logKey = `${bookingIdStr}_comparte_experiencia`;
         if (!sentSet.has(logKey)) {
-          const res = await sendTemplate9_ComparteExperiencia(booking);
-          if (res.success) {
-            await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 9 (Compartir opinión) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+          const roomStr = booking.room_name || booking.room || '';
+          const hasIncident = await hasHighUrgencyIncident(roomStr, booking.check_in, booking.check_out);
+          if (hasIncident) {
+            reports.push(`Omisado Mensaje 9 para ${booking.guest_name} por reporte de incidencia con urgencia alta en ${roomStr}`);
+          } else {
+            const res = await sendTemplate9_ComparteExperiencia(booking);
+            if (res.success) {
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone }]);
+              reports.push(`Enviado Mensaje 9 (Encuesta Experiencia 10AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            }
           }
         }
       }
 
-      // --- REGLA 10: Mensaje 10 - ¡Nos encantaría recibirte nuevamente! (Fidelización) ---
-      // Se envía a las 9:00 A.M., a los 6 meses (180 días) o 12 meses (365 días) del checkout
-      if (currentHour === 9) {
-        if (booking.check_out === sixMonthsAgoStr) {
-          const logKey = `${bookingIdStr}_recibimiento_nuevamente_6m`;
+      // --- MENSAJE 10: ¡Nos encantará recibirte nuevamente! (5 y 10 meses posteriores al Check-In) ---
+      if (currentHour === 10) {
+        if (booking.check_in === fiveMonthsAgoCheckinStr) {
+          const logKey = `${bookingIdStr}_recibimiento_nuevamente_5m`;
           if (!sentSet.has(logKey)) {
             const res = await sendTemplate10_RecibimientoNuevamente(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_6m', phone: guestPhone }]);
-              reports.push(`Enviado Mensaje 10 (Fidelización 6m) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_5m', phone: guestPhone }]);
+              reports.push(`Enviado Mensaje 10 (Fidelización 5 meses) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
           }
-        } else if (booking.check_out === twelveMonthsAgoStr) {
-          const logKey = `${bookingIdStr}_recibimiento_nuevamente_12m`;
+        } else if (booking.check_in === tenMonthsAgoCheckinStr) {
+          const logKey = `${bookingIdStr}_recibimiento_nuevamente_10m`;
           if (!sentSet.has(logKey)) {
             const res = await sendTemplate10_RecibimientoNuevamente(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_12m', phone: guestPhone }]);
-              reports.push(`Enviado Mensaje 10 (Fidelización 12m) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_10m', phone: guestPhone }]);
+              reports.push(`Enviado Mensaje 10 (Fidelización 10 meses) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
           }
         }

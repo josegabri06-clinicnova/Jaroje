@@ -1341,16 +1341,15 @@ export default function ReservasList() {
       // NOTA: No se llama a /api/reservas/payment porque el PUT ya actualiza el depósito
       // tanto en Beds24 como en local_reservas. Llamar a ambos causaba duplicación ($675 → $1350).
 
-      // Enviar confirmación por WhatsApp en segundo plano al registrar anticipo
+      // Enviar confirmación por WhatsApp en segundo plano al registrar anticipo (Mensaje 3)
       const phoneNumForWA = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
       if (phoneNumForWA) {
         const total = (selectedRes.price_estimate || selectedRes.price || 0);
-        const isPartial = newDeposit < total;
         fetch('/api/whatsapp/send-template', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            template: isPartial ? 'pago_anticipo_recibido' : 'reservacion_confirmada',
+            template: 'reservacion_confirmada',
             booking: {
               ...selectedRes,
               deposit: newDeposit,
@@ -1746,37 +1745,74 @@ export default function ReservasList() {
         console.error("Error registrando log de enterado:", logErr);
       }
 
-      // Enviar confirmación por WhatsApp si existe número telefónico
+      // Enviar plantilla de WhatsApp correspondiente según canal y depósito
       const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
       if (phoneNum) {
         try {
-          const waRes = await fetch('/api/whatsapp/confirm', {
+          const isOta = targetRes.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => targetRes.channel.toLowerCase().includes(c));
+          const hasNoDeposit = !targetRes.deposit || Number(targetRes.deposit) === 0;
+
+          // Si es OTA o ya tiene anticipo -> Mensaje 3 (reservacion_confirmada)
+          // Si es Directa/Google/Bot sin anticipo -> Mensaje 1 (solicitud_recibida)
+          const targetTemplate = (isOta || !hasNoDeposit) ? 'reservacion_confirmada' : 'solicitud_recibida';
+
+          const waRes = await fetch('/api/whatsapp/send-template', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              template: targetTemplate,
               booking: targetRes
             })
           });
           const waData = await waRes.json();
           if (!waRes.ok) {
             console.error("Error al enviar WhatsApp:", waData.error);
-            alert(`✅ Reserva marcada como enterado.\n⚠️ Nota: No se pudo enviar el WhatsApp de confirmación (${waData.error || 'error desconocido'}).`);
+            alert(`✅ Reserva marcada como revisada.\n⚠️ Nota: No se pudo enviar el WhatsApp (${waData.error || 'error de Meta API'}).`);
           } else {
-            alert('✅ Reserva marcada como enterado y confirmación enviada por WhatsApp.');
+            const msgName = targetTemplate === 'solicitud_recibida' ? 'Mensaje 1 (Solicitud Recibida)' : 'Mensaje 3 (Confirmación)';
+            alert(`✅ Reserva revisada y ${msgName} enviado por WhatsApp con éxito.`);
           }
         } catch (waErr) {
           console.error("Error de red enviando WhatsApp:", waErr);
-          alert('✅ Reserva marcada como enterado.\n⚠️ Nota: Error de red al enviar el WhatsApp.');
+          alert('✅ Reserva marcada como revisada.\n⚠️ Nota: Error de red al enviar el WhatsApp.');
         }
       } else {
-        alert('✅ Reserva marcada como enterado (la reserva no tiene teléfono registrado).');
+        alert('✅ Reserva marcada como revisada (la reserva no tiene teléfono registrado).');
       }
 
     } catch (err: any) {
       console.error(err);
-      alert(`❌ Error al marcar como enterado:\n\n${err.message}`);
+      alert(`❌ Error al marcar como revisada:\n\n${err.message}`);
     } finally {
       setAckLoading(false);
+    }
+  };
+
+  const handleSendUltimoAviso = async (targetRes: any) => {
+    if (!targetRes) return;
+    const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
+    if (!phoneNum) {
+      alert('⚠️ La reservación no tiene número de teléfono registrado.');
+      return;
+    }
+    try {
+      const res = await fetch('/api/whatsapp/send-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: 'ultimo_aviso',
+          booking: targetRes
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error de Meta API');
+
+      setSelectedRes((prev: any) => prev && prev.id === targetRes.id ? { ...prev, last_notice_sent: true, is_acknowledged: true } : prev);
+      setReservas((prev: any[]) => prev.map(r => r.id === targetRes.id ? { ...r, last_notice_sent: true, is_acknowledged: true } : r));
+
+      alert('✅ Recordatorio de ÚLTIMO AVISO (Mensaje 2) enviado por WhatsApp con éxito.');
+    } catch (err: any) {
+      alert(`⚠️ Error enviando ÚLTIMO AVISO: ${err.message || 'Error de red'}`);
     }
   };
 
@@ -2285,6 +2321,23 @@ export default function ReservasList() {
                     className="w-full mt-2.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] cursor-pointer"
                   >
                     ✓ REVISADO (Quitar de Nuevas)
+                  </button>
+                )}
+
+                {activeTab === 'Sin Anticipo' && (
+                  <button
+                    disabled={r.last_notice_sent}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await handleSendUltimoAviso(r);
+                    }}
+                    className={`w-full mt-2 py-2.5 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer ${
+                      r.last_notice_sent
+                        ? 'bg-zinc-200 text-zinc-500 cursor-not-allowed border border-zinc-300/80 shadow-none'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white active:scale-[0.98]'
+                    }`}
+                  >
+                    {r.last_notice_sent ? 'Último Aviso Enviado ✅' : '⚠️ Enviar Último Aviso (Mensaje 2)'}
                   </button>
                 )}
               </div>

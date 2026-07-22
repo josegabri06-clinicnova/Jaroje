@@ -88,6 +88,29 @@ export async function POST(req: Request) {
       }, { status: 500 });
     }
 
+    // Persistir banderas de estado en Supabase al enviar plantillas clave
+    try {
+      const { supabase } = require('@/lib/supabase');
+      const bookingIdStr = String(booking.id || '');
+      const isLocal = bookingIdStr.startsWith('loc_') || bookingIdStr.startsWith('walkin_') || bookingIdStr.length < 7;
+
+      if (template === 'solicitud_recibida' || template === 'reservacion_confirmada') {
+        if (isLocal) {
+          await supabase.from('local_reservas').update({ is_acknowledged: true }).eq('id', bookingIdStr);
+        } else {
+          await supabase.from('beds24_reservations').upsert({ id: bookingIdStr, is_acknowledged: true });
+        }
+      } else if (template === 'ultimo_aviso') {
+        if (isLocal) {
+          await supabase.from('local_reservas').update({ last_notice_sent: true, is_acknowledged: true }).eq('id', bookingIdStr);
+        } else {
+          await supabase.from('beds24_reservations').upsert({ id: bookingIdStr, last_notice_sent: true, is_acknowledged: true });
+        }
+      }
+    } catch (dbUpdateErr) {
+      console.error("[send-template] Error actualizando banderas en Supabase:", dbUpdateErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: `Plantilla ${template} enviada con éxito`,
