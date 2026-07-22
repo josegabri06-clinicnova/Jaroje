@@ -94,6 +94,7 @@ interface Reserva {
   balance?: number;
   notes?: string;
   channel?: string;
+  status?: string;
 }
 
 interface CleanTask {
@@ -210,30 +211,46 @@ function getRoomOperationalStatus(
     }
   }
 
-  const hasResToday = activeReservations.some(r => {
+  // 1. Si hay un huésped en la habitación que YA HIZO CHECK-IN (checked_in === true) y no ha salido
+  const isCheckedInGuest = activeReservations.some(r => {
     const matches = matchesRoomNumber(r, roomNum);
-    const isActiveToday = (r.check_in <= todayStr && r.check_out > todayStr) || (r.check_in === todayStr);
-    return matches && isActiveToday && !r.checked_out && r.status !== 'cancelled';
+    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
+    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
+    const isActiveToday = (cIn <= todayStr && cOut > todayStr);
+    return matches && isActiveToday && r.checked_in && !r.checked_out && r.status !== 'cancelled';
   });
 
-  // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato si es limpieza/sucio
-  if (isUpdatedToday) {
-    if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Aviso Check Out)
-    if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
-    if (dbStatus === 'limpieza_programada') return 'limpieza_programada'; // Amarillo (Programada manualmente hoy)
-    if (dbStatus === 'limpia') {
-      return hasResToday ? 'ocupada' : 'limpia';
-    }
-    if (dbStatus === 'disponible') {
-      return hasResToday ? 'ocupada' : 'disponible';
-    }
+  if (isCheckedInGuest) {
+    return 'ocupada'; // GRIS: Huésped alojado con Check-In realizado
   }
 
-  // 2. Si es de ayer o antes (estatus obsoleto), calcular fresh de Beds24 para hoy:
+  // 2. Si el estatus en base de datos fue actualizado HOY (ej: limpieza terminada recién marcada)
+  if (isUpdatedToday) {
+    if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Salida)
+    if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
+    if (dbStatus === 'limpieza_programada') return 'limpieza_programada'; // Amarillo (Programada hoy)
+    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpia Terminada / Lista)
+    if (dbStatus === 'disponible') return 'disponible';
+  }
 
-  // Buscar si hay una reserva activa hoy para estancia (Stayover)
+  // 3. Buscar si tiene salida programada hoy o pendiente en el pasado (Check-out)
+  const limit = new Date();
+  limit.setDate(limit.getDate() - 5);
+  const limitStr = limit.toISOString().split('T')[0];
+  const isSalidaHoy = activeReservations.some(r => {
+    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
+    return matchesRoomNumber(r, roomNum) && cOut <= todayStr && cOut >= limitStr && !r.checked_out && r.status !== 'cancelled';
+  });
+
+  if (isSalidaHoy || dbStatus === 'sucio_checkout') {
+    return 'salida_hoy'; // Rojo (Pendiente de limpieza por checkout)
+  }
+
+  // 4. Buscar si es estancia intermedia (Stayover) que requiere limpieza programada hoy
   const currentRes = activeReservations.find(r => {
-    return matchesRoomNumber(r, roomNum) && r.check_in <= todayStr && r.check_out > todayStr && !r.checked_out && r.status !== 'cancelled';
+    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
+    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
+    return matchesRoomNumber(r, roomNum) && cIn <= todayStr && cOut > todayStr && !r.checked_out && r.status !== 'cancelled';
   });
 
   if (currentRes) {
@@ -242,38 +259,16 @@ function getRoomOperationalStatus(
       const checkInDate = new Date(checkInRaw + 'T12:00:00');
       const todayDate = new Date(todayStr + 'T12:00:00');
       const diffTime = todayDate.getTime() - checkInDate.getTime();
-      const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1 (Llegada), Día 2, Día 3...
+      const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
 
       const isTwoDayRoom = ['401'].includes(roomNum);
       const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','501','402'].includes(roomNum);
       const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(roomNum);
 
-      if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) {
-        return 'limpieza_programada';
-      }
-      if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
-        return 'limpieza_programada'; // Amarillo automático por 3er día de estancia
-      }
-      if (isDailyRoom && dayOfStay >= 2) {
-        return 'limpieza_programada'; // Amarillo automático diario durante estancia
-      }
+      if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) return 'limpieza_programada';
+      if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) return 'limpieza_programada';
+      if (isDailyRoom && dayOfStay >= 2) return 'limpieza_programada';
     }
-  }
-
-  // Buscar si tiene salida programada hoy (Check-out)
-  const limit = new Date();
-  limit.setDate(limit.getDate() - 5);
-  const limitStr = limit.toISOString().split('T')[0];
-  const isSalidaHoy = activeReservations.some(r => {
-    return matchesRoomNumber(r, roomNum) && r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled';
-  });
-
-  if (isSalidaHoy) {
-    return 'salida_hoy'; // Rojo por checkout programado hoy
-  }
-
-  if (hasResToday) {
-    return 'ocupada';
   }
 
   return dbStatus === 'limpia' ? 'limpia' : 'disponible';
@@ -283,7 +278,11 @@ export default function StaffPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [todayStr, setTodayStr] = useState('');
+  const [todayStr, setTodayStr] = useState(() => getLocalDateStr());
+
+  const limitDate = new Date();
+  limitDate.setDate(limitDate.getDate() - 5);
+  const limitDateStr = getLocalDateStr(limitDate);
 
   const isDateToday = (dStr?: string) => {
     if (!dStr) return false;
@@ -565,7 +564,6 @@ export default function StaffPage() {
   };
 
   useEffect(() => {
-    setTodayStr(getLocalDateStr());
     fetchData();
     fetchSchedules();
 
@@ -591,9 +589,16 @@ export default function StaffPage() {
     };
   }, []);
 
-  const llegadas = reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
-  const salidas  = reservas.filter(r => r.check_out === todayStr && !r.checked_out);
-  const ocupadas = reservas.filter(r => r.check_out > todayStr && r.checked_in);
+  const llegadas = reservas.filter(r => r.status !== 'cancelled' && (r.check_in || '').split('T')[0].split(' ')[0] === todayStr && !r.checked_in && !r.checked_out);
+  const salidas  = reservas.filter(r => r.status !== 'cancelled' && (r.check_out || '').split('T')[0].split(' ')[0] <= todayStr && (r.check_out || '').split('T')[0].split(' ')[0] >= limitDateStr && !r.checked_out);
+  const ocupadas = reservas.filter(r => {
+    if (r.status === 'cancelled' || r.checked_out) return false;
+    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
+    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
+    if (cIn < todayStr && cOut > todayStr) return true;
+    if (cIn === todayStr && r.checked_in) return true;
+    return false;
+  });
 
   const getScheduledCleanings = (): CleanTask[] => {
     const list: CleanTask[] = [];
@@ -1603,6 +1608,9 @@ export default function StaffPage() {
                         } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
                           colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
                           dotClass = 'bg-amber-250';
+                        } else if (operStatus === 'ocupada') {
+                          colorClasses = 'bg-slate-700 text-white border-slate-800 shadow-slate-200/30';
+                          dotClass = 'bg-slate-400';
                         }
 
                         return (

@@ -201,30 +201,30 @@ const getReservaStatusColor = (booking: any, todayStr: string) => {
   const isCheckedIn = booking.checked_in || booking.is_checked_in;
   const isCheckedOut = booking.checked_out || booking.is_checked_out;
   
-  if (booking.check_out === todayStr) {
-    return {
-      bg: '#fef3c7', // amber-100
-      border: '#d97706', // amber-600
-      text: '#92400e' // amber-800
-    };
-  }
   if (isCheckedOut) {
     return {
-      bg: '#f4f4f5', // gray-100
+      bg: '#f4f4f5', // gray-100 (Salida completada)
       border: '#71717a', // gray-500
       text: '#3f3f46' // gray-700
     };
   }
+  if (booking.check_out === todayStr) {
+    return {
+      bg: '#fef3c7', // amber-100 (Sale hoy pendiente)
+      border: '#d97706', // amber-600
+      text: '#92400e' // amber-800
+    };
+  }
   if (isCheckedIn) {
     return {
-      bg: '#dbeafe', // blue-100
+      bg: '#dbeafe', // blue-100 (En casa)
       border: '#2563eb', // blue-600
       text: '#1e40af' // blue-800
     };
   }
   // Default/Llegan / Future
   return {
-    bg: '#d1fae5', // emerald-100
+    bg: '#d1fae5', // emerald-100 (Llega hoy / Reserva futura)
     border: '#10b981', // emerald-500
     text: '#065f46' // emerald-800
   };
