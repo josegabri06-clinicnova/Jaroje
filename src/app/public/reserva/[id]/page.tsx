@@ -794,6 +794,7 @@ export default function PublicReservaPage() {
   const [maintenanceError, setMaintenanceError] = useState('');
   const [maintenanceSuccess, setMaintenanceSuccess] = useState(false);
   const [showWifiInfo, setShowWifiInfo] = useState(false);
+  const [showCancellationPolicies, setShowCancellationPolicies] = useState(false);
 
   const changeLanguage = async (newLang: 'es' | 'en') => {
     setLang(newLang);
@@ -1519,15 +1520,6 @@ export default function PublicReservaPage() {
           </div>
 
           <div className="space-y-3 text-xs leading-relaxed text-zinc-650">
-            <a
-              href="https://www.condominiosjaroje.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold rounded-xl text-center block border border-zinc-350/40 transition-all cursor-pointer"
-            >
-              {t.stayGuideBtn}
-            </a>
-
             {/* WiFi Block */}
             {hasPaid ? (
               <>
@@ -1630,6 +1622,45 @@ export default function PublicReservaPage() {
               </div>
             )}
 
+            {/* Políticas de Cancelación (Solo para reservas DIRECTAS y GOOGLE) */}
+            {!isOta && (
+              <>
+                <button
+                  onClick={() => setShowCancellationPolicies(!showCancellationPolicies)}
+                  className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold rounded-xl text-center flex items-center justify-center gap-2 border border-zinc-350/40 transition-all cursor-pointer select-none mt-2"
+                >
+                  <span>📋</span>
+                  {lang === 'en' ? 'Cancellation Policies' : 'Políticas de Cancelación'}
+                  <span className="text-[10px] text-zinc-400">
+                    {showCancellationPolicies ? '▲' : '▼'}
+                  </span>
+                </button>
+                {showCancellationPolicies && (
+                  <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-4 space-y-2 text-left animate-in fade-in slide-in-from-top-3 duration-200 mt-2">
+                    <h4 className="font-extrabold text-amber-950 text-[12px] uppercase tracking-wider flex items-center gap-1.5 border-b border-amber-200/60 pb-1.5">
+                      ❗ {lang === 'en' ? 'CANCELLATION POLICY' : 'POLÍTICA DE CANCELACIONES'}
+                    </h4>
+                    <div className="text-[11.5px] leading-relaxed text-amber-900 space-y-2 font-medium">
+                      <p className="flex items-start gap-1.5 font-semibold text-amber-950">
+                        <span className="shrink-0">🔹</span>
+                        <span>{lang === 'en' ? 'Free date changes up to 3 days prior to check-in (subject to availability).' : 'Cambio de fechas sin penalización: hasta 3 días antes (sujeto a disponibilidad).'}</span>
+                      </p>
+                      <div className="space-y-1 pt-1">
+                        <span className="font-bold block text-amber-950">
+                          🔹 {lang === 'en' ? 'Cancellation terms:' : 'Cancelación con:'}
+                        </span>
+                        <ul className="pl-4 space-y-1 list-disc text-amber-900">
+                          <li><strong>+15 {lang === 'en' ? 'days prior' : 'días antes'}:</strong> {lang === 'en' ? '15% penalty of total booking amount' : 'penalización 15% del total de su reservación'}</li>
+                          <li><strong>{lang === 'en' ? 'Between 15 and 5 days' : 'Entre 15 y 5 días'}:</strong> {lang === 'en' ? '30% penalty of total booking amount' : 'penalización 30% del total de su reservación'}</li>
+                          <li><strong>-5 {lang === 'en' ? 'days prior' : 'días antes'}:</strong> {lang === 'en' ? '50% penalty of total booking amount' : 'penalización 50% del total de su reservación'}</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
             <div className="bg-[#FAF9F6] border border-zinc-200/50 rounded-xl p-3 space-y-2 mt-2">
               <h4 className="font-extrabold text-zinc-900 uppercase text-[10px] tracking-wide">{t.stayPolicies}</h4>
               <ul className="list-disc pl-4 space-y-1">
@@ -1690,10 +1721,12 @@ export default function PublicReservaPage() {
           )}
           <a
             href="https://www.condominiosjaroje.com"
-            className="w-full bg-zinc-200 hover:bg-zinc-300 text-zinc-700 font-extrabold text-sm py-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer text-center border border-zinc-300"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-extrabold text-sm py-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer text-center border border-zinc-300"
           >
-            <LogOut size={16} />
-            {t.exitBtn}
+            <Compass size={18} className="text-zinc-600" />
+            {t.stayGuideBtn}
           </a>
         </div>
 
