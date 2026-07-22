@@ -40,7 +40,7 @@ type FinanceRecord = {
   payment_method?: string;
 };
  
-const cleanDescription = (desc: string) => {
+const cleanDescription = (desc: string, accName?: string, paymentMethod?: string) => {
   if (!desc) return '';
   let cleaned = desc
     .replace(/\[Reserva B24:\s*\d+\]/gi, '')
@@ -49,6 +49,44 @@ const cleanDescription = (desc: string) => {
     .replace(/\s+/g, ' ')
     .trim();
   cleaned = cleaned.replace(/[-|:\s]+$/, '').trim();
+
+  if (/^Hab\s+\d+/i.test(cleaned)) {
+    return cleaned;
+  }
+
+  const roomMatch = cleaned.match(/(?:habitación|habitacion|hab\.?)\s*(\d+[A-Za-z]?)/i);
+  if (roomMatch && roomMatch[1]) {
+    const roomStr = `Hab ${roomMatch[1]}`;
+    let sobreStr = '';
+    if (accName) {
+      const aUpper = accName.trim().toUpperCase();
+      if (aUpper.startsWith('SOBRE')) sobreStr = accName.trim();
+      else if (/^S\d{2}$/.test(aUpper)) sobreStr = `Sobre ${aUpper}`;
+    }
+    if (!sobreStr && paymentMethod === 'efectivo') {
+      const sobreMatch = cleaned.match(/(?:sobre|caja)\s*(?:en\s+sobre:?\s*)?(S\d{2}|[A-Za-z0-9_ -]+)/i);
+      if (sobreMatch) {
+        const val = sobreMatch[1].trim();
+        if (/^S\d{2}$/i.test(val)) sobreStr = `Sobre ${val.toUpperCase()}`;
+        else if (val.toLowerCase().startsWith('sobre')) sobreStr = val;
+      }
+    }
+
+    const guestMatch = cleaned.match(/^([^-–(]+?)(?:\s*\([^)]*\))?\s*(?:de la Habitación|de la hab|-|$)/i);
+    const guestName = guestMatch ? guestMatch[1].trim() : '';
+
+    let rest = cleaned;
+    if (guestName) {
+      rest = rest.replace(new RegExp(`^${guestName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'), '');
+    }
+    rest = rest
+      .replace(/(?:de la Habitación|de la hab|habitación|habitacion|hab\.?)\s*\d+[A-Za-z]?/gi, '')
+      .replace(/^\s*[-–\s]+/, '')
+      .trim();
+
+    return [roomStr, sobreStr, guestName, rest].filter(Boolean).join(' - ');
+  }
+
   return cleaned;
 };
  
@@ -1508,7 +1546,7 @@ export default function FinanzasPage() {
                           )}
                         </div>
                         <span className="text-[12px] font-medium text-zinc-500 line-clamp-1 max-w-[200px]">
-                          {record.accounts?.name || 'Desconocido'} • {cleanDescription(record.description)}
+                          {record.accounts?.name || 'Desconocido'} • {cleanDescription(record.description, record.accounts?.name, record.payment_method)}
                         </span>
                       </div>
                     </div>
@@ -2041,7 +2079,7 @@ export default function FinanzasPage() {
                           {r.accounts?.name || 'N/A'}
                         </td>
                         <td className="p-3 min-w-[150px] max-w-[250px] truncate text-zinc-500" title={r.description}>
-                          {cleanDescription(r.description)}
+                          {cleanDescription(r.description, r.accounts?.name, r.payment_method)}
                         </td>
                       </tr>
                     ))

@@ -629,7 +629,36 @@ export function NotificationBell() {
       }
 
       const rawDetailsText = typeof fin.description === 'string' ? fin.description : ev.desc;
-      const cleanDetailsText = rawDetailsText.replace(/\[Synced:\s*B24\]/gi, '').replace(/\[Pending\s*Sync:\s*B24\]/gi, '').trim();
+      let cleanDetailsText = rawDetailsText.replace(/\[Synced:\s*B24\]/gi, '').replace(/\[Pending\s*Sync:\s*B24\]/gi, '').trim();
+
+      // Formatear orden: Habitación - Sobre - Nombre de cliente - Resto
+      if (!cleanDetailsText.toLowerCase().startsWith('hab')) {
+        const roomMatch = cleanDetailsText.match(/(?:habitación|habitacion|hab\.?)\s*(\d+[A-Za-z]?)/i) || (ev.room ? [null, ev.room] : null);
+        if (roomMatch && roomMatch[1]) {
+          const roomStr = `Hab ${roomMatch[1]}`;
+          let sobreStr = '';
+          const accName = fin.account || '';
+          if (accName.toUpperCase().startsWith('SOBRE')) {
+            sobreStr = accName;
+          } else if (/^S\d{2}$/i.test(accName)) {
+            sobreStr = `Sobre ${accName.toUpperCase()}`;
+          }
+
+          const guestMatch = cleanDetailsText.match(/^([^-–(]+?)(?:\s*\([^)]*\))?\s*(?:de la Habitación|de la hab|-|$)/i);
+          const guestName = guestMatch ? guestMatch[1].trim() : '';
+
+          let rest = cleanDetailsText;
+          if (guestName) {
+            rest = rest.replace(new RegExp(`^${guestName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i'), '');
+          }
+          rest = rest
+            .replace(/(?:de la Habitación|de la hab|habitación|habitacion|hab\.?)\s*\d+[A-Za-z]?/gi, '')
+            .replace(/^\s*[-–\s]+/, '')
+            .trim();
+
+          cleanDetailsText = [roomStr, sobreStr, guestName, rest].filter(Boolean).join(' - ');
+        }
+      }
 
       return (
         <div

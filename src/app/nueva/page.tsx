@@ -557,7 +557,7 @@ export default function VercelActionForm() {
       } else {
         const name = acc.name.trim().toUpperCase();
         if (formPaymentMethod === 'efectivo') {
-          return name === 'EFECTIVO';
+          return name === 'EFECTIVO' || acc.group_type === 'SOBRES' || name.includes('SOBRE') || name.includes('CASH');
         }
         if (formPaymentMethod === 'tarjeta') {
           return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
@@ -763,9 +763,20 @@ export default function VercelActionForm() {
         // Registrar en Supabase finances y actualizar balance de cuenta si hay anticipo/pago
         if (!isBlock && depositPerRoom > 0) {
           try {
-            const baseDesc = form.channel === 'Recepción'
-              ? `${form.guestName}${b24Id ? ` (ID: ${b24Id})` : ''} - Hab ${room.name} - Pago Walk-in`
-              : `${form.guestName}${b24Id ? ` (ID: ${b24Id})` : ''} - Hab ${room.name} - Anticipo`;
+            const selectedAcc = accounts.find(a => String(a.id) === String(formAccountId));
+            let sobrePart = '';
+            if (formPaymentMethod === 'efectivo' && selectedAcc?.name) {
+              const nameUpper = selectedAcc.name.trim().toUpperCase();
+              if (nameUpper.startsWith('SOBRE')) sobrePart = selectedAcc.name.trim();
+              else if (/^S\d{2}$/.test(nameUpper)) sobrePart = `Sobre ${nameUpper}`;
+              else sobrePart = `Sobre ${selectedAcc.name.trim()}`;
+            }
+
+            const roomPart = `Hab ${room.name}`;
+            const guestPart = `${form.guestName || 'Huésped'}${b24Id ? ` (ID: ${b24Id})` : ''}`;
+            const typePart = form.channel === 'Recepción' ? 'Pago Walk-in' : 'Anticipo';
+
+            const baseDesc = [roomPart, sobrePart, guestPart, typePart].filter(Boolean).join(' - ');
             
             const currentDayStr = getLocalDateStr(new Date());
             // Si el check-in es retroactivo, registrar en esa fecha de check-in, si no, registrar hoy
@@ -1550,7 +1561,7 @@ export default function VercelActionForm() {
                             } else {
                               const name = acc.name.trim().toUpperCase();
                               if (formPaymentMethod === 'efectivo') {
-                                return name === 'EFECTIVO';
+                                return name === 'EFECTIVO' || acc.group_type === 'SOBRES' || name.includes('SOBRE') || name.includes('CASH');
                               }
                               if (formPaymentMethod === 'tarjeta') {
                                 return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
