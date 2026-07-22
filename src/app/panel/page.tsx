@@ -106,29 +106,16 @@ function getRoomOperationalStatus(
     }
   }
 
-  // 1. Si hay un huésped en la habitación que YA HIZO CHECK-IN (checked_in === true) y no ha salido
-  const isCheckedInGuest = activeReservations.some(r => {
-    const matches = matchesRoomNumber(r, roomNum);
-    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
-    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    const isActiveToday = (cIn <= todayStr && cOut > todayStr);
-    return matches && isActiveToday && r.checked_in && !r.checked_out && r.status !== 'cancelled';
-  });
-
-  if (isCheckedInGuest) {
-    return 'ocupada'; // GRIS: Huésped alojado con Check-In realizado
-  }
-
-  // 2. Si el estatus en base de datos fue actualizado HOY (ej: limpieza terminada recién marcada)
+  // 1. Si la habitación fue marcada como LIMPIA u otro estado HOY en base de datos, respetar acción del día
   if (isUpdatedToday) {
     if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Salida)
     if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
     if (dbStatus === 'limpieza_programada') return 'limpieza_programada'; // Amarillo (Programada hoy)
-    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpia Terminada / Lista)
+    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpia Terminada hoy)
     if (dbStatus === 'disponible') return 'disponible';
   }
 
-  // 3. Buscar si tiene salida programada hoy o pendiente en el pasado (Check-out)
+  // 2. Buscar si tiene salida programada hoy o pendiente en el pasado (Check-out)
   const limit = new Date();
   limit.setDate(limit.getDate() - 5);
   const limitStr = limit.toISOString().split('T')[0];
@@ -141,7 +128,7 @@ function getRoomOperationalStatus(
     return 'salida_hoy'; // Rojo (Pendiente de limpieza por checkout)
   }
 
-  // 4. Buscar si es estancia intermedia (Stayover) que requiere limpieza programada hoy
+  // 3. Buscar si es estancia activa (Stayover) y evaluar reglas de limpieza cada 3 días / 2 días / diario
   const currentRes = activeReservations.find(r => {
     const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
@@ -160,9 +147,22 @@ function getRoomOperationalStatus(
       const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '501', '402'].includes(roomNum);
       const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '502', '503', '504', '505', '506', '507'].includes(roomNum);
 
-      if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) return 'limpieza_programada';
-      if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) return 'limpieza_programada';
-      if (isDailyRoom && dayOfStay >= 2) return 'limpieza_programada';
+      let requiresService = false;
+      if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) {
+        requiresService = true;
+      } else if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
+        requiresService = true;
+      } else if (isDailyRoom && dayOfStay >= 2) {
+        requiresService = true;
+      }
+
+      if (requiresService) {
+        return 'limpieza_programada'; // Amarillo por regla de servicio durante estancia
+      }
+    }
+
+    if (currentRes.checked_in) {
+      return 'ocupada'; // Gris neutro: Huésped hospedado normalmente sin servicio pendiente hoy
     }
   }
 
