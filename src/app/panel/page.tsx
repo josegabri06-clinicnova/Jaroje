@@ -97,38 +97,35 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
-  let isUpdatedToday = false;
-  if (lastUpdatedAt) {
-    try {
-      isUpdatedToday = getLocalDateStr(new Date(lastUpdatedAt)) === todayStr;
-    } catch (e) {
-      isUpdatedToday = lastUpdatedAt.startsWith(todayStr);
-    }
-  }
-
-  // 1. Si la habitación fue marcada como LIMPIA u otro estado HOY en base de datos, respetar acción del día
-  if (isUpdatedToday) {
-    if (dbStatus === 'sucio_checkout') return 'sucio_checkout'; // Rojo (Salida)
-    if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
-    if (dbStatus === 'limpieza_programada') return 'limpieza_programada'; // Amarillo (Programada hoy)
-    if (dbStatus === 'limpia') return 'limpia'; // Azul (Limpia Terminada hoy)
-    if (dbStatus === 'disponible') return 'disponible';
-  }
-
-  // 2. Buscar si tiene salida programada hoy o pendiente en el pasado (Check-out)
+  // 1. Evaluar si la habitación tiene salida hoy o reciente (Check-out)
   const limit = new Date();
   limit.setDate(limit.getDate() - 5);
   const limitStr = limit.toISOString().split('T')[0];
-  const isSalidaHoy = activeReservations.some(r => {
+
+  const salidaRes = activeReservations.find(r => {
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cOut <= todayStr && cOut >= limitStr && !r.checked_out && r.status !== 'cancelled';
+    return matchesRoomNumber(r, roomNum) && cOut <= todayStr && cOut >= limitStr && r.status !== 'cancelled';
   });
 
-  if (isSalidaHoy || dbStatus === 'sucio_checkout') {
-    return 'salida_hoy'; // Rojo (Pendiente de limpieza por checkout)
+  if (salidaRes) {
+    // Si aún NO se registra el check-out en recepción/sistema y no ha sido marcada como limpia:
+    if (!salidaRes.checked_out && dbStatus !== 'sucio_checkout' && dbStatus !== 'limpia' && dbStatus !== 'en_limpieza') {
+      return 'salida_hoy'; // Rojo claro (Check-out pendiente por registrar)
+    }
+    // Si YA se registró el check-out (o dbStatus es sucio_checkout) y sigue sucia:
+    if ((salidaRes.checked_out || dbStatus === 'sucio_checkout') && dbStatus !== 'limpia' && dbStatus !== 'en_limpieza') {
+      return 'sucio_checkout'; // Rojo fuerte (Check-out registrado, sucia esperando limpieza)
+    }
   }
 
-  // 3. Buscar si es estancia activa (Stayover) y evaluar reglas de limpieza cada 3 días / 2 días / diario
+  if (dbStatus === 'sucio_checkout') {
+    return 'sucio_checkout'; // Rojo fuerte
+  }
+  if (dbStatus === 'en_limpieza') {
+    return 'en_limpieza'; // Amarillo (En proceso de limpieza)
+  }
+
+  // 2. Buscar si hay una reserva para hoy (entrante hoy o en estancia)
   const currentRes = activeReservations.find(r => {
     const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
@@ -136,37 +133,43 @@ function getRoomOperationalStatus(
   });
 
   if (currentRes) {
-    const checkInRaw = (currentRes.check_in || '').split('T')[0].split(' ')[0];
-    if (checkInRaw && checkInRaw.length === 10) {
-      const checkInDate = new Date(checkInRaw + 'T12:00:00');
-      const todayDate = new Date(todayStr + 'T12:00:00');
-      const diffTime = todayDate.getTime() - checkInDate.getTime();
-      const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
+    const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
 
-      const isTwoDayRoom = ['401'].includes(roomNum);
-      const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '501', '402'].includes(roomNum);
-      const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '502', '503', '504', '505', '506', '507'].includes(roomNum);
-
-      let requiresService = false;
-      if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) {
-        requiresService = true;
-      } else if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
-        requiresService = true;
-      } else if (isDailyRoom && dayOfStay >= 2) {
-        requiresService = true;
+    // CASO A: El huésped AÚN NO ha registrado el Check-In
+    if (!currentRes.checked_in) {
+      if (dbStatus === 'limpia' || dbStatus === 'disponible' || !dbStatus) {
+        return 'limpia'; // Azul (Limpia de check-out con reservación hoy, sin check-in registrado aún)
       }
-
-      if (requiresService) {
-        return 'limpieza_programada'; // Amarillo por regla de servicio durante estancia
-      }
+      return 'limpia'; // Azul por tener reserva hoy esperando check-in
     }
 
-    if (currentRes.checked_in) {
-      return 'ocupada'; // Gris neutro: Huésped hospedado normalmente sin servicio pendiente hoy
+    // CASO B: El huésped YA REGISTRÓ su Check-In (checked_in === true)
+    // Evaluar si requiere servicio de estancia hoy (Amarillo) o pasa a Gris (Ocupada/Limpia)
+    const checkInDate = new Date(cIn + 'T12:00:00');
+    const todayDate = new Date(todayStr + 'T12:00:00');
+    const diffTime = todayDate.getTime() - checkInDate.getTime();
+    const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+    // Regla del cliente: cada 3er día para 101-107, 201-206, 401, 402 y diario para 301-306 y 500-507
+    const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '401', '402'].includes(roomNum);
+    const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '501', '502', '503', '504', '505', '506', '507'].includes(roomNum);
+
+    let requiresService = false;
+    if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
+      requiresService = true;
+    } else if (isDailyRoom && dayOfStay >= 2) {
+      requiresService = true;
     }
+
+    if (requiresService && dbStatus !== 'limpia') {
+      return 'limpieza_programada'; // Amarillo por regla de servicio durante estancia
+    }
+
+    return 'ocupada'; // Gris (Limpia con check-in registrado / Ocupada)
   }
 
-  return dbStatus === 'limpia' ? 'limpia' : 'disponible';
+  // 3. Habitación libre sin reservación hoy
+  return 'disponible'; // Verde (Libre para rentar)
 }
 
 export default function AdminDashboard() {
@@ -1181,19 +1184,19 @@ export default function AdminDashboard() {
                       colorClasses = 'bg-emerald-500 text-white border-emerald-600 shadow-emerald-100/30';
                       dotClass = 'bg-emerald-250';
                     } else if (operStatus === 'limpia') {
-                      colorClasses = 'bg-blue-500 text-white border-blue-600 shadow-blue-100/30';
+                      colorClasses = 'bg-blue-600 text-white border-blue-700 shadow-blue-100/30 font-extrabold';
                       dotClass = 'bg-blue-250';
                     } else if (operStatus === 'sucio_checkout') {
-                      colorClasses = 'bg-rose-500 text-white border-rose-600 shadow-rose-100/30';
-                      dotClass = 'bg-rose-250';
+                      colorClasses = 'bg-red-600 text-white border-red-700 shadow-red-200/50 font-black';
+                      dotClass = 'bg-red-300';
                     } else if (operStatus === 'salida_hoy') {
-                      colorClasses = 'bg-rose-50/90 text-rose-700 border-rose-200 shadow-rose-50/20';
+                      colorClasses = 'bg-rose-100 text-rose-800 border-rose-300 shadow-rose-50/20 font-bold';
                       dotClass = 'bg-rose-400';
                     } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
-                      colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
+                      colorClasses = 'bg-amber-400 text-amber-950 border-amber-500 shadow-amber-100/30 font-extrabold';
                       dotClass = 'bg-amber-250';
                     } else if (operStatus === 'ocupada') {
-                      colorClasses = 'bg-zinc-100 text-zinc-600 border-zinc-200';
+                      colorClasses = 'bg-zinc-600 text-white border-zinc-700 shadow-zinc-100/20';
                       dotClass = 'bg-zinc-400';
                     }
 
