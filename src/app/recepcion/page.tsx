@@ -279,6 +279,27 @@ function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
   return dbStatusObj ? dbStatusObj.status : 'disponible';
 }
 
+function matchesRoomNumber(r: any, roomNum: string): boolean {
+  if (!r || !roomNum) return false;
+  const roomStr = String(r.room || '');
+  if (roomStr.includes(roomNum)) return true;
+  const roomNameStr = String(r.room_name || '');
+  if (roomNameStr.includes(roomNum)) return true;
+  if (Array.isArray(r.groupRooms)) {
+    const matchedInGroup = r.groupRooms.some((gr: any) => {
+      const grStr = String(gr.name || gr.roomId || gr.unitId || '');
+      return grStr.includes(roomNum);
+    });
+    if (matchedInGroup) return true;
+  }
+  const UNIT_TO_ROOM: Record<string, string> = {
+    '1': '500', '2': '501', '3': '502', '4': '503',
+    '5': '504', '6': '505', '7': '506', '8': '507'
+  };
+  if (r.unit_id && UNIT_TO_ROOM[String(r.unit_id)] === roomNum) return true;
+  return false;
+}
+
 function getRoomOperationalStatus(
   roomNum: string,
   dbStatus: string, // 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout'
@@ -296,10 +317,9 @@ function getRoomOperationalStatus(
   }
 
   const hasResToday = activeReservations.some(r => {
-    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
-    const matches = rRoom.includes(roomNum);
+    const matches = matchesRoomNumber(r, roomNum);
     const isActiveToday = (r.check_in <= todayStr && r.check_out > todayStr) || (r.check_in === todayStr);
-    return matches && isActiveToday && !r.checked_out;
+    return matches && isActiveToday && !r.checked_out && r.status !== 'cancelled';
   });
 
   // 1. Si el estatus en base de datos fue actualizado HOY, respetar de inmediato si es limpieza/sucio
@@ -308,7 +328,7 @@ function getRoomOperationalStatus(
     if (dbStatus === 'en_limpieza') return 'en_limpieza'; // Amarillo (En limpieza)
     if (dbStatus === 'limpieza_programada') return 'limpieza_programada'; // Amarillo (Programada manualmente hoy)
     if (dbStatus === 'limpia') {
-      return hasResToday ? 'ocupada' : 'limpia'; // Si está reservada hoy, no se muestra limpia/disponible
+      return hasResToday ? 'ocupada' : 'limpia';
     }
     if (dbStatus === 'disponible') {
       return hasResToday ? 'ocupada' : 'disponible';
@@ -319,29 +339,30 @@ function getRoomOperationalStatus(
 
   // Buscar si hay una reserva activa hoy para estancia (Stayover)
   const currentRes = activeReservations.find(r => {
-    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
-    return rRoom.includes(roomNum) && r.check_in <= todayStr && r.check_out > todayStr;
+    return matchesRoomNumber(r, roomNum) && r.check_in <= todayStr && r.check_out > todayStr && !r.checked_out && r.status !== 'cancelled';
   });
 
-  if (currentRes && !currentRes.checked_out) {
-    // Calcular días de estancia transcurridos
-    const checkInDate = new Date(currentRes.check_in + 'T12:00:00');
-    const todayDate = new Date(todayStr + 'T12:00:00');
-    const diffTime = Math.abs(todayDate.getTime() - checkInDate.getTime());
-    const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
+  if (currentRes) {
+    const checkInRaw = (currentRes.check_in || '').split('T')[0].split(' ')[0];
+    if (checkInRaw && checkInRaw.length === 10) {
+      const checkInDate = new Date(checkInRaw + 'T12:00:00');
+      const todayDate = new Date(todayStr + 'T12:00:00');
+      const diffTime = todayDate.getTime() - checkInDate.getTime();
+      const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1 (Llegada), Día 2, Día 3...
 
-    const isTwoDayRoom = ['401'].includes(roomNum);
-    const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','501','402'].includes(roomNum);
-    const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(roomNum);
+      const isTwoDayRoom = ['401'].includes(roomNum);
+      const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','501','402'].includes(roomNum);
+      const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(roomNum);
 
-    if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) {
-      return 'limpieza_programada'; // Amarillo automático cada 2 días (Stayover cada 2 días)
-    }
-    if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
-      return 'limpieza_programada'; // Amarillo automático por 3er día (Stayover cada 3er día)
-    }
-    if (isDailyRoom && dayOfStay >= 2) {
-      return 'limpieza_programada'; // Amarillo automático diario durante estancia
+      if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) {
+        return 'limpieza_programada';
+      }
+      if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
+        return 'limpieza_programada'; // Amarillo automático por 3er día de estancia
+      }
+      if (isDailyRoom && dayOfStay >= 2) {
+        return 'limpieza_programada'; // Amarillo automático diario durante estancia
+      }
     }
   }
 
@@ -350,12 +371,11 @@ function getRoomOperationalStatus(
   limit.setDate(limit.getDate() - 5);
   const limitStr = limit.toISOString().split('T')[0];
   const isSalidaHoy = activeReservations.some(r => {
-    const rRoom = String(r.room || '').replace(/[\s()]/g, '');
-    return rRoom.includes(roomNum) && r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled';
+    return matchesRoomNumber(r, roomNum) && r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled';
   });
 
   if (isSalidaHoy) {
-    return 'salida_hoy'; // Rojo muy tenue por checkout programado hoy/pendiente
+    return 'salida_hoy'; // Rojo por checkout programado hoy/pendiente
   }
 
   // Si no necesita limpieza, y está reservada/ocupada hoy, se muestra sin color (ocupada)
@@ -363,8 +383,7 @@ function getRoomOperationalStatus(
     return 'ocupada';
   }
 
-  // 3. Si no tiene salida ni estancia programada que requiera limpieza hoy, está disponible
-  return 'disponible'; // Verde por defecto
+  return dbStatus === 'limpia' ? 'limpia' : 'disponible';
 }
 
 function getUnitNumberFromInventory(roomId: string, unitId: string, roomInventory: any[]): string {
@@ -4399,7 +4418,7 @@ export default function RecepcionPage() {
                 <div className="bg-emerald-50/50 border-2 border-emerald-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-emerald-700">
                     {ROOMS.filter(r => {
-                      if (['500','501','502','503','504','505','506','507'].includes(r)) return false; // Excluir 500-507 del indicador de disponibles
+                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'disponible';
