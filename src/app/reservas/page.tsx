@@ -1115,7 +1115,8 @@ export default function ReservasList() {
           ...r,
           is_checked_in: checkinMap[String(r.id)]?.status === 'checked_in',
           is_checked_out: checkinMap[String(r.id)]?.status === 'checked_out',
-          is_acknowledged: checkinMap[String(r.id)]?.status === 'acknowledged' || checkinMap[String(r.id)]?.status === 'checked_in' || checkinMap[String(r.id)]?.status === 'checked_out',
+          is_acknowledged: Boolean(r.is_acknowledged) || checkinMap[String(r.id)]?.status === 'acknowledged' || checkinMap[String(r.id)]?.status === 'checked_in' || checkinMap[String(r.id)]?.status === 'checked_out',
+          last_notice_sent: Boolean(r.last_notice_sent),
           document_url: checkinMap[String(r.id)]?.document_url,
           transfer_receipts: transferMap[String(r.id)] || []
         })).sort((a: any, b: any) => 
@@ -1985,7 +1986,7 @@ export default function ReservasList() {
         (r.guest_name || '').toLowerCase().includes(c)
       );
       const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-      matchTab = isDirectChannel && !isOtaBooking && (!r.deposit || r.deposit === 0);
+      matchTab = Boolean(r.is_acknowledged) && isDirectChannel && !isOtaBooking && (!r.deposit || Number(r.deposit) === 0);
     }
     else if (activeTab === 'Directas') matchTab = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
     else if (activeTab === 'WhatsApp') matchTab = r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
@@ -2135,7 +2136,7 @@ export default function ReservasList() {
               (r.guest_name || '').toLowerCase().includes(c)
             );
             const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-            return isDirectChannel && !isOtaBooking && (!r.deposit || r.deposit === 0);
+            return Boolean(r.is_acknowledged) && isDirectChannel && !isOtaBooking && (!r.deposit || Number(r.deposit) === 0);
           }).length;
           const porAprobarCount = activeReservas.filter(r => 
             Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending')

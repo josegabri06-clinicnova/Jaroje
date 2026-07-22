@@ -76,6 +76,8 @@ export async function GET(req: Request) {
             comments: b.notes || '',
             channel: b.channel || 'Recepción',
             isLocal: true,
+            is_acknowledged: Boolean(b.is_acknowledged),
+            last_notice_sent: Boolean(b.last_notice_sent),
             booking_time: b.created_at || b.check_in || null,
             nights,
             cancelled_at: b.status === 'cancelled' ? (b.updated_at || b.created_at || null) : null
