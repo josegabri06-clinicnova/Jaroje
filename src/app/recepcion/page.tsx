@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
-  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown
+  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';

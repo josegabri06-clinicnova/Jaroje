@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2 } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
