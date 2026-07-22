@@ -488,9 +488,36 @@ export default function RecepcionPage() {
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [savingNotesOnly, setSavingNotesOnly] = useState(false);
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
   const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
   const [portalLanguage, setPortalLanguage] = useState('es');
+
+  const handleSaveNotesOnly = async () => {
+    if (!selectedReserva) return;
+    setSavingNotesOnly(true);
+    try {
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedReserva.id,
+          notes: editedNotes
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar la observación');
+      setSelectedReserva((prev: any) => prev ? { ...prev, notes: editedNotes, comments: editedNotes } : null);
+      setReservas((prev: any[]) => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, notes: editedNotes, comments: editedNotes } : r));
+      setIsEditingNotes(false);
+      alert('✅ Observación guardada con éxito.');
+    } catch (err: any) {
+      alert(`⚠️ ${err.message || 'Error al guardar observación'}`);
+    } finally {
+      setSavingNotesOnly(false);
+    }
+  };
 
   // Estados para abono dedicado en Recepción
   const [showAbonoFlow, setShowAbonoFlow] = useState(false);
@@ -5428,6 +5455,61 @@ export default function RecepcionPage() {
                       <span>{selectedReserva.check_out ? format(parseISO(selectedReserva.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
                     </div>
                   </div>
+
+                  {/* 10. OBSERVACIONES DE LA RESERVA (Editable en cualquier momento) */}
+                  <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText size={13} className="text-amber-600" />
+                        Observaciones de la Reserva
+                      </span>
+                      {!isEditingNotes ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditedNotes(selectedReserva.notes || selectedReserva.comments || '');
+                            setIsEditingNotes(true);
+                          }}
+                          className="text-[10.5px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                        >
+                          <Edit size={11} /> Editar Observaciones 📝
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingNotes(false)}
+                          className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 cursor-pointer"
+                        >
+                          ✕ Cancelar
+                        </button>
+                      )}
+                    </div>
+
+                    {!isEditingNotes ? (
+                      <p className="text-[12px] font-semibold text-amber-950 whitespace-pre-line leading-relaxed bg-white/80 p-3 rounded-xl border border-amber-200/60">
+                        {selectedReserva.notes || selectedReserva.comments || <span className="text-amber-700/60 font-normal italic">Sin observaciones registradas. Haz clic en "Editar Observaciones" para agregar notas...</span>}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 animate-in fade-in duration-150">
+                        <textarea
+                          rows={3}
+                          value={editedNotes}
+                          onChange={(e) => setEditedNotes(e.target.value)}
+                          placeholder="Escribe aquí las observaciones especiales de la reservación (ej. llegada tardía, solicitudes especiales, grupo, etc.)..."
+                          className="w-full bg-white border border-amber-300 rounded-xl p-3 text-[12.5px] font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 placeholder:text-amber-700/40"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveNotesOnly}
+                          disabled={savingNotesOnly}
+                          className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {savingNotesOnly ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
+                          Guardar Observaciones
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   {/* Notas del Huésped */}
                   {/* Notas del Huésped — editable durante el check-in */}
                   {selectedReserva.id !== 'walkin' && (
@@ -5839,6 +5921,19 @@ export default function RecepcionPage() {
 
               {!selectedReserva.checked_in && (
                 <>
+                  {/* Observaciones de la Reserva en Check-In */}
+                  <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl text-left space-y-1 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText size={13} className="text-amber-600" />
+                        Observaciones de la Reserva
+                      </span>
+                    </div>
+                    <p className="text-[12px] font-bold text-amber-950 bg-white/80 p-2.5 rounded-xl border border-amber-200/60 whitespace-pre-line leading-relaxed">
+                      {selectedReserva.notes || selectedReserva.comments || <span className="text-amber-700/60 font-normal italic">Sin observaciones especiales registradas.</span>}
+                    </p>
+                  </div>
+
                   {/* DNI Scanner */}
                   <div className="space-y-2">
                     <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Identificación (DNI/Pasaporte)</h4>

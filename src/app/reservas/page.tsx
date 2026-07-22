@@ -189,6 +189,33 @@ export default function ReservasList() {
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
   const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
   const [portalLanguage, setPortalLanguage] = useState('es');
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [savingNotesOnly, setSavingNotesOnly] = useState(false);
+
+  const handleSaveNotesOnlyInReservas = async () => {
+    if (!selectedRes) return;
+    setSavingNotesOnly(true);
+    try {
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedRes.id,
+          notes: editNotes
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al guardar la observación');
+      setSelectedRes((prev: any) => prev ? { ...prev, notes: editNotes, comments: editNotes } : null);
+      setReservas((prev: any[]) => prev.map(r => String(r.id) === String(selectedRes.id) ? { ...r, notes: editNotes, comments: editNotes } : r));
+      setIsEditingNotes(false);
+      alert('✅ Observación guardada con éxito.');
+    } catch (err: any) {
+      alert(`⚠️ ${err.message || 'Error al guardar observación'}`);
+    } finally {
+      setSavingNotesOnly(false);
+    }
+  };
 
   const [editCheckIn, setEditCheckIn] = useState('');
   const [editCheckOut, setEditCheckOut] = useState('');
@@ -3451,13 +3478,60 @@ export default function ReservasList() {
                     </div>
                   </div>
 
-                  {/* Notas del Huésped */}
-                  {selectedRes.notes && (
-                    <div className="bg-amber-50/40 border border-amber-100 p-4 rounded-2xl mt-1">
-                      <span className="text-[10px] font-bold text-amber-850 uppercase tracking-widest block mb-1">Notas del Huésped</span>
-                      <p className="text-[13px] text-zinc-700 italic leading-relaxed">"{selectedRes.notes}"</p>
+                  {/* OBSERVACIONES DE LA RESERVA (Editable desde Admin en cualquier momento) */}
+                  <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left space-y-2.5 mt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText size={13} className="text-amber-600" />
+                        Observaciones de la Reserva
+                      </span>
+                      {!isEditingNotes ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditNotes(selectedRes.notes || selectedRes.comments || '');
+                            setIsEditingNotes(true);
+                          }}
+                          className="text-[10.5px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                        >
+                          <Edit size={11} /> Editar Observaciones 📝
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingNotes(false)}
+                          className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 cursor-pointer"
+                        >
+                          ✕ Cancelar
+                        </button>
+                      )}
                     </div>
-                  )}
+
+                    {!isEditingNotes ? (
+                      <p className="text-[12px] font-semibold text-amber-950 whitespace-pre-line leading-relaxed bg-white/80 p-3 rounded-xl border border-amber-200/60">
+                        {selectedRes.notes || selectedRes.comments || <span className="text-amber-700/60 font-normal italic">Sin observaciones registradas. Haz clic en "Editar Observaciones" para agregar notas...</span>}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 animate-in fade-in duration-150">
+                        <textarea
+                          rows={3}
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                          placeholder="Escribe aquí las observaciones especiales de la reservación (ej. llegada tardía, solicitudes especiales, grupo, etc.)..."
+                          className="w-full bg-white border border-amber-300 rounded-xl p-3 text-[12.5px] font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 placeholder:text-amber-700/40"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveNotesOnlyInReservas}
+                          disabled={savingNotesOnly}
+                          className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {savingNotesOnly ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
+                          Guardar Observaciones
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Documento Adjunto (DNI/Pasaporte) */}
                   {selectedRes.document_url && (

@@ -1289,6 +1289,17 @@ export default function PublicReservaPage() {
                 </button>
               )}
             </div>
+
+            {booking.notes && booking.notes.trim() && (
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-3.5 text-left col-span-2 mt-1 space-y-1">
+                <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest block">
+                  {lang === 'en' ? '📝 Special Instructions / Observations' : '📝 Observaciones de tu Reservación'}
+                </span>
+                <p className="text-[11.5px] font-semibold text-amber-950 whitespace-pre-line leading-relaxed">
+                  {booking.notes}
+                </p>
+              </div>
+            )}
           </div>
         </div>
 

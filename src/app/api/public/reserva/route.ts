@@ -48,7 +48,7 @@ export async function GET(req: Request) {
       // Obtener settings de pago
       const { data: portalSettings } = await supabase
         .from('booking_portal_settings')
-        .select('show_card_payment, transfer_account, language')
+        .select('show_card_payment, transfer_account, language, notes')
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
@@ -102,6 +102,7 @@ export async function GET(req: Request) {
           nights,
           num_adult: localGroupAdult,
           num_child: localGroupChild,
+          notes: (localRes.notes || portalSettings?.notes || '').trim(),
           room_count: localRoomNames.length,
           is_checked_in: checkinData?.status === 'checked_in',
           is_checked_out: checkinData?.status === 'checked_out',
@@ -221,7 +222,7 @@ export async function GET(req: Request) {
 
       const { data: portalSettings } = await supabase
         .from('booking_portal_settings')
-        .select('show_card_payment, transfer_account, language')
+        .select('show_card_payment, transfer_account, language, notes')
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
@@ -294,6 +295,7 @@ export async function GET(req: Request) {
             nights: booking.nights,
             num_adult: b24GroupAdult,
             num_child: b24GroupChild,
+            notes: ((booking as any).notes || (booking as any).comments || portalSettings?.notes || '').trim(),
             room_count: b24RoomNames.length,
             is_checked_in: checkinData?.status === 'checked_in',
             is_checked_out: checkinData?.status === 'checked_out',
