@@ -4497,8 +4497,8 @@ export default function RecepcionPage() {
                           colorClasses = 'bg-amber-400 text-white border-amber-500 shadow-amber-100/30';
                           dotClass = 'bg-amber-250';
                         } else if (operStatus === 'ocupada') {
-                          colorClasses = 'bg-slate-700 text-white border-slate-800 shadow-slate-200/30';
-                          dotClass = 'bg-slate-400';
+                          colorClasses = 'bg-zinc-100 text-zinc-600 border-zinc-200';
+                          dotClass = 'bg-zinc-400';
                         }
 
                         return (
