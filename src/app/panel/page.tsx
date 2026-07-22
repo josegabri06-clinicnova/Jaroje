@@ -660,13 +660,7 @@ export default function AdminDashboard() {
           className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
         >
           <p className="text-[20px] font-bold text-amber-500">
-            {ROOMS.filter(r => {
-              if (r === '500') return false;
-              const dbStatus = getRoomDbStatus(r, roomStatuses);
-              const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-              const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-              return s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout';
-            }).length}
+            {todasSalidasHoy.length}
           </p>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">Salen hoy</p>
         </button>
