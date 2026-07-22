@@ -457,39 +457,96 @@ export default function InventarioPage() {
       empDept = activeEmp.department;
     }
 
-    const ALLOWED_DB_CATEGORIES = ['Blancos', 'Amenidades', 'Limpieza', 'Bebidas', 'Alimentos', 'Otros'];
-    const getValidDbCategory = (cat: string) => {
-      if (!cat) return 'Otros';
-      const clean = cat.trim();
-      const match = ALLOWED_DB_CATEGORIES.find(c => c.toLowerCase() === clean.toLowerCase());
-      return match || 'Otros';
-    };
+  const executeInventoryDbAction = async (
+    action: 'insert' | 'update',
+    payload: { item_name: string; category: string; stock: number; min_stock: number },
+    empName: string,
+    itemId?: string
+  ) => {
+    const candidateCategories = [
+      payload.category?.trim(),
+      payload.category?.trim().toLowerCase(),
+      payload.category?.trim().toUpperCase(),
+      'Otros',
+      'otros',
+      'OTROS',
+      'Blancos',
+      'blancos',
+      'Limpieza',
+      'limpieza',
+      'Amenidades',
+      'amenidades',
+      'Bebidas',
+      'bebidas',
+      'Alimentos',
+      'alimentos'
+    ].filter(Boolean);
 
-    const targetCategory = getValidDbCategory(formCategory);
+    if (items && items.length > 0) {
+      items.forEach(i => {
+        if (i.category) candidateCategories.push(i.category);
+      });
+    }
 
-    const basePayload: any = {
+    const uniqueCategories = [...new Set(candidateCategories)];
+    let lastError: any = null;
+
+    for (const cat of uniqueCategories) {
+      const itemData: any = {
+        item_name: payload.item_name,
+        category: cat,
+        stock: payload.stock,
+        min_stock: payload.min_stock
+      };
+
+      let res = action === 'insert'
+        ? await supabase.from('inventory').insert([{ ...itemData, last_updated_by: empName }])
+        : await supabase.from('inventory').update({ ...itemData, last_updated_by: empName }).eq('id', itemId);
+
+      if (!res.error) return { error: null, categoryUsed: cat };
+
+      res = action === 'insert'
+        ? await supabase.from('inventory').insert([itemData])
+        : await supabase.from('inventory').update(itemData).eq('id', itemId);
+
+      if (!res.error) return { error: null, categoryUsed: cat };
+
+      lastError = res.error;
+      const isCheckViolation = res.error.message?.includes('inventory_category_check') || res.error.code === '23514';
+      if (!isCheckViolation) {
+        break;
+      }
+    }
+
+    return { error: lastError, categoryUsed: payload.category };
+  };
+
+  const handleAddItem = async () => {
+    if (!formName.trim()) return;
+    setIsSubmitting(true);
+    
+    let empName = 'Administrador';
+    let empNum = '999';
+    let empDept = 'Administración';
+    
+    const activeEmp = ['recepcion', 'limpieza', 'mantenimiento']
+      .map(dept => getActiveEmployee(dept as any))
+      .find(emp => emp !== null);
+      
+    if (activeEmp) {
+      empName = activeEmp.full_name;
+      empNum = activeEmp.employee_num;
+      empDept = activeEmp.department;
+    }
+
+    const basePayload = {
       item_name: formName.trim(),
-      category: targetCategory,
+      category: formCategory || 'Blancos',
       stock: parseInt(formStock) || 0,
       min_stock: parseInt(formMinStock) || 0
     };
     
-    let { error } = await supabase.from('inventory').insert([{ ...basePayload, last_updated_by: empName }]);
-    if (error) {
-      // Retry without last_updated_by if column doesn't exist in Supabase schema
-      let retry = await supabase.from('inventory').insert([basePayload]);
-      if (!retry.error) {
-        error = null;
-      } else if (retry.error.message?.includes('inventory_category_check')) {
-        // Retry with fallback category 'Otros'
-        const retryOtros = await supabase.from('inventory').insert([{ ...basePayload, category: 'Otros' }]);
-        if (!retryOtros.error) error = null;
-        else error = retryOtros.error;
-      } else {
-        error = retry.error;
-      }
-    }
-
+    const { error } = await executeInventoryDbAction('insert', basePayload, empName);
     setIsSubmitting(false);
     
     if (error) {
@@ -536,36 +593,15 @@ export default function InventarioPage() {
       empDept = activeEmp.department;
     }
 
-    const ALLOWED_DB_CATEGORIES = ['Blancos', 'Amenidades', 'Limpieza', 'Bebidas', 'Alimentos', 'Otros'];
-    const getValidDbCategory = (cat: string) => {
-      if (!cat) return 'Otros';
-      const clean = cat.trim();
-      const match = ALLOWED_DB_CATEGORIES.find(c => c.toLowerCase() === clean.toLowerCase());
-      return match || 'Otros';
-    };
-
-    const targetCategory = getValidDbCategory(formCategory);
-
-    const updated: any = {
+    const updated = {
       item_name: formName.trim(),
-      category: targetCategory,
+      category: formCategory || editingItem.category || 'Blancos',
       stock: parseInt(formStock) || 0,
       min_stock: parseInt(formMinStock) || 0
     };
 
-    let { error } = await supabase.from('inventory').update({ ...updated, last_updated_by: empName }).eq('id', editingItem.id);
-    if (error) {
-      let retry = await supabase.from('inventory').update(updated).eq('id', editingItem.id);
-      if (!retry.error) {
-        error = null;
-      } else if (retry.error.message?.includes('inventory_category_check')) {
-        const retryOtros = await supabase.from('inventory').update({ ...updated, category: 'Otros' }).eq('id', editingItem.id);
-        if (!retryOtros.error) error = null;
-        else error = retryOtros.error;
-      } else {
-        error = retry.error;
-      }
-    }
+    const { error } = await executeInventoryDbAction('update', updated, empName, editingItem.id);
+    setIsSubmitting(false);
 
     setIsSubmitting(false);
 
