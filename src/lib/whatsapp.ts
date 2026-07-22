@@ -127,7 +127,6 @@ export async function sendWhatsAppTemplate(
       'solicitud_recibida',
       'ultimo_aviso',
       'reservacion_confirmada',
-      'disponibilidad_liberada',
       'preparacion_llegada',
       'bienvenida_checkin',
       'seguimiento_satisfaccion',
@@ -264,7 +263,7 @@ export async function sendWhatsAppTemplate(
           case 'reservacion_confirmada':
             return `¡Hola ${name}!\nNos complace informarte que tu reservación en Condominios Jaroje está oficialmente *CONFIRMADA*. ¡Tu estancia en Huatulco está lista! 🎉\n\nPuedes consultar el reglamento, la ubicación y todos los detalles en tu portal:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
           case 'disponibilidad_liberada':
-            return `Hola ${name}.\nTe informamos que, al no recibir la confirmación de tu anticipo, la disponibilidad de tu habitación ha sido liberada.\n\nSi aún deseas hospedarte con nosotros, puedes consultar disponibilidad en el portal o escribirnos:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Reservación]`;
+            return `Hola ${name}.\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona "Verificar disponibilidad" para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n🔗 *Reserva Beds24:* https://beds24.com/booking2.php?propid=327286&lang=es\n\n[Botón: Verificar disponibilidad] [Botón: Hablar con nosotros]`;
           case 'preparacion_llegada':
             return `¡Hola ${name}!\nYa nos estamos preparando para tu llegada a Condominios Jaroje. En tu portal de huésped encontrarás las instrucciones de llegada, indicaciones para llegar y datos importantes.\n\nPor favor, revísalo aquí:\n🔗 *Portal del Huésped:* https://jaroje-app.vercel.app/public/reserva/[BOOKID]\n\n[Botón: Ver Mi Reservación]`;
           case 'bienvenida_checkin':
