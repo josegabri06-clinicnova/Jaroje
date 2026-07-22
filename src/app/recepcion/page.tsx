@@ -4059,6 +4059,7 @@ export default function RecepcionPage() {
             >
               <p className="text-[20px] font-bold text-amber-500">
                 {ROOMS.filter(r => {
+                  if (r === '500') return false;
                   const dbStatus = getRoomDbStatus(r, roomStatuses);
                   const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                   const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -4400,6 +4401,7 @@ export default function RecepcionPage() {
                 <div className="bg-rose-50/50 border-2 border-rose-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-rose-700">
                     {ROOMS.filter(r => {
+                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
