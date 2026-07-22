@@ -457,9 +457,19 @@ export default function InventarioPage() {
       empDept = activeEmp.department;
     }
 
+    const ALLOWED_DB_CATEGORIES = ['Blancos', 'Amenidades', 'Limpieza', 'Bebidas', 'Alimentos', 'Otros'];
+    const getValidDbCategory = (cat: string) => {
+      if (!cat) return 'Otros';
+      const clean = cat.trim();
+      const match = ALLOWED_DB_CATEGORIES.find(c => c.toLowerCase() === clean.toLowerCase());
+      return match || 'Otros';
+    };
+
+    const targetCategory = getValidDbCategory(formCategory);
+
     const basePayload: any = {
       item_name: formName.trim(),
-      category: formCategory || 'General',
+      category: targetCategory,
       stock: parseInt(formStock) || 0,
       min_stock: parseInt(formMinStock) || 0
     };
@@ -467,9 +477,16 @@ export default function InventarioPage() {
     let { error } = await supabase.from('inventory').insert([{ ...basePayload, last_updated_by: empName }]);
     if (error) {
       // Retry without last_updated_by if column doesn't exist in Supabase schema
-      const retry = await supabase.from('inventory').insert([basePayload]);
+      let retry = await supabase.from('inventory').insert([basePayload]);
       if (!retry.error) {
         error = null;
+      } else if (retry.error.message?.includes('inventory_category_check')) {
+        // Retry with fallback category 'Otros'
+        const retryOtros = await supabase.from('inventory').insert([{ ...basePayload, category: 'Otros' }]);
+        if (!retryOtros.error) error = null;
+        else error = retryOtros.error;
+      } else {
+        error = retry.error;
       }
     }
 
@@ -519,18 +536,34 @@ export default function InventarioPage() {
       empDept = activeEmp.department;
     }
 
+    const ALLOWED_DB_CATEGORIES = ['Blancos', 'Amenidades', 'Limpieza', 'Bebidas', 'Alimentos', 'Otros'];
+    const getValidDbCategory = (cat: string) => {
+      if (!cat) return 'Otros';
+      const clean = cat.trim();
+      const match = ALLOWED_DB_CATEGORIES.find(c => c.toLowerCase() === clean.toLowerCase());
+      return match || 'Otros';
+    };
+
+    const targetCategory = getValidDbCategory(formCategory);
+
     const updated: any = {
       item_name: formName.trim(),
-      category: formCategory || 'General',
+      category: targetCategory,
       stock: parseInt(formStock) || 0,
       min_stock: parseInt(formMinStock) || 0
     };
 
     let { error } = await supabase.from('inventory').update({ ...updated, last_updated_by: empName }).eq('id', editingItem.id);
     if (error) {
-      const retry = await supabase.from('inventory').update(updated).eq('id', editingItem.id);
+      let retry = await supabase.from('inventory').update(updated).eq('id', editingItem.id);
       if (!retry.error) {
         error = null;
+      } else if (retry.error.message?.includes('inventory_category_check')) {
+        const retryOtros = await supabase.from('inventory').update({ ...updated, category: 'Otros' }).eq('id', editingItem.id);
+        if (!retryOtros.error) error = null;
+        else error = retryOtros.error;
+      } else {
+        error = retry.error;
       }
     }
 
