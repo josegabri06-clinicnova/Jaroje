@@ -1282,6 +1282,104 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
   return true;
 }
 
+/**
+ * Registrar un pago en Beds24 detectando si la reserva pertenece a un grupo de condominios.
+ * Si pertenece a un grupo, distribuye el monto proporcionalmente al saldo pendiente de cada unidad.
+ */
+export async function addBeds24GroupPayment(
+  bookId: number | string,
+  totalAmount: number,
+  description: string = 'Pago por transferencia'
+): Promise<boolean> {
+  try {
+    const token = await getBeds24Token();
+    const resTarget = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}&includeInvoice=true`, {
+      headers: { 'token': token },
+      cache: 'no-store'
+    });
+    if (!resTarget.ok) return addBeds24Payment(bookId, totalAmount, description);
+    const jsonTarget = await resTarget.json();
+    if (!jsonTarget.success || !jsonTarget.data || jsonTarget.data.length === 0) {
+      return addBeds24Payment(bookId, totalAmount, description);
+    }
+
+    const targetB = jsonTarget.data[0];
+    const targetName = `${targetB.firstName || ''} ${targetB.lastName || ''}`.trim().toLowerCase();
+    const targetPhone = (targetB.phone || targetB.mobile || targetB.guestPhone || '').trim();
+
+    const resSiblings = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${targetB.arrival}&arrivalTo=${targetB.arrival}&includeInvoice=true`, {
+      headers: { 'token': token },
+      cache: 'no-store'
+    });
+    if (!resSiblings.ok) return addBeds24Payment(bookId, totalAmount, description);
+    const jsonSiblings = await resSiblings.json();
+    const allArrival = jsonSiblings.data || [];
+
+    const group = allArrival.filter((b: any) => {
+      if (b.departure !== targetB.departure) return false;
+      if (String(b.status) === '0' || b.status === 'cancelled') return false;
+      const bName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+      const bPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
+      const sameName = bName && targetName && (bName.includes(targetName) || targetName.includes(bName));
+      const samePhone = bPhone && targetPhone && (bPhone.includes(targetPhone) || targetPhone.includes(bPhone));
+      return sameName || samePhone;
+    });
+
+    if (group.length <= 1) {
+      return addBeds24Payment(bookId, totalAmount, description);
+    }
+
+    console.log(`[Beds24 Group Payment] Group detected (${group.length} condos). Distributing $${totalAmount}`);
+    let groupTotalBalance = 0;
+    const items = group.map((b: any) => {
+      const price = Number(b.price || 0);
+      const dep = Number(b.deposit || 0);
+      const bal = Math.max(0, price - dep);
+      groupTotalBalance += bal;
+      return { b, price, dep, bal };
+    });
+
+    let allSuccess = true;
+    for (const item of items) {
+      const prop = groupTotalBalance > 0 ? (item.bal / groupTotalBalance) : (1 / items.length);
+      const shareAmount = Math.round(totalAmount * prop * 100) / 100;
+      if (shareAmount <= 0) continue;
+
+      const newDep = item.dep + shareAmount;
+      const payload = [
+        {
+          id: Number(item.b.id),
+          bookId: Number(item.b.id),
+          status: 'confirmed',
+          deposit: newDep,
+          invoiceItems: [
+            {
+              description: `${description} (Grupo ${items.length} habs)`,
+              qty: -1,
+              price: shareAmount
+            }
+          ]
+        }
+      ];
+
+      const postRes = await fetch('https://api.beds24.com/v2/bookings', {
+        method: 'POST',
+        headers: { 'token': token, 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store'
+      });
+      if (!postRes.ok) allSuccess = false;
+    }
+
+    clearBeds24Cache();
+    return allSuccess;
+  } catch (err) {
+    console.error("[Beds24 Group Payment Error]:", err);
+    return addBeds24Payment(bookId, totalAmount, description);
+  }
+}
+
+
 
 /**
  * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.

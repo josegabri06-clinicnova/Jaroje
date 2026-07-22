@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { addBeds24Payment, getBeds24Token } from '@/lib/beds24';
+import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token } from '@/lib/beds24';
 import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, getFirstName } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -57,9 +57,9 @@ export async function POST(req: Request) {
         numAdult = Number(localRes.num_adult || 1);
         numChild = Number(localRes.num_child || 0);
       } else {
-        // Reserva de Beds24: Registrar pago en Beds24
+        // Reserva de Beds24: Registrar pago en Beds24 con soporte para distribución de grupo
         const desc = `Abono por transferencia bancaria (Ref: ${receiptId.substring(0, 8)})`;
-        const beds24Success = await addBeds24Payment(bookingId, amount, desc);
+        const beds24Success = await addBeds24GroupPayment(bookingId, amount, desc);
 
         if (!beds24Success) {
           return NextResponse.json({ error: 'Fallo al registrar el pago en Beds24. Revisa las credenciales de la API.' }, { status: 500 });

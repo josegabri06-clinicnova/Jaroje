@@ -228,6 +228,7 @@ export default function ReservasList() {
   const [abonoAccountId, setAbonoAccountId] = useState('');
   const [abonoLoading, setAbonoLoading] = useState(false);
   const [abonoGrupalMode, setAbonoGrupalMode] = useState(false);
+  const [rebalancingGroup, setRebalancingGroup] = useState(false);
 
   // Estados para extensión de estancia
   const [showExtensionFlow, setShowExtensionFlow] = useState(false);
@@ -1689,6 +1690,29 @@ export default function ReservasList() {
       alert(`❌ Error al registrar anticipo grupal:\n\n${err.message}`);
     } finally {
       setAbonoLoading(false);
+    }
+  };
+
+  const handleRebalanceGroup = async () => {
+    if (!selectedRes) return;
+    setRebalancingGroup(true);
+    try {
+      const res = await fetch('/api/reservas/rebalance-group', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bookingId: selectedRes.id })
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        alert(`✅ ${json.message || 'Anticipos del grupo redistribuidos correctamente.'}`);
+        setTimeout(() => { fetchReservas(); }, 1500);
+      } else {
+        alert(`❌ ${json.error || 'No se pudo redistribuir los anticipos.'}`);
+      }
+    } catch (e: any) {
+      alert(`❌ Error al intentar rebalancear los anticipos: ${e.message}`);
+    } finally {
+      setRebalancingGroup(false);
     }
   };
 
@@ -3421,9 +3445,19 @@ export default function ReservasList() {
                           );
                         })}
                       </div>
-                      <p className="text-[10px] font-semibold text-blue-600 pt-1">
-                        💡 Al registrar un anticipo, puedes distribuirlo proporcionalmente en todas las habitaciones del grupo.
-                      </p>
+                      <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-semibold text-blue-600">
+                          💡 Al registrar un anticipo, puedes distribuirlo proporcionalmente en todas las habitaciones del grupo.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleRebalanceGroup}
+                          disabled={rebalancingGroup}
+                          className="shrink-0 px-2.5 py-1 text-[10px] font-extrabold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+                        >
+                          {rebalancingGroup ? 'Rebalanceando...' : '⚖️ Rebalancear anticipos'}
+                        </button>
+                      </div>
                     </div>
                   )}
 
