@@ -1119,7 +1119,7 @@ export default function AdminDashboard() {
                   const dbStatus = getRoomDbStatus(r, roomStatuses);
                   const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                   const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-                  return s === 'sucio_checkout' || s === 'salida_hoy' || dbStatus === 'sucio_checkout';
+                  return s === 'sucio_checkout' || s === 'salida_hoy';
                 }).length}
               </span>
               <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
