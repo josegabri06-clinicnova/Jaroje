@@ -423,18 +423,10 @@ export default function ReservasList() {
     }
     if (!selectedRes || !targetRoomName) return;
 
-    // Validar capacidad máxima de la nueva habitación
-    const totalGuests = Number(selectedRes.num_adult || 1) + Number(selectedRes.num_child || 0);
-    const rules = getCapacityRules(targetRoomName, capacitySettings || undefined);
-    if (totalGuests > rules.max) {
-      alert(`⚠️ No se puede reasignar a la habitación ${targetRoomName} porque la capacidad máxima es de ${rules.max} personas y la reserva tiene ${totalGuests} huéspedes.`);
-      return;
-    }
-
     const oldPVal = Number(selectedRes.price_estimate || selectedRes.price || 0);
     const oldP = oldPVal.toLocaleString('es-MX');
 
-    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedRes.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá sin cambios.`)) {
+    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedRes.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá completamente congelada sin cambios.`)) {
       return;
     }
 
@@ -445,7 +437,8 @@ export default function ReservasList() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedRes.id,
-          roomName: targetRoomName
+          roomName: targetRoomName,
+          price: oldPVal
         })
       });
       const data = await res.json();

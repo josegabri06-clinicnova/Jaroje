@@ -984,7 +984,7 @@ export default function CalendarPage() {
     const oldPVal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
     const oldP = oldPVal.toLocaleString('es-MX');
 
-    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá sin cambios.`)) {
+    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá completamente congelada sin cambios.`)) {
       return;
     }
 
@@ -995,7 +995,8 @@ export default function CalendarPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedReserva.id,
-          roomName: targetRoomName
+          roomName: targetRoomName,
+          price: oldPVal
         })
       });
       const data = await res.json();
