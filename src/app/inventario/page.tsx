@@ -457,19 +457,27 @@ export default function InventarioPage() {
       empDept = activeEmp.department;
     }
 
-    const newItem = {
+    const basePayload: any = {
       item_name: formName.trim(),
-      category: formCategory,
+      category: formCategory || 'General',
       stock: parseInt(formStock) || 0,
-      min_stock: parseInt(formMinStock) || 0,
-      last_updated_by: empName
+      min_stock: parseInt(formMinStock) || 0
     };
     
-    const { error } = await supabase.from('inventory').insert([newItem]);
+    let { error } = await supabase.from('inventory').insert([{ ...basePayload, last_updated_by: empName }]);
+    if (error) {
+      // Retry without last_updated_by if column doesn't exist in Supabase schema
+      const retry = await supabase.from('inventory').insert([basePayload]);
+      if (!retry.error) {
+        error = null;
+      }
+    }
+
     setIsSubmitting(false);
     
     if (error) {
-      alert("Error al añadir artículo");
+      console.error("Error al añadir artículo:", error);
+      alert(`Error al añadir artículo: ${error.message || 'Error desconocido'}`);
     } else {
       // Registrar log de auditoría real
       try {
@@ -482,7 +490,7 @@ export default function InventarioPage() {
             department: empDept,
             module: 'inventario',
             action: 'nuevo_articulo',
-            details: `Creó nuevo artículo de almacén: ${newItem.item_name} | Stock inicial: ${newItem.stock} (Min: ${newItem.min_stock})`
+            details: `Creó nuevo artículo de almacén: ${basePayload.item_name} | Stock inicial: ${basePayload.stock} (Min: ${basePayload.min_stock})`
           })
         });
       } catch (logErr) {
@@ -511,19 +519,26 @@ export default function InventarioPage() {
       empDept = activeEmp.department;
     }
 
-    const updated = {
+    const updated: any = {
       item_name: formName.trim(),
-      category: formCategory,
+      category: formCategory || 'General',
       stock: parseInt(formStock) || 0,
-      min_stock: parseInt(formMinStock) || 0,
-      last_updated_by: empName
+      min_stock: parseInt(formMinStock) || 0
     };
 
-    const { error } = await supabase.from('inventory').update(updated).eq('id', editingItem.id);
+    let { error } = await supabase.from('inventory').update({ ...updated, last_updated_by: empName }).eq('id', editingItem.id);
+    if (error) {
+      const retry = await supabase.from('inventory').update(updated).eq('id', editingItem.id);
+      if (!retry.error) {
+        error = null;
+      }
+    }
+
     setIsSubmitting(false);
 
     if (error) {
-      alert("Error al actualizar artículo");
+      console.error("Error al actualizar artículo:", error);
+      alert(`Error al actualizar artículo: ${error.message || 'Error desconocido'}`);
     } else {
       // Registrar log de auditoría real
       try {
