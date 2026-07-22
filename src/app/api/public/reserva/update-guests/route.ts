@@ -43,19 +43,56 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (localRes) {
-      // 2.1. Validar capacidad máxima
-      const rules = getCapacityRules(localRes.unit_id || '', capacitySettings || undefined);
-      if (totalNewGuests > rules.max) {
+      // 2.1. Consolidar capacidad si es una reservación de grupo local
+      let groupBase = 0;
+      let groupMax = 0;
+      let groupOriginalPax = Number(localRes.num_adult || 1) + Number(localRes.num_child || 0);
+      let groupOriginalPrice = Number(localRes.price || 0);
+      let groupDeposit = Number(localRes.deposit || 0);
+
+      const mainRules = getCapacityRules(localRes.unit_id || '', capacitySettings || undefined);
+      groupBase += mainRules.base;
+      groupMax += mainRules.max;
+
+      try {
+        const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+        const mainName = cleanStr(localRes.guest_name || '');
+        const mainPhone = (localRes.phone || '').trim();
+
+        const { data: siblingLocal } = await supabase
+          .from('local_reservas')
+          .select('id, unit_id, guest_name, phone, num_adult, num_child, price, deposit')
+          .eq('check_in', localRes.check_in)
+          .neq('id', localRes.id);
+
+        if (siblingLocal && siblingLocal.length > 0) {
+          siblingLocal.forEach(s => {
+            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone;
+            const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
+            if (samePhone || sameName) {
+              const sRules = getCapacityRules(s.unit_id || '', capacitySettings || undefined);
+              groupBase += sRules.base;
+              groupMax += sRules.max;
+              groupOriginalPax += (Number(s.num_adult || 0) + Number(s.num_child || 0));
+              groupOriginalPrice += Number(s.price || 0);
+              groupDeposit += Number(s.deposit || 0);
+            }
+          });
+        }
+      } catch (err) {
+        console.error("Error al consolidar grupo localRes en update-guests:", err);
+      }
+
+      if (totalNewGuests > groupMax) {
         return NextResponse.json({ 
           success: false, 
-          error: `La capacidad máxima de la habitación es de ${rules.max} personas. Has seleccionado ${totalNewGuests}.` 
+          error: `La capacidad máxima de la reservación es de ${groupMax} personas. Has seleccionado ${totalNewGuests}.` 
         }, { status: 400 });
       }
 
-      // 2.2. Calcular ajuste de precio
-      const originalPax = Number(localRes.num_adult || 1) + Number(localRes.num_child || 0);
-      const originalExtraGuests = Math.max(0, originalPax - rules.base);
-      const newExtraGuests = Math.max(0, totalNewGuests - rules.base);
+      // 2.2. Calcular ajuste de precio basado en la capacidad base del grupo
+      const originalExtraGuests = Math.max(0, groupOriginalPax - groupBase);
+      const newExtraGuests = Math.max(0, totalNewGuests - groupBase);
       const diffExtra = newExtraGuests - originalExtraGuests;
 
       const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
@@ -67,8 +104,8 @@ export async function POST(req: Request) {
         : 1;
 
       const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
-      const newPrice = Math.round(Number(localRes.price || 0) + priceAdjustment);
-      const newBalance = Math.max(0, newPrice - Number(localRes.deposit || 0));
+      const newPrice = Math.round(groupOriginalPrice + priceAdjustment);
+      const newBalance = Math.max(0, newPrice - groupDeposit);
 
       // 2.3. Guardar en base de datos local
       const { error: dbErr } = await supabase
@@ -118,21 +155,71 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'No se encontró la reserva en Beds24' }, { status: 404 });
     }
 
-    // 3.1. Validar capacidad máxima
-    const roomId = String(currentBooking.roomId || '');
-    const roomName = currentBooking.roomName || '';
-    const rules = getCapacityRules(roomId || roomName, capacitySettings || undefined);
-    if (totalNewGuests > rules.max) {
+    // 3.1. Consolidar grupo en Beds24 si existen reservas hermanas
+    let groupBase = 0;
+    let groupMax = 0;
+    let groupOriginalPax = 0;
+    let groupOriginalPrice = 0;
+
+    try {
+      const allB24 = await getBeds24Bookings(true);
+      const normalizePhoneStr = (p?: string) => (p || '').replace(/\D/g, '');
+
+      const mainPhone = currentBooking.phone || currentBooking.mobile || currentBooking.guestPhone || currentBooking.guestMobile || '';
+      const phoneNum = mainPhone ? normalizePhoneStr(mainPhone) : '';
+      const mainName = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toLowerCase().trim().replace(/\s+/g, ' ');
+
+      const siblingBeds24 = allB24.filter(r => {
+        if (r.check_in !== currentBooking.arrival) return false;
+        if (r.check_out !== currentBooking.departure) return false;
+        const rPhone = r.guest_phone || r.phone || r.mobile || '';
+        const samePhone = phoneNum && rPhone && normalizePhoneStr(rPhone) === phoneNum;
+        const sameName = mainName && r.guest_name && (r.guest_name.toLowerCase().includes(mainName) || mainName.includes(r.guest_name.toLowerCase()));
+        return samePhone || sameName;
+      });
+
+      const groupList = siblingBeds24.length > 0 ? siblingBeds24 : [{
+        roomId: String(currentBooking.roomId || ''),
+        roomName: currentBooking.roomName || '',
+        num_adult: Number(currentBooking.numAdult || 1),
+        num_child: Number(currentBooking.numChild || 0),
+        price: Number(currentBooking.price || 0)
+      }];
+
+      groupList.forEach((b: any) => {
+        const roomIdentifier = String(b.roomId || b.unitId || b.room_name || b.roomName || '');
+        const rRules = getCapacityRules(roomIdentifier, capacitySettings || undefined);
+        groupBase += rRules.base;
+        groupMax += rRules.max;
+        groupOriginalPax += (Number(b.num_adult || b.numAdult || 1) + Number(b.num_child || b.numChild || 0));
+        groupOriginalPrice += Number(b.price || b.price_estimate || 0);
+      });
+
+    } catch (err) {
+      console.error("Error al consolidar grupo Beds24:", err);
+      const roomId = String(currentBooking.roomId || '');
+      const roomName = currentBooking.roomName || '';
+      const rules = getCapacityRules(roomId || roomName, capacitySettings || undefined);
+      groupBase = rules.base;
+      groupMax = rules.max;
+      groupOriginalPax = Number(currentBooking.numAdult || 1) + Number(currentBooking.numChild || 0);
+      groupOriginalPrice = Number(currentBooking.price || 0);
+    }
+
+    if (groupOriginalPrice === 0) {
+      groupOriginalPrice = Number(currentBooking.price || 0);
+    }
+
+    if (totalNewGuests > groupMax) {
       return NextResponse.json({ 
         success: false, 
-        error: `La capacidad máxima de la habitación es de ${rules.max} personas. Has seleccionado ${totalNewGuests}.` 
+        error: `La capacidad máxima de la reservación es de ${groupMax} personas. Has seleccionado ${totalNewGuests}.` 
       }, { status: 400 });
     }
 
     // 3.2. Calcular ajuste de precio
-    const originalPax = Number(currentBooking.numAdult || 1) + Number(currentBooking.numChild || 0);
-    const originalExtraGuests = Math.max(0, originalPax - rules.base);
-    const newExtraGuests = Math.max(0, totalNewGuests - rules.base);
+    const originalExtraGuests = Math.max(0, groupOriginalPax - groupBase);
+    const newExtraGuests = Math.max(0, totalNewGuests - groupBase);
     const diffExtra = newExtraGuests - originalExtraGuests;
 
     const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
@@ -144,8 +231,7 @@ export async function POST(req: Request) {
       : 1;
 
     const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
-    const currentPrice = Number(currentBooking.price || 0);
-    const newPrice = Math.round(currentPrice + priceAdjustment);
+    const newPrice = Math.round(groupOriginalPrice + priceAdjustment);
 
     // Calcular depósitos reales hechos en la reserva para estimar saldo restante
     let actualPaid = 0;

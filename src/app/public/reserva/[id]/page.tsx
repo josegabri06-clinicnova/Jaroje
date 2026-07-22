@@ -685,7 +685,24 @@ const compressImage = (file: File): Promise<Blob | File> => {
   });
 };
 
-// Cliente-side helper para obtener reglas de capacidad
+// Cliente-side helper para obtener reglas de capacidad consolidadas del grupo o habitación
+function getGroupCapacityRules(booking: any) {
+  if (!booking) return { base: 6, max: 8 };
+
+  if (booking.rooms_detail && Array.isArray(booking.rooms_detail) && booking.rooms_detail.length > 0) {
+    let totalBase = 0;
+    let totalMax = 0;
+    booking.rooms_detail.forEach((r: any) => {
+      const rules = getCapacityRules(r.room_name || '');
+      totalBase += rules.base;
+      totalMax += rules.max;
+    });
+    return { base: totalBase, max: totalMax };
+  }
+
+  return getCapacityRules(booking.room_name || '');
+}
+
 function getCapacityRules(roomNameOrId: string) {
   // Si hay múltiples habitaciones (separadas por coma), sumar capacidades
   const parts = roomNameOrId.split(',').map(p => p.trim()).filter(Boolean);
@@ -1778,7 +1795,7 @@ export default function PublicReservaPage() {
               {/* Información de capacidades */}
               <div className="bg-[#FAF9F6] border border-zinc-200/50 rounded-2xl p-3.5 space-y-1.5 text-xs text-zinc-650">
                 <p className="font-bold text-zinc-800">
-                  {t.capacityInfo(getCapacityRules(booking.room_name).base, getCapacityRules(booking.room_name).max)}
+                  {t.capacityInfo(getGroupCapacityRules(booking).base, getGroupCapacityRules(booking).max)}
                 </p>
                 <p className="text-[11px] text-zinc-500">
                   {t.extraChargeInfo}
@@ -1802,7 +1819,7 @@ export default function PublicReservaPage() {
                   <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempAdults}</span>
                   <button
                     onClick={() => setTempAdults(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getCapacityRules(booking.room_name).max}
+                    disabled={tempAdults + tempChildren >= getGroupCapacityRules(booking).max}
                     className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
                   >
                     +
@@ -1827,7 +1844,7 @@ export default function PublicReservaPage() {
                   <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempChildren}</span>
                   <button
                     onClick={() => setTempChildren(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getCapacityRules(booking.room_name).max}
+                    disabled={tempAdults + tempChildren >= getGroupCapacityRules(booking).max}
                     className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
                   >
                     +
@@ -1837,7 +1854,7 @@ export default function PublicReservaPage() {
 
               {/* Cálculo en vivo de tarifas si aplica */}
               {(() => {
-                const rules = getCapacityRules(booking.room_name);
+                const rules = getGroupCapacityRules(booking);
                 const totalTemp = tempAdults + tempChildren;
                 const originalTotal = booking.num_adult + booking.num_child;
                 const originalExtra = Math.max(0, originalTotal - rules.base);
@@ -1861,6 +1878,13 @@ export default function PublicReservaPage() {
                   </div>
                 );
               })()}
+
+              {tempAdults + tempChildren > getGroupCapacityRules(booking).max && (
+                <div className="text-red-600 bg-red-50 border border-red-200 p-3 rounded-2xl text-xs font-bold flex items-center gap-1.5">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  <span>{t.maxCapacityExceeded(getGroupCapacityRules(booking).max)}</span>
+                </div>
+              )}
 
               {updateGuestsError && (
                 <div className="text-red-600 bg-red-50 border border-red-200 p-3 rounded-2xl text-xs font-bold flex items-center gap-1.5">
@@ -1912,7 +1936,7 @@ export default function PublicReservaPage() {
                       setIsUpdatingGuests(false);
                     }
                   }}
-                  disabled={isUpdatingGuests || tempAdults + tempChildren > getCapacityRules(booking.room_name).max}
+                  disabled={isUpdatingGuests || tempAdults + tempChildren > getGroupCapacityRules(booking).max}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-center text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   {isUpdatingGuests && <Loader2 className="animate-spin" size={14} />}
