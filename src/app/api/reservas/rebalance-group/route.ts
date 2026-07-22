@@ -1,12 +1,67 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Token, clearBeds24Cache } from '@/lib/beds24';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
 async function performRebalance(bookingId: string) {
+  const bookingIdNum = Number(bookingId);
+
+  // 1. Revisar si es reserva local en Supabase
+  const { data: localTarget } = await supabase
+    .from('local_reservas')
+    .select('*')
+    .eq('id', bookingIdNum)
+    .maybeSingle();
+
+  if (localTarget) {
+    const cleanStr = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const mainName = cleanStr(localTarget.guest_name || '');
+    const mainPhone = (localTarget.phone || '').trim();
+
+    const { data: siblings } = await supabase
+      .from('local_reservas')
+      .select('*')
+      .eq('check_in', localTarget.check_in);
+
+    const group = (siblings || []).filter(s => {
+      if (s.check_out !== localTarget.check_out) return false;
+      const sName = cleanStr(s.guest_name || '');
+      const sPhone = (s.phone || '').trim();
+      const samePhone = mainPhone && sPhone && sPhone === mainPhone;
+      const sameName = mainName && sName && (sName.includes(mainName) || mainName.includes(sName));
+      return samePhone || sameName;
+    });
+
+    if (group.length > 1) {
+      let totalDepositInGroup = 0;
+      let totalPriceInGroup = 0;
+      group.forEach(s => {
+        totalDepositInGroup += Number(s.deposit || 0);
+        totalPriceInGroup += Number(s.price || 0);
+      });
+
+      for (const s of group) {
+        const sPrice = Number(s.price || 0);
+        const prop = totalPriceInGroup > 0 ? (sPrice / totalPriceInGroup) : (1 / group.length);
+        const targetDeposit = Math.round(totalDepositInGroup * prop * 100) / 100;
+
+        await supabase
+          .from('local_reservas')
+          .update({ deposit: targetDeposit })
+          .eq('id', s.id);
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Reserva local: Depósito de $${totalDepositInGroup} redistribuido en ${group.length} habitaciones.`
+      });
+    }
+  }
+
+  // 2. Si es de Beds24
   const token = await getBeds24Token();
 
-  // 1. Obtener la reserva de Beds24
   const resTarget = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true`, {
     headers: { 'token': token },
     cache: 'no-store'
@@ -23,7 +78,6 @@ async function performRebalance(bookingId: string) {
   const targetName = `${targetB.firstName || ''} ${targetB.lastName || ''}`.trim().toLowerCase();
   const targetPhone = (targetB.phone || targetB.mobile || targetB.guestPhone || '').trim();
 
-  // 2. Buscar reservas hermanas en el mismo rango de fechas
   const resSiblings = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${targetB.arrival}&arrivalTo=${targetB.arrival}&includeInvoice=true`, {
     headers: { 'token': token },
     cache: 'no-store'
@@ -45,7 +99,6 @@ async function performRebalance(bookingId: string) {
     return NextResponse.json({ message: 'La reserva no pertenece a un grupo de múltiples condominios' }, { status: 200 });
   }
 
-  // 3. Sumar el depósito acumulado total del grupo
   let totalDepositInGroup = 0;
   let totalPriceInGroup = 0;
   group.forEach((b: any) => {
@@ -53,7 +106,6 @@ async function performRebalance(bookingId: string) {
     totalPriceInGroup += Number(b.price || 0);
   });
 
-  // 4. Redistribuir equitativamente / proporcionalmente el depósito acumulado
   const results = [];
   for (const b of group) {
     const bPrice = Number(b.price || 0);
@@ -70,7 +122,7 @@ async function performRebalance(bookingId: string) {
           {
             description: `Redistribución de anticipo grupal (Rebalanceo Jaroje)`,
             qty: -1,
-            price: targetDeposit
+            amount: targetDeposit
           }
         ]
       }
@@ -94,7 +146,7 @@ async function performRebalance(bookingId: string) {
   clearBeds24Cache();
   return NextResponse.json({
     success: true,
-    message: `Depósito de $${totalDepositInGroup} redistribuido con éxito entre ${group.length} condominios.`,
+    message: `Depósito de $${totalDepositInGroup} redistribuido con éxito entre ${group.length} condominios en Beds24.`,
     details: results
   });
 }

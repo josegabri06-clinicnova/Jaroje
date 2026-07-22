@@ -1356,7 +1356,7 @@ export async function addBeds24GroupPayment(
             {
               description: `${description} (Grupo ${items.length} habs)`,
               qty: -1,
-              price: shareAmount
+              amount: shareAmount
             }
           ]
         }
