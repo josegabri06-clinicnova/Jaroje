@@ -138,11 +138,7 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     "/images/doble/2.jpg",
     "/images/doble/3.jpg",
     "/images/doble/4.jpg",
-    "/images/doble/5.jpg",
-    "/images/doble/6.jpg",
-    "/images/doble/7.jpg",
-    "/images/doble/8.jpg",
-    "/images/doble/9.jpg"
+    "/images/doble/5.jpg"
   ],
   '1rec': [
     "/images/1rec/1.jpg",
@@ -151,11 +147,7 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     "/images/1rec/4.jpg",
     "/images/1rec/5.jpg",
     "/images/1rec/6.jpg",
-    "/images/1rec/7.jpg",
-    "/images/1rec/8.jpg",
-    "/images/1rec/9.jpg",
-    "/images/1rec/10.jpg",
-    "/images/1rec/11.jpg"
+    "/images/1rec/7.jpg"
   ],
   '2rec': [
     "/images/2rec/1.jpg",
@@ -168,13 +160,7 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     "/images/2rec/8.jpg",
     "/images/2rec/9.jpg",
     "/images/2rec/10.jpg",
-    "/images/2rec/11.jpg",
-    "/images/2rec/12.jpg",
-    "/images/2rec/13.jpg",
-    "/images/2rec/14.jpg",
-    "/images/2rec/15.jpg",
-    "/images/2rec/16.jpg",
-    "/images/2rec/17.jpg"
+    "/images/2rec/11.jpg"
   ],
   '3rec': [
     "/images/3rec/1.jpg",
@@ -191,13 +177,7 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     "/images/3rec/12.jpg",
     "/images/3rec/13.jpg",
     "/images/3rec/14.jpg",
-    "/images/3rec/15.jpg",
-    "/images/3rec/16.jpg",
-    "/images/3rec/17.jpg",
-    "/images/3rec/18.jpg",
-    "/images/3rec/19.jpg",
-    "/images/3rec/20.jpg",
-    "/images/3rec/21.jpg"
+    "/images/3rec/15.jpg"
   ],
   'casa': [
     "/images/casa/1.jpg",
@@ -217,12 +197,7 @@ const ROOM_PHOTOS: Record<string, string[]> = {
     "/images/casa/15.jpg",
     "/images/casa/16.jpg",
     "/images/casa/17.jpg",
-    "/images/casa/18.jpg",
-    "/images/casa/19.jpg",
-    "/images/casa/20.jpg",
-    "/images/casa/21.jpg",
-    "/images/casa/22.jpg",
-    "/images/casa/23.jpg"
+    "/images/casa/18.jpg"
   ]
 };
 
