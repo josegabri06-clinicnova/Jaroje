@@ -450,6 +450,23 @@ export async function sendTemplate2_UltimoAviso(booking: any, bypassPause: boole
   return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, undefined, booking.id, 'url', bypassPause);
 }
 
+// Mensaje de Comprobante Rechazado con motivo personalizado de Roland y botones interactivos (Portal + Contacto)
+export async function sendTemplate_ComprobanteRechazado(booking: any, reason?: string, bypassPause: boolean = false) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const rejectionReason = reason || booking.notes || 'El comprobante no pudo ser verificado. Por favor sube una imagen legible o contáctanos.';
+
+  const params = [
+    getFirstName(booking.guest_name), // {{1}} Nombre
+    String(booking.id),               // {{2}} ID Reserva
+    rejectionReason                   // {{3}} Motivo del rechazo
+  ];
+
+  // Intenta enviar con plantilla específica 'comprobante_rechazado' o 'ultimo_aviso'
+  return sendWhatsAppTemplate(phone, 'comprobante_rechazado', params, undefined, booking.id, 'url', bypassPause);
+}
+
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
 export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPause: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;

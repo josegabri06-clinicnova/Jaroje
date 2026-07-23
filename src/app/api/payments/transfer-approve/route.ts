@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token } from '@/lib/beds24';
-import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, getFirstName } from '@/lib/whatsapp';
+import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -226,15 +226,13 @@ export async function POST(req: Request) {
         }
       }
 
-      // Notificar rechazo vía WhatsApp
+      // Notificar rechazo vía WhatsApp con los motivos personalizados escritos por el Administrador y los botones interactivos
       if (phone) {
-        console.log(`[Reject Transfer] Sending WhatsApp ultimo_aviso to ${phone}`);
-        const waRes = await sendTemplate2_UltimoAviso({
-          id: String(bookingId),
-          guest_name: guestName,
-          phone: phone,
-          deposit: 0
-        });
+        console.log(`[Reject Transfer] Sending WhatsApp rejection notification to ${phone} with notes: ${notes}`);
+        const waRes = await sendTemplate_ComprobanteRechazado(
+          { id: String(bookingId), guest_name: guestName, phone: phone, deposit: 0 },
+          notes
+        );
         if (!waRes.success) console.warn('[Reject Transfer] WhatsApp send template failed:', waRes.error);
       }
 
