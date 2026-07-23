@@ -279,6 +279,13 @@ function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
   return dbStatusObj ? dbStatusObj.status : 'disponible';
 }
 
+const BEDS24_ROOM_MAP: Record<string, string> = {
+  '685321': '101', '685322': '102', '685323': '103', '685324': '104', '685325': '105', '685326': '106', '685327': '107',
+  '685312': '201', '685318': '202', '685314': '203', '685315': '204', '685316': '205', '685317': '206',
+  '685531': '301', '685532': '302', '685533': '303', '685534': '304', '685535': '305', '685536': '306',
+  '679093': '401', '679008': '401', '679087': '402'
+};
+
 const BEDS24_UNIT_MAP: Record<string, Record<string, string>> = {
   '679077': { '1': '301', '2': '302', '3': '303', '4': '304', '5': '305', '6': '306' },
   '679087': { '1': '402' },
@@ -298,18 +305,23 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
   const roomIdStr = String(r.roomId || r.room_id || '');
   const unitIdStr = String(r.unitId || r.unit_id || '');
 
-  // 1. Mapeo explícito Beds24 (roomId + unitId)
+  // 1. Mapeo directo por roomId individual Beds24 (685321 -> 101, etc.)
+  if (roomIdStr && BEDS24_ROOM_MAP[roomIdStr]) {
+    return BEDS24_ROOM_MAP[roomIdStr] === roomNum;
+  }
+
+  // 2. Mapeo explícito Beds24 (roomId + unitId)
   if (roomIdStr && unitIdStr && BEDS24_UNIT_MAP[roomIdStr]?.[unitIdStr]) {
     return BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum;
   }
 
-  // 2. Mapeo habitaciones locales 500-507 (unitId)
+  // 3. Mapeo habitaciones locales 500-507 (unitId)
   if (unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
     if (LOCAL_UNIT_MAP[unitIdStr] === roomNum) return true;
   }
   if (unitIdStr && unitIdStr === roomNum) return true;
 
-  // 3. Evaluar campos room o room_name limpiando rangos como (101-107), (301-306)
+  // 4. Evaluar campos room o room_name limpiando rangos como (101-107), (301-306)
   const roomStr = String(r.room || '').replace(/\(\d{3}-\d{3}\)/g, '');
   const roomNameStr = String(r.room_name || '').replace(/\(\d{3}-\d{3}\)/g, '');
 
@@ -317,11 +329,14 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
   if (regex.test(roomStr)) return true;
   if (regex.test(roomNameStr)) return true;
 
-  // 4. Si la reserva tiene habitaciones de grupo asignadas
+  // 5. Si la reserva tiene habitaciones de grupo asignadas
   if (Array.isArray(r.groupRooms)) {
     const matchedInGroup = r.groupRooms.some((gr: any) => {
       const gRoomId = String(gr.roomId || gr.room_id || '');
       const gUnitId = String(gr.unitId || gr.unit_id || '');
+      if (gRoomId && BEDS24_ROOM_MAP[gRoomId]) {
+        return BEDS24_ROOM_MAP[gRoomId] === roomNum;
+      }
       if (gRoomId && gUnitId && BEDS24_UNIT_MAP[gRoomId]?.[gUnitId]) {
         return BEDS24_UNIT_MAP[gRoomId][gUnitId] === roomNum;
       }
