@@ -746,29 +746,11 @@ export default function StaffPage() {
       
       // 2. Verificar si es stayover hoy (Servicio durante estancia)
       const stayoverRes = reservas.find(res => {
-        const rRoom = String(res.room || '').replace(/[\s()]/g, '');
-        return rRoom.includes(r) && res.check_in <= todayStr && res.check_out > todayStr;
+        return matchesRoomNumber(res, r) && res.check_in <= todayStr && res.check_out > todayStr && res.status !== 'cancelled';
       });
       
       if (stayoverRes && !stayoverRes.checked_out) {
-        // Calcular si requiere servicio hoy por regla de días
-        const checkInDate = new Date(stayoverRes.check_in + 'T12:00:00');
-        const todayDate = new Date(todayStr + 'T12:00:00');
-        const diffTime = Math.abs(todayDate.getTime() - checkInDate.getTime());
-        const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1; // Día 1, 2, 3...
-        
-        const isTwoDayRoom = ['401'].includes(r);
-        const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','501','402'].includes(r);
-        const isDailyRoom = ['301','302','303','304','305','306','500','502','503','504','505','506','507'].includes(r);
-        
-        let requiresService = false;
-        if (isTwoDayRoom && dayOfStay >= 3 && (dayOfStay - 1) % 2 === 0) {
-          requiresService = true;
-        } else if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
-          requiresService = true;
-        } else if (isDailyRoom && dayOfStay >= 2) {
-          requiresService = true;
-        }
+        const requiresService = isRoomStayoverServiceScheduled(r, reservas, todayStr);
         
         if (requiresService) {
           list.push({
