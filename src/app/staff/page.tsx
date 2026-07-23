@@ -263,59 +263,52 @@ function getRoomOperationalStatus(
     }
   }
 
-  // 1. Evaluar si la habitación tiene salida hoy o reciente (Check-out)
-  const limit = new Date();
-  limit.setDate(limit.getDate() - 5);
-  const limitStr = limit.toISOString().split('T')[0];
-
+  // 1. Evaluar si la habitación tiene salida HOY (solo checkouts de hoy)
   const salidaRes = activeReservations.find(r => {
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    const isTodayCheckout = cOut === todayStr;
-    const isOverdueCheckout = cOut < todayStr && !r.checked_out;
-    return matchesRoomNumber(r, roomNum) && (isTodayCheckout || isOverdueCheckout) && r.status !== 'cancelled';
+    return matchesRoomNumber(r, roomNum) && cOut === todayStr && r.status !== 'cancelled';
   });
 
   if (salidaRes) {
-    // Si aún NO ha sido marcada como limpia HOY:
     if (!isCleanedToday) {
       if (isEnLimpiezaToday) return 'en_limpieza';
       if (salidaRes.checked_out || isSucioCheckoutToday || dbStatus === 'sucio_checkout') {
-        return 'sucio_checkout'; // Rojo Fuerte (Check-out registrado, sucia)
+        return 'sucio_checkout';
       }
-      return 'salida_hoy'; // Rojo Claro (Check-out pendiente por registrar en recepción)
+      return 'salida_hoy';
     }
+    // Si ya fue limpiada HOY, seguir evaluando entrada nueva
   }
 
-  if (isSucioCheckoutToday && !isCleanedToday) {
-    return 'sucio_checkout'; // Rojo Fuerte
+  // Checkout vencido: solo rojo si room_status en DB es sucio_checkout
+  if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
+    return 'sucio_checkout';
   }
-  if (dbStatus === 'en_limpieza' && isEnLimpiezaToday) {
-    return 'en_limpieza'; // Amarillo (En proceso)
+  if (isEnLimpiezaToday) {
+    return 'en_limpieza';
   }
 
-  // 2. Buscar si hay una reserva para hoy (entrante hoy o en estancia)
+  // 2. Buscar si hay una reserva activa hoy (estancia o entrante)
   const currentRes = activeReservations.find(r => {
     const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cIn <= todayStr && cOut > todayStr && !r.checked_out && r.status !== 'cancelled';
+    return matchesRoomNumber(r, roomNum) && cIn <= todayStr && cOut > todayStr && r.status !== 'cancelled';
   });
 
   if (currentRes) {
     const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
 
-    // CASO A: El huésped AÚN NO ha registrado el Check-In
-    if (!currentRes.checked_in) {
-      return 'limpia'; // Azul (Esperando llegada de nueva reserva)
+    // CASO A: Llega HOY y aún no ha registrado Check-In → Azul (limpia con reserva)
+    if (!currentRes.checked_in && cIn === todayStr) {
+      return 'limpia';
     }
 
-    // CASO B: El huésped YA REGISTRÓ su Check-In (checked_in === true)
-    // Evaluar si requiere servicio de estancia hoy (Amarillo) o pasa a Gris (Ocupada)
+    // CASO B: En estancia (check-in anterior a hoy) o ya registró check-in
     const checkInDate = new Date(cIn + 'T12:00:00');
     const todayDate = new Date(todayStr + 'T12:00:00');
     const diffTime = todayDate.getTime() - checkInDate.getTime();
     const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-    // Regla del cliente: cada 3er día para 101-107, 201-206, 401, 402 y diario para 301-306 y 500-507
     const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
     const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
 
@@ -327,14 +320,14 @@ function getRoomOperationalStatus(
     }
 
     if (requiresService && !isCleanedToday) {
-      return 'limpieza_programada'; // Amarillo (Servicio de estancia pendiente hoy)
+      return 'limpieza_programada'; // Amarillo
     }
 
-    return 'ocupada'; // Gris (Limpia con check-in registrado / Ocupada)
+    return 'ocupada'; // Gris
   }
 
-  // 3. Habitación libre sin reservación hoy
-  return 'disponible'; // Verde (Libre para rentar)
+  // 3. Sin reservación hoy → Verde
+  return 'disponible';
 }
 
 function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any[], todayStr: string): boolean {
