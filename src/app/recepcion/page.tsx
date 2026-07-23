@@ -382,6 +382,35 @@ function getRoomOperationalStatus(
   return 'disponible'; // Verde (Libre para rentar)
 }
 
+function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any[], todayStr: string): boolean {
+  const currentRes = activeReservations.find(r => {
+    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
+    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
+    return matchesRoomNumber(r, roomNum) && cIn <= todayStr && cOut > todayStr && !r.checked_out && r.status !== 'cancelled';
+  });
+
+  if (!currentRes) return false;
+
+  const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
+  if (!cIn || cIn.length !== 10) return false;
+
+  const checkInDate = new Date(cIn + 'T12:00:00');
+  const todayDate = new Date(todayStr + 'T12:00:00');
+  const diffTime = todayDate.getTime() - checkInDate.getTime();
+  const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+  const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
+  const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
+
+  if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
+    return true;
+  } else if (isDailyRoom && dayOfStay >= 2) {
+    return true;
+  }
+
+  return false;
+}
+
 function getUnitNumberFromInventory(roomId: string, unitId: string, roomInventory: any[]): string {
   if (roomInventory && roomInventory.length > 0) {
     const group = roomInventory.find((g: any) => g.roomId === roomId);
@@ -4417,7 +4446,14 @@ export default function RecepcionPage() {
                       if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                      return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'disponible';
+                      const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                      if (s === 'disponible') return true;
+                      const isSalida = (s === 'salida_hoy' || s === 'sucio_checkout');
+                      const hasIncomingRes = reservas.some(res => {
+                        const cIn = (res.check_in || '').split('T')[0].split(' ')[0];
+                        return matchesRoomNumber(res, r) && cIn === todayStr && res.status !== 'cancelled';
+                      });
+                      return isSalida && !hasIncomingRes;
                     }).length}
                   </span>
                   <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
@@ -4425,10 +4461,11 @@ export default function RecepcionPage() {
                 <div className="bg-amber-50/50 border-2 border-amber-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-amber-700">
                     {ROOMS.filter(r => {
+                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-                      return s === 'en_limpieza' || s === 'limpieza_programada';
+                      return s === 'en_limpieza' || s === 'limpieza_programada' || isRoomStayoverServiceScheduled(r, reservas, todayStr);
                     }).length}
                   </span>
                   <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
@@ -4448,6 +4485,7 @@ export default function RecepcionPage() {
                 <div className="bg-blue-50/50 border-2 border-blue-500 rounded-xl p-2 text-center shadow-sm">
                   <span className="text-[15px] font-black text-blue-700">
                     {ROOMS.filter(r => {
+                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'limpia';
