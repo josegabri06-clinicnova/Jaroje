@@ -1186,36 +1186,36 @@ export default function AdminDashboard() {
         <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-sm p-5 space-y-4">
           {/* Conteo por estados (4 columnas igual que recepción) */}
           <div className="grid grid-cols-4 gap-1.5">
+            {/* DISPONIBLES: habitaciones con checkout hoy pero SIN reserva por llegar → número fijo del día */}
             <div className="bg-emerald-50/50 border-2 border-emerald-500 rounded-xl p-2 text-center shadow-sm">
               <span className="text-[15px] font-black text-emerald-700">
                 {ROOMS.filter(r => {
                   if (r === '500') return false;
-                  const dbStatus = getRoomDbStatus(r, roomStatuses);
-                  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                  const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-                  if (s === 'disponible') return true;
-                  const isSalida = (s === 'salida_hoy' || s === 'sucio_checkout');
+                  const hasCheckoutToday = reservas.some(res => {
+                    const cOut = (res.check_out || '').split('T')[0].split(' ')[0];
+                    return matchesRoomNumber(res, r) && cOut === todayStr && res.status !== 'cancelled';
+                  });
+                  if (!hasCheckoutToday) return false;
                   const hasIncomingRes = reservas.some(res => {
                     const cIn = (res.check_in || '').split('T')[0].split(' ')[0];
                     return matchesRoomNumber(res, r) && cIn === todayStr && res.status !== 'cancelled';
                   });
-                  return isSalida && !hasIncomingRes;
+                  return !hasIncomingRes;
                 }).length}
               </span>
               <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
             </div>
+            {/* LIMP PROGRAMADA: habitaciones con limpieza de estancia programada hoy → número fijo del día */}
             <div className="bg-amber-50/50 border-2 border-amber-500 rounded-xl p-2 text-center shadow-sm">
               <span className="text-[15px] font-black text-amber-700">
                 {ROOMS.filter(r => {
                   if (r === '500') return false;
-                  const dbStatus = getRoomDbStatus(r, roomStatuses);
-                  const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                  const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-                  return s === 'en_limpieza' || s === 'limpieza_programada' || isRoomStayoverServiceScheduled(r, reservas, todayStr);
+                  return isRoomStayoverServiceScheduled(r, reservas, todayStr);
                 }).length}
               </span>
               <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
             </div>
+            {/* CHECK OUT: habitaciones pendientes de checkout o checkout registrado (rojo claro + rojo fuerte) → decremental */}
             <div className="bg-rose-50/50 border-2 border-rose-500 rounded-xl p-2 text-center shadow-sm">
               <span className="text-[15px] font-black text-rose-700">
                 {ROOMS.filter(r => {
@@ -1228,18 +1228,22 @@ export default function AdminDashboard() {
               </span>
               <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
             </div>
+            {/* LIMP TERMINADA: habitaciones en estado limpia (azul) → incremental durante el día */}
             <div className="bg-blue-50/50 border-2 border-blue-500 rounded-xl p-2 text-center shadow-sm">
               <span className="text-[15px] font-black text-blue-700">
                 {ROOMS.filter(r => {
                   if (r === '500') return false;
                   const dbStatus = getRoomDbStatus(r, roomStatuses);
                   const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                  return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'limpia';
+                  const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                  // Limpieza terminada = azul: limpia de checkout CON reserva entrante pendiente de check-in
+                  return s === 'limpia';
                 }).length}
               </span>
               <p className="text-[7.2px] font-black text-blue-600 uppercase tracking-wider mt-0.5">Limp. Terminada</p>
             </div>
           </div>
+
 
           {/* Grid visual premium agrupado por Renglones/Filas */}
           <div className="space-y-4 pt-1">
