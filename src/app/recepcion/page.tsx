@@ -281,22 +281,33 @@ function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
 
 function matchesRoomNumber(r: any, roomNum: string): boolean {
   if (!r || !roomNum) return false;
-  const roomStr = String(r.room || '');
-  if (roomStr.includes(roomNum)) return true;
-  const roomNameStr = String(r.room_name || '');
-  if (roomNameStr.includes(roomNum)) return true;
-  if (Array.isArray(r.groupRooms)) {
-    const matchedInGroup = r.groupRooms.some((gr: any) => {
-      const grStr = String(gr.name || gr.roomId || gr.unitId || '');
-      return grStr.includes(roomNum);
-    });
-    if (matchedInGroup) return true;
-  }
+
+  // 1. Matcheo por unit_id
   const UNIT_TO_ROOM: Record<string, string> = {
     '1': '500', '2': '501', '3': '502', '4': '503',
     '5': '504', '6': '505', '7': '506', '8': '507'
   };
   if (r.unit_id && UNIT_TO_ROOM[String(r.unit_id)] === roomNum) return true;
+  if (r.unit_id && String(r.unit_id) === roomNum) return true;
+
+  // 2. Si la reserva tiene habitaciones de grupo asignadas
+  if (Array.isArray(r.groupRooms)) {
+    const matchedInGroup = r.groupRooms.some((gr: any) => {
+      const grStr = String(gr.name || gr.roomId || gr.unitId || '').replace(/\(\d{3}-\d{3}\)/g, '');
+      const regex = new RegExp(`\\b${roomNum}\\b`);
+      return regex.test(grStr);
+    });
+    if (matchedInGroup) return true;
+  }
+
+  // 3. Matchear room o room_name limpiando rangos como (101-107), (301-306)
+  const roomStr = String(r.room || '').replace(/\(\d{3}-\d{3}\)/g, '');
+  const roomNameStr = String(r.room_name || '').replace(/\(\d{3}-\d{3}\)/g, '');
+
+  const regex = new RegExp(`\\b${roomNum}\\b`);
+  if (regex.test(roomStr)) return true;
+  if (regex.test(roomNameStr)) return true;
+
   return false;
 }
 
