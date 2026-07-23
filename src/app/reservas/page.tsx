@@ -3036,21 +3036,27 @@ export default function ReservasList() {
 
                         const templates = [
                           // Mensaje de Bienvenida OTA (Sin Enlaces)
-                          `🏖️ ¡Gracias por reservar en Condominios Jaroje!\n\n` +
+                          `🏖️ ¡Gracias por elegir Condominios Jaroje!\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
-                          `¡Será un gusto recibirte en Huatulco! 🌴\n\n` +
-                          `Hemos preparado tu Portal del Huésped, donde encontrarás toda la información sobre tu reservación y estancia.\n\n` +
-                          `En él podrás consultar:\n\n` +
-                          `•  📋 Datos de tu reservación.\n` +
-                          `•  🏡 Información y fotografías de tu alojamiento.\n` +
-                          `•  📍 Cómo llegar.\n` +
-                          `•  🚪 Acceso y guía de llegada.\n` +
-                          `•  📖 Políticas del alojamiento.\n` +
-                          `•  📶 WiFi y datos de tu estancia.\n` +
-                          `•  🌴 Recomendaciones para disfrutar Huatulco.\n\n` +
-                          `📲 Muy pronto recibirás en el WhatsApp registrado en tu reservación el acceso a tu Portal del Huésped.\n\n` +
-                          `Si tienes cualquier duda, estaremos encantados de ayudarte.\n\n` +
-                          `¡Te esperamos! ☀️`,
+                          `Será un gusto darte la bienvenida en Huatulco.\n\n` +
+                          `📲 Portal del Huésped\n` +
+                          `Hemos preparado tu Portal del Huésped, donde encontrarás toda la información de tu estancia:\n` +
+                          `•  📋 Detalles de tu reservación\n` +
+                          `•  🏡 Información y fotos del alojamiento\n` +
+                          `•  📍 Indicaciones de llegada\n` +
+                          `•  🚪 Acceso y guía de entrada\n` +
+                          `•  📖 Políticas del alojamiento\n` +
+                          `•  📶 WiFi y datos de tu estancia\n` +
+                          `•  🌴 Recomendaciones en Huatulco\n\n` +
+                          `Recibirás el acceso en breve por nuestros canales oficiales.\n\n` +
+                          `📞 Canales oficiales\n` +
+                          `Nos comunicaremos únicamente por WhatsApp desde:\n` +
+                          `+52 958 116 8698\n` +
+                          `+52 958 587 8554\n\n` +
+                          `También podrías recibir mensajes dentro de Booking.com.\n\n` +
+                          `🔒 Por tu seguridad: Si recibes mensajes o enlaces de otros remitentes, no interactúes y contáctanos primero.\n\n` +
+                          `Si tienes dudas, con gusto te ayudamos.\n\n` +
+                          `¡Te esperamos!`,
 
                           // Mensaje 1
                           `📋 *Solicitud de reservación recibida (24 h para confirmar)*\n\n` +
