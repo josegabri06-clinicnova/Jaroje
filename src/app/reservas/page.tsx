@@ -1673,6 +1673,24 @@ export default function ReservasList() {
           deposit: newMainDeposit,
           balance: Math.max(0, (prev.price_estimate || 0) - newMainDeposit)
         }));
+        // Enviar confirmación por WhatsApp (Mensaje 3) al registrar anticipo grupal
+        const mainPhoneNum = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
+        if (mainPhoneNum) {
+          const total = (selectedRes.price_estimate || selectedRes.price || 0);
+          fetch('/api/whatsapp/send-template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              template: 'reservacion_confirmada',
+              booking: {
+                ...selectedRes,
+                deposit: newMainDeposit,
+                balance: Math.max(0, total - newMainDeposit),
+                last_payment_amount: mainAmount
+              }
+            })
+          }).catch(err => console.error("Error al enviar WhatsApp de anticipo grupal:", err));
+        }
       }
 
       setShowAbonoFlow(false);
@@ -1777,11 +1795,10 @@ export default function ReservasList() {
       if (phoneNum) {
         try {
           const isOta = targetRes.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => targetRes.channel.toLowerCase().includes(c));
-          const hasNoDeposit = !targetRes.deposit || Number(targetRes.deposit) === 0;
 
-          // Si es OTA o ya tiene anticipo -> Mensaje 3 (reservacion_confirmada)
+          // Si es reserva nueva de OTA -> Mensaje 3 (reservacion_confirmada)
           // Si es Directa/Google/Bot sin anticipo -> Mensaje 1 (solicitud_recibida)
-          const targetTemplate = (isOta || !hasNoDeposit) ? 'reservacion_confirmada' : 'solicitud_recibida';
+          const targetTemplate = isOta ? 'reservacion_confirmada' : 'solicitud_recibida';
 
           const waRes = await fetch('/api/whatsapp/send-template', {
             method: 'POST',
