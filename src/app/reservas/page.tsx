@@ -2997,20 +2997,22 @@ export default function ReservasList() {
                           <option value={1}>Mensaje 1: Solicitud de Reservación Recibida (24h)</option>
                           <option value={2}>Mensaje 2: Último recordatorio (1h)</option>
                           <option value={3}>Mensaje 3: Confirmación de Pago y Reservación</option>
-                          <option value={4}>Mensaje 4: Disponibilidad Liberada</option>
-                          <option value={5}>Mensaje 5: Todo listo para tu llegada</option>
-                          <option value={6}>Mensaje 6: Bienvenido a Condominios Jaroje</option>
-                          <option value={7}>Mensaje 7: ¿Cómo va tu estancia?</option>
-                          <option value={8}>Mensaje 8: Check-out 12:00 p.m.</option>
-                          <option value={9}>Mensaje 9: ¿Cómo estuvo tu experiencia?</option>
-                          <option value={10}>Mensaje 10: Nos encantará recibirte nuevamente</option>
+                          <option value={4}>Mensaje 4: Disponibilidad Liberada (Español)</option>
+                          <option value={5}>Mensaje 4 (EN): Availability Released (English)</option>
+                          <option value={6}>Mensaje 5: Todo listo para tu llegada</option>
+                          <option value={7}>Mensaje 6: Bienvenido a Condominios Jaroje</option>
+                          <option value={8}>Mensaje 7: ¿Cómo va tu estancia?</option>
+                          <option value={9}>Mensaje 8: Check-out 12:00 p.m.</option>
+                          <option value={10}>Mensaje 9: ¿Cómo estuvo tu experiencia?</option>
+                          <option value={11}>Mensaje 10: Nos encantará recibirte nuevamente</option>
                         </select>
                       </div>
 
                       {(() => {
                         const guestFirstName = selectedRes.guest_name ? selectedRes.guest_name.trim().split(' ')[0] : 'Huésped';
                         const link = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}`;
-                        const linkDisponibilidad = 'https://www.condominiosjaroje.com';
+                        const linkDisponibilidad = 'https://beds24.com/booking2.php?propid=327286';
+                        const linkDisponibilidadEn = 'https://beds24.com/booking2.php?propid=327286&lang=en';
 
                         const templates = [
                           // Mensaje de Bienvenida OTA (Sin Enlaces)
@@ -3055,13 +3057,21 @@ export default function ReservasList() {
                           `👇 *Mi reservación*\n` +
                           `${link}`,
 
-                          // Mensaje 4
+                          // Mensaje 4 (ES)
                           `😔 *Disponibilidad liberada*\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
                           `Lamentamos informarte que, al no recibir el depósito dentro del plazo indicado, *la disponibilidad de tu alojamiento fue liberada.*\n\n` +
                           `Si aún deseas hospedarte con nosotros, presiona *“Verificar disponibilidad”* para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n` +
                           `👇 *Verificar disponibilidad*\n` +
                           `${linkDisponibilidad}`,
+
+                          // Mensaje 4 (EN)
+                          `😔 *Availability Released*\n\n` +
+                          `Hello, ${guestFirstName}.\n\n` +
+                          `We regret to inform you that, as we did not receive the deposit within the specified timeframe, *the availability for your accommodation has been released.*\n\n` +
+                          `If you still wish to stay with us, please press *“Check Availability”* to see if we still have accommodation available for your travel dates and make a new reservation.\n\n` +
+                          `👇 *Check Availability*\n` +
+                          `${linkDisponibilidadEn}`,
 
                           // Mensaje 5
                           `*🚗 Todo listo para tu llegada*\n` +
@@ -3154,6 +3164,7 @@ export default function ReservasList() {
                           'solicitud_recibida',
                           'ultimo_aviso',
                           'reservacion_confirmada',
+                          'disponibilidad_liberada',
                           'disponibilidad_liberada',
                           'preparacion_llegada',
                           'bienvenida_checkin',
