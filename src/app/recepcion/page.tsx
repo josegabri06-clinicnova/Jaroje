@@ -2407,28 +2407,54 @@ export default function RecepcionPage() {
   }, []);
 
   const llegadas = useMemo(() => {
-    return reservas.filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out);
+    return reservas
+      .filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out)
+      .sort((a, b) => {
+        const roomA = getUnitDisplay(a.room_name || a.room || '');
+        const roomB = getUnitDisplay(b.room_name || b.room || '');
+        const numA = parseInt(roomA.replace(/\D/g, ''), 10) || 9999;
+        const numB = parseInt(roomB.replace(/\D/g, ''), 10) || 9999;
+        return numA - numB;
+      });
   }, [reservas, todayStr]);
 
   const todasLlegadas = useMemo(() => {
-    return reservas.filter(r => 
-      r.status !== 'cancelled' && 
-      r.check_in === todayStr
-    );
+    return reservas
+      .filter(r => r.status !== 'cancelled' && r.check_in === todayStr)
+      .sort((a, b) => {
+        const roomA = getUnitDisplay(a.room_name || a.room || '');
+        const roomB = getUnitDisplay(b.room_name || b.room || '');
+        const numA = parseInt(roomA.replace(/\D/g, ''), 10) || 9999;
+        const numB = parseInt(roomB.replace(/\D/g, ''), 10) || 9999;
+        return numA - numB;
+      });
   }, [reservas, todayStr]);
 
   const salidas = useMemo(() => {
     const limit = new Date();
     limit.setDate(limit.getDate() - 5);
     const limitStr = limit.toISOString().split('T')[0];
-    return reservas.filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled');
+    return reservas
+      .filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled')
+      .sort((a, b) => {
+        const roomA = getUnitDisplay(a.room_name || a.room || '');
+        const roomB = getUnitDisplay(b.room_name || b.room || '');
+        const numA = parseInt(roomA.replace(/\D/g, ''), 10) || 9999;
+        const numB = parseInt(roomB.replace(/\D/g, ''), 10) || 9999;
+        return numA - numB;
+      });
   }, [reservas, todayStr]);
 
   const todasSalidas = useMemo(() => {
-    return reservas.filter(r => 
-      r.status !== 'cancelled' &&
-      r.check_out === todayStr
-    );
+    return reservas
+      .filter(r => r.status !== 'cancelled' && r.check_out === todayStr)
+      .sort((a, b) => {
+        const roomA = getUnitDisplay(a.room_name || a.room || '');
+        const roomB = getUnitDisplay(b.room_name || b.room || '');
+        const numA = parseInt(roomA.replace(/\D/g, ''), 10) || 9999;
+        const numB = parseInt(roomB.replace(/\D/g, ''), 10) || 9999;
+        return numA - numB;
+      });
   }, [reservas, todayStr]);
 
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
