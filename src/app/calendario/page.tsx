@@ -3343,23 +3343,36 @@ export default function CalendarPage() {
                 ) : (
                   sortedFiltered.map(r => {
                     const roomNum = getUnitDisplay(r.room_name || r.room || '');
-                    const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
-                    const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum));
-                    const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
+                    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
 
                     let statusBadge = {
                       label: 'En Casa',
                       classes: 'bg-zinc-100 text-zinc-800 border-zinc-300 font-extrabold',
                       dot: 'bg-zinc-400'
                     };
-                    if (operStatus === 'salida_hoy') {
-                      statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
-                    } else if (operStatus === 'sucio_checkout') {
-                      statusBadge = { label: 'Check out registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
-                    } else if (operStatus === 'limpieza_programada' || isRoomStayoverServiceScheduled(roomNum, reservas, todayStr)) {
-                      statusBadge = { label: 'Limpieza programada', classes: 'bg-amber-400 text-amber-950 border-amber-500 font-black', dot: 'bg-amber-900' };
-                    } else if (operStatus === 'limpia' || operStatus === 'disponible') {
+
+                    if (cOut === todayStr) {
+                      if (!r.checked_out) {
+                        statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
+                      } else {
+                        statusBadge = { label: 'Check out registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
+                      }
+                    } else if (cIn === todayStr && !r.checked_in) {
                       statusBadge = { label: 'Limpieza finalizada', classes: 'bg-blue-600 text-white border-blue-700 font-extrabold', dot: 'bg-white' };
+                    } else if (r.checked_in) {
+                      const cInDate = new Date(cIn + 'T12:00:00');
+                      const tDate = new Date(todayStr + 'T12:00:00');
+                      const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
+                      const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '401', '402'].includes(roomNum);
+                      const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '501', '502', '503', '504', '505', '506', '507'].includes(roomNum);
+                      let reqServ = false;
+                      if (isThreeDayRoom && diffDays >= 2 && diffDays % 2 === 0) reqServ = true;
+                      else if (isDailyRoom && diffDays >= 1) reqServ = true;
+
+                      if (reqServ) {
+                        statusBadge = { label: 'Limpieza programada', classes: 'bg-amber-400 text-amber-950 border-amber-500 font-black', dot: 'bg-amber-900' };
+                      }
                     }
 
                     const nightsVal = r.nights || 1;
