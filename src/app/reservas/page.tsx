@@ -3005,6 +3005,7 @@ export default function ReservasList() {
                           <option value={9}>Mensaje 8: Check-out 12:00 p.m.</option>
                           <option value={10}>Mensaje 9: ¿Cómo estuvo tu experiencia?</option>
                           <option value={11}>Mensaje 10: Nos encantará recibirte nuevamente</option>
+                          <option value={12}>Mensaje: 📶 WiFi, Claves e Información Importante</option>
                         </select>
                       </div>
 
@@ -3013,6 +3014,25 @@ export default function ReservasList() {
                         const link = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}`;
                         const linkDisponibilidad = 'https://beds24.com/booking2.php?propid=327286';
                         const linkDisponibilidadEn = 'https://beds24.com/booking2.php?propid=327286&lang=en';
+
+                        const wifiInfoBlock = 
+                          `📶 *WiFi y Claves*\n` +
+                          `WiFi: JAROJE\n` +
+                          `Contraseña: HUXX2025\n` +
+                          `Portón: 3456\n\n` +
+                          `ℹ️ *Información importante*\n` +
+                          `• Toallas secas disponibles en recepción.\n` +
+                          `• Acceso exclusivo para huéspedes registrados.\n` +
+                          `• No se admiten mascotas.\n` +
+                          `• Propiedad 100% libre de humo.\n` +
+                          `• El hotel no se hace responsable por objetos de valor.\n` +
+                          `• Estacionamiento sujeto a disponibilidad.\n\n` +
+                          `⏰ *Horarios*\n` +
+                          `Alberca: 9:00–22:00\n` +
+                          `Recepción: 8:00–20:00\n` +
+                          `WhatsApp: 9:00–16:00\n\n` +
+                          `🌐 *Portal del Huésped:*\n` +
+                          `${link}`;
 
                         const templates = [
                           // Mensaje de Bienvenida OTA (Sin Enlaces)
@@ -3085,8 +3105,7 @@ export default function ReservasList() {
                           `${link}\n\n` +
                           `*📍 Cómo llegar*\n` +
                           `CONDOMINIOS JAROJE 958 116 8698 https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic\n\n` +
-                          `*📶 WiFi y Claves*\n` +
-                          `${link}`,
+                          wifiInfoBlock,
 
                           // Mensaje 6
                           `🏡 *¡Bienvenido a Condominios Jaroje!*\n\n` +
@@ -3097,8 +3116,7 @@ export default function ReservasList() {
                           `Deseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n` +
                           `👇 *Mi estancia*\n` +
                           `${link}\n\n` +
-                          `*📶 WiFi y Claves*\n` +
-                          `${link}`,
+                          wifiInfoBlock,
 
                           // Mensaje 7
                           `😊 *¿Cómo va tu estancia?*\n\n` +
@@ -3107,8 +3125,7 @@ export default function ReservasList() {
                           `Si hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n` +
                           `👇 *Mi estancia*\n` +
                           `${link}\n\n` +
-                          `*📶 WiFi y Claves*\n` +
-                          `${link}`,
+                          wifiInfoBlock,
 
                           // Mensaje 8
                           `🚪 *Check-out 12:00 p.m.*\n\n` +
@@ -3135,7 +3152,10 @@ export default function ReservasList() {
                           `Hoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\n` +
                           `Si estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En *"Verificar disponibilidad"* podrás consultar disponibilidad y comenzar una nueva reservación.\n\n` +
                           `👇 *Verificar disponibilidad*\n` +
-                          `${linkDisponibilidad}`
+                          `${linkDisponibilidad}`,
+
+                          // Mensaje 12: WiFi e Información
+                          wifiInfoBlock
                         ];
 
                         const message = templates[selectedMessageIndex] || templates[0];
