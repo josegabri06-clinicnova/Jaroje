@@ -174,34 +174,57 @@ function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
   return dbStatusObj ? dbStatusObj.status : 'disponible';
 }
 
+const BEDS24_UNIT_MAP: Record<string, Record<string, string>> = {
+  '679077': { '1': '301', '2': '302', '3': '303', '4': '304', '5': '305', '6': '306' },
+  '679087': { '1': '402' },
+  '679091': { '1': '201', '2': '202', '3': '203', '4': '204', '5': '205', '6': '206' },
+  '679092': { '1': '101', '2': '102', '3': '103', '4': '104', '5': '105', '6': '106', '7': '107' },
+  '679093': { '1': '401' }
+};
+
+const LOCAL_UNIT_MAP: Record<string, string> = {
+  '1': '500', '2': '501', '3': '502', '4': '503',
+  '5': '504', '6': '505', '7': '506', '8': '507'
+};
+
 function matchesRoomNumber(r: any, roomNum: string): boolean {
   if (!r || !roomNum) return false;
 
-  // 1. Matcheo por unit_id
-  const UNIT_TO_ROOM: Record<string, string> = {
-    '1': '500', '2': '501', '3': '502', '4': '503',
-    '5': '504', '6': '505', '7': '506', '8': '507'
-  };
-  if (r.unit_id && UNIT_TO_ROOM[String(r.unit_id)] === roomNum) return true;
-  if (r.unit_id && String(r.unit_id) === roomNum) return true;
+  const roomIdStr = String(r.roomId || r.room_id || '');
+  const unitIdStr = String(r.unitId || r.unit_id || '');
 
-  // 2. Si la reserva tiene habitaciones de grupo asignadas
-  if (Array.isArray(r.groupRooms)) {
-    const matchedInGroup = r.groupRooms.some((gr: any) => {
-      const grStr = String(gr.name || gr.roomId || gr.unitId || '').replace(/\(\d{3}-\d{3}\)/g, '');
-      const regex = new RegExp(`\\b${roomNum}\\b`);
-      return regex.test(grStr);
-    });
-    if (matchedInGroup) return true;
+  // 1. Mapeo explícito Beds24 (roomId + unitId)
+  if (roomIdStr && unitIdStr && BEDS24_UNIT_MAP[roomIdStr]?.[unitIdStr]) {
+    return BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum;
   }
 
-  // 3. Matchear room o room_name limpiando rangos como (101-107), (301-306)
+  // 2. Mapeo habitaciones locales 500-507 (unitId)
+  if (unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
+    if (LOCAL_UNIT_MAP[unitIdStr] === roomNum) return true;
+  }
+  if (unitIdStr && unitIdStr === roomNum) return true;
+
+  // 3. Evaluar campos room o room_name limpiando rangos como (101-107), (301-306)
   const roomStr = String(r.room || '').replace(/\(\d{3}-\d{3}\)/g, '');
   const roomNameStr = String(r.room_name || '').replace(/\(\d{3}-\d{3}\)/g, '');
 
   const regex = new RegExp(`\\b${roomNum}\\b`);
   if (regex.test(roomStr)) return true;
   if (regex.test(roomNameStr)) return true;
+
+  // 4. Si la reserva tiene habitaciones de grupo asignadas
+  if (Array.isArray(r.groupRooms)) {
+    const matchedInGroup = r.groupRooms.some((gr: any) => {
+      const gRoomId = String(gr.roomId || gr.room_id || '');
+      const gUnitId = String(gr.unitId || gr.unit_id || '');
+      if (gRoomId && gUnitId && BEDS24_UNIT_MAP[gRoomId]?.[gUnitId]) {
+        return BEDS24_UNIT_MAP[gRoomId][gUnitId] === roomNum;
+      }
+      const grStr = String(gr.name || gr.roomId || gr.unitId || '').replace(/\(\d{3}-\d{3}\)/g, '');
+      return regex.test(grStr);
+    });
+    if (matchedInGroup) return true;
+  }
 
   return false;
 }
