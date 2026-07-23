@@ -283,28 +283,27 @@ function getRoomOperationalStatus(
 
   if (salidaRes) {
     // Si el huésped de la salida AÚN NO registra checkout (salida pendiente):
-    if (!salidaRes.checked_out && !isSucioCheckoutToday && dbStatus !== 'sucio_checkout' && !isCleanedToday) {
+    if (!salidaRes.checked_out) {
       if (isEnLimpiezaToday || dbStatus === 'en_limpieza') return 'en_limpieza';
-      return 'salida_hoy'; // Rojo claro: check-out pendiente
+      return 'salida_hoy'; // Rojo claro: check-out pendiente SIEMPRE que no haya hecho check-out
     }
 
-    // Si ya registró checkout O dbStatus es sucio_checkout O fue limpiada hoy:
-    if (salidaRes.checked_out || isSucioCheckoutToday || dbStatus === 'sucio_checkout' || isCleanedToday) {
-      if (isCleanedToday) {
-        // Limpieza terminada post-checkout:
-        const incomingRes = activeReservations.find(r => {
-          const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
-          return matchesRoomNumber(r, roomNum) && cIn === todayStr && r.status !== 'cancelled' && !r.checked_in;
-        });
-        if (incomingRes) {
-          return 'limpia'; // Azul: limpia con reserva entrante pendiente de check-in
-        } else {
-          return 'disponible'; // Verde: limpia sin reserva entrante, libre para rentar
-        }
+    // Si ya registró checkout (salidaRes.checked_out es true) O se marcó sucio_checkout:
+    if (isCleanedToday || dbStatus === 'limpia') {
+      // Limpieza terminada post-checkout:
+      const incomingRes = activeReservations.find(r => {
+        const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
+        return matchesRoomNumber(r, roomNum) && cIn === todayStr && r.status !== 'cancelled' && !r.checked_in;
+      });
+      if (incomingRes) {
+        return 'limpia'; // Azul: limpia post-checkout con reserva entrante pendiente de check-in
+      } else {
+        return 'disponible'; // Verde: limpia post-checkout sin reserva entrante, libre para rentar
       }
-      if (isEnLimpiezaToday || dbStatus === 'en_limpieza') return 'en_limpieza';
-      return 'sucio_checkout'; // Rojo fuerte: checkout registrado pero sucia
     }
+
+    if (isEnLimpiezaToday || dbStatus === 'en_limpieza') return 'en_limpieza';
+    return 'sucio_checkout'; // Rojo fuerte: checkout registrado pero sucia
   }
 
   // Checkout vencido: solo rojo si room_status en DB es sucio_checkout
