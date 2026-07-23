@@ -184,7 +184,7 @@ function getRoomOperationalStatus(
     }
 
     // Si ya registró checkout (salidaRes.checked_out es true) O se marcó sucio_checkout:
-    if (isCleanedToday || dbStatus === 'limpia') {
+    if (isCleanedToday || (dbStatus === 'limpia' && lastUpdatedAt && (lastUpdatedAt || '').split('T')[0].split(' ')[0] === todayStr)) {
       // Limpieza terminada post-checkout:
       const incomingRes = activeReservations.find(r => {
         const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
@@ -222,10 +222,10 @@ function getRoomOperationalStatus(
 
     // CASO A: Es la fecha de entrada de la reserva y el huésped AÚN NO hace check-in
     if (cIn === todayStr && !currentRes.checked_in) {
-      if (isCleanedToday || dbStatus === 'limpia') {
+      if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible') {
         return 'limpia'; // Azul: limpia con reserva entrante
       }
-      return 'limpia'; // Azul por defecto para llegada nueva lista
+      return 'sucio_checkout'; // Rojo fuerte si la habitación no está limpia
     }
 
     // CASO B: Estancia en curso (check_in < todayStr o ya hizo check_in)

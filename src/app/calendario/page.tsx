@@ -3352,7 +3352,20 @@ export default function CalendarPage() {
                       dot: 'bg-zinc-400'
                     };
 
-                    if (cOut === todayStr) {
+                    // Verificar si la habitación tiene una salida hoy en cualquier reserva
+                    const roomCheckoutRes = reservas.find(res => {
+                      const resOut = (res.check_out || '').split('T')[0].split(' ')[0];
+                      const resRoom = getUnitDisplay(res.room_name || res.room || '');
+                      return resRoom === roomNum && resOut === todayStr && res.status !== 'cancelled';
+                    });
+
+                    if (roomCheckoutRes) {
+                      if (!roomCheckoutRes.checked_out) {
+                        statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
+                      } else {
+                        statusBadge = { label: 'Check out registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
+                      }
+                    } else if (cOut === todayStr) {
                       if (!r.checked_out) {
                         statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
                       } else {
