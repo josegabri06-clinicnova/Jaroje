@@ -1041,10 +1041,9 @@ export default function PublicReservaPage() {
     ? (ROOM_FEATURES_EN[roomTypeKey] || ROOM_FEATURES_EN['doble'])
     : (ROOM_FEATURES[roomTypeKey] || ROOM_FEATURES['doble']);
 
-  // Fotos y descripciones del Carrusel
-  const photos = (roomTypeKey === 'doble' || roomTypeKey === '2rec')
-    ? [...(ROOM_PHOTOS[roomTypeKey] || ROOM_PHOTOS['doble']), ...COMMON_PHOTOS]
-    : (ROOM_PHOTOS[roomTypeKey] || ROOM_PHOTOS['doble']);
+  // Fotos y descripciones del Carrusel: Fotos individuales de la propiedad seguidas de las fotos de áreas comunes
+  const roomSpecificPhotos = ROOM_PHOTOS[roomTypeKey] || ROOM_PHOTOS['doble'];
+  const photos = [...roomSpecificPhotos, ...COMMON_PHOTOS];
   const captions = Array(photos.length).fill('');
 
   const anticipoRequerido = Math.round(booking.price * 0.5);
