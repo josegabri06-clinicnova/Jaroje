@@ -3084,7 +3084,9 @@ export default function ReservasList() {
                           `👇 *"Mi reservación"*\n` +
                           `${link}\n\n` +
                           `*📍 Cómo llegar*\n` +
-                          `CONDOMINIOS JAROJE 958 116 8698 https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic`,
+                          `CONDOMINIOS JAROJE 958 116 8698 https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic\n\n` +
+                          `*📶 WiFi y Claves*\n` +
+                          `${link}`,
 
                           // Mensaje 6
                           `🏡 *¡Bienvenido a Condominios Jaroje!*\n\n` +
@@ -3094,6 +3096,8 @@ export default function ReservasList() {
                           `Si durante tu estancia necesitas *reportar algún detalle de mantenimiento* podrás hacerlo desde *“Mi estancia”.*\n\n` +
                           `Deseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n` +
                           `👇 *Mi estancia*\n` +
+                          `${link}\n\n` +
+                          `*📶 WiFi y Claves*\n` +
                           `${link}`,
 
                           // Mensaje 7
@@ -3102,6 +3106,8 @@ export default function ReservasList() {
                           `Queremos asegurarnos de que todo esté transcurriendo como esperabas.\n\n` +
                           `Si hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n` +
                           `👇 *Mi estancia*\n` +
+                          `${link}\n\n` +
+                          `*📶 WiFi y Claves*\n` +
                           `${link}`,
 
                           // Mensaje 8
