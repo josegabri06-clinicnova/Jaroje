@@ -3049,115 +3049,106 @@ export default function ReservasList() {
                           `•  📶 WiFi y datos de tu estancia\n` +
                           `•  🌴 Recomendaciones en Huatulco\n\n` +
                           `Recibirás el acceso en breve por nuestros canales oficiales.\n\n` +
-                          `📞 Canales oficiales\n` +
-                          `Nos comunicaremos únicamente por WhatsApp desde:\n` +
-                          `+52 958 116 8698\n` +
-                          `+52 958 587 8554\n\n` +
-                          `También podrías recibir mensajes dentro de Booking.com.\n\n` +
-                          `🔒 Por tu seguridad: Si recibes mensajes o enlaces de otros remitentes, no interactúes y contáctanos primero.\n\n` +
-                          `Si tienes dudas, con gusto te ayudamos.\n\n` +
-                          `¡Te esperamos!`,
-
-                          // Mensaje 1
-                          `📋 *Solicitud de reservación recibida (24 h para confirmar)*\n\n` +
+                          `📞 Canales oficia                          // Mensaje 1
+                          `📋 Solicitud de reservación recibida (24 h para confirmar)\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
-                          `¡Gracias por elegir *Condominios Jaroje* para tus próximas vacaciones en Huatulco! 🌴\n\n` +
-                          `En tu ”Portal del Huésped” encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n` +
-                          `👇 *Portal del Huésped*\n` +
+                          `¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\n` +
+                          `En tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n` +
+                          `👇 Portal del Huésped\n` +
                           `${link}`,
 
                           // Mensaje 2
-                          `⏳ *Último recordatorio (queda 1 hora para confirmar tu reservación)*\n\n` +
+                          `⏳ Último recordatorio (queda 1 hora para confirmar tu reservación)\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
-                          `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente *1 hora.*\n\n` +
-                          `En “Realizar depósito” encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíenos tu comprobante.\n\n` +
-                          `👇 *Realizar Depósito*\n` +
+                          `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 1 hora.\n\n` +
+                          `En "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n` +
+                          `👇 Realizar Depósito\n` +
                           `${link}`,
 
                           // Mensaje 3
-                          `🎉 *¡Tu reservación está confirmada!*\n\n` +
+                          `🎉 ¡Tu reservación está confirmada!\n\n` +
                           `¡Excelente, ${guestFirstName}!\n\n` +
-                          `Nos da mucho gusto confirmar que tu reservación ya quedó lista. *Estamos listos para recibirte.*\n\n` +
-                          `En *"Portal del Huésped"* podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n` +
-                          `👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
-                          `👇 *Portal del Huésped*\n` +
+                          `Nos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\n` +
+                          `En "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n` +
+                          `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
+                          `👇 Portal del Huésped\n` +
                           `${link}`,
 
                           // Mensaje 4 (ES)
-                          `😔 *Disponibilidad liberada*\n\n` +
+                          `😔 Disponibilidad liberada\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
-                          `Lamentamos informarte que, al no recibir el depósito dentro del plazo indicado, *la disponibilidad de tu alojamiento fue liberada.*\n\n` +
+                          `Lamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\n` +
                           `Si aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n` +
-                          `👇 *Verificar disponibilidad*\n` +
+                          `👇 Verificar disponibilidad\n` +
                           `${linkDisponibilidad}`,
 
                           // Mensaje 4 (EN)
-                          `😔 *Availability Released*\n\n` +
+                          `😔 Availability Released\n\n` +
                           `Hello, ${guestFirstName}.\n\n` +
-                          `We regret to inform you that, as we did not receive the deposit within the specified timeframe, *the availability for your accommodation has been released.*\n\n` +
+                          `We regret to inform you that, as we did not receive the deposit within the specified timeframe, the availability for your accommodation has been released.\n\n` +
                           `If you still wish to stay with us, please press “Check Availability” to see if we still have accommodation available for your travel dates and make a new reservation.\n\n` +
-                          `👇 *Check Availability*\n` +
+                          `👇 Check Availability\n` +
                           `${linkDisponibilidadEn}`,
 
                           // Mensaje 5
-                          `🚗 *Todo listo para tu llegada*\n\n` +
+                          `🚗 Todo listo para tu llegada\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
-                          `¡Ya falta muy poco para recibirte en *Condominios Jaroje*! Queremos que tu llegada sea lo más cómoda posible.\n\n` +
-                          `👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
-                          `En *"Mi reservación"* encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n` +
-                          `*¿Llegarás después de las 8:00 p.m.?* Avísanos con anticipación para recibirte.\n\n` +
+                          `¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n` +
+                          `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
+                          `En "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n` +
+                          `¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n` +
                           `¡Te deseamos un excelente viaje!\n\n` +
-                          `👇 *"Mi reservación"*\n` +
+                          `👇 "Mi reservación"\n` +
                           `${link}\n\n` +
-                          `*📍 Cómo llegar*\n` +
+                          `📍 Cómo llegar\n` +
                           `CONDOMINIOS JAROJE 958 116 8698 https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic\n\n` +
                           wifiInfoBlock,
 
                           // Mensaje 6
-                          `🏡 *¡Bienvenido a Condominios Jaroje!*\n\n` +
+                          `🏡 ¡Bienvenido a Condominios Jaroje!\n\n` +
                           `¡Qué gusto recibirte, ${guestFirstName}!\n\n` +
                           `Esperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\n\n` +
-                          `En *“Mi estancia”* encontrarás *el código del portón, la red WiFi y su contraseña,* las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\n\n` +
-                          `Si durante tu estancia necesitas *reportar algún detalle de mantenimiento* podrás hacerlo desde *“Mi estancia”.*\n\n` +
+                          `En "Mi estancia" encontrarás el código del portón, la red WiFi y su contraseña, las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\n\n` +
+                          `Si durante tu estancia necesitas reportar algún detalle de mantenimiento podrás hacerlo desde "Mi estancia".\n\n` +
                           `Deseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n` +
-                          `👇 *Mi estancia*\n` +
+                          `👇 Mi estancia\n` +
                           `${link}\n\n` +
                           wifiInfoBlock,
 
                           // Mensaje 7
-                          `😊 *¿Cómo va tu estancia?*\n\n` +
+                          `😊 ¿Cómo va tu estancia?\n\n` +
                           `Buenos días, ${guestFirstName}.\n\n` +
                           `Queremos asegurarnos de que todo esté transcurriendo como esperabas.\n\n` +
                           `Si hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n` +
-                          `👇 *Mi estancia*\n` +
+                          `👇 Mi estancia\n` +
                           `${link}\n\n` +
                           wifiInfoBlock,
 
                           // Mensaje 8
-                          `🚪 *Check-out 12:00 p.m.*\n\n` +
+                          `🚪 Check-out 12:00 p.m.\n\n` +
                           `Muy buenos días, ${guestFirstName}.\n\n` +
                           `Hoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n\n` +
-                          `*Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.*\n\n` +
+                          `Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.\n\n` +
                           `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
                           `Si consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.\n\n` +
-                          `👇 *Escribir reseña*\n` +
+                          `👇 Escribir reseña\n` +
                           `https://g.page/r/CVL6xPUz98QaEAE/review`,
 
                           // Mensaje 9
-                          `⭐ *¿Cómo estuvo tu experiencia?*\n\n` +
+                          `⭐ ¿Cómo estuvo tu experiencia?\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
                           `Esperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\n\n` +
                           `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
                           `Si tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n` +
-                          `👇 *Calificar alojamiento*\n` +
+                          `👇 Calificar alojamiento\n` +
                           `https://g.page/r/CVL6xPUz98QaEAE/review`,
 
                           // Mensaje 10
-                          `🌴 *¡Nos encantará recibirte nuevamente!*\n\n` +
+                          `🌴 ¡Nos encantará recibirte nuevamente!\n\n` +
                           `Hola de nuevo, ${guestFirstName}.\n\n` +
                           `Hoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\n` +
-                          `Si estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En *"Verificar disponibilidad"* podrás consultar disponibilidad y comenzar una nueva reservación.\n\n` +
-                          `👇 *Verificar disponibilidad*\n` +
+                          `Si estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En "Verificar disponibilidad" podrás consultar disponibilidad y comenzar una nueva reservación.\n\n` +
+                          `👇 Verificar disponibilidad\n` +
                           `${linkDisponibilidad}`,
 
                           // Mensaje 12: WiFi e Información
