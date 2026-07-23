@@ -307,7 +307,7 @@ export default function AdminDashboard() {
   const [showRoomStatusModal, setShowRoomStatusModal] = useState(false);
   const [selectedRoomForStatus, setSelectedRoomForStatus] = useState<any | null>(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
-  const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | null>(null);
+  const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | 'disponibles' | 'programada' | 'checkout' | 'terminada' | null>(null);
   const [toastMsg, setToastMsg] = useState('');
 
   const fetchAll = async (silent = false, bypassCache = false) => {
@@ -1250,7 +1250,10 @@ export default function AdminDashboard() {
           {/* Conteo por estados (4 columnas igual que recepción) */}
           <div className="grid grid-cols-4 gap-1.5">
             {/* DISPONIBLES: habitaciones con checkout hoy pero SIN reserva por llegar → número fijo del día */}
-            <div className="bg-emerald-50/50 border-2 border-emerald-500 rounded-xl p-2 text-center shadow-sm">
+            <div 
+              onClick={() => setKpiModalType('disponibles')}
+              className="bg-emerald-50/50 border-2 border-emerald-500 rounded-xl p-2 text-center shadow-sm cursor-pointer hover:bg-emerald-100/60 active:scale-95 transition-all"
+            >
               <span className="text-[15px] font-black text-emerald-700">
                 {ROOMS.filter(r => {
                   if (r === '500') return false;
@@ -1269,7 +1272,10 @@ export default function AdminDashboard() {
               <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
             </div>
             {/* LIMP PROGRAMADA: habitaciones con limpieza de estancia programada hoy → número fijo del día */}
-            <div className="bg-amber-50/50 border-2 border-amber-500 rounded-xl p-2 text-center shadow-sm">
+            <div 
+              onClick={() => setKpiModalType('programada')}
+              className="bg-amber-50/50 border-2 border-amber-500 rounded-xl p-2 text-center shadow-sm cursor-pointer hover:bg-amber-100/60 active:scale-95 transition-all"
+            >
               <span className="text-[15px] font-black text-amber-700">
                 {ROOMS.filter(r => {
                   if (r === '500') return false;
@@ -1279,7 +1285,10 @@ export default function AdminDashboard() {
               <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
             </div>
             {/* CHECK OUT: habitaciones pendientes de checkout o checkout registrado (rojo claro + rojo fuerte) → decremental */}
-            <div className="bg-rose-50/50 border-2 border-rose-500 rounded-xl p-2 text-center shadow-sm">
+            <div 
+              onClick={() => setKpiModalType('checkout')}
+              className="bg-rose-50/50 border-2 border-rose-500 rounded-xl p-2 text-center shadow-sm cursor-pointer hover:bg-rose-100/60 active:scale-95 transition-all"
+            >
               <span className="text-[15px] font-black text-rose-700">
                 {ROOMS.filter(r => {
                   if (r === '500') return false;
@@ -1292,7 +1301,10 @@ export default function AdminDashboard() {
               <p className="text-[7.2px] font-black text-rose-600 uppercase tracking-wider mt-0.5">Check Out</p>
             </div>
             {/* LIMP TERMINADA: habitaciones en estado limpia (azul) → incremental durante el día */}
-            <div className="bg-blue-50/50 border-2 border-blue-500 rounded-xl p-2 text-center shadow-sm">
+            <div 
+              onClick={() => setKpiModalType('terminada')}
+              className="bg-blue-50/50 border-2 border-blue-500 rounded-xl p-2 text-center shadow-sm cursor-pointer hover:bg-blue-100/60 active:scale-95 transition-all"
+            >
               <span className="text-[15px] font-black text-blue-700">
                 {ROOMS.filter(r => {
                   if (r === '500') return false;
@@ -1747,6 +1759,8 @@ export default function AdminDashboard() {
         let title = 'Detalles';
         let badgeColor = 'bg-zinc-100 text-zinc-800';
         let filtered: any[] = [];
+        let roomFiltered: string[] = [];
+        let isCleaningKpi = false;
 
         if (kpiModalType === 'encasa') {
           title = 'Huéspedes En Casa';
@@ -1760,16 +1774,61 @@ export default function AdminDashboard() {
           title = 'Salidas Hoy';
           badgeColor = 'bg-zinc-150 text-zinc-700 border border-zinc-200';
           filtered = todasSalidasHoy;
+        } else if (kpiModalType === 'disponibles') {
+          title = 'Habitaciones Disponibles';
+          badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+          isCleaningKpi = true;
+          roomFiltered = ROOMS.filter(r => {
+            if (r === '500') return false;
+            const hasCheckoutToday = reservas.some(res => {
+              const cOut = (res.check_out || '').split('T')[0].split(' ')[0];
+              return matchesRoomNumber(res, r) && cOut === todayStr && res.status !== 'cancelled';
+            });
+            if (!hasCheckoutToday) return false;
+            const hasIncomingRes = reservas.some(res => {
+              const cIn = (res.check_in || '').split('T')[0].split(' ')[0];
+              return matchesRoomNumber(res, r) && cIn === todayStr && res.status !== 'cancelled';
+            });
+            return !hasIncomingRes;
+          });
+        } else if (kpiModalType === 'programada') {
+          title = 'Limpiezas Programadas';
+          badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+          isCleaningKpi = true;
+          roomFiltered = ROOMS.filter(r => r !== '500' && isRoomStayoverServiceScheduled(r, reservas, todayStr));
+        } else if (kpiModalType === 'checkout') {
+          title = 'Check Out / Salidas';
+          badgeColor = 'bg-rose-100 text-rose-800 border border-rose-200';
+          isCleaningKpi = true;
+          roomFiltered = ROOMS.filter(r => {
+            if (r === '500') return false;
+            const dbStatus = getRoomDbStatus(r, roomStatuses);
+            const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+            const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+            return s === 'sucio_checkout' || s === 'salida_hoy';
+          });
+        } else if (kpiModalType === 'terminada') {
+          title = 'Limpiezas Terminadas';
+          badgeColor = 'bg-blue-100 text-blue-800 border border-blue-200';
+          isCleaningKpi = true;
+          roomFiltered = ROOMS.filter(r => {
+            if (r === '500') return false;
+            const dbStatus = getRoomDbStatus(r, roomStatuses);
+            const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+            const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+            return s === 'limpia';
+          });
         }
 
-        // Ordenar el listado por número de habitación
+        // Ordenar el listado por número de habitación estrictamente numérico
         const sortedFiltered = [...filtered].sort((a, b) => {
           const roomA = getUnitDisplay(a.room_name || a.room || '');
           const roomB = getUnitDisplay(b.room_name || b.room || '');
-          const numA = parseInt(roomA.replace(/\D/g, ''), 10) || 9999;
-          const numB = parseInt(roomB.replace(/\D/g, ''), 10) || 9999;
-          return numA - numB;
+          return roomA.localeCompare(roomB, undefined, { numeric: true });
         });
+
+        const sortedRooms = [...roomFiltered].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const totalCount = isCleaningKpi ? sortedRooms.length : sortedFiltered.length;
 
         return (
           <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
@@ -1781,7 +1840,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-black text-zinc-900">{title}</h3>
                   <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${badgeColor}`}>
-                    {sortedFiltered.length}
+                    {totalCount}
                   </span>
                 </div>
                 <button
@@ -1794,10 +1853,61 @@ export default function AdminDashboard() {
 
               {/* List body */}
               <div className="flex-1 overflow-y-auto space-y-3 pr-1 py-1">
-                {sortedFiltered.length === 0 ? (
-                  <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
-                    No hay huéspedes en este grupo para el día de hoy.
-                  </div>
+                {isCleaningKpi ? (
+                  sortedRooms.length === 0 ? (
+                    <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
+                      No hay habitaciones en esta categoría para hoy.
+                    </div>
+                  ) : (
+                    sortedRooms.map(roomNum => {
+                      const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
+                      const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum));
+                      const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                      const categoryLabel = getRoomCategoryLabel(roomNum);
+
+                      let statusBadge = {
+                        label: 'Disponible',
+                        classes: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-black',
+                        dot: 'bg-emerald-500'
+                      };
+                      if (operStatus === 'salida_hoy') {
+                        statusBadge = { label: 'Salida Hoy (Pendiente)', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
+                      } else if (operStatus === 'sucio_checkout') {
+                        statusBadge = { label: 'Check Out Registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
+                      } else if (operStatus === 'limpieza_programada' || isRoomStayoverServiceScheduled(roomNum, reservas, todayStr)) {
+                        statusBadge = { label: 'Limpieza Programada', classes: 'bg-amber-400 text-amber-950 border-amber-500 font-black', dot: 'bg-amber-900' };
+                      } else if (operStatus === 'limpia') {
+                        statusBadge = { label: 'Limpieza Finalizada', classes: 'bg-blue-600 text-white border-blue-700 font-extrabold', dot: 'bg-white' };
+                      }
+
+                      return (
+                        <div
+                          key={roomNum}
+                          onClick={() => {
+                            setKpiModalType(null);
+                            setSelectedRoomForStatus({
+                              room: roomNum,
+                              status: operStatus,
+                              updatedAt: dbStatusObj?.updated_at
+                            });
+                            setShowRoomStatusModal(true);
+                          }}
+                          className="p-4 border border-zinc-150 rounded-2xl hover:border-zinc-300 hover:bg-zinc-50/50 transition-all cursor-pointer flex items-center justify-between"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[15px] font-black text-zinc-900">Habitación {roomNum}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusBadge.classes}`}>
+                                {statusBadge.label}
+                              </span>
+                            </div>
+                            <p className="text-[11px] font-medium text-zinc-500">{categoryLabel}</p>
+                          </div>
+                          <span className="text-[12px] font-bold text-blue-600 hover:underline">Ver detalle →</span>
+                        </div>
+                      );
+                    })
+                  )
                 ) : (
                   sortedFiltered.map(r => {
                     const roomNum = getUnitDisplay(r.room_name || r.room || '');
