@@ -132,9 +132,7 @@ async function compressImage(file: File): Promise<string> {
 
 function isReservationNew(r: any): boolean {
   if (!r || r.is_acknowledged || r.status === 'cancelled') return false;
-  const isDirect = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-  const hasNoDeposit = !r.deposit || Number(r.deposit) === 0;
-  return !(isDirect && hasNoDeposit);
+  return true;
 }
 
 export default function ReservasList() {
