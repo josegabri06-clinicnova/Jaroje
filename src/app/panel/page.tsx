@@ -97,6 +97,16 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
+  let isCleanedToday = false;
+  let isEnLimpiezaToday = false;
+  if (lastUpdatedAt) {
+    const updateDateStr = (lastUpdatedAt || '').split('T')[0].split(' ')[0];
+    if (updateDateStr === todayStr) {
+      if (dbStatus === 'limpia') isCleanedToday = true;
+      if (dbStatus === 'en_limpieza') isEnLimpiezaToday = true;
+    }
+  }
+
   // 1. Evaluar si la habitación tiene salida hoy o reciente (Check-out)
   const limit = new Date();
   limit.setDate(limit.getDate() - 5);
@@ -108,21 +118,21 @@ function getRoomOperationalStatus(
   });
 
   if (salidaRes) {
-    // Si aún NO se registra el check-out en recepción/sistema y no ha sido marcada como limpia:
-    if (!salidaRes.checked_out && dbStatus !== 'sucio_checkout' && dbStatus !== 'limpia' && dbStatus !== 'en_limpieza') {
-      return 'salida_hoy'; // Rojo claro (Check-out pendiente por registrar)
-    }
-    // Si YA se registró el check-out (o dbStatus es sucio_checkout) y sigue sucia:
-    if ((salidaRes.checked_out || dbStatus === 'sucio_checkout') && dbStatus !== 'limpia' && dbStatus !== 'en_limpieza') {
-      return 'sucio_checkout'; // Rojo fuerte (Check-out registrado, sucia esperando limpieza)
+    // Si aún NO ha sido marcada como limpia HOY:
+    if (!isCleanedToday) {
+      if (isEnLimpiezaToday) return 'en_limpieza';
+      if (salidaRes.checked_out || dbStatus === 'sucio_checkout') {
+        return 'sucio_checkout'; // Rojo Fuerte (Check-out registrado, sucia)
+      }
+      return 'salida_hoy'; // Rojo Claro (Check-out pendiente por registrar en recepción)
     }
   }
 
-  if (dbStatus === 'sucio_checkout') {
-    return 'sucio_checkout'; // Rojo fuerte
+  if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
+    return 'sucio_checkout'; // Rojo Fuerte
   }
-  if (dbStatus === 'en_limpieza') {
-    return 'en_limpieza'; // Amarillo (En proceso de limpieza)
+  if (dbStatus === 'en_limpieza' && isEnLimpiezaToday) {
+    return 'en_limpieza'; // Amarillo (En proceso)
   }
 
   // 2. Buscar si hay una reserva para hoy (entrante hoy o en estancia)
@@ -137,14 +147,11 @@ function getRoomOperationalStatus(
 
     // CASO A: El huésped AÚN NO ha registrado el Check-In
     if (!currentRes.checked_in) {
-      if (dbStatus === 'limpia' || dbStatus === 'disponible' || !dbStatus) {
-        return 'limpia'; // Azul (Limpia de check-out con reservación hoy, sin check-in registrado aún)
-      }
-      return 'limpia'; // Azul por tener reserva hoy esperando check-in
+      return 'limpia'; // Azul (Esperando llegada de nueva reserva)
     }
 
     // CASO B: El huésped YA REGISTRÓ su Check-In (checked_in === true)
-    // Evaluar si requiere servicio de estancia hoy (Amarillo) o pasa a Gris (Ocupada/Limpia)
+    // Evaluar si requiere servicio de estancia hoy (Amarillo) o pasa a Gris (Ocupada)
     const checkInDate = new Date(cIn + 'T12:00:00');
     const todayDate = new Date(todayStr + 'T12:00:00');
     const diffTime = todayDate.getTime() - checkInDate.getTime();
@@ -161,8 +168,8 @@ function getRoomOperationalStatus(
       requiresService = true;
     }
 
-    if (requiresService && dbStatus !== 'limpia') {
-      return 'limpieza_programada'; // Amarillo por regla de servicio durante estancia
+    if (requiresService && !isCleanedToday) {
+      return 'limpieza_programada'; // Amarillo (Servicio de estancia pendiente hoy)
     }
 
     return 'ocupada'; // Gris (Limpia con check-in registrado / Ocupada)
