@@ -791,20 +791,8 @@ export default function StaffPage() {
       }
     });
     
-    // Ordenar: primero check-outs no terminados, luego stayovers no terminados, luego terminados.
-    return list.sort((a, b) => {
-      const aFinished = a.dbStatus === 'limpia' || (a.dbStatus === 'disponible' && a.isUpdatedToday);
-      const bFinished = b.dbStatus === 'limpia' || (b.dbStatus === 'disponible' && b.isUpdatedToday);
-      if (aFinished && !bFinished) return 1;
-      if (!aFinished && bFinished) return -1;
-      
-      // Luego por tipo: checkout tiene prioridad sobre stayover
-      if (a.type === 'checkout' && b.type !== 'checkout') return -1;
-      if (a.type !== 'checkout' && b.type === 'checkout') return 1;
-      
-      // Luego por número de habitación
-      return a.room.localeCompare(b.room, undefined, { numeric: true });
-    });
+    // Ordenar estrictamente por número de habitación en orden numérico ascendente (101, 102, 103, ..., 201, 202, ..., 301, 302, etc.)
+    return list.sort((a, b) => a.room.localeCompare(b.room, undefined, { numeric: true }));
   };
 
   const roleFilteredTasks = tasks.filter(t => {
