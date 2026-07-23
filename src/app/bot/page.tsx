@@ -36,6 +36,17 @@ function BubbleWA({ size = 16 }: { size?: number }) {
   );
 }
 
+function formatWAMarkdown(text: string) {
+  if (!text) return null;
+  const parts = text.split(/(\*[^*]+\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return <strong key={i} className="font-bold">{part.slice(1, -1)}</strong>;
+    }
+    return part;
+  });
+}
+
 function parseTemplateMessage(text: string) {
   if (!text) return { isTemplate: false, cleanText: text, buttons: [] };
   const isTemplate = text.includes('[Botón:') || text.includes('[Button:') || text.includes('🔗') || text.includes('⚡ Plantilla');
@@ -787,7 +798,7 @@ export default function BotPage() {
                   {msg.role_guest && (
                     <div className="flex justify-start items-end mb-1">
                       <div className="max-w-[75%] bg-white text-zinc-900 px-4 py-2.5 rounded-[16px] rounded-tl-none shadow-[0_1px_0.5px_rgba(0,0,0,0.12)] relative border border-zinc-200/20">
-                        <p className="text-[13px] font-medium leading-snug whitespace-pre-wrap">{msg.role_guest}</p>
+                        <p className="text-[13px] font-medium leading-snug whitespace-pre-wrap">{formatWAMarkdown(msg.role_guest)}</p>
                         <div className="text-[9px] mt-1 text-zinc-400 flex items-center justify-end gap-1 select-none font-semibold">
                           {format(new Date(msg.timestamp), 'HH:mm')}
                         </div>
@@ -802,7 +813,7 @@ export default function BotPage() {
                         <div className="flex items-center gap-1 mb-1.5 select-none">
                           <span className="text-[9px] font-extrabold text-emerald-700 bg-emerald-100/60 px-1.5 py-0.5 rounded border border-emerald-250/20">🤖 Bot</span>
                         </div>
-                        <p className="text-[13px] font-medium leading-snug whitespace-pre-wrap">{msg.role_bot}</p>
+                        <p className="text-[13px] font-medium leading-snug whitespace-pre-wrap">{formatWAMarkdown(msg.role_bot)}</p>
                         <div className="text-[9px] mt-1 text-zinc-500 flex items-center justify-end gap-0.5 select-none font-semibold">
                           {format(new Date(msg.timestamp), 'HH:mm')}
                           <DoubleCheckSVG className="text-[#53bdeb] ml-1 shrink-0" />
@@ -827,7 +838,7 @@ export default function BotPage() {
                             </span>
                           </div>
 
-                          <p className="text-[13px] font-medium leading-relaxed whitespace-pre-wrap text-zinc-900">{cleanText}</p>
+                          <p className="text-[13px] font-medium leading-relaxed whitespace-pre-wrap text-zinc-900">{formatWAMarkdown(cleanText)}</p>
 
                           {buttons.length > 0 && (
                             <div className="mt-2.5 pt-2 border-t border-emerald-250/60 space-y-1.5">
@@ -1192,32 +1203,45 @@ export default function BotPage() {
                   <p className="text-[13px] font-medium text-zinc-900 leading-relaxed whitespace-pre-wrap">
                     {(() => {
                       const name = activeConv.guest_name || 'Huésped';
+                      let templateStr = '';
                       switch (selectedTemplateKey) {
                         case 'solicitud_recibida':
-                          return `📋 *Solicitud de reservación recibida (24 h para confirmar)*\nHola, ${name}.\n¡Gracias por elegir *Condominios Jaroje* para tus próximas vacaciones en Huatulco! 🌴\nEn tu ”Portal del Huésped” encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.`;
+                          templateStr = `📋 *Solicitud de reservación recibida (24 h para confirmar)*\nHola, ${name}.\n¡Gracias por elegir *Condominios Jaroje* para tus próximas vacaciones en Huatulco! 🌴\nEn tu ”Portal del Huésped” encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n👇 *Portal del Huésped*`;
+                          break;
                         case 'ultimo_aviso':
-                          return `⏳ *Último recordatorio (queda 1 hora para confirmar tu reservación)*\nHola, ${name}.\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente *1 hora.*\nEn “Realizar depósito” encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.`;
+                          templateStr = `⏳ *Último recordatorio (queda 1 hora para confirmar tu reservación)*\nHola, ${name}.\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente *1 hora.*\nEn “Realizar depósito” encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 *Realizar Depósito*`;
+                          break;
                         case 'reservacion_confirmada':
-                          return `🎉 *¡Tu reservación está confirmada!*\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. *Estamos listos para recibirte.*\n\nEn *"Portal del Huésped"* podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.`;
+                          templateStr = `🎉 *¡Tu reservación está confirmada!*\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. *Estamos listos para recibirte.*\n\nEn *"Portal del Huésped"* podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n👇 *Portal del Huésped*`;
+                          break;
                         case 'disponibilidad_liberada':
-                          return `😔 *Disponibilidad liberada*\nHola, ${name}.\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, *la disponibilidad de tu alojamiento fue liberada.*\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.`;
+                          templateStr = `😔 *Disponibilidad liberada*\nHola, ${name}.\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, *la disponibilidad de tu alojamiento fue liberada.*\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n👇 *Verificar disponibilidad*`;
+                          break;
                         case 'preparacion_llegada':
-                          return `🚗 *Todo listo para tu llegada*\nHola, ${name}.\n¡Ya falta muy poco para recibirte en *Condominios Jaroje*! Queremos que tu llegada sea lo más cómoda posible.\n👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\nEn *"Mi reservación"* encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n*¿Llegarás después de las 8:00 p.m.?* Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!`;
+                          templateStr = `🚗 *Todo listo para tu llegada*\nHola, ${name}.\n¡Ya falta muy poco para recibirte en *Condominios Jaroje*! Queremos que tu llegada sea lo más cómoda posible.\n👥 *¿Cambió el número de huéspedes?* Actualízalo desde *"Mi reservación"* antes de tu llegada para evitar cargos adicionales al momento del check-in.\nEn *"Mi reservación"* encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n*¿Llegarás después de las 8:00 p.m.?* Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!\n\n👇 *"Mi reservación"*`;
+                          break;
                         case 'bienvenida_checkin':
-                          return `🏡 *¡Bienvenido a Condominios Jaroje!*\n¡Qué gusto recibirte, ${name}!\nEsperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\nEn *“Mi estancia”* encontrarás *el código del portón, la red WiFi y su contraseña,* las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\nSi durante tu estancia necesitas *reportar algún detalle de mantenimiento* podrás hacerlo desde *“Mi estancia”.*\nDeseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.`;
+                          templateStr = `🏡 *¡Bienvenido a Condominios Jaroje!*\n¡Qué gusto recibirte, ${name}!\nEsperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\nEn *“Mi estancia”* encontrarás *el código del portón, la red WiFi y su contraseña,* las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\nSi durante tu estancia necesitas *reportar algún detalle de mantenimiento* podrás hacerlo desde *“Mi estancia”.*\nDeseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n👇 *Mi estancia*`;
+                          break;
                         case 'seguimiento_satisfaccion':
-                          return `😊 *¿Cómo va tu estancia?*\nBuenos días, ${name}.\nQueremos asegurarnos de que todo esté transcurriendo como esperabas.\nSi hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n👇 *Mi estancia*`;
+                          templateStr = `😊 *¿Cómo va tu estancia?*\nBuenos días, ${name}.\nQueremos asegurarnos de que todo esté transcurriendo como esperabas.\nSi hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n👇 *Mi estancia*`;
+                          break;
                         case 'salida_checkout':
-                          return `🚪 *Check-out 12:00 p.m.*\nMuy buenos días, ${name}.\nHoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n*Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.*\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\nSi consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.`;
+                          templateStr = `🚪 *Check-out 12:00 p.m.*\nMuy buenos días, ${name}.\nHoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n*Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.*\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\nSi consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.\n\n👇 *Escribir reseña*`;
+                          break;
                         case 'comparte_experiencia':
-                          return `⭐ *¿Cómo estuvo tu experiencia?*\nHola, ${name}.\nEsperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\nSi tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.`;
+                          templateStr = `⭐ *¿Cómo estuvo tu experiencia?*\nHola, ${name}.\nEsperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\nSi tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n👇 *Calificar alojamiento*`;
+                          break;
                         case 'recibimiento_nuevamente':
-                          return `🌴 *¡Nos encantará recibirte nuevamente!*\nHola de nuevo, ${name}.\nHoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\nSi estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En *"Verificar disponibilidad"* podrás consultar disponibilidad y comenzar una nueva reservación.`;
+                          templateStr = `🌴 *¡Nos encantará recibirte nuevamente!*\nHola de nuevo, ${name}.\nHoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\nSi estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En *"Verificar disponibilidad"* podrás consultar disponibilidad y comenzar una nueva reservación.\n\n👇 *Verificar disponibilidad*`;
+                          break;
                         case 'portal_huesped_link':
-                          return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅`;
+                          templateStr = `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅\n\n👇 *Portal del Huésped*`;
+                          break;
                         default:
-                          return `[Plantilla Meta ${selectedTemplateKey}]`;
+                          templateStr = `[Plantilla Meta ${selectedTemplateKey}]`;
                       }
+                      return formatWAMarkdown(templateStr);
                     })()}
                   </p>
 
