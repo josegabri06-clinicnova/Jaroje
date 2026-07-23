@@ -1035,9 +1035,11 @@ export default function PublicReservaPage() {
 
   const activeIndex = steps.findIndex(s => s.state === currentState);
 
-  // Características del tipo de habitación
+  // Características del tipo de habitación según el idioma seleccionado
   const roomTypeKey = getRoomTypeKey(booking.room_name);
-  const featuresData = ROOM_FEATURES[roomTypeKey] || ROOM_FEATURES['doble'];
+  const featuresData = lang === 'en'
+    ? (ROOM_FEATURES_EN[roomTypeKey] || ROOM_FEATURES_EN['doble'])
+    : (ROOM_FEATURES[roomTypeKey] || ROOM_FEATURES['doble']);
 
   // Fotos y descripciones del Carrusel
   const photos = (roomTypeKey === 'doble' || roomTypeKey === '2rec')
@@ -1477,7 +1479,7 @@ export default function PublicReservaPage() {
           <div className="space-y-3.5">
             <div className="bg-[#FAF9F6] border border-zinc-200/40 rounded-xl p-3 flex items-center text-xs">
               <span className="text-zinc-700 font-extrabold uppercase tracking-wide">
-                {lang === 'en' ? (ROOM_FEATURES_EN[roomTypeKey]?.title || ROOM_FEATURES_EN['doble'].title) : featuresData.title}
+                {featuresData.title}
               </span>
             </div>
 
