@@ -59,9 +59,8 @@ function parseTemplateMessage(text: string) {
   }
 
   let cleanText = text.replace(/\[(?:Botón|Button):\s*([^\]]+)\]/g, '').trim();
-  // Eliminar cualquier línea final residual de tipo "🔗 *Portal del Huésped:* https://..." o "👇 *Portal del Huésped*"
-  cleanText = cleanText.replace(/\n*(?:🔗|👇)\s*\*?[^*:]*:\*?\s*https?:\/\/\S+/gi, '').trim();
-  cleanText = cleanText.replace(/\n*(?:🔗|👇)\s*\*?[^*]*\*?\s*$/gi, '').trim();
+  // Convertir sintaxis vieja con clip "🔗 *Título:* https://..." al formato de Meta "👇 *Título*"
+  cleanText = cleanText.replace(/🔗\s*\*?([^:*]+):\*?\s*https?:\/\/\S+/gi, '👇 *$1*').trim();
 
   return { isTemplate, cleanText, buttons };
 }
