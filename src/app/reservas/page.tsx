@@ -1717,6 +1717,10 @@ export default function ReservasList() {
   const [cancelLoading, setCancelLoading] = useState(false);
 
   const handleAcknowledgeReserva = async (resData?: any) => {
+    if (userRole !== 'admin') {
+      alert('🔒 Acción no autorizada. Solo los usuarios administradores pueden revisar reservas y enviar mensajes.');
+      return;
+    }
     const targetRes = resData || selectedRes;
     if (!targetRes) return;
     setAckLoading(true);
@@ -1812,6 +1816,10 @@ export default function ReservasList() {
   };
 
   const handleSendUltimoAviso = async (targetRes: any) => {
+    if (userRole !== 'admin') {
+      alert('🔒 Acción no autorizada. Solo los usuarios administradores pueden enviar avisos de WhatsApp.');
+      return;
+    }
     if (!targetRes) return;
     const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
     if (!phoneNum) {
@@ -2335,7 +2343,7 @@ export default function ReservasList() {
 
                 <StatusBadge status={r.status} isCheckedIn={r.is_checked_in} isCheckedOut={r.is_checked_out} />
 
-                {isReservationNew(r) && (
+                {userRole === 'admin' && isReservationNew(r) && (
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
@@ -2347,7 +2355,7 @@ export default function ReservasList() {
                   </button>
                 )}
 
-                {activeTab === 'Sin Anticipo' && (
+                {userRole === 'admin' && activeTab === 'Sin Anticipo' && (
                   <button
                     disabled={r.last_notice_sent}
                     onClick={async (e) => {
@@ -4215,7 +4223,7 @@ export default function ReservasList() {
             
             {/* Acción Botón */}
             <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
-              {isReservationNew(selectedRes) && (
+              {userRole === 'admin' && isReservationNew(selectedRes) && (
                 <button
                   onClick={handleAcknowledgeReserva}
                   disabled={ackLoading}
