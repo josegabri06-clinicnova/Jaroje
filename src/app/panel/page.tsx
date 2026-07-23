@@ -149,6 +149,7 @@ function getRoomOperationalStatus(
   let isCleanedToday = false;
   let isEnLimpiezaToday = false;
   let isSucioCheckoutToday = false;
+
   if (lastUpdatedAt) {
     const updateDateStr = (lastUpdatedAt || '').split('T')[0].split(' ')[0];
     if (updateDateStr === todayStr) {
@@ -165,25 +166,42 @@ function getRoomOperationalStatus(
   });
 
   if (salidaRes) {
-    if (!isCleanedToday) {
-      if (isEnLimpiezaToday) return 'en_limpieza';
-      if (salidaRes.checked_out || isSucioCheckoutToday || dbStatus === 'sucio_checkout') {
-        return 'sucio_checkout'; 
+    // Si el huésped de la salida AÚN NO registra checkout (salida pendiente):
+    if (!salidaRes.checked_out && !isSucioCheckoutToday && dbStatus !== 'sucio_checkout' && !isCleanedToday) {
+      if (isEnLimpiezaToday || dbStatus === 'en_limpieza') return 'en_limpieza';
+      return 'salida_hoy'; // Rojo claro: check-out pendiente
+    }
+
+    // Si ya registró checkout O dbStatus es sucio_checkout O fue limpiada hoy:
+    if (salidaRes.checked_out || isSucioCheckoutToday || dbStatus === 'sucio_checkout' || isCleanedToday) {
+      if (isCleanedToday) {
+        // Limpieza terminada post-checkout:
+        // Revisar si hay reserva entrante hoy
+        const incomingRes = activeReservations.find(r => {
+          const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
+          return matchesRoomNumber(r, roomNum) && cIn === todayStr && r.status !== 'cancelled' && !r.checked_in;
+        });
+        if (incomingRes) {
+          return 'limpia'; // Azul: limpia con reserva entrante pendiente de check-in
+        } else {
+          return 'disponible'; // Verde: limpia sin reserva entrante, libre para rentar
+        }
       }
-      return 'salida_hoy';
+      if (isEnLimpiezaToday || dbStatus === 'en_limpieza') return 'en_limpieza';
+      return 'sucio_checkout'; // Rojo fuerte: checkout registrado pero sucia
     }
   }
 
-  // Si es un check-out vencido, solo mostrar rojo si el status en DB es sucio_checkout
+  // Si es un checkout atrasado vencido en DB
   if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
     return 'sucio_checkout';
   }
 
-  if (isEnLimpiezaToday) {
+  if (isEnLimpiezaToday || dbStatus === 'en_limpieza') {
     return 'en_limpieza';
   }
 
-  // 2. Buscar si hay una reserva activa hoy
+  // 2. Buscar si hay una reserva activa hoy en la habitación (estancia o llegada)
   const currentRes = activeReservations.find(r => {
     const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
@@ -193,32 +211,40 @@ function getRoomOperationalStatus(
   if (currentRes) {
     const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
 
-    // CASO A: El huésped AÚN NO ha registrado el Check-In y es su fecha de entrada
-    if (!currentRes.checked_in && cIn === todayStr) {
-      return 'limpia';
+    // CASO A: Es la fecha de entrada de la reserva y el huésped AÚN NO hace check-in
+    if (cIn === todayStr && !currentRes.checked_in) {
+      return 'limpia'; // Azul
     }
 
-    // CASO B: Es estancia actual (check-in < todayStr) o entrada sin check-in (para mostrar ocupada)
-    const checkInDate = new Date(cIn + 'T12:00:00');
-    const todayDate = new Date(todayStr + 'T12:00:00');
-    const diffTime = todayDate.getTime() - checkInDate.getTime();
-    const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    // CASO B: Estancia en curso (check_in < todayStr o ya hizo check_in)
+    const cInDate = new Date(cIn + 'T12:00:00');
+    const tDate = new Date(todayStr + 'T12:00:00');
+    const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
 
     const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '401', '402'].includes(roomNum);
     const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '501', '502', '503', '504', '505', '506', '507'].includes(roomNum);
 
     let requiresService = false;
-    if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
-      requiresService = true;
-    } else if (isDailyRoom && dayOfStay >= 2) {
-      requiresService = true;
+    if (isThreeDayRoom) {
+      // Cada 2 días de estancia (ej. entro 18 -> servicio 20, 22, 24...)
+      if (diffDays >= 2 && diffDays % 2 === 0) {
+        requiresService = true;
+      }
+    } else if (isDailyRoom) {
+      if (diffDays >= 1) {
+        requiresService = true;
+      }
     }
 
     if (requiresService && !isCleanedToday) {
-      return 'limpieza_programada';
+      return 'limpieza_programada'; // Amarillo
     }
 
-    return 'ocupada';
+    return 'ocupada'; // Gris
+  }
+
+  if (isCleanedToday || dbStatus === 'limpia') {
+    return 'disponible';
   }
 
   return 'disponible';
@@ -228,7 +254,7 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   const currentRes = activeReservations.find(r => {
     const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cIn <= todayStr && cOut > todayStr && !r.checked_out && r.status !== 'cancelled';
+    return matchesRoomNumber(r, roomNum) && cIn < todayStr && cOut > todayStr && !r.checked_out && r.status !== 'cancelled';
   });
 
   if (!currentRes) return false;
@@ -236,18 +262,17 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
   if (!cIn || cIn.length !== 10) return false;
 
-  const checkInDate = new Date(cIn + 'T12:00:00');
-  const todayDate = new Date(todayStr + 'T12:00:00');
-  const diffTime = todayDate.getTime() - checkInDate.getTime();
-  const dayOfStay = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const cInDate = new Date(cIn + 'T12:00:00');
+  const tDate = new Date(todayStr + 'T12:00:00');
+  const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
 
   const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
   const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
 
-  if (isThreeDayRoom && dayOfStay >= 3 && dayOfStay % 3 === 0) {
-    return true;
-  } else if (isDailyRoom && dayOfStay >= 2) {
-    return true;
+  if (isThreeDayRoom) {
+    return diffDays >= 2 && diffDays % 2 === 0;
+  } else if (isDailyRoom) {
+    return diffDays >= 1;
   }
 
   return false;
