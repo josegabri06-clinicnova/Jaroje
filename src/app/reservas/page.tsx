@@ -3049,7 +3049,16 @@ export default function ReservasList() {
                           `•  📶 WiFi y datos de tu estancia\n` +
                           `•  🌴 Recomendaciones en Huatulco\n\n` +
                           `Recibirás el acceso en breve por nuestros canales oficiales.\n\n` +
-                          `📞 Canales oficia                          // Mensaje 1
+                          `📞 Canales oficiales\n` +
+                          `Nos comunicaremos únicamente por WhatsApp desde:\n` +
+                          `+52 958 116 8698\n` +
+                          `+52 958 587 8554\n\n` +
+                          `También podrías recibir mensajes dentro de Booking.com.\n\n` +
+                          `🔒 Por tu seguridad: Si recibes mensajes o enlaces de otros remitentes, no interactúes y contáctanos primero.\n\n` +
+                          `Si tienes dudas, con gusto te ayudamos.\n\n` +
+                          `¡Te esperamos!`,
+
+                          // Mensaje 1
                           `📋 Solicitud de reservación recibida (24 h para confirmar)\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
                           `¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\n` +
