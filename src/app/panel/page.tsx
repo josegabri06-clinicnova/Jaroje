@@ -81,7 +81,8 @@ const BEDS24_UNIT_MAP: Record<string, Record<string, string>> = {
   '679087': { '1': '402' },
   '679091': { '1': '201', '2': '202', '3': '203', '4': '204', '5': '205', '6': '206' },
   '679092': { '1': '101', '2': '102', '3': '103', '4': '104', '5': '105', '6': '106', '7': '107' },
-  '679093': { '1': '401' }
+  '679093': { '1': '401' },
+  '679008': { '1': '401' }
 };
 
 const LOCAL_UNIT_MAP: Record<string, string> = {
@@ -95,14 +96,14 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
   const roomIdStr = String(r.roomId || r.room_id || '');
   const unitIdStr = String(r.unitId || r.unit_id || '');
 
-  // 1. Mapeo directo por roomId individual Beds24 (685321 -> 101, etc.)
+  // 1. Mapeo directo por roomId individual Beds24 (685321 -> 101, 679093 -> 401, 679008 -> 401)
   if (roomIdStr && BEDS24_ROOM_MAP[roomIdStr]) {
-    return BEDS24_ROOM_MAP[roomIdStr] === roomNum;
+    if (BEDS24_ROOM_MAP[roomIdStr] === roomNum) return true;
   }
 
   // 2. Mapeo explícito Beds24 (roomId + unitId)
   if (roomIdStr && unitIdStr && BEDS24_UNIT_MAP[roomIdStr]?.[unitIdStr]) {
-    return BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum;
+    if (BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum) return true;
   }
 
   // 3. Mapeo habitaciones locales 500-507 (unitId)
@@ -119,19 +120,29 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
   if (regex.test(roomStr)) return true;
   if (regex.test(roomNameStr)) return true;
 
-  // 5. Si la reserva tiene habitaciones de grupo asignadas
+  // 5. Caso especial para Casa Vacacional (401)
+  if (roomNum === '401') {
+    const combinedStr = (roomStr + ' ' + roomNameStr).toLowerCase();
+    if (combinedStr.includes('casa') || combinedStr.includes('vacacional') || roomIdStr === '679093' || roomIdStr === '679008') {
+      return true;
+    }
+  }
+
+  // 6. Si la reserva tiene habitaciones de grupo asignadas
   if (Array.isArray(r.groupRooms)) {
     const matchedInGroup = r.groupRooms.some((gr: any) => {
       const gRoomId = String(gr.roomId || gr.room_id || '');
       const gUnitId = String(gr.unitId || gr.unit_id || '');
       if (gRoomId && BEDS24_ROOM_MAP[gRoomId]) {
-        return BEDS24_ROOM_MAP[gRoomId] === roomNum;
+        if (BEDS24_ROOM_MAP[gRoomId] === roomNum) return true;
       }
       if (gRoomId && gUnitId && BEDS24_UNIT_MAP[gRoomId]?.[gUnitId]) {
-        return BEDS24_UNIT_MAP[gRoomId][gUnitId] === roomNum;
+        if (BEDS24_UNIT_MAP[gRoomId][gUnitId] === roomNum) return true;
       }
       const grStr = String(gr.name || gr.roomId || gr.unitId || '').replace(/\(\d{3}-\d{3}\)/g, '');
-      return regex.test(grStr);
+      if (regex.test(grStr)) return true;
+      if (roomNum === '401' && (grStr.toLowerCase().includes('casa') || gRoomId === '679093' || gRoomId === '679008')) return true;
+      return false;
     });
     if (matchedInGroup) return true;
   }
