@@ -148,11 +148,13 @@ function getRoomOperationalStatus(
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
   let isCleanedToday = false;
   let isEnLimpiezaToday = false;
+  let isSucioCheckoutToday = false;
   if (lastUpdatedAt) {
     const updateDateStr = (lastUpdatedAt || '').split('T')[0].split(' ')[0];
     if (updateDateStr === todayStr) {
       if (dbStatus === 'limpia') isCleanedToday = true;
       if (dbStatus === 'en_limpieza') isEnLimpiezaToday = true;
+      if (dbStatus === 'sucio_checkout') isSucioCheckoutToday = true;
     }
   }
 
@@ -172,14 +174,14 @@ function getRoomOperationalStatus(
     // Si aún NO ha sido marcada como limpia HOY:
     if (!isCleanedToday) {
       if (isEnLimpiezaToday) return 'en_limpieza';
-      if (salidaRes.checked_out || dbStatus === 'sucio_checkout') {
+      if (salidaRes.checked_out || isSucioCheckoutToday || dbStatus === 'sucio_checkout') {
         return 'sucio_checkout'; // Rojo Fuerte (Check-out registrado, sucia)
       }
       return 'salida_hoy'; // Rojo Claro (Check-out pendiente por registrar en recepción)
     }
   }
 
-  if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
+  if (isSucioCheckoutToday && !isCleanedToday) {
     return 'sucio_checkout'; // Rojo Fuerte
   }
   if (dbStatus === 'en_limpieza' && isEnLimpiezaToday) {
