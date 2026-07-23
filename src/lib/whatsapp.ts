@@ -471,7 +471,7 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any, bypassP
     getFirstName(booking.guest_name) // {{1}} Nombre en el cuerpo del mensaje
   ];
 
-  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, undefined, booking.id, undefined, bypassPause);
 }
 
 // 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
@@ -543,7 +543,7 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any, bypass
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, undefined, booking.id, undefined, bypassPause);
 }
 
 // 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)
