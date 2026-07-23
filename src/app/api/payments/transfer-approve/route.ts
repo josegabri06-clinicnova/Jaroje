@@ -166,17 +166,10 @@ export async function POST(req: Request) {
         let waRes: { success: boolean; error?: string; data?: any };
         let templateLogged = '';
 
-        if (balance > 0) {
-          // Pago parcial: Anticipo recibido (balance pendiente)
-          console.log(`[Approve Transfer] Sending WhatsApp pago_anticipo_recibido to ${phone} (saldo: $${balance})`);
-          waRes = await sendTemplate11_PagoAnticipoRecibido(bookingForWA);
-          templateLogged = 'pago_anticipo_recibido';
-        } else {
-          // Pago completo: Reservación confirmada
-          console.log(`[Approve Transfer] Sending WhatsApp reservacion_confirmada to ${phone} (pago completo)`);
-          waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
-          templateLogged = 'reservacion_confirmada';
-        }
+        // Siempre se envía Mensaje 3 (reservacion_confirmada) independientemente de si es 50% o 100% de anticipo
+        console.log(`[Approve Transfer] Sending WhatsApp reservacion_confirmada (Mensaje 3) to ${phone} (depósito: $${newDeposit}, saldo: $${balance})`);
+        waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+        templateLogged = 'reservacion_confirmada';
 
         if (waRes.success) {
           // Registrar en whatsapp_logs para evitar que el cron reenvíe mensajes
