@@ -3002,6 +3002,15 @@ export default function StaffPage() {
           filtered = salidas;
         }
 
+        // Ordenar el listado por número de habitación
+        const sortedFiltered = [...filtered].sort((a, b) => {
+          const roomA = getUnitDisplay(a.room_name || a.room || '');
+          const roomB = getUnitDisplay(b.room_name || b.room || '');
+          const numA = parseInt(roomA.replace(/\D/g, ''), 10) || 9999;
+          const numB = parseInt(roomB.replace(/\D/g, ''), 10) || 9999;
+          return numA - numB;
+        });
+
         return (
           <div className="fixed inset-0 z-[9999] flex flex-col justify-end bg-zinc-950/40 backdrop-blur-sm animate-in fade-in duration-200">
             <div onClick={() => setKpiModalType(null)} className="absolute inset-0" />
@@ -3012,7 +3021,7 @@ export default function StaffPage() {
                 <div className="flex items-center gap-2">
                   <h3 className="text-lg font-black text-zinc-900">{title}</h3>
                   <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${badgeColor}`}>
-                    {filtered.length}
+                    {sortedFiltered.length}
                   </span>
                 </div>
                 <button 
@@ -3025,12 +3034,34 @@ export default function StaffPage() {
 
               {/* List body */}
               <div className="flex-1 overflow-y-auto space-y-3 pr-1 py-1">
-                {filtered.length === 0 ? (
+                {sortedFiltered.length === 0 ? (
                   <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">
                     No hay huéspedes en este grupo para el día de hoy.
                   </div>
                 ) : (
-                  filtered.map(r => {
+                  sortedFiltered.map(r => {
+                    const roomNum = getUnitDisplay(r.room_name || r.room || '');
+                    const dbStatus = getRoomDbStatus(roomNum, roomStatuses);
+                    const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(roomNum));
+                    const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+
+                    let statusBadge = {
+                      label: 'Gris · En Estancia',
+                      classes: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+                      dot: 'bg-zinc-400'
+                    };
+                    if (operStatus === 'salida_hoy') {
+                      statusBadge = { label: 'Rojo Claro · Check-out Pendiente', classes: 'bg-rose-100 text-rose-800 border-rose-300', dot: 'bg-rose-500' };
+                    } else if (operStatus === 'sucio_checkout') {
+                      statusBadge = { label: 'Rojo Fuerte · Check-out Registrado', classes: 'bg-red-600 text-white border-red-700', dot: 'bg-red-200' };
+                    } else if (operStatus === 'limpieza_programada' || isRoomStayoverServiceScheduled(roomNum, reservas, todayStr)) {
+                      statusBadge = { label: 'Amarillo · Limpieza Programada', classes: 'bg-amber-400 text-amber-950 border-amber-500', dot: 'bg-amber-800' };
+                    } else if (operStatus === 'limpia') {
+                      statusBadge = { label: 'Azul · Limpia con Reserva', classes: 'bg-blue-600 text-white border-blue-700', dot: 'bg-blue-200' };
+                    } else if (operStatus === 'disponible') {
+                      statusBadge = { label: 'Verde · Disponible Libre', classes: 'bg-emerald-500 text-white border-emerald-600', dot: 'bg-emerald-200' };
+                    }
+
                     const nightsVal = r.nights || 1;
                     return (
                       <div 
@@ -3042,8 +3073,16 @@ export default function StaffPage() {
                             <h4 className="text-[14px] font-black text-zinc-950 leading-tight">{r.guest_name || 'Huésped Sin Nombre'}</h4>
                             <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Reserva ID: {r.id}</span>
                           </div>
-                          <span className="text-[11px] font-extrabold bg-zinc-900 text-white px-2.5 py-1 rounded-lg">
-                            {getUnitDisplay(r.room || r.room_name || '')}
+                          <span className="text-[12px] font-black bg-zinc-900 text-white px-3 py-1 rounded-xl shadow-sm">
+                            Hab {roomNum || 'Sin asign'}
+                          </span>
+                        </div>
+
+                        {/* Botón / Badge de Estado del Mapa de Limpieza */}
+                        <div className="pt-0.5">
+                          <span className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-lg border shadow-sm ${statusBadge.classes}`}>
+                            <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
+                            <span>Estado Mapa: {statusBadge.label}</span>
                           </span>
                         </div>
 
