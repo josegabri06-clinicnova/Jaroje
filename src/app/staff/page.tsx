@@ -219,7 +219,9 @@ function getRoomOperationalStatus(
 
   const salidaRes = activeReservations.find(r => {
     const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cOut <= todayStr && cOut >= limitStr && r.status !== 'cancelled';
+    const isTodayCheckout = cOut === todayStr;
+    const isOverdueCheckout = cOut < todayStr && !r.checked_out;
+    return matchesRoomNumber(r, roomNum) && (isTodayCheckout || isOverdueCheckout) && r.status !== 'cancelled';
   });
 
   if (salidaRes) {
