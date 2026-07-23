@@ -3028,20 +3028,18 @@ export default function StaffPage() {
                     const operStatus = getRoomOperationalStatus(roomNum, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
 
                     let statusBadge = {
-                      label: 'Gris · En Estancia',
-                      classes: 'bg-zinc-100 text-zinc-700 border-zinc-200',
+                      label: 'En Casa',
+                      classes: 'bg-zinc-100 text-zinc-800 border-zinc-300 font-extrabold',
                       dot: 'bg-zinc-400'
                     };
                     if (operStatus === 'salida_hoy') {
-                      statusBadge = { label: 'Rojo Claro · Check-out Pendiente', classes: 'bg-rose-100 text-rose-800 border-rose-300', dot: 'bg-rose-500' };
+                      statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
                     } else if (operStatus === 'sucio_checkout') {
-                      statusBadge = { label: 'Rojo Fuerte · Check-out Registrado', classes: 'bg-red-600 text-white border-red-700', dot: 'bg-red-200' };
+                      statusBadge = { label: 'Check out registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
                     } else if (operStatus === 'limpieza_programada' || isRoomStayoverServiceScheduled(roomNum, reservas, todayStr)) {
-                      statusBadge = { label: 'Amarillo · Limpieza Programada', classes: 'bg-amber-400 text-amber-950 border-amber-500', dot: 'bg-amber-800' };
-                    } else if (operStatus === 'limpia') {
-                      statusBadge = { label: 'Azul · Limpia con Reserva', classes: 'bg-blue-600 text-white border-blue-700', dot: 'bg-blue-200' };
-                    } else if (operStatus === 'disponible') {
-                      statusBadge = { label: 'Verde · Disponible Libre', classes: 'bg-emerald-500 text-white border-emerald-600', dot: 'bg-emerald-200' };
+                      statusBadge = { label: 'Limpieza programada', classes: 'bg-amber-400 text-amber-950 border-amber-500 font-black', dot: 'bg-amber-900' };
+                    } else if (operStatus === 'limpia' || operStatus === 'disponible') {
+                      statusBadge = { label: 'Limpieza finalizada', classes: 'bg-blue-600 text-white border-blue-700 font-extrabold', dot: 'bg-white' };
                     }
 
                     const nightsVal = r.nights || 1;
@@ -3062,9 +3060,9 @@ export default function StaffPage() {
 
                         {/* Botón / Badge de Estado del Mapa de Limpieza */}
                         <div className="pt-0.5">
-                          <span className={`inline-flex items-center gap-1.5 text-[10px] font-black px-2.5 py-1 rounded-lg border shadow-sm ${statusBadge.classes}`}>
+                          <span className={`inline-flex items-center gap-1.5 text-[11px] px-3 py-1 rounded-xl border shadow-2xs ${statusBadge.classes}`}>
                             <span className={`w-2 h-2 rounded-full ${statusBadge.dot}`} />
-                            <span>Estado Mapa: {statusBadge.label}</span>
+                            <span>{statusBadge.label}</span>
                           </span>
                         </div>
 
