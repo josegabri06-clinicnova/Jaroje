@@ -4105,6 +4105,8 @@ export default function RecepcionPage() {
     if (currentStock + change < 0) return;
     setInventory(prev => prev.map(item => item.id === id ? { ...item, stock: item.stock + change } : item));
     await supabase.from('inventory').update({ stock: currentStock + change, last_updated_by: staffName }).eq('id', id);
+  };
+
   return (
     <div className="space-y-6 pb-28 bg-[#fafafa] min-h-screen">
 
