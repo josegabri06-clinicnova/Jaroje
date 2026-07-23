@@ -145,22 +145,19 @@ export async function POST(req: Request) {
                   let templateName = 'reservacion_confirmada';
 
                   if (!isOTA && bookingForWA.deposit === 0) {
-                    const { sendTemplate1_SolicitudRecibida } = await import('@/lib/whatsapp');
-                    waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
-                    templateName = 'solicitud_recibida';
+                    console.log(`[Webhook Beds24] Reserva sin anticipo ${bookingId} agendada en NUEVAS. Esperando clic en REVISADO para enviar Mensaje 1.`);
                   } else {
-                    waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
-                  }
-
-                  if (waRes.success) {
-                    await supabase.from('whatsapp_logs').insert([{
-                      reservation_id: bookingId.toString(),
-                      template_name: templateName,
-                      phone: phone
-                    }]);
-                    console.log(`[Webhook Beds24] WhatsApp ${templateName} enviado a reserva ${bookingId}`);
-                  } else {
-                    console.error(`[Webhook Beds24] Error al enviar WhatsApp:`, waRes.error);
+                    const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+                    if (waRes.success) {
+                      await supabase.from('whatsapp_logs').insert([{
+                        reservation_id: bookingId.toString(),
+                        template_name: 'reservacion_confirmada',
+                        phone: phone
+                      }]);
+                      console.log(`[Webhook Beds24] WhatsApp reservacion_confirmada enviado a reserva ${bookingId}`);
+                    } else {
+                      console.error(`[Webhook Beds24] Error al enviar WhatsApp:`, waRes.error);
+                    }
                   }
                 } // fin else deduplicación por teléfono
               } // fin else deduplicación por bookingId
