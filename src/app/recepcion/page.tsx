@@ -27,6 +27,7 @@ let sharedAudioCtx: AudioContext | null = null;
 interface Reserva {
   id: string;
   room: string;
+  room_name?: string;
   unit_id?: string;
   daily_rate?: string;
   guest_name?: string;
@@ -38,6 +39,7 @@ interface Reserva {
   checked_out?: boolean;
   dni_image?: string;
   nights?: number;
+  price?: number;
   price_estimate?: number;
   price_per_night?: number;
   num_adult?: number;
@@ -45,6 +47,7 @@ interface Reserva {
   deposit?: number;
   balance?: number;
   notes?: string;
+  comments?: string;
   groupRooms?: { roomId: string; unitId: string; name: string }[];
   extra_guest_surcharge?: string;
   channel?: string;
@@ -5305,7 +5308,7 @@ export default function RecepcionPage() {
 
 
                   {/* Ajustes del Portal del Huésped */}
-                  {false && selectedReserva.id !== 'walkin' && (
+                  {false && selectedReserva && selectedReserva.id !== 'walkin' && (
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
                       <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -5611,8 +5614,8 @@ export default function RecepcionPage() {
                     <div>
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
-                        const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
-                        const isCheckedIn = selectedReserva.checked_in === true;
+                        const isOta = !!(selectedReserva?.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
+                        const isCheckedIn = selectedReserva?.checked_in === true;
                         const balanceVal = (isOta || isCheckedIn) ? 0 : (selectedReserva.id === 'walkin'
                           ? Math.max(0, (selectedReserva.price_estimate || 0) - Number(paymentAmount || 0))
                           : Math.max(0, Number(editedPrice !== '' ? editedPrice : (selectedReserva.price_estimate || 0)) - Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0))));
@@ -6422,7 +6425,7 @@ export default function RecepcionPage() {
                       ? Number(paymentAmount || 0)
                       : Number(editedDeposit !== '' ? editedDeposit : (selectedReserva.deposit || 0));
                     
-                    const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
+                    const isOta = !!(selectedReserva?.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedReserva.channel || '').toLowerCase().includes(c)));
                     const balanceVal = isOta ? 0 : (payGroupConsolidated
                       ? directGroupTotalBalance
                       : Math.max(0, totalVal - depositVal));
