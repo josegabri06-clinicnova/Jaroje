@@ -217,9 +217,11 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
   }
   if (unitIdStr && unitIdStr === roomNum) return true;
 
-  // 4. Evaluar campos room o room_name limpiando rangos como (101-107), (301-306)
-  const roomStr = String(r.room || '').replace(/\(\d{3}-\d{3}\)/g, '');
-  const roomNameStr = String(r.room_name || '').replace(/\(\d{3}-\d{3}\)/g, '');
+  // 4. Evaluar campos room o room_name limpiando rangos de categoría como 500-507, 301-306, (101-107)
+  const cleanStr = (str: string) => str.replace(/\(?\d{3}\s*-\s*\d{3}\)?/g, '');
+
+  const roomStr = cleanStr(String(r.room || ''));
+  const roomNameStr = cleanStr(String(r.room_name || ''));
 
   const regex = new RegExp(`\\b${roomNum}\\b`);
   if (regex.test(roomStr)) return true;
@@ -244,7 +246,7 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
       if (gRoomId && gUnitId && BEDS24_UNIT_MAP[gRoomId]?.[gUnitId]) {
         if (BEDS24_UNIT_MAP[gRoomId][gUnitId] === roomNum) return true;
       }
-      const grStr = String(gr.name || gr.roomId || gr.unitId || '').replace(/\(\d{3}-\d{3}\)/g, '');
+      const grStr = cleanStr(String(gr.name || gr.roomId || gr.unitId || ''));
       if (regex.test(grStr)) return true;
       if (roomNum === '401' && (grStr.toLowerCase().includes('casa') || gRoomId === '679093' || gRoomId === '679008')) return true;
       return false;
