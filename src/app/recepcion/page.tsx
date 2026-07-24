@@ -4595,10 +4595,13 @@ export default function RecepcionPage() {
                     {ROOMS.filter(r => {
                       const num = parseInt(r, 10);
                       if (num >= 500 && num <= 507) return false;
-                      const dbStatus = getRoomDbStatus(r, roomStatuses);
-                      const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-                      const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-                      return s === 'disponible';
+                      const hasResTonight = reservas.some(res => {
+                        if (res.status === 'cancelled' || res.status === 'cancelado') return false;
+                        const cIn = (res.check_in || res.arrival || '').split('T')[0].split(' ')[0];
+                        const cOut = (res.check_out || res.departure || '').split('T')[0].split(' ')[0];
+                        return matchesRoomNumber(res, r) && cIn <= todayStr && cOut > todayStr;
+                      });
+                      return !hasResTonight;
                     }).length}
                   </span>
                   <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
@@ -7511,10 +7514,13 @@ export default function RecepcionPage() {
           roomFiltered = ROOMS.filter(r => {
             const num = parseInt(r, 10);
             if (num >= 500 && num <= 507) return false;
-            const dbStatus = getRoomDbStatus(r, roomStatuses);
-            const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
-            const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-            return s === 'disponible';
+            const hasResTonight = reservas.some(res => {
+              if (res.status === 'cancelled' || res.status === 'cancelado') return false;
+              const cIn = (res.check_in || res.arrival || '').split('T')[0].split(' ')[0];
+              const cOut = (res.check_out || res.departure || '').split('T')[0].split(' ')[0];
+              return matchesRoomNumber(res, r) && cIn <= todayStr && cOut > todayStr;
+            });
+            return !hasResTonight;
           });
         } else if (kpiModalType === 'programada') {
           title = 'Limpiezas Programadas';
