@@ -660,17 +660,22 @@ export default function StaffPage() {
       let checkinMap: Record<string, any> = {};
       if (chk.data) {
         chk.data.forEach(c => {
-          checkinMap[String(c.reservation_id)] = c;
+          if (c.reservation_id) {
+            checkinMap[String(c.reservation_id).toLowerCase().trim()] = c;
+          }
         });
       }
       
       if (rj.success && rj.data) {
-        setReservas(rj.data.map((res: any) => ({
-          ...res,
-          room: res.room_name || res.room || 'Sin asignar',
-          checked_in: checkinMap[String(res.id)]?.status === 'checked_in',
-          checked_out: checkinMap[String(res.id)]?.status === 'checked_out'
-        })));
+        setReservas(rj.data.map((res: any) => {
+          const resIdStr = String(res.id).toLowerCase().trim();
+          return {
+            ...res,
+            room: res.room_name || res.room || 'Sin asignar',
+            checked_in: checkinMap[resIdStr]?.status === 'checked_in',
+            checked_out: checkinMap[resIdStr]?.status === 'checked_out'
+          };
+        }));
       }
       if (tj.success) setTasks(tj.data);
       if (inv.data) setInventory(inv.data);

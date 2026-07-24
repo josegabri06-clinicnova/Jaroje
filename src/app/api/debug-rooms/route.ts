@@ -79,7 +79,9 @@ export async function GET() {
     const { data: checkins } = await supabase.from('checkins').select('*');
     const checkinMap: Record<string, any> = {};
     (checkins || []).forEach((c: any) => {
-      checkinMap[String(c.reservation_id)] = c;
+      if (c.reservation_id) {
+        checkinMap[String(c.reservation_id).toLowerCase().trim()] = c;
+      }
     });
 
     // 3. Cargar room_status de Supabase
@@ -90,12 +92,15 @@ export async function GET() {
     });
 
     // 4. Enriquecer reservas con checked_in / checked_out
-    const reservas = allBookings.map((res: any) => ({
-      ...res,
-      room: res.room || res.room_name || '',
-      checked_in: checkinMap[String(res.id)]?.status === 'checked_in',
-      checked_out: checkinMap[String(res.id)]?.status === 'checked_out',
-    }));
+    const reservas = allBookings.map((res: any) => {
+      const resIdStr = String(res.id).toLowerCase().trim();
+      return {
+        ...res,
+        room: res.room || res.room_name || '',
+        checked_in: checkinMap[resIdStr]?.status === 'checked_in',
+        checked_out: checkinMap[resIdStr]?.status === 'checked_out',
+      };
+    });
 
     // 5. Diagnóstico por habitación
     const diagnosis: any[] = [];

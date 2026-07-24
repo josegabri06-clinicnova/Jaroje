@@ -333,18 +333,21 @@ export default function CalendarPage() {
       let checkinMap: Record<string, any> = {};
       if (chk.data) {
         chk.data.forEach(c => {
-          checkinMap[String(c.reservation_id)] = c;
+          if (c.reservation_id) {
+            checkinMap[String(c.reservation_id).toLowerCase().trim()] = c;
+          }
         });
       }
 
       if (json.success && json.data) {
         const merged = json.data.map((res: any) => {
+          const resIdStr = String(res.id).toLowerCase().trim();
           return {
             ...res,
             room: res.room_name || res.room || 'Sin asignar',
-            checked_in: checkinMap[String(res.id)]?.status === 'checked_in',
-            checked_out: checkinMap[String(res.id)]?.status === 'checked_out',
-            dni_image: checkinMap[String(res.id)]?.document_url
+            checked_in: checkinMap[resIdStr]?.status === 'checked_in',
+            checked_out: checkinMap[resIdStr]?.status === 'checked_out',
+            dni_image: checkinMap[resIdStr]?.document_url
           };
         });
         setReservas(merged);
@@ -1169,7 +1172,7 @@ export default function CalendarPage() {
     }
 
     const { error: upsertErr } = await supabase.from('checkins').upsert({
-      reservation_id: String(selectedReserva.id),
+      reservation_id: String(selectedReserva.id).toLowerCase().trim(),
       guest_name: selectedReserva.guest_name,
       room: selectedReserva.room,
       check_in_date: selectedReserva.check_in,

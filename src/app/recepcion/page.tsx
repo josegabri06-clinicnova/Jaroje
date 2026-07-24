@@ -2263,20 +2263,23 @@ export default function RecepcionPage() {
       let checkinMap: Record<string, any> = {};
       if (chk.data) {
         chk.data.forEach(c => {
-          checkinMap[String(c.reservation_id)] = c;
+          if (c.reservation_id) {
+            checkinMap[String(c.reservation_id).toLowerCase().trim()] = c;
+          }
         });
       }
 
       if (rj.success && rj.data) {
         setReservas(prevReservas => {
           return rj.data.map((res: any) => {
-            const alreadyCheckedIn = prevReservas.find(p => String(p.id) === String(res.id))?.checked_in;
+            const resIdStr = String(res.id).toLowerCase().trim();
+            const alreadyCheckedIn = prevReservas.find(p => String(p.id).toLowerCase().trim() === resIdStr)?.checked_in;
             return {
               ...res,
               room: res.room_name || res.room || 'Sin asignar',
-              checked_in: alreadyCheckedIn || checkinMap[String(res.id)]?.status === 'checked_in',
-              checked_out: checkinMap[String(res.id)]?.status === 'checked_out',
-              dni_image: checkinMap[String(res.id)]?.document_url
+              checked_in: alreadyCheckedIn || checkinMap[resIdStr]?.status === 'checked_in',
+              checked_out: checkinMap[resIdStr]?.status === 'checked_out',
+              dni_image: checkinMap[resIdStr]?.document_url
             };
           });
         });
@@ -2661,17 +2664,18 @@ export default function RecepcionPage() {
             return;
           }
 
-          const b24Array = resData.data;
-          const beds24AssignedId = (Array.isArray(b24Array) && b24Array[0]?.new?.id)
-            ? String(b24Array[0].new.id)
-            : (resData.data && resData.data.id ? String(resData.data.id) : `b24-${Date.now()}`);
+          const beds24AssignedId = String(
+            (Array.isArray(resData.data) && resData.data[0]?.new?.id)
+              ? resData.data[0].new.id
+              : (resData.data?.data?.[0]?.id || resData.data?.id || `b24-${Date.now()}`)
+          );
 
           bookedBeds24Ids.push(beds24AssignedId);
 
           const roomNameHuman = getFriendlyRoomName(room.roomId, room.unitId, roomInventory);
 
           const { error: upsertErr } = await supabase.from('checkins').upsert({
-            reservation_id: beds24AssignedId,
+            reservation_id: beds24AssignedId.toLowerCase().trim(),
             guest_name: selectedReserva.guest_name,
             room: roomNameHuman,
             check_in_date: selectedReserva.check_in || todayStr,
@@ -2996,7 +3000,7 @@ export default function RecepcionPage() {
         for (const r of groupBookings) {
           // A. Guardar check-in local en Supabase
           const { error: upsertErr } = await supabase.from('checkins').upsert({
-            reservation_id: String(r.id),
+            reservation_id: String(r.id).toLowerCase().trim(),
             guest_name: r.guest_name,
             room: r.room,
             check_in_date: r.check_in,
@@ -3514,7 +3518,7 @@ export default function RecepcionPage() {
         // --- PROCESO INDIVIDUAL ESTÁNDAR ---
         try {
           const { error: upsertErr } = await supabase.from('checkins').upsert({
-          reservation_id: String(selectedReserva.id),
+          reservation_id: String(selectedReserva.id).toLowerCase().trim(),
           guest_name: selectedReserva.guest_name,
           room: selectedReserva.room,
           check_in_date: selectedReserva.check_in,
@@ -4035,7 +4039,7 @@ export default function RecepcionPage() {
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
 
     const { error } = await supabase.from('checkins').upsert({
-      reservation_id: String(r.id),
+      reservation_id: String(r.id).toLowerCase().trim(),
       guest_name: r.guest_name,
       room: r.room,
       check_in_date: r.check_in,

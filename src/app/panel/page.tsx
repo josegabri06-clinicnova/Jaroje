@@ -325,7 +325,9 @@ export default function AdminDashboard() {
       let checkinMap: Record<string, any> = {};
       if (chkRes && chkRes.data) {
         chkRes.data.forEach((c: any) => {
-          checkinMap[String(c.reservation_id)] = c;
+          if (c.reservation_id) {
+            checkinMap[String(c.reservation_id).toLowerCase().trim()] = c;
+          }
         });
       }
 
@@ -340,13 +342,16 @@ export default function AdminDashboard() {
             new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
           );
           setReservas(
-            sorted.map((res: any) => ({
-              ...res,
-              room: res.room_name || res.room || 'Sin asignar',
-              checked_in: checkinMap[String(res.id)]?.status === 'checked_in',
-              checked_out: checkinMap[String(res.id)]?.status === 'checked_out',
-              dni_image: checkinMap[String(res.id)]?.document_url
-            }))
+            sorted.map((res: any) => {
+              const resIdStr = String(res.id).toLowerCase().trim();
+              return {
+                ...res,
+                room: res.room_name || res.room || 'Sin asignar',
+                checked_in: checkinMap[resIdStr]?.status === 'checked_in',
+                checked_out: checkinMap[resIdStr]?.status === 'checked_out',
+                dni_image: checkinMap[resIdStr]?.document_url
+              };
+            })
           );
         }
       }

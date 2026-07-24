@@ -599,7 +599,7 @@ export default function ReservasList() {
 
       // 1. Guardar el Check-in (usando upsert con onConflict para evitar fallos de clave duplicada)
       const { error: upsertErr } = await supabase.from('checkins').upsert({
-        reservation_id: selectedRes.id.toString(),
+        reservation_id: selectedRes.id.toString().toLowerCase().trim(),
         guest_name: selectedRes.guest_name,
         room: selectedRes.room_name,
         check_in_date: selectedRes.check_in,
@@ -1103,13 +1103,17 @@ export default function ReservasList() {
       let checkinMap: Record<string, any> = {};
       if (acc.data) setAccounts(acc.data);
       if (chk.data) {
-        chk.data.forEach(c => { checkinMap[String(c.reservation_id)] = c; });
+        chk.data.forEach(c => {
+          if (c.reservation_id) {
+            checkinMap[String(c.reservation_id).toLowerCase().trim()] = c;
+          }
+        });
       }
 
       let transferMap: Record<string, any[]> = {};
       if (Array.isArray(trData)) {
         trData.forEach((tr: any) => {
-          const bid = String(tr.booking_id);
+          const bid = String(tr.booking_id).toLowerCase().trim();
           if (!transferMap[bid]) transferMap[bid] = [];
           transferMap[bid].push(tr);
         });
@@ -1126,15 +1130,18 @@ export default function ReservasList() {
 
       if (json.error === 'TOKEN_EXPIRED') { setTokenError(true); return; }
       if (json.success && json.data) {
-        const sorted = json.data.map((r: any) => ({
-          ...r,
-          is_checked_in: checkinMap[String(r.id)]?.status === 'checked_in',
-          is_checked_out: checkinMap[String(r.id)]?.status === 'checked_out',
-          is_acknowledged: Boolean(r.is_acknowledged) || checkinMap[String(r.id)]?.status === 'acknowledged' || checkinMap[String(r.id)]?.status === 'checked_in' || checkinMap[String(r.id)]?.status === 'checked_out',
-          last_notice_sent: Boolean(r.last_notice_sent),
-          document_url: checkinMap[String(r.id)]?.document_url,
-          transfer_receipts: transferMap[String(r.id)] || []
-        })).sort((a: any, b: any) => 
+        const sorted = json.data.map((r: any) => {
+          const resIdStr = String(r.id).toLowerCase().trim();
+          return {
+            ...r,
+            is_checked_in: checkinMap[resIdStr]?.status === 'checked_in',
+            is_checked_out: checkinMap[resIdStr]?.status === 'checked_out',
+            is_acknowledged: Boolean(r.is_acknowledged) || checkinMap[resIdStr]?.status === 'acknowledged' || checkinMap[resIdStr]?.status === 'checked_in' || checkinMap[resIdStr]?.status === 'checked_out',
+            last_notice_sent: Boolean(r.last_notice_sent),
+            document_url: checkinMap[resIdStr]?.document_url,
+            transfer_receipts: transferMap[resIdStr] || []
+          };
+        }).sort((a: any, b: any) => 
           new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
         );
         setReservas(sorted);
@@ -1760,7 +1767,7 @@ export default function ReservasList() {
     setAckLoading(true);
     try {
       const { error } = await supabase.from('checkins').upsert({
-        reservation_id: targetRes.id.toString(),
+        reservation_id: targetRes.id.toString().toLowerCase().trim(),
         guest_name: targetRes.guest_name,
         room: targetRes.room_name,
         check_in_date: targetRes.check_in,
