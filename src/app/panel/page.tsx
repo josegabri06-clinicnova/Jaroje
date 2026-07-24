@@ -157,121 +157,99 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
-  let isCleanedToday = false;
-  let isEnLimpiezaToday = false;
-  let isSucioCheckoutToday = false;
+  const updateDateStr = lastUpdatedAt ? (lastUpdatedAt || '').split('T')[0].split(' ')[0] : '';
+  const isCleanedToday = (updateDateStr === todayStr) && dbStatus === 'limpia';
+  const isEnLimpiezaToday = (dbStatus === 'en_limpieza');
 
-  if (lastUpdatedAt) {
-    const updateDateStr = (lastUpdatedAt || '').split('T')[0].split(' ')[0];
-    if (updateDateStr === todayStr) {
-      if (dbStatus === 'limpia') isCleanedToday = true;
-      if (dbStatus === 'en_limpieza') isEnLimpiezaToday = true;
-      if (dbStatus === 'sucio_checkout') isSucioCheckoutToday = true;
-    }
-  }
-
-  // 1. Evaluar si la habitación tiene salida hoy (Check-out)
+  // 1. FLUJO 2: Evaluar si la habitación tiene SALIDA HOY (Check-out)
   const salidaRes = activeReservations.find(r => {
-    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cOut === todayStr && r.status !== 'cancelled';
+    if (r.status === 'cancelled' || r.status === 'cancelado') return false;
+    const cOut = (r.check_out || r.departure || '').split('T')[0].split(' ')[0];
+    return matchesRoomNumber(r, roomNum) && cOut === todayStr;
   });
 
   if (salidaRes) {
-    // Si el huésped de la salida AÚN NO registra checkout (salida pendiente):
+    // Si el huésped AÚN NO HACE CHECK-OUT -> ROJO CLARO (salida_hoy)
     if (!salidaRes.checked_out) {
-      if (isEnLimpiezaToday || dbStatus === 'en_limpieza') return 'en_limpieza';
-      return 'salida_hoy'; // Rojo claro: check-out pendiente SIEMPRE que no haya hecho check-out
+      if (isEnLimpiezaToday) return 'en_limpieza';
+      return 'salida_hoy'; // Rojo claro (salida hoy pendiente)
     }
 
-    // Si ya registró checkout (salidaRes.checked_out es true) O se marcó sucio_checkout:
-    if (isCleanedToday || (dbStatus === 'limpia' && lastUpdatedAt && (lastUpdatedAt || '').split('T')[0].split(' ')[0] === todayStr)) {
-      // Limpieza terminada post-checkout:
+    // Si ya registró checkout (checked_out === true):
+    // ¿Ya se realizó la limpieza post-checkout hoy?
+    if (isCleanedToday) {
+      // ¿Hay una nueva reserva que llega hoy y aún no hace check-in?
       const incomingRes = activeReservations.find(r => {
-        const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
-        return matchesRoomNumber(r, roomNum) && cIn === todayStr && r.status !== 'cancelled' && !r.checked_in;
+        if (r.status === 'cancelled' || r.status === 'cancelado') return false;
+        const cIn = (r.check_in || r.arrival || '').split('T')[0].split(' ')[0];
+        return matchesRoomNumber(r, roomNum) && cIn === todayStr && !r.checked_in;
       });
       if (incomingRes) {
-        return 'limpia'; // Azul: limpia post-checkout con reserva entrante pendiente de check-in
+        return 'limpia'; // Azul (check-in pendiente)
       } else {
-        return 'disponible'; // Verde: limpia post-checkout sin reserva entrante, libre para rentar
+        return 'disponible'; // Verde (disponible libre)
       }
     }
 
-    if (isEnLimpiezaToday || dbStatus === 'en_limpieza') return 'en_limpieza';
-    return 'sucio_checkout'; // Rojo fuerte: checkout registrado pero sucia
+    // Check-out registrado pero sucia -> ROJO FUERTE
+    if (isEnLimpiezaToday) return 'en_limpieza';
+    return 'sucio_checkout'; // Rojo fuerte
   }
 
-  // Si es un checkout atrasado vencido en DB
-  if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
-    return 'sucio_checkout';
-  }
-
-  if (isEnLimpiezaToday || dbStatus === 'en_limpieza') {
-    return 'en_limpieza';
-  }
-
-  // 2. Buscar si hay una reserva activa hoy en la habitación (estancia o llegada)
+  // 2. FLUJO 1 & FLUJO 3/4: Buscar si hay una reserva activa en estancia o que entra hoy
   const currentRes = activeReservations.find(r => {
-    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
-    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cIn <= todayStr && cOut > todayStr && r.status !== 'cancelled';
+    if (r.status === 'cancelled' || r.status === 'cancelado') return false;
+    const cIn = (r.check_in || r.arrival || '').split('T')[0].split(' ')[0];
+    const cOut = (r.check_out || r.departure || '').split('T')[0].split(' ')[0];
+    return matchesRoomNumber(r, roomNum) && (r.checked_in || (cIn <= todayStr && cOut > todayStr));
   });
 
   if (currentRes) {
-    const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
+    const cIn = (currentRes.check_in || currentRes.arrival || '').split('T')[0].split(' ')[0];
+    const isTodayArrival = (cIn === todayStr);
 
-    // CASO A: Es la fecha de entrada de la reserva y el huésped AÚN NO hace check-in
-    if (cIn === todayStr && !currentRes.checked_in) {
+    // CASO A: Entra HOY y el huésped AÚN NO HACE CHECK-IN -> AZUL (Check-in pendiente / Llegada hoy)
+    if (isTodayArrival && !currentRes.checked_in) {
       if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible') {
-        return 'limpia'; // Azul: limpia con reserva entrante
+        return 'limpia'; // Azul
       }
-      return 'sucio_checkout'; // Rojo fuerte si la habitación no está limpia
+      return 'sucio_checkout'; // Rojo fuerte si falta limpiar antes de llegada
     }
 
-    // CASO B: Estancia en curso (check_in < todayStr o ya hizo check_in)
-    const cInDate = new Date(cIn + 'T12:00:00');
-    const tDate = new Date(todayStr + 'T12:00:00');
-    const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
-
-    const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '401', '402'].includes(roomNum);
-    const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '501', '502', '503', '504', '505', '506', '507'].includes(roomNum);
-
-    let requiresService = false;
-    if (isThreeDayRoom) {
-      // Cada 2 días de estancia (ej. entro 18 -> servicio 20, 22, 24...)
-      if (diffDays >= 2 && diffDays % 2 === 0) {
-        requiresService = true;
-      }
-    } else if (isDailyRoom) {
-      if (diffDays >= 1) {
-        requiresService = true;
+    // CASO B: EL HUÉSPED YA HIZO CHECK-IN O ESTÁ EN ESTANCIA EN CURSO (Gris u Amarillo)
+    // Evaluar si le corresponde Limpieza Programada hoy (Flujo 4):
+    if (isRoomStayoverServiceScheduled(roomNum, activeReservations, todayStr)) {
+      if (!isCleanedToday) {
+        return 'limpieza_programada'; // Amarillo
       }
     }
 
-    if (requiresService && !isCleanedToday) {
-      return 'limpieza_programada'; // Amarillo
-    }
-
-    return 'ocupada'; // Gris
+    return 'ocupada'; // GRIS (No disponible / Ocupada)
   }
 
-  if (isCleanedToday || dbStatus === 'limpia') {
-    return 'disponible';
+  // 3. Si fue marcada sucio_checkout previamente en DB
+  if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
+    return 'sucio_checkout';
+  }
+  if (isEnLimpiezaToday) {
+    return 'en_limpieza';
   }
 
+  // 4. Si la habitación está totalmente libre y sin reservas activas -> VERDE (Disponible)
   return 'disponible';
 }
 
 function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any[], todayStr: string): boolean {
   const currentRes = activeReservations.find(r => {
-    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
-    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cIn < todayStr && cOut > todayStr && !r.checked_out && r.status !== 'cancelled';
+    if (r.status === 'cancelled' || r.status === 'cancelado') return false;
+    const cIn = (r.check_in || r.arrival || '').split('T')[0].split(' ')[0];
+    const cOut = (r.check_out || r.departure || '').split('T')[0].split(' ')[0];
+    return matchesRoomNumber(r, roomNum) && (r.checked_in || (cIn <= todayStr && cOut > todayStr)) && !r.checked_out;
   });
 
   if (!currentRes) return false;
 
-  const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
+  const cIn = (currentRes.check_in || currentRes.arrival || '').split('T')[0].split(' ')[0];
   if (!cIn || cIn.length !== 10) return false;
 
   const cInDate = new Date(cIn + 'T12:00:00');
