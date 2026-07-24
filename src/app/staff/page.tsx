@@ -407,6 +407,7 @@ export default function StaffPage() {
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | 'disponibles' | 'programada' | 'checkout' | 'terminada' | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [todayStr, setTodayStr] = useState(() => getLocalDateStr());
+  const [isLoading, setIsLoading] = useState(false);
 
   const limitDate = new Date();
   limitDate.setDate(limitDate.getDate() - 5);
@@ -654,10 +655,11 @@ export default function StaffPage() {
     };
   }, [showForm, showStatusModal, showResolveModal, showEmployeeModal]);
 
-  const fetchData = async () => {
+  const fetchData = async (bypassCache = false) => {
+    setIsLoading(true);
     try {
       const [r, t, inv, rs, chk] = await Promise.all([
-        fetch('/api/reservas?t=' + Date.now()),
+        fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
         fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
         fetch('/api/room-status?t=' + Date.now()),
@@ -693,6 +695,8 @@ export default function StaffPage() {
       if (rsj.success && rsj.data) setRoomStatuses(rsj.data);
     } catch (e) {
       console.error('Error al cargar datos en Staff:', e);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1618,9 +1622,15 @@ export default function StaffPage() {
             
             {/* ── ESTADO FÍSICO DE HABITACIONES (GRID INTERACTIVO PREMIUM) ── */}
             <div className="bg-white border border-zinc-200 rounded-[28px] p-5 shadow-sm space-y-4">
-              <div>
-                <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
-                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
+                  <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
+                </div>
+                <button onClick={() => fetchData(true)} disabled={isLoading}
+                  className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 rounded-lg shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
+                  <RefreshCw size={13} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
+                </button>
               </div>
 
               {/* Conteo por estados */}

@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
-  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2
+  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
@@ -551,6 +551,7 @@ function fmtCurrency(amount: number, guestName?: string) {
 
 export default function RecepcionPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [inventory, setInventory] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -2256,6 +2257,7 @@ export default function RecepcionPage() {
   };
 
   const fetchData = async (bypassCache = false) => {
+    setIsLoading(true);
     try {
       const [r, t, inv, chk, acc, rms, prc, psRes, capRes] = await Promise.all([
         fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
@@ -2322,6 +2324,8 @@ export default function RecepcionPage() {
       }
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -4567,6 +4571,10 @@ export default function RecepcionPage() {
                 <BedDouble size={14} className="text-blue-500" />
                 Habitaciones Disponibles / Limpias
               </h3>
+              <button onClick={() => fetchData(true)} disabled={isLoading}
+                className="w-7 h-7 flex items-center justify-center bg-white border border-zinc-200 rounded-lg shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
+                <RefreshCw size={12} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
+              </button>
             </div>
 
             <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-sm p-5 space-y-4">
