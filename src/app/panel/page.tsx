@@ -670,7 +670,6 @@ export default function AdminDashboard() {
         return numA - numB;
       });
   }, [reservas, todayStr]);
-  const proximasLlegadas = reservas.filter(r => r.check_in > todayStr && r.status !== 'cancelled').slice(0, 5);
 
   // WhatsApp — semáforo de urgencia
   const findAllReservationsForContact = (phone: string, name: string) => {
@@ -1417,75 +1416,6 @@ export default function AdminDashboard() {
       </div>
 
 
-      {/* ── 7. PRÓXIMAS RESERVAS ──────────────────────────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-            <Users size={13} />
-            Próximas Reservas
-          </h3>
-          <span className="text-[11px] font-semibold bg-zinc-100 text-zinc-600 px-2 py-0.5 rounded-md">{reservas.length} total</span>
-        </div>
-        <div className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm overflow-hidden">
-          {isLoading ? (
-            <div className="p-8 flex justify-center">
-              <div className="w-5 h-5 border-2 border-zinc-200 border-t-zinc-600 rounded-full animate-spin" />
-            </div>
-          ) : proximasLlegadas.length === 0 ? (
-            <div className="p-8 text-center text-zinc-400 text-[13px] font-medium">Sin próximas llegadas.</div>
-          ) : (
-            <div className="divide-y divide-zinc-100">
-              {proximasLlegadas.map(r => (
-                <div
-                  key={r.id}
-                  onClick={() => router.push(`/reservas?id=${r.id}`)}
-                  className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-8 h-8 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
-                      <Users size={14} className="text-zinc-500" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[14px] font-semibold text-zinc-900 leading-tight truncate">{r.guest_name}</p>
-                      <div className="flex items-center gap-1.5 mt-0.5 text-[11px] font-medium text-zinc-500 flex-wrap leading-none">
-                        <span className="truncate">{r.room_name}</span>
-                        <span>•</span>
-                        <span className="truncate">{r.channel}</span>
-                        {r.guest_phone && (
-                          <>
-                            <span>•</span>
-                            <a
-                              href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex items-center gap-0.5 text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
-                            >
-                              <Phone size={9} />
-                              <span>{r.guest_phone}</span>
-                            </a>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                    <span className="text-[12px] font-bold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded-lg">
-                      {r.check_in ? format(new Date(r.check_in + 'T12:00:00'), 'd MMM', { locale: es }) : '—'}
-                    </span>
-                    <span className="text-[10px] text-zinc-400 font-medium flex items-center gap-0.5">
-                      <Moon size={9} /> {r.nights}n
-                    </span>
-                  </div>
-                </div>
-              ))}
-              <Link href="/reservas" className="block text-center text-[12px] font-bold text-blue-600 py-3 hover:bg-zinc-50">
-                Ver todas →
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
 
       {/* ── MODAL DETALLE / INSPECCIÓN DE HABITACIÓN EN ADMIN (INTERACTIVO COMPACTO) ── */}
       {showRoomStatusModal && selectedRoomForStatus && (() => {
