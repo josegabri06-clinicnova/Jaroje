@@ -271,7 +271,7 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
 
   if (isThreeDayRoom) {
-    return diffDays >= 2 && diffDays % 2 === 0;
+    return diffDays >= 2 && (diffDays - 2) % 3 === 0;
   } else if (isDailyRoom) {
     return diffDays >= 1;
   }
