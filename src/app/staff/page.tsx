@@ -1608,7 +1608,6 @@ export default function StaffPage() {
                 >
                   <span className="text-[15px] font-black text-emerald-700">
                     {ROOMS.filter(r => {
-                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -1623,7 +1622,6 @@ export default function StaffPage() {
                 >
                   <span className="text-[15px] font-black text-amber-700">
                     {ROOMS.filter(r => {
-                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -1638,7 +1636,6 @@ export default function StaffPage() {
                 >
                   <span className="text-[15px] font-black text-rose-700">
                     {ROOMS.filter(r => {
-                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -1653,7 +1650,6 @@ export default function StaffPage() {
                 >
                   <span className="text-[15px] font-black text-blue-700">
                     {ROOMS.filter(r => {
-                      if (r === '500') return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       return getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at) === 'limpia';
@@ -2984,7 +2980,6 @@ export default function StaffPage() {
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           isCleaningKpi = true;
           roomFiltered = ROOMS.filter(r => {
-            if (r === '500') return false;
             const dbStatus = getRoomDbStatus(r, roomStatuses);
             const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
             const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -2995,7 +2990,6 @@ export default function StaffPage() {
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
           isCleaningKpi = true;
           roomFiltered = ROOMS.filter(r => {
-            if (r === '500') return false;
             const dbStatus = getRoomDbStatus(r, roomStatuses);
             const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
             const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -3006,7 +3000,6 @@ export default function StaffPage() {
           badgeColor = 'bg-rose-100 text-rose-800 border border-rose-200';
           isCleaningKpi = true;
           roomFiltered = ROOMS.filter(r => {
-            if (r === '500') return false;
             const dbStatus = getRoomDbStatus(r, roomStatuses);
             const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
             const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -3017,7 +3010,6 @@ export default function StaffPage() {
           badgeColor = 'bg-blue-100 text-blue-800 border border-blue-200';
           isCleaningKpi = true;
           roomFiltered = ROOMS.filter(r => {
-            if (r === '500') return false;
             const dbStatus = getRoomDbStatus(r, roomStatuses);
             const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
             const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
