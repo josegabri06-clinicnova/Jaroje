@@ -656,6 +656,7 @@ export default function StaffPage() {
   }, [showForm, showStatusModal, showResolveModal, showEmployeeModal]);
 
   const fetchData = async (bypassCache = false) => {
+    window.dispatchEvent(new Event('refresh-start'));
     setIsLoading(true);
     try {
       const [r, t, inv, rs, chk] = await Promise.all([
@@ -697,6 +698,7 @@ export default function StaffPage() {
       console.error('Error al cargar datos en Staff:', e);
     } finally {
       setIsLoading(false);
+      window.dispatchEvent(new Event('refresh-end'));
     }
   };
 
@@ -724,11 +726,17 @@ export default function StaffPage() {
       }
     }, 45000);
     
+    const handleRefresh = () => {
+      fetchData(true);
+    };
+    window.addEventListener('refresh-data', handleRefresh);
+    
     return () => {
       clearInterval(iv);
       supabase.removeChannel(channel);
+      window.removeEventListener('refresh-data', handleRefresh);
     };
-  }, []);
+  }, [fetchData]);
 
   const llegadas = reservas.filter(r => r.status !== 'cancelled' && (r.check_in || '').split('T')[0].split(' ')[0] === todayStr && !r.checked_in && !r.checked_out);
   const salidas  = reservas.filter(r => r.status !== 'cancelled' && (r.check_out || '').split('T')[0].split(' ')[0] <= todayStr && (r.check_out || '').split('T')[0].split(' ')[0] >= limitDateStr && !r.checked_out);
@@ -1622,15 +1630,9 @@ export default function StaffPage() {
             
             {/* ── ESTADO FÍSICO DE HABITACIONES (GRID INTERACTIVO PREMIUM) ── */}
             <div className="bg-white border border-zinc-200 rounded-[28px] p-5 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
-                  <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
-                </div>
-                <button onClick={() => fetchData(true)} disabled={isLoading}
-                  className="w-8 h-8 flex items-center justify-center bg-white border border-zinc-200 rounded-lg shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
-                  <RefreshCw size={13} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
-                </button>
+              <div>
+                <h3 className="text-[15px] font-black text-zinc-900">Estado de Habitaciones</h3>
+                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Sincronizado al instante mediante Supabase Realtime</p>
               </div>
 
               {/* Conteo por estados */}

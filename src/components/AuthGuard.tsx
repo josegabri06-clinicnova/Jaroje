@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/lib/auth';
-import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer } from 'lucide-react';
+import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer, RefreshCw } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 
 type Role = 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento' | null;
@@ -22,6 +22,22 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [role, setRole]       = useState<Role>(null);
   const [checked, setChecked] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  useEffect(() => {
+    const start = () => setIsRefreshing(true);
+    const end = () => setIsRefreshing(false);
+    window.addEventListener('refresh-start', start);
+    window.addEventListener('refresh-end', end);
+    return () => {
+      window.removeEventListener('refresh-start', start);
+      window.removeEventListener('refresh-end', end);
+    };
+  }, []);
+
+  const handleRefresh = () => {
+    window.dispatchEvent(new Event('refresh-data'));
+  };
 
   useEffect(() => {
     const stored = localStorage.getItem('jaroje_role') as Role;
@@ -136,6 +152,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
           {/* Campana — solo admin */}
           {role === 'admin' && <NotificationBell />}
+
+          {/* Refresh button */}
+          {role && (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-100 active:scale-95 transition-all cursor-pointer"
+              aria-label="Refrescar datos"
+            >
+              <RefreshCw size={17} className={`text-zinc-500 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          )}
 
           {/* Logout */}
           {role && (

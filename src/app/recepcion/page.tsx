@@ -2257,6 +2257,7 @@ export default function RecepcionPage() {
   };
 
   const fetchData = async (bypassCache = false) => {
+    window.dispatchEvent(new Event('refresh-start'));
     setIsLoading(true);
     try {
       const [r, t, inv, chk, acc, rms, prc, psRes, capRes] = await Promise.all([
@@ -2326,6 +2327,7 @@ export default function RecepcionPage() {
       console.error(err);
     } finally {
       setIsLoading(false);
+      window.dispatchEvent(new Event('refresh-end'));
     }
   };
 
@@ -2433,13 +2435,19 @@ export default function RecepcionPage() {
       )
       .subscribe();
 
+    const handleRefresh = () => {
+      fetchData(true);
+    };
+    window.addEventListener('refresh-data', handleRefresh);
+
     return () => {
       clearInterval(iv);
       supabase.removeChannel(channel);
       window.removeEventListener('click', unlock);
       window.removeEventListener('touchstart', unlock);
+      window.removeEventListener('refresh-data', handleRefresh);
     };
-  }, []);
+  }, [fetchData]);
 
   const llegadas = useMemo(() => {
     return reservas
@@ -4571,10 +4579,6 @@ export default function RecepcionPage() {
                 <BedDouble size={14} className="text-blue-500" />
                 Habitaciones Disponibles / Limpias
               </h3>
-              <button onClick={() => fetchData(true)} disabled={isLoading}
-                className="w-7 h-7 flex items-center justify-center bg-white border border-zinc-200 rounded-lg shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
-                <RefreshCw size={12} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
-              </button>
             </div>
 
             <div className="bg-white border border-zinc-200/80 rounded-[28px] shadow-sm p-5 space-y-4">

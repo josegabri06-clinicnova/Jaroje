@@ -322,6 +322,7 @@ export default function AdminDashboard() {
   const [toastMsg, setToastMsg] = useState('');
 
   const fetchAll = async (silent = false, bypassCache = false) => {
+    window.dispatchEvent(new Event('refresh-start'));
     if (!silent) setIsLoading(true);
     setTokenError(false);
     try {
@@ -404,6 +405,7 @@ export default function AdminDashboard() {
       console.error(e);
     } finally {
       if (!silent) setIsLoading(false);
+      window.dispatchEvent(new Event('refresh-end'));
     }
   };
 
@@ -604,8 +606,17 @@ export default function AdminDashboard() {
         fetchAll(false);
       }
     }, 45000);
-    return () => clearInterval(interval);
-  }, []);
+
+    const handleRefresh = () => {
+      fetchAll(false, true);
+    };
+    window.addEventListener('refresh-data', handleRefresh);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('refresh-data', handleRefresh);
+    };
+  }, [fetchAll]);
   const llegadasHoy = useMemo(() => {
     return reservas
       .filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled')
@@ -712,10 +723,6 @@ export default function AdminDashboard() {
             <span className="text-[13px] font-medium text-zinc-500 capitalize">{hoy}</span>
           </div>
         </div>
-        <button onClick={() => fetchAll(false, true)} disabled={isLoading}
-          className="w-9 h-9 flex items-center justify-center bg-white border border-zinc-200 rounded-xl shadow-sm hover:bg-zinc-50 active:scale-95 transition-all">
-          <RefreshCw size={15} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
       </div>
 
       {/* Token error banner */}
