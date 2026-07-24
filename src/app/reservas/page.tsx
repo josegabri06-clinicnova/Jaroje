@@ -2135,7 +2135,6 @@ export default function ReservasList() {
             <Download size={13} className={exportLoading ? 'animate-bounce' : ''} />
             SQL
           </button>
-          </button>
         </div>
 
       </div>
