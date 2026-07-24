@@ -270,6 +270,10 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   return false;
 }
 
+function getRoomCategoryLabel(roomNum: string): string {
+  return ROOM_ROWS.find(row => row.rooms.includes(roomNum))?.label || `Habitación ${roomNum}`;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [reservas, setReservas] = useState<any[]>([]);
