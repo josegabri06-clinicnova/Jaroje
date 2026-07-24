@@ -441,7 +441,7 @@ function getRoomOperationalStatus(
     if (r.status === 'cancelled' || r.status === 'cancelado') return false;
     const cIn = (r.check_in || r.arrival || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || r.departure || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && (r.checked_in || (cIn <= todayStr && cOut > todayStr));
+    return matchesRoomNumber(r, roomNum) && (r.checked_in || (cIn <= todayStr && cOut > todayStr)) && cOut >= todayStr;
   });
 
   if (currentRes) {
@@ -484,7 +484,7 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
     if (r.status === 'cancelled' || r.status === 'cancelado') return false;
     const cIn = (r.check_in || r.arrival || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || r.departure || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && (r.checked_in || (cIn <= todayStr && cOut > todayStr)) && !r.checked_out;
+    return matchesRoomNumber(r, roomNum) && (r.checked_in || (cIn <= todayStr && cOut > todayStr)) && !r.checked_out && cOut >= todayStr;
   });
 
   if (!currentRes) return false;
