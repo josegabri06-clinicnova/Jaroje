@@ -2677,6 +2677,7 @@ export default function RecepcionPage() {
               phone: selectedReserva.guest_phone || '',
               numAdult: room.adults,
               numChild: room.children,
+              sendWhatsApp: false,
               notes: selectedReserva.id === 'walkin'
                 ? `${paymentDescription || ''}${roomDetails.length > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`
                 : `${selectedReserva.notes || ''}${roomDetails.length > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`

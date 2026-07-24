@@ -97,6 +97,17 @@ export async function POST(req: Request) {
               const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
               // 1. Deduplicación por bookingId exacto
+              const { data: dbCheckin } = await supabase
+                .from('checkins')
+                .select('status')
+                .eq('reservation_id', bookingIdStr.toLowerCase().trim())
+                .maybeSingle();
+
+              if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
+                console.log(`[Webhook Beds24] Huésped ya hizo check-in (status: ${dbCheckin.status}), omitiendo confirmación.`);
+                return NextResponse.json({ success: true, message: 'Check-in ya realizado, se omite confirmación.' });
+              }
+
               const { data: existingLog } = await supabase
                 .from('whatsapp_logs')
                 .select('id')
