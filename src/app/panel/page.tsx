@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, BedDouble, Sparkles, BarChart3,
   MessageCircle, TrendingUp, RefreshCw, AlertCircle, Users, Moon,
@@ -596,6 +596,9 @@ export default function AdminDashboard() {
     window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
   };
 
+  const fetchAllRef = useRef(fetchAll);
+  fetchAllRef.current = fetchAll;
+
   useEffect(() => {
     const today = getLocalDateStr();
     setTodayStr(today);
@@ -608,7 +611,7 @@ export default function AdminDashboard() {
     }, 45000);
 
     const handleRefresh = () => {
-      fetchAll(false, true);
+      fetchAllRef.current(false, true);
     };
     window.addEventListener('refresh-data', handleRefresh);
 
@@ -616,7 +619,7 @@ export default function AdminDashboard() {
       clearInterval(interval);
       window.removeEventListener('refresh-data', handleRefresh);
     };
-  }, [fetchAll]);
+  }, []);
   const llegadasHoy = useMemo(() => {
     return reservas
       .filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled')

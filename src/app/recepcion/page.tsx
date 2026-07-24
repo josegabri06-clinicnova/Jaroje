@@ -2387,6 +2387,9 @@ export default function RecepcionPage() {
     }
   }, [cleanToast]);
 
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+
   useEffect(() => {
     // Desbloquear AudioContext en la primera interacción
     const unlock = () => {
@@ -2429,14 +2432,14 @@ export default function RecepcionPage() {
               by: updated.updated_by || 'Personal'
             });
             playPremiumNotificationSound();
-            fetchData(true); // Sincronizar datos de inmediato sin recargar
+            fetchDataRef.current(true); // Sincronizar datos de inmediato sin recargar
           }
         }
       )
       .subscribe();
 
     const handleRefresh = () => {
-      fetchData(true);
+      fetchDataRef.current(true);
     };
     window.addEventListener('refresh-data', handleRefresh);
 
@@ -2447,7 +2450,7 @@ export default function RecepcionPage() {
       window.removeEventListener('touchstart', unlock);
       window.removeEventListener('refresh-data', handleRefresh);
     };
-  }, [fetchData]);
+  }, []);
 
   const llegadas = useMemo(() => {
     return reservas

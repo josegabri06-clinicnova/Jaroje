@@ -702,6 +702,9 @@ export default function StaffPage() {
     }
   };
 
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+
   useEffect(() => {
     fetchData();
     fetchSchedules();
@@ -727,7 +730,7 @@ export default function StaffPage() {
     }, 45000);
     
     const handleRefresh = () => {
-      fetchData(true);
+      fetchDataRef.current(true);
     };
     window.addEventListener('refresh-data', handleRefresh);
     
@@ -736,7 +739,7 @@ export default function StaffPage() {
       supabase.removeChannel(channel);
       window.removeEventListener('refresh-data', handleRefresh);
     };
-  }, [fetchData]);
+  }, []);
 
   const llegadas = reservas.filter(r => r.status !== 'cancelled' && (r.check_in || '').split('T')[0].split(' ')[0] === todayStr && !r.checked_in && !r.checked_out);
   const salidas  = reservas.filter(r => r.status !== 'cancelled' && (r.check_out || '').split('T')[0].split(' ')[0] <= todayStr && (r.check_out || '').split('T')[0].split(' ')[0] >= limitDateStr && !r.checked_out);
