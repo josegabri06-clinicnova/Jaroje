@@ -384,6 +384,15 @@ function getRoomOperationalStatus(
   const updateDateStr = lastUpdatedAt ? (lastUpdatedAt || '').split('T')[0].split(' ')[0] : '';
   const isCleanedToday = (updateDateStr === todayStr) && dbStatus === 'limpia';
   const isEnLimpiezaToday = (dbStatus === 'en_limpieza');
+  const isUpdatedToday = (updateDateStr === todayStr);
+
+  // Sobrescribimiento Manual del Administrador hoy:
+  if (isUpdatedToday && dbStatus === 'sucio_checkout') {
+    return 'sucio_checkout';
+  }
+  if (isUpdatedToday && dbStatus === 'en_limpieza') {
+    return 'en_limpieza';
+  }
 
   // 1. FLUJO 2: Evaluar si la habitación tiene SALIDA HOY (Check-out)
   const salidaRes = activeReservations.find(r => {

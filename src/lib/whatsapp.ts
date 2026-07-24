@@ -58,6 +58,18 @@ function getSiteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
 }
 
+const groupMessageLocks = new Map<string, number>();
+
+function isGroupMessageLocked(key: string): boolean {
+  const now = Date.now();
+  const lastSent = groupMessageLocks.get(key);
+  if (lastSent && (now - lastSent < 15000)) {
+    return true;
+  }
+  groupMessageLocks.set(key, now);
+  return false;
+}
+
 // Envía una plantilla genérica de WhatsApp llamando a Meta Cloud API
 export async function sendWhatsAppTemplate(
   phone: string,
@@ -97,6 +109,13 @@ export async function sendWhatsAppTemplate(
       } catch (e) {
         console.error("Error al consultar configuración de pausa de WhatsApp:", e);
       }
+    }
+
+    // Candado anti-duplicados para reservaciones de grupo y envíos masivos simultáneos (15 segundos)
+    const lockKey = `${cleanedPhone}_${templateName}`;
+    if (isGroupMessageLocked(lockKey)) {
+      console.log(`[WhatsApp Deduplicador] Omitiendo mensaje duplicado para ${cleanedPhone} (plantilla: ${templateName})`);
+      return { success: true, deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador de grupo.' };
     }
 
     // Resolve language preference
