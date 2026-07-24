@@ -179,11 +179,11 @@ function getRoomOperationalStatus(
     if (dbStatus === 'sucio_checkout') return 'sucio_checkout';
   }
 
-  // 1. FLUJO 2: Evaluar si la habitación tiene SALIDA HOY o anterior (Check-out)
+  // 1. FLUJO 2: Evaluar si la habitación tiene SALIDA HOY (Check-out)
   const salidaRes = activeReservations.find(r => {
     if (r.status === 'cancelled' || r.status === 'cancelado') return false;
     const cOut = (r.check_out || r.departure || '').split('T')[0].split(' ')[0];
-    return matchesRoomNumber(r, roomNum) && cOut <= todayStr;
+    return matchesRoomNumber(r, roomNum) && cOut === todayStr;
   });
 
   if (salidaRes) {
