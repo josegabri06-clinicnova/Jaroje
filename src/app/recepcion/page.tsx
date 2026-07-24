@@ -2372,7 +2372,11 @@ export default function RecepcionPage() {
     window.addEventListener('touchstart', unlock);
 
     fetchData();
-    const iv = setInterval(fetchData, 15000);
+    const iv = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    }, 45000);
 
     // Suscripción Realtime en Supabase para cambios de estado de cuartos
     const channel = supabase

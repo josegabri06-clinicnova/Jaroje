@@ -23,7 +23,7 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const bypassCache = searchParams.get('bypassCache') === 'true';
     const includeCancelled = searchParams.get('includeCancelled') === 'true';
-    const mappedBookings = await getBeds24Bookings(false, includeCancelled, bypassCache);
+    const mappedBookings = await getBeds24Bookings(true, includeCancelled, bypassCache);
     
     // Obtener reservas locales de Supabase
     let localBookings: any[] = [];

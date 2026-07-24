@@ -564,8 +564,10 @@ export default function AdminDashboard() {
     setHoy(format(new Date(), "EEEE, d MMM", { locale: es }));
     fetchAll(false);
     const interval = setInterval(() => {
-      fetchAll(true);
-    }, 15000);
+      if (document.visibilityState === 'visible') {
+        fetchAll(false);
+      }
+    }, 45000);
     return () => clearInterval(interval);
   }, []);
   const llegadasHoy = useMemo(() => {

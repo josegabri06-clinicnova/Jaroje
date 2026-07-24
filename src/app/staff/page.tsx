@@ -681,8 +681,12 @@ export default function StaffPage() {
       )
       .subscribe();
 
-    // Polling secundario de seguridad cada 15 segundos
-    const iv = setInterval(fetchData, 15_000);
+    // Polling secundario de seguridad cada 45 segundos solo si la pestaña está visible
+    const iv = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchData();
+      }
+    }, 45000);
     
     return () => {
       clearInterval(iv);

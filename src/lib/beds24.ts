@@ -908,12 +908,14 @@ export function extractOtaDetails(invoiceItems: any[]): OtaDetails {
   };
 }
 
-// Variables globales de caché para evitar cuellos de botella bajo concurrencia
+// Variables globales de caché para evitar cuellos de botella bajo concurrencia multi-usuario
 let cachedBookingsPromise: Promise<any[]> | null = null;
 let cachedAllBookingsPromise: Promise<any[]> | null = null;
+let lastKnownBookingsCache: any[] = [];
+let lastKnownAllBookingsCache: any[] = [];
 let cacheTimestamp = 0;
 let cacheAllTimestamp = 0;
-const CACHE_TTL_MS = 30000; // 30 segundos de ciclo de vida (TTL)
+const CACHE_TTL_MS = 90000; // 90 segundos de ciclo de vida (TTL) para soportar múltiples usuarios concurrentes sin saturar Beds24
 
 // Función para limpiar/invalidar el caché de Beds24 (útil tras POST/PUT/DELETE)
 export function clearBeds24Cache() {
@@ -926,7 +928,7 @@ export function clearBeds24Cache() {
 
 // Obtener y mapear reservas activas (Backend Server-Side) con caché
 export async function getBeds24Bookings(
-  fast: boolean = false,
+  fast: boolean = true,
   includeCancelled: boolean = false,
   bypassCache: boolean = false
 ): Promise<any[]> {
@@ -940,10 +942,17 @@ export async function getBeds24Bookings(
     cachedAllBookingsPromise = (async () => {
       try {
         const result = await doFetchAndMapBeds24Bookings(fast, true);
+        if (Array.isArray(result) && result.length > 0) {
+          lastKnownAllBookingsCache = result;
+        }
         return result;
       } catch (err) {
         cachedAllBookingsPromise = null;
         cacheAllTimestamp = 0;
+        if (lastKnownAllBookingsCache.length > 0) {
+          console.warn("[Beds24 Cache Warning] Reutilizando última reserva conocida tras límite de peticiones API.");
+          return lastKnownAllBookingsCache;
+        }
         throw err;
       }
     })();
@@ -957,10 +966,17 @@ export async function getBeds24Bookings(
     cachedBookingsPromise = (async () => {
       try {
         const result = await doFetchAndMapBeds24Bookings(fast, false);
+        if (Array.isArray(result) && result.length > 0) {
+          lastKnownBookingsCache = result;
+        }
         return result;
       } catch (err) {
         cachedBookingsPromise = null;
         cacheTimestamp = 0;
+        if (lastKnownBookingsCache.length > 0) {
+          console.warn("[Beds24 Cache Warning] Reutilizando última reserva conocida tras límite de peticiones API.");
+          return lastKnownBookingsCache;
+        }
         throw err;
       }
     })();
