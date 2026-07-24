@@ -1646,6 +1646,8 @@ export default function StaffPage() {
                 >
                   <span className="text-[15px] font-black text-emerald-700">
                     {ROOMS.filter(r => {
+                      const num = parseInt(r, 10);
+                      if (num >= 500 && num <= 507) return false;
                       const dbStatus = getRoomDbStatus(r, roomStatuses);
                       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
                       const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
@@ -3018,6 +3020,8 @@ export default function StaffPage() {
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           isCleaningKpi = true;
           roomFiltered = ROOMS.filter(r => {
+            const num = parseInt(r, 10);
+            if (num >= 500 && num <= 507) return false;
             const dbStatus = getRoomDbStatus(r, roomStatuses);
             const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
             const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
