@@ -14,6 +14,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const ENVELOPES = Array.from({ length: 99 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
+
 const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas'];
 
 const PHYSICAL_ROOM_GROUPS = [
@@ -364,7 +366,8 @@ export default function ReservasList() {
       } else {
         const name = acc.name.trim().toUpperCase();
         if (abonoPaymentMethod === 'efectivo') {
-          return name === 'EFECTIVO';
+          setAbonoAccountId('S01');
+          return;
         }
         if (abonoPaymentMethod === 'tarjeta') {
           return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
@@ -2898,35 +2901,44 @@ export default function ReservasList() {
                             className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900 cursor-pointer"
                           >
                             <option value="" disabled>Selecciona una opción</option>
-                            {accounts
-                              .filter(a => {
-                                const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                if (isUSD) {
-                                  const isUSDAcc = a.currency?.toUpperCase() === 'USD';
-                                  if (!isUSDAcc) return false;
-                                  
-                                  const name = a.name.trim().toUpperCase();
-                                  if (paymentMethod === 'efectivo') {
-                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                            {paymentMethod === 'efectivo' ? (
+                              <>
+                                {ENVELOPES.map(env => (
+                                  <option key={env} value={env}>{env}</option>
+                                ))}
+                                {accounts
+                                  .filter(a => {
+                                    const name = a.name.trim().toUpperCase();
+                                    return a.group_type === 'SOBRES' || a.group_type === 'EFECTIVO' || name === 'EFECTIVO' || name.includes('SOBRE') || name.includes('EFE');
+                                  })
+                                  .map(a => (
+                                    <option key={a.id} value={a.id}>{a.name}</option>
+                                  ))}
+                              </>
+                            ) : (
+                              accounts
+                                .filter(a => {
+                                  const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                  if (isUSD) {
+                                    const isUSDAcc = a.currency?.toUpperCase() === 'USD';
+                                    if (!isUSDAcc) return false;
+                                    const name = a.name.trim().toUpperCase();
+                                    return !name.includes('EFE') && !name.includes('CASH');
+                                  } else {
+                                    const name = a.name.trim().toUpperCase();
+                                    if (paymentMethod === 'tarjeta') {
+                                      return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                    }
+                                    if (paymentMethod === 'transferencia') {
+                                      return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
+                                    }
+                                    return false;
                                   }
-                                  return !name.includes('EFE') && !name.includes('CASH');
-                                } else {
-                                  const name = a.name.trim().toUpperCase();
-                                  if (paymentMethod === 'efectivo') {
-                                    return name === 'EFECTIVO';
-                                  }
-                                  if (paymentMethod === 'tarjeta') {
-                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                  }
-                                  if (paymentMethod === 'transferencia') {
-                                    return a.group_type === 'BANCOS' || a.group_type === 'EXTRANJERO';
-                                  }
-                                  return false;
-                                }
-                              })
-                              .map(a => (
-                                <option key={a.id} value={a.id}>{a.name}</option>
-                              ))}
+                                })
+                                .map(a => (
+                                  <option key={a.id} value={a.id}>{a.name}</option>
+                                ))
+                            )}
                           </select>
                         </div>
 
@@ -3928,37 +3940,46 @@ export default function ReservasList() {
                                     className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer"
                                   >
                                     <option value="" disabled>Selecciona un sobre...</option>
-                                    {accounts
-                                      .filter(acc => {
-                                        const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                        if (isUSD) {
-                                          const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                          if (!isUSDAcc) return false;
-                                          
-                                          const name = acc.name.trim().toUpperCase();
-                                          if (extensionPaymentMethod === 'efectivo') {
-                                            return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                    {extensionPaymentMethod === 'efectivo' ? (
+                                      <>
+                                        {ENVELOPES.map(env => (
+                                          <option key={env} value={env}>{env}</option>
+                                        ))}
+                                        {accounts
+                                          .filter(acc => {
+                                            const name = acc.name.trim().toUpperCase();
+                                            return acc.group_type === 'SOBRES' || acc.group_type === 'EFECTIVO' || name === 'EFECTIVO' || name.includes('SOBRE') || name.includes('EFE');
+                                          })
+                                          .map(acc => (
+                                            <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                          ))}
+                                      </>
+                                    ) : (
+                                      accounts
+                                        .filter(acc => {
+                                          const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                          if (isUSD) {
+                                            const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                            if (!isUSDAcc) return false;
+                                            const name = acc.name.trim().toUpperCase();
+                                            return !name.includes('EFE') && !name.includes('CASH');
+                                          } else {
+                                            const name = acc.name.trim().toUpperCase();
+                                            if (extensionPaymentMethod === 'tarjeta') {
+                                              return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                            }
+                                            if (extensionPaymentMethod === 'transferencia') {
+                                              return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                            }
+                                            return false;
                                           }
-                                          return !name.includes('EFE') && !name.includes('CASH');
-                                        } else {
-                                          const name = acc.name.trim().toUpperCase();
-                                          if (extensionPaymentMethod === 'efectivo') {
-                                            return name === 'EFECTIVO';
-                                          }
-                                          if (extensionPaymentMethod === 'tarjeta') {
-                                            return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                          }
-                                          if (extensionPaymentMethod === 'transferencia') {
-                                            return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                          }
-                                          return false;
-                                        }
-                                      })
-                                      .map(acc => (
-                                        <option key={acc.id} value={acc.id}>
-                                          {acc.name}
-                                        </option>
-                                      ))}
+                                        })
+                                        .map(acc => (
+                                          <option key={acc.id} value={acc.id}>
+                                            {acc.name}
+                                          </option>
+                                        ))
+                                    )}
                                   </select>
                                 </div>
                               )}
@@ -4153,37 +4174,46 @@ export default function ReservasList() {
                                 className="w-full bg-white border border-zinc-200 rounded-lg p-2.5 text-zinc-900 font-semibold text-[12px] focus:border-zinc-400 transition-all outline-none cursor-pointer"
                               >
                                 <option value="" disabled>Selecciona un sobre...</option>
-                                {accounts
-                                  .filter(acc => {
-                                    const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                    if (isUSD) {
-                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                      if (!isUSDAcc) return false;
-                                      
-                                      const name = acc.name.trim().toUpperCase();
-                                      if (abonoPaymentMethod === 'efectivo') {
-                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                {abonoPaymentMethod === 'efectivo' ? (
+                                  <>
+                                    {ENVELOPES.map(env => (
+                                      <option key={env} value={env}>{env}</option>
+                                    ))}
+                                    {accounts
+                                      .filter(acc => {
+                                        const name = acc.name.trim().toUpperCase();
+                                        return acc.group_type === 'SOBRES' || acc.group_type === 'EFECTIVO' || name === 'EFECTIVO' || name.includes('SOBRE') || name.includes('EFE');
+                                      })
+                                      .map(acc => (
+                                        <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                      ))}
+                                  </>
+                                ) : (
+                                  accounts
+                                    .filter(acc => {
+                                      const isUSD = selectedRes?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                      if (isUSD) {
+                                        const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                        if (!isUSDAcc) return false;
+                                        const name = acc.name.trim().toUpperCase();
+                                        return !name.includes('EFE') && !name.includes('CASH');
+                                      } else {
+                                        const name = acc.name.trim().toUpperCase();
+                                        if (abonoPaymentMethod === 'tarjeta') {
+                                          return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                        }
+                                        if (abonoPaymentMethod === 'transferencia') {
+                                          return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                        }
+                                        return false;
                                       }
-                                      return !name.includes('EFE') && !name.includes('CASH');
-                                    } else {
-                                      const name = acc.name.trim().toUpperCase();
-                                      if (abonoPaymentMethod === 'efectivo') {
-                                        return name === 'EFECTIVO';
-                                      }
-                                      if (abonoPaymentMethod === 'tarjeta') {
-                                        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                      }
-                                      if (abonoPaymentMethod === 'transferencia') {
-                                        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                      }
-                                      return false;
-                                    }
-                                  })
-                                  .map(acc => (
-                                    <option key={acc.id} value={acc.id}>
-                                      {acc.name}
-                                    </option>
-                                  ))}
+                                    })
+                                    .map(acc => (
+                                      <option key={acc.id} value={acc.id}>
+                                        {acc.name}
+                                      </option>
+                                    ))
+                                )}
                               </select>
                             </div>
                           )}
