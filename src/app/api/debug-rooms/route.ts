@@ -164,7 +164,7 @@ export async function GET() {
           const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
           const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
           let requiresService = false;
-          if (isThreeDayRoom && diffDays >= 2 && (diffDays - 2) % 3 === 0) requiresService = true;
+          if (isThreeDayRoom && diffDays >= 2 && diffDays % 2 === 0) requiresService = true;
           else if (isDailyRoom && diffDays >= 1) requiresService = true;
 
           if (requiresService && !isCleanedToday) {
