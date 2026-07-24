@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 // @ts-ignore
 import { startRegistration } from '@simplewebauthn/browser';
@@ -475,6 +475,27 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchAllSettings = async () => {
+    window.dispatchEvent(new Event('refresh-start'));
+    try {
+      await Promise.all([
+        fetchEmployees(),
+        fetchAccounts(),
+        fetchPasskeys(),
+        fetchRecoveryKey(),
+        fetchDisableAutoWA(),
+        expandedSections.depuracion ? fetchDepurarData() : Promise.resolve()
+      ]);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      window.dispatchEvent(new Event('refresh-end'));
+    }
+  };
+
+  const fetchAllSettingsRef = useRef(fetchAllSettings);
+  fetchAllSettingsRef.current = fetchAllSettings;
+
   useEffect(() => {
     fetchEmployees();
     fetchAccounts();
@@ -497,6 +518,14 @@ export default function AjustesPage() {
         }, 300);
       }
     }
+
+    const handleRefresh = () => {
+      fetchAllSettingsRef.current();
+    };
+    window.addEventListener('refresh-data', handleRefresh);
+    return () => {
+      window.removeEventListener('refresh-data', handleRefresh);
+    };
   }, []);
 
   const openPinModal = (target: PinTarget) => {

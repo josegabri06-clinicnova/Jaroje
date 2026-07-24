@@ -319,11 +319,12 @@ export default function CalendarPage() {
 
 
 
-  const fetchData = async () => {
+  const fetchData = async (bypassCache = false) => {
+    window.dispatchEvent(new Event('refresh-start'));
     setIsLoading(true);
     try {
       const [r, chk, acc, psRes] = await Promise.all([
-        fetch('/api/reservas?t=' + Date.now()),
+        fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
         supabase.from('settings').select('value').eq('key', 'pricing_unit_settings').maybeSingle()
@@ -368,12 +369,24 @@ export default function CalendarPage() {
       console.error(e);
     } finally {
       setIsLoading(false);
+      window.dispatchEvent(new Event('refresh-end'));
     }
   };
+
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
 
   useEffect(() => {
     fetchData();
     setUserRole(localStorage.getItem('jaroje_role'));
+
+    const handleRefresh = () => {
+      fetchDataRef.current(true);
+    };
+    window.addEventListener('refresh-data', handleRefresh);
+    return () => {
+      window.removeEventListener('refresh-data', handleRefresh);
+    };
   }, []);
 
   useEffect(() => {
@@ -1808,16 +1821,6 @@ export default function CalendarPage() {
             {isLoading ? 'Sincronizando...' : `${reservas.length} reservas · Vista semanal`}
           </p>
         </div>
-        <button 
-          onClick={() => {
-            goToday();
-            fetchData();
-          }} 
-          disabled={isLoading}
-          className="w-9 h-9 flex items-center justify-center bg-white border border-zinc-200 rounded-xl shadow-sm hover:bg-zinc-50 active:scale-95 transition-all"
-        >
-          <RefreshCw size={15} className={`text-zinc-500 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
       </div>
 
       {/* Today summary */}

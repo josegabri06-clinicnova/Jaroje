@@ -1077,7 +1077,8 @@ export default function ReservasList() {
   };
 
 
-  const fetchReservas = async () => {
+  const fetchReservas = async (bypassCache = false) => {
+    window.dispatchEvent(new Event('refresh-start'));
     setIsLoading(true);
     setTokenError(false);
     try {
@@ -1092,7 +1093,7 @@ export default function ReservasList() {
       };
 
       const [res, chk, acc, capRes, trData] = await Promise.all([
-        fetch('/api/reservas?includeCancelled=true&t=' + Date.now()),
+        fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
         supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle(),
@@ -1158,6 +1159,7 @@ export default function ReservasList() {
       console.error("Error al cargar reservas", e);
     } finally {
       setIsLoading(false);
+      window.dispatchEvent(new Event('refresh-end'));
     }
   };
 
@@ -1994,6 +1996,9 @@ export default function ReservasList() {
   };
 
 
+  const fetchReservasRef = useRef(fetchReservas);
+  fetchReservasRef.current = fetchReservas;
+
   useEffect(() => {
     fetchReservas();
     if (typeof window !== 'undefined') {
@@ -2004,6 +2009,14 @@ export default function ReservasList() {
         setSearch(querySearch);
       }
     }
+
+    const handleRefresh = () => {
+      fetchReservasRef.current(true);
+    };
+    window.addEventListener('refresh-data', handleRefresh);
+    return () => {
+      window.removeEventListener('refresh-data', handleRefresh);
+    };
   }, []);
 
 
@@ -2122,12 +2135,6 @@ export default function ReservasList() {
             <Download size={13} className={exportLoading ? 'animate-bounce' : ''} />
             SQL
           </button>
-          <button 
-            onClick={fetchReservas} 
-            disabled={isLoading}
-            className={`w-9 h-9 flex items-center justify-center text-zinc-500 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-xl shadow-sm transition-all ${isLoading ? 'opacity-50' : 'active:scale-95'}`}
-          >
-            <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
           </button>
         </div>
 
