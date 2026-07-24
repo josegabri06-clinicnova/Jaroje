@@ -5,30 +5,32 @@ export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // 1. Obtener todas las reservas locales de la habitación 500 (unit_id = '1')
-    const { data: localReservas, error: err1 } = await supabase
+    // 1. Obtener todas las reservas de la habitación 500 (unit_id = '1')
+    const { data: localReservas } = await supabase
       .from('local_reservas')
       .select('*')
       .eq('unit_id', '1');
 
-    // 2. Obtener la fila de room_status de la 500
-    const { data: roomStatus, error: err2 } = await supabase
-      .from('room_status')
-      .select('*')
-      .eq('room_number', '500')
-      .maybeSingle();
+    // 2. Extraer todos sus IDs
+    const resIds = (localReservas || []).map(r => String(r.id));
 
-    // 3. Obtener todos los checkins de Supabase
-    const { data: checkins, error: err3 } = await supabase
+    // 3. Buscar en checkins si hay algún registro para estos IDs
+    const { data: matchedCheckins } = await supabase
       .from('checkins')
-      .select('*');
+      .select('*')
+      .in('reservation_id', resIds);
+
+    // 4. Buscar en checkins por la cadena "500" en el campo room
+    const { data: roomCheckins } = await supabase
+      .from('checkins')
+      .select('*')
+      .ilike('room', '%500%');
 
     return NextResponse.json({
       success: true,
-      errors: { err1, err2, err3 },
-      roomStatus,
-      localReservas: localReservas || [],
-      checkins: checkins || []
+      resIds,
+      matchedCheckins: matchedCheckins || [],
+      roomCheckins: roomCheckins || []
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message });
