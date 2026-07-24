@@ -1023,7 +1023,20 @@ export default function ReservasList() {
       alert('⚠️ Solo los administradores pueden confirmar o rechazar comprobantes de transferencia.');
       return;
     }
-    if (!confirm(`¿Estás seguro de que deseas ${action === 'approve' ? 'APROBAR' : 'RECHAZAR'} esta transferencia bancaria de $${amount.toLocaleString('es-MX')} MXN?`)) {
+
+    let finalAmount = amount;
+    if (action === 'approve') {
+      const userInput = prompt(`Confirmar o editar el monto depositado para este comprobante ($ MXN):`, String(amount));
+      if (userInput === null) return; // Cancelado por usuario
+      const parsed = parseFloat(userInput);
+      if (isNaN(parsed) || parsed < 0) {
+        alert('Por favor ingresa un monto válido.');
+        return;
+      }
+      finalAmount = parsed;
+    }
+
+    if (!confirm(`¿Estás seguro de que deseas ${action === 'approve' ? `APROBAR la transferencia bancaria por $${finalAmount.toLocaleString('es-MX')} MXN` : 'RECHAZAR esta transferencia'}?`)) {
       return;
     }
 
@@ -1036,7 +1049,7 @@ export default function ReservasList() {
         body: JSON.stringify({
           receiptId,
           bookingId,
-          amount,
+          amount: finalAmount,
           action,
           notes
         })
@@ -3615,18 +3628,33 @@ export default function ReservasList() {
                     </div>
                   </div>
 
-                  {/* 8. Adeudo Pendiente */}
+                  {/* 8. Adeudo Pendiente (Consolidado si es Grupo) */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Adeudo Pendiente</span>
                       {(() => {
+                        const isGroup = !!(selectedRes.group_id || selectedRes.master_id || selectedRes.group_name);
                         const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedRes.checked_in === true;
-                        const balanceVal = (isOta || isCheckedIn) ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
+                        let balanceVal = (isOta || isCheckedIn) ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
+
+                        if (isGroup) {
+                          const groupMembers = reservas.filter(r => (r.group_id && r.group_id === selectedRes.group_id) || (r.master_id && r.master_id === selectedRes.master_id));
+                          if (groupMembers.length > 0) {
+                            const totalGroupPrice = groupMembers.reduce((sum, r) => sum + (Number(r.price_estimate) || Number(r.price) || 0), 0);
+                            const totalGroupDeposit = groupMembers.reduce((sum, r) => sum + (Number(r.deposit) || 0), 0);
+                            balanceVal = Math.max(0, totalGroupPrice - totalGroupDeposit);
+                          }
+                        }
+
                         return (
-                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
-                            {fmtCurrency(balanceVal, selectedRes.guest_name)}
-                          </p>
+                          <>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">
+                              {isGroup ? '👥 Adeudo Total del Grupo (Consolidado)' : 'Adeudo Pendiente'}
+                            </span>
+                            <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                              {fmtCurrency(balanceVal, selectedRes.guest_name)}
+                            </p>
+                          </>
                         );
                       })()}
                     </div>

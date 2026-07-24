@@ -1541,6 +1541,59 @@ export function getDirectTotalForStay(
 }
 
 /**
+ * Calcula la estimación de precio total para un grupo de habitaciones,
+ * aplicando el cálculo de personas extras ($500/noche) sobre la capacidad combinada del grupo.
+ */
+export function calculateGroupPriceEstimate(
+  groupRooms: Array<{
+    roomName: string;
+    numAdults: number;
+    numChildren: number;
+    checkIn: string;
+    checkOut: string;
+  }>,
+  rulesList?: any[],
+  capacitySettings?: any
+): number {
+  if (!groupRooms || groupRooms.length === 0) return 0;
+
+  const totalGroupGuests = groupRooms.reduce((sum, g) => sum + (g.numAdults || 1) + (g.numChildren || 0), 0);
+  const totalGroupBaseCapacity = groupRooms.reduce((sum, g) => {
+    const cap = getCapacityRules(g.roomName, capacitySettings);
+    return sum + cap.base;
+  }, 0);
+
+  const groupExtraGuests = Math.max(0, totalGroupGuests - totalGroupBaseCapacity);
+
+  let totalGroupPrice = 0;
+  let extraGuestsDistributed = groupExtraGuests;
+
+  for (const g of groupRooms) {
+    const capRules = getCapacityRules(g.roomName, capacitySettings);
+    const roomTotalGuests = (g.numAdults || 1) + (g.numChildren || 0);
+
+    let roomExtraGuests = 0;
+    if (groupExtraGuests > 0) {
+      roomExtraGuests = Math.min(extraGuestsDistributed, Math.max(0, roomTotalGuests - capRules.base));
+      extraGuestsDistributed -= roomExtraGuests;
+    }
+
+    const roomPrice = calculateDirectPriceEstimate(
+      g.roomName,
+      capRules.base + roomExtraGuests,
+      0,
+      g.checkIn,
+      g.checkOut,
+      rulesList,
+      capacitySettings
+    );
+    totalGroupPrice += roomPrice;
+  }
+
+  return totalGroupPrice;
+}
+
+/**
  * Retorna el desglose neto + comisión OTA para una reserva Airbnb/Booking.
  */
 export function computeOtaSplit(
