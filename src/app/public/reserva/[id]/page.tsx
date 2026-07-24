@@ -1048,17 +1048,18 @@ export default function PublicReservaPage() {
 
   const anticipoRequerido = Math.round(booking.price * 0.5);
 
-  // Cargo extra por huéspedes adicionales ($500 MXN por persona sobre la capacidad base de cada habitación)
+  // Cargo extra por huéspedes adicionales ($500 MXN por persona sobre la capacidad base combinada del grupo)
   const EXTRA_GUEST_CHARGE = 500;
   const extraChargesTotal = (() => {
     if (isOta) return 0; // OTAs (Expedia, Booking, Airbnb) tienen tarifa fija en booking.price sin cargos extra automáticos
     if (!booking.rooms_detail || booking.rooms_detail.length < 1) return 0;
-    return booking.rooms_detail.reduce((acc: number, room: any) => {
-      const total = (room.num_adult || 0) + (room.num_child || 0);
-      const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
-      const extra = Math.max(0, total - baseCapacity);
-      return acc + extra * EXTRA_GUEST_CHARGE;
-    }, 0);
+    
+    // Sumar total de huéspedes y capacidad base combinada de todas las habitaciones del grupo
+    const totalGroupGuests = booking.rooms_detail.reduce((sum: number, r: any) => sum + (r.num_adult || 0) + (r.num_child || 0), 0);
+    const totalGroupBaseCapacity = booking.rooms_detail.reduce((sum: number, r: any) => sum + getCapacityRulesForSingle(r.room_name || '').base, 0);
+
+    const groupExtraGuests = Math.max(0, totalGroupGuests - totalGroupBaseCapacity);
+    return groupExtraGuests * EXTRA_GUEST_CHARGE;
   })();
   const totalConExtras = booking.price + extraChargesTotal;
   const anticipoConExtras = Math.round(totalConExtras * 0.5);
@@ -1203,41 +1204,55 @@ export default function PublicReservaPage() {
               {/* Desglose por habitación */}
               {booking.rooms_detail && booking.rooms_detail.length > 1 ? (
                 <div className="mt-1.5 space-y-2">
-                  {booking.rooms_detail.map((room: any, idx: number) => {
-                    const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
-                    const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
-                    const EXTRA_CHARGE = 500; // $500 MXN por persona extra
-                    const extraGuests = Math.max(0, totalGuests - baseCapacity);
-                    const extraCharge = extraGuests * EXTRA_CHARGE;
-                    return (
-                      <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
-                        <div className="flex items-start gap-2">
-                          <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
-                          <div className="flex-1">
-                            <strong style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} className="text-zinc-900 font-bold text-[12px] leading-tight block">
-                              {room.room_name}
-                            </strong>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Users size={10} className="text-zinc-400 shrink-0" />
-                              <span className="text-zinc-600 font-semibold text-[11px]">
-                                {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
-                              </span>
+                  {(() => {
+                    const totalGroupGuests = booking.rooms_detail.reduce((sum: number, r: any) => sum + (r.num_adult || 0) + (r.num_child || 0), 0);
+                    const totalGroupBaseCapacity = booking.rooms_detail.reduce((sum: number, r: any) => sum + getCapacityRulesForSingle(r.room_name || '').base, 0);
+                    const groupExtraGuests = Math.max(0, totalGroupGuests - totalGroupBaseCapacity);
+
+                    let extraGuestsToDistribute = groupExtraGuests;
+
+                    return booking.rooms_detail.map((room: any, idx: number) => {
+                      const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
+                      const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
+                      const EXTRA_CHARGE = 500;
+
+                      let roomExtraGuests = 0;
+                      if (groupExtraGuests > 0 && totalGuests > baseCapacity) {
+                        roomExtraGuests = Math.min(extraGuestsToDistribute, totalGuests - baseCapacity);
+                        extraGuestsToDistribute -= roomExtraGuests;
+                      }
+                      const extraCharge = roomExtraGuests * EXTRA_CHARGE;
+
+                      return (
+                        <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
+                          <div className="flex items-start gap-2">
+                            <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
+                            <div className="flex-1">
+                              <strong style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} className="text-zinc-900 font-bold text-[12px] leading-tight block">
+                                {room.room_name}
+                              </strong>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <Users size={10} className="text-zinc-400 shrink-0" />
+                                <span className="text-zinc-600 font-semibold text-[11px]">
+                                  {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
+                                </span>
+                              </div>
                             </div>
                           </div>
+                          {extraCharge > 0 && (
+                            <div className="mt-1.5 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
+                              <AlertTriangle size={10} className="text-amber-500 shrink-0" />
+                              <span className="text-amber-700 text-[10.5px] font-semibold">
+                                {lang === 'en'
+                                  ? `${roomExtraGuests} extra guest(s) · +$${extraCharge.toLocaleString()} MXN`
+                                  : `${roomExtraGuests} huésped(es) extra · +$${extraCharge.toLocaleString()} MXN`}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                        {extraCharge > 0 && (
-                          <div className="mt-1.5 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
-                            <AlertTriangle size={10} className="text-amber-500 shrink-0" />
-                            <span className="text-amber-700 text-[10.5px] font-semibold">
-                              {lang === 'en'
-                                ? `${extraGuests} extra guest(s) · +$${extraCharge.toLocaleString()} MXN`
-                                : `${extraGuests} huésped(es) extra · +$${extraCharge.toLocaleString()} MXN`}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               ) : (
                 <strong className="text-zinc-900 font-bold text-[13px] block mt-0.5">
