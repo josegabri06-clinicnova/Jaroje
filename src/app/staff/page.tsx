@@ -272,7 +272,6 @@ function getRoomOperationalStatus(
   // Sobrescribimiento Manual del Administrador hoy (fuerza el color seleccionado por Rolando al 100%):
   if (isUpdatedToday) {
     if (dbStatus === 'disponible') return 'disponible';
-    if (dbStatus === 'limpia') return 'limpia';
     if (dbStatus === 'en_limpieza') return 'en_limpieza';
     if (dbStatus === 'sucio_checkout') return 'sucio_checkout';
   }
