@@ -271,7 +271,15 @@ function getRoomOperationalStatus(
 
   // Sobrescribimiento Manual del Administrador hoy (fuerza el color seleccionado por Rolando al 100%):
   if (isUpdatedToday) {
-    if (dbStatus === 'disponible') return 'disponible';
+    if (dbStatus === 'disponible') {
+      const hasActiveCheckedIn = activeReservations.some(r => {
+        if (r.status === 'cancelled' || r.status === 'cancelado') return false;
+        return matchesRoomNumber(r, roomNum) && r.checked_in && !r.checked_out;
+      });
+      if (!hasActiveCheckedIn) {
+        return 'disponible';
+      }
+    }
     if (dbStatus === 'en_limpieza') return 'en_limpieza';
     if (dbStatus === 'sucio_checkout') return 'sucio_checkout';
   }
