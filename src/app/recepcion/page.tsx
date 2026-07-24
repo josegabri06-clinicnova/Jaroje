@@ -427,6 +427,17 @@ function getRoomOperationalStatus(
       if (incomingRes) {
         return 'limpia'; // Azul (check-in pendiente)
       } else {
+        const checkedInRes = activeReservations.find(r => {
+          if (r.status === 'cancelled' || r.status === 'cancelado') return false;
+          const cIn = (r.check_in || r.arrival || '').split('T')[0].split(' ')[0];
+          return matchesRoomNumber(r, roomNum) && cIn === todayStr && r.checked_in;
+        });
+        if (checkedInRes) {
+          if (isRoomStayoverServiceScheduled(roomNum, activeReservations, todayStr) && !isCleanedToday) {
+            return 'limpieza_programada'; // Amarillo
+          }
+          return 'ocupada'; // Gris (Ocupada)
+        }
         return 'disponible'; // Verde (disponible libre)
       }
     }
