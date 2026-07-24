@@ -4548,16 +4548,10 @@ export default function RecepcionPage() {
                   <span className="text-[15px] font-black text-emerald-700">
                     {ROOMS.filter(r => {
                       if (r === '500') return false;
-                      const hasCheckoutToday = reservas.some(res => {
-                        const cOut = (res.check_out || '').split('T')[0].split(' ')[0];
-                        return matchesRoomNumber(res, r) && cOut === todayStr && res.status !== 'cancelled';
-                      });
-                      if (!hasCheckoutToday) return false;
-                      const hasIncomingRes = reservas.some(res => {
-                        const cIn = (res.check_in || '').split('T')[0].split(' ')[0];
-                        return matchesRoomNumber(res, r) && cIn === todayStr && res.status !== 'cancelled';
-                      });
-                      return !hasIncomingRes;
+                      const dbStatus = getRoomDbStatus(r, roomStatuses);
+                      const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+                      const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                      return s === 'disponible';
                     }).length}
                   </span>
                   <p className="text-[7.2px] font-black text-emerald-600 uppercase tracking-wider mt-0.5">Disponibles</p>
@@ -4569,7 +4563,10 @@ export default function RecepcionPage() {
                   <span className="text-[15px] font-black text-amber-700">
                     {ROOMS.filter(r => {
                       if (r === '500') return false;
-                      return isRoomStayoverServiceScheduled(r, reservas, todayStr);
+                      const dbStatus = getRoomDbStatus(r, roomStatuses);
+                      const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+                      const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+                      return s === 'limpieza_programada';
                     }).length}
                   </span>
                   <p className="text-[7.2px] font-black text-amber-600 uppercase tracking-wider mt-0.5">Limp. Programada</p>
@@ -7469,22 +7466,22 @@ export default function RecepcionPage() {
           isCleaningKpi = true;
           roomFiltered = ROOMS.filter(r => {
             if (r === '500') return false;
-            const hasCheckoutToday = reservas.some(res => {
-              const cOut = (res.check_out || '').split('T')[0].split(' ')[0];
-              return matchesRoomNumber(res, r) && cOut === todayStr && res.status !== 'cancelled';
-            });
-            if (!hasCheckoutToday) return false;
-            const hasIncomingRes = reservas.some(res => {
-              const cIn = (res.check_in || '').split('T')[0].split(' ')[0];
-              return matchesRoomNumber(res, r) && cIn === todayStr && res.status !== 'cancelled';
-            });
-            return !hasIncomingRes;
+            const dbStatus = getRoomDbStatus(r, roomStatuses);
+            const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+            const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+            return s === 'disponible';
           });
         } else if (kpiModalType === 'programada') {
           title = 'Limpiezas Programadas';
           badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
           isCleaningKpi = true;
-          roomFiltered = ROOMS.filter(r => r !== '500' && isRoomStayoverServiceScheduled(r, reservas, todayStr));
+          roomFiltered = ROOMS.filter(r => {
+            if (r === '500') return false;
+            const dbStatus = getRoomDbStatus(r, roomStatuses);
+            const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
+            const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
+            return s === 'limpieza_programada';
+          });
         } else if (kpiModalType === 'checkout') {
           title = 'Check Out / Salidas';
           badgeColor = 'bg-rose-100 text-rose-800 border border-rose-200';
