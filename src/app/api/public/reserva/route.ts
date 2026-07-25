@@ -66,12 +66,13 @@ export async function GET(req: Request) {
 
         const { data: siblingLocal } = await supabase
           .from('local_reservas')
-          .select('id, guest_name, phone, price, deposit, unit_id, num_adult, num_child')
+          .select('id, guest_name, phone, price, deposit, unit_id, num_adult, num_child, status')
           .eq('check_in', localRes.check_in)
           .neq('id', localRes.id);
 
         if (siblingLocal && siblingLocal.length > 0) {
           siblingLocal.forEach(s => {
+            if (s.status === 'cancelled' || s.status === 'cancelado' || s.status === 'black') return;
             const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone;
             const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
             if (samePhone || sameName) {
@@ -121,7 +122,7 @@ export async function GET(req: Request) {
 
     // 2. Buscar en Beds24 activo (caché)
     const allBeds24 = await getBeds24Bookings(true);
-    let booking = allBeds24.find(r => r.id === bookingId);
+    let booking = allBeds24.find(r => String(r.id) === String(bookingId));
 
     // 2.1. Fallback: Buscar directamente en Beds24 por ID si no está activo (ej: si está cancelada)
     if (!booking) {
@@ -250,9 +251,10 @@ export async function GET(req: Request) {
 
         const siblingBeds24 = allBeds24.filter(r => {
           // Mismo check_in y check_out, diferente ID, no cancelada
+          if (r.status === 'cancelled' || r.status === 'cancelado' || r.status === '0') return false;
           if (r.check_in !== booking.check_in) return false;
           if (r.check_out !== booking.check_out) return false;
-          if (r.id === booking.id) return false;
+          if (String(r.id) === String(booking.id)) return false;
           // Mismo teléfono o mismo nombre
           const rPhone = r.guest_phone || r.phone || r.mobile || '';
           const samePhone = phoneNum && rPhone && normalizePhone(rPhone) === phoneNum;
