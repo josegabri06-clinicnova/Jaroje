@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { logout } from '@/lib/auth';
-import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer, RefreshCw } from 'lucide-react';
+import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer, RefreshCw, Settings } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 
 type Role = 'admin' | 'recepcion' | 'staff_limpieza' | 'staff_mantenimiento' | null;
@@ -152,6 +152,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
           {/* Campana — solo admin */}
           {role === 'admin' && <NotificationBell />}
+
+          {/* Ajustes — solo admin */}
+          {role === 'admin' && (
+            <button
+              onClick={() => router.push('/ajustes')}
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-zinc-100 active:scale-95 transition-all text-zinc-500 hover:text-zinc-950 cursor-pointer"
+              aria-label="Ir a Ajustes"
+            >
+              <Settings size={18} className="text-zinc-500" />
+            </button>
+          )}
 
           {/* Refresh button */}
           {role && (

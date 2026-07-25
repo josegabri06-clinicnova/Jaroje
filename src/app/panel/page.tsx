@@ -326,9 +326,8 @@ export default function AdminDashboard() {
     if (!silent) setIsLoading(true);
     setTokenError(false);
     try {
-      const [resRes, convRes, roomsRes, tasksRes, chkRes] = await Promise.all([
+      const [resRes, roomsRes, tasksRes, chkRes] = await Promise.all([
         fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()).catch(() => null),
-        fetch('/api/conversations?t=' + Date.now()).catch(() => null),
         fetch('/api/room-status?t=' + Date.now()).catch(() => null),
         fetch('/api/tasks?t=' + Date.now()).catch(() => null),
         supabase.from('checkins').select('*')
@@ -368,10 +367,7 @@ export default function AdminDashboard() {
         }
       }
 
-      if (convRes) {
-        const convJson = await convRes.json();
-        if (convJson.success) setConversations(convJson.data || []);
-      }
+
 
       if (roomsRes) {
         const roomsJson = await roomsRes.json();
@@ -852,80 +848,6 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* ── 1. WHATSAPP INBOX ────────────────────────────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
-            <MessageCircle size={13} />
-            WhatsApp Inbox
-          </h3>
-          <div className="flex items-center gap-2">
-            {chatsConUrgencia.filter(c => c.minutesSince > 120).length > 0 && (
-              <span className="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full animate-pulse">
-                {chatsConUrgencia.filter(c => c.minutesSince > 120).length} sin respuesta
-              </span>
-            )}
-            <Link href="/bot" className="text-[11px] font-bold text-blue-600 hover:underline">Ver todo →</Link>
-          </div>
-        </div>
-
-        {chatsConUrgencia.length === 0 ? (
-          <div className="bg-white border border-zinc-200/80 rounded-2xl p-6 text-center">
-            <CheckCircle2 size={24} className="text-emerald-400 mx-auto mb-2" />
-            <p className="text-[13px] font-semibold text-zinc-500">Bandeja limpia — sin chats activos</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {chatsConUrgencia.slice(0, 3).map(c => {
-              const urgency = getUrgencyColor(c.minutesSince);
-              const convRes = findAllReservationsForContact(c.guest_phone, c.guest_name);
-              const primaryRes = convRes[0] || null;
-              const displayName = primaryRes ? primaryRes.guest_name : c.guest_name;
-              const hasDifferentWaName = primaryRes && c.guest_name && primaryRes.guest_name.toLowerCase() !== c.guest_name.toLowerCase();
-
-              return (
-                <div
-                  key={c.id}
-                  onClick={() => router.push(`/bot?chatId=${c.id}`)}
-                  className={`border rounded-2xl p-4 flex items-center gap-3 cursor-pointer active:scale-[0.99] transition-all ${urgency.bg}`}
-                >
-                  <div className="relative shrink-0">
-                    <div className="w-9 h-9 rounded-full bg-white border border-zinc-200 flex items-center justify-center">
-                      <span className="text-[13px] font-bold text-zinc-700">
-                        {(displayName || '?').charAt(0).toUpperCase()}
-                      </span>
-                    </div>
-                    <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${urgency.dot}`} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <p className="text-[14px] font-bold text-zinc-900 truncate flex items-center gap-1.5">
-                        <span className="truncate">{displayName}</span>
-                        {hasDifferentWaName && (
-                          <span className="text-[11px] text-zinc-400 font-normal truncate max-w-[90px] shrink-0">
-                            ({c.guest_name})
-                          </span>
-                        )}
-                      </p>
-                      <span className={`text-[10px] font-bold shrink-0 ml-2 ${urgency.text}`}>
-                        {c.minutesSince < 60
-                          ? `${Math.round(c.minutesSince)}m`
-                          : `${Math.round(c.minutesSince / 60)}h`}
-                      </span>
-                    </div>
-                    <p className="text-[12px] text-zinc-500 truncate font-medium">{c.lastText.slice(0, 60)}</p>
-                  </div>
-                </div>
-              );
-            })}
-            {chatsConUrgencia.length > 3 && (
-              <Link href="/bot" className="block text-center text-[12px] font-bold text-blue-600 py-2">
-                +{chatsConUrgencia.length - 3} conversaciones más →
-              </Link>
-            )}
-          </div>
-        )}
-      </div>
 
       {/* ── 2. LLEGADAS HOY ───────────────────────────────────────────── */}
       <div>

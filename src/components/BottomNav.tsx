@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Home, Calendar as CalendarIcon, Plus, List as ListIcon, Settings, Edit3, Lock, Wallet, Users, Wrench } from 'lucide-react';
+import { Home, Calendar as CalendarIcon, Plus, List as ListIcon, Settings, Edit3, Lock, Wallet, Users, Wrench, MessageCircle } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 
 export function BottomNav() {
@@ -76,6 +76,7 @@ export function BottomNav() {
             { href: '/recepcion', icon: <Home size={22} />, label: 'Panel' },
             { href: '/calendario', icon: <CalendarIcon size={22} />, label: 'Calendario' },
             { href: '/reservas',  icon: <ListIcon size={22} />, label: 'Reservas' },
+            { href: '/bot',       icon: <MessageCircle size={22} />, label: 'Chats' },
           ].map(item => (
             <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 p-1">
               <div className={`p-1.5 rounded-xl transition-all ${pathname === item.href ? 'bg-blue-50 text-blue-600' : 'text-zinc-400 hover:text-zinc-600'}`}>
@@ -103,7 +104,7 @@ export function BottomNav() {
           { href: '/panel', icon: <Home size={22} />, label: 'Panel' },
           { href: '/calendario', icon: <CalendarIcon size={22} />, label: 'Calendario' },
           { href: '/reservas',  icon: <ListIcon size={22} />, label: 'Reservas' },
-          { href: '/ajustes',   icon: <Settings size={22} />,   label: 'Ajustes' },
+          { href: '/bot',       icon: <MessageCircle size={22} />, label: 'Chats' },
         ].map(item => (
           <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 p-1">
             <div className={`p-1.5 rounded-xl transition-all ${pathname === item.href ? 'bg-zinc-105 text-zinc-950 bg-zinc-100/80' : 'text-zinc-400 hover:text-zinc-650'}`}>
