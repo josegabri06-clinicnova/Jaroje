@@ -1591,14 +1591,6 @@ export default function PublicReservaPage() {
                         </li>
                         <li className="flex items-start gap-1.5">
                           <span className="text-zinc-400 shrink-0">•</span>
-                          <span>{lang === 'en' ? 'No pets allowed.' : 'No se admiten mascotas.'}</span>
-                        </li>
-                        <li className="flex items-start gap-1.5">
-                          <span className="text-zinc-400 shrink-0">•</span>
-                          <span>{lang === 'en' ? '100% smoke-free property.' : 'Propiedad 100% libre de humo.'}</span>
-                        </li>
-                        <li className="flex items-start gap-1.5">
-                          <span className="text-zinc-400 shrink-0">•</span>
                           <span>{lang === 'en' ? 'The hotel is not responsible for valuables.' : 'El hotel no se hace responsable por objetos de valor.'}</span>
                         </li>
                         <li className="flex items-start gap-1.5">
