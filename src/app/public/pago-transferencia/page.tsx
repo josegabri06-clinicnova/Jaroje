@@ -526,22 +526,6 @@ export default function PagoTransferenciaPage() {
               </div>
 
               <div className="pt-2 flex flex-col gap-2.5 max-w-sm mx-auto">
-                {uploadedUrl && (
-                  <a 
-                    href={`https://wa.me/529585878554?text=${encodeURIComponent(
-                      lang === 'en'
-                        ? `Hi, I just uploaded the bank transfer receipt for my reservation #${bookingId}. You can view it here: ${uploadedUrl}`
-                        : `Hola, acabo de subir el comprobante de mi reserva #${bookingId}. Puedes verlo aquí: ${uploadedUrl}`
-                    )}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full inline-flex items-center justify-center gap-2 bg-[#25D366] text-white text-xs font-bold px-4 py-3 rounded-xl hover:bg-[#20ba5a] active:scale-95 transition-all shadow-md"
-                  >
-                    <MessageSquare size={14} />
-                    {t.notifyWhatsapp}
-                  </a>
-                )}
-                
                 <Link 
                   href={`/public/reserva/${bookingId}${lang !== 'es' ? `?lang=${lang}` : ''}`}
                   className="w-full inline-flex items-center justify-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-3 rounded-xl hover:bg-black active:scale-95 transition-all shadow-md"

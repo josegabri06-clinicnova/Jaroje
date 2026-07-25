@@ -72,6 +72,45 @@ export async function POST(req: Request) {
       console.warn("[Submit Transfer] WhatsApp notification warning:", waRes.error);
     }
 
+    // 5. Obtener teléfono del huésped para enviarle una notificación automática por WhatsApp
+    let guestPhone = '';
+    let dbGuestName = name || 'Invitado';
+    try {
+      const { data: localRes } = await supabase
+        .from('local_reservas')
+        .select('phone, guest_name')
+        .eq('id', Number(bookingId))
+        .maybeSingle();
+
+      if (localRes) {
+        guestPhone = localRes.phone || '';
+        dbGuestName = localRes.guest_name || dbGuestName;
+      } else {
+        const { getBeds24Token } = await import('@/lib/beds24');
+        const BEDS24_TOKEN = await getBeds24Token();
+        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
+          headers: { 'token': BEDS24_TOKEN }
+        });
+        if (b24Res.ok) {
+          const b24Json = await b24Res.json();
+          const b = Array.isArray(b24Json?.data) ? b24Json.data[0] : (Array.isArray(b24Json) ? b24Json[0] : null);
+          if (b) {
+            guestPhone = b.phone || b.mobile || b.guestPhone || '';
+            dbGuestName = b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || dbGuestName);
+          }
+        }
+      }
+    } catch (waLookupErr) {
+      console.error("[Submit Transfer] Error buscando teléfono para WhatsApp automático:", waLookupErr);
+    }
+
+    // Enviar mensaje de confirmación al huésped si tenemos su número
+    if (guestPhone) {
+      const guestNotificationBody = `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de transferencia por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para la reserva #${bookingId}.\n\nNuestro equipo lo está validando de inmediato. Te notificaremos por aquí tan pronto como esté aprobado. ¡Muchas gracias!`;
+      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone}`);
+      await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
+    }
+
     return NextResponse.json({ success: true, receiptUrl: publicUrl, record: dbData });
 
   } catch (err: any) {
