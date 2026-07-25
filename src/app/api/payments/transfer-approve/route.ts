@@ -168,7 +168,7 @@ export async function POST(req: Request) {
 
         // Siempre se envía Mensaje 3 (reservacion_confirmada) independientemente de si es 50% o 100% de anticipo
         console.log(`[Approve Transfer] Sending WhatsApp reservacion_confirmada (Mensaje 3) to ${phone} (depósito: $${newDeposit}, saldo: $${balance})`);
-        waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+        waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
         templateLogged = 'reservacion_confirmada';
 
         if (waRes.success) {
@@ -231,7 +231,8 @@ export async function POST(req: Request) {
         console.log(`[Reject Transfer] Sending WhatsApp rejection notification to ${phone} with notes: ${notes}`);
         const waRes = await sendTemplate_ComprobanteRechazado(
           { id: String(bookingId), guest_name: guestName, phone: phone, deposit: 0 },
-          notes
+          notes,
+          true
         );
         if (!waRes.success) console.warn('[Reject Transfer] WhatsApp send template failed:', waRes.error);
       }
