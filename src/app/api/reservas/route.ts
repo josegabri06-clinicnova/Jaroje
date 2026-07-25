@@ -25,6 +25,33 @@ export async function GET(req: Request) {
     const includeCancelled = searchParams.get('includeCancelled') === 'true';
     const mappedBookings = await getBeds24Bookings(true, includeCancelled, bypassCache);
     
+    // Merge beds24_reservations metadata from Supabase (e.g. last_notice_sent status)
+    try {
+      const { data: b24Meta } = await supabase
+        .from('beds24_reservations')
+        .select('*');
+      if (b24Meta && b24Meta.length > 0) {
+        const metaMap = new Map(b24Meta.map(m => [String(m.id), m]));
+        mappedBookings.forEach(b => {
+          const meta = metaMap.get(String(b.id));
+          if (meta) {
+            b.last_notice_sent = Boolean(meta.last_notice_sent);
+            b.is_acknowledged = Boolean(meta.is_acknowledged);
+          } else {
+            b.last_notice_sent = false;
+            b.is_acknowledged = false;
+          }
+        });
+      } else {
+        mappedBookings.forEach(b => {
+          b.last_notice_sent = false;
+          b.is_acknowledged = false;
+        });
+      }
+    } catch (metaErr) {
+      console.error("[Reservas GET] Error merging beds24_reservations metadata:", metaErr);
+    }
+    
     // Obtener reservas locales de Supabase
     let localBookings: any[] = [];
     let localRawData: any[] = [];
