@@ -158,7 +158,8 @@ export async function sendWhatsAppTemplate(
       'pago_anticipo_recibido',
       'portal_huesped_link',
       'portal_huesped_link_en',
-      'rechazo_solicitud'
+      'rechazo_solicitud',
+      'alojamiento_listo'
     ];
 
     let resolvedButtonType = buttonType;
@@ -637,4 +638,16 @@ export async function sendTemplate_PortalHuespedLink(
   const buttonParams = [`${bookingId}?lang=${lang}`];
 
   return sendWhatsAppTemplate(phone, templateName, bodyParams, buttonParams, bookingId, 'url');
+}
+
+// Mensaje de Alojamiento Listo / Limpieza Terminada (alojamiento_listo)
+export async function sendTemplate_AlojamientoListo(booking: any, bypassPause: boolean = false) {
+  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+
+  const params = [
+    getFirstName(booking.guest_name) // {{1}} Nombre
+  ];
+
+  return sendWhatsAppTemplate(phone, 'alojamiento_listo', params, undefined, booking.id, 'url', bypassPause);
 }
