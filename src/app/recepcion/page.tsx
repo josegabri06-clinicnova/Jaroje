@@ -5364,7 +5364,7 @@ export default function RecepcionPage() {
 
 
                   {/* Ajustes del Portal del Huésped (Solo locales y sin anticipo) */}
-                  {role === 'admin' && 
+                  {getRole() === 'admin' && 
                    selectedReserva &&
                    selectedReserva.id !== 'walkin' &&
                    !['Airbnb', 'Booking.com', 'Expedia'].includes(selectedReserva.channel || '') && 
