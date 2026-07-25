@@ -213,14 +213,14 @@ export async function GET(req: Request) {
         }
       }
 
-      // --- MENSAJE 7: ¿Cómo va tu estancia? (10:00 AM del 2º día de estancia, noches >= 2) ---
-      if (booking.check_in === yesterdayStr && Number(booking.nights || 1) >= 2 && currentHour === 10) {
+      // --- MENSAJE 7: ¿Cómo va tu estancia? (9:00 AM del 2º día de estancia, noches >= 2) ---
+      if (booking.check_in === yesterdayStr && Number(booking.nights || 1) >= 2 && currentHour === 9) {
         const logKey = `${bookingIdStr}_seguimiento_satisfaccion`;
         if (!sentSet.has(logKey)) {
           const res = await sendTemplate7_SeguimientoSatisfaccion(booking);
           if (res.success) {
             await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone }]);
-            reports.push(`Enviado Mensaje 7 (Satisfacción 10AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+            reports.push(`Enviado Mensaje 7 (Satisfacción 9AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
           }
         }
       }
