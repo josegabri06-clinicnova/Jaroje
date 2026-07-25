@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 import { 
   Copy, 
@@ -524,8 +525,8 @@ export default function PagoTransferenciaPage() {
                 </ul>
               </div>
 
-              {uploadedUrl && (
-                <div className="pt-2">
+              <div className="pt-2 flex flex-col gap-2.5 max-w-sm mx-auto">
+                {uploadedUrl && (
                   <a 
                     href={`https://wa.me/529585878554?text=${encodeURIComponent(
                       lang === 'en'
@@ -534,13 +535,21 @@ export default function PagoTransferenciaPage() {
                     )}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-[#25D366] text-white text-xs font-bold px-4 py-2.5 rounded-xl hover:bg-[#20ba5a] active:scale-95 transition-all shadow-md"
+                    className="w-full inline-flex items-center justify-center gap-2 bg-[#25D366] text-white text-xs font-bold px-4 py-3 rounded-xl hover:bg-[#20ba5a] active:scale-95 transition-all shadow-md"
                   >
                     <MessageSquare size={14} />
                     {t.notifyWhatsapp}
                   </a>
-                </div>
-              )}
+                )}
+                
+                <Link 
+                  href={`/public/reserva/${bookingId}${lang !== 'es' ? `?lang=${lang}` : ''}`}
+                  className="w-full inline-flex items-center justify-center gap-2 bg-zinc-900 text-white text-xs font-bold px-4 py-3 rounded-xl hover:bg-black active:scale-95 transition-all shadow-md"
+                >
+                  <ArrowRight size={14} className="rotate-180" />
+                  {lang === 'en' ? 'Back to My Reservation' : 'Volver a Mi Reserva'}
+                </Link>
+              </div>
             </div>
           )}
 
