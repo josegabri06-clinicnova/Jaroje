@@ -3580,66 +3580,91 @@ export default function ReservasList() {
                   </div>
 
                   {/* Banner de Grupo — siempre visible si hay hermanas */}
-                  {siblingBookings.length > 0 && (
-                    <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-2xl space-y-3 animate-in fade-in duration-200 shadow-[0_2px_12px_rgba(59,130,246,0.08)]">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
-                          <Users size={16} className="text-blue-600" />
-                        </div>
-                        <div>
-                          <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">Grupo Detectado</span>
-                          <p className="text-[13px] font-bold text-blue-900 leading-tight">
-                            {groupBookings.length} habitaciones · Mismo huésped
-                          </p>
-                        </div>
-                      </div>
-                      <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
-                        {groupBookings.map(b => {
-                          const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
-                          const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
-                          const isCurrent = String(b.id) === String(selectedRes.id);
-                          return (
-                            <div key={b.id} className={`flex justify-between items-start text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
-                              <span className="font-bold text-blue-800 flex items-center gap-1.5 flex-wrap">
-                                <BedDouble size={11} className="text-blue-500 shrink-0" />
-                                {b.room_name || b.room}
-                                {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
-                                {/* Huéspedes de la habitación */}
-                                {(() => {
-                                  const total = (b.num_adult || 0) + (b.num_child || 0);
-                                  if (total === 0) return null;
-                                  const baseCapacity = getCapacityRules(b.room_name || b.room || '', capacitySettings || undefined).base;
-                                  const isExtra = total > baseCapacity;
-                                  return (
-                                    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-bold border ${isExtra ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`}>
-                                      👤 {total} {total === 1 ? 'huésped' : 'huéspedes'}
-                                      {isExtra && <span className="text-amber-500 font-black">+extra</span>}
-                                    </span>
-                                  );
-                                })()}
-                              </span>
-                              <span className={`font-extrabold shrink-0 ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                {bBal > 0 ? `Adeudo: ${fmtCurrency(bBal, b.guest_name)}` : '✅ Pagado'}
-                              </span>
+                  {siblingBookings.length > 0 && (() => {
+                    const totalGroupBalance = groupBookings.reduce((sum, b) => {
+                      const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
+                      const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+                      return sum + bBal;
+                    }, 0);
+
+                    return (
+                      <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-2xl space-y-3 animate-in fade-in duration-200 shadow-[0_2px_12px_rgba(59,130,246,0.08)]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
+                            <Users size={16} className="text-blue-600" />
+                          </div>
+                          <div className="flex-1 flex justify-between items-center min-w-0">
+                            <div>
+                              <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">Grupo Detectado</span>
+                              <p className="text-[13px] font-bold text-blue-900 leading-tight">
+                                {groupBookings.length} habitaciones · Mismo huésped
+                              </p>
                             </div>
-                          );
-                        })}
+                            {totalGroupBalance > 0 && (
+                              <div className="text-right shrink-0">
+                                <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Adeudo Total</span>
+                                <span className="text-[13px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg">
+                                  {fmtCurrency(totalGroupBalance, selectedRes.guest_name)}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
+                          {groupBookings.map(b => {
+                            const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
+                            const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+                            const isCurrent = String(b.id) === String(selectedRes.id);
+                            return (
+                              <div key={b.id} className={`flex justify-between items-start text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
+                                <span className="font-bold text-blue-800 flex items-center gap-1.5 flex-wrap">
+                                  <BedDouble size={11} className="text-blue-500 shrink-0" />
+                                  {b.room_name || b.room}
+                                  {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
+                                  {/* Huéspedes de la habitación */}
+                                  {(() => {
+                                    const total = (b.num_adult || 0) + (b.num_child || 0);
+                                    if (total === 0) return null;
+                                    const baseCapacity = getCapacityRules(b.room_name || b.room || '', capacitySettings || undefined).base;
+                                    const isExtra = total > baseCapacity;
+                                    return (
+                                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-bold border ${isExtra ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`}>
+                                        👤 {total} {total === 1 ? 'huésped' : 'huéspedes'}
+                                        {isExtra && <span className="text-amber-500 font-black">+extra</span>}
+                                      </span>
+                                    );
+                                  })()}
+                                </span>
+                                <span className={`font-extrabold shrink-0 ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                  {bBal > 0 ? `Adeudo: ${fmtCurrency(bBal, b.guest_name)}` : '✅ Pagado'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex-1 text-left min-w-[200px]">
+                            <p className="text-[10px] font-semibold text-blue-600 leading-tight">
+                              💡 Al registrar un anticipo, puedes distribuirlo proporcionalmente en todas las habitaciones del grupo.
+                            </p>
+                            {totalGroupBalance > 0 && (
+                              <p className="text-[11px] font-extrabold text-blue-900 mt-1">
+                                Adeudo Total del Grupo: <span className="text-rose-600 font-black">{fmtCurrency(totalGroupBalance, selectedRes.guest_name)}</span>
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRebalanceGroup}
+                            disabled={rebalancingGroup}
+                            className="shrink-0 px-2.5 py-1.5 text-[10px] font-extrabold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+                          >
+                            {rebalancingGroup ? 'Rebalanceando...' : '⚖️ Rebalancear anticipos'}
+                          </button>
+                        </div>
                       </div>
-                      <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between gap-2">
-                        <p className="text-[10px] font-semibold text-blue-600">
-                          💡 Al registrar un anticipo, puedes distribuirlo proporcionalmente en todas las habitaciones del grupo.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={handleRebalanceGroup}
-                          disabled={rebalancingGroup}
-                          className="shrink-0 px-2.5 py-1 text-[10px] font-extrabold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all cursor-pointer shadow-sm"
-                        >
-                          {rebalancingGroup ? 'Rebalanceando...' : '⚖️ Rebalancear anticipos'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* 4. Canal reservado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
