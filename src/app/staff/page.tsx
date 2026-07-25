@@ -1771,31 +1771,6 @@ export default function StaffPage() {
               </div>
             </div>
 
-            {/* Llegadas de Hoy (Check-in) */}
-            {llegadas.length > 0 && (
-              <div className="bg-white border border-zinc-200 rounded-3xl overflow-hidden shadow-sm">
-                <div className="px-5 py-4 border-b border-zinc-100 bg-zinc-50/50 flex items-center gap-2">
-                  <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
-                  <span className="text-[13px] font-extrabold text-zinc-800">Próximos Check-ins ({llegadas.length})</span>
-                </div>
-                <div className="divide-y divide-zinc-100">
-                  {llegadas.map((r) => (
-                    <div key={r.id} className="p-4 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                          <BedDouble size={18} />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-[14px] font-bold text-zinc-900 leading-tight">Hab. {r.room || 'Sin asignar'}</p>
-                          <p className="text-[12px] font-semibold text-zinc-400 truncate mt-0.5">{r.guest_name || 'Huésped'}</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-100/70 text-emerald-700">Hoy</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* ── NUEVA SECCIÓN: REPORTE DIARIO DE LIMPIEZA ── */}
             <div className="bg-white border border-zinc-200 rounded-[28px] p-5 shadow-sm space-y-4 animate-in fade-in duration-200">
