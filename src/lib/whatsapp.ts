@@ -152,7 +152,8 @@ export async function sendWhatsAppTemplate(
       'recibimiento_nuevamente',
       'pago_anticipo_recibido',
       'portal_huesped_link',
-      'portal_huesped_link_en'
+      'portal_huesped_link_en',
+      'rechazo_solicitud'
     ];
 
     let resolvedButtonType = buttonType;
@@ -482,8 +483,8 @@ export async function sendTemplate_ComprobanteRechazado(booking: any, reason?: s
     rejectionReason                   // {{3}} Motivo del rechazo
   ];
 
-  // Intenta enviar con plantilla específica 'comprobante_rechazado' o 'ultimo_aviso'
-  return sendWhatsAppTemplate(phone, 'comprobante_rechazado', params, undefined, booking.id, 'url', bypassPause);
+  // Intenta enviar con plantilla específica 'rechazo_solicitud'
+  return sendWhatsAppTemplate(phone, 'rechazo_solicitud', params, undefined, booking.id, 'url', bypassPause);
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
