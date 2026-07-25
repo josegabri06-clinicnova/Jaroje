@@ -1961,8 +1961,8 @@ export default function ReservasList() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error de Meta API');
 
-      setSelectedRes((prev: any) => prev && prev.id === targetRes.id ? { ...prev, last_notice_sent: true, is_acknowledged: true } : prev);
-      setReservas((prev: any[]) => prev.map(r => r.id === targetRes.id ? { ...r, last_notice_sent: true, is_acknowledged: true } : r));
+      setSelectedRes((prev: any) => prev && String(prev.id) === String(targetRes.id) ? { ...prev, last_notice_sent: true, is_acknowledged: true } : prev);
+      setReservas((prev: any[]) => prev.map(r => String(r.id) === String(targetRes.id) ? { ...r, last_notice_sent: true, is_acknowledged: true } : r));
 
       alert('✅ Recordatorio de ÚLTIMO AVISO (Mensaje 2) enviado por WhatsApp con éxito.');
     } catch (err: any) {

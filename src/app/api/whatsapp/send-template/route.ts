@@ -92,7 +92,11 @@ export async function POST(req: Request) {
     try {
       const { supabase } = require('@/lib/supabase');
       const bookingIdStr = String(booking.id || '');
-      const isLocal = bookingIdStr.startsWith('loc_') || bookingIdStr.startsWith('walkin_') || bookingIdStr.length < 7;
+      const isLocal = Boolean(booking.isLocal) || 
+                      bookingIdStr.startsWith('loc_') || 
+                      bookingIdStr.startsWith('walkin_') || 
+                      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdStr) || 
+                      bookingIdStr.length < 7;
 
       if (template === 'solicitud_recibida' || template === 'reservacion_confirmada') {
         if (isLocal) {
