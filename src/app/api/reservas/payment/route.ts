@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Token, getBeds24Bookings, clearBeds24Cache } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
-import { sendTemplate3_ReservacionConfirmada } from '@/lib/whatsapp';
+import { sendTemplate3_ReservacionConfirmada, sendTemplate6_BienvenidaCheckin } from '@/lib/whatsapp';
 
 // POST: Registrar un cobro/pago en Beds24 asociado a una reserva o localmente en Supabase
 export async function POST(req: Request) {
@@ -58,7 +58,24 @@ export async function POST(req: Request) {
               num_adult: Number(localRes.num_adult || 1),
               num_child: Number(localRes.num_child || 0)
             };
-            await sendTemplate3_ReservacionConfirmada(bookingForWA);
+            const { data: dbCheckin } = await supabase
+              .from('checkins')
+              .select('status')
+              .eq('reservation_id', String(localRes.id).toLowerCase().trim())
+              .maybeSingle();
+
+            if (dbCheckin?.status === 'checked_in') {
+              const res = await sendTemplate6_BienvenidaCheckin(bookingForWA);
+              if (res?.success) {
+                await supabase.from('whatsapp_logs').insert([{
+                  reservation_id: String(localRes.id),
+                  template_name: 'bienvenida_checkin',
+                  phone: localRes.phone
+                }]);
+              }
+            } else {
+              await sendTemplate3_ReservacionConfirmada(bookingForWA);
+            }
           } catch (waErr) {
             console.error("Error enviando WhatsApp en payment local:", waErr);
           }
@@ -134,7 +151,25 @@ export async function POST(req: Request) {
         const allBookings = await getBeds24Bookings(true);
         const booking = allBookings.find(r => r.id === Number(bookId));
         if (booking && (booking.phone || booking.mobile || booking.guest_phone)) {
-          await sendTemplate3_ReservacionConfirmada(booking);
+          const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
+          const { data: dbCheckin } = await supabase
+            .from('checkins')
+            .select('status')
+            .eq('reservation_id', String(bookId).toLowerCase().trim())
+            .maybeSingle();
+
+          if (dbCheckin?.status === 'checked_in') {
+            const res = await sendTemplate6_BienvenidaCheckin(booking);
+            if (res?.success) {
+              await supabase.from('whatsapp_logs').insert([{
+                reservation_id: String(bookId),
+                template_name: 'bienvenida_checkin',
+                phone: guestPhone
+              }]);
+            }
+          } else {
+            await sendTemplate3_ReservacionConfirmada(booking);
+          }
         }
       } catch (waErr) {
         console.error("Error enviando WhatsApp en payment Beds24:", waErr);
