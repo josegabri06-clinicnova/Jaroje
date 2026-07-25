@@ -1016,6 +1016,45 @@ export default function ReservasList() {
       console.error(err);
       alert(`❌ Error al revertir check-in: ${err.message}`);
     }
+  };  const handleEditReceiptAmount = async (receiptId: string, currentAmount: number) => {
+    if (userRole !== 'admin') {
+      alert('⚠️ Solo los administradores pueden editar los montos de las transferencias.');
+      return;
+    }
+
+    const userInput = prompt('Editar monto declarado ($ MXN):', String(currentAmount));
+    if (userInput === null) return;
+    const parsed = parseFloat(userInput);
+    if (isNaN(parsed) || parsed <= 0) {
+      alert('Por favor ingresa un monto válido.');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('transfer_receipts')
+        .update({ amount: parsed })
+        .eq('id', receiptId);
+
+      if (error) throw error;
+
+      alert('✓ Monto declarado actualizado con éxito.');
+      
+      setSelectedRes(prev => {
+        if (!prev || !prev.transfer_receipts) return prev;
+        return {
+          ...prev,
+          transfer_receipts: prev.transfer_receipts.map((r: any) => 
+            r.id === receiptId ? { ...r, amount: parsed } : r
+          )
+        };
+      });
+
+      await fetchReservas();
+    } catch (e: any) {
+      console.error("Error al actualizar el monto:", e);
+      alert('❌ Error al actualizar el monto: ' + (e.message || e));
+    }
   };
 
   const handleProcessTransferReceipt = async (receiptId: string, bookingId: string, amount: number, action: 'approve' | 'reject') => {
@@ -3774,9 +3813,20 @@ export default function ReservasList() {
                               <div className="flex justify-between items-start gap-2">
                                 <div>
                                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Monto Declarado</span>
-                                  <p className="text-[14px] font-black text-zinc-900 mt-0.5">
-                                    ${receipt.amount?.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
-                                  </p>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <p className="text-[14px] font-black text-zinc-900">
+                                      ${receipt.amount?.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                                    </p>
+                                    {isPending && userRole === 'admin' && (
+                                      <button 
+                                        onClick={() => handleEditReceiptAmount(receipt.id, receipt.amount)}
+                                        className="p-1 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                                        title="Editar monto"
+                                      >
+                                        <Edit size={12} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
                                   isPending ? 'bg-amber-50 border-amber-200 text-amber-700' :
