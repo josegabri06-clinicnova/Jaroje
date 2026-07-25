@@ -8,6 +8,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// Memory cache to prevent concurrent race conditions from Meta retries or n8n loops
+const requestCache = new Map<string, number>();
+
 function normalizePhone(rawPhone: string): string {
   let cleaned = String(rawPhone || '').replace(/\D/g, '');
   
@@ -288,6 +291,27 @@ export async function POST(req: Request) {
     // ── MODO: Recibir mensaje desde n8n ───────────────────────────────────────
     const phone     = normalizePhone(body.guest_phone || 'desconocido');
     const timestamp = body.timestamp   || new Date().toISOString();
+
+    // Concurrent check using in-memory lock
+    const guestMsgText = String(body.message_from_guest || '').trim();
+    if (phone !== 'desconocido' && guestMsgText) {
+      const cacheKey = `${phone}_${guestMsgText}`;
+      const now = Date.now();
+      if (requestCache.has(cacheKey)) {
+        const lastTime = requestCache.get(cacheKey)!;
+        if (now - lastTime < 8000) { // 8 seconds lock
+          console.log(`[Conversations Webhook Deduplicator] Ignoring concurrent duplicate message for key: ${cacheKey} (${now - lastTime}ms ago)`);
+          return NextResponse.json({ success: true, message: 'Duplicate message ignored (cache).' });
+        }
+      }
+      requestCache.set(cacheKey, now);
+
+      // Clean up cache periodically to avoid memory leaks (keep last 50 entries)
+      if (requestCache.size > 50) {
+        const oldestKeys = Array.from(requestCache.keys()).slice(0, 10);
+        oldestKeys.forEach(k => requestCache.delete(k));
+      }
+    }
 
     // Buscar la última conversación de este teléfono para mantener un historial unificado (SaaS CRM)
     const { data: existing } = await supabase
