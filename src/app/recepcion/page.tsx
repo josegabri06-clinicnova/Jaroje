@@ -646,6 +646,7 @@ export default function RecepcionPage() {
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
   const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
   const [portalLanguage, setPortalLanguage] = useState('es');
+  const [portalMuteNotifications, setPortalMuteNotifications] = useState(false);
 
   const handleSaveNotesOnly = async () => {
     if (!selectedReserva) return;
@@ -761,18 +762,20 @@ export default function RecepcionPage() {
       setPortalShowCardPayment(true);
       setPortalTransferAccount('santander');
       setPortalLanguage('es');
+      setPortalMuteNotifications(false);
       if (selectedReserva.id !== 'walkin') {
         (async () => {
           try {
             const { data, error } = await supabase
               .from('booking_portal_settings')
-              .select('show_card_payment, transfer_account, language')
+              .select('show_card_payment, transfer_account, language, mute_notifications')
               .eq('booking_id', String(selectedReserva.id))
               .maybeSingle();
             if (!error && data) {
               setPortalShowCardPayment(data.show_card_payment);
               setPortalTransferAccount(data.transfer_account);
               setPortalLanguage(data.language || 'es');
+              setPortalMuteNotifications(data.mute_notifications || false);
             }
           } catch (e) {
             console.error("Error loading portal settings:", e);
@@ -807,10 +810,12 @@ export default function RecepcionPage() {
       setExtensionPaymentMethod(null);
       setExtensionAccountId('');
       setExtensionLoading(false);
+
+      setPortalMuteNotifications(false);
     }
   }, [selectedReserva?.id]);
 
-  const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string) => {
+  const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string, mute: boolean) => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return;
     try {
       const { error } = await supabase
@@ -819,12 +824,14 @@ export default function RecepcionPage() {
           booking_id: String(selectedReserva.id),
           show_card_payment: showCard,
           transfer_account: account,
-          language: languageCode
+          language: languageCode,
+          mute_notifications: mute
         }, { onConflict: 'booking_id' });
       if (error) throw error;
       setPortalShowCardPayment(showCard);
       setPortalTransferAccount(account);
       setPortalLanguage(languageCode);
+      setPortalMuteNotifications(mute);
     } catch (err: any) {
       console.error("Error saving portal settings:", err);
       alert("Error al guardar ajustes de pago: " + err.message);

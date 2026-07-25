@@ -126,15 +126,20 @@ export async function sendWhatsAppTemplate(
       try {
         const { data: settings } = await supabase
           .from('booking_portal_settings')
-          .select('language')
+          .select('language, mute_notifications')
           .eq('booking_id', String(bookingId))
           .maybeSingle();
+        
+        if (settings?.mute_notifications === true) {
+          console.log(`[WhatsApp API] Envíos omitidos para la reserva ${bookingId} (mute_notifications: true)`);
+          return { success: false, error: 'muted', data: { status: 'muted', message: 'Notificaciones silenciadas para esta reserva.' } };
+        }
         
         if (settings?.language) {
           detectedLang = settings.language;
         }
       } catch (dbErr) {
-        console.error("Error fetching booking language from DB:", dbErr);
+        console.error("Error fetching booking portal settings from DB:", dbErr);
       }
     }
 

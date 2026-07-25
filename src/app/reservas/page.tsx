@@ -189,6 +189,7 @@ export default function ReservasList() {
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
   const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
   const [portalLanguage, setPortalLanguage] = useState('es');
+  const [portalMuteNotifications, setPortalMuteNotifications] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [savingNotesOnly, setSavingNotesOnly] = useState(false);
 
@@ -281,17 +282,19 @@ export default function ReservasList() {
       setPortalShowCardPayment(true);
       setPortalTransferAccount('santander');
       setPortalLanguage('es');
+      setPortalMuteNotifications(false);
       (async () => {
         try {
           const { data, error } = await supabase
             .from('booking_portal_settings')
-            .select('show_card_payment, transfer_account, language')
+            .select('show_card_payment, transfer_account, language, mute_notifications')
             .eq('booking_id', String(selectedRes.id))
             .maybeSingle();
           if (!error && data) {
             setPortalShowCardPayment(data.show_card_payment);
             setPortalTransferAccount(data.transfer_account);
             setPortalLanguage(data.language || 'es');
+            setPortalMuteNotifications(data.mute_notifications || false);
           }
         } catch (e) {
           console.error("Error loading portal settings:", e);
@@ -322,10 +325,12 @@ export default function ReservasList() {
       setExtensionPaymentMethod(null);
       setExtensionAccountId('');
       setExtensionLoading(false);
+
+      setPortalMuteNotifications(false);
     }
   }, [selectedRes]);
 
-  const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string) => {
+  const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string, mute: boolean) => {
     if (!selectedRes) return;
     try {
       const { error } = await supabase
@@ -334,15 +339,17 @@ export default function ReservasList() {
           booking_id: String(selectedRes.id),
           show_card_payment: showCard,
           transfer_account: account,
-          language: languageCode
+          language: languageCode,
+          mute_notifications: mute
         }, { onConflict: 'booking_id' });
       if (error) throw error;
       setPortalShowCardPayment(showCard);
       setPortalTransferAccount(account);
       setPortalLanguage(languageCode);
-    } catch (err: any) {
-      console.error("Error saving portal settings:", err);
-      alert("Error al guardar ajustes de pago: " + err.message);
+      setPortalMuteNotifications(mute);
+    } catch (e: any) {
+      console.error("Error updating portal settings:", e);
+      alert("Error al actualizar la configuración del portal.");
     }
   };
 
@@ -3431,7 +3438,7 @@ export default function ReservasList() {
                         <p className="text-[10px] text-zinc-400">Habilitar cobro con tarjeta en portal</p>
                       </div>
                       <button
-                        onClick={() => handleUpdatePortalSettings(!portalShowCardPayment, portalTransferAccount, portalLanguage)}
+                        onClick={() => handleUpdatePortalSettings(!portalShowCardPayment, portalTransferAccount, portalLanguage, portalMuteNotifications)}
                         className={`w-11 h-6 rounded-full transition-colors relative outline-none flex items-center px-1 shrink-0 cursor-pointer ${
                           portalShowCardPayment ? 'bg-indigo-600 justify-end' : 'bg-zinc-200 justify-start'
                         }`}
@@ -3447,7 +3454,7 @@ export default function ReservasList() {
                       </div>
                       <select
                         value={portalTransferAccount}
-                        onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, e.target.value, portalLanguage)}
+                        onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, e.target.value, portalLanguage, portalMuteNotifications)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
                         <option value="santander">SANTANDER (Laura Isabel Corral)</option>
@@ -3465,12 +3472,27 @@ export default function ReservasList() {
                       </div>
                       <select
                         value={portalLanguage}
-                        onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, e.target.value)}
+                        onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, e.target.value, portalMuteNotifications)}
                         className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                       >
                         <option value="es">Español 🇲🇽</option>
                         <option value="en">Inglés 🇺🇸</option>
                       </select>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
+                      <div className="space-y-0.5 text-left">
+                        <label className="text-xs font-bold text-zinc-800">Silenciar Notificaciones</label>
+                        <p className="text-[10px] text-zinc-400">Desactivar mensajes automáticos de WhatsApp para esta reserva</p>
+                      </div>
+                      <button
+                        onClick={() => handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, portalLanguage, !portalMuteNotifications)}
+                        className={`w-11 h-6 rounded-full transition-colors relative outline-none flex items-center px-1 shrink-0 cursor-pointer ${
+                          portalMuteNotifications ? 'bg-amber-600 justify-end' : 'bg-zinc-200 justify-start'
+                        }`}
+                      >
+                        <span className="w-4 h-4 bg-white rounded-full shadow-sm block" />
+                      </button>
                     </div>
                   </div>
                 )}

@@ -25,8 +25,11 @@ export async function GET() {
     });
     reports.push(`Bucket: ${await bRes.text()}`);
 
-    // 2. Crear la columna receipt_url en checkins
-    const sql = `ALTER TABLE public.checkins ADD COLUMN IF NOT EXISTS receipt_url TEXT;`;
+    // 2. Crear las columnas necesarias en base de datos
+    const sql = `
+      ALTER TABLE public.checkins ADD COLUMN IF NOT EXISTS receipt_url TEXT;
+      ALTER TABLE public.booking_portal_settings ADD COLUMN IF NOT EXISTS mute_notifications BOOLEAN DEFAULT false;
+    `;
     const sRes = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
       method: 'POST',
       headers,
