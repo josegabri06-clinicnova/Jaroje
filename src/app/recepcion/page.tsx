@@ -5363,8 +5363,12 @@ export default function RecepcionPage() {
                   </div>
 
 
-                  {/* Ajustes del Portal del Huésped */}
-                  {false && selectedReserva && selectedReserva.id !== 'walkin' && (
+                  {/* Ajustes del Portal del Huésped (Solo locales y sin anticipo) */}
+                  {role === 'admin' && 
+                   selectedReserva &&
+                   selectedReserva.id !== 'walkin' &&
+                   !['Airbnb', 'Booking.com', 'Expedia'].includes(selectedReserva.channel || '') && 
+                   Number(selectedReserva.deposit || 0) === 0 && (
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
                       <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -5385,7 +5389,7 @@ export default function RecepcionPage() {
                           <p className="text-[10px] text-zinc-400">Habilitar cobro con tarjeta en portal</p>
                         </div>
                         <button
-                          onClick={() => handleUpdatePortalSettings(!portalShowCardPayment, portalTransferAccount, portalLanguage)}
+                          onClick={() => handleUpdatePortalSettings(!portalShowCardPayment, portalTransferAccount, portalLanguage, portalMuteNotifications)}
                           className={`w-11 h-6 rounded-full transition-colors relative outline-none flex items-center px-1 shrink-0 cursor-pointer ${
                             portalShowCardPayment ? 'bg-indigo-600 justify-end' : 'bg-zinc-200 justify-start'
                           }`}
@@ -5401,7 +5405,7 @@ export default function RecepcionPage() {
                         </div>
                         <select
                           value={portalTransferAccount}
-                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, e.target.value, portalLanguage)}
+                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, e.target.value, portalLanguage, portalMuteNotifications)}
                           className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                         >
                           <option value="santander">SANTANDER (Laura Isabel Corral)</option>
@@ -5411,6 +5415,21 @@ export default function RecepcionPage() {
                           <option value="paypal">PAYPAL USD (Live Huatulco)</option>
                         </select>
                       </div>
+                    </div>
+                  )}
+
+                  {/* Ajustes de Notificaciones y Mensajería (Para todas las reservas) */}
+                  {selectedReserva && selectedReserva.id !== 'walkin' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-2">
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                          <svg className="w-3.5 h-3.5 text-amber-650" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                          </svg>
+                          Notificaciones de la Reserva
+                        </span>
+                      </div>
 
                       <div className="space-y-1.5 text-left">
                         <div className="space-y-0.5">
@@ -5419,12 +5438,27 @@ export default function RecepcionPage() {
                         </div>
                         <select
                           value={portalLanguage}
-                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, e.target.value)}
+                          onChange={(e) => handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, e.target.value, portalMuteNotifications)}
                           className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[12px] font-bold text-zinc-800 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer"
                         >
                           <option value="es">Español 🇲🇽</option>
                           <option value="en">Inglés 🇺🇸</option>
                         </select>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-zinc-100 pt-3">
+                        <div className="space-y-0.5 text-left">
+                          <label className="text-xs font-bold text-zinc-800">Silenciar Notificaciones</label>
+                          <p className="text-[10px] text-zinc-400">Desactivar mensajes automáticos de WhatsApp para esta reserva</p>
+                        </div>
+                        <button
+                          onClick={() => handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, portalLanguage, !portalMuteNotifications)}
+                          className={`w-11 h-6 rounded-full transition-colors relative outline-none flex items-center px-1 shrink-0 cursor-pointer ${
+                            portalMuteNotifications ? 'bg-amber-600 justify-end' : 'bg-zinc-200 justify-start'
+                          }`}
+                        >
+                          <span className="w-4 h-4 bg-white rounded-full shadow-sm block" />
+                        </button>
                       </div>
                     </div>
                   )}
