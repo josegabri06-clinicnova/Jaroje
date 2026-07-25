@@ -298,6 +298,24 @@ export async function POST(req: Request) {
       .limit(1)
       .maybeSingle();
 
+    // Deduplicación de mensajes entrantes (Meta retries / n8n duplicate triggers)
+    if (existing && Array.isArray(existing.messages) && existing.messages.length > 0) {
+      const lastMsg = existing.messages[existing.messages.length - 1];
+      const lastGuestMsg = String(lastMsg.role_guest || '').trim();
+      const currentGuestMsg = String(body.message_from_guest || '').trim();
+      
+      if (currentGuestMsg && lastGuestMsg === currentGuestMsg && lastMsg.timestamp) {
+        const lastTime = new Date(lastMsg.timestamp).getTime();
+        const currentTime = new Date(timestamp).getTime();
+        const diffSeconds = Math.abs(currentTime - lastTime) / 1000;
+        
+        if (diffSeconds < 10) {
+          console.log(`[Conversations Webhook Deduplicator] Ignoring duplicate incoming message for phone ${phone}: "${currentGuestMsg}" (diff: ${diffSeconds}s)`);
+          return NextResponse.json({ success: true, message: 'Duplicate message ignored.' });
+        }
+      }
+    }
+
     // ── Interceptar si el cliente hizo clic en botones de interacción rápida ──
     let forceHuman = existing ? existing.human_mode : false;
     let finalBotResponse = body.bot_response || null;
