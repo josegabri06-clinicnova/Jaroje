@@ -106,7 +106,7 @@ export async function POST(req: Request) {
 
     // Enviar mensaje de confirmación al huésped si tenemos su número
     if (guestPhone) {
-      const guestNotificationBody = `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de transferencia por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para la reserva #${bookingId}.\n\nNuestro equipo lo está validando de inmediato. Te notificaremos por aquí tan pronto como esté aprobado. ¡Muchas gracias!`;
+      const guestNotificationBody = `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de transferencia por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para la reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado. ¡Muchas gracias!`;
       console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone}`);
       await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
     }
