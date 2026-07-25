@@ -68,7 +68,7 @@ export function BottomNav() {
       );
     }
 
-    // Recepción: panel + calendar + reservas + precios
+    // Recepción: panel + calendar + reservas
     return (
       <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-t border-zinc-200/80 pb-safe">
         <div className="flex justify-around items-center px-2 py-2 pb-3 max-w-md mx-auto">
@@ -76,7 +76,6 @@ export function BottomNav() {
             { href: '/recepcion', icon: <Home size={22} />, label: 'Panel' },
             { href: '/calendario', icon: <CalendarIcon size={22} />, label: 'Calendario' },
             { href: '/reservas',  icon: <ListIcon size={22} />, label: 'Reservas' },
-            { href: '/bot',       icon: <MessageCircle size={22} />, label: 'Chats' },
           ].map(item => (
             <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 p-1">
               <div className={`p-1.5 rounded-xl transition-all ${pathname === item.href ? 'bg-blue-50 text-blue-600' : 'text-zinc-400 hover:text-zinc-600'}`}>
