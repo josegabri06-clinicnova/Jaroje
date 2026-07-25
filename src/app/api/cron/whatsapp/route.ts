@@ -46,10 +46,29 @@ async function ensureLogsTable() {
   }
 }
 
-// Obtener fecha y hora en formato GMT-6 (Huatulco, México)
-function getMexicoTime(): Date {
-  const utc = new Date();
-  return new Date(utc.getTime() - (6 * 60 * 60 * 1000));
+// Obtener la hora actual en formato GMT-6 (Huatulco, México) de manera robusta
+function getMexicoHour(): number {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Mexico_City',
+    hour: 'numeric',
+    hour12: false
+  });
+  return Number(formatter.format(new Date()));
+}
+
+// Obtener la fecha en formato YYYY-MM-DD para México con un desplazamiento de días
+function getMexicoDateStr(offsetDays = 0): string {
+  const date = new Date();
+  if (offsetDays !== 0) {
+    date.setDate(date.getDate() + offsetDays);
+  }
+  const formatter = new Intl.DateTimeFormat('fr-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  return formatter.format(date);
 }
 
 export async function GET(req: Request) {
@@ -114,17 +133,15 @@ export async function GET(req: Request) {
 
     const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
 
-    // 5. Calcular variables de tiempo en México (CST/CDT - GMT-6)
-    const mexicoTime = getMexicoTime();
-    const currentHour = mexicoTime.getHours();
-
-    const todayStr = mexicoTime.toISOString().split('T')[0];
-    const tomorrowStr = new Date(mexicoTime.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const yesterdayStr = new Date(mexicoTime.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // 5. Calcular variables de tiempo en México de forma inmune a la zona horaria del servidor
+    const currentHour = getMexicoHour();
+    const todayStr = getMexicoDateStr(0);
+    const tomorrowStr = getMexicoDateStr(1);
+    const yesterdayStr = getMexicoDateStr(-1);
     
     // Rango de fechas para fidelización Mensaje 10 (5 meses = 150 días, 10 meses = 300 días)
-    const fiveMonthsAgoCheckinStr = new Date(mexicoTime.getTime() - 150 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const tenMonthsAgoCheckinStr = new Date(mexicoTime.getTime() - 300 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const fiveMonthsAgoCheckinStr = getMexicoDateStr(-150);
+    const tenMonthsAgoCheckinStr = getMexicoDateStr(-300);
 
     const reports: string[] = [];
 
@@ -265,7 +282,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      mexicoTime: mexicoTime.toISOString(),
+      mexicoTime: new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),
       hourChecked: currentHour,
       bookingsProcessed: allBookings.length,
       actionsTaken: reports

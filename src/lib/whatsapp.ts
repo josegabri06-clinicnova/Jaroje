@@ -104,7 +104,7 @@ export async function sendWhatsAppTemplate(
 
         if (disableSetting && (disableSetting.value === true || disableSetting.value === 'true')) {
           console.log(`[WhatsApp API] Envíos automáticos pausados por configuración (disable_automatic_whatsapp: true)`);
-          return { success: true, data: { status: 'paused', message: 'WhatsApp automatizado pausado por administrador.' } };
+          return { success: false, error: 'paused', data: { status: 'paused', message: 'WhatsApp automatizado pausado por administrador.' } };
         }
       } catch (e) {
         console.error("Error al consultar configuración de pausa de WhatsApp:", e);
