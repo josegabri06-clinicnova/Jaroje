@@ -460,9 +460,16 @@ export default function AdminDashboard() {
     }
 
     const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
-    const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled');
-    const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled');
-    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled');
+
+    const sortByRoomNumber = (a: any, b: any) => {
+      const roomA = getUnitDisplay(a.room_name || a.room || '');
+      const roomB = getUnitDisplay(b.room_name || b.room || '');
+      return roomA.localeCompare(roomB, undefined, { numeric: true, sensitivity: 'base' });
+    };
+
+    const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
+    const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
+    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled').sort(sortByRoomNumber);
 
     let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *Condominios Jaroje*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
