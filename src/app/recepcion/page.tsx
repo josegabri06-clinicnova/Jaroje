@@ -21,6 +21,23 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accountId: string | null, description: string } {
+  if (!selectedVal) {
+    return { accountId: null, description: baseDesc };
+  }
+  const isEnvelope = /^S\d+$/.test(selectedVal);
+  if (isEnvelope) {
+    return {
+      accountId: null,
+      description: `${baseDesc} (Sobre: ${selectedVal})`
+    };
+  }
+  return {
+    accountId: selectedVal,
+    description: baseDesc
+  };
+}
+
 // Contexto de audio global compartido para la página de recepción
 let sharedAudioCtx: AudioContext | null = null;
 
@@ -1262,14 +1279,15 @@ export default function RecepcionPage() {
       if (extensionRegisterPayment && paymentAmountNum > 0 && extensionAccountId && extensionPaymentMethod) {
         const baseDesc = `Pago Extensión Stay de ${selectedReserva.guest_name} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} (+${extensionNights} noches)`;
         const todayStr = new Date().toLocaleDateString('sv-SE');
+        const finFields = getFinanceAccountFields(extensionAccountId, baseDesc);
         
         const { error: financeErr } = await supabase.from('finances').insert({
           type: 'ingreso',
           amount: paymentAmountNum,
           category: 'Alojamiento',
-          description: baseDesc,
+          description: finFields.description,
           payment_method: extensionPaymentMethod,
-          account_id: extensionAccountId,
+          account_id: finFields.accountId,
           date: todayStr
         });
         
@@ -1278,14 +1296,16 @@ export default function RecepcionPage() {
           alert(`⚠️ Se actualizó la reserva, pero hubo un error al registrar el ingreso en Finanzas: ${financeErr.message}`);
         } else {
           // Actualizar balance de la cuenta
-          const matchedAcc = accounts.find(a => a.id === extensionAccountId);
-          if (matchedAcc) {
-            const newBalance = matchedAcc.balance + paymentAmountNum;
-            const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', extensionAccountId);
-            if (accErr) {
-              console.error("Error al actualizar balance de cuenta:", accErr);
-            } else {
-              setAccounts(prev => prev.map(a => a.id === extensionAccountId ? { ...a, balance: newBalance } : a));
+          if (finFields.accountId) {
+            const matchedAcc = accounts.find(a => a.id === finFields.accountId);
+            if (matchedAcc) {
+              const newBalance = matchedAcc.balance + paymentAmountNum;
+              const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', finFields.accountId);
+              if (accErr) {
+                console.error("Error al actualizar balance de cuenta:", accErr);
+              } else {
+                setAccounts(prev => prev.map(a => a.id === finFields.accountId ? { ...a, balance: newBalance } : a));
+              }
             }
           }
         }

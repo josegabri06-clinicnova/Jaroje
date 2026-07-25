@@ -16,6 +16,23 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const ENVELOPES = Array.from({ length: 99 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
 
+function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accountId: string | null, description: string } {
+  if (!selectedVal) {
+    return { accountId: null, description: baseDesc };
+  }
+  const isEnvelope = /^S\d+$/.test(selectedVal);
+  if (isEnvelope) {
+    return {
+      accountId: null,
+      description: `${baseDesc} (Sobre: ${selectedVal})`
+    };
+  }
+  return {
+    accountId: selectedVal,
+    description: baseDesc
+  };
+}
+
 const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas'];
 
 const PHYSICAL_ROOM_GROUPS = [
@@ -782,21 +799,24 @@ export default function ReservasList() {
           if (otaSplit.isOTA) {
             // 1. Ingreso neto para el negocio (sin comisión OTA)
             const netDesc = `${baseDesc} | Ingreso Neto (sin comisión ${otaSplit.channelLabel}) | ${paymentDetail}`;
+            const finFields = getFinanceAccountFields(paymentReference, netDesc);
             const { error } = await supabase.from('finances').insert([{
               type: 'ingreso',
               amount: otaSplit.netRevenue,
               category: 'Alojamiento',
-              description: paymentDescription ? `${paymentDescription} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
+              description: paymentDescription ? `${paymentDescription} - ${finFields.description} [Pending Sync: B24]` : `${finFields.description} [Pending Sync: B24]`,
               payment_method: paymentMethod,
-              account_id: paymentReference,
+              account_id: finFields.accountId,
               date: new Date().toISOString().split('T')[0]
             }]);
 
             if (!error) {
               isSuccess = true;
-              const acc = accounts.find(a => a.id === paymentReference);
-              if (acc) {
-                await supabase.from('accounts').update({ balance: acc.balance + otaSplit.netRevenue }).eq('id', paymentReference);
+              if (finFields.accountId) {
+                const acc = accounts.find(a => a.id === finFields.accountId);
+                if (acc) {
+                  await supabase.from('accounts').update({ balance: acc.balance + otaSplit.netRevenue }).eq('id', finFields.accountId);
+                }
               }
             } else {
               financeError = error;
@@ -825,23 +845,27 @@ export default function ReservasList() {
             }
           } else {
             // Registro normal directo (sin OTA)
+            const normalDesc = paymentDescription
+              ? `${paymentDescription} - ${baseDesc} | ${paymentDetail}`
+              : `${baseDesc} | ${paymentDetail}`;
+            const finFields = getFinanceAccountFields(paymentReference, normalDesc);
             const { error } = await supabase.from('finances').insert([{
               type: 'ingreso',
               amount: paymentAmountNum,
               category: 'Alojamiento',
-              description: paymentDescription
-                ? `${paymentDescription} - ${baseDesc} | ${paymentDetail} [Pending Sync: B24]`
-                : `${baseDesc} | ${paymentDetail} [Pending Sync: B24]`,
+              description: `${finFields.description} [Pending Sync: B24]`,
               payment_method: paymentMethod,
-              account_id: paymentReference,
+              account_id: finFields.accountId,
               date: new Date().toISOString().split('T')[0]
             }]);
 
             if (!error) {
               isSuccess = true;
-              const acc = accounts.find(a => a.id === paymentReference);
-              if (acc) {
-                await supabase.from('accounts').update({ balance: acc.balance + paymentAmountNum }).eq('id', paymentReference);
+              if (finFields.accountId) {
+                const acc = accounts.find(a => a.id === finFields.accountId);
+                if (acc) {
+                  await supabase.from('accounts').update({ balance: acc.balance + paymentAmountNum }).eq('id', finFields.accountId);
+                }
               }
             } else {
               financeError = error;
@@ -1381,14 +1405,15 @@ export default function ReservasList() {
       // 2. Registrar en Supabase finances
       const baseDesc = `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} - Anticipo Directo`;
       const todayStr = new Date().toLocaleDateString('sv-SE');
+      const finFields = getFinanceAccountFields(abonoAccountId, baseDesc);
 
       const { error: financeErr } = await supabase.from('finances').insert({
         type: 'ingreso',
         amount: amountNum,
         category: 'Alojamiento',
-        description: baseDesc,
+        description: finFields.description,
         payment_method: abonoPaymentMethod,
-        account_id: abonoAccountId,
+        account_id: finFields.accountId,
         date: todayStr
       });
 
@@ -1397,14 +1422,16 @@ export default function ReservasList() {
         alert(`⚠️ Se guardó el anticipo en Beds24, pero hubo un error al registrar en Finanzas: ${financeErr.message}`);
       } else {
         // 3. Actualizar balance de la cuenta
-        const matchedAcc = accounts.find(a => a.id === abonoAccountId);
-        if (matchedAcc) {
-          const newBalance = matchedAcc.balance + amountNum;
-          const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoAccountId);
-          if (accErr) {
-            console.error("Error al actualizar balance de cuenta para anticipo:", accErr);
-          } else {
-            setAccounts(prev => prev.map(a => a.id === abonoAccountId ? { ...a, balance: newBalance } : a));
+        if (finFields.accountId) {
+          const matchedAcc = accounts.find(a => a.id === finFields.accountId);
+          if (matchedAcc) {
+            const newBalance = matchedAcc.balance + amountNum;
+            const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', finFields.accountId);
+            if (accErr) {
+              console.error("Error al actualizar balance de cuenta para anticipo:", accErr);
+            } else {
+              setAccounts(prev => prev.map(a => a.id === finFields.accountId ? { ...a, balance: newBalance } : a));
+            }
           }
         }
       }
@@ -1552,14 +1579,15 @@ export default function ReservasList() {
       if (extensionRegisterPayment && paymentAmountNum > 0 && extensionAccountId && extensionPaymentMethod) {
         const baseDesc = `Pago Extensión Stay de ${selectedRes.guest_name} (ID: ${selectedRes.id}) - Hab ${selectedRes.room_name || 'General'} (+${extensionNights} noches)`;
         const todayStr = new Date().toLocaleDateString('sv-SE');
+        const finFields = getFinanceAccountFields(extensionAccountId, baseDesc);
         
         const { error: financeErr } = await supabase.from('finances').insert({
           type: 'ingreso',
           amount: paymentAmountNum,
           category: 'Alojamiento',
-          description: baseDesc,
+          description: finFields.description,
           payment_method: extensionPaymentMethod,
-          account_id: extensionAccountId,
+          account_id: finFields.accountId,
           date: todayStr
         });
         
@@ -1568,14 +1596,16 @@ export default function ReservasList() {
           alert(`⚠️ Se actualizó la reserva, pero hubo un error al registrar el ingreso en Finanzas: ${financeErr.message}`);
         } else {
           // Actualizar balance de la cuenta
-          const matchedAcc = accounts.find(a => a.id === extensionAccountId);
-          if (matchedAcc) {
-            const newBalance = matchedAcc.balance + paymentAmountNum;
-            const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', extensionAccountId);
-            if (accErr) {
-              console.error("Error al actualizar balance de cuenta:", accErr);
-            } else {
-              setAccounts(prev => prev.map(a => a.id === extensionAccountId ? { ...a, balance: newBalance } : a));
+          if (finFields.accountId) {
+            const matchedAcc = accounts.find(a => a.id === finFields.accountId);
+            if (matchedAcc) {
+              const newBalance = matchedAcc.balance + paymentAmountNum;
+              const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', finFields.accountId);
+              if (accErr) {
+                console.error("Error al actualizar balance de cuenta:", accErr);
+              } else {
+                setAccounts(prev => prev.map(a => a.id === finFields.accountId ? { ...a, balance: newBalance } : a));
+              }
             }
           }
         }
@@ -1690,13 +1720,15 @@ export default function ReservasList() {
           continue;
         }
 
+        const abonoBaseDesc = `Anticipo Grupal – ${booking.guest_name} (ID: ${booking.id}) Hab ${booking.room_name || booking.room}`;
+        const finFields = getFinanceAccountFields(abonoAccountId, abonoBaseDesc);
         await supabase.from('finances').insert({
           type: 'ingreso',
           amount: bookingAmount,
           category: 'Alojamiento',
-          description: `Anticipo Grupal – ${booking.guest_name} (ID: ${booking.id}) Hab ${booking.room_name || booking.room}`,
+          description: finFields.description,
           payment_method: abonoPaymentMethod,
-          account_id: abonoAccountId,
+          account_id: finFields.accountId,
           date: todayStr
         });
 
@@ -1726,11 +1758,14 @@ export default function ReservasList() {
         } : r));
       }
 
-      const matchedAcc = accounts.find(a => a.id === abonoAccountId);
-      if (matchedAcc) {
-        const newBalance = matchedAcc.balance + totalAmount;
-        const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', abonoAccountId);
-        if (!accErr) setAccounts(prev => prev.map(a => a.id === abonoAccountId ? { ...a, balance: newBalance } : a));
+      const finFieldsForAbono = getFinanceAccountFields(abonoAccountId, '');
+      if (finFieldsForAbono.accountId) {
+        const matchedAcc = accounts.find(a => a.id === finFieldsForAbono.accountId);
+        if (matchedAcc) {
+          const newBalance = matchedAcc.balance + totalAmount;
+          const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', finFieldsForAbono.accountId);
+          if (!accErr) setAccounts(prev => prev.map(a => a.id === finFieldsForAbono.accountId ? { ...a, balance: newBalance } : a));
+        }
       }
 
       const mainBooking = directGroupBookings.find(b => String(b.id) === String(selectedRes.id));
