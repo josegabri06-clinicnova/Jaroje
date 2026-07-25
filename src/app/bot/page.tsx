@@ -436,18 +436,15 @@ export default function BotPage() {
     return roomStr;
   };
 
-  // Buscar todas las reservaciones activas o futuras correspondientes al número de teléfono o nombre del contacto
+  // Buscar todas las reservaciones correspondientes al número de teléfono o nombre del contacto
   const findAllReservationsForContact = (guestPhone: string | undefined, guestName: string | undefined) => {
     if (!guestPhone) return [];
-    
-    // Filtrar solo las reservaciones activas o futuras (check-out hoy o después)
-    const activeFuture = reservas.filter(r => r.check_out >= todayStr);
     
     // Normalizar y comparar de forma flexible números de teléfono de cualquier país
     const clean = (p: string) => p.replace(/\D/g, '');
     const pClean = clean(guestPhone);
     
-    const matched = activeFuture.filter(r => {
+    const matched = reservas.filter(r => {
       const rPhone = clean(r.phone || r.mobile || r.guest_phone || '');
       if (pClean.length < 7 || rPhone.length < 7) return false;
       // Comparación flexible de los últimos dígitos según el tamaño del número más corto (máximo 10 dígitos)
@@ -457,9 +454,8 @@ export default function BotPage() {
       return lastP === lastR;
     });
 
-
-    // Ordenar de más reciente check-in a más lejano futuro
-    return matched.sort((a, b) => new Date(a.check_in).getTime() - new Date(b.check_in).getTime());
+    // Ordenar de más reciente check-in a más antiguo (para que la última reserva aparezca primero)
+    return matched.sort((a, b) => new Date(b.check_in).getTime() - new Date(a.check_in).getTime());
   };
 
   // Helper de DoubleCheck de WhatsApp
