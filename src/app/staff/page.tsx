@@ -1650,8 +1650,8 @@ export default function StaffPage() {
                       if (num >= 500 && num <= 507) return false;
                       const hasResTonight = reservas.some(res => {
                         if (res.status === 'cancelled' || res.status === 'cancelado') return false;
-                        const cIn = (res.check_in || res.arrival || '').split('T')[0].split(' ')[0];
-                        const cOut = (res.check_out || res.departure || '').split('T')[0].split(' ')[0];
+                        const cIn = (res.check_in || (res as any).arrival || '').split('T')[0].split(' ')[0];
+                        const cOut = (res.check_out || (res as any).departure || '').split('T')[0].split(' ')[0];
                         return matchesRoomNumber(res, r) && cIn <= todayStr && cOut > todayStr;
                       });
                       return !hasResTonight;
@@ -3002,8 +3002,8 @@ export default function StaffPage() {
             if (num >= 500 && num <= 507) return false;
             const hasResTonight = reservas.some(res => {
               if (res.status === 'cancelled' || res.status === 'cancelado') return false;
-              const cIn = (res.check_in || res.arrival || '').split('T')[0].split(' ')[0];
-              const cOut = (res.check_out || res.departure || '').split('T')[0].split(' ')[0];
+              const cIn = (res.check_in || (res as any).arrival || '').split('T')[0].split(' ')[0];
+              const cOut = (res.check_out || (res as any).departure || '').split('T')[0].split(' ')[0];
               return matchesRoomNumber(res, r) && cIn <= todayStr && cOut > todayStr;
             });
             return !hasResTonight;
@@ -3104,9 +3104,11 @@ export default function StaffPage() {
                         <div
                           key={roomNum}
                           onClick={() => {
-                            setKpiModalType(null);
-                            setSelectedRoomForInspection(roomNum);
-                            setShowInspectionModal(true);
+                            if (canModifyStatus) {
+                              setKpiModalType(null);
+                              setSelectedRoom(roomNum);
+                              setShowStatusModal(true);
+                            }
                           }}
                           className="p-4 border border-zinc-150 rounded-2xl hover:border-zinc-300 hover:bg-zinc-50/50 transition-all cursor-pointer flex items-center justify-between"
                         >
