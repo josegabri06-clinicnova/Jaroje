@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  Calculator, Zap, Check, AlertCircle, RefreshCw, X
+  Calculator, Zap, Check, AlertCircle, RefreshCw, X, Tag, Percent, CalendarDays, Trash2
 } from 'lucide-react';
 
 export default function PreciosPage() {
@@ -259,7 +259,134 @@ export default function PreciosPage() {
 
   useEffect(() => {
     loadBeds24Prices();
+    loadTempDiscounts();
   }, []);
+
+  // ─────────────────────────────────────────────────────
+  // DESCUENTOS TEMPORALES
+  // ─────────────────────────────────────────────────────
+  const ROOMS_LIST = [
+    { id: '679077', name: 'Habitación Doble', icon: '🛏️' },
+    { id: '679087', name: 'Apartamento 1 dorm.', icon: '🏠' },
+    { id: '679091', name: 'Apartamento 2 dorm.', icon: '🏠' },
+    { id: '679092', name: 'Apartamento 3 dorm.', icon: '🏡' },
+    { id: '679093', name: 'Casa Vacacional 3 dorm.', icon: '🏖️' },
+  ];
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const in30Str = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().split('T')[0]; })();
+
+  const [tdSelectedRooms, setTdSelectedRooms] = useState<string[]>(['679077']);
+  const [tdFrom, setTdFrom] = useState(todayStr);
+  const [tdTo, setTdTo] = useState(in30Str);
+  const [tdPriceHuesped, setTdPriceHuesped] = useState(''); // precio al huésped (con IVA)
+  const [tdLabel, setTdLabel] = useState('');
+  const [tdSaving, setTdSaving] = useState(false);
+  const [tdError, setTdError] = useState('');
+  const [tdSuccess, setTdSuccess] = useState('');
+  const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
+  const [tdDeleting, setTdDeleting] = useState<string | null>(null);
+
+  // Precio base calculado (sin IVA) = precio huésped / 1.19
+  const tdPriceRaw = tdPriceHuesped ? Math.round((Number(tdPriceHuesped) / 1.19) * 100) / 100 : 0;
+  const tdPriceAirbnb = tdPriceRaw > 0 ? Math.round(tdPriceRaw * beds24Multipliers.airbnb * 1.19) : 0;
+  const tdPriceBooking = tdPriceRaw > 0 ? Math.round(tdPriceRaw * beds24Multipliers.booking * 1.19) : 0;
+
+  const loadTempDiscounts = async () => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data } = await sb.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle();
+      if (data?.value && Array.isArray(data.value)) {
+        setTempDiscounts(data.value);
+      } else if (data?.value) {
+        try { setTempDiscounts(JSON.parse(data.value)); } catch {}
+      }
+    } catch {}
+  };
+
+  const saveTempDiscounts = async (list: any[]) => {
+    const { createClient } = await import('@supabase/supabase-js');
+    const sb = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    await sb.from('settings').upsert({ key: 'temp_discounts', value: list }, { onConflict: 'key' });
+  };
+
+  const handleApplyTempDiscount = async () => {
+    setTdError('');
+    setTdSuccess('');
+    const priceNum = Number(tdPriceHuesped);
+    if (!priceNum || priceNum <= 0) { setTdError('Ingresa un precio válido.'); return; }
+    if (!tdFrom || !tdTo || tdFrom > tdTo) { setTdError('Las fechas no son válidas.'); return; }
+    if (tdSelectedRooms.length === 0) { setTdError('Selecciona al menos una habitación.'); return; }
+
+    const priceRaw = Math.round((priceNum / 1.19) * 100) / 100;
+    const roomNames = tdSelectedRooms.map(id => ROOMS_LIST.find(r => r.id === id)?.name || id).join(', ');
+
+    const confirmed = window.confirm(
+      `⚠️ CONFIRMAR DESCUENTO TEMPORAL\n\n` +
+      `Habitaciones: ${roomNames}\n` +
+      `Período: ${tdFrom} → ${tdTo}\n` +
+      `Precio al huésped: $${priceNum.toLocaleString('es-MX')} MXN (con IVA)\n` +
+      `Precio base en Beds24: $${priceRaw.toLocaleString('es-MX', { maximumFractionDigits: 0 })}\n\n` +
+      `Las reservas ya confirmadas NO se ven afectadas.\n` +
+      `¿Continuar?`
+    );
+    if (!confirmed) return;
+
+    setTdSaving(true);
+    try {
+      for (const roomId of tdSelectedRooms) {
+        const res = await fetch('/api/beds24-prices', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId, priceRaw, from: tdFrom, to: tdTo }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || `Error en habitación ${roomId}`);
+      }
+
+      // Guardar en historial
+      const newDiscount = {
+        id: Date.now().toString(),
+        rooms: tdSelectedRooms,
+        roomNames,
+        from: tdFrom,
+        to: tdTo,
+        priceHuesped: priceNum,
+        priceRaw,
+        label: tdLabel || `Descuento ${tdFrom} → ${tdTo}`,
+        appliedAt: new Date().toISOString()
+      };
+      const updated = [newDiscount, ...tempDiscounts];
+      setTempDiscounts(updated);
+      await saveTempDiscounts(updated);
+
+      setTdSuccess(`✅ Descuento aplicado en Beds24 para: ${roomNames} (${tdFrom} → ${tdTo})`);
+      setTdPriceHuesped('');
+      setTdLabel('');
+    } catch (err: any) {
+      setTdError('Error al aplicar: ' + err.message);
+    } finally {
+      setTdSaving(false);
+    }
+  };
+
+  const handleDeleteTempDiscount = async (discountId: string) => {
+    setTdDeleting(discountId);
+    try {
+      const updated = tempDiscounts.filter(d => d.id !== discountId);
+      setTempDiscounts(updated);
+      await saveTempDiscounts(updated);
+    } finally {
+      setTdDeleting(null);
+    }
+  };
 
   return (
     <div className="space-y-6 pb-24 bg-[#fafafa] min-h-screen text-zinc-950 font-sans">
@@ -278,6 +405,202 @@ export default function PreciosPage() {
       {/* Main Content Area */}
       <div className="px-6">
         <div className="space-y-6 animate-in fade-in duration-200">
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* 🏷️  DESCUENTOS TEMPORALES                              */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          <div className="bg-white border border-amber-200 rounded-3xl shadow-sm overflow-hidden">
+            
+            {/* Header de sección */}
+            <div className="px-5 py-4 bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                  <Tag size={18} className="text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-[14px] font-black text-zinc-900 tracking-tight">Descuentos Temporales</h3>
+                  <p className="text-[11.5px] text-zinc-500 font-medium mt-0.5">
+                    Aplica una tarifa especial a fechas específicas sin modificar las temporadas base.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-5">
+
+              {/* Selector de habitaciones */}
+              <div className="space-y-2">
+                <label className="text-[10.5px] font-extrabold text-zinc-500 uppercase tracking-widest block">
+                  1. Habitaciones
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {ROOMS_LIST.map(room => {
+                    const selected = tdSelectedRooms.includes(room.id);
+                    return (
+                      <button
+                        key={room.id}
+                        onClick={() => setTdSelectedRooms(prev =>
+                          selected ? prev.filter(id => id !== room.id) : [...prev, room.id]
+                        )}
+                        className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-[12px] font-semibold transition-all cursor-pointer ${
+                          selected
+                            ? 'bg-amber-500 text-white border-amber-500 shadow-md'
+                            : 'bg-white text-zinc-700 border-zinc-200 hover:border-amber-300 hover:bg-amber-50'
+                        }`}
+                      >
+                        <span className="shrink-0">{room.icon}</span>
+                        <span className="leading-tight">{room.name}</span>
+                        {selected && <Check size={13} strokeWidth={3} className="ml-auto shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Fechas */}
+              <div className="space-y-2">
+                <label className="text-[10.5px] font-extrabold text-zinc-500 uppercase tracking-widest block">
+                  2. Período del descuento
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Desde</span>
+                    <input
+                      type="date"
+                      value={tdFrom}
+                      onChange={e => setTdFrom(e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide block mb-1">Hasta</span>
+                    <input
+                      type="date"
+                      value={tdTo}
+                      min={tdFrom}
+                      onChange={e => setTdTo(e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3 py-2.5 text-[13px] font-semibold text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Precio al huésped */}
+              <div className="space-y-2">
+                <label className="text-[10.5px] font-extrabold text-zinc-500 uppercase tracking-widest block">
+                  3. Precio que pagará el huésped (con IVA incluido)
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-black text-[14px]">$</span>
+                    <input
+                      type="number"
+                      value={tdPriceHuesped}
+                      onChange={e => { setTdPriceHuesped(e.target.value); setTdError(''); setTdSuccess(''); }}
+                      placeholder="1800"
+                      min="1"
+                      className="w-full border border-zinc-200 rounded-xl pl-8 pr-16 py-3 text-[16px] font-black text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-semibold text-[11px]">MXN</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview de precios */}
+              {tdPriceRaw > 0 && (
+                <div className="bg-zinc-900 rounded-2xl px-4 py-3.5 space-y-2.5">
+                  <span className="text-[9px] font-black text-zinc-500 uppercase tracking-widest block">Preview de precios calculados</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-zinc-800 rounded-xl p-2.5 text-center">
+                      <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-wide block mb-1">Base Beds24</span>
+                      <span className="text-[14px] font-black text-white">${Math.round(tdPriceRaw).toLocaleString('es-MX')}</span>
+                    </div>
+                    <div className="bg-emerald-900/50 rounded-xl p-2.5 text-center border border-emerald-800/30">
+                      <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wide block mb-1">📱 Directo</span>
+                      <span className="text-[14px] font-black text-white">${Number(tdPriceHuesped).toLocaleString('es-MX')}</span>
+                    </div>
+                    <div className="bg-pink-900/40 rounded-xl p-2.5 text-center border border-pink-800/30">
+                      <span className="text-[9px] text-pink-300 font-bold uppercase tracking-wide block mb-1">🏠 Airbnb</span>
+                      <span className="text-[14px] font-black text-white">${tdPriceAirbnb.toLocaleString('es-MX')}</span>
+                    </div>
+                  </div>
+                  <div className="bg-blue-900/40 rounded-xl p-2.5 text-center border border-blue-800/30">
+                    <span className="text-[9px] text-blue-300 font-bold uppercase tracking-wide block mb-1">🌐 Booking.com</span>
+                    <span className="text-[15px] font-black text-white">${tdPriceBooking.toLocaleString('es-MX')} MXN</span>
+                  </div>
+                  <p className="text-[9.5px] text-zinc-500 italic">
+                    Airbnb ×{beds24Multipliers.airbnb} · Booking ×{beds24Multipliers.booking} · todos incluyen IVA 19%
+                  </p>
+                </div>
+              )}
+
+              {/* Etiqueta opcional */}
+              <div className="space-y-1.5">
+                <label className="text-[10.5px] font-extrabold text-zinc-500 uppercase tracking-widest block">
+                  Etiqueta (opcional)
+                </label>
+                <input
+                  type="text"
+                  value={tdLabel}
+                  onChange={e => setTdLabel(e.target.value)}
+                  placeholder='Ej: "Descuento agosto bajo flujo"'
+                  className="w-full border border-zinc-200 rounded-xl px-3.5 py-2.5 text-[12.5px] font-medium text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+
+              {/* Feedback */}
+              {tdError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-3.5 py-3 text-[12px] text-red-700 font-semibold flex items-center gap-2">
+                  <AlertCircle size={14} className="shrink-0" /> {tdError}
+                </div>
+              )}
+              {tdSuccess && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3.5 py-3 text-[12px] text-emerald-700 font-semibold flex items-center gap-2">
+                  <Check size={14} strokeWidth={3} className="shrink-0" /> {tdSuccess}
+                </div>
+              )}
+
+              {/* Botón */}
+              <button
+                onClick={handleApplyTempDiscount}
+                disabled={tdSaving}
+                className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-extrabold text-[13px] rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+              >
+                {tdSaving ? <RefreshCw size={16} className="animate-spin" /> : <Tag size={16} />}
+                {tdSaving ? 'Aplicando en Beds24...' : 'Aplicar Descuento Temporal'}
+              </button>
+
+              {/* Historial de descuentos activos */}
+              {tempDiscounts.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-zinc-100">
+                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block">
+                    Historial de descuentos aplicados
+                  </span>
+                  {tempDiscounts.map((d: any) => (
+                    <div key={d.id} className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex items-start justify-between gap-3">
+                      <div className="space-y-0.5 text-[11.5px]">
+                        <p className="font-extrabold text-zinc-900">{d.label}</p>
+                        <p className="text-zinc-500 font-semibold">{d.roomNames}</p>
+                        <p className="text-zinc-500">
+                          📅 {d.from} → {d.to} · 
+                          <span className="text-indigo-700 font-bold"> ${Number(d.priceHuesped).toLocaleString('es-MX')} MXN</span>
+                        </p>
+                        <p className="text-zinc-400 text-[10px]">Aplicado: {new Date(d.appliedAt).toLocaleString('es-MX')}</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteTempDiscount(d.id)}
+                        disabled={tdDeleting === d.id}
+                        title="Eliminar del historial"
+                        className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-500 border border-red-200 transition-all cursor-pointer shrink-0"
+                      >
+                        {tdDeleting === d.id ? <RefreshCw size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Header */}
           <div className="flex items-center justify-between">
