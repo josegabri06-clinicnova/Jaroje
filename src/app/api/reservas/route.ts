@@ -240,6 +240,7 @@ export async function GET(req: Request) {
           }
 
           const totalPriceInGroup = group.reduce((sum, b) => sum + Number(b.price_estimate || b.price || 0), 0);
+          totalDepositInGroup = Math.min(totalDepositInGroup, totalPriceInGroup);
 
           // 2. Redistribuir proporcionalmente
           group.forEach((b: any) => {

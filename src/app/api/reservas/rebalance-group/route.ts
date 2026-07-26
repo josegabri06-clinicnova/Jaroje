@@ -139,6 +139,7 @@ async function performRebalance(bookingId: string) {
   group.forEach((b: any) => {
     totalPriceInGroup += Number(b.price || 0);
   });
+  totalDepositInGroup = Math.min(totalDepositInGroup, totalPriceInGroup);
 
   const results = [];
   for (const b of group) {
