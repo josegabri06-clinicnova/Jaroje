@@ -2244,7 +2244,12 @@ export default function RecepcionPage() {
   useEffect(() => {
     if (selectedReserva && selectedReserva.id === 'walkin') {
       const { totalStay } = calculateWalkinPrices(selectedReserva);
-      setPaymentAmount(totalStay.toString());
+      if (isSplitPayment) {
+        setPaymentAmount(String(Math.ceil(totalStay / 2)));
+        setPaymentAmount2(String(Math.floor(totalStay / 2)));
+      } else {
+        setPaymentAmount(totalStay.toString());
+      }
     }
   }, [
     selectedReserva?.room,
@@ -2253,8 +2258,10 @@ export default function RecepcionPage() {
     selectedReserva?.check_out,
     selectedReserva?.num_adult,
     selectedReserva?.num_child,
+    selectedReserva?.extra_guest_surcharge,
     rules,
-    groupRoomRates
+    groupRoomRates,
+    isSplitPayment
   ]);
 
   const handleUnlockPrice = () => {
@@ -6668,35 +6675,33 @@ export default function RecepcionPage() {
                                 <span>Registrar Pago (Opcional)</span>
                               </h4>
                               
-                              {selectedReserva.id !== 'walkin' && (
-                                <div className="flex items-center gap-2 mb-3 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/60 text-left">
-                                  <input
-                                    type="checkbox"
-                                    id="isSplitPayment"
-                                    checked={isSplitPayment}
-                                    onChange={e => {
-                                      const checked = e.target.checked;
-                                      setIsSplitPayment(checked);
-                                      if (checked) {
-                                        setPaymentAmount(String(Math.ceil(totalDebt / 2)));
-                                        setPaymentAmount2(String(Math.floor(totalDebt / 2)));
-                                        setPaymentMode('efectivo');
-                                        setPaymentMode2('tarjeta');
-                                      } else {
-                                        setPaymentAmount(totalDebt > 0 ? String(totalDebt) : '');
-                                        setPaymentAmount2('');
-                                        setPaymentMode(null);
-                                        setPaymentMode2(null);
-                                        setSelectedAccountId2('');
-                                      }
-                                    }}
-                                    className="w-4 h-4 text-zinc-950 border-zinc-300 rounded focus:ring-zinc-955 cursor-pointer"
-                                  />
-                                  <label htmlFor="isSplitPayment" className="text-[11px] font-extrabold text-zinc-700 cursor-pointer select-none uppercase tracking-wider">
-                                    Dividir pago (Pago Mixto)
-                                  </label>
-                                </div>
-                              )}
+                              <div className="flex items-center gap-2 mb-3 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/60 text-left">
+                                <input
+                                  type="checkbox"
+                                  id="isSplitPayment"
+                                  checked={isSplitPayment}
+                                  onChange={e => {
+                                    const checked = e.target.checked;
+                                    setIsSplitPayment(checked);
+                                    if (checked) {
+                                      setPaymentAmount(String(Math.ceil(totalDebt / 2)));
+                                      setPaymentAmount2(String(Math.floor(totalDebt / 2)));
+                                      setPaymentMode('efectivo');
+                                      setPaymentMode2('tarjeta');
+                                    } else {
+                                      setPaymentAmount(totalDebt > 0 ? String(totalDebt) : '');
+                                      setPaymentAmount2('');
+                                      setPaymentMode(null);
+                                      setPaymentMode2(null);
+                                      setSelectedAccountId2('');
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-zinc-950 border-zinc-300 rounded focus:ring-zinc-955 cursor-pointer"
+                                />
+                                <label htmlFor="isSplitPayment" className="text-[11px] font-extrabold text-zinc-700 cursor-pointer select-none uppercase tracking-wider">
+                                  Dividir pago (Pago Mixto)
+                                </label>
+                              </div>
 
                               {isSplitPayment ? (
                                 <div className="space-y-4">
