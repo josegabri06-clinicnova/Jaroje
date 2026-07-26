@@ -92,27 +92,53 @@ export async function POST(req: Request) {
     try {
       const { supabase } = require('@/lib/supabase');
       const bookingIdStr = String(booking.id || '');
-      const isLocal = Boolean(booking.isLocal) || 
-                      bookingIdStr.startsWith('loc_') || 
-                      bookingIdStr.startsWith('walkin_') || 
-                      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdStr) || 
-                      bookingIdStr.length < 7;
+      
+      // Heurística inicial de si es local
+      let isLocal = Boolean(booking.isLocal) || 
+                    bookingIdStr.startsWith('loc_') || 
+                    bookingIdStr.startsWith('walkin_') || 
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdStr) || 
+                    bookingIdStr.length < 7;
 
+      // Verificación directa en BD para mayor robustez (cubre reservas auto-sincronizadas en local_reservas con IDs numéricos)
+      try {
+        const { data: dbLocalRow } = await supabase
+          .from('local_reservas')
+          .select('id')
+          .eq('id', bookingIdStr)
+          .maybeSingle();
+        if (dbLocalRow) {
+          isLocal = true;
+        }
+      } catch (dbCheckErr) {
+        console.error("[send-template] Error verificando existencia local en Supabase:", dbCheckErr);
+      }
+
+      let dbRes;
       if (template === 'solicitud_recibida' || template === 'reservacion_confirmada') {
         if (isLocal) {
-          await supabase.from('local_reservas').update({ is_acknowledged: true }).eq('id', bookingIdStr);
+          dbRes = await supabase.from('local_reservas').update({ is_acknowledged: true }).eq('id', bookingIdStr);
         } else {
-          await supabase.from('beds24_reservations').upsert({ id: bookingIdStr, is_acknowledged: true });
+          dbRes = await supabase.from('beds24_reservations').upsert({ id: bookingIdStr, is_acknowledged: true });
         }
       } else if (template === 'ultimo_aviso') {
         if (isLocal) {
-          await supabase.from('local_reservas').update({ last_notice_sent: true, is_acknowledged: true }).eq('id', bookingIdStr);
+          dbRes = await supabase.from('local_reservas').update({ last_notice_sent: true, is_acknowledged: true }).eq('id', bookingIdStr);
         } else {
-          await supabase.from('beds24_reservations').upsert({ id: bookingIdStr, last_notice_sent: true, is_acknowledged: true });
+          dbRes = await supabase.from('beds24_reservations').upsert({ id: bookingIdStr, last_notice_sent: true, is_acknowledged: true });
         }
       }
-    } catch (dbUpdateErr) {
+
+      if (dbRes && dbRes.error) {
+        console.error("[send-template] Error de Supabase al guardar estado:", dbRes.error);
+        throw new Error(`Error en base de datos: ${dbRes.error.message || JSON.stringify(dbRes.error)}`);
+      }
+    } catch (dbUpdateErr: any) {
       console.error("[send-template] Error actualizando banderas en Supabase:", dbUpdateErr);
+      return NextResponse.json({
+        success: false,
+        error: `Estado enviado pero falló persistencia en base de datos: ${dbUpdateErr.message || dbUpdateErr}`
+      }, { status: 500 });
     }
 
     return NextResponse.json({
