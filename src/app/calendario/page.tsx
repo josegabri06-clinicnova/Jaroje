@@ -3354,44 +3354,39 @@ export default function CalendarPage() {
 
                     let statusBadge = {
                       label: 'En Casa',
-                      classes: 'bg-zinc-100 text-zinc-800 border-zinc-300 font-extrabold',
-                      dot: 'bg-zinc-400'
+                      classes: 'bg-zinc-900 text-white font-extrabold',
+                      dot: 'bg-emerald-400'
                     };
-
-                    // Verificar si la habitación tiene una salida hoy en cualquier reserva
-                    const roomCheckoutRes = reservas.find(res => {
-                      const resOut = (res.check_out || '').split('T')[0].split(' ')[0];
-                      const resRoom = getUnitDisplay(res.room_name || res.room || '');
-                      return resRoom === roomNum && resOut === todayStr && res.status !== 'cancelled';
-                    });
-
-                    if (roomCheckoutRes) {
-                      if (!roomCheckoutRes.checked_out) {
-                        statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
-                      } else {
-                        statusBadge = { label: 'Check out registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
-                      }
+                    if (r.checked_out) {
+                      statusBadge = {
+                        label: 'Check-out registrado',
+                        classes: 'bg-zinc-100 text-zinc-500 border-zinc-200 font-bold',
+                        dot: 'bg-zinc-300'
+                      };
                     } else if (cOut === todayStr) {
-                      if (!r.checked_out) {
-                        statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
-                      } else {
-                        statusBadge = { label: 'Check out registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
-                      }
-                    } else if (cIn === todayStr && !r.checked_in) {
-                      statusBadge = { label: 'Limpieza finalizada', classes: 'bg-blue-600 text-white border-blue-700 font-extrabold', dot: 'bg-white' };
+                      statusBadge = {
+                        label: 'Pendiente check-out',
+                        classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold',
+                        dot: 'bg-rose-500'
+                      };
                     } else if (r.checked_in) {
-                      const cInDate = new Date(cIn + 'T12:00:00');
-                      const tDate = new Date(todayStr + 'T12:00:00');
-                      const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
-                      const isThreeDayRoom = ['101', '102', '103', '104', '105', '106', '107', '201', '202', '203', '204', '205', '206', '401', '402'].includes(roomNum);
-                      const isDailyRoom = ['301', '302', '303', '304', '305', '306', '500', '501', '502', '503', '504', '505', '506', '507'].includes(roomNum);
-                      let reqServ = false;
-                      if (isThreeDayRoom && diffDays >= 2 && diffDays % 2 === 0) reqServ = true;
-                      else if (isDailyRoom && diffDays >= 1) reqServ = true;
-
-                      if (reqServ) {
-                        statusBadge = { label: 'Limpieza programada', classes: 'bg-amber-400 text-amber-950 border-amber-500 font-black', dot: 'bg-amber-900' };
-                      }
+                      statusBadge = {
+                        label: 'En Casa',
+                        classes: 'bg-zinc-900 text-white font-extrabold',
+                        dot: 'bg-emerald-400'
+                      };
+                    } else if (cIn === todayStr) {
+                      statusBadge = {
+                        label: 'Pendiente check-in',
+                        classes: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold',
+                        dot: 'bg-emerald-500'
+                      };
+                    } else {
+                      statusBadge = {
+                        label: 'Confirmada',
+                        classes: 'bg-blue-50 text-blue-800 border-blue-200 font-extrabold',
+                        dot: 'bg-blue-500'
+                      };
                     }
 
                     const nightsVal = r.nights || 1;

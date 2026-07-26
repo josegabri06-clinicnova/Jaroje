@@ -7712,17 +7712,39 @@ export default function RecepcionPage() {
 
                     let statusBadge = {
                       label: 'En Casa',
-                      classes: 'bg-zinc-100 text-zinc-800 border-zinc-300 font-extrabold',
-                      dot: 'bg-zinc-400'
+                      classes: 'bg-zinc-900 text-white font-extrabold',
+                      dot: 'bg-emerald-400'
                     };
-                    if (operStatus === 'salida_hoy') {
-                      statusBadge = { label: 'Pendiente check out', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
-                    } else if (operStatus === 'sucio_checkout') {
-                      statusBadge = { label: 'Check out registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
-                    } else if (operStatus === 'limpieza_programada' || isRoomStayoverServiceScheduled(roomNum, reservas, todayStr)) {
-                      statusBadge = { label: 'Limpieza programada', classes: 'bg-amber-400 text-amber-950 border-amber-500 font-black', dot: 'bg-amber-900' };
-                    } else if (operStatus === 'limpia' || operStatus === 'disponible') {
-                      statusBadge = { label: 'Limpieza finalizada', classes: 'bg-blue-600 text-white border-blue-700 font-extrabold', dot: 'bg-white' };
+                    if (r.checked_out) {
+                      statusBadge = {
+                        label: 'Check-out registrado',
+                        classes: 'bg-zinc-100 text-zinc-500 border-zinc-200 font-bold',
+                        dot: 'bg-zinc-300'
+                      };
+                    } else if (r.check_out === todayStr) {
+                      statusBadge = {
+                        label: 'Pendiente check-out',
+                        classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold',
+                        dot: 'bg-rose-500'
+                      };
+                    } else if (r.checked_in) {
+                      statusBadge = {
+                        label: 'En Casa',
+                        classes: 'bg-zinc-900 text-white font-extrabold',
+                        dot: 'bg-emerald-400'
+                      };
+                    } else if (r.check_in === todayStr) {
+                      statusBadge = {
+                        label: 'Pendiente check-in',
+                        classes: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-extrabold',
+                        dot: 'bg-emerald-500'
+                      };
+                    } else {
+                      statusBadge = {
+                        label: 'Confirmada',
+                        classes: 'bg-blue-50 text-blue-800 border-blue-200 font-extrabold',
+                        dot: 'bg-blue-500'
+                      };
                     }
 
                     const nightsVal = r.nights || 1;
