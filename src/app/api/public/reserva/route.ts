@@ -54,10 +54,10 @@ export async function GET(req: Request) {
 
       // Obtener todos los localRes de la misma fecha de checkin, mismo nombre o telefono para consolidar el total del grupo
       let localGroupPrice = Number(localRes.price || 0);
-      let localGroupDeposit = Number(localRes.deposit || 0);
       let localGroupAdult = Number(localRes.num_adult || 1);
       let localGroupChild = Number(localRes.num_child || 0);
       let localRoomNames = [`Habitación ${physicalName}`];
+      const localGroupBookings = [localRes];
 
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -77,9 +77,9 @@ export async function GET(req: Request) {
             const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
             if (samePhone || sameName) {
               localGroupPrice += Number(s.price || 0);
-              localGroupDeposit += Number(s.deposit || 0);
               localGroupAdult += Number(s.num_adult || 0);
               localGroupChild += Number(s.num_child || 0);
+              localGroupBookings.push(s);
               const siblingPhysicalName = s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : '';
               localRoomNames.push(`Habitación ${siblingPhysicalName}`);
             }
@@ -88,6 +88,16 @@ export async function GET(req: Request) {
       } catch (err) {
         console.error("Error al agrupar localRes:", err);
       }
+
+      // Calcular depósito del grupo local de forma segura
+      let localGroupDeposit = 0;
+      const nonZeroDeps = localGroupBookings.map(b => Number(b.deposit || 0)).filter((d: number) => d > 0);
+      if (nonZeroDeps.length > 0) {
+        const firstDep = nonZeroDeps[0];
+        const allSame = nonZeroDeps.every((d: number) => d === firstDep);
+        localGroupDeposit = allSame ? firstDep : nonZeroDeps.reduce((sum: number, d: number) => sum + d, 0);
+      }
+      localGroupDeposit = Math.min(localGroupDeposit, localGroupPrice);
 
       return NextResponse.json({
         success: true,
@@ -196,6 +206,8 @@ export async function GET(req: Request) {
 
             booking = {
               id: rawB.id,
+              actualPaid: actualPaid,
+              rawDeposit: rawB.deposit !== undefined ? Number(rawB.deposit) : 0,
               guest_name: `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || 'Huésped',
               room_name: resolvedRoomName,
               check_in: rawB.arrival,
@@ -232,8 +244,6 @@ export async function GET(req: Request) {
         .maybeSingle();
 
       let b24GroupPrice = Number(booking.price_estimate || booking.price || 0);
-      let b24GroupDeposit = Number(booking.deposit || 0);
-      let b24GroupBalance = Number(booking.balance || 0);
       let b24RoomNames = [booking.room_name || `Habitación ${booking.roomId}`];
 
       // rooms_detail: desglose por habitación (nombre, num_adult, num_child)
@@ -246,20 +256,19 @@ export async function GET(req: Request) {
         }
       ];
 
+      const beds24GroupBookings = [booking];
+
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
         const mainName = cleanStr(booking.guest_name || '');
-        // El objeto de Beds24 usa 'guest_phone' (ver beds24.ts línea 1029)
         const mainPhone = booking.guest_phone || booking.phone || booking.mobile || '';
         const phoneNum = mainPhone ? normalizePhone(mainPhone) : '';
 
         const siblingBeds24 = allBeds24.filter(r => {
-          // Mismo check_in y check_out, diferente ID, no cancelada
           if (r.status === 'cancelled' || r.status === 'cancelado' || r.status === '0') return false;
           if (r.check_in !== booking.check_in) return false;
           if (r.check_out !== booking.check_out) return false;
           if (String(r.id) === String(booking.id)) return false;
-          // Mismo teléfono o mismo nombre
           const rPhone = r.guest_phone || r.phone || r.mobile || '';
           const samePhone = phoneNum && rPhone && normalizePhone(rPhone) === phoneNum;
           const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
@@ -272,10 +281,9 @@ export async function GET(req: Request) {
         if (siblingBeds24.length > 0) {
           siblingBeds24.forEach(s => {
             b24GroupPrice += Number(s.price_estimate || s.price || 0);
-            b24GroupDeposit += Number(s.deposit || 0);
-            b24GroupBalance += Number(s.balance || 0);
             b24GroupAdult += Number(s.num_adult || 0);
             b24GroupChild += Number(s.num_child || 0);
+            beds24GroupBookings.push(s);
             b24RoomNames.push(s.room_name || `Habitación ${s.roomId}`);
             b24RoomsDetail.push({
               room_name: s.room_name || `Habitación ${s.roomId}`,
@@ -285,6 +293,23 @@ export async function GET(req: Request) {
             });
           });
         }
+
+        // Calcular depósito del grupo Beds24 de forma segura
+        const totalPaidFromInvoices = beds24GroupBookings.reduce((sum, b) => sum + (b.actualPaid || 0), 0);
+        let b24GroupDeposit = 0;
+        if (totalPaidFromInvoices > 0) {
+          b24GroupDeposit = totalPaidFromInvoices;
+        } else {
+          const nonZeroDeps = beds24GroupBookings.map(b => Number(b.rawDeposit || b.deposit || 0)).filter(d => d > 0);
+          if (nonZeroDeps.length > 0) {
+            const firstDep = nonZeroDeps[0];
+            const allSame = nonZeroDeps.every(d => d === firstDep);
+            b24GroupDeposit = allSame ? firstDep : nonZeroDeps.reduce((sum, d) => sum + d, 0);
+          }
+        }
+
+        b24GroupDeposit = Math.min(b24GroupDeposit, b24GroupPrice);
+        const b24GroupBalance = Math.max(0, b24GroupPrice - b24GroupDeposit);
 
         return NextResponse.json({
           success: true,
