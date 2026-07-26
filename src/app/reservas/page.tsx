@@ -1203,14 +1203,24 @@ export default function ReservasList() {
       if (json.success && json.data) {
         const sorted = json.data.map((r: any) => {
           const resIdStr = String(r.id).toLowerCase().trim();
+          const isChIn = checkinMap[resIdStr]?.status === 'checked_in';
+          const isChOut = checkinMap[resIdStr]?.status === 'checked_out';
+          const isSettled = isChIn || isChOut;
+
+          const priceVal = Number(r.price_estimate || r.price || 0);
+          const depositVal = isSettled ? priceVal : Number(r.deposit || 0);
+          const balanceVal = isSettled ? 0 : (r.balance !== undefined ? Number(r.balance) : Math.max(0, priceVal - depositVal));
+
           return {
             ...r,
-            is_checked_in: checkinMap[resIdStr]?.status === 'checked_in',
-            is_checked_out: checkinMap[resIdStr]?.status === 'checked_out',
-            is_acknowledged: Boolean(r.is_acknowledged) || checkinMap[resIdStr]?.status === 'acknowledged' || checkinMap[resIdStr]?.status === 'checked_in' || checkinMap[resIdStr]?.status === 'checked_out',
+            is_checked_in: isChIn,
+            is_checked_out: isChOut,
+            is_acknowledged: Boolean(r.is_acknowledged) || checkinMap[resIdStr]?.status === 'acknowledged' || isChIn || isChOut,
             last_notice_sent: Boolean(r.last_notice_sent),
             document_url: checkinMap[resIdStr]?.document_url,
-            transfer_receipts: transferMap[resIdStr] || []
+            transfer_receipts: transferMap[resIdStr] || [],
+            deposit: depositVal,
+            balance: balanceVal
           };
         }).sort((a: any, b: any) => 
           new Date(a.check_in).getTime() - new Date(b.check_in).getTime()

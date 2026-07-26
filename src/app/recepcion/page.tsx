@@ -2321,13 +2321,23 @@ export default function RecepcionPage() {
         setReservas(prevReservas => {
           return rj.data.map((res: any) => {
             const resIdStr = String(res.id).toLowerCase().trim();
+            const isChIn = checkinMap[resIdStr]?.status === 'checked_in';
+            const isChOut = checkinMap[resIdStr]?.status === 'checked_out';
+            const isSettled = isChIn || isChOut;
+
+            const priceVal = Number(res.price_estimate || res.price || 0);
+            const depositVal = isSettled ? priceVal : Number(res.deposit || 0);
+            const balanceVal = isSettled ? 0 : (res.balance !== undefined ? Number(res.balance) : Math.max(0, priceVal - depositVal));
+
             const alreadyCheckedIn = prevReservas.find(p => String(p.id).toLowerCase().trim() === resIdStr)?.checked_in;
             return {
               ...res,
               room: res.room_name || res.room || 'Sin asignar',
-              checked_in: alreadyCheckedIn || checkinMap[resIdStr]?.status === 'checked_in',
-              checked_out: checkinMap[resIdStr]?.status === 'checked_out',
-              dni_image: checkinMap[resIdStr]?.document_url
+              checked_in: alreadyCheckedIn || isChIn,
+              checked_out: isChOut,
+              dni_image: checkinMap[resIdStr]?.document_url,
+              deposit: depositVal,
+              balance: balanceVal
             };
           });
         });
