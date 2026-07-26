@@ -2150,7 +2150,7 @@ export default function ReservasList() {
         (r.guest_name || '').toLowerCase().includes(c)
       );
       const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-      matchTab = Boolean(r.is_acknowledged) && isDirectChannel && !isOtaBooking && (!r.deposit || Number(r.deposit) === 0);
+      matchTab = Boolean(r.is_acknowledged) && isDirectChannel && !isOtaBooking && (!r.deposit || Number(r.deposit) === 0) && Number(r.price_estimate || r.price || 0) > 0;
     }
     else if (activeTab === 'Directas') matchTab = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
     else if (activeTab === 'WhatsApp') matchTab = r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
@@ -2293,7 +2293,7 @@ export default function ReservasList() {
               (r.guest_name || '').toLowerCase().includes(c)
             );
             const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-            return Boolean(r.is_acknowledged) && isDirectChannel && !isOtaBooking && (!r.deposit || Number(r.deposit) === 0);
+            return Boolean(r.is_acknowledged) && isDirectChannel && !isOtaBooking && (!r.deposit || Number(r.deposit) === 0) && Number(r.price_estimate || r.price || 0) > 0;
           }).length;
           const porAprobarCount = activeReservas.filter(r => 
             Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending')
