@@ -24,7 +24,8 @@ import {
   Info,
   MessageSquare,
   Edit,
-  LogOut
+  LogOut,
+  ReceiptText
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -788,6 +789,122 @@ export default function PublicReservaPage() {
   const [showWifiInfo, setShowWifiInfo] = useState(false);
   const [showCancellationPolicies, setShowCancellationPolicies] = useState(false);
 
+  // Estados para Solicitud de Factura
+  const [showFacturaModal, setShowFacturaModal] = useState(false);
+  const [facturaEmail, setFacturaEmail] = useState('');
+  const [facturaCfdi, setFacturaCfdi] = useState('');
+  const [facturaNotes, setFacturaNotas] = useState('');
+  const [facturaPdf, setFacturaPdf] = useState<File | null>(null);
+  const [facturaPdfName, setFacturaPdfName] = useState('');
+  const [facturaPdfUrl, setFacturaPdfUrl] = useState<string | null>(null);
+  const [facturaSubmitting, setFacturaSubmitting] = useState(false);
+  const [facturaSuccess, setFacturaSuccess] = useState(false);
+  const [facturaError, setFacturaError] = useState('');
+  const [facturaWhatsappMsg, setFacturaWhatsappMsg] = useState('');
+
+  const CFDI_OPTIONS = [
+    'G01 - Adquisición de mercancias',
+    'G02 - Devoluciones, descuentos o bonificaciones',
+    'G03 - Gastos en general',
+    'I01 - Construcciones',
+    'I02 - Mobilario y equipo de oficina por inversiones',
+    'I03 - Equipo de transporte',
+    'I04 - Equipo de computo y accesorios',
+    'I05 - Dados, troqueles, moldes, matrices y herramental',
+    'I06 - Comunicaciones telefónicas',
+    'I07 - Comunicaciones satelitales',
+    'I08 - Otra maquinaria y equipo',
+    'D01 - Honorarios médicos, dentales y gastos hospitalarios',
+    'D02 - Gastos médicos por incapacidad o discapacidad',
+    'D03 - Gastos funerales',
+    'D04 - Donativos',
+    'D05 - Intereses reales efectivamente pagados por créditos hipotecarios (casa habitación)',
+    'D06 - Aportaciones voluntarias al SAR',
+    'D07 - Primas por seguros de gastos médicos',
+    'D08 - Gastos de transportación escolar obligatoria',
+    'D09 - Depósitos en cuentas para el ahorro, primas que tengan como base planes de pensiones',
+    'D10 - Pagos por servicios educativos (colegiaturas)',
+    'P01 - Por definir',
+    'S01 - Sin efectos fiscales',
+    'CP01 - Pagos',
+    'CN01 - Nómina'
+  ];
+
+  const handleFacturaPdfChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      setFacturaError('Solo se aceptan archivos PDF.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setFacturaError('El archivo no debe superar los 10 MB.');
+      return;
+    }
+    setFacturaPdf(file);
+    setFacturaPdfName(file.name);
+    setFacturaError('');
+  };
+
+  const handleSubmitFactura = async () => {
+    if (!facturaCfdi) { setFacturaError('Por favor selecciona el Uso del CFDI.'); return; }
+    if (!facturaEmail) { setFacturaError('Por favor ingresa tu correo electrónico.'); return; }
+    if (!facturaPdf) { setFacturaError('Por favor adjunta tu Constancia de Situación Fiscal (PDF).'); return; }
+    if (!booking) return;
+
+    setFacturaSubmitting(true);
+    setFacturaError('');
+    try {
+      // 1. Subir PDF
+      const formData = new FormData();
+      formData.append('file', facturaPdf);
+      formData.append('reservationId', String(booking.id));
+      const uploadRes = await fetch('/api/public/reserva/factura', { method: 'POST', body: formData });
+      const uploadJson = await uploadRes.json();
+      if (!uploadJson.success) throw new Error(uploadJson.error || 'Error subiendo PDF');
+
+      const pdfUrl = uploadJson.url;
+      setFacturaPdfUrl(pdfUrl);
+
+      // 2. Guardar registro en billing_requests (via el mismo endpoint con JSON)
+      await fetch('/api/public/reserva/factura', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reservationId: String(booking.id),
+          guestName: booking.guest_name,
+          roomName: booking.room_name,
+          amount: booking.deposit || booking.price || 0,
+          email: facturaEmail,
+          cfdiUse: facturaCfdi,
+          pdfUrl,
+          notes: facturaNotes
+        })
+      });
+
+      // 3. Generar mensaje de WhatsApp
+      const waMsgLines = [
+        '📑 SOLICITUD DE FACTURA',
+        '',
+        `1. Constancia: ${pdfUrl}`,
+        `2. Correo: ${facturaEmail}`,
+        `3. Uso del CFDI: ${facturaCfdi}`,
+        `4. Total pagado: $${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} MXN`,
+        `5. Habitación: ${booking.room_name}`,
+        `6. Observaciones: ${facturaNotes || '(Ninguna)'}`,
+        '',
+        '⏳ En un plazo de 48 hrs hábiles recibirás tu factura.',
+        '❌ NO REFACTURAMOS'
+      ];
+      setFacturaWhatsappMsg(encodeURIComponent(waMsgLines.join('\n')));
+      setFacturaSuccess(true);
+    } catch (err: any) {
+      setFacturaError(err.message || 'Error al enviar la solicitud. Intenta de nuevo.');
+    } finally {
+      setFacturaSubmitting(false);
+    }
+  };
+
   const changeLanguage = async (newLang: 'es' | 'en') => {
     setLang(newLang);
     if (!id) return;
@@ -1483,6 +1600,44 @@ export default function PublicReservaPage() {
           );
         })()}
 
+        {/* BOTÓN SOLICITAR FACTURA — visible cuando ya hay anticipo registrado */}
+        {!isOta && booking && Number(booking.deposit || 0) > 0 && (
+          <div className="bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
+                <ReceiptText size={20} className="text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-zinc-900 text-[13.5px] uppercase tracking-wider">
+                  {lang === 'en' ? 'Invoice Request' : 'Solicitar Factura'}
+                </h3>
+                <p className="text-[10.5px] text-zinc-500 font-medium leading-tight mt-0.5">
+                  {lang === 'en' ? 'Upload your Constancia and we will send you your CFDI in 48 hrs.' : 'Sube tu Constancia de Situación Fiscal y te enviamos tu CFDI en 48 hrs hábiles.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setFacturaEmail('');
+                setFacturaCfdi('');
+                setFacturaNotas('');
+                setFacturaPdf(null);
+                setFacturaPdfName('');
+                setFacturaPdfUrl(null);
+                setFacturaSuccess(false);
+                setFacturaError('');
+                setFacturaWhatsappMsg('');
+                setShowFacturaModal(true);
+              }}
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+            >
+              <ReceiptText size={17} />
+              {lang === 'en' ? '📄 Request Invoice' : '📄 Solicitar Factura'}
+            </button>
+            <p className="text-[9.5px] text-zinc-400 text-center mt-2 italic">❌ NO REFACTURAMOS</p>
+          </div>
+        )}
+
         {/* 6. CARACTERÍSTICAS DEL ALOJAMIENTO */}
         <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
           <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
@@ -1742,6 +1897,179 @@ export default function PublicReservaPage() {
         </div>
 
       </main>
+
+      {/* MODAL SOLICITAR FACTURA */}
+      {showFacturaModal && booking && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden max-h-[95vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-100 bg-indigo-600 text-white">
+              <div className="flex items-center gap-2.5">
+                <ReceiptText size={20} />
+                <span className="font-extrabold text-[14px] uppercase tracking-wider">
+                  {lang === 'en' ? 'Invoice Request' : 'Solicitar Factura'}
+                </span>
+              </div>
+              <button onClick={() => setShowFacturaModal(false)} className="p-1.5 rounded-full bg-white/20 hover:bg-white/30 transition-all cursor-pointer">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+              {!facturaSuccess ? (
+                <>
+                  {/* Info prellenada */}
+                  <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-1.5 text-[11.5px]">
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500 font-semibold">Habitación:</span>
+                      <span className="font-bold text-zinc-900">{booking.room_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500 font-semibold">Total pagado:</span>
+                      <span className="font-extrabold text-indigo-700">${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} MXN</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500 font-semibold">Check-in:</span>
+                      <span className="font-bold text-zinc-900">{booking.check_in}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500 font-semibold">Check-out:</span>
+                      <span className="font-bold text-zinc-900">{booking.check_out}</span>
+                    </div>
+                  </div>
+
+                  {/* Correo electrónico */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-extrabold text-zinc-700 uppercase tracking-wider block">
+                      📧 Correo electrónico *
+                    </label>
+                    <input
+                      type="email"
+                      value={facturaEmail}
+                      onChange={e => setFacturaEmail(e.target.value)}
+                      placeholder="tu@correo.com"
+                      className="w-full border border-zinc-200 rounded-xl px-3.5 py-2.5 text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Uso del CFDI */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-extrabold text-zinc-700 uppercase tracking-wider block">
+                      💼 Uso del CFDI *
+                    </label>
+                    <select
+                      value={facturaCfdi}
+                      onChange={e => setFacturaCfdi(e.target.value)}
+                      className="w-full border border-zinc-200 rounded-xl px-3.5 py-2.5 text-[12.5px] font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+                    >
+                      <option value="">-- Selecciona el uso del CFDI --</option>
+                      {CFDI_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Constancia Situación Fiscal PDF */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-extrabold text-zinc-700 uppercase tracking-wider block">
+                      📎 Constancia de Situación Fiscal (PDF) *
+                    </label>
+                    <label className={`flex items-center gap-3 w-full border-2 border-dashed rounded-xl px-4 py-3 cursor-pointer transition-all ${facturaPdfName ? 'border-emerald-300 bg-emerald-50' : 'border-zinc-200 hover:border-indigo-300 hover:bg-indigo-50/50'}`}>
+                      <Upload size={18} className={facturaPdfName ? 'text-emerald-600' : 'text-zinc-400'} />
+                      <div className="flex-1 min-w-0">
+                        {facturaPdfName ? (
+                          <span className="text-[11.5px] font-bold text-emerald-700 truncate block">{facturaPdfName}</span>
+                        ) : (
+                          <span className="text-[11.5px] font-semibold text-zinc-500">Toca aquí para seleccionar tu PDF</span>
+                        )}
+                        <span className="text-[10px] text-zinc-400 block mt-0.5">Máx. 10 MB · Solo PDF</span>
+                      </div>
+                      <input type="file" accept=".pdf,application/pdf" className="hidden" onChange={handleFacturaPdfChange} />
+                    </label>
+                  </div>
+
+                  {/* Observaciones */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-extrabold text-zinc-700 uppercase tracking-wider block">
+                      📝 Observaciones (opcional)
+                    </label>
+                    <textarea
+                      value={facturaNotes}
+                      onChange={e => setFacturaNotas(e.target.value)}
+                      placeholder="Ej: Hospedaje del 25 al 26 de julio 2026, incluir RFC en leyenda..."
+                      rows={3}
+                      className="w-full border border-zinc-200 rounded-xl px-3.5 py-2.5 text-[12.5px] font-medium focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+                    />
+                  </div>
+
+                  {/* Aviso importante */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-[10.5px] text-amber-800 font-semibold leading-relaxed">
+                    ⏳ Recibirás tu factura en un plazo de <strong>48 horas hábiles</strong> por este medio.<br />
+                    <span className="text-red-600 font-extrabold">❌ NO REFACTURAMOS.</span>
+                  </div>
+
+                  {facturaError && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-3 py-2.5 text-[11.5px] text-red-700 font-semibold">
+                      ⚠️ {facturaError}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSubmitFactura}
+                    disabled={facturaSubmitting}
+                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
+                  >
+                    {facturaSubmitting ? <Loader2 size={18} className="animate-spin" /> : <ReceiptText size={18} />}
+                    {facturaSubmitting ? 'Enviando datos...' : 'Enviar Solicitud de Factura'}
+                  </button>
+                </>
+              ) : (
+                /* ÉXITO */
+                <div className="space-y-4 py-2">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                      <Check size={32} className="text-emerald-600" />
+                    </div>
+                    <h4 className="font-extrabold text-zinc-900 text-[16px]">¡Solicitud Recibida!</h4>
+                    <p className="text-[12px] text-zinc-500 leading-relaxed">
+                      Tus datos han sido registrados correctamente. Recibirás tu factura en un plazo de <strong>48 horas hábiles.</strong>
+                    </p>
+                  </div>
+
+                  {/* Datos confirmados */}
+                  <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3.5 space-y-2 text-[11.5px]">
+                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Correo:</span><span className="font-bold text-zinc-900">{facturaEmail}</span></div>
+                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">CFDI:</span><span className="font-bold text-zinc-900">{facturaCfdi}</span></div>
+                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Habitación:</span><span className="font-bold text-zinc-900">{booking.room_name}</span></div>
+                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Monto:</span><span className="font-extrabold text-indigo-700">${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} MXN</span></div>
+                    {facturaNotes && <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Obs.:</span><span className="font-bold text-zinc-900">{facturaNotes}</span></div>}
+                  </div>
+
+                  {/* Botón WhatsApp */}
+                  <a
+                    href={`https://wa.me/529585878554?text=${facturaWhatsappMsg}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-4 bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
+                  >
+                    <MessageSquare size={18} />
+                    💬 Enviar Solicitud por WhatsApp
+                  </a>
+                  <p className="text-[10px] text-zinc-400 text-center italic">
+                    El botón abrirá WhatsApp con todos los datos de tu solicitud prellenados.
+                  </p>
+                  <button
+                    onClick={() => setShowFacturaModal(false)}
+                    className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="text-center text-zinc-500 text-[10px] mt-12 px-4 space-y-1">

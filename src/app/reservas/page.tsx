@@ -33,7 +33,7 @@ function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accou
   };
 }
 
-const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas'];
+const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas', 'Facturas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -157,6 +157,7 @@ function isReservationNew(r: any): boolean {
 export default function ReservasList() {
   const searchParams = useSearchParams();
   const [reservas, setReservas] = useState<any[]>([]);
+  const [billingRequests, setBillingRequests] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Todas');
@@ -1162,14 +1163,16 @@ export default function ReservasList() {
         }
       };
 
-      const [res, chk, acc, capRes, trData] = await Promise.all([
+      const [res, chk, acc, capRes, trData, billRes] = await Promise.all([
         fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
         supabase.from('checkins').select('*'),
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
         supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle(),
-        fetchTransferReceipts()
+        fetchTransferReceipts(),
+        supabase.from('billing_requests').select('*').order('created_at', { ascending: false })
       ]);
       const json = await res.json();
+      if (billRes.data) setBillingRequests(billRes.data);
       
       let checkinMap: Record<string, any> = {};
       if (acc.data) setAccounts(acc.data);
@@ -2354,7 +2357,85 @@ export default function ReservasList() {
       )}
 
       {/* Lista */}
-      {isLoading ? (
+      {activeTab === 'Facturas' ? (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-[13px] font-extrabold text-zinc-700 uppercase tracking-wider">
+              🧾 Solicitudes de Factura ({billingRequests.length})
+            </h3>
+          </div>
+          {billingRequests.length === 0 ? (
+            <div className="bg-white border border-dashed border-zinc-200 rounded-2xl p-10 flex flex-col items-center text-center">
+              <p className="text-[14px] font-semibold text-zinc-400">No hay solicitudes de factura aún.</p>
+            </div>
+          ) : (
+            billingRequests.map((br: any) => (
+              <div key={br.id} className="bg-white border border-zinc-200/80 rounded-2xl shadow-sm p-4 space-y-3">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-extrabold text-zinc-900 text-[13.5px]">{br.guest_name}</p>
+                    <p className="text-[11px] text-zinc-500 font-semibold mt-0.5">{br.room_name} · ID: {br.reservation_id}</p>
+                  </div>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${br.status === 'processed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                    {br.status === 'processed' ? '✅ Facturado' : '⏳ Pendiente'}
+                  </span>
+                </div>
+                {/* Datos fiscales */}
+                <div className="bg-zinc-50 rounded-xl p-3 space-y-1.5 text-[11.5px]">
+                  <div className="flex gap-2"><span className="text-zinc-500 w-24 shrink-0 font-semibold">Correo:</span><span className="font-bold text-zinc-900 break-all">{br.email}</span></div>
+                  <div className="flex gap-2"><span className="text-zinc-500 w-24 shrink-0 font-semibold">CFDI:</span><span className="font-bold text-zinc-900">{br.cfdi_use}</span></div>
+                  <div className="flex gap-2"><span className="text-zinc-500 w-24 shrink-0 font-semibold">Monto:</span><span className="font-extrabold text-indigo-700">${Number(br.amount || 0).toLocaleString('es-MX')} MXN</span></div>
+                  {br.notes && <div className="flex gap-2"><span className="text-zinc-500 w-24 shrink-0 font-semibold">Obs.:</span><span className="font-medium text-zinc-700 whitespace-pre-line">{br.notes}</span></div>}
+                  <div className="flex gap-2"><span className="text-zinc-500 w-24 shrink-0 font-semibold">Fecha:</span><span className="font-medium text-zinc-600">{new Date(br.created_at).toLocaleString('es-MX')}</span></div>
+                </div>
+                {/* Acciones */}
+                <div className="flex gap-2 flex-wrap">
+                  {br.pdf_url && (
+                    <a
+                      href={br.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] rounded-xl border border-indigo-200 transition-all"
+                    >
+                      📎 Ver Constancia (PDF)
+                    </a>
+                  )}
+                  <button
+                    onClick={() => {
+                      const text = [
+                        `Nombre: ${br.guest_name}`,
+                        `Habitación: ${br.room_name}`,
+                        `ID Reserva: ${br.reservation_id}`,
+                        `Correo: ${br.email}`,
+                        `CFDI: ${br.cfdi_use}`,
+                        `Monto: $${Number(br.amount || 0).toLocaleString('es-MX')} MXN`,
+                        `Observaciones: ${br.notes || '(Ninguna)'}`,
+                        `PDF: ${br.pdf_url}`
+                      ].join('\n');
+                      navigator.clipboard.writeText(text).catch(() => {});
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-extrabold text-[11px] rounded-xl border border-zinc-200 transition-all cursor-pointer"
+                  >
+                    📋 Copiar Datos SAT
+                  </button>
+                  {br.status !== 'processed' && (
+                    <button
+                      onClick={async () => {
+                        const { error } = await supabase.from('billing_requests').update({ status: 'processed' }).eq('id', br.id);
+                        if (!error) setBillingRequests(prev => prev.map(b => b.id === br.id ? { ...b, status: 'processed' } : b));
+                      }}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-extrabold text-[11px] rounded-xl border border-emerald-200 transition-all cursor-pointer"
+                    >
+                      ✅ Marcar como Facturado
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
             <div key={i} className="bg-white border border-zinc-200/80 rounded-2xl p-4 animate-pulse h-28" />
