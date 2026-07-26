@@ -99,6 +99,10 @@ export async function GET(req: Request) {
       }
       localGroupDeposit = Math.min(localGroupDeposit, localGroupPrice);
 
+      const isCheckedIn = checkinData?.status === 'checked_in';
+      const finalDeposit = isCheckedIn ? localGroupPrice : localGroupDeposit;
+      const finalBalance = isCheckedIn ? 0 : Math.max(0, localGroupPrice - localGroupDeposit);
+
       return NextResponse.json({
         success: true,
         data: {
@@ -108,8 +112,8 @@ export async function GET(req: Request) {
           check_in: localRes.check_in,
           check_out: localRes.check_out,
           price: localGroupPrice,
-          deposit: localGroupDeposit,
-          balance: Math.max(0, localGroupPrice - localGroupDeposit),
+          deposit: finalDeposit,
+          balance: finalBalance,
           nights,
           num_adult: localGroupAdult,
           num_child: localGroupChild,
@@ -311,6 +315,10 @@ export async function GET(req: Request) {
         b24GroupDeposit = Math.min(b24GroupDeposit, b24GroupPrice);
         const b24GroupBalance = Math.max(0, b24GroupPrice - b24GroupDeposit);
 
+        const isCheckedIn = checkinData?.status === 'checked_in';
+        const finalDeposit = isCheckedIn ? b24GroupPrice : b24GroupDeposit;
+        const finalBalance = isCheckedIn ? 0 : b24GroupBalance;
+
         return NextResponse.json({
           success: true,
           data: {
@@ -321,8 +329,8 @@ export async function GET(req: Request) {
             check_in: booking.check_in,
             check_out: booking.check_out,
             price: b24GroupPrice,
-            deposit: b24GroupDeposit,
-            balance: b24GroupBalance,
+            deposit: finalDeposit,
+            balance: finalBalance,
             nights: booking.nights,
             num_adult: b24GroupAdult,
             num_child: b24GroupChild,
