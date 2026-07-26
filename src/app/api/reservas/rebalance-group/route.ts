@@ -99,10 +99,44 @@ async function performRebalance(bookingId: string) {
     return NextResponse.json({ message: 'La reserva no pertenece a un grupo de múltiples condominios' }, { status: 200 });
   }
 
+  // Calcular el total del depósito del grupo de forma segura (evitando duplicidades de Beds24)
+  const allInvoiceItems: any[] = [];
+  const seenItemIds = new Set();
+  group.forEach((b: any) => {
+    if (b.invoiceItems && Array.isArray(b.invoiceItems)) {
+      b.invoiceItems.forEach((item: any) => {
+        if (item.id && !seenItemIds.has(String(item.id))) {
+          seenItemIds.add(String(item.id));
+          allInvoiceItems.push(item);
+        }
+      });
+    }
+  });
+
+  let totalPaidFromInvoice = 0;
+  allInvoiceItems.forEach((item: any) => {
+    const qty = Number(item.qty || 0);
+    const price = Number(item.price || 0);
+    const lineTotal = qty * price;
+    if (lineTotal < 0) {
+      totalPaidFromInvoice += Math.abs(lineTotal);
+    }
+  });
+
   let totalDepositInGroup = 0;
+  if (totalPaidFromInvoice > 0) {
+    totalDepositInGroup = totalPaidFromInvoice;
+  } else {
+    const nonZeroDeps = group.map((b: any) => Number(b.deposit || 0)).filter((d: number) => d > 0);
+    if (nonZeroDeps.length > 0) {
+      const firstDep = nonZeroDeps[0];
+      const allSame = nonZeroDeps.every((d: number) => d === firstDep);
+      totalDepositInGroup = allSame ? firstDep : nonZeroDeps.reduce((sum: number, d: number) => sum + d, 0);
+    }
+  }
+
   let totalPriceInGroup = 0;
   group.forEach((b: any) => {
-    totalDepositInGroup += Number(b.deposit || 0);
     totalPriceInGroup += Number(b.price || 0);
   });
 
@@ -117,14 +151,7 @@ async function performRebalance(bookingId: string) {
         id: Number(b.id),
         bookId: Number(b.id),
         status: 'confirmed',
-        deposit: targetDeposit,
-        invoiceItems: [
-          {
-            description: `Redistribución de anticipo grupal (Rebalanceo Jaroje)`,
-            qty: -1,
-            amount: targetDeposit
-          }
-        ]
+        deposit: targetDeposit
       }
     ];
 

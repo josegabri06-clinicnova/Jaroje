@@ -1180,6 +1180,9 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
       return {
         id: b.id || Math.random().toString(),
+        masterId: b.masterId || null,
+        actualPaid: actualPaid,
+        rawDeposit: b.deposit !== undefined ? Number(b.deposit) : 0,
         check_in: b.arrival,
         check_out: b.departure,
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',

@@ -202,6 +202,58 @@ export async function GET(req: Request) {
 
     const combined = [...mappedBookings, ...localBookings];
 
+    // --- REDISTRIBUCIÓN AUTOMÁTICA DE ANTICIPOS GRUPALES EN TIEMPO REAL ---
+    try {
+      const groupMap = new Map<string, any[]>();
+      combined.forEach((b: any) => {
+        if (b.status === 'cancelled') return;
+        const cleanStr = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+        const guestKey = cleanStr(b.guest_name);
+        let key = '';
+        if (b.masterId) {
+          key = `master_${b.masterId}`;
+        } else if (guestKey) {
+          key = `name_${guestKey}_${b.check_in}_${b.check_out}`;
+        }
+        if (key) {
+          if (!groupMap.has(key)) {
+            groupMap.set(key, []);
+          }
+          groupMap.get(key)!.push(b);
+        }
+      });
+
+      groupMap.forEach((group) => {
+        if (group.length > 1) {
+          // 1. Calcular el total del depósito del grupo de forma segura
+          const totalPaidFromInvoices = group.reduce((sum, b) => sum + (b.actualPaid || 0), 0);
+          let totalDepositInGroup = 0;
+          if (totalPaidFromInvoices > 0) {
+            totalDepositInGroup = totalPaidFromInvoices;
+          } else {
+            const nonZeroDeps = group.map(b => Number(b.rawDeposit || b.deposit || 0)).filter(d => d > 0);
+            if (nonZeroDeps.length > 0) {
+              const firstDep = nonZeroDeps[0];
+              const allSame = nonZeroDeps.every(d => d === firstDep);
+              totalDepositInGroup = allSame ? firstDep : nonZeroDeps.reduce((sum, d) => sum + d, 0);
+            }
+          }
+
+          const totalPriceInGroup = group.reduce((sum, b) => sum + Number(b.price_estimate || b.price || 0), 0);
+
+          // 2. Redistribuir proporcionalmente
+          group.forEach((b: any) => {
+            const bPrice = Number(b.price_estimate || b.price || 0);
+            const prop = totalPriceInGroup > 0 ? (bPrice / totalPriceInGroup) : (1 / group.length);
+            b.deposit = Math.round(totalDepositInGroup * prop * 100) / 100;
+            b.balance = Math.max(0, bPrice - b.deposit);
+          });
+        }
+      });
+    } catch (rebalanceErr) {
+      console.error("[Reservas GET] Error en rebalanceo automatico:", rebalanceErr);
+    }
+
     // --- DEBUG LOGGING WRITE TO WORKSPACE ---
     try {
       const { data: dbCheckins } = await supabase.from('checkins').select('*');
