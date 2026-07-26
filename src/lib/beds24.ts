@@ -1594,13 +1594,13 @@ export function calculateGroupPriceEstimate(
       extraGuestsDistributed -= roomExtraGuests;
     }
 
-    const roomPrice = calculateDirectPriceEstimate(
+    const roomPrice = getDirectTotalForStay(
       g.roomName,
-      capRules.base + roomExtraGuests,
-      0,
       g.checkIn,
       g.checkOut,
       rulesList,
+      capRules.base + roomExtraGuests,
+      0,
       capacitySettings
     );
     totalGroupPrice += roomPrice;

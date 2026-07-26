@@ -423,9 +423,6 @@ export async function POST(req: Request) {
 
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
-      if (data && data.id) {
-        await supabase.from('local_reservas').delete().eq('id', data.id);
-      }
       if (beds24Response.status === 429 || errText.includes('Credit limit exceeded')) {
         return NextResponse.json({ 
           error: '⏳ El servidor de Beds24 está temporalmente en su límite de solicitudes por minuto. Por favor, reintenta en 10 segundos.' 
@@ -444,9 +441,6 @@ export async function POST(req: Request) {
       const errorMsg = firstResult.errors 
         ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
         : firstResult.message || 'Error individual en Beds24';
-      if (data && data.id) {
-        await supabase.from('local_reservas').delete().eq('id', data.id);
-      }
       return NextResponse.json({ error: `Beds24 rechazó la reserva: ${errorMsg}` }, { status: 400 });
     }
 

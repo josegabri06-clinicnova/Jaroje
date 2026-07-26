@@ -999,6 +999,10 @@ export default function CalendarPage() {
     
     const oldPVal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
     const oldP = oldPVal.toLocaleString('es-MX');
+    
+    const price_changed = false;
+    const old_price = oldPVal;
+    const recalculated_price = oldPVal;
 
     if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá completamente congelada sin cambios.`)) {
       return;

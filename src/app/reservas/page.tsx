@@ -1071,7 +1071,7 @@ export default function ReservasList() {
 
       alert('✓ Monto declarado actualizado con éxito.');
       
-      setSelectedRes(prev => {
+      setSelectedRes((prev: any) => {
         if (!prev || !prev.transfer_receipts) return prev;
         return {
           ...prev,

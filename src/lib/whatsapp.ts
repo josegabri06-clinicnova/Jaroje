@@ -115,7 +115,7 @@ export async function sendWhatsAppTemplate(
     const lockKey = `${cleanedPhone}_${templateName}`;
     if (isGroupMessageLocked(lockKey)) {
       console.log(`[WhatsApp Deduplicador] Omitiendo mensaje duplicado para ${cleanedPhone} (plantilla: ${templateName})`);
-      return { success: true, deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador de grupo.' };
+      return { success: true, data: { deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador de grupo.' } };
     }
 
     // Resolve language preference

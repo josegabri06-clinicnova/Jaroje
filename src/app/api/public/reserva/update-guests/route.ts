@@ -311,7 +311,7 @@ export async function POST(req: Request) {
       module: 'portal_publico',
       action: 'huespedes_modificados',
       room: currentBooking.roomName || 'Beds24',
-      details: `Huésped modificó su número de personas en el portal a ${newAdults}A/${newChildren}N. Precio ajustado en Beds24 de $${currentPrice} a $${newPrice} MXN.`
+      details: `Huésped modificó su número de personas en el portal a ${newAdults}A/${newChildren}N. Precio ajustado en Beds24 de $${groupOriginalPrice} a $${newPrice} MXN.`
     }]);
 
     return NextResponse.json({
