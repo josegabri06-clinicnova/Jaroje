@@ -826,7 +826,7 @@ export interface TaxInfo {
   total: number;
 }
 
-export function extractTaxesFromInvoice(invoiceItems: any[]): TaxInfo {
+export function extractTaxesFromInvoice(invoiceItems: any[], bookingId?: string | number): TaxInfo {
   let iva = 0;
   let ish = 0;
   let otros = 0;
@@ -836,6 +836,12 @@ export function extractTaxesFromInvoice(invoiceItems: any[]): TaxInfo {
   }
 
   invoiceItems.forEach(item => {
+    if (bookingId) {
+      const itemBookingId = String(item.bookingId || item.bookId || '');
+      if (itemBookingId && itemBookingId !== String(bookingId)) {
+        return;
+      }
+    }
     const qty = Number(item.qty || 0);
     const price = Number(item.price || 0);
     const lineTotal = qty * price;
@@ -883,12 +889,18 @@ export interface OtaDetails {
   hostFee: number;
 }
 
-export function extractOtaDetails(invoiceItems: any[]): OtaDetails {
+export function extractOtaDetails(invoiceItems: any[], bookingId?: string | number): OtaDetails {
   let expectedPayout = 0;
   let hostFee = 0;
 
   if (invoiceItems && Array.isArray(invoiceItems)) {
     invoiceItems.forEach((item: any) => {
+      if (bookingId) {
+        const itemBookingId = String(item.bookingId || item.bookId || '');
+        if (itemBookingId && itemBookingId !== String(bookingId)) {
+          return;
+        }
+      }
       const desc = String(item.description || item.desc || '').toLowerCase();
       const qty = item.qty !== undefined ? Number(item.qty) : 1;
       const price = item.price !== undefined ? Number(item.price) : 0;
@@ -1137,14 +1149,18 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         ? (roomData.nombre.includes(unitName) ? roomData.nombre : `${roomData.nombre} (${unitName})`)
         : roomData.nombre;
 
-      const taxInfo = extractTaxesFromInvoice(b.invoiceItems);
-      const otaDetails = extractOtaDetails(b.invoiceItems);
+      const taxInfo = extractTaxesFromInvoice(b.invoiceItems, b.id);
+      const otaDetails = extractOtaDetails(b.invoiceItems, b.id);
 
       // Calcular pagos registrados en invoiceItems (Beds24)
       let actualPaid = 0;
       let totalInvoiceCharges = 0;
       if (b.invoiceItems && Array.isArray(b.invoiceItems)) {
         b.invoiceItems.forEach((item: any) => {
+          const itemBookingId = String(item.bookingId || item.bookId || '');
+          if (itemBookingId && itemBookingId !== String(b.id)) {
+            return;
+          }
           const qty = Number(item.qty || 0);
           const price = Number(item.price || 0);
           const lineTotal = qty * price;

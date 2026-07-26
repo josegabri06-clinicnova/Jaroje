@@ -156,6 +156,10 @@ export async function GET(req: Request) {
             let totalInvoiceCharges = 0;
             if (rawB.invoiceItems && Array.isArray(rawB.invoiceItems)) {
               rawB.invoiceItems.forEach((item: any) => {
+                const itemBookingId = String(item.bookingId || item.bookId || '');
+                if (itemBookingId && itemBookingId !== String(rawB.id)) {
+                  return;
+                }
                 const qty = Number(item.qty || 0);
                 const price = Number(item.price || 0);
                 const lineTotal = qty * price;

@@ -2707,7 +2707,7 @@ export default function RecepcionPage() {
               guestName: selectedReserva.guest_name || 'Walk-In',
               isBlock: false,
               price: room.roomTotal,
-              deposit: depositPerRoom,
+              deposit: 0,
               phone: selectedReserva.guest_phone || '',
               numAdult: room.adults,
               numChild: room.children,

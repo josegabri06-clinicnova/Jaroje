@@ -996,7 +996,12 @@ export async function PUT(req: Request) {
     if (finalPrice !== undefined) {
       updatePayload.price = finalPrice;
       // Actualizar la factura de Beds24 con el precio final (explícito o recalculado)
-      const currentItems = (currentBooking && Array.isArray(currentBooking.invoiceItems)) ? currentBooking.invoiceItems : [];
+      const currentItems = (currentBooking && Array.isArray(currentBooking.invoiceItems)) 
+        ? currentBooking.invoiceItems.filter((item: any) => {
+            const itemBookingId = String(item.bookingId || item.bookId || '');
+            return !itemBookingId || itemBookingId === String(id);
+          })
+        : [];
       const charges = currentItems.filter((item: any) => Number(item.qty || 0) > 0);
       const invoiceItemsUpdate: any[] = [];
       

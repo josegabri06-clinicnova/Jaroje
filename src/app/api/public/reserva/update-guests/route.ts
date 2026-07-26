@@ -234,17 +234,21 @@ export async function POST(req: Request) {
     const newPrice = Math.round(groupOriginalPrice + priceAdjustment);
 
     // Calcular depósitos reales hechos en la reserva para estimar saldo restante
-    let actualPaid = 0;
-    if (currentBooking.invoiceItems && Array.isArray(currentBooking.invoiceItems)) {
-      currentBooking.invoiceItems.forEach((item: any) => {
-        const qty = Number(item.qty || 0);
-        const price = Number(item.price || 0);
-        const lineTotal = qty * price;
-        if (lineTotal < 0) {
-          actualPaid += Math.abs(lineTotal);
-        }
-      });
-    }
+     let actualPaid = 0;
+     if (currentBooking.invoiceItems && Array.isArray(currentBooking.invoiceItems)) {
+       currentBooking.invoiceItems.forEach((item: any) => {
+         const itemBookingId = String(item.bookingId || item.bookId || '');
+         if (itemBookingId && itemBookingId !== String(currentBooking.id)) {
+           return;
+         }
+         const qty = Number(item.qty || 0);
+         const price = Number(item.price || 0);
+         const lineTotal = qty * price;
+         if (lineTotal < 0) {
+           actualPaid += Math.abs(lineTotal);
+         }
+       });
+     }
     const newBalance = Math.max(0, newPrice - actualPaid);
 
     // 3.3. Actualizar en Beds24
