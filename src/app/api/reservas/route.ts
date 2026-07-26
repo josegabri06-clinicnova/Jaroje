@@ -255,6 +255,20 @@ export async function GET(req: Request) {
       console.error("[Reservas GET] Error en rebalanceo automatico:", rebalanceErr);
     }
 
+    // --- REGLA DE NEGOCIO: SI EL HUÉSPED YA HIZO CHECK-IN (EN CASA), EL ADEUDO ES CERO Y EL ANTICIPO ES EL TOTAL ---
+    try {
+      combined.forEach((b: any) => {
+        const isCheckedIn = b.is_checked_in || b.status === 'checked_in' || String(b.status).toLowerCase() === 'checked_in';
+        if (isCheckedIn) {
+          const bPrice = Number(b.price_estimate || b.price || 0);
+          b.deposit = bPrice;
+          b.balance = 0;
+        }
+      });
+    } catch (overrideErr) {
+      console.error("[Reservas GET] Error al aplicar regla check-in:", overrideErr);
+    }
+
     // --- DEBUG LOGGING WRITE TO WORKSPACE ---
     try {
       const { data: dbCheckins } = await supabase.from('checkins').select('*');
