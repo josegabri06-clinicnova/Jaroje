@@ -255,18 +255,19 @@ export async function GET(req: Request) {
       console.error("[Reservas GET] Error en rebalanceo automatico:", rebalanceErr);
     }
 
-    // --- REGLA DE NEGOCIO: SI EL HUÉSPED YA HIZO CHECK-IN (EN CASA), EL ADEUDO ES CERO Y EL ANTICIPO ES EL TOTAL ---
+    // --- REGLA DE NEGOCIO: SI EL HUÉSPED HIZO CHECK-IN (EN CASA) O CHECK-OUT, EL ADEUDO ES CERO Y EL ANTICIPO ES EL TOTAL ---
     try {
       combined.forEach((b: any) => {
         const isCheckedIn = b.is_checked_in || b.status === 'checked_in' || String(b.status).toLowerCase() === 'checked_in';
-        if (isCheckedIn) {
+        const isCheckedOut = b.is_checked_out || b.status === 'checked_out' || String(b.status).toLowerCase() === 'checked_out';
+        if (isCheckedIn || isCheckedOut) {
           const bPrice = Number(b.price_estimate || b.price || 0);
           b.deposit = bPrice;
           b.balance = 0;
         }
       });
     } catch (overrideErr) {
-      console.error("[Reservas GET] Error al aplicar regla check-in:", overrideErr);
+      console.error("[Reservas GET] Error al aplicar regla check-in/out:", overrideErr);
     }
 
     // --- DEBUG LOGGING WRITE TO WORKSPACE ---

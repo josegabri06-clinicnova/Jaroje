@@ -100,8 +100,10 @@ export async function GET(req: Request) {
       localGroupDeposit = Math.min(localGroupDeposit, localGroupPrice);
 
       const isCheckedIn = checkinData?.status === 'checked_in';
-      const finalDeposit = isCheckedIn ? localGroupPrice : localGroupDeposit;
-      const finalBalance = isCheckedIn ? 0 : Math.max(0, localGroupPrice - localGroupDeposit);
+      const isCheckedOut = checkinData?.status === 'checked_out';
+      const isSettled = isCheckedIn || isCheckedOut;
+      const finalDeposit = isSettled ? localGroupPrice : localGroupDeposit;
+      const finalBalance = isSettled ? 0 : Math.max(0, localGroupPrice - localGroupDeposit);
 
       return NextResponse.json({
         success: true,
@@ -316,8 +318,10 @@ export async function GET(req: Request) {
         const b24GroupBalance = Math.max(0, b24GroupPrice - b24GroupDeposit);
 
         const isCheckedIn = checkinData?.status === 'checked_in';
-        const finalDeposit = isCheckedIn ? b24GroupPrice : b24GroupDeposit;
-        const finalBalance = isCheckedIn ? 0 : b24GroupBalance;
+        const isCheckedOut = checkinData?.status === 'checked_out';
+        const isSettled = isCheckedIn || isCheckedOut;
+        const finalDeposit = isSettled ? b24GroupPrice : b24GroupDeposit;
+        const finalBalance = isSettled ? 0 : b24GroupBalance;
 
         return NextResponse.json({
           success: true,
