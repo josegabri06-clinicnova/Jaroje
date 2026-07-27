@@ -1567,6 +1567,11 @@ export default function PublicReservaPage() {
                 </div>
               )}
 
+              <div className="bg-yellow-50 text-yellow-800 text-[10px] p-2 rounded-lg border border-yellow-250 font-mono text-left space-y-1 mb-2">
+                <div>DEBUG: show_card_payment={String(booking.portal_settings?.show_card_payment)}</div>
+                <div>SETTINGS: {JSON.stringify(booking.portal_settings)}</div>
+              </div>
+
               {/* Monto seleccionado explicito */}
               <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-3.5 text-center">
                 <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider block">{t.amountSelected}</span>
