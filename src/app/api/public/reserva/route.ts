@@ -100,7 +100,12 @@ export async function GET(req: Request) {
       if (nonZeroDeps.length > 0) {
         const firstDep = nonZeroDeps[0];
         const allSame = nonZeroDeps.every((d: number) => d === firstDep);
-        localGroupDeposit = allSame ? firstDep : nonZeroDeps.reduce((sum: number, d: number) => sum + d, 0);
+        const totalSumOfDeps = nonZeroDeps.reduce((sum: number, d: number) => sum + d, 0);
+        if (allSame && nonZeroDeps.length > 1 && totalSumOfDeps > localGroupPrice) {
+          localGroupDeposit = firstDep;
+        } else {
+          localGroupDeposit = totalSumOfDeps;
+        }
       }
       localGroupDeposit = Math.min(localGroupDeposit, localGroupPrice);
 
@@ -321,7 +326,12 @@ export async function GET(req: Request) {
           if (nonZeroDeps.length > 0) {
             const firstDep = nonZeroDeps[0];
             const allSame = nonZeroDeps.every(d => d === firstDep);
-            b24GroupDeposit = allSame ? firstDep : nonZeroDeps.reduce((sum, d) => sum + d, 0);
+            const totalSumOfDeps = nonZeroDeps.reduce((sum, d) => sum + d, 0);
+            if (allSame && nonZeroDeps.length > 1 && totalSumOfDeps > b24GroupPrice) {
+              b24GroupDeposit = firstDep;
+            } else {
+              b24GroupDeposit = totalSumOfDeps;
+            }
           }
         }
 

@@ -225,7 +225,10 @@ export async function GET(req: Request) {
 
       groupMap.forEach((group) => {
         if (group.length > 1) {
-          // 1. Calcular el total del depósito del grupo de forma segura
+          // 1. Calcular el total del precio del grupo primero
+          const totalPriceInGroup = group.reduce((sum, b) => sum + Number(b.price_estimate || b.price || 0), 0);
+
+          // 2. Calcular el total del depósito del grupo de forma segura
           const totalPaidFromInvoices = group.reduce((sum, b) => sum + (b.actualPaid || 0), 0);
           let totalDepositInGroup = 0;
           if (totalPaidFromInvoices > 0) {
@@ -235,11 +238,15 @@ export async function GET(req: Request) {
             if (nonZeroDeps.length > 0) {
               const firstDep = nonZeroDeps[0];
               const allSame = nonZeroDeps.every(d => d === firstDep);
-              totalDepositInGroup = allSame ? firstDep : nonZeroDeps.reduce((sum, d) => sum + d, 0);
+              const totalSumOfDeps = nonZeroDeps.reduce((sum, d) => sum + d, 0);
+              if (allSame && group.length > 1 && totalSumOfDeps > totalPriceInGroup) {
+                totalDepositInGroup = firstDep;
+              } else {
+                totalDepositInGroup = totalSumOfDeps;
+              }
             }
           }
 
-          const totalPriceInGroup = group.reduce((sum, b) => sum + Number(b.price_estimate || b.price || 0), 0);
           totalDepositInGroup = Math.min(totalDepositInGroup, totalPriceInGroup);
 
           // 2. Redistribuir proporcionalmente

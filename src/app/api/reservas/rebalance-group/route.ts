@@ -123,6 +123,11 @@ async function performRebalance(bookingId: string) {
     }
   });
 
+  let totalPriceInGroup = 0;
+  group.forEach((b: any) => {
+    totalPriceInGroup += Number(b.price || 0);
+  });
+
   let totalDepositInGroup = 0;
   if (totalPaidFromInvoice > 0) {
     totalDepositInGroup = totalPaidFromInvoice;
@@ -131,14 +136,15 @@ async function performRebalance(bookingId: string) {
     if (nonZeroDeps.length > 0) {
       const firstDep = nonZeroDeps[0];
       const allSame = nonZeroDeps.every((d: number) => d === firstDep);
-      totalDepositInGroup = allSame ? firstDep : nonZeroDeps.reduce((sum: number, d: number) => sum + d, 0);
+      const totalSumOfDeps = nonZeroDeps.reduce((sum: number, d: number) => sum + d, 0);
+      if (allSame && group.length > 1 && totalSumOfDeps > totalPriceInGroup) {
+        totalDepositInGroup = firstDep;
+      } else {
+        totalDepositInGroup = totalSumOfDeps;
+      }
     }
   }
 
-  let totalPriceInGroup = 0;
-  group.forEach((b: any) => {
-    totalPriceInGroup += Number(b.price || 0);
-  });
   totalDepositInGroup = Math.min(totalDepositInGroup, totalPriceInGroup);
 
   const results = [];
