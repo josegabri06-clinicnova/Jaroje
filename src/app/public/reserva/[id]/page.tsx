@@ -1576,7 +1576,7 @@ export default function PublicReservaPage() {
               </div>
 
               {/* Método 1: Tarjeta */}
-              {(booking.portal_settings?.show_card_payment === true) && (
+              {(booking.portal_settings?.show_card_payment !== false) && (
                 <>
                   <div className="space-y-2">
                     <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">{t.optionCard}</span>
