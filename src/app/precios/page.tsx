@@ -315,8 +315,23 @@ export default function PreciosPage() {
       );
       const { error } = await sb.from('settings').upsert({ key: 'season_ranges', value: rangesToSave }, { onConflict: 'key' });
       if (error) throw error;
-      alert('✅ Fechas de temporadas actualizadas con éxito.');
       setSeasonRanges(rangesToSave);
+
+      const doSync = window.confirm(
+        '✅ Fechas de temporadas actualizadas con éxito en la base de datos.\n\n' +
+        '¿Desea sincronizar ahora mismo todo el calendario de Beds24 para aplicar estas nuevas fechas a las tarifas del hotel? (Recomendado, tardará unos 5 segundos)'
+      );
+
+      if (doSync) {
+        const syncRes = await fetch('/api/precios/sync?t=' + Date.now());
+        const syncJson = await syncRes.json();
+        if (syncJson.success) {
+          alert('✅ Sincronización completada. El calendario de Beds24 ha sido actualizado con las nuevas fechas de temporada.');
+        } else {
+          alert('⚠️ Las fechas se guardaron, pero ocurrió un error al sincronizar con Beds24: ' + syncJson.error);
+        }
+      }
+      
       loadBeds24Prices();
     } catch (err: any) {
       alert('Error al guardar temporadas: ' + err.message);

@@ -18,15 +18,25 @@ const ROOM_GROUPS = [
   { parentId: '685542', childIds: ['685542'] }
 ];
 
+export async function GET(req: Request) {
+  return handleSync(req, false);
+}
+
 export async function POST(req: Request) {
+  return handleSync(req, true);
+}
+
+async function handleSync(req: Request, checkAuth: boolean) {
   try {
-    // Validar token de seguridad de Cron si está configurado en las variables de entorno
-    const cronSecret = process.env.CRON_SECRET;
-    if (cronSecret) {
-      const authHeader = req.headers.get('authorization') || '';
-      const providedToken = authHeader.replace(/^bearer\s+/i, '').trim() || req.headers.get('x-cron-secret') || '';
-      if (providedToken !== cronSecret) {
-        return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 });
+    if (checkAuth) {
+      // Validar token de seguridad de Cron si está configurado en las variables de entorno
+      const cronSecret = process.env.CRON_SECRET;
+      if (cronSecret) {
+        const authHeader = req.headers.get('authorization') || '';
+        const providedToken = authHeader.replace(/^bearer\s+/i, '').trim() || req.headers.get('x-cron-secret') || '';
+        if (providedToken !== cronSecret) {
+          return NextResponse.json({ success: false, error: 'No autorizado' }, { status: 401 });
+        }
       }
     }
 
