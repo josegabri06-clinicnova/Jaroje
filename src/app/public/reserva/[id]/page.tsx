@@ -1215,7 +1215,7 @@ export default function PublicReservaPage() {
 
         {/* 1. BARRA DE PROGRESO */}
         {currentState === 'liberada' ? (
-          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 text-center shadow-sm">
+          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 text-center shadow-sm space-y-4">
             <div className="w-12 h-12 bg-rose-105 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 border border-rose-100">
               <AlertTriangle size={24} />
             </div>
@@ -1223,6 +1223,28 @@ export default function PublicReservaPage() {
               {lang === 'en' ? 'Availability Released' : 'Disponibilidad Liberada'}
             </h3>
             <p className="text-rose-700 text-xs mt-1.5 leading-relaxed">{statusMessage}</p>
+
+            {/* Botón Reservar Nuevamente */}
+            <div className="pt-1 border-t border-rose-100">
+              <p className="text-[11px] text-rose-600 font-semibold mb-2.5">
+                {lang === 'en'
+                  ? '¿Would you like to book again with us?'
+                  : '¿Te gustaría hospedarte nuevamente con nosotros?'}
+              </p>
+              <a
+                href="https://jaroje.beds24.com/v2/booking"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[13px] rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
+              >
+                🏨 {lang === 'en' ? 'Book Again' : 'Reservar Nuevamente'}
+              </a>
+              <p className="text-[10px] text-rose-500 mt-2 italic">
+                {lang === 'en'
+                  ? 'Check availability and rates directly on our booking page.'
+                  : 'Consulta disponibilidad y tarifas directamente en nuestra página de reservas.'}
+              </p>
+            </div>
           </div>
         ) : (
           <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4 overflow-hidden relative">
