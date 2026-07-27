@@ -454,7 +454,11 @@ export default function AdminDashboard() {
   };
 
   const handleCopyDailyReport = async () => {
+    // Abrir la pestaña de inmediato para evitar el bloqueo del navegador
+    const waWindow = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+
     if (reservas.length === 0) {
+      if (waWindow) waWindow.close();
       alert("No hay datos de reservaciones cargados para generar el reporte.");
       return;
     }
@@ -610,7 +614,11 @@ export default function AdminDashboard() {
       alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
     });
 
-    window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+    if (waWindow) {
+      waWindow.location.href = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0';
+    } else {
+      window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+    }
   };
 
   const fetchAllRef = useRef(fetchAll);

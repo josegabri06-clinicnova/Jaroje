@@ -669,6 +669,11 @@ export default function RecepcionPage() {
 
   const handleSaveNotesOnly = async () => {
     if (!selectedReserva) return;
+    
+    // Abrir la pestaña de inmediato para evitar el bloqueo del navegador al redirigir después de llamadas asíncronas
+    const newNoteText = (editedNotes || '').trim();
+    const waWindow = newNoteText && typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+
     setSavingNotesOnly(true);
     try {
       const res = await fetch('/api/reservas', {
@@ -706,12 +711,18 @@ export default function RecepcionPage() {
           await navigator.clipboard.writeText(waText);
         } catch (e) {}
 
-        window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+        if (waWindow) {
+          waWindow.location.href = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0';
+        } else {
+          window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+        }
         alert('✅ Observación guardada con éxito.\n📋 ¡Reporte copiado! Abriendo grupo de WhatsApp Recepción...');
       } else {
+        if (waWindow) waWindow.close();
         alert('✅ Observación borrada con éxito.');
       }
     } catch (err: any) {
+      if (waWindow) waWindow.close();
       alert(`⚠️ ${err.message || 'Error al guardar observación'}`);
     } finally {
       setSavingNotesOnly(false);
