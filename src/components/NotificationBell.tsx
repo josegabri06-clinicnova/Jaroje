@@ -938,7 +938,25 @@ export function NotificationBell() {
                       )}
                       {task.image_base64 && (
                         <div style={{ paddingLeft: 38, marginBottom: 10 }}>
-                          <img src={task.image_base64} alt="Foto incidencia" style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12, border: '1px solid #e4e4e7' }} />
+                          {(() => {
+                            const val = task.image_base64.trim();
+                            let firstImage = val;
+                            if (val.startsWith('[') && val.endsWith(']')) {
+                              try {
+                                const parsed = JSON.parse(val);
+                                if (Array.isArray(parsed) && parsed.length > 0) {
+                                  firstImage = parsed[0];
+                                }
+                              } catch (e) {}
+                            }
+                            return (
+                              <img 
+                                src={firstImage} 
+                                alt="Foto incidencia" 
+                                style={{ width: '100%', maxHeight: 200, objectFit: 'cover', borderRadius: 12, border: '1px solid #e4e4e7' }} 
+                              />
+                            );
+                          })()}
                         </div>
                       )}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)' }}>

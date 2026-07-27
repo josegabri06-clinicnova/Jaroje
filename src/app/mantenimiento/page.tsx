@@ -16,6 +16,32 @@ import { getActiveEmployee } from '@/lib/auth';
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
+const getTaskImages = (t: Task | null | undefined): string[] => {
+  if (!t) return [];
+  const list: string[] = [];
+  if (t.photo_url && t.photo_url !== 'null' && t.photo_url.trim() !== '') {
+    list.push(t.photo_url);
+  }
+  if (t.image_base64 && t.image_base64 !== 'null' && t.image_base64.trim() !== '') {
+    const val = t.image_base64.trim();
+    if (val.startsWith('[') && val.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed)) {
+          list.push(...parsed);
+        } else {
+          list.push(val);
+        }
+      } catch (e) {
+        list.push(val);
+      }
+    } else {
+      list.push(val);
+    }
+  }
+  return list;
+};
+
 
 interface Task {
   id: string;
@@ -1210,18 +1236,29 @@ export default function MantenimientoPage() {
                 </div>
               )}
 
-              {(editingTask?.photo_url || editingTask?.image_base64) && (
+              {getTaskImages(editingTask).length > 0 && (
                 <div>
                   <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto Original</label>
-                  {(() => {
-                    const srcUrl = editingTask.photo_url || editingTask.image_base64 || '';
-                    const isBase64 = srcUrl.startsWith('data:');
-                    return (
-                      <a href={isBase64 ? undefined : srcUrl} target="_blank" rel="noreferrer" className={isBase64 ? '' : 'cursor-pointer'}>
-                        <img src={srcUrl} alt="Incidencia" className="w-full h-32 object-cover rounded-xl border border-zinc-200" />
-                      </a>
-                    );
-                  })()}
+                  <div className="grid grid-cols-2 gap-2">
+                    {getTaskImages(editingTask).map((srcUrl, idx) => {
+                      const isBase64 = srcUrl.startsWith('data:');
+                      return (
+                        <a 
+                          key={idx}
+                          href={isBase64 ? undefined : srcUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className={isBase64 ? '' : 'cursor-pointer'}
+                        >
+                          <img 
+                            src={srcUrl} 
+                            alt={`Incidencia ${idx + 1}`} 
+                            className="w-full h-24 object-cover rounded-xl border border-zinc-200" 
+                          />
+                        </a>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
 
@@ -1505,22 +1542,29 @@ export default function MantenimientoPage() {
               </div>
 
               {/* Foto si existe */}
-              {(selectedTaskForDetails.photo_url || selectedTaskForDetails.image_base64) && (
+              {getTaskImages(selectedTaskForDetails).length > 0 && (
                 <div className="space-y-2 pt-2">
                   <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Evidencia Fotográfica</span>
-                  {(() => {
-                    const srcUrl = selectedTaskForDetails.photo_url || selectedTaskForDetails.image_base64 || '';
-                    const isBase64 = srcUrl.startsWith('data:');
-                    return (
-                      <a href={isBase64 ? undefined : srcUrl} target="_blank" rel="noreferrer" className={`block overflow-hidden rounded-2xl border border-zinc-200 ${isBase64 ? '' : 'hover:opacity-95 transition-opacity'}`}>
-                        <img 
-                          src={srcUrl} 
-                          alt="Evidencia inicial" 
-                          className="w-full h-48 object-cover"
-                        />
-                      </a>
-                    );
-                  })()}
+                  <div className="grid grid-cols-1 gap-3">
+                    {getTaskImages(selectedTaskForDetails).map((srcUrl, idx) => {
+                      const isBase64 = srcUrl.startsWith('data:');
+                      return (
+                        <a 
+                          key={idx}
+                          href={isBase64 ? undefined : srcUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className={`block overflow-hidden rounded-2xl border border-zinc-200 ${isBase64 ? '' : 'hover:opacity-95 transition-opacity'}`}
+                        >
+                          <img 
+                            src={srcUrl} 
+                            alt={`Evidencia inicial ${idx + 1}`} 
+                            className="w-full h-48 object-cover"
+                          />
+                        </a>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>
