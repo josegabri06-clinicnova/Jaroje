@@ -2054,10 +2054,6 @@ export default function PublicReservaPage() {
                     <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
                       <Check size={32} className="text-emerald-600" />
                     </div>
-                    <h4 className="font-extrabold text-zinc-900 text-[16px]">¡Solicitud Recibida!</h4>
-                    <p className="text-[12px] text-zinc-500 leading-relaxed">
-                      Tus datos han sido registrados correctamente. Recibirás tu factura en un plazo de <strong>48 horas hábiles.</strong>
-                    </p>
                   </div>
 
                   {/* Datos confirmados */}
@@ -2079,9 +2075,16 @@ export default function PublicReservaPage() {
                     <MessageSquare size={18} />
                     💬 Enviar Solicitud por WhatsApp
                   </a>
-                  <p className="text-[10px] text-zinc-400 text-center italic">
-                    El botón abrirá WhatsApp con todos los datos de tu solicitud prellenados.
-                  </p>
+                  
+                  <div className="space-y-1.5 text-center">
+                    <p className="text-[12px] text-zinc-800 font-bold">
+                      Recibirás tu factura en un plazo de 48 horas hábiles.
+                    </p>
+                    <p className="text-[10px] text-zinc-400 italic">
+                      El botón abrirá WhatsApp con todos los datos de tu solicitud prellenados.
+                    </p>
+                  </div>
+
                   <button
                     onClick={() => setShowFacturaModal(false)}
                     className="w-full py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-extrabold text-sm rounded-xl transition-all cursor-pointer"
