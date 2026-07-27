@@ -52,6 +52,11 @@ export async function GET(req: Request) {
         .eq('booking_id', String(bookingId))
         .maybeSingle();
 
+      try {
+        const fs = require('fs');
+        fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[GET PUBLIC LOCAL] bookingId=${bookingId} db_show_card_payment=${portalSettings?.show_card_payment} (typeof=${typeof portalSettings?.show_card_payment}) map_value=${portalSettings?.show_card_payment !== false} time=${new Date().toISOString()}\n`);
+      } catch (logErr) {}
+
       // Obtener todos los localRes de la misma fecha de checkin, mismo nombre o telefono para consolidar el total del grupo
       let localGroupPrice = Number(localRes.price || 0);
       let localGroupAdult = Number(localRes.num_adult || 1);
@@ -248,6 +253,11 @@ export async function GET(req: Request) {
         .select('show_card_payment, transfer_account, language, notes')
         .eq('booking_id', String(bookingId))
         .maybeSingle();
+
+      try {
+        const fs = require('fs');
+        fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[GET PUBLIC BEDS24] bookingId=${bookingId} db_show_card_payment=${portalSettings?.show_card_payment} (typeof=${typeof portalSettings?.show_card_payment}) map_value=${portalSettings?.show_card_payment !== false} time=${new Date().toISOString()}\n`);
+      } catch (logErr) {}
 
       let b24GroupPrice = Number(booking.price_estimate || booking.price || 0);
       let b24RoomNames = [booking.room_name || `Habitación ${booking.roomId}`];

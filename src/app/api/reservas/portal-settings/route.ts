@@ -29,6 +29,10 @@ export async function PATCH(req: Request) {
 
     if (error) {
       console.error('[portal-settings PATCH] Supabase error:', error);
+      try {
+        const fs = require('fs');
+        fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[PATCH ERROR] bookingId=${bookingId} error=${JSON.stringify(error)}\n`);
+      } catch (logErr) {}
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
@@ -39,9 +43,18 @@ export async function PATCH(req: Request) {
       .eq('booking_id', String(bookingId))
       .maybeSingle();
 
+    try {
+      const fs = require('fs');
+      fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[PATCH SUCCESS] bookingId=${bookingId} input_showCardPayment=${showCardPayment} saved_show_card_payment=${saved?.show_card_payment} (typeof=${typeof saved?.show_card_payment}) time=${new Date().toISOString()}\n`);
+    } catch (logErr) {}
+
     return NextResponse.json({ success: true, saved });
   } catch (e: any) {
     console.error('[portal-settings PATCH] Error:', e);
+    try {
+      const fs = require('fs');
+      fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[PATCH FATAL] error=${e.message}\n`);
+    } catch (logErr) {}
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
