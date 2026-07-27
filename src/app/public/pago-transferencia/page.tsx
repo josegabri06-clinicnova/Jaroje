@@ -542,7 +542,7 @@ export default function PagoTransferenciaPage() {
             <HelpCircle size={13} />
             {t.needHelp}
             <a 
-              href="https://wa.me/529585878554" 
+              href="https://wa.me/529581168698" 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-zinc-650 hover:text-zinc-800 underline transition-colors"

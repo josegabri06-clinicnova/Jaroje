@@ -1061,7 +1061,7 @@ export default function PublicReservaPage() {
           {error || (lang === 'en' ? 'The requested reservation does not exist or has been cancelled.' : 'La reservación solicitada no existe o ha sido cancelada.')}
         </p>
         <a
-          href="https://wa.me/529585878554"
+          href="https://wa.me/529581168698"
           target="_blank"
           rel="noopener noreferrer"
           className="bg-indigo-600 text-white font-bold text-sm py-3 px-6 rounded-xl shadow-md hover:bg-indigo-700 transition-all cursor-pointer"
@@ -1886,7 +1886,7 @@ export default function PublicReservaPage() {
         {/* 10. BOTONES DE ACCIÓN FINAL */}
         <div className="pt-2 flex flex-col gap-2.5">
           <a
-            href="https://wa.me/529585878554"
+            href="https://wa.me/529581168698"
             target="_blank"
             rel="noopener noreferrer"
             className="w-full bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm py-4 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
@@ -2067,7 +2067,7 @@ export default function PublicReservaPage() {
 
                   {/* Botón WhatsApp */}
                   <a
-                    href={`https://wa.me/529585878554?text=${facturaWhatsappMsg}`}
+                    href={`https://wa.me/529581168698?text=${facturaWhatsappMsg}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full py-4 bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer text-center"
