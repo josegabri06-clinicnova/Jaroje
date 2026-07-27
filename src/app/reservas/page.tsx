@@ -365,6 +365,7 @@ export default function ReservasList() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Error al guardar');
+      alert("DEBUG SAVE: " + JSON.stringify(json));
       setPortalShowCardPayment(showCard);
       setPortalTransferAccount(account);
       setPortalLanguage(languageCode);
