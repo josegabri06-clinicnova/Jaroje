@@ -46,7 +46,7 @@ export async function GET(req: Request) {
         .maybeSingle();
 
       // Obtener settings de pago
-      const { data: portalSettings } = await supabase
+      const { data: portalSettings, error: portalSettingsError } = await supabase
         .from('booking_portal_settings')
         .select('show_card_payment, transfer_account, language, notes')
         .eq('booking_id', String(bookingId))
@@ -135,7 +135,8 @@ export async function GET(req: Request) {
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment !== false,
             transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
-            language: portalSettings?.language || detectLanguageFromPhone(localRes.phone)
+            language: portalSettings?.language || detectLanguageFromPhone(localRes.phone),
+            db_error: portalSettingsError?.message || null
           }
         }
       }, { headers: { 'Cache-Control': 'no-store' } });
@@ -248,7 +249,7 @@ export async function GET(req: Request) {
         .eq('reservation_id', String(bookingId))
         .maybeSingle();
 
-      const { data: portalSettings } = await supabase
+      const { data: portalSettings, error: portalSettingsError } = await supabase
         .from('booking_portal_settings')
         .select('show_card_payment, transfer_account, language, notes')
         .eq('booking_id', String(bookingId))
@@ -359,7 +360,8 @@ export async function GET(req: Request) {
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment !== false,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
-              language: portalSettings?.language || detectLanguageFromPhone(booking.guest_phone || booking.phone || booking.mobile)
+              language: portalSettings?.language || detectLanguageFromPhone(booking.guest_phone || booking.phone || booking.mobile),
+              db_error: portalSettingsError?.message || null
             }
           }
         }, { headers: { 'Cache-Control': 'no-store' } });

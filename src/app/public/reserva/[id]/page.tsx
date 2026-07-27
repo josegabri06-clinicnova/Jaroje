@@ -1569,6 +1569,7 @@ export default function PublicReservaPage() {
 
               <div className="bg-yellow-50 text-yellow-800 text-[10px] p-2 rounded-lg border border-yellow-250 font-mono text-left space-y-1 mb-2">
                 <div>DEBUG: show_card_payment={String(booking.portal_settings?.show_card_payment)}</div>
+                <div>DB_ERROR: {String(booking.portal_settings?.db_error || 'none')}</div>
                 <div>SETTINGS: {JSON.stringify(booking.portal_settings)}</div>
               </div>
 
