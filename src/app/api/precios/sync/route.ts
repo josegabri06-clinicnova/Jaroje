@@ -40,8 +40,8 @@ async function handleSync(req: Request, checkAuth: boolean) {
       }
     }
 
-    // 1. Obtener reglas y rangos de temporadas de Supabase
-    const [{ data: rules, error: rulesErr }, { data: seasonRow }] = await Promise.all([
+    // 1. Obtener reglas, rangos de temporadas y descuentos temporales de Supabase
+    const [{ data: rules, error: rulesErr }, { data: seasonRow }, { data: discountRow }] = await Promise.all([
       supabase
         .from('pricing_rules')
         .select('*')
@@ -50,6 +50,11 @@ async function handleSync(req: Request, checkAuth: boolean) {
         .from('settings')
         .select('value')
         .eq('key', 'season_ranges')
+        .maybeSingle(),
+      supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'temp_discounts')
         .maybeSingle()
     ]);
 
@@ -61,6 +66,12 @@ async function handleSync(req: Request, checkAuth: boolean) {
       ? (typeof seasonRow.value === 'string'
           ? JSON.parse(seasonRow.value)
           : seasonRow.value)
+      : [];
+
+    const tempDiscounts = discountRow?.value
+      ? (typeof discountRow.value === 'string'
+          ? JSON.parse(discountRow.value)
+          : discountRow.value)
       : [];
 
     // 2. Definir ventana de 540 días a partir de hoy
@@ -104,9 +115,19 @@ async function handleSync(req: Request, checkAuth: boolean) {
             r.rule_type === 'base'
           );
 
+          // 1. Verificar si hay un descuento temporal activo para este cuarto y fecha
+          const activeDiscount = tempDiscounts.find((d: any) => 
+            Array.isArray(d.rooms) && 
+            d.rooms.includes(group.parentId) && 
+            dateStr >= d.from && 
+            dateStr <= d.to
+          );
+
           let priceUsed = 0;
           if (specialRule) {
             priceUsed = Number(specialRule.price);
+          } else if (activeDiscount) {
+            priceUsed = Number(activeDiscount.priceRaw);
           } else if (seasonalRule) {
             priceUsed = Number(seasonalRule.price);
           } else {

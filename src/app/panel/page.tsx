@@ -528,15 +528,22 @@ export default function AdminDashboard() {
     // --- TARIFAS ESTACIONALES DINÁMICAS ---
     const todayISO = getLocalDateStr(new Date());
     let seasonRanges: any[] = [];
+    let tempDiscounts: any[] = [];
     try {
       const { createClient } = await import('@supabase/supabase-js');
       const sb = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
       );
-      const { data } = await sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle();
-      if (data?.value) {
-        seasonRanges = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+      const [seasonRes, discountsRes] = await Promise.all([
+        sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
+        sb.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle()
+      ]);
+      if (seasonRes.data?.value) {
+        seasonRanges = typeof seasonRes.data.value === 'string' ? JSON.parse(seasonRes.data.value) : seasonRes.data.value;
+      }
+      if (discountsRes.data?.value) {
+        tempDiscounts = typeof discountsRes.data.value === 'string' ? JSON.parse(discountsRes.data.value) : discountsRes.data.value;
       }
     } catch (e) {
       console.error(e);
@@ -596,13 +603,34 @@ export default function AdminDashboard() {
       console.warn("No se pudieron cargar tarifas de Ajustes, usando fallback:", e);
     }
 
+    const getActiveDiscountForToday = (roomId: string) => {
+      if (!Array.isArray(tempDiscounts)) return null;
+      return tempDiscounts.find(d => 
+        Array.isArray(d.rooms) && 
+        d.rooms.includes(roomId) && 
+        todayISO >= d.from && 
+        todayISO <= d.to
+      );
+    };
+
+    const formatPriceLine = (name: string, roomId: string, activePrice: number, basePrice: number) => {
+      const activeDisc = getActiveDiscountForToday(roomId);
+      if (activeDisc) {
+        return `• ${name}: $${activeDisc.priceHuesped} (Con Descuento - Reg: $${basePrice})`;
+      }
+      if (activePrice < basePrice) {
+        return `• ${name}: $${activePrice} (Con Descuento - Reg: $${basePrice})`;
+      }
+      return `• ${name}: $${activePrice}`;
+    };
+
     const label = seasonLabels[currentSeason] || 'MEDIA-ALTA';
     text += `💰 *TARIFA TEMP ${label}*\n`;
-    text += `• Habitación doble: $${doublePrice}\n`;
-    text += `• Condominio 1 dormitorio: $${cond1Price}\n`;
-    text += `• Condominio 2 dormitorios: $${cond2Price}\n`;
-    text += `• Condominio 3 dormitorios: $${cond3Price}\n`;
-    text += `• Casa vacacional: $${casaPrice}\n\n`;
+    text += formatPriceLine('Habitación doble', '679077', doublePrice, fallbacks.double) + '\n';
+    text += formatPriceLine('Condominio 1 dormitorio', '679087', cond1Price, fallbacks.cond1) + '\n';
+    text += formatPriceLine('Condominio 2 dormitorios', '679091', cond2Price, fallbacks.cond2) + '\n';
+    text += formatPriceLine('Condominio 3 dormitorios', '679092', cond3Price, fallbacks.cond3) + '\n';
+    text += formatPriceLine('Casa vacacional', '679093', casaPrice, fallbacks.casa) + '\n\n';
 
     text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
 
