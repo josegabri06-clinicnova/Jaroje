@@ -191,6 +191,7 @@ export default function ReservasList() {
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(0);
   const [sendingTemplate, setSendingTemplate] = useState<boolean>(false);
   const [showGuestPortalIframe, setShowGuestPortalIframe] = useState<string | null>(null);
+  const [portalIframeKey, setPortalIframeKey] = useState(0);
 
   // Estados para edición de reserva (Admin)
   const [isEditingRes, setIsEditingRes] = useState(false);
@@ -365,6 +366,8 @@ export default function ReservasList() {
       setPortalTransferAccount(account);
       setPortalLanguage(languageCode);
       setPortalMuteNotifications(mute);
+      // Forzar recarga del iframe de vista previa
+      setPortalIframeKey(prev => prev + 1);
     } catch (e: any) {
       console.error("Error updating portal settings:", e);
       alert("Error al actualizar la configuración del portal.");
@@ -2616,7 +2619,7 @@ export default function ReservasList() {
               <div className="flex items-center gap-2">
                 {userRole === 'admin' && selectedRes.id !== 'walkin' && (
                   <button
-                    onClick={() => setShowGuestPortalIframe(String(selectedRes.id))}
+                   onClick={() => { setShowGuestPortalIframe(String(selectedRes.id)); setPortalIframeKey(prev => prev + 1); }}
                     className="px-2.5 py-1 text-[11px] font-extrabold text-blue-700 bg-blue-50 border border-blue-150 hover:bg-blue-100 rounded-lg transition-all flex items-center gap-1 cursor-pointer select-none"
                   >
                     🌐 Portal
@@ -4758,7 +4761,8 @@ export default function ReservasList() {
             {/* Iframe */}
             <div className="flex-1 w-full bg-white relative">
               <iframe
-                src={`/public/reserva/${showGuestPortalIframe}`}
+                key={portalIframeKey}
+                src={`/public/reserva/${showGuestPortalIframe}?t=${portalIframeKey}`}
                 className="w-full h-full border-none"
                 title="Vista previa del portal"
               />
