@@ -618,13 +618,13 @@ export default function AdminDashboard() {
       if (activeDisc) {
         const isIncrease = activeDisc.priceHuesped > basePrice;
         const typeLabel = isIncrease ? 'Aumento' : 'Con Descuento';
-        return `• ${name}: $${activeDisc.priceHuesped} (${typeLabel} - Reg: $${basePrice})`;
+        return `• ${name}: *$${activeDisc.priceHuesped}* (${typeLabel} - Reg: $${basePrice})`;
       }
       if (activePrice < basePrice) {
-        return `• ${name}: $${activePrice} (Con Descuento - Reg: $${basePrice})`;
+        return `• ${name}: *$${activePrice}* (Con Descuento - Reg: $${basePrice})`;
       }
       if (activePrice > basePrice) {
-        return `• ${name}: $${activePrice} (Aumento - Reg: $${basePrice})`;
+        return `• ${name}: *$${activePrice}* (Aumento - Reg: $${basePrice})`;
       }
       return `• ${name}: $${activePrice}`;
     };
