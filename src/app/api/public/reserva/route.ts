@@ -128,7 +128,7 @@ export async function GET(req: Request) {
           booking_time: localRes.created_at || null,
           channel: 'Directo',
           portal_settings: {
-            show_card_payment: portalSettings?.show_card_payment ?? true,
+            show_card_payment: portalSettings?.show_card_payment === true,
             transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
             language: portalSettings?.language || detectLanguageFromPhone(localRes.phone)
           }
@@ -347,7 +347,7 @@ export async function GET(req: Request) {
             booking_time: booking.booking_time || null,
             channel: booking.channel || 'Directo',
             portal_settings: {
-              show_card_payment: portalSettings?.show_card_payment ?? true,
+              show_card_payment: portalSettings?.show_card_payment === true,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
               language: portalSettings?.language || detectLanguageFromPhone(booking.guest_phone || booking.phone || booking.mobile)
             }
