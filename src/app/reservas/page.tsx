@@ -352,16 +352,19 @@ export default function ReservasList() {
   const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string, mute: boolean) => {
     if (!selectedRes) return;
     try {
-      const { error } = await supabase
-        .from('booking_portal_settings')
-        .upsert({
-          booking_id: String(selectedRes.id),
-          show_card_payment: showCard,
-          transfer_account: account,
+      const res = await fetch('/api/reservas/portal-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: String(selectedRes.id),
+          showCardPayment: showCard,
+          transferAccount: account,
           language: languageCode,
-          mute_notifications: mute
-        }, { onConflict: 'booking_id' });
-      if (error) throw error;
+          muteNotifications: mute
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Error al guardar');
       setPortalShowCardPayment(showCard);
       setPortalTransferAccount(account);
       setPortalLanguage(languageCode);
@@ -370,7 +373,7 @@ export default function ReservasList() {
       setPortalIframeKey(prev => prev + 1);
     } catch (e: any) {
       console.error("Error updating portal settings:", e);
-      alert("Error al actualizar la configuración del portal.");
+      alert("Error al actualizar la configuración del portal: " + e.message);
     }
   };
 
