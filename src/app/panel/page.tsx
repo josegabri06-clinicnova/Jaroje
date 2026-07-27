@@ -616,10 +616,15 @@ export default function AdminDashboard() {
     const formatPriceLine = (name: string, roomId: string, activePrice: number, basePrice: number) => {
       const activeDisc = getActiveDiscountForToday(roomId);
       if (activeDisc) {
-        return `• ${name}: $${activeDisc.priceHuesped} (Con Descuento - Reg: $${basePrice})`;
+        const isIncrease = activeDisc.priceHuesped > basePrice;
+        const typeLabel = isIncrease ? 'Aumento' : 'Con Descuento';
+        return `• ${name}: $${activeDisc.priceHuesped} (${typeLabel} - Reg: $${basePrice})`;
       }
       if (activePrice < basePrice) {
         return `• ${name}: $${activePrice} (Con Descuento - Reg: $${basePrice})`;
+      }
+      if (activePrice > basePrice) {
+        return `• ${name}: $${activePrice} (Aumento - Reg: $${basePrice})`;
       }
       return `• ${name}: $${activePrice}`;
     };

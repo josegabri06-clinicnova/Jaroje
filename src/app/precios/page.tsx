@@ -431,7 +431,7 @@ export default function PreciosPage() {
     const roomNames = tdSelectedRooms.map(id => ROOMS_LIST.find(r => r.id === id)?.name || id).join(', ');
 
     const confirmed = window.confirm(
-      `⚠️ CONFIRMAR DESCUENTO TEMPORAL\n\n` +
+      `⚠️ CONFIRMAR TARIFA ESPECIAL (DESCUENTO / AUMENTO)\n\n` +
       `Habitaciones: ${roomNames}\n` +
       `Período: ${tdFrom} → ${tdTo}\n` +
       `Precio base en Beds24 (sin impuestos): $${priceRaw.toLocaleString('es-MX', { maximumFractionDigits: 0 })}\n` +
@@ -462,14 +462,14 @@ export default function PreciosPage() {
         to: tdTo,
         priceHuesped: Math.round(priceRaw * 1.19),
         priceRaw,
-        label: tdLabel || `Descuento ${tdFrom} → ${tdTo}`,
+        label: tdLabel || `Tarifa Especial ${tdFrom} → ${tdTo}`,
         appliedAt: new Date().toISOString()
       };
       const updated = [newDiscount, ...tempDiscounts];
       setTempDiscounts(updated);
       await saveTempDiscounts(updated);
 
-      setTdSuccess(`✅ Descuento aplicado en Beds24 para: ${roomNames} (${tdFrom} → ${tdTo})`);
+      setTdSuccess(`✅ Tarifa especial aplicada en Beds24 para: ${roomNames} (${tdFrom} → ${tdTo})`);
       setTdPriceHuesped('');
       // setTdLabel(''); <-- Se deja la descripción del descuento sin borrar según petición del usuario
     } catch (err: any) {
@@ -520,9 +520,9 @@ export default function PreciosPage() {
                   <Tag size={18} className="text-amber-700" />
                 </div>
                 <div>
-                  <h3 className="text-[14px] font-black text-zinc-900 tracking-tight">Descuentos Temporales</h3>
+                  <h3 className="text-[14px] font-black text-zinc-900 tracking-tight">Tarifas Especiales (Descuentos y Aumentos)</h3>
                   <p className="text-[11.5px] text-zinc-500 font-medium mt-0.5">
-                    Aplica una tarifa especial a fechas específicas sin modificar las temporadas base.
+                    Aumenta o descuenta la tarifa en fechas específicas sin modificar las temporadas base.
                   </p>
                 </div>
               </div>
@@ -560,7 +560,7 @@ export default function PreciosPage() {
               {/* Fechas */}
               <div className="space-y-2">
                 <label className="text-[10.5px] font-extrabold text-zinc-500 uppercase tracking-widest block">
-                  2. Período del descuento
+                  2. Período del ajuste
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -642,7 +642,7 @@ export default function PreciosPage() {
                   type="text"
                   value={tdLabel}
                   onChange={e => setTdLabel(e.target.value)}
-                  placeholder='Ej: "Descuento agosto bajo flujo"'
+                  placeholder='Ej: "Aumento fin de año" o "Descuento bajo flujo"'
                   className="w-full border border-zinc-200 rounded-xl px-3.5 py-2.5 text-[12.5px] font-medium text-zinc-800 focus:outline-none focus:ring-2 focus:ring-amber-400"
                 />
               </div>
@@ -666,14 +666,14 @@ export default function PreciosPage() {
                 className="w-full py-3.5 bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-extrabold text-[13px] rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.98]"
               >
                 {tdSaving ? <RefreshCw size={16} className="animate-spin" /> : <Tag size={16} />}
-                {tdSaving ? 'Aplicando en Beds24...' : 'Aplicar Descuento Temporal'}
+                {tdSaving ? 'Aplicando en Beds24...' : 'Aplicar Tarifa Especial (Descuento/Aumento)'}
               </button>
 
-              {/* Historial de descuentos activos */}
+              {/* Historial de tarifas especiales activas */}
               {tempDiscounts.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-zinc-100">
                   <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest block">
-                    Historial de descuentos aplicados
+                    Historial de tarifas especiales y descuentos
                   </span>
                   {tempDiscounts.map((d: any) => (
                     <div key={d.id} className="bg-zinc-50 border border-zinc-200 rounded-xl p-3 flex items-start justify-between gap-3">
