@@ -282,24 +282,16 @@ export default function PreciosPage() {
   const loadSeasonRanges = async () => {
     setLoadingSeasonRanges(true);
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const { data } = await sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle();
-      let list = data?.value;
-      if (list && typeof list === 'string') {
-        try { list = JSON.parse(list); } catch {}
-      }
-      if (list && Array.isArray(list) && list.length > 0) {
-        setSeasonRanges(list);
+      const res = await fetch('/api/precios/save-ranges?t=' + Date.now());
+      const data = await res.json();
+      if (data.success && Array.isArray(data.ranges)) {
+        setSeasonRanges(data.ranges);
       } else {
         setSeasonRanges(defaultSeasonRanges);
-        await sb.from('settings').upsert({ key: 'season_ranges', value: defaultSeasonRanges }, { onConflict: 'key' });
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error al cargar rangos de temporada:', e);
+      setSeasonRanges(defaultSeasonRanges);
     } finally {
       setLoadingSeasonRanges(false);
     }
@@ -308,18 +300,21 @@ export default function PreciosPage() {
   const handleSaveSeasonRanges = async (rangesToSave: any[]) => {
     setSavingSeasonRanges(true);
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const { error } = await sb.from('settings').upsert({ key: 'season_ranges', value: rangesToSave }, { onConflict: 'key' });
-      if (error) throw error;
+      const saveRes = await fetch('/api/precios/save-ranges', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ranges: rangesToSave })
+      });
+      const saveData = await saveRes.json();
+      if (!saveData.success) {
+        throw new Error(saveData.error || 'Error al guardar en la base de datos');
+      }
+
       setSeasonRanges(rangesToSave);
 
       const doSync = window.confirm(
         '✅ Fechas de temporadas actualizadas con éxito en la base de datos.\n\n' +
-        '¿Desea sincronizar ahora mismo todo el calendario de Beds24 para aplicar estas nuevas fechas a las tarifas del hotel? (Recomendado, tardará unos 5 segundos)'
+        '¿Desea sincronizar ahora mismo todo el calendario de Beds24 para aplicar estas nuevas fechas a las tarifas del hotel? (Recomendado, tardará unos de 5 segundos)'
       );
 
       if (doSync) {
