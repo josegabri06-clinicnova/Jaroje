@@ -1232,7 +1232,7 @@ export default function PublicReservaPage() {
                   : '¿Te gustaría hospedarte nuevamente con nosotros?'}
               </p>
               <a
-                href="https://jaroje.beds24.com/v2/booking"
+                href="https://beds24.com/booking2.php?propid=327286&lang=es"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[13px] rounded-xl shadow-md transition-all active:scale-[0.98] cursor-pointer"
