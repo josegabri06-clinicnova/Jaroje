@@ -835,16 +835,19 @@ export default function RecepcionPage() {
   const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string, mute: boolean) => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return;
     try {
-      const { error } = await supabase
-        .from('booking_portal_settings')
-        .upsert({
-          booking_id: String(selectedReserva.id),
-          show_card_payment: showCard,
-          transfer_account: account,
+      const res = await fetch('/api/reservas/portal-settings', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: String(selectedReserva.id),
+          showCardPayment: showCard,
+          transferAccount: account,
           language: languageCode,
-          mute_notifications: mute
-        }, { onConflict: 'booking_id' });
-      if (error) throw error;
+          muteNotifications: mute
+        })
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Error al guardar');
       setPortalShowCardPayment(showCard);
       setPortalTransferAccount(account);
       setPortalLanguage(languageCode);

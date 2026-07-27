@@ -133,7 +133,7 @@ export async function GET(req: Request) {
             language: portalSettings?.language || detectLanguageFromPhone(localRes.phone)
           }
         }
-      });
+      }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     // 2. Buscar en Beds24 activo (caché)
@@ -352,7 +352,7 @@ export async function GET(req: Request) {
               language: portalSettings?.language || detectLanguageFromPhone(booking.guest_phone || booking.phone || booking.mobile)
             }
           }
-        });
+        }, { headers: { 'Cache-Control': 'no-store' } });
       } catch (err) {
         console.error("Error al agrupar Beds24 bookings:", err);
       }

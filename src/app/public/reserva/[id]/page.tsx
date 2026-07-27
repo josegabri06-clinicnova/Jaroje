@@ -969,7 +969,7 @@ export default function PublicReservaPage() {
 
     const fetchBooking = async () => {
       try {
-        const res = await fetch(`/api/public/reserva?id=${id}`);
+        const res = await fetch(`/api/public/reserva?id=${id}`, { cache: 'no-store' });
         const json = await res.json();
         if (res.ok && json.success) {
           setBooking(json.data);
