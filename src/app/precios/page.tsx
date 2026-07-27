@@ -287,8 +287,31 @@ export default function PreciosPage() {
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [tdDeleting, setTdDeleting] = useState<string | null>(null);
 
-  // Precio base calculado (sin IVA) = precio huésped / 1.19
-  const tdPriceRaw = tdPriceHuesped ? Math.round((Number(tdPriceHuesped) / 1.19) * 100) / 100 : 0;
+  // Evaluar expresión matemática en el precio
+  const evaluateMathExpression = (str: string): number => {
+    if (!str) return 0;
+    let cleanStr = str.replace(/x|X|×/g, '*');
+    cleanStr = cleanStr.replace(/[^0-9+\-*/. ]/g, '');
+    try {
+      const result = new Function(`return (${cleanStr})`)();
+      if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+        return result;
+      }
+    } catch (e) {}
+    return 0;
+  };
+
+  const evaluatedPrice = (() => {
+    if (!tdPriceHuesped) return 0;
+    const trimmed = tdPriceHuesped.trim();
+    if (/^\d+(\.\d+)?$/.test(trimmed)) {
+      return Number(trimmed);
+    }
+    return evaluateMathExpression(trimmed);
+  })();
+
+  // El input ahora es Precio Base (sin impuestos)
+  const tdPriceRaw = evaluatedPrice ? Math.round(evaluatedPrice * 100) / 100 : 0;
   const tdPriceAirbnb = tdPriceRaw > 0 ? Math.round(tdPriceRaw * beds24Multipliers.airbnb * 1.19) : 0;
   const tdPriceBooking = tdPriceRaw > 0 ? Math.round(tdPriceRaw * beds24Multipliers.booking * 1.19) : 0;
 
@@ -320,20 +343,20 @@ export default function PreciosPage() {
   const handleApplyTempDiscount = async () => {
     setTdError('');
     setTdSuccess('');
-    const priceNum = Number(tdPriceHuesped);
+    const priceNum = evaluatedPrice;
     if (!priceNum || priceNum <= 0) { setTdError('Ingresa un precio válido.'); return; }
     if (!tdFrom || !tdTo || tdFrom > tdTo) { setTdError('Las fechas no son válidas.'); return; }
     if (tdSelectedRooms.length === 0) { setTdError('Selecciona al menos una habitación.'); return; }
 
-    const priceRaw = Math.round((priceNum / 1.19) * 100) / 100;
+    const priceRaw = priceNum;
     const roomNames = tdSelectedRooms.map(id => ROOMS_LIST.find(r => r.id === id)?.name || id).join(', ');
 
     const confirmed = window.confirm(
       `⚠️ CONFIRMAR DESCUENTO TEMPORAL\n\n` +
       `Habitaciones: ${roomNames}\n` +
       `Período: ${tdFrom} → ${tdTo}\n` +
-      `Precio al huésped: $${priceNum.toLocaleString('es-MX')} MXN (con IVA)\n` +
-      `Precio base en Beds24: $${priceRaw.toLocaleString('es-MX', { maximumFractionDigits: 0 })}\n\n` +
+      `Precio base en Beds24 (sin impuestos): $${priceRaw.toLocaleString('es-MX', { maximumFractionDigits: 0 })}\n` +
+      `Precio al huésped (con impuestos): $${Math.round(priceRaw * 1.19).toLocaleString('es-MX')} MXN\n\n` +
       `Las reservas ya confirmadas NO se ven afectadas.\n` +
       `¿Continuar?`
     );
@@ -358,7 +381,7 @@ export default function PreciosPage() {
         roomNames,
         from: tdFrom,
         to: tdTo,
-        priceHuesped: priceNum,
+        priceHuesped: Math.round(priceRaw * 1.19),
         priceRaw,
         label: tdLabel || `Descuento ${tdFrom} → ${tdTo}`,
         appliedAt: new Date().toISOString()
@@ -369,7 +392,7 @@ export default function PreciosPage() {
 
       setTdSuccess(`✅ Descuento aplicado en Beds24 para: ${roomNames} (${tdFrom} → ${tdTo})`);
       setTdPriceHuesped('');
-      setTdLabel('');
+      // setTdLabel(''); <-- Se deja la descripción del descuento sin borrar según petición del usuario
     } catch (err: any) {
       setTdError('Error al aplicar: ' + err.message);
     } finally {
@@ -439,9 +462,7 @@ export default function PreciosPage() {
                     return (
                       <button
                         key={room.id}
-                        onClick={() => setTdSelectedRooms(prev =>
-                          selected ? prev.filter(id => id !== room.id) : [...prev, room.id]
-                        )}
+                        onClick={() => setTdSelectedRooms([room.id])}
                         className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-[12px] font-semibold transition-all cursor-pointer ${
                           selected
                             ? 'bg-amber-500 text-white border-amber-500 shadow-md'
@@ -488,17 +509,16 @@ export default function PreciosPage() {
               {/* Precio al huésped */}
               <div className="space-y-2">
                 <label className="text-[10.5px] font-extrabold text-zinc-500 uppercase tracking-widest block">
-                  3. Precio que pagará el huésped (con IVA incluido)
+                  3. Precio Base (sin impuestos)
                 </label>
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-black text-[14px]">$</span>
                     <input
-                      type="number"
+                      type="text"
                       value={tdPriceHuesped}
                       onChange={e => { setTdPriceHuesped(e.target.value); setTdError(''); setTdSuccess(''); }}
-                      placeholder="1800"
-                      min="1"
+                      placeholder="Ej: 1513 o 1513 * 1.5"
                       className="w-full border border-zinc-200 rounded-xl pl-8 pr-16 py-3 text-[16px] font-black text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-400"
                     />
                     <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-semibold text-[11px]">MXN</span>
@@ -517,7 +537,7 @@ export default function PreciosPage() {
                     </div>
                     <div className="bg-emerald-900/50 rounded-xl p-2.5 text-center border border-emerald-800/30">
                       <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-wide block mb-1">📱 Directo</span>
-                      <span className="text-[14px] font-black text-white">${Number(tdPriceHuesped).toLocaleString('es-MX')}</span>
+                      <span className="text-[14px] font-black text-white">${Math.round(tdPriceRaw * 1.19).toLocaleString('es-MX')}</span>
                     </div>
                     <div className="bg-pink-900/40 rounded-xl p-2.5 text-center border border-pink-800/30">
                       <span className="text-[9px] text-pink-300 font-bold uppercase tracking-wide block mb-1">🏠 Airbnb</span>
