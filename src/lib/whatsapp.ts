@@ -310,6 +310,11 @@ export async function sendWhatsAppTemplate(
             return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'portal_huesped_link_en':
             return `Hello ${name}, here is your access to your real-time booking details. From your portal you can view your room status, guidelines, WiFi info, and record additional payments.✅\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+          case 'alojamiento_listo':
+            return `✨ ¡Buenas noticias, ${name}!\n\nTu alojamiento ya está limpio, desinfectado y listo para recibirte.\n\nSi ya te encuentras en Huatulco, puedes dirigirte cuando gustes. En "Mi estancia" encontrarás toda la información para tu llegada, incluyendo el acceso, la red WiFi y los detalles de tu estancia.\n\n¡Te esperamos! 🏡\n\n[Botón: Mi estancia] [Botón: Cómo llegar] [Botón: Hablar con nosotros]`;
+          case 'rechazo_solicitud':
+            const motivo = params[2] || 'No especificado';
+            return `❌ Solicitud Rechazada\n\nHola, ${name}.\n\nTe informamos que tu solicitud de reservación #${params[1] || ''} ha sido rechazada por el siguiente motivo:\n\n*${motivo}*\n\nLamentamos los inconvenientes que esto pueda causarte.\n\n[Botón: Hablar con nosotros]`;
           default:
             return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
         }
