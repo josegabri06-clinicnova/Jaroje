@@ -133,7 +133,8 @@ async function handleSync(req: Request, checkAuth: boolean) {
 
           if (priceUsed > 0) {
             calendarDays.push({
-              date: dateStr,
+              from: dateStr,
+              to: dateStr,
               price1: priceUsed
             });
           }
