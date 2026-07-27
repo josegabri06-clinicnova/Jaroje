@@ -1625,7 +1625,7 @@ export default function PublicReservaPage() {
         })()}
 
         {/* BOTÓN SOLICITAR FACTURA — visible cuando ya hay anticipo registrado */}
-        {!isOta && booking && Number(booking.deposit || 0) > 0 && (
+        {booking && Number(booking.deposit || 0) > 0 && (
           <div className="bg-white rounded-2xl p-5 border border-indigo-100 shadow-sm">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
