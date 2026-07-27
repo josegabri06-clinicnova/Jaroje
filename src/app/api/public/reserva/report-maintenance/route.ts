@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { getBeds24Bookings } from '@/lib/beds24';
-import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
+import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,20 +88,28 @@ export async function POST(req: Request) {
       created_at: new Date().toISOString()
     }]);
 
-    // 5. Enviar mensaje de WhatsApp al gerente de mantenimiento (+52 958 119 8448)
+    // 5. Enviar plantilla de WhatsApp al gerente de mantenimiento (+52 958 119 8448)
     const managerPhone = '529581198448';
-    const waText = `🛠️ *Nueva Incidencia de Mantenimiento* 🛠️\n\n` +
-      `*Huésped:* ${guestName}\n` +
-      `*Reserva:* #${bookingId}\n` +
-      `*Lugar/Tipo:* ${type || 'Habitación'}\n` +
-      `*Habitación:* ${roomName}\n\n` +
-      `*Descripción:* ${description}\n\n` +
-      `_Reportada directamente por el huésped desde el portal del cliente._`;
+    const parameters = [
+      guestName || 'Huésped',
+      String(bookingId),
+      type || 'Habitación',
+      roomName || 'General',
+      description
+    ];
 
-    console.log(`[Report Maintenance] Sending WA notification to manager: ${managerPhone}`);
-    const waRes = await sendWhatsAppTextMessage(managerPhone, waText);
+    console.log(`[Report Maintenance] Sending WA template notification to manager: ${managerPhone}`);
+    const waRes = await sendWhatsAppTemplate(
+      managerPhone,
+      'incidencia_mantenimiento',
+      parameters,
+      undefined,
+      undefined, // bookingId (evitar silenciar por preferencias del huésped)
+      undefined,
+      true // bypassPause
+    );
     if (!waRes.success) {
-      console.warn("[Report Maintenance] WhatsApp manager notification warning:", waRes.error);
+      console.warn("[Report Maintenance] WhatsApp manager template notification warning:", waRes.error);
     }
 
     return NextResponse.json({ success: true, taskId: taskData.id });
