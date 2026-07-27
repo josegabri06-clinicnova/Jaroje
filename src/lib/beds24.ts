@@ -1227,7 +1227,7 @@ export function getOtaRoom500Bookings(): any[] {
 export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
   const token = await getBeds24Token();
   
-  const res = await fetch('https://api.beds24.com/v2/inventory/calendar', {
+  const res = await fetch('https://api.beds24.com/v2/inventory/rooms/calendar', {
     method: 'POST',
     headers: {
       'token': token,

@@ -2062,12 +2062,27 @@ export default function RecepcionPage() {
           priceUsed = Number(specialRule.price);
         } else if (seasonalRule) {
           priceUsed = Number(seasonalRule.price);
-        } else if (baseRule) {
-          priceUsed = Number(baseRule.price);
         } else {
           const fallbackSeason = getSeason(dateStr, seasonRanges);
           const parentRoom = getParentMapping(rm.roomId, rm.unitId);
-          priceUsed = PRICES[parentRoom.roomId]?.[fallbackSeason] || 2000;
+          const dbSeasonRule = rules.find((r: any) => 
+            r.room_type_id === rm.roomId && 
+            r.rule_type === 'seasonal' && 
+            (
+              (fallbackSeason === 'alta' && r.name.toLowerCase().includes('alta') && !r.name.toLowerCase().includes('media')) ||
+              (fallbackSeason === 'media_alta' && r.name.toLowerCase().includes('media-alta')) ||
+              (fallbackSeason === 'media' && r.name.toLowerCase().includes('media') && !r.name.toLowerCase().includes('alta')) ||
+              (fallbackSeason === 'baja' && r.name.toLowerCase().includes('baja'))
+            )
+          );
+
+          if (dbSeasonRule) {
+            priceUsed = Number(dbSeasonRule.price);
+          } else if (baseRule && fallbackSeason === 'baja') {
+            priceUsed = Number(baseRule.price);
+          } else {
+            priceUsed = PRICES[parentRoom.roomId]?.[fallbackSeason] || 2000;
+          }
         }
         
         let discountMult = 1.0;
