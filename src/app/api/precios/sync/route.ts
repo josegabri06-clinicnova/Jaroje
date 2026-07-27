@@ -30,15 +30,28 @@ export async function POST(req: Request) {
       }
     }
 
-    // 1. Obtener reglas activas de Supabase
-    const { data: rules, error: rulesErr } = await supabase
-      .from('pricing_rules')
-      .select('*')
-      .order('created_at', { ascending: true });
+    // 1. Obtener reglas y rangos de temporadas de Supabase
+    const [{ data: rules, error: rulesErr }, { data: seasonRow }] = await Promise.all([
+      supabase
+        .from('pricing_rules')
+        .select('*')
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'season_ranges')
+        .maybeSingle()
+    ]);
 
     if (rulesErr) {
       throw new Error(`Error al leer reglas de Supabase: ${rulesErr.message}`);
     }
+
+    const seasonRanges = seasonRow?.value
+      ? (typeof seasonRow.value === 'string'
+          ? JSON.parse(seasonRow.value)
+          : seasonRow.value)
+      : [];
 
     // 2. Definir ventana de 540 días a partir de hoy
     const today = new Date();
@@ -87,7 +100,7 @@ export async function POST(req: Request) {
           } else if (baseRule) {
             priceUsed = Number(baseRule.price);
           } else {
-            const fallbackSeason = getSeason(dateStr);
+            const fallbackSeason = getSeason(dateStr, seasonRanges);
             priceUsed = JAROJE_PRICES[group.parentId]?.[fallbackSeason] || 2000;
           }
 

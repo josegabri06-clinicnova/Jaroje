@@ -269,63 +269,67 @@ export function getAllChildRoomIds(parentId: string | null | undefined): string[
 }
 
 // Detección de temporada (Huatulco/México)
-export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' | 'media_alta' | 'alta' {
+export function getSeason(
+  dateStr: string | null | undefined,
+  dbRanges?: { season: string; from: string; to: string }[]
+): 'baja' | 'media' | 'media_alta' | 'alta' {
   if (!dateStr) return 'media';
 
-  // 1. Rangos específicos definidos por el usuario para 2025-2027
+  // Si se proveen rangos personalizados de la base de datos, usarlos como prioridad
+  if (dbRanges && Array.isArray(dbRanges) && dbRanges.length > 0) {
+    const matched = dbRanges.find(r => dateStr >= r.from && dateStr <= r.to);
+    if (matched) {
+      return matched.season as 'baja' | 'media' | 'media_alta' | 'alta';
+    }
+    return 'baja'; // Por defecto si no está en ningún rango personalizado
+  }
+
+  // Fallback a las fechas verificadas por el usuario por defecto (2026-2027)
   // TEMPORADA ALTA
   if (
-    (dateStr >= '2025-12-20' && dateStr <= '2026-01-10') ||
-    (dateStr >= '2026-03-27' && dateStr <= '2026-04-11') ||
-    (dateStr >= '2026-12-20' && dateStr <= '2027-01-10') ||
+    (dateStr >= '2026-12-18' && dateStr <= '2027-01-08') ||
     (dateStr >= '2027-03-19' && dateStr <= '2027-04-03') ||
-    (dateStr >= '2027-12-20' && dateStr <= '2028-01-10')
+    (dateStr >= '2027-12-17' && dateStr <= '2028-01-07')
   ) {
     return 'alta';
   }
 
   // TEMPORADA MEDIA-ALTA
   if (
-    (dateStr >= '2025-12-15' && dateStr <= '2025-12-19') ||
-    (dateStr >= '2026-07-15' && dateStr <= '2026-08-16') ||
-    (dateStr >= '2026-12-15' && dateStr <= '2026-12-19') ||
-    (dateStr >= '2027-07-15' && dateStr <= '2027-08-16') ||
-    (dateStr >= '2027-12-15' && dateStr <= '2027-12-19')
+    (dateStr >= '2026-07-15' && dateStr <= '2026-08-17') ||
+    (dateStr >= '2027-07-16' && dateStr <= '2027-08-13')
   ) {
     return 'media_alta';
   }
 
   // TEMPORADA MEDIA
   if (
-    (dateStr >= '2026-01-11' && dateStr <= '2026-03-26') ||
-    (dateStr >= '2026-08-17' && dateStr <= '2026-08-31') ||
-    (dateStr >= '2026-09-12' && dateStr <= '2026-09-15') ||
-    (dateStr >= '2026-11-01' && dateStr <= '2026-12-14') ||
-    (dateStr >= '2027-01-11' && dateStr <= '2027-03-18') ||
-    (dateStr >= '2027-08-17' && dateStr <= '2027-08-31') ||
-    (dateStr >= '2027-09-12' && dateStr <= '2027-09-15') ||
-    (dateStr >= '2027-11-01' && dateStr <= '2027-12-14')
+    (dateStr >= '2026-09-12' && dateStr <= '2026-09-16') ||
+    (dateStr >= '2026-10-30' && dateStr <= '2026-12-17') ||
+    (dateStr >= '2027-05-14' && dateStr <= '2027-05-15') ||
+    (dateStr >= '2027-09-15' && dateStr <= '2027-09-18') ||
+    (dateStr >= '2027-10-29' && dateStr <= '2027-12-16')
   ) {
     return 'media';
   }
 
-  // Si es del periodo 2025-2027 y no cayó en ninguna de las anteriores, es BAJA ("Resto del año")
-  if (dateStr >= '2025-01-01' && dateStr <= '2027-12-31') {
+  // Si es del periodo 2026-2027 y no cayó en ninguna de las anteriores, es BAJA
+  if (dateStr >= '2026-01-01' && dateStr <= '2028-01-07') {
     return 'baja';
   }
 
-  // 2. Fallback genérico mensual para otros años futuros (2028+)
+  // Fallback genérico mensual para otros años futuros (2028+)
   const d = new Date(dateStr + 'T12:00:00');
   const month = d.getMonth() + 1; // 1-12
   const day = d.getDate();
 
-  // Temporada Alta: Navidad/Año Nuevo (20 dic - 10 ene) + Semana Santa (aprox fin marzo-inicio abril)
+  // Temporada Alta: Navidad/Año Nuevo (20 dic - 10 ene) + Semana Santa
   if ((month === 12 && day >= 20) || (month === 1 && day <= 10)) return 'alta';
-  if ((month === 3 && day >= 22) || (month === 4 && day <= 7)) return 'alta'; // Semana Santa / Pascua
+  if ((month === 3 && day >= 22) || (month === 4 && day <= 7)) return 'alta';
 
   // Temporada Media-Alta: Julio 15 - Agosto 16, Diciembre 15 - 19
   if ((month === 7 && day >= 15) || (month === 8 && day <= 16)) return 'media_alta';
-  if (month === 12 && day >= 15 && day <= 19) return 'media_alta'; // Pre-navidad
+  if (month === 12 && day >= 15 && day <= 19) return 'media_alta';
 
   // Temporada Media: Jan 11 to Easter-start, Aug 17-31, Sep 12-15, Nov 1 - Dec 14
   if (month === 1 && day >= 11) return 'media';
@@ -335,7 +339,6 @@ export function getSeason(dateStr: string | null | undefined): 'baja' | 'media' 
   if (month === 9 && day >= 12 && day <= 15) return 'media';
   if (month === 11 || (month === 12 && day <= 14)) return 'media';
 
-  // Temporada Baja: Resto del año (e.g. Mayo, Junio, Julio 1-14, Septiembre resto, Octubre)
   return 'baja';
 }
 

@@ -523,7 +523,21 @@ export default function AdminDashboard() {
 
     // --- TARIFAS ESTACIONALES DINÁMICAS ---
     const todayISO = getLocalDateStr(new Date());
-    const currentSeason = getSeason(todayISO);
+    let seasonRanges: any[] = [];
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data } = await sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle();
+      if (data?.value) {
+        seasonRanges = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    const currentSeason = getSeason(todayISO, seasonRanges);
     const seasonLabels: Record<string, string> = {
       baja: 'BAJA',
       media: 'MEDIA',

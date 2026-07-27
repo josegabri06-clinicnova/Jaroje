@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  Calculator, Zap, Check, AlertCircle, RefreshCw, X, Tag, Percent, CalendarDays, Trash2
+  Calculator, Zap, Check, AlertCircle, RefreshCw, X, Tag, Percent, CalendarDays, Trash2, Calendar, Save
 } from 'lucide-react';
 
 export default function PreciosPage() {
@@ -257,9 +257,78 @@ export default function PreciosPage() {
 
 
 
+  // --- CONFIGURACIÓN DE FECHAS DE TEMPORADAS ---
+  const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
+  const [loadingSeasonRanges, setLoadingSeasonRanges] = useState(false);
+  const [savingSeasonRanges, setSavingSeasonRanges] = useState(false);
+  const [showSeasonsConfig, setShowSeasonsConfig] = useState(false);
+
+  const defaultSeasonRanges = [
+    // Temporada Alta
+    { season: "alta", from: "2026-12-18", to: "2027-01-08" },
+    { season: "alta", from: "2027-03-19", to: "2027-04-03" },
+    { season: "alta", from: "2027-12-17", to: "2028-01-07" },
+    // Temporada Media-Alta
+    { season: "media_alta", from: "2026-07-15", to: "2026-08-17" },
+    { season: "media_alta", from: "2027-07-16", to: "2027-08-13" },
+    // Temporada Media
+    { season: "media", from: "2026-09-12", to: "2026-09-16" },
+    { season: "media", from: "2026-10-30", to: "2026-12-17" },
+    { season: "media", from: "2027-05-14", to: "2027-05-15" },
+    { season: "media", from: "2027-09-15", to: "2027-09-18" },
+    { season: "media", from: "2027-10-29", to: "2027-12-16" }
+  ];
+
+  const loadSeasonRanges = async () => {
+    setLoadingSeasonRanges(true);
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data } = await sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle();
+      let list = data?.value;
+      if (list && typeof list === 'string') {
+        try { list = JSON.parse(list); } catch {}
+      }
+      if (list && Array.isArray(list) && list.length > 0) {
+        setSeasonRanges(list);
+      } else {
+        setSeasonRanges(defaultSeasonRanges);
+        await sb.from('settings').upsert({ key: 'season_ranges', value: defaultSeasonRanges }, { onConflict: 'key' });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingSeasonRanges(false);
+    }
+  };
+
+  const handleSaveSeasonRanges = async (rangesToSave: any[]) => {
+    setSavingSeasonRanges(true);
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { error } = await sb.from('settings').upsert({ key: 'season_ranges', value: rangesToSave }, { onConflict: 'key' });
+      if (error) throw error;
+      alert('✅ Fechas de temporadas actualizadas con éxito.');
+      setSeasonRanges(rangesToSave);
+      loadBeds24Prices();
+    } catch (err: any) {
+      alert('Error al guardar temporadas: ' + err.message);
+    } finally {
+      setSavingSeasonRanges(false);
+    }
+  };
+
   useEffect(() => {
     loadBeds24Prices();
     loadTempDiscounts();
+    loadSeasonRanges();
   }, []);
 
   // ─────────────────────────────────────────────────────
@@ -620,6 +689,152 @@ export default function PreciosPage() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════ */}
+          {/* ⚙️  CONFIGURACIÓN DE FECHAS DE TEMPORADAS               */}
+          {/* ═══════════════════════════════════════════════════════ */}
+          <div className="bg-white border border-zinc-200 rounded-3xl shadow-sm overflow-hidden">
+            <button
+              onClick={() => setShowSeasonsConfig(!showSeasonsConfig)}
+              className="w-full px-5 py-4 bg-gradient-to-r from-zinc-50 to-zinc-100/50 border-b border-zinc-150 flex items-center justify-between gap-3 text-left focus:outline-none cursor-pointer"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-zinc-100 flex items-center justify-center shrink-0">
+                  <Calendar size={18} className="text-zinc-700" />
+                </div>
+                <div>
+                  <h3 className="text-[14px] font-black text-zinc-900 tracking-tight">Configuración de Fechas de Temporadas</h3>
+                  <p className="text-[11.5px] text-zinc-500 font-medium mt-0.5">
+                    Modifica los rangos de fechas asignados a cada temporada.
+                  </p>
+                </div>
+              </div>
+              <span className="text-zinc-400 font-black text-xs">{showSeasonsConfig ? '▲ Colapsar' : '▼ Expandir'}</span>
+            </button>
+
+            {showSeasonsConfig && (
+              <div className="p-5 space-y-5 animate-in fade-in duration-200">
+                {loadingSeasonRanges ? (
+                  <div className="flex items-center justify-center py-6 gap-2">
+                    <RefreshCw size={16} className="animate-spin text-indigo-600" />
+                    <span className="text-[12px] font-semibold text-zinc-500">Cargando fechas de temporadas...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {/* Explicación */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-[12px] text-blue-800 leading-relaxed space-y-1">
+                      <p className="font-extrabold flex items-center gap-1.5">
+                        💡 Información sobre Temporadas:
+                      </p>
+                      <p>
+                        Los rangos de fechas que definas aquí agruparán automáticamente las tarifas en el calendario. Las fechas que no coincidan con ningún rango se considerarán de <strong>Temporada Baja</strong> por defecto.
+                      </p>
+                    </div>
+
+                    {/* Lista de temporadas editables */}
+                    {['alta', 'media_alta', 'media'].map(seasonKey => {
+                      const seasonLabel = seasonKey === 'alta' ? 'Temporada Alta 🔥' :
+                                          seasonKey === 'media_alta' ? 'Temporada Media-Alta ☀️' : 'Temporada Media 🌤️';
+                      const colorClass = seasonKey === 'alta' ? 'text-rose-600 bg-rose-50 border-rose-100' :
+                                         seasonKey === 'media_alta' ? 'text-orange-600 bg-orange-50 border-orange-100' :
+                                         'text-amber-600 bg-amber-50 border-amber-100';
+
+                      const ranges = seasonRanges.filter(r => r.season === seasonKey);
+
+                      return (
+                        <div key={seasonKey} className="border border-zinc-150 rounded-2xl p-4 space-y-3 bg-zinc-50/20">
+                          <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                            <span className={`text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border ${colorClass}`}>
+                              {seasonLabel}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const newRange = { season: seasonKey, from: todayStr, to: todayStr };
+                                setSeasonRanges(prev => [...prev, newRange]);
+                              }}
+                              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer bg-indigo-50 px-2 py-1 rounded-lg"
+                            >
+                              + Agregar Rango
+                            </button>
+                          </div>
+
+                          {ranges.length === 0 ? (
+                            <p className="text-[11.5px] text-zinc-400 italic">No hay rangos definidos para esta temporada.</p>
+                          ) : (
+                            <div className="space-y-2">
+                              {seasonRanges.map((range, idx) => {
+                                if (range.season !== seasonKey) return null;
+                                return (
+                                  <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-zinc-100 shadow-xs">
+                                    <div className="flex-1 grid grid-cols-2 gap-2">
+                                      <div>
+                                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Desde</span>
+                                        <input
+                                          type="date"
+                                          value={range.from}
+                                          onChange={e => {
+                                            const updated = [...seasonRanges];
+                                            updated[idx].from = e.target.value;
+                                            setSeasonRanges(updated);
+                                          }}
+                                          className="w-full text-[12px] font-bold text-zinc-800 border border-zinc-200 focus:outline-none p-1 rounded"
+                                        />
+                                      </div>
+                                      <div>
+                                        <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Hasta</span>
+                                        <input
+                                          type="date"
+                                          value={range.to}
+                                          onChange={e => {
+                                            const updated = [...seasonRanges];
+                                            updated[idx].to = e.target.value;
+                                            setSeasonRanges(updated);
+                                          }}
+                                          className="w-full text-[12px] font-bold text-zinc-800 border border-zinc-200 focus:outline-none p-1 rounded"
+                                        />
+                                      </div>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setSeasonRanges(prev => prev.filter((_, i) => i !== idx));
+                                      }}
+                                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                                      title="Eliminar rango"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Temporada Baja (Read-only reminder) */}
+                    <div className="border border-zinc-200 rounded-2xl p-4 bg-zinc-50 border-dashed text-zinc-500 flex items-center justify-between text-[12px]">
+                      <span>🍂 <strong>Temporada Baja</strong> (Resto del año)</span>
+                      <span className="text-[10px] font-bold uppercase text-zinc-400">Automático</span>
+                    </div>
+
+                    {/* Botón de guardar */}
+                    <button
+                      type="button"
+                      disabled={savingSeasonRanges}
+                      onClick={() => handleSaveSeasonRanges(seasonRanges)}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-extrabold text-[13px] rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {savingSeasonRanges ? <RefreshCw size={15} className="animate-spin" /> : <Save size={15} />}
+                      {savingSeasonRanges ? 'Guardando en la base de datos...' : 'Guardar Fechas de Temporada'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Header */}

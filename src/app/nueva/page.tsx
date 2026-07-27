@@ -18,52 +18,53 @@ const PRICES: Record<string, Record<string, number>> = {
   '685542': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
 };
 
-function getSeason(dateStr: string): string {
+function getSeason(dateStr: string, dbRanges?: { season: string; from: string; to: string }[]): string {
   if (!dateStr) return 'media';
 
-  // 1. Rangos específicos definidos por el usuario para 2025-2027
+  // Si se proveen rangos personalizados de la base de datos, usarlos como prioridad
+  if (dbRanges && Array.isArray(dbRanges) && dbRanges.length > 0) {
+    const matched = dbRanges.find(r => dateStr >= r.from && dateStr <= r.to);
+    if (matched) {
+      return matched.season;
+    }
+    return 'baja'; // Por defecto si no está en ningún rango personalizado
+  }
+
+  // Fallback a las fechas verificadas por el usuario por defecto (2026-2027)
   // TEMPORADA ALTA
   if (
-    (dateStr >= '2025-12-20' && dateStr <= '2026-01-10') ||
-    (dateStr >= '2026-03-27' && dateStr <= '2026-04-11') ||
-    (dateStr >= '2026-12-20' && dateStr <= '2027-01-10') ||
+    (dateStr >= '2026-12-18' && dateStr <= '2027-01-08') ||
     (dateStr >= '2027-03-19' && dateStr <= '2027-04-03') ||
-    (dateStr >= '2027-12-20' && dateStr <= '2028-01-10')
+    (dateStr >= '2027-12-17' && dateStr <= '2028-01-07')
   ) {
     return 'alta';
   }
 
   // TEMPORADA MEDIA-ALTA
   if (
-    (dateStr >= '2025-12-15' && dateStr <= '2025-12-19') ||
-    (dateStr >= '2026-07-15' && dateStr <= '2026-08-16') ||
-    (dateStr >= '2026-12-15' && dateStr <= '2026-12-19') ||
-    (dateStr >= '2027-07-15' && dateStr <= '2027-08-16') ||
-    (dateStr >= '2027-12-15' && dateStr <= '2027-12-19')
+    (dateStr >= '2026-07-15' && dateStr <= '2026-08-17') ||
+    (dateStr >= '2027-07-16' && dateStr <= '2027-08-13')
   ) {
     return 'media_alta';
   }
 
   // TEMPORADA MEDIA
   if (
-    (dateStr >= '2026-01-11' && dateStr <= '2026-03-26') ||
-    (dateStr >= '2026-08-17' && dateStr <= '2026-08-31') ||
-    (dateStr >= '2026-09-12' && dateStr <= '2026-09-15') ||
-    (dateStr >= '2026-11-01' && dateStr <= '2026-12-14') ||
-    (dateStr >= '2027-01-11' && dateStr <= '2027-03-18') ||
-    (dateStr >= '2027-08-17' && dateStr <= '2027-08-31') ||
-    (dateStr >= '2027-09-12' && dateStr <= '2027-09-15') ||
-    (dateStr >= '2027-11-01' && dateStr <= '2027-12-14')
+    (dateStr >= '2026-09-12' && dateStr <= '2026-09-16') ||
+    (dateStr >= '2026-10-30' && dateStr <= '2026-12-17') ||
+    (dateStr >= '2027-05-14' && dateStr <= '2027-05-15') ||
+    (dateStr >= '2027-09-15' && dateStr <= '2027-09-18') ||
+    (dateStr >= '2027-10-29' && dateStr <= '2027-12-16')
   ) {
     return 'media';
   }
 
-  // Si es del periodo 2025-2027 y no cayó en ninguna de las anteriores, es BAJA ("Resto del año")
-  if (dateStr >= '2025-01-01' && dateStr <= '2027-12-31') {
+  // Si es del periodo 2026-2027 y no cayó en ninguna de las anteriores, es BAJA
+  if (dateStr >= '2026-01-01' && dateStr <= '2028-01-07') {
     return 'baja';
   }
 
-  // 2. Fallback genérico mensual para otros años futuros (2028+)
+  // Fallback genérico mensual para otros años futuros (2028+)
   const d = new Date(dateStr + 'T12:00:00');
   const month = d.getMonth() + 1;
   const day = d.getDate();
@@ -149,6 +150,7 @@ export default function VercelActionForm() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35 });
+  const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [formAccountId, setFormAccountId] = useState('');
   const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
@@ -329,7 +331,7 @@ export default function VercelActionForm() {
       const dynamicPrice = (unit && unit.price !== undefined && unit.price > 0) ? unit.price : 0;
 
       // 2. Fallback or seasonal pricing
-      const season = getSeason(form.checkIn);
+      const season = getSeason(form.checkIn, seasonRanges);
       const parentRoom = getParentMapping(rm.roomId, rm.unitId);
       const fallbackPrice = PRICES[parentRoom.roomId]?.[season] || 2000;
       const basePrice = dynamicPrice > 0 ? dynamicPrice : fallbackPrice;
@@ -524,9 +526,25 @@ export default function VercelActionForm() {
         console.error("Error fetching capacity settings:", err);
       }
     };
+    const fetchSeasonRanges = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'season_ranges')
+          .maybeSingle();
+        if (data && data.value) {
+          const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          setSeasonRanges(parsed || []);
+        }
+      } catch (err) {
+        console.error("Error fetching season ranges:", err);
+      }
+    };
     fetchAccounts();
     fetchMultipliers();
     fetchCapacitySettings();
+    fetchSeasonRanges();
   }, []);
 
   // Limpiar método y cuenta si el anticipo es 0 o vacío

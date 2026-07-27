@@ -119,18 +119,31 @@ export async function GET() {
   try {
     const token = await getBeds24Token();
 
-    // 1. Multiplicadores OTA desde Supabase
-    const { data: settingsRow } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'ota_multipliers')
-      .maybeSingle();
+    // 1. Multiplicadores OTA y Rangos de Temporadas desde Supabase
+    const [{ data: settingsRow }, { data: seasonRow }] = await Promise.all([
+      supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'ota_multipliers')
+        .maybeSingle(),
+      supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'season_ranges')
+        .maybeSingle()
+    ]);
 
     const multipliers: { airbnb: number; booking: number } = settingsRow?.value
       ? (typeof settingsRow.value === 'string'
           ? JSON.parse(settingsRow.value)
           : settingsRow.value)
       : { airbnb: 1.20, booking: 1.35 };
+
+    const seasonRanges = seasonRow?.value
+      ? (typeof seasonRow.value === 'string'
+          ? JSON.parse(seasonRow.value)
+          : seasonRow.value)
+      : [];
 
     const { data: capacityRow } = await supabase
       .from('settings')
@@ -224,7 +237,7 @@ export async function GET() {
         .sort((a, b) => a.from.localeCompare(b.from))
         .map(range => {
           const midDate = getMidDate(range.from, range.to);
-          const season = getSeason(midDate);
+          const season = getSeason(midDate, seasonRanges);
           const priceRaw = range.price1;
 
           return {
