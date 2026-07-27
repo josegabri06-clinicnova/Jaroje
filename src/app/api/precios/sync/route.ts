@@ -148,18 +148,13 @@ async function handleSync(req: Request, checkAuth: boolean) {
       });
     });
 
-    // 4. Empujar las tarifas a Beds24 en fragmentos (habitación por habitación) para seguridad
-    console.log(`[Sync API] Sincronizando ${ratesPayload.length} habitaciones a Beds24...`);
-    let syncedCount = 0;
-    
-    for (const roomItem of ratesPayload) {
-      await pushRatesToBeds24([roomItem]);
-      syncedCount++;
-    }
+    // 4. Empujar todas las tarifas a Beds24 en una sola petición para evitar el límite de créditos/peticiones (Rate Limit)
+    console.log(`[Sync API] Sincronizando ${ratesPayload.length} habitaciones a Beds24 en una sola petición...`);
+    await pushRatesToBeds24(ratesPayload);
 
     return NextResponse.json({ 
       success: true, 
-      message: `Tarifas sincronizadas exitosamente en Beds24 para 540 días en ${syncedCount} habitaciones.`
+      message: `Tarifas sincronizadas exitosamente en Beds24 para 540 días en ${ratesPayload.length} habitaciones.`
     });
 
   } catch (err: any) {
