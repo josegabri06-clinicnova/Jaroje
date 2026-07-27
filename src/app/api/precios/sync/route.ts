@@ -74,9 +74,11 @@ async function handleSync(req: Request, checkAuth: boolean) {
 
     const ratesPayload: any[] = [];
 
-    // 3. Calcular tarifas noche por noche para cada cuarto hijo
+    // 3. Calcular tarifas noche por noche para cada cuarto hijo y el cuarto padre
     ROOM_GROUPS.forEach(group => {
-      group.childIds.forEach(childId => {
+      const roomIds = Array.from(new Set([group.parentId, ...group.childIds]));
+      
+      roomIds.forEach(roomId => {
         const calendarDays: any[] = [];
 
         dates.forEach(dateStr => {
@@ -124,7 +126,7 @@ async function handleSync(req: Request, checkAuth: boolean) {
 
         if (calendarDays.length > 0) {
           ratesPayload.push({
-            roomId: Number(childId),
+            roomId: Number(roomId),
             calendar: calendarDays
           });
         }
