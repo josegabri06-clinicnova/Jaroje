@@ -577,6 +577,7 @@ export default function RecepcionPage() {
   const [pricingSettings, setPricingSettings] = useState<Record<string, any>>({}); // Multiplicadores por roomId desde Beds24/Supabase
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
+  const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [cleanToast, setCleanToast] = useState<{ room: string; by: string } | null>(null);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
@@ -2066,11 +2067,20 @@ export default function RecepcionPage() {
           rule.rule_type === 'base'
         );
         
+        const activeDiscount = tempDiscounts.find((d: any) => 
+          Array.isArray(d.rooms) && 
+          d.rooms.includes(rm.roomId) && 
+          dateStr >= d.from && 
+          dateStr <= d.to
+        );
+
         let priceUsed = 0;
         if (dynamicPrice > 0) {
           priceUsed = dynamicPrice;
         } else if (specialRule) {
           priceUsed = Number(specialRule.price);
+        } else if (activeDiscount) {
+          priceUsed = Number(activeDiscount.priceRaw);
         } else if (seasonalRule) {
           priceUsed = Number(seasonalRule.price);
         } else {
@@ -2325,7 +2335,7 @@ export default function RecepcionPage() {
     window.dispatchEvent(new Event('refresh-start'));
     setIsLoading(true);
     try {
-      const [r, t, inv, chk, acc, rms, prc, psRes, capRes, seasonRes] = await Promise.all([
+      const [r, t, inv, chk, acc, rms, prc, psRes, capRes, seasonRes, discountsRes] = await Promise.all([
         fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
         fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
@@ -2335,7 +2345,8 @@ export default function RecepcionPage() {
         fetch('/api/precios?t=' + Date.now()).then(res => res.json()).catch(() => ({ success: false, data: [] })),
         supabase.from('settings').select('value').eq('key', 'pricing_unit_settings').maybeSingle(),
         supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle(),
-        supabase.from('settings').select('value').eq('key', 'season_ranges').maybeSingle()
+        supabase.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
+        supabase.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle()
       ]);
       const rj = await r.json();
       const tj = await t.json();
@@ -2407,6 +2418,16 @@ export default function RecepcionPage() {
           setSeasonRanges(parsed || []);
         } catch (e) {
           console.error('Error al parsear season_ranges:', e);
+        }
+      }
+
+      // Cargar descuentos temporales/tarifas especiales de Supabase
+      if (discountsRes && discountsRes.data && discountsRes.data.value) {
+        try {
+          const parsed = typeof discountsRes.data.value === 'string' ? JSON.parse(discountsRes.data.value) : discountsRes.data.value;
+          setTempDiscounts(parsed || []);
+        } catch (e) {
+          console.error('Error al parsear temp_discounts:', e);
         }
       }
     } catch (err) {

@@ -151,6 +151,7 @@ export default function VercelActionForm() {
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35 });
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
+  const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [formAccountId, setFormAccountId] = useState('');
   const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
@@ -334,7 +335,17 @@ export default function VercelActionForm() {
       const season = getSeason(form.checkIn, seasonRanges);
       const parentRoom = getParentMapping(rm.roomId, rm.unitId);
       const fallbackPrice = PRICES[parentRoom.roomId]?.[season] || 2000;
-      const basePrice = dynamicPrice > 0 ? dynamicPrice : fallbackPrice;
+      
+      const activeDiscount = tempDiscounts.find((d: any) => 
+        Array.isArray(d.rooms) && 
+        d.rooms.includes(rm.roomId) && 
+        form.checkIn >= d.from && 
+        form.checkIn <= d.to
+      );
+
+      const basePrice = dynamicPrice > 0 
+        ? dynamicPrice 
+        : (activeDiscount ? Number(activeDiscount.priceRaw) : fallbackPrice);
 
       // 3. Apply long stay discount ONLY to basePrice if NOT dynamic
       let discountMult = 1.0;
@@ -541,10 +552,26 @@ export default function VercelActionForm() {
         console.error("Error fetching season ranges:", err);
       }
     };
+    const fetchTempDiscounts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'temp_discounts')
+          .maybeSingle();
+        if (data && data.value) {
+          const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+          setTempDiscounts(parsed || []);
+        }
+      } catch (err) {
+        console.error("Error fetching temp discounts:", err);
+      }
+    };
     fetchAccounts();
     fetchMultipliers();
     fetchCapacitySettings();
     fetchSeasonRanges();
+    fetchTempDiscounts();
   }, []);
 
   // Limpiar método y cuenta si el anticipo es 0 o vacío
