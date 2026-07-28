@@ -1272,13 +1272,13 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
     {
       id: Number(bookId),
       bookId: Number(bookId),
-      status: 'confirmed',
+      status: '1',
       deposit: newDeposit,
       invoiceItems: [
         {
           description,
           qty: -1,
-          amount: Number(amount)
+          price: Number(amount)
         }
       ]
     }
@@ -1388,13 +1388,13 @@ export async function addBeds24GroupPayment(
         {
           id: Number(item.b.id),
           bookId: Number(item.b.id),
-          status: 'confirmed',
+          status: '1',
           deposit: newDep,
           invoiceItems: [
             {
               description: `${description} (Grupo ${items.length} habs)`,
               qty: -1,
-              amount: shareAmount
+              price: shareAmount
             }
           ]
         }
