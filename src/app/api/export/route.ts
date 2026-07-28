@@ -30,8 +30,10 @@ function mapBooking(b: any, dynamicSettings?: any) {
   if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
   else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
   else if (rawSource.includes('expedia')) channel = 'Expedia';
-  else if (rawSource.includes('whatsapp') || rawSource.includes('n8n')) channel = 'WhatsApp Bot';
-  else if (rawSource.includes('beds24')) channel = 'Beds24';
+  else if (rawSource.includes('whatsapp') || rawSource.includes('n8n')) channel = 'WhatsApp';
+  else if (rawSource.includes('google') || rawSource.includes('gpa') || rawSource.includes('hpa')) channel = 'Google';
+  else if (rawSource.includes('jaroje') || rawSource.includes('condominiosjaroje')) channel = 'Jaroje Oficial';
+  else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24
 
   const status = (b.status === '1' || b.status === 'confirmed') ? 'Confirmada' : 'Pendiente';
 

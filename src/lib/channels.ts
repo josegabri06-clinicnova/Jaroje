@@ -50,6 +50,13 @@ export function getChannelBadge(channel: string | null | undefined): {
         emoji: '💬',
         className: 'bg-emerald-50 border border-emerald-200 text-emerald-800',
       };
+    case 'Jaroje Oficial':
+    case 'Jaroje':
+      return {
+        label: 'Jaroje Oficial',
+        emoji: '🏨',
+        className: 'bg-indigo-50 border border-indigo-200 text-indigo-700 font-extrabold',
+      };
     case 'Directo':
     default:
       return {

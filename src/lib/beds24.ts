@@ -1078,7 +1078,9 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
     else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
     else if (rawSource.includes('expedia')) channel = 'Expedia';
     else if (rawSource.includes('whatsapp') || rawSource.includes('n8n')) channel = 'WhatsApp';
-    else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24 = tráfico desde Google
+    else if (rawSource.includes('google') || rawSource.includes('gpa') || rawSource.includes('hpa')) channel = 'Google';
+    else if (rawSource.includes('jaroje') || rawSource.includes('condominiosjaroje')) channel = 'Jaroje Oficial';
+    else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24
 
     const arrivalDate = b.arrival ? new Date(b.arrival) : null;
     const departureDate = b.departure ? new Date(b.departure) : null;
@@ -1132,7 +1134,9 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
       else if (rawSource.includes('expedia')) channel = 'Expedia';
       else if (rawSource.includes('whatsapp') || rawSource.includes('n8n') || rawSource.includes('wapp')) channel = 'WhatsApp';
-      else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24 = tráfico desde Google
+      else if (rawSource.includes('google') || rawSource.includes('gpa') || rawSource.includes('hpa')) channel = 'Google';
+      else if (rawSource.includes('jaroje') || rawSource.includes('condominiosjaroje')) channel = 'Jaroje Oficial';
+      else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24
 
       const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
 
