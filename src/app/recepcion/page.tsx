@@ -2075,12 +2075,12 @@ export default function RecepcionPage() {
         );
 
         let priceUsed = 0;
-        if (dynamicPrice > 0) {
-          priceUsed = dynamicPrice;
-        } else if (specialRule) {
+        if (specialRule) {
           priceUsed = Number(specialRule.price);
         } else if (activeDiscount) {
           priceUsed = Number(activeDiscount.priceRaw);
+        } else if (dynamicPrice > 0) {
+          priceUsed = dynamicPrice;
         } else if (seasonalRule) {
           priceUsed = Number(seasonalRule.price);
         } else {

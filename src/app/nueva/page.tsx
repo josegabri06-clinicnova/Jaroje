@@ -343,9 +343,9 @@ export default function VercelActionForm() {
         form.checkIn <= d.to
       );
 
-      const basePrice = dynamicPrice > 0 
-        ? dynamicPrice 
-        : (activeDiscount ? Number(activeDiscount.priceRaw) : fallbackPrice);
+      const basePrice = activeDiscount 
+        ? Number(activeDiscount.priceRaw)
+        : (dynamicPrice > 0 ? dynamicPrice : fallbackPrice);
 
       // 3. Apply long stay discount ONLY to basePrice if NOT dynamic
       let discountMult = 1.0;

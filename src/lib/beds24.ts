@@ -743,7 +743,7 @@ export async function fetchBeds24RatesMap(
 ): Promise<Record<string, Record<string, number>>> {
   const ratesMap: Record<string, Record<string, number>> = {};
   try {
-    const res = await fetch(`https://api.beds24.com/v2/inventory/rooms/calendar?startDate=${fromDateStr}&endDate=${toDateStr}&includePrices=true`, {
+    const res = await fetch(`https://api.beds24.com/v2/inventory/rooms/calendar?from=${fromDateStr}&to=${toDateStr}&includePrices=true`, {
       method: 'GET',
       headers: { 'token': token },
       cache: 'no-store'

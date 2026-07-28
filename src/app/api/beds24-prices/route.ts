@@ -166,7 +166,7 @@ export async function GET() {
 
     const [calRes, fixedRes] = await Promise.all([
       fetch(
-        `https://api.beds24.com/v2/inventory/rooms/calendar?startDate=${startDate}&endDate=${endDate}&${roomIdParams}&includePrices=true`,
+        `https://api.beds24.com/v2/inventory/rooms/calendar?from=${startDate}&to=${endDate}&${roomIdParams}&includePrices=true`,
         { headers: { token }, cache: 'no-store' }
       ),
       fetch(
