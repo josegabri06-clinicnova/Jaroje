@@ -752,6 +752,7 @@ export default function PublicReservaPage() {
   const id = rawId ? String(rawId).replace(/^(\{\{1\}\}|%7B%7B1%7D%7D)/, '') : '';
   const searchParams = useSearchParams();
   const queryLang = searchParams?.get('lang');
+  const queryAction = searchParams?.get('action');
 
   const [booking, setBooking] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -991,6 +992,18 @@ export default function PublicReservaPage() {
     };
     fetchBooking();
   }, [id]);
+
+  // Auto-abrir modal de mantenimiento si viene con ?action=maintenance
+  useEffect(() => {
+    if (queryAction === 'maintenance' && booking && booking.status !== 'cancelled') {
+      const roomNum = booking.room_name?.match(/\((\d+)\)/)?.[1] || booking.room_name?.replace(/\D/g, '') || '';
+      setMaintenanceType(lang === 'en' ? `My Room (${roomNum})` : `Mi Habitaci\u00f3n (${roomNum})`);
+      setMaintenanceDesc('');
+      setMaintenanceError('');
+      setMaintenanceSuccess(false);
+      setShowMaintenanceModal(true);
+    }
+  }, [queryAction, booking]);
 
   const copyToClipboard = (text: string, setCopied: (v: boolean) => void) => {
     navigator.clipboard.writeText(text);
