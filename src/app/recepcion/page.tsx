@@ -29,7 +29,7 @@ function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accou
   if (isEnvelope) {
     return {
       accountId: null,
-      description: `${baseDesc} (Sobre: ${selectedVal})`
+      description: `${selectedVal} - ${baseDesc}`
     };
   }
   return {

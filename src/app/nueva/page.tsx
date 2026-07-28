@@ -838,7 +838,7 @@ export default function VercelActionForm() {
             const guestPart = `${form.guestName || 'Huésped'}${b24Id ? ` (ID: ${b24Id})` : ''}`;
             const typePart = form.channel === 'Recepción' ? 'Pago Walk-in' : 'Anticipo';
 
-            const baseDesc = [roomPart, sobrePart, guestPart, typePart].filter(Boolean).join(' - ');
+            const baseDesc = [sobrePart, roomPart, guestPart, typePart].filter(Boolean).join(' - ');
             
             const currentDayStr = getLocalDateStr(new Date());
             // Si el check-in es retroactivo, registrar en esa fecha de check-in, si no, registrar hoy
