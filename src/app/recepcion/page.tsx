@@ -7014,15 +7014,22 @@ export default function RecepcionPage() {
 
                                       {/* Selector de cuenta/sobre */}
                                       <div className="space-y-1.5 pt-1 text-left">
-                                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                        <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block flex items-center gap-1">
                                           {paymentMode === 'efectivo' ? '¿En qué sobre va a colocarse el efectivo?' : '¿A qué cuenta va el dinero?'}
+                                          {paymentMode === 'efectivo' && (
+                                            <span className="text-red-500 font-bold text-[11px] ml-1">* OBLIGATORIO</span>
+                                          )}
                                         </label>
                                         {paymentMode === 'efectivo' ? (
                                           <select
                                             value={selectedEnvelope}
                                             onChange={e => setSelectedEnvelope(e.target.value)}
                                             required
-                                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+                                            className={`w-full border rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer ${
+                                              !selectedEnvelope
+                                                ? 'bg-red-50 border-red-400'
+                                                : 'bg-[#fafafa] border-zinc-200/80'
+                                            }`}
                                           >
                                             <option value="" disabled>Selecciona el número de sobre (S01 - S99)...</option>
                                             {ENVELOPES.map(env => (
@@ -7130,7 +7137,9 @@ export default function RecepcionPage() {
                       const targetBalance = payGroupConsolidated ? directGroupTotalBalance : pendingBalance;
 
                       if (!paymentMode || !selectedAccountId) return true;
+                      if (paymentMode === 'efectivo' && !selectedEnvelope) return true;
                       if (!paymentMode2 || !selectedAccountId2) return true;
+                      if (paymentMode2 === 'efectivo' && !selectedEnvelope2) return true;
                       if (targetBalance > 0 && totalPaid < targetBalance) return true;
                       return false;
                     }
@@ -7140,6 +7149,7 @@ export default function RecepcionPage() {
                         const currentPayment = Number(paymentAmount || 0);
                         if (!paymentMode) return true;
                         if (!selectedAccountId) return true;
+                        if (paymentMode === 'efectivo' && !selectedEnvelope) return true;
                         if (currentPayment < directGroupTotalBalance) return true;
                       }
                       return false;
@@ -7150,6 +7160,8 @@ export default function RecepcionPage() {
                       // Si hay adeudo, se requiere método de pago, cuenta/sobre y que el monto cubra el adeudo
                       if (!paymentMode) return true;
                       if (!selectedAccountId) return true;
+                      // Si el método es efectivo, el sobre es OBLIGATORIO
+                      if (paymentMode === 'efectivo' && !selectedEnvelope) return true;
                       if (currentPayment < pendingBalance) return true;
                     }
 

@@ -694,6 +694,23 @@ export default function VercelActionForm() {
         if (!formPaymentMethod || !formAccountId) {
           return alert("Por favor, selecciona el Método de Pago y la Cuenta Destino para el anticipo.");
         }
+        // Si el método es efectivo, el número de sobre es OBLIGATORIO
+        if (formPaymentMethod === 'efectivo' && !formAccountId) {
+          return alert('⚠️ El número de sobre es OBLIGATORIO cuando el método de pago es Efectivo. Por favor, selecciona el sobre (S01 - S99).');
+        }
+        // Verificar que si efectivo, la cuenta seleccionada sea un sobre válido
+        const selAcc = accounts.find(a => String(a.id) === String(formAccountId));
+        const selAccName = selAcc?.name?.trim().toUpperCase() || '';
+        const isValidEnvelope = selAcc && (
+          selAccName === 'EFECTIVO' ||
+          selAcc.group_type === 'SOBRES' ||
+          selAccName.includes('SOBRE') ||
+          selAccName.includes('CASH') ||
+          /^S\d{2}$/.test(selAccName)
+        );
+        if (formPaymentMethod === 'efectivo' && !isValidEnvelope) {
+          return alert('⚠️ El número de sobre es OBLIGATORIO cuando el método de pago es Efectivo. Por favor, selecciona el sobre (S01 - S99) donde guardarás el efectivo.');
+        }
       }
     }
 
@@ -1581,14 +1598,21 @@ export default function VercelActionForm() {
                     </div>
 
                     <div className="space-y-1.5 col-span-2 md:col-span-1">
-                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block">
-                        Sobre / Cuenta Destino
+                      <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 block flex items-center gap-1">
+                        {formPaymentMethod === 'efectivo' ? '¿En qué sobre va a colocarse el efectivo?' : 'Sobre / Cuenta Destino'}
+                        {formPaymentMethod === 'efectivo' && (
+                          <span className="text-red-500 font-bold text-[11px]">* OBLIGATORIO</span>
+                        )}
                       </label>
                       <select
                         value={formAccountId}
                         onChange={e => setFormAccountId(e.target.value)}
-                        required
-                        className="w-full h-14 bg-white border border-zinc-200 rounded-xl px-3.5 text-[16px] font-semibold text-zinc-900 focus:border-zinc-400 transition-all outline-none cursor-pointer"
+                        required={formPaymentMethod === 'efectivo'}
+                        className={`w-full h-14 bg-white border rounded-xl px-3.5 text-[16px] font-semibold text-zinc-900 focus:border-zinc-400 transition-all outline-none cursor-pointer ${
+                          formPaymentMethod === 'efectivo' && !formAccountId
+                            ? 'border-red-400 bg-red-50'
+                            : 'border-zinc-200'
+                        }`}
                       >
                         <option value="" disabled>Selecciona un sobre...</option>
                         {accounts
