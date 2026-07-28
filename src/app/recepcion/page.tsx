@@ -2625,6 +2625,14 @@ export default function RecepcionPage() {
     const emp = getOperatorForLog();
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
 
+    // Prepend envelope to description whenever payment is cash
+    const effectivePaymentDesc1 = paymentMode === 'efectivo' && selectedEnvelope
+      ? [selectedEnvelope, paymentDescription].filter(Boolean).join(' - ')
+      : paymentDescription;
+    const effectivePaymentDesc2 = paymentMode2 === 'efectivo' && selectedEnvelope2
+      ? [selectedEnvelope2, paymentDescription2].filter(Boolean).join(' - ')
+      : paymentDescription2;
+
     const registerSingleDirectPayment = async (
       resId: string | number,
       roomName: string,
@@ -2866,7 +2874,7 @@ export default function RecepcionPage() {
               type: 'ingreso',
               amount: amt1,
               category: 'Walk In',
-              description: paymentDescription ? `${paymentDescription} - ${baseDesc1} [Pending Sync: B24]` : `${baseDesc1} [Pending Sync: B24]`,
+              description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc1} [Pending Sync: B24]` : `${baseDesc1} [Pending Sync: B24]`,
               payment_method: paymentMode,
               account_id: selectedAccountId || null,
               date: todayStr
@@ -2887,7 +2895,7 @@ export default function RecepcionPage() {
               type: 'ingreso',
               amount: amt2,
               category: 'Walk In',
-              description: paymentDescription2 ? `${paymentDescription2} - ${baseDesc2} [Pending Sync: B24]` : `${baseDesc2} [Pending Sync: B24]`,
+              description: effectivePaymentDesc2 ? `${effectivePaymentDesc2} - ${baseDesc2} [Pending Sync: B24]` : `${baseDesc2} [Pending Sync: B24]`,
               payment_method: paymentMode2,
               account_id: selectedAccountId2 || null,
               date: todayStr
@@ -2967,12 +2975,12 @@ export default function RecepcionPage() {
             if (allSynced) {
               if (rows1?.[0]?.id) {
                 await supabase.from('finances').update({
-                  description: paymentDescription ? `${paymentDescription} - ${baseDesc1} [Synced: B24]` : `${baseDesc1} [Synced: B24]`
+                  description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc1} [Synced: B24]` : `${baseDesc1} [Synced: B24]`
                 }).eq('id', rows1[0].id);
               }
               if (rows2?.[0]?.id) {
                 await supabase.from('finances').update({
-                  description: paymentDescription2 ? `${paymentDescription2} - ${baseDesc2} [Synced: B24]` : `${baseDesc2} [Synced: B24]`
+                  description: effectivePaymentDesc2 ? `${effectivePaymentDesc2} - ${baseDesc2} [Synced: B24]` : `${baseDesc2} [Synced: B24]`
                 }).eq('id', rows2[0].id);
               }
             } else {
@@ -3058,7 +3066,7 @@ export default function RecepcionPage() {
 
             if (allSynced && insertedRecordId) {
               await supabase.from('finances').update({
-                description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+                description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
               }).eq('id', insertedRecordId);
             } else {
               alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
@@ -3385,7 +3393,7 @@ export default function RecepcionPage() {
                   paymentMode!,
                   splitAmt1,
                   selectedAccountId,
-                  paymentDescription,
+                  effectivePaymentDesc1,
                   baseDesc1
                 );
               }
@@ -3398,7 +3406,7 @@ export default function RecepcionPage() {
                   paymentMode2!,
                   splitAmt2,
                   selectedAccountId2,
-                  paymentDescription2,
+                  effectivePaymentDesc2,
                   baseDesc2
                 );
               }
@@ -3494,7 +3502,7 @@ export default function RecepcionPage() {
 
                   if (syncedSuccess && netRecordId) {
                     await supabase.from('finances').update({
-                      description: paymentDescription ? `${paymentDescription} - ${netDesc} [Synced: B24]` : `${netDesc} [Synced: B24]`
+                      description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${netDesc} [Synced: B24]` : `${netDesc} [Synced: B24]`
                     }).eq('id', netRecordId);
                   }
                 }
@@ -3563,7 +3571,7 @@ export default function RecepcionPage() {
                   type: 'ingreso',
                   amount: isNaN(cleanSplitAmt) ? 0 : cleanSplitAmt,
                   category: 'Check In',
-                  description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+                  description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
                   payment_method: paymentMode,
                   account_id: selectedAccountId || null,
                   date: safeDateStr
@@ -3904,7 +3912,7 @@ export default function RecepcionPage() {
               paymentMode!,
               amt1,
               selectedAccountId,
-              paymentDescription,
+              effectivePaymentDesc1,
               baseDesc1
             );
           }
@@ -3917,7 +3925,7 @@ export default function RecepcionPage() {
               paymentMode2!,
               amt2,
               selectedAccountId2,
-              paymentDescription2,
+              effectivePaymentDesc2,
               baseDesc2
             );
           }
@@ -3940,7 +3948,7 @@ export default function RecepcionPage() {
               type: 'ingreso',
               amount: otaSplit.netRevenue,
               category: 'Check In',
-              description: paymentDescription ? `${paymentDescription} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
+              description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${netDesc} [Pending Sync: B24]` : `${netDesc} [Pending Sync: B24]`,
               payment_method: 'transferencia',
               account_id: selectedAccountId || null,
               date: todayStr
@@ -4068,7 +4076,7 @@ export default function RecepcionPage() {
               type: 'ingreso',
               amount: isNaN(cleanAmountNum) ? 0 : cleanAmountNum,
               category: 'Check In',
-              description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+              description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
               payment_method: paymentMode,
               account_id: selectedAccountId || null,
               date: safeDateStr
@@ -4115,7 +4123,7 @@ export default function RecepcionPage() {
 
               if (syncedSuccess && insertedRecordId) {
                 await supabase.from('finances').update({
-                  description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+                  description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
                 }).eq('id', insertedRecordId);
               }
             }
