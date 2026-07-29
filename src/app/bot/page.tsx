@@ -1320,17 +1320,14 @@ export default function BotPage() {
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
                           <span>🌐</span> Portal del Huésped
                         </div>
-                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>💬</span> Hablar con nosotros
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>📍</span> Ubicación
                         </div>
                       </>
                     ) : selectedTemplateKey === 'ultimo_aviso' ? (
                       <>
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
                           <span>💳</span> Realizar depósito
-                        </div>
-                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>💬</span> Hablar con nosotros
                         </div>
                       </>
                     ) : selectedTemplateKey === 'reservacion_confirmada' ? (
@@ -1341,17 +1338,20 @@ export default function BotPage() {
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
                           <span>📍</span> Cómo llegar
                         </div>
-                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>💬</span> Hablar con nosotros
-                        </div>
                       </>
-                    ) : selectedTemplateKey === 'disponibilidad_liberada' || selectedTemplateKey === 'recibimiento_nuevamente' ? (
+                    ) : selectedTemplateKey === 'disponibilidad_liberada' ? (
                       <>
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
                           <span>🌐</span> Verificar disponibilidad
                         </div>
-                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>💬</span> Hablar con nosotros
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>📸</span> Fotos y Tarifas
+                        </div>
+                      </>
+                    ) : selectedTemplateKey === 'recibimiento_nuevamente' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🌐</span> Verificar disponibilidad
                         </div>
                       </>
                     ) : selectedTemplateKey === 'preparacion_llegada' ? (
@@ -1372,6 +1372,9 @@ export default function BotPage() {
                           <span>🏡</span> Mi estancia
                         </div>
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🔧</span> Reporte de Mantenimiento
+                        </div>
+                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
                           <span>📶</span> WiFi y Claves
                         </div>
                       </>
@@ -1380,17 +1383,20 @@ export default function BotPage() {
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
                           <span>⭐</span> Escribir reseña
                         </div>
-                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>💬</span> Hablar con nosotros
-                        </div>
                       </>
                     ) : selectedTemplateKey === 'comparte_experiencia' ? (
                       <>
                         <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
                           <span>⭐</span> Califica tu alojamiento
                         </div>
-                        <div className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
-                          <span>💬</span> Hablar con nosotros
+                      </>
+                    ) : selectedTemplateKey === 'alojamiento_listo' ? (
+                      <>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>🏡</span> Mi estancia
+                        </div>
+                        <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-[12px] font-bold py-2 px-3 rounded-xl text-center shadow-2xs flex items-center justify-center gap-1.5">
+                          <span>📍</span> Como llegar
                         </div>
                       </>
                     ) : (
