@@ -5,6 +5,15 @@ import {
   Calculator, Zap, Check, AlertCircle, RefreshCw, X, Tag, Percent, CalendarDays, Trash2, Calendar, Save
 } from 'lucide-react';
 
+const fmtDate = (isoStr: string) => {
+  if (!isoStr) return '';
+  const d = new Date(isoStr + 'T12:00:00');
+  const day = d.getDate();
+  const month = d.toLocaleDateString('es-MX', { month: 'short' }).replace('.', '');
+  const year = d.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
 export default function PreciosPage() {
   // Beds24 direct pricing state
   const [beds24Loading, setBeds24Loading] = useState(false);
@@ -923,30 +932,29 @@ export default function PreciosPage() {
                     };
 
                     return SEASONS_ORDER.map(sGroup => {
-                      // 1. Obtener todos los periodos únicos de esta temporada en todas las habitaciones
-                      const uniquePeriods: { from: string; to: string; fromLabel: string; toLabel: string }[] = [];
-                      const seenPeriods = new Set<string>();
-
-                      beds24Rooms.forEach(room => {
-                        (room.seasonBlocks || []).forEach((b: any) => {
-                          if (b.season === sGroup.id) {
-                            const key = `${b.from}_${b.to}`;
-                            if (!seenPeriods.has(key)) {
-                              seenPeriods.add(key);
-                              uniquePeriods.push({
-                                from: b.from,
-                                to: b.to,
-                                fromLabel: b.fromLabel,
-                                toLabel: b.toLabel
-                              });
-                            }
-                          }
-                        });
-                      });
-
-                      uniquePeriods.sort((a, b) => a.from.localeCompare(b.from));
+                      // 1. Obtener periodos configurados en la base de datos para esta temporada
+                      let uniquePeriods: { from: string; to: string; fromLabel: string; toLabel: string }[] = [];
                       
-                      // Si esta temporada no tiene periodos en ninguna habitación en Beds24, no la mostramos
+                      if (sGroup.id === 'baja') {
+                        uniquePeriods = [{
+                          from: '',
+                          to: '',
+                          fromLabel: 'Cualquier fecha no definida en otras temporadas',
+                          toLabel: ''
+                        }];
+                      } else {
+                        uniquePeriods = seasonRanges
+                          .filter((r: any) => r.season === sGroup.id)
+                          .map((r: any) => ({
+                            from: r.from,
+                            to: r.to,
+                            fromLabel: fmtDate(r.from),
+                            toLabel: fmtDate(r.to)
+                          }));
+                        uniquePeriods.sort((a, b) => a.from.localeCompare(b.from));
+                      }
+                      
+                      // Si esta temporada no tiene periodos configurados, no la mostramos
                       if (uniquePeriods.length === 0) return null;
 
                       const styles = badgeStyles[sGroup.badgeColor] || badgeStyles.zinc;
