@@ -200,15 +200,40 @@ export async function sendWhatsAppTemplate(
           ]
         });
       } else {
-        components.push({
-          type: 'button',
-          sub_type: 'url',
-          index: '0',
-          parameters: finalButtonParams.map(p => ({
-            type: 'text',
-            text: p || ''
-          }))
-        });
+        if (templateName === 'bienvenida_checkin' && bookingId) {
+          components.push({
+            type: 'button',
+            sub_type: 'url',
+            index: '0',
+            parameters: [
+              {
+                type: 'text',
+                text: `${bookingId}?lang=${detectedLang}`
+              }
+            ]
+          });
+          components.push({
+            type: 'button',
+            sub_type: 'url',
+            index: '2',
+            parameters: [
+              {
+                type: 'text',
+                text: String(bookingId)
+              }
+            ]
+          });
+        } else {
+          components.push({
+            type: 'button',
+            sub_type: 'url',
+            index: '0',
+            parameters: finalButtonParams.map(p => ({
+              type: 'text',
+              text: p || ''
+            }))
+          });
+        }
       }
     }
 

@@ -995,9 +995,12 @@ export default function PublicReservaPage() {
 
   // Auto-abrir modal de mantenimiento si viene con ?action=maintenance
   useEffect(() => {
-    if (queryAction === 'maintenance' && booking && booking.status !== 'cancelled') {
+    const isMaintenanceAction = queryAction === 'maintenance' || 
+      (typeof window !== 'undefined' && window.location.href.includes('action=maintenance'));
+
+    if (isMaintenanceAction && booking && booking.status !== 'cancelled') {
       const roomNum = booking.room_name?.match(/\((\d+)\)/)?.[1] || booking.room_name?.replace(/\D/g, '') || '';
-      setMaintenanceType(lang === 'en' ? `My Room (${roomNum})` : `Mi Habitaci\u00f3n (${roomNum})`);
+      setMaintenanceType(lang === 'en' ? `My Room (${roomNum})` : `Mi Habitación (${roomNum})`);
       setMaintenanceDesc('');
       setMaintenanceError('');
       setMaintenanceSuccess(false);
