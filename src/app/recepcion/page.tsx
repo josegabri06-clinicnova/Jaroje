@@ -7347,7 +7347,8 @@ export default function RecepcionPage() {
                     const emp = getOperatorForLog();
                     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepción';
                     
-                    await fetch('/api/tasks', {
+                    let createdTaskId: string | null = null;
+                    const res = await fetch('/api/tasks', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ 
@@ -7357,6 +7358,10 @@ export default function RecepcionPage() {
                         image_base64: photoBase64 || undefined
                       }),
                     });
+                    const data = await res.json();
+                    if (data.success && data.task?.id) {
+                      createdTaskId = data.task.id;
+                    }
 
                     // Registrar log de auditoría
                     if (emp) {
@@ -7399,6 +7404,7 @@ export default function RecepcionPage() {
                       `📍 *Ubicación:* ${ubicacion}\n` +
                       `📝 *Descripción:* ${reportedDesc}\n` +
                       `👤 *Reportado por:* ${operatorName}\n\n` +
+                      (createdTaskId ? `🔗 *Ver/Gestionar Reporte:* https://jaroje-app.vercel.app/mantenimiento?taskId=${createdTaskId}\n\n` : '') +
                       `_Generado automáticamente desde Jaroje OS_`;
 
                     navigator.clipboard.writeText(waText).catch(() => {});

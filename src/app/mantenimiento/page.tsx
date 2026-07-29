@@ -321,6 +321,23 @@ export default function MantenimientoPage() {
     }
   }, []);
 
+  // Auto-abrir detalles de tarea si viene ?taskId=XXX en la URL
+  useEffect(() => {
+    if (typeof window !== 'undefined' && tasks.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const taskId = params.get('taskId');
+      if (taskId) {
+        const task = tasks.find(t => String(t.id) === String(taskId));
+        if (task) {
+          if (['nuevo', 'pendiente', 'en_proceso', 'resuelta'].includes(task.status)) {
+            setFilterStatus(task.status as any);
+          }
+          openDetailsModal(task);
+        }
+      }
+    }
+  }, [tasks]);
+
   const handleUpdateStatus = async (taskId: string, newStatus: string) => {
     setIsLoading(true);
     try {
@@ -672,6 +689,7 @@ export default function MantenimientoPage() {
         `📍 *Ubicación:* ${ubicacion}\n` +
         `📝 *Descripción:* ${payload.description}\n` +
         `👤 *Reportado por:* ${payload.reported_by}\n\n` +
+        (insertedId ? `🔗 *Ver/Gestionar Reporte:* https://jaroje-app.vercel.app/mantenimiento?taskId=${insertedId}\n\n` : '') +
         `_Generado automáticamente desde Jaroje OS_`;
 
       navigator.clipboard.writeText(waText).catch(() => {});

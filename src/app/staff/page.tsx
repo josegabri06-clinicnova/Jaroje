@@ -1111,6 +1111,8 @@ export default function StaffPage() {
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : staffName;
     const finalImagePayload = imagePreviews.length > 0 ? JSON.stringify(imagePreviews) : imagePreview;
 
+    let createdTaskId: string | null = null;
+
     if (editingTask) {
       await fetch('/api/tasks', {
         method: 'PUT',
@@ -1143,11 +1145,15 @@ export default function StaffPage() {
         }
       }
     } else {
-      await fetch('/api/tasks', {
+      const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, reported_by: operatorName, direction: 'staff_to_admin', image_base64: finalImagePayload }),
       });
+      const data = await res.json();
+      if (data.success && data.task?.id) {
+        createdTaskId = data.task.id;
+      }
 
       // Registrar log de auditoría
       if (emp) {
@@ -1195,6 +1201,7 @@ export default function StaffPage() {
         `📍 *Ubicación:* ${ubicacion}\n` +
         `📝 *Descripción:* ${reportedForm.description}\n` +
         `👤 *Reportado por:* ${reportedOperator}\n\n` +
+        (createdTaskId ? `🔗 *Ver/Gestionar Reporte:* https://jaroje-app.vercel.app/mantenimiento?taskId=${createdTaskId}\n\n` : '') +
         `_Generado automáticamente desde Jaroje OS_`;
 
       navigator.clipboard.writeText(waText).then(() => {
