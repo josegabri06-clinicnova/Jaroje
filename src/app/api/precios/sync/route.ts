@@ -41,7 +41,7 @@ async function handleSync(req: Request, checkAuth: boolean) {
     }
 
     // 1. Obtener reglas, rangos de temporadas y descuentos temporales de Supabase
-    const [{ data: rules, error: rulesErr }, { data: seasonRow }, { data: discountRow }] = await Promise.all([
+    const [{ data: rules, error: rulesErr }, { data: seasonRow }, { data: discountRow }, { data: basePricesRow }] = await Promise.all([
       supabase
         .from('pricing_rules')
         .select('*')
@@ -55,6 +55,11 @@ async function handleSync(req: Request, checkAuth: boolean) {
         .from('settings')
         .select('value')
         .eq('key', 'temp_discounts')
+        .maybeSingle(),
+      supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'season_base_prices')
         .maybeSingle()
     ]);
 
@@ -73,6 +78,12 @@ async function handleSync(req: Request, checkAuth: boolean) {
           ? JSON.parse(discountRow.value)
           : discountRow.value)
       : [];
+
+    const seasonBasePrices = basePricesRow?.value
+      ? (typeof basePricesRow.value === 'string'
+          ? JSON.parse(basePricesRow.value)
+          : basePricesRow.value)
+      : {};
 
     // 2. Definir ventana de 540 días a partir de hoy
     const today = new Date();
@@ -148,7 +159,7 @@ async function handleSync(req: Request, checkAuth: boolean) {
             } else if (baseRule && fallbackSeason === 'baja') {
               priceUsed = Number(baseRule.price);
             } else {
-              priceUsed = JAROJE_PRICES[group.parentId]?.[fallbackSeason] || 2000;
+              priceUsed = seasonBasePrices[group.parentId]?.[fallbackSeason] || JAROJE_PRICES[group.parentId]?.[fallbackSeason] || 2000;
             }
           }
 

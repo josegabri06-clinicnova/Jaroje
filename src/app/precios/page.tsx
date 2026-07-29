@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { 
   Calculator, Zap, Check, AlertCircle, RefreshCw, X, Tag, Percent, CalendarDays, Trash2, Calendar, Save
 } from 'lucide-react';
+import { JAROJE_PRICES } from '@/lib/beds24';
 
 const fmtDate = (isoStr: string) => {
   if (!isoStr) return '';
@@ -28,6 +29,90 @@ export default function PreciosPage() {
 
   const [capacitySettings, setCapacitySettings] = useState<Record<string, any>>({});
   const [savingCapacity, setSavingCapacity] = useState(false);
+
+  // --- TARIFAS BASE DE TEMPORADAS EN BASE DE DATOS ---
+  const [seasonBasePrices, setSeasonBasePrices] = useState<Record<string, Record<string, number>>>(JAROJE_PRICES);
+  const [loadingSeasonBasePrices, setLoadingSeasonBasePrices] = useState(false);
+
+  const loadSeasonBasePrices = async () => {
+    setLoadingSeasonBasePrices(true);
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const { data } = await sb.from('settings').select('value').eq('key', 'season_base_prices').maybeSingle();
+      if (data?.value) {
+        const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
+        setSeasonBasePrices({ ...JAROJE_PRICES, ...parsed });
+      }
+    } catch (e) {
+      console.error("Error al cargar season_base_prices:", e);
+    } finally {
+      setLoadingSeasonBasePrices(false);
+    }
+  };
+
+  const saveSeasonBasePricesToDB = async (updatedPrices: Record<string, Record<string, number>>) => {
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      await sb.from('settings').upsert(
+        { key: 'season_base_prices', value: updatedPrices },
+        { onConflict: 'key' }
+      );
+    } catch (e) {
+      console.error("Error al guardar season_base_prices en DB:", e);
+    }
+  };
+
+  // Helper para restar descuentos temporales de los rangos de la temporada
+  const subtractDiscountsFromRanges = (
+    baseRanges: { from: string; to: string }[],
+    discountsList: any[],
+    roomId: string
+  ): { from: string; to: string }[] => {
+    const activeDiscounts = discountsList.filter(d => 
+      Array.isArray(d.rooms) && d.rooms.includes(roomId)
+    );
+
+    let currentIntervals = [...baseRanges];
+
+    for (const discount of activeDiscounts) {
+      const nextIntervals: { from: string; to: string }[] = [];
+
+      for (const interval of currentIntervals) {
+        if (discount.to < interval.from || discount.from > interval.to) {
+          nextIntervals.push(interval);
+        } else {
+          // Solapamiento. Dividimos el rango en las partes que quedan libres:
+          if (discount.from > interval.from) {
+            const d = new Date(discount.from);
+            d.setDate(d.getDate() - 1);
+            const toStr = d.toISOString().split('T')[0];
+            if (toStr >= interval.from) {
+              nextIntervals.push({ from: interval.from, to: toStr });
+            }
+          }
+          if (discount.to < interval.to) {
+            const d = new Date(discount.to);
+            d.setDate(d.getDate() + 1);
+            const fromStr = d.toISOString().split('T')[0];
+            if (fromStr <= interval.to) {
+              nextIntervals.push({ from: fromStr, to: interval.to });
+            }
+          }
+        }
+      }
+      currentIntervals = nextIntervals;
+    }
+
+    return currentIntervals;
+  };
 
   // Cargar precios del calendario de Beds24 (Daily Prices)
   const loadBeds24Prices = async () => {
@@ -93,6 +178,9 @@ export default function PreciosPage() {
   /**
    * Guarda el precio para todos los bloques de una temporada a la vez en Beds24.
    */
+  /**
+   * Guarda el precio para todos los bloques de una temporada a la vez en Beds24.
+   */
   const handleSaveBeds24SeasonPrice = async (params: {
     roomId: string;
     roomName: string;
@@ -123,7 +211,7 @@ export default function PreciosPage() {
       `  · Directo:  $${precioDirecto} (con impuestos)\n` +
       `  · Airbnb:   $${precioAirbnb} (con impuestos)\n` +
       `  · Booking:  $${precioBooking} (con impuestos)\n\n` +
-      `Se modificarán TODOS los periodos de esta temporada en Beds24.\n` +
+      `Se modificarán los periodos no descontados de esta temporada en Beds24.\n` +
       `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
       `¿Continuar?`
     );
@@ -131,17 +219,33 @@ export default function PreciosPage() {
 
     setSavingSeasonKey(key);
     try {
-      const res = await fetch('/api/beds24-prices', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          roomId: params.roomId,
-          priceRaw: newPriceRaw,
-          ranges: params.ranges,
-        }),
-      });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error);
+      // 1. Guardar en Base de Datos
+      const updatedBasePrices = {
+        ...seasonBasePrices,
+        [params.roomId]: {
+          ...(seasonBasePrices[params.roomId] || {}),
+          [params.seasonId]: newPriceRaw
+        }
+      };
+      setSeasonBasePrices(updatedBasePrices);
+      await saveSeasonBasePricesToDB(updatedBasePrices);
+
+      // 2. Calcular rangos sin solapamiento
+      const nonOverlappingRanges = subtractDiscountsFromRanges(params.ranges, tempDiscounts, params.roomId);
+
+      if (nonOverlappingRanges.length > 0) {
+        const res = await fetch('/api/beds24-prices', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            roomId: params.roomId,
+            priceRaw: newPriceRaw,
+            ranges: nonOverlappingRanges,
+          }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error);
+      }
       
       // Actualizar localmente los precios de los bloques de esta temporada
       setBeds24Rooms(prev => prev.map(room => {
@@ -162,9 +266,9 @@ export default function PreciosPage() {
       }));
 
       setEditedSeasonPrices(prev => { const n = { ...prev }; delete n[key]; return n; });
-      alert(`✅ Precios de la temporada "${params.seasonLabel}" actualizados en Beds24.`);
+      alert(`✅ Precios de la temporada "${params.seasonLabel}" actualizados en base de datos y Beds24 (respetando tarifas especiales).`);
     } catch (err: any) {
-      alert('Error al guardar en Beds24: ' + err.message);
+      alert('Error al guardar: ' + err.message);
     } finally {
       setSavingSeasonKey(null);
     }
@@ -198,54 +302,58 @@ export default function PreciosPage() {
     setSavingSeasonKey(bulkKey);
 
     try {
-      // Guardar de forma secuencial para no saturar la API
+      const updatedBasePrices = { ...seasonBasePrices };
+
       for (const room of roomsToSave) {
         const seasonKey = `${room.id}_${seasonId}`;
-        const newPriceRaw = Number(editedSeasonPrices[seasonKey]);
+        const rawInput = editedSeasonPrices[seasonKey];
+        const newPriceRaw = Number(rawInput);
+
+        // Guardar en objeto local de precios base
+        if (!updatedBasePrices[room.id]) {
+          updatedBasePrices[room.id] = {};
+        }
+        updatedBasePrices[room.id][seasonId] = newPriceRaw;
+
         const blocksInSeason = (room.seasonBlocks || []).filter((b: any) => b.season === seasonId);
+        const baseRanges = blocksInSeason.map((b: any) => ({ from: b.from, to: b.to }));
+        const nonOverlappingRanges = subtractDiscountsFromRanges(baseRanges, tempDiscounts, room.id);
 
-        const ranges = blocksInSeason.length > 0 
-          ? blocksInSeason.map((b: any) => ({ from: b.from, to: b.to }))
-          : [];
-
-        if (ranges.length === 0) {
-          throw new Error(`No se encontraron rangos de fechas activos para la habitación: ${room.name}`);
+        if (nonOverlappingRanges.length > 0) {
+          const res = await fetch('/api/beds24-prices', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              roomId: room.id,
+              priceRaw: newPriceRaw,
+              ranges: nonOverlappingRanges,
+            }),
+          });
+          const json = await res.json();
+          if (!json.success) throw new Error(json.error || `Error en habitación ${room.name}`);
         }
 
-        const res = await fetch('/api/beds24-prices', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            roomId: room.id,
-            priceRaw: newPriceRaw,
-            ranges,
-          }),
-        });
-        const json = await res.json();
-        if (!json.success) throw new Error(json.error || `Error desconocido en ${room.name}`);
+        // Actualizar localmente el estado de beds24Rooms
+        setBeds24Rooms(prev => prev.map(r => {
+          if (r.id !== room.id) return r;
+          return {
+            ...r,
+            seasonBlocks: (r.seasonBlocks || []).map((b: any) => {
+              if (b.season !== seasonId) return b;
+              return {
+                ...b,
+                priceRaw: newPriceRaw,
+                priceDirecto: Math.round(newPriceRaw * 1.19),
+                priceAirbnb: Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19),
+                priceBooking: Math.round(newPriceRaw * beds24Multipliers.booking * 1.19),
+              };
+            })
+          };
+        }));
       }
 
-      // Actualizar localmente el estado de beds24Rooms
-      setBeds24Rooms(prev => prev.map(room => {
-        const seasonKey = `${room.id}_${seasonId}`;
-        const editedVal = editedSeasonPrices[seasonKey];
-        if (editedVal === undefined) return room;
-
-        const newPriceRaw = Number(editedVal);
-        return {
-          ...room,
-          seasonBlocks: (room.seasonBlocks || []).map((b: any) => {
-            if (b.season !== seasonId) return b;
-            return {
-              ...b,
-              priceRaw: newPriceRaw,
-              priceDirecto: Math.round(newPriceRaw * 1.19),
-              priceAirbnb: Math.round(newPriceRaw * beds24Multipliers.airbnb * 1.19),
-              priceBooking: Math.round(newPriceRaw * beds24Multipliers.booking * 1.19),
-            };
-          })
-        };
-      }));
+      setSeasonBasePrices(updatedBasePrices);
+      await saveSeasonBasePricesToDB(updatedBasePrices);
 
       // Limpiar campos editados de esta temporada
       setEditedSeasonPrices(prev => {
@@ -256,7 +364,7 @@ export default function PreciosPage() {
         return copy;
       });
 
-      alert(`✅ Tarifas de la temporada "${seasonLabel}" actualizadas con éxito en Beds24.`);
+      alert(`✅ Tarifas de la temporada "${seasonLabel}" actualizadas con éxito en base de datos y Beds24 (respetando tarifas especiales).`);
     } catch (err: any) {
       alert('Error al guardar tarifas: ' + err.message);
     } finally {
@@ -348,6 +456,7 @@ export default function PreciosPage() {
     loadBeds24Prices();
     loadTempDiscounts();
     loadSeasonRanges();
+    loadSeasonBasePrices();
   }, []);
 
   // ─────────────────────────────────────────────────────
@@ -1015,8 +1124,8 @@ export default function PreciosPage() {
 
                               const seasonKey = `${room.id}_${sGroup.id}`;
                               const isEditing = editedSeasonPrices[seasonKey] !== undefined;
-                              const referencePrice = blocksInSeason[0]?.priceRaw || 0;
-                              const currentVal = isEditing ? editedSeasonPrices[seasonKey] : String(referencePrice || '');
+                              const basePriceFromState = seasonBasePrices[room.id]?.[sGroup.id] || JAROJE_PRICES[room.id]?.[sGroup.id] || 0;
+                              const currentVal = isEditing ? editedSeasonPrices[seasonKey] : String(basePriceFromState || '');
                               const currentPriceNum = Number(currentVal) || 0;
 
                               const isSavingItem = savingSeasonKey === seasonKey;
