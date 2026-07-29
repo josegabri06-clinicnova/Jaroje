@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Bookings } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, clearBeds24Cache } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import {
   sendTemplate1_SolicitudRecibida,
@@ -135,6 +135,39 @@ export async function GET(req: Request) {
 
     const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
 
+    // --- PRECARGA PARA CANCELACIÓN DE 1 HORA ---
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+    // Obtener logs de 'ultimo_aviso' enviados en las últimas 48 horas
+    const { data: ultimoAvisoLogs } = await supabase
+      .from('whatsapp_logs')
+      .select('reservation_id, sent_at')
+      .eq('template_name', 'ultimo_aviso')
+      .gte('sent_at', fortyEightHoursAgo);
+
+    const ultimoAvisoMap = new Map<string, string>();
+    if (ultimoAvisoLogs) {
+      for (const log of ultimoAvisoLogs) {
+        ultimoAvisoMap.set(String(log.reservation_id), log.sent_at);
+      }
+    }
+
+    // Obtener comprobantes de las últimas 48 horas en estado 'pending' o 'approved'
+    const { data: receipts } = await supabase
+      .from('transfer_receipts')
+      .select('booking_id, status')
+      .in('status', ['pending', 'approved'])
+      .gte('created_at', fortyEightHoursAgo);
+
+    const paidOrPendingSet = new Set<string>();
+    if (receipts) {
+      for (const receipt of receipts) {
+        if (receipt.booking_id) {
+          paidOrPendingSet.add(String(receipt.booking_id));
+        }
+      }
+    }
+
     // 5. Calcular variables de tiempo en México de forma inmune a la zona horaria del servidor
     const currentHour = getMexicoHour();
     const todayStr = getMexicoDateStr(0);
@@ -177,6 +210,73 @@ export async function GET(req: Request) {
       const bookingIdStr = String(booking.id);
       const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
       if (!guestPhone) continue;
+
+      // --- REGLA: Cancelación Automática 1h tras Último Aviso ---
+      const isCancelled = booking.status === 'cancelled' || String(booking.status) === '0';
+      const hasDeposit = Number(booking.deposit || 0) > 0;
+      const sentAtStr = ultimoAvisoMap.get(bookingIdStr);
+
+      if (!isCancelled && !hasDeposit && sentAtStr) {
+        const sentAt = new Date(sentAtStr);
+        const limitTime = new Date(sentAt.getTime() + 60 * 60 * 1000); // 1 hora después del aviso
+        const now = new Date();
+
+        if (now >= limitTime) {
+          // Ha transcurrido más de 1 hora
+          if (!paidOrPendingSet.has(bookingIdStr)) {
+            console.log(`[Cron Expiración 1h] Reservación ${bookingIdStr} de ${booking.guest_name} no cargó comprobante tras 1 hora. Cancelando...`);
+
+            const isLocal = bookingIdStr.startsWith('loc_') || 
+                            bookingIdStr.startsWith('walkin_') || 
+                            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdStr) || 
+                            bookingIdStr.length < 7;
+
+            try {
+              if (isLocal) {
+                // Cancelación local
+                await supabase
+                  .from('local_reservas')
+                  .update({ status: 'cancelled' })
+                  .eq('id', Number(bookingIdStr));
+              } else {
+                // Cancelación en Beds24
+                const token = await getBeds24Token();
+                const cancelPayload = { id: Number(bookingIdStr), status: 'cancelled' };
+                const cancelRes = await fetch('https://api.beds24.com/v2/bookings', {
+                  method: 'POST',
+                  headers: { 'token': token, 'Content-Type': 'application/json' },
+                  body: JSON.stringify([cancelPayload])
+                });
+                if (!cancelRes.ok) {
+                  const errText = await cancelRes.text();
+                  console.error(`[Cron Expiración 1h] Error al cancelar en Beds24 para la reserva ${bookingIdStr}:`, errText);
+                } else {
+                  clearBeds24Cache();
+                }
+              }
+
+              // Liberar checkin local
+              await supabase.from('checkins').delete().eq('reservation_id', bookingIdStr);
+
+              // Enviar WhatsApp de disponibilidad liberada
+              const waRes = await sendTemplate4_DisponibilidadLiberada(booking);
+              if (waRes.success) {
+                await supabase.from('whatsapp_logs').insert([{
+                  reservation_id: bookingIdStr,
+                  template_name: 'disponibilidad_liberada',
+                  phone: guestPhone
+                }]);
+                reports.push(`[Expirado 1h] Reserva ${bookingIdStr} cancelada y notificada con Mensaje 4.`);
+              } else {
+                reports.push(`[Expirado 1h] Reserva ${bookingIdStr} cancelada en sistema, pero falló WhatsApp: ${waRes.error}`);
+              }
+            } catch (cancelErr) {
+              console.error(`[Cron Expiración 1h] Error en proceso de cancelación de la reserva ${bookingIdStr}:`, cancelErr);
+            }
+            continue; // Saltar el resto de verificaciones para esta reserva
+          }
+        }
+      }
 
       // --- MENSAJE 4: Disponibilidad Liberada (Automático en Cancelaciones) ---
       if (booking.status === 'cancelled') {
