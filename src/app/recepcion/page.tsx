@@ -3012,7 +3012,7 @@ export default function RecepcionPage() {
             type: 'ingreso',
             amount: totalPayment,
             category: 'Walk In',
-            description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+            description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
             payment_method: paymentMode,
             account_id: selectedAccountId || null,
             date: todayStr
@@ -3614,7 +3614,7 @@ export default function RecepcionPage() {
 
                   if (syncedSuccess && insertedRecordId) {
                     await supabase.from('finances').update({
-                      description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+                      description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
                     }).eq('id', insertedRecordId);
                   }
                 }

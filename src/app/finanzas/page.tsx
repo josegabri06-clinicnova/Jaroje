@@ -90,6 +90,8 @@ const cleanDescription = (desc: string, accName?: string, paymentMethod?: string
   return cleaned;
 };
  
+const ENVELOPES = Array.from({ length: 99 }, (_, i) => 'S' + String(i + 1).padStart(2, '0'));
+
 export default function FinanzasPage() {
   // PIN Locking System (Removido por solicitud del cliente: entrada directa)
   const [pinLocked, setPinLocked] = useState(false);
@@ -318,6 +320,7 @@ export default function FinanzasPage() {
   const [formCategory, setFormCategory] = useState('Proveedores');
   const [formDescription, setFormDescription] = useState('');
   const [formAccountId, setFormAccountId] = useState('');
+  const [formEnvelope, setFormEnvelope] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -354,6 +357,7 @@ export default function FinanzasPage() {
         setFormCategory('Proveedores');
         setFormAmount('');
         setFormDescription('');
+        setFormEnvelope('');
         setFormDate(new Date().toISOString().split('T')[0]);
         setShowMoveModal(true);
       }
@@ -384,7 +388,7 @@ export default function FinanzasPage() {
     
     setIsSaving(true);
 
-    let finalDescription = formDescription;
+    let finalDescription = formEnvelope ? `${formEnvelope} - ${formDescription}`.trim() : formDescription;
     if (editingRecord) {
       const b24TagsMatch = editingRecord.description?.match(/\[Reserva B24:\s*\d+\]/i);
       const pendingSyncTag = editingRecord.description?.includes('[Pending Sync: B24]');
@@ -400,7 +404,7 @@ export default function FinanzasPage() {
         tagsStr += ` [Synced: B24]`;
       }
       
-      finalDescription = `${formDescription}${tagsStr}`.trim();
+      finalDescription = `${formEnvelope ? `${formEnvelope} - ` : ''}${formDescription}${tagsStr}`.trim();
     }
 
     const resolvedPaymentMethod = resolvePaymentMethod(formAccountId);
@@ -511,6 +515,7 @@ export default function FinanzasPage() {
 
     setShowMoveModal(false);
     setEditingRecord(null);
+    setFormEnvelope('');
     fetchData();
     setIsSaving(false);
   };
@@ -571,6 +576,7 @@ export default function FinanzasPage() {
     
     setShowMoveModal(false);
     setEditingRecord(null);
+    setFormEnvelope('');
     fetchData();
     setIsSaving(false);
   };
@@ -1257,6 +1263,7 @@ export default function FinanzasPage() {
               setFormCategory('Proveedores');
               setFormAmount('');
               setFormDescription('');
+              setFormEnvelope('');
               setFormDate(new Date().toISOString().split('T')[0]);
               setShowMoveModal(true);
             }} 
@@ -1516,7 +1523,17 @@ export default function FinanzasPage() {
                       setFormType(record.type);
                       setFormAmount(record.amount.toString());
                       setFormCategory(record.category);
-                      setFormDescription(cleanDescription(record.description || ''));
+                      
+                      const envelopeMatch = record.description?.match(/^(S\d{2})\b/);
+                      if (envelopeMatch && envelopeMatch[1]) {
+                        setFormEnvelope(envelopeMatch[1]);
+                        const cleanDesc = record.description.replace(/^(S\d{2})\s*[-:]*\s*/, '');
+                        setFormDescription(cleanDescription(cleanDesc));
+                      } else {
+                        setFormEnvelope('');
+                        setFormDescription(cleanDescription(record.description || ''));
+                      }
+                      
                       setFormAccountId(record.account_id || '');
                       setFormDate(record.date);
                       setShowMoveModal(true);
@@ -1753,6 +1770,28 @@ export default function FinanzasPage() {
                   placeholder="Ej. Traspaso, Pago a proveedor..."
                 />
               </div>
+
+              {/* SELECT ENVELOPE FOR CASH ACCOUNT */}
+              {(() => {
+                const selectedAcc = accounts.find(a => a.id === formAccountId);
+                const isCash = selectedAcc?.group_type === 'EFECTIVO';
+                if (!isCash) return null;
+                return (
+                  <div className="animate-in fade-in duration-300">
+                    <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Número de Sobre (Efectivo)</label>
+                    <select
+                      value={formEnvelope}
+                      onChange={e => setFormEnvelope(e.target.value)}
+                      className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none font-bold text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 cursor-pointer"
+                    >
+                      <option value="">Ninguno / No aplica</option>
+                      {ENVELOPES.map(env => (
+                        <option key={env} value={env}>{env}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })()}
 
               {/* FECHA */}
               <div>
