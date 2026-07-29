@@ -741,16 +741,9 @@ export default function StaffPage() {
     };
   }, []);
 
-  const llegadas = reservas.filter(r => r.status !== 'cancelled' && (r.check_in || '').split('T')[0].split(' ')[0] === todayStr && !r.checked_in && !r.checked_out);
-  const salidas  = reservas.filter(r => r.status !== 'cancelled' && (r.check_out || '').split('T')[0].split(' ')[0] <= todayStr && (r.check_out || '').split('T')[0].split(' ')[0] >= limitDateStr && !r.checked_out);
-  const ocupadas = reservas.filter(r => {
-    if (r.status === 'cancelled' || r.checked_out) return false;
-    const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
-    const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-    if (cIn < todayStr && cOut > todayStr) return true;
-    if (cIn === todayStr && r.checked_in) return true;
-    return false;
-  });
+  const llegadas = reservas.filter(r => r.status !== 'cancelled' && (r.check_in || '').split('T')[0].split(' ')[0] === todayStr);
+  const salidas  = reservas.filter(r => r.status !== 'cancelled' && (r.check_out || '').split('T')[0].split(' ')[0] === todayStr);
+  const ocupadas = reservas.filter(r => r.status !== 'cancelled' && (r.check_out || '').split('T')[0].split(' ')[0] > todayStr && r.checked_in);
 
   const getScheduledCleanings = (): CleanTask[] => {
     const list: CleanTask[] = [];
@@ -2997,8 +2990,8 @@ export default function StaffPage() {
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
           filtered = llegadas;
         } else if (kpiModalType === 'salen') {
-          title = 'Pendientes por Salir';
-          badgeColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+          title = 'Salidas Hoy';
+          badgeColor = 'bg-zinc-150 text-zinc-700 border border-zinc-200';
           filtered = salidas;
         } else if (kpiModalType === 'disponibles') {
           title = 'Habitaciones Disponibles';
