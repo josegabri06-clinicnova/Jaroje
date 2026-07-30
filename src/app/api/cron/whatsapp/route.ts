@@ -11,7 +11,8 @@ import {
   sendTemplate7_SeguimientoSatisfaccion,
   sendTemplate8_SalidaCheckout,
   sendTemplate9_ComparteExperiencia,
-  sendTemplate10_RecibimientoNuevamente
+  sendTemplate10_RecibimientoNuevamente,
+  sendTemplate_AlojamientoListo
 } from '@/lib/whatsapp';
 
 // Asegurar de forma automatizada que existe la tabla whatsapp_logs en Supabase
@@ -299,6 +300,34 @@ export async function GET(req: Request) {
           if (res.success) {
             await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone }]);
             reports.push(`Enviado Mensaje 5 (Prep llegada 6PM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+          }
+        }
+      }
+
+      // --- MENSAJE EXTRA: Alojamiento Listo para habitaciones vacías el día anterior (12:00 PM de hoy) ---
+      if (booking.check_in === todayStr && currentHour === 12) {
+        const logKey = `${bookingIdStr}_alojamiento_listo`;
+        if (!sentSet.has(logKey)) {
+          const rRoom = String(booking.room_name || booking.room || '').replace(/[^0-9]/g, '');
+          if (rRoom) {
+            // Verificar si alguna reserva ocupaba la habitación ayer (checkout ayer)
+            const occupiedYesterday = allBookings.some(other => {
+              if (other.status === 'cancelled' || String(other.status) === '0' || String(other.id) === bookingIdStr) return false;
+              const otherRoom = String(other.room_name || other.room || '').replace(/[^0-9]/g, '');
+              return otherRoom === rRoom && other.check_out === yesterdayStr;
+            });
+
+            if (!occupiedYesterday) {
+              const res = await sendTemplate_AlojamientoListo(booking);
+              if (res.success) {
+                await supabase.from('whatsapp_logs').insert([{
+                  reservation_id: bookingIdStr,
+                  template_name: 'alojamiento_listo',
+                  phone: guestPhone
+                }]);
+                reports.push(`Enviado Mensaje Alojamiento Listo (Vacante ayer) a ${booking.guest_name} para Habitación ${rRoom} (ID: ${bookingIdStr})`);
+              }
+            }
           }
         }
       }
