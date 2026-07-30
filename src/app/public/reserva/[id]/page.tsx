@@ -1033,7 +1033,7 @@ export default function PublicReservaPage() {
           if (json.data.receipt_url) {
             setUploadedUrl(json.data.receipt_url);
           }
-          if (json.data.document_url) {
+          if (json.data.document_url && json.data.document_url !== 'null' && json.data.document_url !== 'undefined') {
             setUploadedDniUrl(json.data.document_url);
           }
         } else {
@@ -1721,13 +1721,28 @@ export default function PublicReservaPage() {
                 <p className="text-[11px] text-zinc-600 leading-relaxed">
                   {t.dniSuccessDesc}
                 </p>
-                <div className="relative rounded-xl overflow-hidden border border-zinc-200 shadow-sm max-w-xs mx-auto">
-                  <img
-                    src={uploadedDniUrl}
-                    alt="Guest ID / Passport"
-                    className="w-full h-36 object-cover bg-zinc-50"
-                  />
-                </div>
+                {(uploadedDniUrl.toLowerCase().endsWith('.pdf') || uploadedDniUrl.toLowerCase().includes('.pdf')) ? (
+                  <div className="flex flex-col items-center justify-center p-5 bg-zinc-50 border border-zinc-200 rounded-xl space-y-2 max-w-xs mx-auto">
+                    <FileText size={36} className="text-zinc-400" />
+                    <span className="text-[11px] font-bold text-zinc-700">{lang === 'en' ? 'PDF Document' : 'Documento PDF'}</span>
+                    <a
+                      href={uploadedDniUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10.5px] font-extrabold rounded-lg transition-colors border border-indigo-100 shadow-xs cursor-pointer"
+                    >
+                      {lang === 'en' ? 'Open PDF' : 'Abrir PDF'}
+                    </a>
+                  </div>
+                ) : (
+                  <div className="relative rounded-xl overflow-hidden border border-zinc-200 shadow-sm max-w-xs mx-auto">
+                    <img
+                      src={uploadedDniUrl}
+                      alt="Guest ID / Passport"
+                      className="w-full h-36 object-cover bg-zinc-50"
+                    />
+                  </div>
+                )}
                 <div className="pt-1 text-center">
                   <label className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-xs transition-all border border-zinc-200 cursor-pointer shadow-xs">
                     <Upload size={13} className="text-zinc-500" />
