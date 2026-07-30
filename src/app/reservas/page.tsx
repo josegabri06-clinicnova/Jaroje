@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2 } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -2945,7 +2945,6 @@ export default function ReservasList() {
                         }}
                         className="hidden"
                         accept="image/*"
-                        required
                       />
                       {!dniPreview ? (
                         <div
@@ -2956,14 +2955,31 @@ export default function ReservasList() {
                           <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
                         </div>
                       ) : (
-                        <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white">
-                          <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
-                          <button
-                            onClick={() => { setDniPreview(null); setDocumentFile(null); }}
-                            className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
-                          >
-                            <X size={14} />
-                          </button>
+                        <div className="space-y-2 animate-in fade-in duration-200">
+                          <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white">
+                            <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => docInputRef.current?.click()}
+                              className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                            >
+                              <Camera size={14} /> Cambiar Identificación
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm('¿Estás seguro de que deseas eliminar la identificación seleccionada?')) {
+                                  setDniPreview(null);
+                                  setDocumentFile(null);
+                                }
+                              }}
+                              className="px-3.5 bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

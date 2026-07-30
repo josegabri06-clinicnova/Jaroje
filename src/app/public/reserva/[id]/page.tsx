@@ -25,7 +25,8 @@ import {
   MessageSquare,
   Edit,
   LogOut,
-  ReceiptText
+  ReceiptText,
+  Lock
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -1712,7 +1713,21 @@ export default function PublicReservaPage() {
               </div>
             </div>
 
-            {uploadedDniUrl ? (
+            {!isOta && !hasPaid ? (
+              <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-4.5 text-center space-y-2">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-2 text-amber-700">
+                  <Lock size={20} />
+                </div>
+                <h4 className="text-[13px] font-bold text-amber-900 uppercase tracking-wide">
+                  {lang === 'en' ? 'Payment Required' : 'Pago Requerido'}
+                </h4>
+                <p className="text-[11.5px] text-amber-800 leading-relaxed font-semibold">
+                  {lang === 'en'
+                    ? 'Please complete your deposit or stay payment to enable registering your official ID. Once confirmed, the upload option will appear here.'
+                    : 'Por favor realiza el pago del anticipo o de tu estancia para habilitar el registro de tu identificación oficial. Una vez confirmado, aparecerá la opción para subir tu documento.'}
+                </p>
+              </div>
+            ) : uploadedDniUrl ? (
               <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 space-y-3">
                 <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs select-none">
                   <Check size={16} className="shrink-0" />

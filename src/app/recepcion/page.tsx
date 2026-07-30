@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
-  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw
+  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw, Trash2
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
@@ -1635,6 +1635,7 @@ export default function RecepcionPage() {
   };
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
+  const [dniUploadLoading, setDniUploadLoading] = useState<boolean>(false);
 
   useEffect(() => {
     if (showCheckInModal && selectedReserva) {
@@ -2625,9 +2626,60 @@ export default function RecepcionPage() {
   const handleDniUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    
     const b64 = await compressImage(file);
     setDniPreview(b64);
     setDniFile(file);
+
+    if (selectedReserva && selectedReserva.checked_in) {
+      setDniUploadLoading(true);
+      try {
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
+        const { data, error: uploadErr } = await supabase.storage.from('dni_images').upload(fileName, file);
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
+        const newDniUrl = publicUrlData.publicUrl;
+
+        const cleanId = String(selectedReserva.id).toLowerCase().trim();
+        const { data: existingCheckin } = await supabase
+          .from('checkins')
+          .select('reservation_id')
+          .eq('reservation_id', cleanId)
+          .maybeSingle();
+
+        if (existingCheckin) {
+          const { error: updateErr } = await supabase
+            .from('checkins')
+            .update({ document_url: newDniUrl })
+            .eq('reservation_id', cleanId);
+          if (updateErr) throw updateErr;
+        } else {
+          const { error: upsertErr } = await supabase
+            .from('checkins')
+            .upsert({
+              reservation_id: cleanId,
+              guest_name: selectedReserva.guest_name,
+              room: selectedReserva.room,
+              check_in_date: selectedReserva.check_in,
+              check_out_date: selectedReserva.check_out,
+              status: 'checked_in',
+              document_url: newDniUrl
+            });
+          if (upsertErr) throw upsertErr;
+        }
+
+        setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
+        setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
+        alert('✅ Identificación guardada con éxito.');
+      } catch (err: any) {
+        console.error('Error al subir DNI:', err);
+        alert('❌ Error al guardar identificación: ' + err.message);
+      } finally {
+        setDniUploadLoading(false);
+      }
+    }
   };
 
   const processCheckIn = async () => {
@@ -6314,35 +6366,77 @@ export default function RecepcionPage() {
                 </div>
               )}
 
+              {/* DNI Scanner */}
+              <div className="space-y-2">
+                <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Identificación (DNI/Pasaporte)</h4>
+                {dniUploadLoading ? (
+                  <div className="border border-zinc-200 bg-zinc-50 rounded-2xl h-24 flex flex-col items-center justify-center gap-2 transition-all">
+                    <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
+                    <span className="text-[12px] font-bold text-zinc-500">Subiendo identificación...</span>
+                  </div>
+                ) : !dniPreview ? (
+                  <div
+                    onClick={() => fileRef.current?.click()}
+                    className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <Camera size={20} className="text-zinc-400" />
+                    <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
+                    <input
+                      type="file" accept="image/*"
+                      ref={fileRef} onChange={handleDniUpload} className="hidden"
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2 animate-in fade-in duration-200">
+                    <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white">
+                      <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                      >
+                        <Camera size={14} /> Cambiar Identificación
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (window.confirm('¿Estás seguro de que deseas eliminar la identificación actual?')) {
+                            if (selectedReserva.checked_in) {
+                              try {
+                                const { error: deleteErr } = await supabase
+                                  .from('checkins')
+                                  .update({ document_url: null })
+                                  .eq('reservation_id', String(selectedReserva.id).toLowerCase().trim());
+                                if (deleteErr) throw deleteErr;
+                                setSelectedReserva(prev => prev ? { ...prev, dni_image: undefined } : null);
+                                setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: undefined } : r));
+                                alert('✅ Identificación eliminada.');
+                              } catch (err: any) {
+                                alert('Error al eliminar: ' + err.message);
+                              }
+                            }
+                            setDniPreview(null);
+                            setDniFile(null);
+                          }
+                        }}
+                        className="px-3.5 bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    {/* Hidden input for change upload */}
+                    <input
+                      type="file" accept="image/*"
+                      ref={fileRef} onChange={handleDniUpload} className="hidden"
+                    />
+                  </div>
+                )}
+              </div>
+
               {!selectedReserva.checked_in && (
                 <>
-                  {/* DNI Scanner */}
-                  <div className="space-y-2">
-                    <h4 className="text-[12px] font-extrabold text-zinc-900 uppercase tracking-wider">Identificación (DNI/Pasaporte)</h4>
-                    {!dniPreview ? (
-                      <div
-                        onClick={() => fileRef.current?.click()}
-                        className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
-                      >
-                        <Camera size={20} className="text-zinc-400" />
-                        <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
-                        <input
-                          type="file" accept="image/*"
-                          ref={fileRef} onChange={handleDniUpload} className="hidden"
-                        />
-                      </div>
-                    ) : (
-                      <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm">
-                        <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
-                        <button
-                          onClick={() => { setDniPreview(null); setDniFile(null); }}
-                          className="absolute top-2.5 right-2.5 w-7 h-7 bg-black/60 hover:bg-black text-white flex items-center justify-center rounded-full transition-all cursor-pointer shadow"
-                        >
-                          <X size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
 
                   {/* Editar Número de Huéspedes */}
                   {selectedReserva.id !== 'walkin' && (() => {

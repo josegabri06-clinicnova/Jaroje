@@ -16,10 +16,11 @@ export async function POST(req: Request) {
 
     const bookingId = Number(id);
 
-    // 1. Obtener detalles de la reservación (Check-in/Check-out/Guest Name)
+    // 1. Obtener detalles de la reservación (Check-in/Check-out/Guest Name) y verificar pago
     let checkInDate = null;
     let checkOutDate = null;
     let guestName = 'Huésped';
+    let isPaidOrOta = false;
 
     const { data: localRes } = await supabase
       .from('local_reservas')
@@ -31,6 +32,8 @@ export async function POST(req: Request) {
       checkInDate = localRes.check_in;
       checkOutDate = localRes.check_out;
       guestName = localRes.guest_name;
+      // Para reservas locales: require deposit > 0 o is_acknowledged
+      isPaidOrOta = (Number(localRes.deposit || 0) > 0) || !!localRes.is_acknowledged;
     } else {
       const allBeds24 = await getBeds24Bookings(true);
       const booking = allBeds24.find(r => r.id === bookingId);
@@ -38,7 +41,23 @@ export async function POST(req: Request) {
         checkInDate = booking.check_in;
         checkOutDate = booking.check_out;
         guestName = booking.guest_name;
+        
+        // Determinar si es OTA
+        const rawChannel = String(booking.channel || '').toLowerCase();
+        const rawName = String(booking.guest_name || '').toUpperCase();
+        const rawNotes = String(booking.notes || '').toLowerCase();
+        const isOta = ['airbnb', 'booking', 'expedia'].some(c => rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c));
+        
+        if (isOta) {
+          isPaidOrOta = true;
+        } else {
+          isPaidOrOta = (Number(booking.deposit || 0) > 0) || !!booking.is_acknowledged;
+        }
       }
+    }
+
+    if (!isPaidOrOta) {
+      return NextResponse.json({ error: 'Debes completar el pago de tu anticipo antes de subir tu identificación.' }, { status: 400 });
     }
 
     // 2. Extensión del archivo y ruta en Storage
