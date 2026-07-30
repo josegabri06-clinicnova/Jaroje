@@ -49,6 +49,19 @@ async function ensureLogsTable() {
   }
 }
 
+// Limpia y normaliza el número de habitación (por ejemplo, extrae "401" de "Casa Vacacional de 3 dormitorios (401)")
+function getCleanRoom(roomName: string, roomField: string): string {
+  const parenMatch = String(roomName || '').match(/\((\d{3})\)/);
+  if (parenMatch) return parenMatch[1];
+  const digitMatch = String(roomName || '').match(/\b(\d{3})\b/);
+  if (digitMatch) return digitMatch[1];
+  const rawDigits = String(roomField || roomName || '').replace(/[^0-9]/g, '');
+  if (rawDigits.length > 3) {
+    return rawDigits.substring(rawDigits.length - 3);
+  }
+  return rawDigits;
+}
+
 // Obtener la hora actual en formato GMT-6 (Huatulco, México) de manera robusta
 function getMexicoHour(): number {
   const formatter = new Intl.DateTimeFormat('en-US', {
@@ -185,7 +198,7 @@ export async function GET(req: Request) {
     const hasHighUrgencyIncident = async (roomName: string, checkIn: string, checkOut: string): Promise<boolean> => {
       try {
         if (!roomName) return false;
-        const cleanRoom = roomName.replace(/[^0-9]/g, '');
+        const cleanRoom = getCleanRoom(roomName, '');
         if (!cleanRoom) return false;
 
         const { data: incidents } = await supabase
@@ -197,7 +210,7 @@ export async function GET(req: Request) {
         if (!incidents || incidents.length === 0) return false;
 
         return incidents.some(inc => {
-          const incRoomClean = (inc.room || '').replace(/[^0-9]/g, '');
+          const incRoomClean = getCleanRoom('', inc.room);
           return incRoomClean === cleanRoom;
         });
       } catch (e) {
@@ -308,13 +321,13 @@ export async function GET(req: Request) {
       if (booking.check_in === todayStr && currentHour === 12) {
         const logKey = `${bookingIdStr}_alojamiento_listo`;
         if (!sentSet.has(logKey)) {
-          const rRoom = String(booking.room_name || booking.room || '').replace(/[^0-9]/g, '');
+          const rRoom = getCleanRoom(booking.room_name, booking.room);
           if (rRoom) {
-            // Verificar si alguna reserva ocupaba la habitación ayer (checkout ayer)
+            // Verificar si alguna reserva ocupaba la habitación ayer por la noche
             const occupiedYesterday = allBookings.some(other => {
               if (other.status === 'cancelled' || String(other.status) === '0' || String(other.id) === bookingIdStr) return false;
-              const otherRoom = String(other.room_name || other.room || '').replace(/[^0-9]/g, '');
-              return otherRoom === rRoom && other.check_out === yesterdayStr;
+              const otherRoom = getCleanRoom(other.room_name, other.room);
+              return otherRoom === rRoom && other.check_in <= yesterdayStr && other.check_out >= todayStr;
             });
 
             if (!occupiedYesterday) {
