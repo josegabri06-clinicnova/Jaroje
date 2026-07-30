@@ -124,7 +124,9 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       todayBookings,
-      alojamiento_listo_logs: compactLogs
+      alojamiento_listo_logs: compactLogs,
+      beds24BookingRaw: b24BookingRaw,
+      beds24BookingError: b24BookingError
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message });
