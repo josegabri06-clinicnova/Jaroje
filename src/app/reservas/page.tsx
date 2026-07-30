@@ -184,6 +184,14 @@ export default function ReservasList() {
   const [paymentDescription, setPaymentDescription] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [dniPreview, setDniPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (showPaymentFlow && selectedRes) {
+      if (selectedRes.document_url) {
+        setDniPreview(selectedRes.document_url);
+      }
+    }
+  }, [showPaymentFlow, selectedRes]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const docInputRef = useRef<HTMLInputElement>(null);

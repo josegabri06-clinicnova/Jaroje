@@ -317,6 +317,14 @@ export default function CalendarPage() {
   const [showPaymentFlow, setShowPaymentFlow] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (showPaymentFlow && selectedReserva) {
+      if (selectedReserva.dni_image) {
+        setDniPreview(selectedReserva.dni_image);
+      }
+    }
+  }, [showPaymentFlow, selectedReserva]);
+
 
 
   const fetchData = async (bypassCache = false) => {

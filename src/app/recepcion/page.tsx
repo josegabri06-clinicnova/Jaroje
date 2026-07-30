@@ -1635,6 +1635,14 @@ export default function RecepcionPage() {
   };
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (showCheckInModal && selectedReserva) {
+      if (selectedReserva.dni_image) {
+        setDniPreview(selectedReserva.dni_image);
+      }
+    }
+  }, [showCheckInModal, selectedReserva]);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');
