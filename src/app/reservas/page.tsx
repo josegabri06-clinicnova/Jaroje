@@ -4717,7 +4717,6 @@ export default function ReservasList() {
                     );
                   }
 
-                  const todayStr = new Date().toLocaleDateString('sv-SE');
                   const isFuture = selectedRes.check_in && selectedRes.check_in > todayStr;
                   
                   if (isFuture) {

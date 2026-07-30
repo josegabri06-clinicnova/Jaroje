@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         const { sendTemplate3_ReservacionConfirmada } = await import('@/lib/whatsapp');
         
         const BEDS24_TOKEN = await getBeds24Token();
-        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
+        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&status=0,1,2,3,4,5`, {
           headers: { 'token': BEDS24_TOKEN }
         });
         
