@@ -972,7 +972,7 @@ export default function AjustesPage() {
         onToggle={() => toggleSection('seguridad')}
       >
         <div className="divide-y divide-zinc-100">
-          <Row label="Cambiar PIN Administrador (Master)" value="••••" onPress={() => openPinModal('admin')} />
+          <Row label="Cambiar PIN Finanzas" value="••••" onPress={() => openPinModal('admin')} />
           <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
           <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
           <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />
@@ -1405,7 +1405,7 @@ export default function AjustesPage() {
               <div className="flex items-center gap-2">
                 <Key size={16} className="text-zinc-650"/>
                 <h3 className="font-bold text-zinc-900 text-base">
-                  PIN {pinModal === 'admin' ? 'Administrador' : pinModal === 'recepcion' ? 'Recepción' : pinModal === 'staff_limpieza' ? 'Limpieza' : 'Mantenimiento'}
+                  PIN {pinModal === 'admin' ? 'Finanzas' : pinModal === 'recepcion' ? 'Recepción' : pinModal === 'staff_limpieza' ? 'Limpieza' : 'Mantenimiento'}
                 </h3>
               </div>
               <button onClick={() => setPinModal(null)} className="p-2 rounded-xl hover:bg-zinc-100 transition-colors">
