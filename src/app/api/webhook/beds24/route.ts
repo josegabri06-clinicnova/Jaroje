@@ -10,8 +10,8 @@ export async function POST(req: Request) {
     // { "roomId": "[ROOMID]", "checkIn": "[FIRSTNIGHT]", "checkOut": "[LASTNIGHT]", "source": "[SOURCE]", "bookingId": "[BOOKID]", "guestName": "[GUESTNAME]" }
     const { roomId, checkIn, checkOut, source, bookingId, guestName } = payload;
 
-    if (!roomId || !checkIn || !checkOut) {
-      return NextResponse.json({ error: 'Faltan parámetros obligatorios' }, { status: 400 });
+    if (!bookingId) {
+      return NextResponse.json({ error: 'Falta bookingId' }, { status: 400 });
     }
 
 
