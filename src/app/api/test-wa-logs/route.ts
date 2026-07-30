@@ -76,11 +76,21 @@ export async function GET(req: Request) {
       .order('created_at', { ascending: false })
       .limit(20);
 
-    // Query local_reservas for test names to see if they are in the database
-    const { data: testLocalRes, error: localErr } = await supabase
-      .from('local_reservas')
-      .select('*')
-      .or('guest_name.ilike.%rolando%,guest_name.ilike.%jose%');
+    let todayBookings: any[] = [];
+    try {
+      const { getBeds24Bookings } = await import('@/lib/beds24');
+      const allB = await getBeds24Bookings(true, false, true);
+      todayBookings = allB.filter(b => b.check_in === '2026-07-30').map(b => ({
+        id: b.id,
+        guest_name: b.guest_name,
+        phone: b.guest_phone,
+        room: b.room,
+        room_name: b.room_name,
+        channel: b.channel
+      }));
+    } catch (e: any) {
+      todayBookings = [{ error: e.message }];
+    }
 
     // Query Beds24 raw booking for diagnostics if test_booking_id is provided
     const testBookingId = searchParams.get('test_booking_id') || '';
@@ -112,8 +122,7 @@ export async function GET(req: Request) {
       convError: convErr?.message,
       webhookDebugLogs: debugLogs,
       webhookDebugError: debugErr?.message,
-      localReservasTest: testLocalRes,
-      localReservasError: localErr?.message,
+      todayBookings,
       beds24BookingRaw: b24BookingRaw,
       beds24BookingError: b24BookingError
     });
