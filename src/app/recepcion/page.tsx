@@ -1638,11 +1638,15 @@ export default function RecepcionPage() {
 
   useEffect(() => {
     if (showCheckInModal && selectedReserva) {
-      if (selectedReserva.dni_image) {
+      const userRole = getRole();
+      const isFuture = selectedReserva.check_in && selectedReserva.check_in > todayStr;
+      if (selectedReserva.dni_image && !(userRole === 'recepcion' && isFuture)) {
         setDniPreview(selectedReserva.dni_image);
+      } else {
+        setDniPreview(null);
       }
     }
-  }, [showCheckInModal, selectedReserva]);
+  }, [showCheckInModal, selectedReserva, todayStr]);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');

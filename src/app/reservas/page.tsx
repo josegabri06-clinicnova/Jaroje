@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2 } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -3996,15 +3996,22 @@ export default function ReservasList() {
                   {selectedRes.document_url && (
                     <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Identificación del Huésped</span>
-                      <a 
-                        href={selectedRes.document_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2.5 px-4 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
-                      >
-                        <FileText size={15} className="text-zinc-500" />
-                        <span>Ver DNI / Pasaporte Escaneado ↗</span>
-                      </a>
+                      {userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
+                        <div className="flex items-center gap-2.5 px-4 py-3 bg-zinc-100 border border-zinc-205 text-zinc-450 font-bold rounded-xl text-[12px] shadow-sm select-none">
+                          <Lock size={15} className="text-zinc-400 shrink-0" />
+                          <span>🔒 Oculto hasta el día de llegada ({format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es })})</span>
+                        </div>
+                      ) : (
+                        <a 
+                          href={selectedRes.document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 px-4 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
+                        >
+                          <FileText size={15} className="text-zinc-500" />
+                          <span>Ver DNI / Pasaporte Escaneado ↗</span>
+                        </a>
+                      )}
                     </div>
                   )}
 
@@ -4604,14 +4611,21 @@ export default function ReservasList() {
                     <CheckCircle2 size={18} /> En Casa (Extender Estancia 🗓️)
                   </button>
                   {selectedRes.document_url && (
-                    <a 
-                      href={selectedRes.document_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 transition-colors shadow-sm"
-                    >
-                      <FileText size={16} /> Ver Documento / Pasaporte
-                    </a>
+                    userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
+                      <div className="w-full bg-zinc-100 text-zinc-400 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 select-none">
+                        <Lock size={16} className="text-zinc-400 shrink-0" />
+                        <span>Documento oculto hasta el check-in</span>
+                      </div>
+                    ) : (
+                      <a 
+                        href={selectedRes.document_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 transition-colors shadow-sm"
+                      >
+                        <FileText size={16} /> Ver Documento / Pasaporte
+                      </a>
+                    )
                   )}
                   {userRole === 'admin' && (
                     <button
@@ -4683,14 +4697,21 @@ export default function ReservasList() {
                           <span>Estancia Completada (Checked-Out)</span>
                         </div>
                         {selectedRes.document_url && (
-                          <a 
-                            href={selectedRes.document_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 transition-colors shadow-sm"
-                          >
-                            <FileText size={16} /> Ver Documento / Pasaporte
-                          </a>
+                          userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
+                            <div className="w-full bg-zinc-100 text-zinc-400 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 select-none">
+                              <Lock size={16} className="text-zinc-400 shrink-0" />
+                              <span>Documento oculto hasta el check-in</span>
+                            </div>
+                          ) : (
+                            <a 
+                              href={selectedRes.document_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 transition-colors shadow-sm"
+                            >
+                              <FileText size={16} /> Ver Documento / Pasaporte
+                            </a>
+                          )
                         )}
                       </div>
                     );

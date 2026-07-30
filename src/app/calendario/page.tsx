@@ -319,11 +319,14 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (showPaymentFlow && selectedReserva) {
-      if (selectedReserva.dni_image) {
+      const isFuture = selectedReserva.check_in && selectedReserva.check_in > todayStr;
+      if (selectedReserva.dni_image && !(userRole === 'recepcion' && isFuture)) {
         setDniPreview(selectedReserva.dni_image);
+      } else {
+        setDniPreview(null);
       }
     }
-  }, [showPaymentFlow, selectedReserva]);
+  }, [showPaymentFlow, selectedReserva, userRole, todayStr]);
 
 
 
