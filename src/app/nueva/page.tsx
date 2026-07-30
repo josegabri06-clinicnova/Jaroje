@@ -18,6 +18,8 @@ const PRICES: Record<string, Record<string, number>> = {
   '685542': { baja: 1345, media: 1597, media_alta: 1681, alta: 1849 },
 };
 
+const ENVELOPES = Array.from({ length: 99 }, (_, i) => 'S' + String(i + 1).padStart(2, '0'));
+
 function getSeason(dateStr: string, dbRanges?: { season: string; from: string; to: string }[]): string {
   if (!dateStr) return 'media';
 
@@ -154,6 +156,7 @@ export default function VercelActionForm() {
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [formAccountId, setFormAccountId] = useState('');
+  const [selectedEnvelope, setSelectedEnvelope] = useState('');
   const [rateSource, setRateSource] = useState<'beds24' | 'fallback' | 'edited' | null>(null);
 
   useEffect(() => {
@@ -189,6 +192,8 @@ export default function VercelActionForm() {
       }
     }
   }, []);
+
+
 
   const { maxCapacity, baseCapacity } = useMemo(() => {
     const roomsToBook = form.groupRooms && form.groupRooms.length > 0
@@ -574,20 +579,23 @@ export default function VercelActionForm() {
     fetchTempDiscounts();
   }, []);
 
-  // Limpiar método y cuenta si el anticipo es 0 o vacío
-  useEffect(() => {
-    if (Number(form.deposit || 0) <= 0) {
-      setFormPaymentMethod(null);
-      setFormAccountId('');
-    }
-  }, [form.deposit]);
-
   // Auto-seleccionar primer sobre compatible para el anticipo
   useEffect(() => {
     if (!formPaymentMethod || accounts.length === 0) {
       setFormAccountId('');
       return;
     }
+
+    if (formPaymentMethod === 'efectivo') {
+      const cashAccount = accounts.find(a => a.name.trim().toUpperCase() === 'EFECTIVO');
+      if (cashAccount) {
+        setFormAccountId(cashAccount.id);
+      } else {
+        setFormAccountId('');
+      }
+      return;
+    }
+
     const compatible = accounts.filter(acc => {
       const isUSD = form.guestName?.toUpperCase().includes('(US DOLLARS)');
       if (isUSD) {
@@ -595,15 +603,9 @@ export default function VercelActionForm() {
         if (!isUSDAcc) return false;
         
         const name = acc.name.trim().toUpperCase();
-        if (formPaymentMethod === 'efectivo') {
-          return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-        }
         return !name.includes('EFE') && !name.includes('CASH');
       } else {
         const name = acc.name.trim().toUpperCase();
-        if (formPaymentMethod === 'efectivo') {
-          return name === 'EFECTIVO' || acc.group_type === 'SOBRES' || name.includes('SOBRE') || name.includes('CASH');
-        }
         if (formPaymentMethod === 'tarjeta') {
           return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
         }
@@ -695,21 +697,8 @@ export default function VercelActionForm() {
           return alert("Por favor, selecciona el Método de Pago y la Cuenta Destino para el anticipo.");
         }
         // Si el método es efectivo, el número de sobre es OBLIGATORIO
-        if (formPaymentMethod === 'efectivo' && !formAccountId) {
+        if (formPaymentMethod === 'efectivo' && !selectedEnvelope) {
           return alert('⚠️ El número de sobre es OBLIGATORIO cuando el método de pago es Efectivo. Por favor, selecciona el sobre (S01 - S99).');
-        }
-        // Verificar que si efectivo, la cuenta seleccionada sea un sobre válido
-        const selAcc = accounts.find(a => String(a.id) === String(formAccountId));
-        const selAccName = selAcc?.name?.trim().toUpperCase() || '';
-        const isValidEnvelope = selAcc && (
-          selAccName === 'EFECTIVO' ||
-          selAcc.group_type === 'SOBRES' ||
-          selAccName.includes('SOBRE') ||
-          selAccName.includes('CASH') ||
-          /^S\d{2}$/.test(selAccName)
-        );
-        if (formPaymentMethod === 'efectivo' && !isValidEnvelope) {
-          return alert('⚠️ El número de sobre es OBLIGATORIO cuando el método de pago es Efectivo. Por favor, selecciona el sobre (S01 - S99) donde guardarás el efectivo.');
         }
       }
     }
@@ -825,13 +814,9 @@ export default function VercelActionForm() {
         // Registrar en Supabase finances y actualizar balance de cuenta si hay anticipo/pago
         if (!isBlock && depositPerRoom > 0) {
           try {
-            const selectedAcc = accounts.find(a => String(a.id) === String(formAccountId));
             let sobrePart = '';
-            if (formPaymentMethod === 'efectivo' && selectedAcc?.name) {
-              const nameUpper = selectedAcc.name.trim().toUpperCase();
-              if (nameUpper.startsWith('SOBRE')) sobrePart = selectedAcc.name.trim();
-              else if (/^S\d{2}$/.test(nameUpper)) sobrePart = `Sobre ${nameUpper}`;
-              else sobrePart = `Sobre ${selectedAcc.name.trim()}`;
+            if (formPaymentMethod === 'efectivo' && selectedEnvelope) {
+              sobrePart = `Sobre ${selectedEnvelope}`;
             }
 
             const roomPart = `Hab ${room.name}`;
@@ -1604,49 +1589,54 @@ export default function VercelActionForm() {
                           <span className="text-red-500 font-bold text-[11px]">* OBLIGATORIO</span>
                         )}
                       </label>
-                      <select
-                        value={formAccountId}
-                        onChange={e => setFormAccountId(e.target.value)}
-                        required={formPaymentMethod === 'efectivo'}
-                        className={`w-full h-14 bg-white border rounded-xl px-3.5 text-[16px] font-semibold text-zinc-900 focus:border-zinc-400 transition-all outline-none cursor-pointer ${
-                          formPaymentMethod === 'efectivo' && !formAccountId
-                            ? 'border-red-400 bg-red-50'
-                            : 'border-zinc-200'
-                        }`}
-                      >
-                        <option value="" disabled>Selecciona un sobre...</option>
-                        {accounts
-                          .filter(acc => {
-                            const isUSD = form.guestName?.toUpperCase().includes('(US DOLLARS)');
-                            if (isUSD) {
-                              const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                              if (!isUSDAcc) return false;
-                              
-                              const name = acc.name.trim().toUpperCase();
-                              if (formPaymentMethod === 'efectivo') {
-                                return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                              }
-                              return !name.includes('EFE') && !name.includes('CASH');
-                            } else {
-                              const name = acc.name.trim().toUpperCase();
-                              if (formPaymentMethod === 'efectivo') {
-                                return name === 'EFECTIVO' || acc.group_type === 'SOBRES' || name.includes('SOBRE') || name.includes('CASH');
-                              }
-                              if (formPaymentMethod === 'tarjeta') {
-                                return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                              }
-                              if (formPaymentMethod === 'transferencia') {
-                                return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                              }
-                              return false;
-                            }
-                          })
-                          .map(acc => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name} (${acc.balance})
-                            </option>
+                      {formPaymentMethod === 'efectivo' ? (
+                        <select
+                          value={selectedEnvelope}
+                          onChange={e => setSelectedEnvelope(e.target.value)}
+                          required
+                          className={`w-full h-14 bg-white border rounded-xl px-3.5 text-[16px] font-semibold text-zinc-900 focus:border-zinc-400 transition-all outline-none cursor-pointer ${
+                            !selectedEnvelope ? 'border-red-400 bg-red-50' : 'border-zinc-200'
+                          }`}
+                        >
+                          <option value="" disabled>Selecciona el número de sobre (S01 - S99)...</option>
+                          {ENVELOPES.map(env => (
+                            <option key={env} value={env}>{env}</option>
                           ))}
-                      </select>
+                        </select>
+                      ) : (
+                        <select
+                          value={formAccountId}
+                          onChange={e => setFormAccountId(e.target.value)}
+                          required={formPaymentMethod !== null}
+                          className="w-full h-14 bg-white border border-zinc-200 rounded-xl px-3.5 text-[16px] font-semibold text-zinc-900 focus:border-zinc-400 transition-all outline-none cursor-pointer"
+                        >
+                          <option value="" disabled>Selecciona una cuenta...</option>
+                          {accounts
+                            .filter(acc => {
+                              const isUSD = form.guestName?.toUpperCase().includes('(US DOLLARS)');
+                              if (isUSD) {
+                                const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                if (!isUSDAcc) return false;
+                                const name = acc.name.trim().toUpperCase();
+                                return !name.includes('EFE') && !name.includes('CASH');
+                              } else {
+                                const name = acc.name.trim().toUpperCase();
+                                if (formPaymentMethod === 'tarjeta') {
+                                  return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                }
+                                if (formPaymentMethod === 'transferencia') {
+                                  return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                }
+                                return false;
+                              }
+                            })
+                            .map(acc => (
+                              <option key={acc.id} value={acc.id}>
+                                {acc.name} (${acc.balance})
+                              </option>
+                            ))}
+                        </select>
+                      )}
                     </div>
                   </div>
                 )}
