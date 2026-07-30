@@ -313,7 +313,6 @@ export default function AdminDashboard() {
   const [savingToken, setSavingToken] = useState(false);
   const [hoy, setHoy] = useState('');
   const [todayStr, setTodayStr] = useState('');
-  const [financeBalance, setFinanceBalance] = useState(0);
 
   const [showRoomStatusModal, setShowRoomStatusModal] = useState(false);
   const [selectedRoomForStatus, setSelectedRoomForStatus] = useState<any | null>(null);
@@ -391,12 +390,7 @@ export default function AdminDashboard() {
         }
       }
 
-      // Obtener el balance general real de finanzas (sobres y cuentas)
-      const accRes = await supabase.from('accounts').select('balance');
-      if (!accRes.error && accRes.data) {
-        const total = accRes.data.reduce((sum: number, acc: any) => sum + (acc.balance || 0), 0);
-        setFinanceBalance(total);
-      }
+
     } catch (e) {
       console.error(e);
     } finally {
@@ -1206,7 +1200,7 @@ export default function AdminDashboard() {
             <Wallet size={20} className="text-zinc-700" />
             <div>
               <p className="text-[14px] font-bold text-zinc-900 tracking-tight">FINANZAS</p>
-              <p className="text-[11px] font-bold text-emerald-600 mt-0.5">MX${Math.round(financeBalance).toLocaleString('es-MX')}</p>
+              <p className="text-[11px] font-medium text-zinc-400 mt-0.5">Saldos · Contabilidad</p>
             </div>
           </Link>
           {/* MANTENIMIENTO */}
