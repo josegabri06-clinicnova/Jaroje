@@ -3157,7 +3157,7 @@ export default function RecepcionPage() {
             check_out_date: r.check_out,
             status: 'checked_in',
             checked_in_by: operatorName,
-            document_url: finalDniUrl || null
+            document_url: finalDniUrl || r.dni_image || null
           }, { onConflict: 'reservation_id' });
 
           if (upsertErr) {
@@ -3675,7 +3675,7 @@ export default function RecepcionPage() {
           check_out_date: selectedReserva.check_out,
           status: 'checked_in',
           checked_in_by: operatorName,
-          document_url: finalDniUrl || null
+          document_url: finalDniUrl || selectedReserva.dni_image || null
         }, { onConflict: 'reservation_id' });
 
         if (upsertErr) {
@@ -4195,7 +4195,8 @@ export default function RecepcionPage() {
       check_in_date: r.check_in,
       check_out_date: r.check_out,
       status: 'checked_out',
-      checked_in_by: operatorName
+      checked_in_by: operatorName,
+      document_url: r.dni_image || null
     }, { onConflict: 'reservation_id' });
 
     if (error) {

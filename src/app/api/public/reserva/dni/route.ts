@@ -80,6 +80,7 @@ export async function POST(req: Request) {
         check_in_date: existingCheckin?.check_in_date || checkInDate || new Date().toISOString().split('T')[0],
         check_out_date: existingCheckin?.check_out_date || checkOutDate || new Date().toISOString().split('T')[0],
         document_url: publicUrl,
+        receipt_url: existingCheckin?.receipt_url || null,
         status: existingCheckin?.status || 'pending'
       }, { onConflict: 'reservation_id' });
 

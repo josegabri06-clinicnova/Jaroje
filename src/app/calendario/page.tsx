@@ -1204,7 +1204,7 @@ export default function CalendarPage() {
       check_out_date: selectedReserva.check_out,
       status: 'checked_in',
       checked_in_by: operatorName,
-      document_url: finalDniUrl || null
+      document_url: finalDniUrl || selectedReserva.dni_image || null
     }, { onConflict: 'reservation_id' });
 
     if (upsertErr) {
