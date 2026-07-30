@@ -972,6 +972,7 @@ export default function AjustesPage() {
         onToggle={() => toggleSection('seguridad')}
       >
         <div className="divide-y divide-zinc-100">
+          <Row label="Cambiar PIN Administrador (Master)" value="••••" onPress={() => openPinModal('admin')} />
           <Row label="Cambiar PIN Recepción" value="••••" onPress={() => openPinModal('recepcion')} />
           <Row label="Cambiar PIN Limpieza" value="••••" onPress={() => openPinModal('staff_limpieza')} />
           <Row label="Cambiar PIN Mantenimiento" value="••••" onPress={() => openPinModal('staff_mantenimiento')} />

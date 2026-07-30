@@ -183,7 +183,7 @@ export default function FinanzasPage() {
           return;
         }
       }
-      setPinLocked(false); // Mantener abierto de inmediato
+      setPinLocked(true);
     };
     checkPin();
   }, []);
@@ -249,6 +249,26 @@ export default function FinanzasPage() {
       }
     }
   };
+
+  // Escuchar teclado físico para desbloquear el PIN
+  useEffect(() => {
+    if (!pinLocked) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignorar si el usuario está escribiendo en algún input (aunque en la pantalla de bloqueo no debería haber inputs enfocados)
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+        return;
+      }
+      if (e.key >= '0' && e.key <= '9') {
+        handleDigitPress(e.key);
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        handleDigitPress('⌫');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pinLocked, pinInput]);
 
   const [activeTab, setActiveTab] = useState<'libro' | 'registro'>('libro');
   
