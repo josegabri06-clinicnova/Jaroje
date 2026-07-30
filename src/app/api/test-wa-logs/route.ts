@@ -91,26 +91,17 @@ export async function GET(req: Request) {
     } catch (e: any) {
       todayBookings = [{ error: e.message }];
     }
-    let debugOccupiedYesterday: any[] = [];
+    let syncLogs: any[] = [];
     try {
-      const { getBeds24Bookings } = await import('@/lib/beds24');
-      const allB = await getBeds24Bookings(true, false, true);
-      allB.forEach(other => {
-        if (other.check_out === '2026-07-29') {
-          const otherRoom = String(other.room_name || other.room || '').replace(/[^0-9]/g, '');
-          debugOccupiedYesterday.push({
-            id: other.id,
-            guest_name: other.guest_name,
-            room: other.room,
-            room_name: other.room_name,
-            otherRoomClean: otherRoom,
-            matches: otherRoom === '3401',
-            status: other.status
-          });
-        }
-      });
+      const { data } = await supabase
+        .from('employee_logs')
+        .select('*')
+        .eq('employee_num', '000')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      syncLogs = data || [];
     } catch (e: any) {
-      debugOccupiedYesterday = [{ error: e.message }];
+      syncLogs = [{ error: e.message }];
     }
 
     // Query Beds24 raw booking for diagnostics if test_booking_id is provided
@@ -145,8 +136,8 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       todayBookings,
-      debugOccupiedYesterday,
-      alojamiento_listo_logs: compactLogs,
+      syncLogs,
+      whatsapp_logs: logs,
       beds24BookingRaw: b24BookingRaw,
       beds24BookingError: b24BookingError
     });
