@@ -114,17 +114,17 @@ export async function GET(req: Request) {
       }
     }
 
+    // Filter logs to only include alojamiento_listo logs for today
+    const compactLogs = (logs || []).filter(l => l.template_name === 'alojamiento_listo').map(l => ({
+      res_id: l.reservation_id,
+      phone: l.phone,
+      sent_at: l.sent_at
+    }));
+
     return NextResponse.json({
       success: true,
-      logs,
-      logError: logErr?.message,
-      conversations: convs,
-      convError: convErr?.message,
-      webhookDebugLogs: debugLogs,
-      webhookDebugError: debugErr?.message,
       todayBookings,
-      beds24BookingRaw: b24BookingRaw,
-      beds24BookingError: b24BookingError
+      alojamiento_listo_logs: compactLogs
     });
   } catch (err: any) {
     return NextResponse.json({ success: false, error: err.message });
