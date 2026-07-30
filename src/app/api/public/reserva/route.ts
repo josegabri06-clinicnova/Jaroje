@@ -41,7 +41,7 @@ export async function GET(req: Request) {
       // Obtener el estado del check-in
       const { data: checkinData } = await supabase
         .from('checkins')
-        .select('status')
+        .select('status, document_url')
         .eq('reservation_id', String(bookingId))
         .maybeSingle();
 
@@ -134,6 +134,7 @@ export async function GET(req: Request) {
           is_checked_in: checkinData?.status === 'checked_in',
           is_checked_out: checkinData?.status === 'checked_out',
           is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
+          document_url: checkinData?.document_url || null,
           status: localRes.status || 'confirmed',
           booking_time: localRes.created_at || null,
           channel: 'Directo',
@@ -252,7 +253,7 @@ export async function GET(req: Request) {
     if (booking) {
       const { data: checkinData } = await supabase
         .from('checkins')
-        .select('status')
+        .select('status, document_url')
         .eq('reservation_id', String(bookingId))
         .maybeSingle();
 
@@ -366,6 +367,7 @@ export async function GET(req: Request) {
             is_checked_in: checkinData?.status === 'checked_in',
             is_checked_out: checkinData?.status === 'checked_out',
             is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
+            document_url: checkinData?.document_url || null,
             status: booking.status || 'confirmed',
             booking_time: booking.booking_time || null,
             channel: booking.channel || 'Directo',

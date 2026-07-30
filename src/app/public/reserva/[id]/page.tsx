@@ -510,7 +510,15 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     maintenanceTypeLabel: '¿Dónde está el problema?',
     maintenanceDescPlaceholder: 'Describe detalladamente el problema para poder ayudarte...',
     sendReport: 'Enviar Reporte',
-    reportSuccess: '¡Reporte enviado con éxito! El personal de mantenimiento lo revisará de inmediato.'
+    reportSuccess: '¡Reporte enviado con éxito! El personal de mantenimiento lo revisará de inmediato.',
+    dniTitle: 'Registro de Identificación (DNI / Pasaporte)',
+    dniSubtitle: 'Para completar tu check-in digital y agilizar tu llegada, por favor sube una foto de tu identificación oficial (DNI, INE o Pasaporte).',
+    dniUploadButton: 'Sube tu Identificación',
+    dniUploading: 'Subiendo identificación...',
+    dniSuccess: 'Identificación registrada correctamente ✅',
+    dniSuccessDesc: 'Hemos recibido tu identificación. Tu check-in digital está completo.',
+    dniError: 'No se pudo subir la identificación. Inténtalo de nuevo.',
+    dniChangeButton: 'Cambiar Identificación 🔄',
   },
   en: {
     title: 'CONDOMINIOS JAROJE',
@@ -624,7 +632,15 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     maintenanceTypeLabel: 'Where is the issue?',
     maintenanceDescPlaceholder: 'Describe the problem in detail so we can help you...',
     sendReport: 'Submit Report',
-    reportSuccess: 'Report submitted successfully! The maintenance staff will review it shortly.'
+    reportSuccess: 'Report submitted successfully! The maintenance staff will review it shortly.',
+    dniTitle: 'ID / Passport Registration',
+    dniSubtitle: 'To complete your digital check-in and speed up your arrival, please upload a photo of your official ID (DNI, INE, or Passport).',
+    dniUploadButton: 'Upload your ID',
+    dniUploading: 'Uploading ID...',
+    dniSuccess: 'ID successfully registered ✅',
+    dniSuccessDesc: 'We have received your ID. Your digital check-in is complete.',
+    dniError: 'Failed to upload your ID. Please try again.',
+    dniChangeButton: 'Change ID 🔄',
   }
 };
 
@@ -929,6 +945,42 @@ export default function PublicReservaPage() {
   const [uploadedUrl, setUploadedUrl] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  // Estados para carga de DNI/Pasaporte
+  const [uploadingDni, setUploadingDni] = useState(false);
+  const [uploadedDniUrl, setUploadedDniUrl] = useState<string | null>(null);
+  const [dniUploadError, setDniUploadError] = useState<string | null>(null);
+
+  const handleDniChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0 && id) {
+      const file = e.target.files[0];
+      setDniUploadError(null);
+      setUploadingDni(true);
+
+      try {
+        const fileToUpload = await compressImage(file);
+
+        const formData = new FormData();
+        formData.append('id', String(id));
+        formData.append('file', fileToUpload);
+
+        const res = await fetch('/api/public/reserva/dni', {
+          method: 'POST',
+          body: formData
+        });
+        const json = await res.json();
+        if (res.ok && json.success) {
+          setUploadedDniUrl(json.url);
+        } else {
+          setDniUploadError(json.error || (lang === 'en' ? 'An error occurred uploading your ID.' : 'Ocurrió un error al subir la identificación.'));
+        }
+      } catch (err) {
+        setDniUploadError(lang === 'en' ? 'Network error uploading ID.' : 'Error de red al intentar subir la identificación.');
+      } finally {
+        setUploadingDni(false);
+      }
+    }
+  };
+
   // Estados para Lightbox de fotos
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -980,6 +1032,9 @@ export default function PublicReservaPage() {
           // Si ya existe un recibo previo subido, guardarlo en el estado
           if (json.data.receipt_url) {
             setUploadedUrl(json.data.receipt_url);
+          }
+          if (json.data.document_url) {
+            setUploadedDniUrl(json.data.document_url);
           }
         } else {
           setError(json.error || 'No se pudo cargar la información de la reservación.');
@@ -1639,6 +1694,90 @@ export default function PublicReservaPage() {
             </div>
           );
         })()}
+
+        {/* SECCIÓN REGISTRO DE IDENTIFICACIÓN / DNI */}
+        {booking && currentState !== 'liberada' && (
+          <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
+            <div className="flex items-center gap-3 border-b border-zinc-100 pb-2.5">
+              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
+                <User size={20} className="text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
+                  {t.dniTitle}
+                </h3>
+                <p className="text-[10.5px] text-zinc-500 font-medium leading-tight mt-0.5">
+                  {lang === 'en' ? 'Complete your digital check-in' : 'Completa tu check-in digital'}
+                </p>
+              </div>
+            </div>
+
+            {uploadedDniUrl ? (
+              <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 space-y-3">
+                <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs select-none">
+                  <Check size={16} className="shrink-0" />
+                  <span>{t.dniSuccess}</span>
+                </div>
+                <p className="text-[11px] text-zinc-600 leading-relaxed">
+                  {t.dniSuccessDesc}
+                </p>
+                <div className="relative rounded-xl overflow-hidden border border-zinc-200 shadow-sm max-w-xs mx-auto">
+                  <img
+                    src={uploadedDniUrl}
+                    alt="Guest ID / Passport"
+                    className="w-full h-36 object-cover bg-zinc-50"
+                  />
+                </div>
+                <div className="pt-1 text-center">
+                  <label className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-xs transition-all border border-zinc-200 cursor-pointer shadow-xs">
+                    <Upload size={13} className="text-zinc-500" />
+                    <span>{t.dniChangeButton}</span>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={handleDniChange}
+                      className="hidden"
+                      disabled={uploadingDni}
+                    />
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-[12.5px] text-zinc-650 leading-relaxed font-medium">
+                  {t.dniSubtitle}
+                </p>
+
+                {dniUploadError && (
+                  <div className="bg-red-50 border border-red-100 text-red-700 text-xs p-3.5 rounded-xl font-semibold leading-relaxed">
+                    ⚠️ {dniUploadError}
+                  </div>
+                )}
+
+                <label className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer select-none">
+                  {uploadingDni ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{t.dniUploading}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      <span>{t.dniUploadButton}</span>
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleDniChange}
+                    className="hidden"
+                    disabled={uploadingDni}
+                  />
+                </label>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* BOTÓN SOLICITAR FACTURA — visible cuando ya hay anticipo registrado */}
         {booking && Number(booking.deposit || 0) > 0 && (
