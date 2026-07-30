@@ -1157,7 +1157,9 @@ export default function FinanzasPage() {
     }
   };
 
-  const totalGeneral = accounts.reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
+  const totalGeneral = accounts
+    .filter(curr => curr.group_type !== 'COMISIONES')
+    .reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
 
   if (pinLocked) {
     return (
