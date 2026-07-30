@@ -1742,6 +1742,18 @@ export default function PublicReservaPage() {
                   </label>
                 </div>
               </div>
+            ) : (booking.is_checked_in || booking.is_checked_out) ? (
+              <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 space-y-2">
+                <div className="flex items-center gap-2 text-emerald-700 font-bold text-xs select-none">
+                  <Check size={16} className="shrink-0" />
+                  <span>{lang === 'en' ? 'Check-in Completed ✅' : 'Check-in Completado ✅'}</span>
+                </div>
+                <p className="text-[11px] text-zinc-650 leading-relaxed font-medium">
+                  {lang === 'en' 
+                    ? 'Your registration has been completed by reception. Welcome to Condominios Jaroje!' 
+                    : 'Tu registro ha sido completado por la recepción. ¡Bienvenido a Condominios Jaroje!'}
+                </p>
+              </div>
             ) : (
               <div className="space-y-4">
                 <p className="text-[12.5px] text-zinc-650 leading-relaxed font-medium">

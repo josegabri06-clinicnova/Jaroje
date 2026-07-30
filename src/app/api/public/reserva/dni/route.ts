@@ -66,16 +66,17 @@ export async function POST(req: Request) {
     const publicUrl = urlData.publicUrl;
 
     // 5. Upsert en la tabla 'checkins' de Supabase
+    const cleanId = String(id).toLowerCase().trim();
     const { data: existingCheckin } = await supabase
       .from('checkins')
       .select('*')
-      .eq('reservation_id', id)
+      .eq('reservation_id', cleanId)
       .maybeSingle();
 
     const { error: dbError } = await supabase
       .from('checkins')
       .upsert({
-        reservation_id: id,
+        reservation_id: cleanId,
         guest_name: existingCheckin?.guest_name || guestName,
         check_in_date: existingCheckin?.check_in_date || checkInDate || new Date().toISOString().split('T')[0],
         check_out_date: existingCheckin?.check_out_date || checkOutDate || new Date().toISOString().split('T')[0],
