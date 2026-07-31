@@ -232,7 +232,7 @@ export async function GET(req: Request) {
 
       if (!isCancelled && !hasDeposit && sentAtStr) {
         const sentAt = new Date(sentAtStr);
-        const limitTime = new Date(sentAt.getTime() + 60 * 60 * 1000); // 1 hora después del aviso
+        const limitTime = new Date(sentAt.getTime() + 50 * 60 * 1000); // 50 minutos (margen para tolerar la frecuencia del cron)
         const now = new Date();
 
         if (now >= limitTime) {
