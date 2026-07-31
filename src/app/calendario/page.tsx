@@ -271,6 +271,7 @@ export default function CalendarPage() {
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
   const [dniUploadLoading, setDniUploadLoading] = useState<boolean>(false);
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -2773,7 +2774,10 @@ export default function CalendarPage() {
                   </div>
                 ) : (
                   <div className="space-y-2 animate-in fade-in duration-200">
-                    <div className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white">
+                    <div 
+                      onClick={() => setZoomImage(dniPreview)}
+                      className="relative rounded-2xl overflow-hidden border border-zinc-200 shadow-sm bg-white cursor-zoom-in hover:brightness-95 transition-all"
+                    >
                       <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
                     </div>
                     <div className="flex gap-2">
@@ -3558,6 +3562,26 @@ export default function CalendarPage() {
           </div>
         );
       })()}
+      {zoomImage && (
+        <div 
+          className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setZoomImage(null)}
+        >
+          <button 
+            type="button"
+            onClick={() => setZoomImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-md"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <img 
+            src={zoomImage} 
+            alt="Zoomed DNI" 
+            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200" 
+            onClick={(e) => e.stopPropagation()} 
+          />
+        </div>
+      )}
     </div>
   );
 }

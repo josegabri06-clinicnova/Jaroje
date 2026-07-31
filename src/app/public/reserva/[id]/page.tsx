@@ -950,6 +950,7 @@ export default function PublicReservaPage() {
   const [uploadingDni, setUploadingDni] = useState(false);
   const [uploadedDniUrl, setUploadedDniUrl] = useState<string | null>(null);
   const [dniUploadError, setDniUploadError] = useState<string | null>(null);
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
 
   const handleDniChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0 && id) {
@@ -1750,7 +1751,10 @@ export default function PublicReservaPage() {
                     </a>
                   </div>
                 ) : (
-                  <div className="relative rounded-xl overflow-hidden border border-zinc-200 shadow-sm max-w-xs mx-auto">
+                  <div 
+                    onClick={() => setZoomImage(uploadedDniUrl)}
+                    className="relative rounded-xl overflow-hidden border border-zinc-200 shadow-sm max-w-xs mx-auto cursor-zoom-in hover:brightness-95 transition-all bg-white"
+                  >
                     <img
                       src={uploadedDniUrl}
                       alt="Guest ID / Passport"
@@ -2693,6 +2697,26 @@ export default function PublicReservaPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+      {zoomImage && (
+        <div 
+          className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setZoomImage(null)}
+        >
+          <button 
+            type="button"
+            onClick={() => setZoomImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-md"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
+          <img 
+            src={zoomImage} 
+            alt="Zoomed DNI" 
+            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200" 
+            onClick={(e) => e.stopPropagation()} 
+          />
         </div>
       )}
     </div>
