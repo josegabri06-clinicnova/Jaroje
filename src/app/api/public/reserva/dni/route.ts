@@ -32,8 +32,8 @@ export async function POST(req: Request) {
       checkInDate = localRes.check_in;
       checkOutDate = localRes.check_out;
       guestName = localRes.guest_name;
-      // Para reservas locales: require deposit > 0 o is_acknowledged
-      isPaidOrOta = (Number(localRes.deposit || 0) > 0) || !!localRes.is_acknowledged;
+      // Para reservas locales: require deposit > 0
+      isPaidOrOta = Number(localRes.deposit || 0) > 0;
     } else {
       const allBeds24 = await getBeds24Bookings(true);
       const booking = allBeds24.find(r => r.id === bookingId);
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
         if (isOta) {
           isPaidOrOta = true;
         } else {
-          isPaidOrOta = (Number(booking.deposit || 0) > 0) || !!booking.is_acknowledged;
+          isPaidOrOta = Number(booking.deposit || 0) > 0;
         }
       }
     }

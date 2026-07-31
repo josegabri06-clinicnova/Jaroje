@@ -1152,11 +1152,12 @@ export default function PublicReservaPage() {
   const isCancelled = booking.status === 'cancelled';
   const isCheckedIn = booking.is_checked_in;
   const isCheckedOut = booking.is_checked_out;
-  const hasPaid = booking.deposit > 0 || booking.is_acknowledged;
+  const hasPaid = booking.deposit > 0;
   const rawChannel = (booking.channel || '').toLowerCase();
   const rawName = (booking.guest_name || '').toLowerCase();
   const rawNotes = (booking.notes || '').toLowerCase();
   const isOta = ['airbnb', 'booking', 'expedia'].some(c => rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c));
+  const isConfirmed = hasPaid || isOta;
 
   // Fechas clave
   const checkInDate = booking.check_in ? new Date(booking.check_in) : null;
@@ -1191,12 +1192,12 @@ export default function PublicReservaPage() {
     statusMessage = lang === 'en'
       ? 'Welcome to Condominios Jaroje! We hope you are enjoying your stay. If you need anything, our team is at your service.'
       : '¡Bienvenido a Condominios Jaroje! Esperamos que estés disfrutando de tu estancia. Si necesitas algo, nuestro equipo está a tu disposición.';
-  } else if (hasPaid && checkInLimit && today >= checkInLimit) {
+  } else if (isConfirmed && checkInLimit && today >= checkInLimit) {
     currentState = 'checkin_pendiente';
     statusMessage = lang === 'en'
       ? 'Your room is almost ready. Upon arrival, the front desk staff will help you complete your digital registration and contract signing.'
       : 'Tu habitación está casi lista. A tu llegada, el personal de recepción te ayudará a completar tu registro y firma digital de contrato.';
-  } else if (hasPaid || isOta) {
+  } else if (isConfirmed) {
     currentState = 'confirmada';
     statusMessage = lang === 'en'
       ? 'Your stay is confirmed! Everything is ready for your arrival. We will send you check-in instructions one day before your entry.'
@@ -1920,7 +1921,7 @@ export default function PublicReservaPage() {
 
           <div className="space-y-3 text-xs leading-relaxed text-zinc-650">
             {/* WiFi Block */}
-            {hasPaid ? (
+            {isConfirmed ? (
               <>
                 <button
                   onClick={() => setShowWifiInfo(!showWifiInfo)}
