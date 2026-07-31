@@ -512,7 +512,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     maintenanceDescPlaceholder: 'Describe detalladamente el problema para poder ayudarte...',
     sendReport: 'Enviar Reporte',
     reportSuccess: '¡Reporte enviado con éxito! El personal de mantenimiento lo revisará de inmediato.',
-    dniTitle: 'Registro de Identificación (DNI / Pasaporte)',
+    dniTitle: 'CHECK-IN DIGITAL (DNI, INE o Pasaporte)',
     dniSubtitle: 'Para completar tu check-in digital y agilizar tu llegada, por favor sube una foto de tu identificación oficial (DNI, INE o Pasaporte).',
     dniUploadButton: 'Sube tu Identificación',
     dniUploading: 'Subiendo identificación...',
@@ -634,7 +634,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     maintenanceDescPlaceholder: 'Describe the problem in detail so we can help you...',
     sendReport: 'Submit Report',
     reportSuccess: 'Report submitted successfully! The maintenance staff will review it shortly.',
-    dniTitle: 'ID / Passport Registration',
+    dniTitle: 'DIGITAL CHECK-IN (DNI, INE or Passport)',
     dniSubtitle: 'To complete your digital check-in and speed up your arrival, please upload a photo of your official ID (DNI, INE, or Passport).',
     dniUploadButton: 'Upload your ID',
     dniUploading: 'Uploading ID...',
@@ -1713,7 +1713,7 @@ export default function PublicReservaPage() {
               </div>
             </div>
 
-            {!isOta && !hasPaid ? (
+            {!isOta && !hasPaid && !uploadedUrl ? (
               <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-4.5 text-center space-y-2">
                 <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-2 text-amber-700">
                   <Lock size={20} />

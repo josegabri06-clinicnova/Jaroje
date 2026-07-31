@@ -56,7 +56,20 @@ export async function POST(req: Request) {
       }
     }
 
-    if (!isPaidOrOta) {
+    // Verificar si ya se subió un comprobante de pago en la tabla checkins
+    let hasUploadedReceipt = false;
+    const cleanId = String(id).toLowerCase().trim();
+    const { data: existingCheckin } = await supabase
+      .from('checkins')
+      .select('*')
+      .eq('reservation_id', cleanId)
+      .maybeSingle();
+
+    if (existingCheckin && existingCheckin.receipt_url) {
+      hasUploadedReceipt = true;
+    }
+
+    if (!isPaidOrOta && !hasUploadedReceipt) {
       return NextResponse.json({ error: 'Debes completar el pago de tu anticipo antes de subir tu identificación.' }, { status: 400 });
     }
 
@@ -85,13 +98,6 @@ export async function POST(req: Request) {
     const publicUrl = urlData.publicUrl;
 
     // 5. Upsert en la tabla 'checkins' de Supabase
-    const cleanId = String(id).toLowerCase().trim();
-    const { data: existingCheckin } = await supabase
-      .from('checkins')
-      .select('*')
-      .eq('reservation_id', cleanId)
-      .maybeSingle();
-
     const { error: dbError } = await supabase
       .from('checkins')
       .upsert({
