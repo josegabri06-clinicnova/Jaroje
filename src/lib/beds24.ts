@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { normalizePhone } from './whatsapp';
 
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────
 // Fuente de verdad para reservas del Hotel Condominios Jaroje.
@@ -1095,7 +1096,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       check_out: b.departure,
       price: b.price !== undefined ? Number(b.price) : 0,
       deposit: b.deposit !== undefined ? Number(b.deposit) : 0,
-      phone: b.phone || b.mobile || b.guestPhone || b.guestMobile || '',
+      phone: normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.guestCountry2 || b.guestCountry),
       num_adult: b.numAdult ? Number(b.numAdult) : 1,
       num_child: b.numChild ? Number(b.numChild) : 0,
       notes: b.info || b.notes || '',
@@ -1193,7 +1194,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         check_in: b.arrival,
         check_out: b.departure,
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
-        guest_phone: b.phone || b.mobile || b.guestPhone || b.guestMobile || null,
+        guest_phone: normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.guestCountry2 || b.guestCountry) || null,
         guest_email: b.email || null,
         status: (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending'),
         source: 'beds24',

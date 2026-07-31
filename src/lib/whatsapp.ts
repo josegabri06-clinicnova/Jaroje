@@ -13,14 +13,150 @@ export function detectLanguageFromPhone(phone: string): string {
   return 'es';
 }
 
+const COUNTRY_TO_PREFIX: Record<string, string> = {
+  MX: '52',
+  US: '1',
+  CA: '1',
+  CO: '57',
+  ES: '34',
+  AR: '54',
+  CL: '56',
+  PE: '51',
+  EC: '593',
+  VE: '58',
+  BR: '55',
+  CR: '506',
+  PA: '507',
+  GT: '502',
+  HN: '504',
+  SV: '503',
+  NI: '505',
+  UY: '598',
+  PY: '595',
+  BO: '591',
+  DO: '1',
+  PR: '1',
+  DE: '49',
+  FR: '33',
+  GB: '44',
+  IT: '39',
+  NL: '31',
+  CH: '41',
+  AT: '43',
+  BE: '32',
+  PT: '351',
+};
+
+function countryNameToCode(name: string): string {
+  const normalized = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  const map: Record<string, string> = {
+    'mexico': 'MX',
+    'estados unidos': 'US',
+    'united states': 'US',
+    'usa': 'US',
+    'canada': 'CA',
+    'colombia': 'CO',
+    'espana': 'ES',
+    'spain': 'ES',
+    'argentina': 'AR',
+    'chile': 'CL',
+    'peru': 'PE',
+    'ecuador': 'EC',
+    'venezuela': 'VE',
+    'brasil': 'BR',
+    'brazil': 'BR',
+    'costa rica': 'CR',
+    'panama': 'PA',
+    'guatemala': 'GT',
+    'honduras': 'HN',
+    'el salvador': 'SV',
+    'nicaragua': 'NI',
+    'uruguay': 'UY',
+    'paraguay': 'PY',
+    'bolivia': 'BO',
+    'republica dominicana': 'DO',
+    'dominican republic': 'DO',
+    'puerto rico': 'PR',
+    'alemania': 'DE',
+    'germany': 'DE',
+    'francia': 'FR',
+    'france': 'FR',
+    'reino unido': 'GB',
+    'united kingdom': 'GB',
+    'uk': 'GB',
+    'italia': 'IT',
+    'italy': 'IT',
+    'paises bajos': 'NL',
+    'netherlands': 'NL',
+    'suiza': 'CH',
+    'switzerland': 'CH',
+    'austria': 'AT',
+    'belgica': 'BE',
+    'belgium': 'BE',
+    'portugal': 'PT'
+  };
+  return map[normalized] || '';
+}
+
 // Normaliza y limpia el número de teléfono para base de datos y búsqueda
-export function normalizePhone(phone: string): string {
+export function normalizePhone(phone: string, countryCodeOrName?: string | null): string {
   if (!phone) return '';
   let cleaned = phone.replace(/\D/g, '');
+  if (!cleaned) return '';
+
+  let cc = (countryCodeOrName || '').trim().toUpperCase();
+
+  // Traducir nombre de país largo a código de 2 letras si es necesario
+  if (cc.length > 2) {
+    cc = countryNameToCode(cc);
+  }
+
+  // Si no tenemos código de país, aplicamos la lógica clásica basada en la longitud
+  if (!cc) {
+    if (cleaned.length === 10) {
+      cleaned = '521' + cleaned;
+    } else if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
+      cleaned = '521' + cleaned.substring(2);
+    } else if (cleaned.length === 9) {
+      cleaned = '34' + cleaned;
+    }
+    return cleaned;
+  }
+
+  // Si el país es México
+  if (cc === 'MX') {
+    if (cleaned.length === 10) {
+      return '521' + cleaned;
+    }
+    if (cleaned.startsWith('521')) {
+      return cleaned;
+    }
+    if (cleaned.startsWith('52') && cleaned.length === 12) {
+      return '521' + cleaned.substring(2);
+    }
+    if (!cleaned.startsWith('52')) {
+      return '521' + cleaned;
+    }
+    return cleaned;
+  }
+
+  // Para otros países conocidos
+  const prefix = COUNTRY_TO_PREFIX[cc];
+  if (prefix) {
+    // Si ya empieza con el prefijo correcto del país
+    if (cleaned.startsWith(prefix)) {
+      if (prefix === '1' && cleaned.length === 10) {
+        return '1' + cleaned;
+      }
+      return cleaned;
+    }
+    // Si no empieza con el prefijo del país, se lo añadimos
+    return prefix + cleaned;
+  }
+
+  // Caída por defecto si el país es desconocido pero se pasó algo que no mapeamos
   if (cleaned.length === 10) {
     cleaned = '521' + cleaned;
-  } else if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
-    cleaned = '521' + cleaned.substring(2);
   } else if (cleaned.length === 9) {
     cleaned = '34' + cleaned;
   }

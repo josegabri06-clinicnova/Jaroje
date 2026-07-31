@@ -58,7 +58,8 @@ export async function POST(req: Request) {
           const b24Json = await b24Res.json();
           if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
             const b = b24Json.data[0];
-            const phone = b.phone || b.mobile || b.guestPhone || '';
+            const { normalizePhone } = await import('@/lib/whatsapp');
+            const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || '', b.guestCountry2 || b.guestCountry);
             const bookingIdStr = bookingId.toString();
             const bStatus = String(b.status || '');
 
