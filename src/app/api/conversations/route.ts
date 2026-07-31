@@ -695,8 +695,15 @@ export async function POST(req: Request) {
                         parameters: [
                           { type: 'text', text: String(guestNameClean).slice(0, 30) },
                           { type: 'text', text: String(phone) },
-                          { type: 'text', text: String(guestMsgText).slice(0, 150) },
-                          { type: 'text', text: String(chatUrl) }
+                          { type: 'text', text: String(guestMsgText).slice(0, 150) }
+                        ]
+                      },
+                      {
+                        type: 'button',
+                        sub_type: 'url',
+                        index: '0',
+                        parameters: [
+                          { type: 'text', text: String(currentConvId) }
                         ]
                       }
                     ]
