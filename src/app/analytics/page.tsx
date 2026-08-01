@@ -437,6 +437,7 @@ export default function AnalyticsPage() {
     let occupiedNights = 0;
     reservas.forEach(r => {
       if (!r.check_in || !r.check_out) return;
+      if (r.status === 'cancelled' || r.status === '0') return; // Excluir canceladas
       const rIn = new Date(r.check_in + 'T12:00:00');
       const rOut = new Date(r.check_out + 'T12:00:00');
 
@@ -498,6 +499,7 @@ export default function AnalyticsPage() {
         let occupiedNights = 0;
         reservas.forEach(r => {
           if (!r.check_in || !r.check_out) return;
+          if (r.status === 'cancelled' || r.status === '0') return; // Excluir canceladas
           const rIn = new Date(r.check_in + 'T12:00:00');
           const rOut = new Date(r.check_out + 'T12:00:00');
 
@@ -537,6 +539,7 @@ export default function AnalyticsPage() {
       let occupiedYear = 0;
       reservas.forEach(r => {
         if (!r.check_in || !r.check_out) return;
+        if (r.status === 'cancelled' || r.status === '0') return; // Excluir canceladas
         const rIn = new Date(r.check_in + 'T12:00:00');
         const rOut = new Date(r.check_out + 'T12:00:00');
 
@@ -590,23 +593,25 @@ export default function AnalyticsPage() {
   }, [finanzas, reservas, currentYear, previousYear]);
 
   // ── SECCIÓN AUXILIAR: BREAKDOWN DE CANALES BEDS24 (FILTRADO POR RANGO) ────
-  const { channelData, totalNochesCanales } = useMemo(() => {
-    // Filtrar reservas que caen en el rango de fechas
+  const { channelData, totalNochesCanales, reservasRevenuePeriodo } = useMemo(() => {
+    // Filtrar reservas que caen en el rango de fechas (excluyendo canceladas)
     const rangeReservas = reservas.filter(r => {
       if (!r.check_in) return false;
+      if (r.status === 'cancelled' || r.status === '0') return false;
       const matchStart = startDate ? r.check_in >= startDate : true;
       const matchEnd = endDate ? r.check_in <= endDate : true;
       return matchStart && matchEnd;
     });
 
     const totalN = rangeReservas.reduce((s, r) => s + (r.nights || 0), 0);
+    const totalRev = rangeReservas.reduce((s, r) => s + (Number(r.price_estimate || r.price || 0)), 0);
     const channelMap: Record<string, { nights: number; revenue: number }> = {};
     
     rangeReservas.forEach(r => {
       const ch = r.channel || 'Directo';
       if (!channelMap[ch]) channelMap[ch] = { nights: 0, revenue: 0 };
       channelMap[ch].nights += r.nights || 0;
-      channelMap[ch].revenue += r.price_estimate || 0;
+      channelMap[ch].revenue += Number(r.price_estimate || r.price || 0);
     });
 
     const data = Object.entries(channelMap)
@@ -619,7 +624,7 @@ export default function AnalyticsPage() {
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
-    return { channelData: data, totalNochesCanales: totalN };
+    return { channelData: data, totalNochesCanales: totalN, reservasRevenuePeriodo: totalRev };
   }, [reservas, startDate, endDate]);
 
   const Skeleton = () => <div className="h-7 bg-zinc-150 rounded-lg animate-pulse w-24" />;
@@ -757,7 +762,7 @@ export default function AnalyticsPage() {
             {/* 2. INGRESOS */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ingresos Totales</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ingresos Totales (Caja)</span>
                 <TrendingUp size={16} className="text-emerald-500" />
               </div>
               <div>
@@ -766,7 +771,23 @@ export default function AnalyticsPage() {
                     MX${ingresosPeriodo.toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Suma de entradas en Libro Contable</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Suma de entradas en Libro Contable (Caja Física)</p>
+              </div>
+            </div>
+
+            {/* 2.5 VENTAS RESERVACIONES */}
+            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ventas Reservaciones (Beds24)</span>
+                <TrendingUp size={16} className="text-blue-500" />
+              </div>
+              <div>
+                {isLoading ? <Skeleton /> : (
+                  <p className="text-3xl font-black text-zinc-950 tracking-tight">
+                    MX${reservasRevenuePeriodo.toLocaleString('es-MX')}
+                  </p>
+                )}
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Suma de reservas efectivas (Beds24 + Locales)</p>
               </div>
             </div>
 
