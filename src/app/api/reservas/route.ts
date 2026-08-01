@@ -58,9 +58,9 @@ export async function GET(req: Request) {
     try {
       let localQuery = supabase.from('local_reservas').select('*');
       if (!includeCancelled) {
-        // Traer todas las activas, y además las canceladas de las últimas 24 horas
+        // Traer todas las activas, y además las canceladas de las últimas 24 horas (usando created_at que sí existe)
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        localQuery = localQuery.or(`status.neq.cancelled,and(status.eq.cancelled,updated_at.gte.${twentyFourHoursAgo})`);
+        localQuery = localQuery.or(`status.neq.cancelled,and(status.eq.cancelled,created_at.gte.${twentyFourHoursAgo})`);
       }
       const { data } = await localQuery;
       
@@ -109,7 +109,7 @@ export async function GET(req: Request) {
             last_notice_sent: Boolean(b.last_notice_sent),
             booking_time: b.created_at || b.check_in || null,
             nights,
-            cancelled_at: b.status === 'cancelled' ? (b.updated_at || b.created_at || null) : null
+            cancelled_at: b.status === 'cancelled' ? (b.created_at || null) : null
           };
         });
       }
