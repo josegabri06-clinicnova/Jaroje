@@ -2197,12 +2197,14 @@ export default function ReservasList() {
     else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas') matchTab = r.channel === activeTab;
 
     let matchDateRange = true;
-    if (startDate && endDate) {
-      matchDateRange = (r.check_in <= endDate) && (r.check_out >= startDate);
-    } else if (startDate) {
-      matchDateRange = r.check_out >= startDate;
-    } else if (endDate) {
-      matchDateRange = r.check_in <= endDate;
+    if (activeTab !== 'Canceladas') {
+      if (startDate && endDate) {
+        matchDateRange = (r.check_in <= endDate) && (r.check_out >= startDate);
+      } else if (startDate) {
+        matchDateRange = r.check_out >= startDate;
+      } else if (endDate) {
+        matchDateRange = r.check_in <= endDate;
+      }
     }
 
     return matchSearch && matchTab && matchDateRange;

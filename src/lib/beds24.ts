@@ -1137,7 +1137,17 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
   return bookingsArray
     .filter((b: any) => {
-      if (!includeCancelled && (String(b.status) === '0' || b.status === 'cancelled')) return false;
+      if (!includeCancelled && (String(b.status) === '0' || b.status === 'cancelled')) {
+        // Permitir pasar únicamente si fue modificada/cancelada en las últimas 24 horas
+        if (b.modifiedTime) {
+          const modTime = new Date(b.modifiedTime).getTime();
+          const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+          if (modTime >= twentyFourHoursAgo) {
+            return true;
+          }
+        }
+        return false;
+      }
       const rId = String(b.roomId || '').trim();
       // Excluir habitaciones locales 500-507 que Beds24 no gestiona
       if (rId === LOCAL_ROOM_ID) return false;
