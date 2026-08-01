@@ -12,6 +12,7 @@ import { format, addDays, formatDistanceToNow, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
 import { getSeason } from '@/lib/beds24';
+import { getChannelBadge } from '@/lib/channels';
 
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -983,11 +984,12 @@ export default function AdminDashboard() {
                         </td>
                         <td className="py-3 px-4">
                           {(() => {
-                            const ch = (r.channel || '').toLowerCase();
-                            if (ch.includes('airbnb')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200 whitespace-nowrap">🏠 Airbnb</span>;
-                            if (ch.includes('booking')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">🔵 Booking</span>;
-                            if (ch.includes('expedia')) return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-700 border border-yellow-200 whitespace-nowrap">✈️ Expedia</span>;
-                            return <span className="inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">✅ Directa</span>;
+                            const badge = getChannelBadge(r.channel);
+                            return (
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-black px-2 py-0.5 rounded-full border whitespace-nowrap ${badge.className}`}>
+                                {badge.emoji} {badge.label}
+                              </span>
+                            );
                           })()}
                         </td>
                         <td className="py-3 px-4 text-[12px] text-zinc-500 font-medium">
