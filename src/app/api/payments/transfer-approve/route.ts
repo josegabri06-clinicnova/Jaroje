@@ -77,7 +77,8 @@ export async function POST(req: Request) {
             if (rawBookingData && rawBookingData.success && Array.isArray(rawBookingData.data) && rawBookingData.data.length > 0) {
               const rawB = rawBookingData.data[0];
               guestName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || 'Huésped';
-              phone = rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || '';
+              const { normalizePhone } = await import('@/lib/whatsapp');
+              phone = normalizePhone(rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || '', rawB.country2 || rawB.country || rawB.guestCountry2 || rawB.guestCountry);
               price = Number(rawB.price || 0);
               newDeposit = Number(rawB.deposit || 0);
               guestsCount = String(Number(rawB.numAdult || 1) + Number(rawB.numChild || 0));

@@ -95,7 +95,8 @@ export async function POST(req: Request) {
           const b24Json = await b24Res.json();
           const b = Array.isArray(b24Json?.data) ? b24Json.data[0] : (Array.isArray(b24Json) ? b24Json[0] : null);
           if (b) {
-            guestPhone = b.phone || b.mobile || b.guestPhone || '';
+            const { normalizePhone } = await import('@/lib/whatsapp');
+            guestPhone = normalizePhone(b.phone || b.mobile || b.guestPhone || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry);
             dbGuestName = b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || dbGuestName);
           }
         }
