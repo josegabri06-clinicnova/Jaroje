@@ -87,43 +87,10 @@ export async function POST(req: Request) {
             const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || '', country);
             const bStatus = String(b.status || '');
 
-            // --- DETECTAR SI LA RESERVACIÓN ESTÁ CANCELADA ---
             if (bStatus === '0' || bStatus === 'cancelled') {
               console.log(`[Webhook Beds24] Reservación cancelada detectada para ID ${bookingIdStr}`);
               await supabase.from('checkins').delete().eq('reservation_id', bookingIdStr.toLowerCase().trim());
-
-              if (phone) {
-                const { data: existingCancelLog } = await supabase
-                  .from('whatsapp_logs')
-                  .select('id')
-                  .eq('reservation_id', bookingIdStr)
-                  .eq('template_name', 'disponibilidad_liberada')
-                  .limit(1);
-
-                if (existingCancelLog && existingCancelLog.length > 0) {
-                  console.log(`[Webhook Beds24] Aviso disponibilidad_liberada ya enviado anteriormente a ${bookingIdStr}, omitiendo.`);
-                } else {
-                  const bookingForWA = {
-                    id: bookingIdStr,
-                    guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || guestName || 'Huésped'),
-                    phone: phone
-                  };
-
-                  const { sendTemplate4_DisponibilidadLiberada } = await import('@/lib/whatsapp');
-                  const waRes = await sendTemplate4_DisponibilidadLiberada(bookingForWA);
-                  if (waRes.success) {
-                    await supabase.from('whatsapp_logs').insert([{
-                      reservation_id: bookingIdStr,
-                      template_name: 'disponibilidad_liberada',
-                      phone: phone
-                    }]);
-                    console.log(`[Webhook Beds24] WhatsApp disponibilidad_liberada enviado con éxito a ${bookingIdStr}`);
-                  } else {
-                    console.error(`[Webhook Beds24] Error al enviar WhatsApp disponibilidad_liberada:`, waRes.error);
-                  }
-                }
-              }
-              return NextResponse.json({ success: true, message: 'Reservación cancelada procesada y notificada.' });
+              return NextResponse.json({ success: true, message: 'Reservación cancelada procesada.' });
             }
 
             if (phone) {
