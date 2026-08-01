@@ -1202,16 +1202,17 @@ export default function PublicReservaPage() {
     statusMessage = lang === 'en'
       ? 'Your stay is confirmed! Everything is ready for your arrival. We will send you check-in instructions one day before your entry.'
       : '¡Tu estancia está confirmada! Todo está listo para tu llegada. Te enviaremos las instrucciones de check-in un día antes de tu entrada.';
-  } else if (hoursSinceCreation > 2) {
-    currentState = 'pago_pendiente';
-    statusMessage = lang === 'en'
-      ? 'Your reservation is awaiting payment. Please upload your deposit receipt to avoid automatic cancellation of your reservation.'
-      : 'Tu reservación está pendiente de pago. Por favor, sube tu comprobante de anticipo para evitar la cancelación automática de tu estancia.';
   } else {
-    currentState = 'solicitud';
-    statusMessage = lang === 'en'
-      ? 'We have received your reservation request. To secure your stay, please make your deposit payment in the next few hours.'
-      : 'Hemos recibido tu solicitud de reservación. Para asegurar tu estancia, realiza el depósito de anticipo en las próximas horas.';
+    currentState = 'pago_pendiente';
+    if (hoursSinceCreation > 2) {
+      statusMessage = lang === 'en'
+        ? 'Your reservation is awaiting payment. Please upload your deposit receipt to avoid automatic cancellation of your reservation.'
+        : 'Tu reservación está pendiente de pago. Por favor, sube tu comprobante de anticipo para evitar la cancelación automática de tu estancia.';
+    } else {
+      statusMessage = lang === 'en'
+        ? 'We have received your reservation request. To secure your stay, please make your deposit payment in the next few hours.'
+        : 'Hemos recibido tu solicitud de reservación. Para asegurar tu estancia, realiza el depósito de anticipo en las próximas horas.';
+    }
   }
 
   // Pasos de la barra de progreso
