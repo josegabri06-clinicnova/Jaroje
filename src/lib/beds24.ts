@@ -732,7 +732,34 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
       throw err;
     }
   } else {
-    return fetchPage(baseUrl);
+    try {
+      // Traer las activas, y además las canceladas de las últimas 24 horas
+      const twentyFourHoursAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('.')[0] + 'Z';
+      const [activeBookings, recentCancelledBookings] = await Promise.all([
+        fetchPage(baseUrl).catch(err => {
+          console.error("[Beds24 API] Fallo al obtener activas:", err);
+          throw err;
+        }),
+        fetchPage(`${baseUrl}&status=cancelled&modifiedFrom=${twentyFourHoursAgoIso}`).catch(err => {
+          console.warn("[Beds24 API] Fallo silencioso al obtener canceladas recientes:", err);
+          return [];
+        })
+      ]);
+
+      const combined = [...activeBookings];
+      const activeIds = new Set(activeBookings.map(b => String(b.id)));
+      
+      recentCancelledBookings.forEach(b => {
+        if (!activeIds.has(String(b.id))) {
+          combined.push(b);
+        }
+      });
+
+      return combined;
+    } catch (err) {
+      console.error("[Beds24 API] Error al obtener reservas combinadas:", err);
+      throw err;
+    }
   }
 }
 

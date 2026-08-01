@@ -58,7 +58,9 @@ export async function GET(req: Request) {
     try {
       let localQuery = supabase.from('local_reservas').select('*');
       if (!includeCancelled) {
-        localQuery = localQuery.neq('status', 'cancelled');
+        // Traer todas las activas, y además las canceladas de las últimas 24 horas
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        localQuery = localQuery.or(`status.neq.cancelled,and(status.eq.cancelled,updated_at.gte.${twentyFourHoursAgo})`);
       }
       const { data } = await localQuery;
       
