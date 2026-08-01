@@ -1192,16 +1192,17 @@ export default function PublicReservaPage() {
     statusMessage = lang === 'en'
       ? 'Welcome to Condominios Jaroje! We hope you are enjoying your stay. If you need anything, our team is at your service.'
       : '¡Bienvenido a Condominios Jaroje! Esperamos que estés disfrutando de tu estancia. Si necesitas algo, nuestro equipo está a tu disposición.';
-  } else if (isConfirmed && checkInLimit && today >= checkInLimit) {
-    currentState = 'checkin_pendiente';
-    statusMessage = lang === 'en'
-      ? 'Your room is almost ready. Upon arrival, the front desk staff will help you complete your digital registration and contract signing.'
-      : 'Tu habitación está casi lista. A tu llegada, el personal de recepción te ayudará a completar tu registro y firma digital de contrato.';
   } else if (isConfirmed) {
-    currentState = 'confirmada';
-    statusMessage = lang === 'en'
-      ? 'Your stay is confirmed! Everything is ready for your arrival. We will send you check-in instructions one day before your entry.'
-      : '¡Tu estancia está confirmada! Todo está listo para tu llegada. Te enviaremos las instrucciones de check-in un día antes de tu entrada.';
+    currentState = 'checkin_pendiente';
+    if (checkInLimit && today >= checkInLimit) {
+      statusMessage = lang === 'en'
+        ? 'Your room is almost ready. Upon arrival, the front desk staff will help you complete your digital registration and contract signing.'
+        : 'Tu habitación está casi lista. A tu llegada, el personal de recepción te ayudará a completar tu registro y firma digital de contrato.';
+    } else {
+      statusMessage = lang === 'en'
+        ? 'Your stay is confirmed! Everything is ready for your arrival. We will send you check-in instructions one day before your entry.'
+        : '¡Tu estancia está confirmada! Todo está listo para tu llegada. Te enviaremos las instrucciones de check-in un día antes de tu entrada.';
+    }
   } else {
     currentState = 'pago_pendiente';
     if (hoursSinceCreation > 2) {
