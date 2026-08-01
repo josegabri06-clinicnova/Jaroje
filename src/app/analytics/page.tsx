@@ -594,37 +594,69 @@ export default function AnalyticsPage() {
 
   // ── SECCIÓN AUXILIAR: BREAKDOWN DE CANALES BEDS24 (FILTRADO POR RANGO) ────
   const { channelData, totalNochesCanales, reservasRevenuePeriodo } = useMemo(() => {
-    // Filtrar reservas que caen en el rango de fechas (excluyendo canceladas)
-    const rangeReservas = reservas.filter(r => {
-      if (!r.check_in) return false;
-      if (r.status === 'cancelled' || r.status === '0') return false;
-      const matchStart = startDate ? r.check_in >= startDate : true;
-      const matchEnd = endDate ? r.check_in <= endDate : true;
-      return matchStart && matchEnd;
-    });
+    let sDate = startDate ? new Date(startDate + 'T12:00:00') : null;
+    let eDate = endDate ? new Date(endDate + 'T12:00:00') : null;
 
-    const totalN = rangeReservas.reduce((s, r) => s + (r.nights || 0), 0);
-    const totalRev = rangeReservas.reduce((s, r) => s + (Number(r.price_estimate || r.price || 0)), 0);
+    if (!sDate || !eDate) {
+      if (reservas.length === 0) return { channelData: [], totalNochesCanales: 0, reservasRevenuePeriodo: 0 };
+      const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
+      const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
+      sDate = checkIns.length > 0 ? new Date(checkIns[0] + 'T12:00:00') : new Date();
+      eDate = checkOuts.length > 0 ? new Date(checkOuts[checkOuts.length - 1] + 'T12:00:00') : new Date();
+    }
+
+    let totalN = 0;
+    let totalRev = 0;
     const channelMap: Record<string, { nights: number; revenue: number }> = {};
-    
-    rangeReservas.forEach(r => {
-      const ch = r.channel || 'Directo';
-      if (!channelMap[ch]) channelMap[ch] = { nights: 0, revenue: 0 };
-      channelMap[ch].nights += r.nights || 0;
-      channelMap[ch].revenue += Number(r.price_estimate || r.price || 0);
+
+    reservas.forEach(r => {
+      if (!r.check_in || !r.check_out) return;
+      if (r.status === 'cancelled' || r.status === '0') return;
+
+      const rIn = new Date(r.check_in + 'T12:00:00');
+      const rOut = new Date(r.check_out + 'T12:00:00');
+
+      // Calcular solapamiento
+      if (rIn < eDate! && rOut > sDate!) {
+        const overlapStart = new Date(Math.max(rIn.getTime(), sDate!.getTime()));
+        const overlapEnd = new Date(Math.min(rOut.getTime(), eDate!.getTime()));
+        const diff = (overlapEnd.getTime() - overlapStart.getTime()) / 86400000;
+        const overlapNights = Math.max(0, Math.round(diff));
+
+        if (overlapNights > 0) {
+          totalN += overlapNights;
+
+          // Prorrateo de ingresos diario (Devengo)
+          const totalNightsOfBooking = Math.max(1, Math.round((rOut.getTime() - rIn.getTime()) / 86400000));
+          const price = Number(r.price_estimate || r.price || 0);
+          const pricePerNight = price / totalNightsOfBooking;
+          const proportionalRevenue = pricePerNight * overlapNights;
+
+          totalRev += proportionalRevenue;
+
+          const ch = r.channel || 'Directo';
+          if (!channelMap[ch]) channelMap[ch] = { nights: 0, revenue: 0 };
+          channelMap[ch].nights += overlapNights;
+          channelMap[ch].revenue += proportionalRevenue;
+        }
+      }
     });
 
     const data = Object.entries(channelMap)
       .map(([name, d]) => ({
         name,
         nights: d.nights,
-        revenue: d.revenue,
+        revenue: Math.round(d.revenue),
         pct: totalN > 0 ? Math.round((d.nights / totalN) * 100) : 0,
         color: name.includes('Airbnb') ? '#FF5A5F' : name.includes('Booking') ? '#003580' : name.includes('Expedia') ? '#FFC000' : name.includes('WhatsApp') ? '#25D366' : '#111827'
       }))
       .sort((a, b) => b.revenue - a.revenue);
 
-    return { channelData: data, totalNochesCanales: totalN, reservasRevenuePeriodo: totalRev };
+    return { 
+      channelData: data, 
+      totalNochesCanales: totalN, 
+      reservasRevenuePeriodo: Math.round(totalRev) 
+    };
   }, [reservas, startDate, endDate]);
 
   const Skeleton = () => <div className="h-7 bg-zinc-150 rounded-lg animate-pulse w-24" />;
