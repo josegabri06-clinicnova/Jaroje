@@ -117,7 +117,7 @@ export async function GET(req: Request) {
       console.error("[Reservas GET] Error reading local_reservas:", dbErr);
     }
 
-    // --- Auto-sync: OTA bookings de Beds24 hab 500 → local rooms 501-507 ---
+    // --- Auto-sync: bookings de Beds24 hab 500 → local rooms ---
     try {
       const otaBookings = getOtaRoom500Bookings();
       if (otaBookings.length > 0) {
@@ -130,26 +130,32 @@ export async function GET(req: Request) {
           });
           if (alreadySynced) continue;
 
-          // Encontrar habitaciones locales disponibles (501-507) para las fechas
-          const occupiedUnits = localRawData
-            .filter(lr => lr.status !== 'cancelled' && lr.check_in < ota.check_out && lr.check_out > ota.check_in)
-            .map(lr => String(lr.unit_id));
+          let targetUnit = ota.unit_id;
+          let roomName = UNIT_TO_ROOM[targetUnit] || '500';
 
-          const availableUnits = OTA_ASSIGNABLE_UNITS.filter(u => !occupiedUnits.includes(u));
-          if (availableUnits.length === 0) {
-            console.warn(`[OTA Sync] No hay hab locales 501-507 disponibles para B24:${ota.beds24_id} (${ota.guest_name})`);
-            continue;
+          if (ota.isOTA) {
+            // Si es OTA, recolocar en una de las locales 501-507 (unit_id 2-8) disponibles para liberar la 500
+            const occupiedUnits = localRawData
+              .filter(lr => lr.status !== 'cancelled' && lr.check_in < ota.check_out && lr.check_out > ota.check_in)
+              .map(lr => String(lr.unit_id));
+
+            const availableUnits = OTA_ASSIGNABLE_UNITS.filter(u => !occupiedUnits.includes(u));
+            if (availableUnits.length === 0) {
+              console.warn(`[OTA Sync] No hay hab locales 501-507 disponibles para B24:${ota.beds24_id} (${ota.guest_name})`);
+              // Como fallback, la dejamos en su unidad original asignada en Beds24
+              targetUnit = ota.unit_id;
+              roomName = UNIT_TO_ROOM[targetUnit] || '500';
+            } else {
+              targetUnit = availableUnits[Math.floor(Math.random() * availableUnits.length)];
+              roomName = UNIT_TO_ROOM[targetUnit];
+            }
           }
-
-          // Seleccionar habitación aleatoria de las disponibles
-          const randomUnit = availableUnits[Math.floor(Math.random() * availableUnits.length)];
-          const roomName = UNIT_TO_ROOM[randomUnit];
 
           const { data: inserted, error: insertErr } = await supabase
             .from('local_reservas')
             .insert([{
               room_id: '685542',
-              unit_id: randomUnit,
+              unit_id: targetUnit,
               guest_name: ota.guest_name,
               check_in: ota.check_in,
               check_out: ota.check_out,
@@ -158,7 +164,7 @@ export async function GET(req: Request) {
               phone: ota.phone,
               num_adult: ota.num_adult,
               num_child: ota.num_child,
-              notes: `OTA Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
+              notes: `Beds24 Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
               channel: ota.channel,
               status: 'confirmed'
             }])
@@ -166,12 +172,12 @@ export async function GET(req: Request) {
             .single();
 
           if (insertErr) {
-            console.error(`[OTA Sync] Error insertando B24:${ota.beds24_id}:`, insertErr);
+            console.error(`[Beds24 Sync] Error insertando B24:${ota.beds24_id}:`, insertErr);
           } else {
-            console.log(`[OTA Sync] ✅ B24:${ota.beds24_id} (${ota.guest_name}) → Hab ${roomName}`);
+            console.log(`[Beds24 Sync] ✅ B24:${ota.beds24_id} (${ota.guest_name}) → Hab ${roomName}`);
             const nights = ota.nights || 1;
             localBookings.push({
-              id: inserted.id, roomId: 685542, unitId: Number(randomUnit),
+              id: inserted.id, roomId: 685542, unitId: Number(targetUnit),
               roomName: `Habitación ${roomName}`, room_name: `Habitación ${roomName}`,
               room: roomName || '',
               arrival: ota.check_in, departure: ota.check_out,
@@ -181,25 +187,25 @@ export async function GET(req: Request) {
               deposit: ota.deposit, balance: ota.price - ota.deposit,
               phone: ota.phone, mobile: ota.phone,
               numAdult: ota.num_adult, numChild: ota.num_child,
-              notes: `OTA Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
-              comments: `OTA Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
+              notes: `Beds24 Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
+              comments: `Beds24 Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
               channel: ota.channel, isLocal: true,
               booking_time: new Date().toISOString(), nights
             });
             // Actualizar localRawData para siguiente iteración
             localRawData.push({
-              id: inserted.id, room_id: '685542', unit_id: randomUnit,
+              id: inserted.id, room_id: '685542', unit_id: targetUnit,
               guest_name: ota.guest_name, check_in: ota.check_in, check_out: ota.check_out,
               price: ota.price, deposit: ota.deposit, phone: ota.phone,
               num_adult: ota.num_adult, num_child: ota.num_child,
-              notes: `OTA Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
+              notes: `Beds24 Auto-Sync | ${ota.channel} | B24:${ota.beds24_id}`,
               channel: ota.channel, status: 'confirmed'
             });
           }
         }
       }
     } catch (syncErr) {
-      console.error("[OTA Sync] Error en auto-sync:", syncErr);
+      console.error("[Beds24 Sync] Error en auto-sync de habitaciones locales:", syncErr);
     }
 
     const combined = [...mappedBookings, ...localBookings];

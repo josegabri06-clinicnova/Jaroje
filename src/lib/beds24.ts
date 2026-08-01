@@ -1092,15 +1092,13 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
     if (rId !== LOCAL_ROOM_ID) return false;
     const uId = String(b.unitId ?? '').trim();
     if (!uId || uId === '0') return false; // Excluir unallocated
-    // Detectar si es OTA
+    return true;
+  }).map((b: any) => {
     const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
     const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
     const isOTA = rawSource.includes('airbnb') || rawSource.includes('booking') || rawSource.includes('expedia')
       || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
-    return isOTA;
-  }).map((b: any) => {
-    const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
-    const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+
     let channel = 'Directo';
     if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
     else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
@@ -1118,7 +1116,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
     return {
       beds24_id: String(b.id),
-      guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped OTA',
+      guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
       check_in: b.arrival,
       check_out: b.departure,
       price: b.price !== undefined ? Number(b.price) : 0,
@@ -1130,6 +1128,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       channel,
       nights,
       unit_id: String(b.unitId || '1'),
+      isOTA
     };
   });
 
