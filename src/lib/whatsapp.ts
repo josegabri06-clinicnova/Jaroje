@@ -49,11 +49,24 @@ const COUNTRY_TO_PREFIX: Record<string, string> = {
 
 function countryNameToCode(name: string): string {
   const normalized = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  
+  // 1. Mapeo exacto (incluyendo nombres comunes y códigos de 3 letras)
   const map: Record<string, string> = {
+    // Códigos de 3 letras
+    'mex': 'MX', 'usa': 'US', 'col': 'CO', 'can': 'CA', 'esp': 'ES',
+    'arg': 'AR', 'chl': 'CL', 'per': 'PE', 'ecu': 'EC', 'ven': 'VE',
+    'bra': 'BR', 'cri': 'CR', 'pan': 'PA', 'gtm': 'GT', 'hnd': 'HN',
+    'slv': 'SV', 'nic': 'NI', 'ury': 'UY', 'pry': 'PY', 'bol': 'BO',
+    'dom': 'DO', 'pri': 'PR', 'deu': 'DE', 'fra': 'FR', 'gbr': 'GB',
+    'ita': 'IT', 'nld': 'NL', 'che': 'CH', 'aut': 'AT', 'bel': 'BE',
+    'prt': 'PT',
+
+    // Variantes exactas
     'mexico': 'MX',
     'estados unidos': 'US',
+    'estados unidos de america': 'US',
     'united states': 'US',
-    'usa': 'US',
+    'united states of america': 'US',
     'canada': 'CA',
     'colombia': 'CO',
     'espana': 'ES',
@@ -95,7 +108,45 @@ function countryNameToCode(name: string): string {
     'belgium': 'BE',
     'portugal': 'PT'
   };
-  return map[normalized] || '';
+
+  if (map[normalized]) {
+    return map[normalized];
+  }
+
+  // 2. Búsqueda por coincidencia parcial de palabras clave si no hay coincidencia exacta
+  if (normalized.includes('mexic')) return 'MX';
+  if (normalized.includes('colomb')) return 'CO';
+  if (normalized.includes('united states') || normalized.includes('ee.uu') || normalized.includes('eeuu') || normalized.includes('america')) return 'US';
+  if (normalized.includes('canada')) return 'CA';
+  if (normalized.includes('espan') || normalized.includes('spain')) return 'ES';
+  if (normalized.includes('argentin')) return 'AR';
+  if (normalized.includes('chile')) return 'CL';
+  if (normalized.includes('peru')) return 'PE';
+  if (normalized.includes('ecuador')) return 'EC';
+  if (normalized.includes('venezuel')) return 'VE';
+  if (normalized.includes('brasil') || normalized.includes('brazil')) return 'BR';
+  if (normalized.includes('costa rica')) return 'CR';
+  if (normalized.includes('panama')) return 'PA';
+  if (normalized.includes('guatemal')) return 'GT';
+  if (normalized.includes('hondur')) return 'HN';
+  if (normalized.includes('salvador')) return 'SV';
+  if (normalized.includes('nicaragu')) return 'NI';
+  if (normalized.includes('uruguay')) return 'UY';
+  if (normalized.includes('paraguay')) return 'PY';
+  if (normalized.includes('bolivi')) return 'BO';
+  if (normalized.includes('dominic')) return 'DO';
+  if (normalized.includes('puerto rico')) return 'PR';
+  if (normalized.includes('aleman') || normalized.includes('german')) return 'DE';
+  if (normalized.includes('franc') || normalized.includes('french')) return 'FR';
+  if (normalized.includes('reino unido') || normalized.includes('united kingdom')) return 'GB';
+  if (normalized.includes('itali')) return 'IT';
+  if (normalized.includes('paises bajos') || normalized.includes('netherland')) return 'NL';
+  if (normalized.includes('suiz') || normalized.includes('switzer')) return 'CH';
+  if (normalized.includes('austri')) return 'AT';
+  if (normalized.includes('belgic') || normalized.includes('belgi')) return 'BE';
+  if (normalized.includes('portug')) return 'PT';
+
+  return '';
 }
 
 // Normaliza y limpia el número de teléfono para base de datos y búsqueda
