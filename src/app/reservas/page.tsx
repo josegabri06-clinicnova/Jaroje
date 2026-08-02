@@ -773,34 +773,29 @@ export default function ReservasList() {
           }
         }
 
-        // Sincronizar pago de OTA con Beds24 en tiempo real
+        // Sincronizar pago de OTA con Beds24 en segundo plano (asíncrono)
         const totalAmount = netRevenue + commission + taxesRetained;
-        let syncedSuccess = false;
-        try {
-          const b24PayRes = await fetch('/api/reservas/payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              bookId: selectedRes.id,
-              amount: totalAmount,
-              paymentMethod: 'transferencia',
-              employeeNum: '999', // Admin
-              description: `Cobro Check-in Automático ${channel}`
-            })
-          });
+        fetch('/api/reservas/payment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            bookId: selectedRes.id,
+            amount: totalAmount,
+            paymentMethod: 'transferencia',
+            employeeNum: '999', // Admin
+            description: `Cobro Check-in Automático ${channel}`,
+            currentDeposit: selectedRes.deposit || 0
+          })
+        }).then(async (b24PayRes) => {
           const payData = await b24PayRes.json();
-          if (b24PayRes.ok && payData.success) {
-            syncedSuccess = true;
+          if (b24PayRes.ok && payData.success && netRecordId) {
+            supabase.from('finances').update({
+              description: `${netDesc} [Synced: B24]`
+            }).eq('id', netRecordId).catch(err => console.error("Error updating synced log:", err));
           }
-        } catch (payErr) {
-          console.error("Error al registrar pago OTA en Beds24:", payErr);
-        }
-
-        if (syncedSuccess && netRecordId) {
-          await supabase.from('finances').update({
-            description: `${netDesc} [Synced: B24]`
-          }).eq('id', netRecordId);
-        }
+        }).catch(payErr => {
+          console.error("Error al registrar pago OTA en Beds24 en segundo plano:", payErr);
+        });
       } else {
         if (paymentReference && paymentAmountNum > 0) {
           const accountName = accounts.find(a => a.id === paymentReference)?.name || paymentReference;
@@ -900,22 +895,21 @@ export default function ReservasList() {
         }
 
         if (isSuccess) {
-          // Registrar el pago en Beds24 en tiempo real para flujos manuales
-          try {
-            await fetch('/api/reservas/payment', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                bookId: selectedRes.id,
-                amount: paymentAmountNum,
-                paymentMethod: paymentMethod,
-                employeeNum: '999', // Admin
-                description: paymentDescription || null
-              })
-            });
-          } catch (payB24Err) {
-            console.error("Error al registrar pago en Beds24:", payB24Err);
-          }
+          // Registrar el pago en Beds24 en segundo plano (asíncrono) para flujos manuales
+          fetch('/api/reservas/payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              bookId: selectedRes.id,
+              amount: paymentAmountNum,
+              paymentMethod: paymentMethod,
+              employeeNum: '999', // Admin
+              description: paymentDescription || null,
+              currentDeposit: selectedRes.deposit || 0
+            })
+          }).catch(payB24Err => {
+            console.error("Error al registrar pago en Beds24 en segundo plano:", payB24Err);
+          });
         } else {
           if (financeError) {
             console.error("Error al registrar ingreso en finanzas:", financeError);

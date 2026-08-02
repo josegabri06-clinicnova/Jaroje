@@ -285,20 +285,7 @@ export async function GET(req: Request) {
       console.error("[Reservas GET] Error al aplicar regla check-in/out:", overrideErr);
     }
 
-    // --- DEBUG LOGGING WRITE TO WORKSPACE ---
-    try {
-      const { data: dbCheckins } = await supabase.from('checkins').select('*');
-      const fs = await import('fs');
-      const path = await import('path');
-      const filePath = path.join(process.cwd(), 'src/app/api/reservas/debug_reservas.json');
-      fs.writeFileSync(filePath, JSON.stringify({
-        timestamp: new Date().toISOString(),
-        localBookings: localBookings.map(b => ({ id: b.id, room: b.room, check_in: b.check_in, check_out: b.check_out, guest: b.guest_name, type: typeof b.id })),
-        checkins: dbCheckins?.map(c => ({ reservation_id: c.reservation_id, status: c.status, room: c.room, guest: c.guest_name, type: typeof c.reservation_id }))
-      }, null, 2), 'utf8');
-    } catch (debugErr) {
-      console.error("Error writing debug_reservas.json:", debugErr);
-    }
+    // --- DEBUG LOGGING REMOVED FOR HIGH PERFORMANCE ---
 
     return NextResponse.json({ success: true, data: combined });
   } catch (err: any) {

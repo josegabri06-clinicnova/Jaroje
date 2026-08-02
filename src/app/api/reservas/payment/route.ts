@@ -7,7 +7,7 @@ import { sendTemplate3_ReservacionConfirmada, sendTemplate6_BienvenidaCheckin } 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { bookId, amount, paymentMethod, employeeNum, description: customDescription } = body;
+    const { bookId, amount, paymentMethod, employeeNum, description: customDescription, currentDeposit: bodyDeposit } = body;
 
     if (!bookId || !amount || !paymentMethod) {
       return NextResponse.json({ 
@@ -91,24 +91,8 @@ export async function POST(req: Request) {
 
     const BEDS24_TOKEN = await getBeds24Token();
 
-    // Consultar el depósito actual en Beds24 para acumular el nuevo depósito
-    let currentDeposit = 0;
-    try {
-      const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}`, {
-        headers: { 'token': BEDS24_TOKEN },
-        cache: 'no-store'
-      });
-      if (b24Res.ok) {
-        const b24Data = await b24Res.json();
-        const bItem = Array.isArray(b24Data?.data) ? b24Data.data[0] : (Array.isArray(b24Data) ? b24Data[0] : null);
-        if (bItem) {
-          currentDeposit = Number(bItem.deposit || 0);
-        }
-      }
-    } catch (e) {
-      console.warn("No se pudo obtener el depósito previo de Beds24:", e);
-    }
-
+    // Evitamos la llamada GET lenta a Beds24 usando el depósito provisto por el frontend
+    const currentDeposit = bodyDeposit !== undefined ? Number(bodyDeposit) : 0;
     const newDeposit = currentDeposit + Number(amount);
 
     // Estructurar el pago según la especificación contable de Beds24 API v2:
