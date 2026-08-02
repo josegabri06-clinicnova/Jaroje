@@ -57,15 +57,31 @@ export async function POST(req: Request) {
       try {
         const todayStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
         
-        // 1. Obtener todas las reservas de Beds24
-        const { getBeds24Bookings } = await import('@/lib/beds24');
-        const b24Bookings = await getBeds24Bookings(true, false, false).catch(() => [] as any[]);
+        // 1. Obtener todas las reservas de Beds24 activas directamente de Supabase (Supabase-First)
+        const { data: dbB24Data } = await supabase
+          .from('beds24_reservations')
+          .select('*')
+          .neq('status', 'cancelled')
+          .neq('status', 'cancelado');
+
+        const b24Bookings = (dbB24Data || []).map((b: any) => ({
+          ...b,
+          roomId: b.room_id,
+          unitId: b.unit_id,
+          check_in: b.check_in,
+          check_out: b.check_out,
+          guest_name: b.guest_name,
+          phone: b.guest_phone || '',
+          deposit: b.deposit || 0,
+          channel: b.channel || 'Directo'
+        }));
 
         // 2. Obtener reservas locales
         const { data: localData } = await supabase
           .from('local_reservas')
           .select('*')
-          .neq('status', 'cancelled');
+          .neq('status', 'cancelled')
+          .neq('status', 'cancelado');
 
         const reservas: any[] = [
           ...b24Bookings,
