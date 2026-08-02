@@ -117,9 +117,19 @@ export async function POST(req: Request) {
         if (b24Res.ok) {
           const rawBookingData = await b24Res.json();
           if (rawBookingData && rawBookingData.success && Array.isArray(rawBookingData.data) && rawBookingData.data.length > 0) {
-            const rawB = rawBookingData.data[0];
-            const phone = rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile;
-            if (phone) {
+             const rawB = rawBookingData.data[0];
+
+             // ¡Sincronizar de inmediato en Supabase local!
+             try {
+               const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+               await syncBeds24BookingLocal(rawB);
+               console.log(`[Stripe Webhook] ✅ Reserva B24:${bookingId} sincronizada síncronamente en Supabase.`);
+             } catch (syncErr) {
+               console.error("[Stripe Webhook] Error al sincronizar reserva tras pago de Stripe:", syncErr);
+             }
+
+             const phone = rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile;
+             if (phone) {
               const formattedName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || guestName;
               const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${bookingId}`;
               const guestsCount = String(Number(rawB.numAdult || 1) + Number(rawB.numChild || 0));

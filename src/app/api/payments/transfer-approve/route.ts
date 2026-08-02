@@ -86,6 +86,15 @@ export async function POST(req: Request) {
               checkOut = rawB.departure || '';
               numAdult = Number(rawB.numAdult || 1);
               numChild = Number(rawB.numChild || 0);
+
+              // ¡Sincronizar de inmediato en Supabase local!
+              try {
+                const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+                await syncBeds24BookingLocal(rawB);
+                console.log(`[Approve Transfer] ✅ Reserva B24:${bookingId} sincronizada síncronamente en Supabase con depósito $${newDeposit}`);
+              } catch (syncErr) {
+                console.error("[Approve Transfer] Error al sincronizar reserva tras aprobar transferencia:", syncErr);
+              }
             }
           }
         } catch (errB24) {
