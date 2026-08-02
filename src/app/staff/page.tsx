@@ -211,11 +211,12 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
     if (BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum) return true;
   }
 
-  // 3. Mapeo habitaciones locales 500-507 (unitId)
-  if (unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
+  // 3. Mapeo habitaciones locales 500-507 (unitId) - Solo si la reserva es local o del roomId de locales
+  const isLocalRes = r.isLocal || roomIdStr === '685542';
+  if (isLocalRes && unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
     if (LOCAL_UNIT_MAP[unitIdStr] === roomNum) return true;
   }
-  if (unitIdStr && unitIdStr === roomNum) return true;
+  if (isLocalRes && unitIdStr && unitIdStr === roomNum) return true;
 
   // 4. Evaluar campos room o room_name limpiando rangos de categoría como 500-507, 301-306, (101-107)
   const cleanStr = (str: string) => str.replace(/\(?\d{3}\s*-\s*\d{3}\)?/g, '');

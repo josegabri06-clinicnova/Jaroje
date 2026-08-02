@@ -50,10 +50,11 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
   if (roomIdStr && unitIdStr && BEDS24_UNIT_MAP[roomIdStr]?.[unitIdStr]) {
     return BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum;
   }
-  if (unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
+  const isLocalRes = r.isLocal || roomIdStr === '685542';
+  if (isLocalRes && unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
     if (LOCAL_UNIT_MAP[unitIdStr] === roomNum) return true;
   }
-  if (unitIdStr && unitIdStr === roomNum) return true;
+  if (isLocalRes && unitIdStr && unitIdStr === roomNum) return true;
 
   const roomStr = String(r.room || '').replace(/\(\d{3}-\d{3}\)/g, '');
   const roomNameStr = String(r.room_name || '').replace(/\(\d{3}-\d{3}\)/g, '');
