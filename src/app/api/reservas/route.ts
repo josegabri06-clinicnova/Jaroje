@@ -257,16 +257,35 @@ export async function GET(req: Request) {
 
     // Excluir reservas de Beds24 que ya han sido clonadas o reasignadas localmente
     const reassignedB24Ids = new Set<string>();
+    const localEstanciaKeys = new Set<string>();
+    const cleanStr = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
     localRawData.forEach(lr => {
+      // 1. Por ID explícito en notas
       if (lr.notes) {
         const match = lr.notes.match(/B24:\s*(\d+)/);
         if (match) {
           reassignedB24Ids.add(match[1]);
         }
       }
+      // 2. Por clave de estancia (nombre + check_in + check_out)
+      const guestKey = cleanStr(lr.guest_name);
+      if (guestKey && lr.check_in && lr.check_out && lr.status !== 'cancelled') {
+        const key = `${guestKey}_${lr.check_in}_${lr.check_out}`;
+        localEstanciaKeys.add(key);
+      }
     });
 
-    const filteredMappedBookings = mappedBookings.filter(b => !reassignedB24Ids.has(String(b.id)));
+    const filteredMappedBookings = mappedBookings.filter(b => {
+      if (reassignedB24Ids.has(String(b.id))) return false;
+
+      const guestKey = cleanStr(b.guest_name);
+      const bKey = `${guestKey}_${b.check_in}_${b.check_out}`;
+      if (localEstanciaKeys.has(bKey)) {
+        return false;
+      }
+      return true;
+    });
 
     const combined = [...filteredMappedBookings, ...localBookings];
 
