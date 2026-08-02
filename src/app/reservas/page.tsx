@@ -166,6 +166,9 @@ async function compressImage(file: File): Promise<string> {
 
 function isReservationNew(r: any): boolean {
   if (!r || r.is_acknowledged || r.status === 'cancelled') return false;
+  const channelLower = (r.channel || '').toLowerCase();
+  const isOta = ['airbnb', 'booking', 'expedia'].some(ota => channelLower.includes(ota));
+  if (isOta) return false;
   return true;
 }
 
