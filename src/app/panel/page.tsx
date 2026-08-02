@@ -765,7 +765,12 @@ export default function AdminDashboard() {
   };
 
   const totalRevenue = reservas.reduce((s, r) => s + (r.price_estimate || 0), 0);
-  const activeNow = reservas.filter(r => r.check_out > todayStr && r.checked_in).length;
+  const activeNow = reservas.filter(r => 
+    r.status !== 'cancelled' && 
+    r.status !== 'cancelado' && 
+    r.check_out > todayStr && 
+    r.checked_in
+  ).length;
 
   return (
     <div className="space-y-6 pb-28 bg-[#fafafa] min-h-screen">
@@ -1700,7 +1705,12 @@ export default function AdminDashboard() {
         if (kpiModalType === 'encasa') {
           title = 'Huéspedes En Casa';
           badgeColor = 'bg-zinc-900 text-white';
-          filtered = reservas.filter(r => r.check_out > todayStr && r.checked_in);
+          filtered = reservas.filter(r => 
+            r.status !== 'cancelled' && 
+            r.status !== 'cancelado' && 
+            r.check_out > todayStr && 
+            r.checked_in
+          );
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';

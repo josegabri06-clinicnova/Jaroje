@@ -1874,7 +1874,12 @@ export default function CalendarPage() {
     );
   }, [reservas, todayStr]);
 
-  const todayActive = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in))).length;
+  const todayActive = reservas.filter(r => 
+    r.status !== 'cancelled' && 
+    r.status !== 'cancelado' && 
+    r.check_out > todayStr && 
+    r.checked_in
+  ).length;
   const todayArrivals = todasLlegadas.length;
   const todayDepartures = todasSalidas.length;
 
@@ -3411,7 +3416,12 @@ export default function CalendarPage() {
         if (kpiModalType === 'encasa') {
           title = 'Huéspedes En Casa';
           badgeColor = 'bg-zinc-900 text-white';
-          filtered = reservas.filter(r => r.check_out > todayStr && (r.check_in < todayStr || (r.check_in === todayStr && r.checked_in)));
+          filtered = reservas.filter(r => 
+            r.status !== 'cancelled' && 
+            r.status !== 'cancelado' && 
+            r.check_out > todayStr && 
+            r.checked_in
+          );
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
