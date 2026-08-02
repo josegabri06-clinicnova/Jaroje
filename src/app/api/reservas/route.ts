@@ -716,6 +716,7 @@ export async function DELETE(req: Request) {
 
     // Obtener detalles de la reserva de Beds24 antes de cancelarla
     let bookingForWA: any = null;
+    let bookingB24Raw: any = null;
     try {
       // Agregamos un rango de fechas muy amplio para asegurar que encuentre reservas futuras o pasadas por ID
       const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31&includeCancelled=true`, {
@@ -725,6 +726,7 @@ export async function DELETE(req: Request) {
         const b24Json = await b24Res.json();
         if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
           const b = b24Json.data[0];
+          bookingB24Raw = b;
           bookingForWA = {
             id: id.toString(),
             guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || 'Huésped'),
@@ -803,16 +805,18 @@ export async function DELETE(req: Request) {
     }
 
     // Actualizar de inmediato en Supabase local (Supabase-First)
-    try {
-      const { syncBeds24BookingLocal } = await import('@/lib/beds24');
-      const b24CancelledObj = {
-        ...bookingForWA,
-        status: '0' // cancelado en Beds24
-      };
-      await syncBeds24BookingLocal(b24CancelledObj);
-      console.log(`[Reservas DELETE] ✅ Estado cancelado sincronizado síncronamente en Supabase para B24:${id}`);
-    } catch (syncErr) {
-      console.error("[Reservas DELETE] Error al sincronizar cancelación local:", syncErr);
+    if (bookingB24Raw) {
+      try {
+        const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+        const b24CancelledObj = {
+          ...bookingB24Raw,
+          status: '0' // cancelado en Beds24
+        };
+        await syncBeds24BookingLocal(b24CancelledObj);
+        console.log(`[Reservas DELETE] ✅ Estado cancelado sincronizado síncronamente en Supabase para B24:${id}`);
+      } catch (syncErr) {
+        console.error("[Reservas DELETE] Error al sincronizar cancelación local:", syncErr);
+      }
     }
 
     // Invalidar caché de Beds24 ya que acabamos de cancelar una reserva
