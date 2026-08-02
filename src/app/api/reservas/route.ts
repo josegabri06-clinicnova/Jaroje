@@ -802,6 +802,19 @@ export async function DELETE(req: Request) {
       }
     }
 
+    // Actualizar de inmediato en Supabase local (Supabase-First)
+    try {
+      const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+      const b24CancelledObj = {
+        ...bookingForWA,
+        status: '0' // cancelado en Beds24
+      };
+      await syncBeds24BookingLocal(b24CancelledObj);
+      console.log(`[Reservas DELETE] ✅ Estado cancelado sincronizado síncronamente en Supabase para B24:${id}`);
+    } catch (syncErr) {
+      console.error("[Reservas DELETE] Error al sincronizar cancelación local:", syncErr);
+    }
+
     // Invalidar caché de Beds24 ya que acabamos de cancelar una reserva
     clearBeds24Cache();
 
@@ -1219,6 +1232,29 @@ export async function PUT(req: Request) {
           : firstResult.message || 'Error individual en Beds24';
         return NextResponse.json({ error: `Beds24 rechazó la actualización: ${errorMsg}` }, { status: 400 });
       }
+    }
+
+    // Sincronizar de inmediato la reserva modificada en Supabase (Supabase-First)
+    try {
+      console.log(`[Reservas PUT] Sincronizando reserva modificada B24:${id} en Supabase...`);
+      const { getBeds24Token } = await import('@/lib/beds24');
+      const BEDS24_TOKEN = await getBeds24Token();
+      const b24FetchRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&includeInvoiceItems=true`, {
+        method: 'GET',
+        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+        cache: 'no-store'
+      });
+      if (b24FetchRes.ok) {
+        const fetchJson = await b24FetchRes.json();
+        const freshBooking = fetchJson.data?.[0];
+        if (freshBooking) {
+          const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+          await syncBeds24BookingLocal(freshBooking);
+          console.log(`[Reservas PUT] ✅ Reserva ${id} Sincronizada con éxito en Supabase.`);
+        }
+      }
+    } catch (syncErr) {
+      console.error(`[Reservas PUT] Error al sincronizar reserva modificada ${id}:`, syncErr);
     }
 
     // Invalidar caché tras modificación
