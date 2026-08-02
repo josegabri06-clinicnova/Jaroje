@@ -255,7 +255,20 @@ export async function GET(req: Request) {
       console.error("[Beds24 Sync] Error en auto-sync de habitaciones locales:", syncErr);
     }
 
-    const combined = [...mappedBookings, ...localBookings];
+    // Excluir reservas de Beds24 que ya han sido clonadas o reasignadas localmente
+    const reassignedB24Ids = new Set<string>();
+    localRawData.forEach(lr => {
+      if (lr.notes) {
+        const match = lr.notes.match(/B24:\s*(\d+)/);
+        if (match) {
+          reassignedB24Ids.add(match[1]);
+        }
+      }
+    });
+
+    const filteredMappedBookings = mappedBookings.filter(b => !reassignedB24Ids.has(String(b.id)));
+
+    const combined = [...filteredMappedBookings, ...localBookings];
 
     // --- REDISTRIBUCIÓN AUTOMÁTICA DE ANTICIPOS GRUPALES EN TIEMPO REAL ---
     try {
