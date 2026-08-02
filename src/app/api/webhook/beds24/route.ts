@@ -83,6 +83,15 @@ export async function POST(req: Request) {
               }
             }
 
+            // Guardar o actualizar la reserva completa localmente en Supabase (Supabase-First)
+            try {
+              const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+              await syncBeds24BookingLocal(b);
+              console.log(`[Webhook Beds24] ✅ Reserva ${bookingIdStr} guardada/actualizada localmente en Supabase.`);
+            } catch (dbSyncErr) {
+              console.error(`[Webhook Beds24] Error al guardar reserva ${bookingIdStr} localmente:`, dbSyncErr);
+            }
+
             const { normalizePhone } = await import('@/lib/whatsapp');
             const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || '', country);
             const bStatus = String(b.status || '');
@@ -90,6 +99,15 @@ export async function POST(req: Request) {
             if (bStatus === '0' || bStatus === 'cancelled') {
               console.log(`[Webhook Beds24] Reservación cancelada detectada para ID ${bookingIdStr}`);
               await supabase.from('checkins').delete().eq('reservation_id', bookingIdStr.toLowerCase().trim());
+              
+              // Sincronizar estado cancelado localmente
+              try {
+                const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+                await syncBeds24BookingLocal(b);
+              } catch (cancelLocalErr) {
+                console.error("Error al marcar reserva como cancelada localmente:", cancelLocalErr);
+              }
+
               return NextResponse.json({ success: true, message: 'Reservación cancelada procesada.' });
             }
 

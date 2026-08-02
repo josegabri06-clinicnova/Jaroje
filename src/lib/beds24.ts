@@ -1714,3 +1714,92 @@ export function computeOtaSplit(
 
   return { isOTA: false, netRevenue: totalAmount, commission: 0, taxesRetained: 0, channelLabel: '' };
 }
+
+/** Mapea e inserta una reserva de Beds24 en la tabla local de Supabase 'beds24_reservations' */
+export async function syncBeds24BookingLocal(b: any): Promise<any> {
+  const arrivalDate = b.arrival ? new Date(b.arrival) : null;
+  const departureDate = b.departure ? new Date(b.departure) : null;
+  const nights = (arrivalDate && departureDate)
+    ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
+    : 1;
+
+  const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+  const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+
+  let channel = 'Directo';
+  if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
+  else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
+  else if (rawSource.includes('expedia')) channel = 'Expedia';
+  else if (rawSource.includes('whatsapp') || rawSource.includes('n8n') || rawSource.includes('wapp')) channel = 'WhatsApp';
+  else if (rawSource.includes('google') || rawSource.includes('gpa') || rawSource.includes('hpa')) channel = 'Google';
+  else if (rawSource.includes('jaroje') || rawSource.includes('condominiosjaroje')) channel = 'Jaroje Oficial';
+  else if (rawSource.includes('beds24')) channel = 'Google';
+
+  const roomData = getRoomMetadata(b.roomId, b.roomName);
+  const unitName = getUnitName(b.roomId, b.unitId);
+  const displayRoomName = unitName 
+    ? (roomData.nombre.includes(unitName) ? roomData.nombre : `${roomData.nombre} (${unitName})`)
+    : roomData.nombre;
+
+  // Calcular pagos registrados en invoiceItems (Beds24)
+  let actualPaid = 0;
+  let totalInvoiceCharges = 0;
+  if (b.invoiceItems && Array.isArray(b.invoiceItems)) {
+    b.invoiceItems.forEach((item: any) => {
+      const itemBookingId = String(item.bookingId || item.bookId || '');
+      if (itemBookingId && itemBookingId !== String(b.id)) {
+        return;
+      }
+      const qty = Number(item.qty || 0);
+      const price = Number(item.price || 0);
+      const lineTotal = qty * price;
+      if (lineTotal < 0) {
+        actualPaid += Math.abs(lineTotal);
+      } else {
+        totalInvoiceCharges += lineTotal;
+      }
+    });
+  }
+
+  const priceVal = (b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : 0;
+  const calculatedCharges = totalInvoiceCharges > 0 ? totalInvoiceCharges : priceVal;
+  const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
+
+  const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
+  const balanceVal = actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal));
+
+  const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+  const email = b.email || null;
+
+  const dbStatus = (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending');
+
+  const { data, error } = await supabase.from('beds24_reservations').upsert({
+    id: String(b.id),
+    master_id: b.masterId || null,
+    check_in: b.arrival,
+    check_out: b.departure,
+    guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
+    guest_phone: phone || null,
+    guest_email: email || null,
+    status: dbStatus,
+    channel: channel,
+    room_name: displayRoomName,
+    room: unitName || '',
+    room_id: String(b.roomId || ''),
+    unit_id: String(b.unitId || ''),
+    price: calculatedCharges,
+    deposit: depositVal,
+    balance: balanceVal,
+    num_adult: b.numAdult ? Number(b.numAdult) : 1,
+    num_child: b.numChild ? Number(b.numChild) : 0,
+    notes: b.info || b.notes || null,
+    invoice_items: b.invoiceItems || [],
+    actual_paid: actualPaid,
+    updated_at: new Date().toISOString()
+  });
+
+  if (error) {
+    console.error(`[Supabase Sync] Error al hacer upsert de B24:${b.id}:`, error);
+  }
+  return { data, error };
+}
