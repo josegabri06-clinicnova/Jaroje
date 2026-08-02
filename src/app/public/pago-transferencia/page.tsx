@@ -334,7 +334,7 @@ export default function PagoTransferenciaPage() {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-zinc-400 uppercase block">{lang === 'en' ? 'Payment Method' : 'Método de Pago'}</span>
-                        <p className="text-sm font-extrabold text-zinc-900">Mercado Pago (Tarjeta/OXXO)</p>
+                        <p className="text-sm font-extrabold text-zinc-900">Mercado Pago</p>
                       </div>
                     </div>
                     
