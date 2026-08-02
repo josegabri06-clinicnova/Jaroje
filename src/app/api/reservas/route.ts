@@ -257,8 +257,13 @@ export async function GET(req: Request) {
 
     // Excluir reservas de Beds24 que ya han sido clonadas o reasignadas localmente
     const reassignedB24Ids = new Set<string>();
-    const localEstanciaKeys = new Set<string>();
-    const cleanStr = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const cleanName = (s: string) => {
+      return (s || '')
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // Quitar acentos
+        .replace(/[^a-z0-9]/g, ''); // Dejar sólo letras y números
+    };
 
     localRawData.forEach(lr => {
       // 1. Por ID explícito en notas
@@ -268,20 +273,28 @@ export async function GET(req: Request) {
           reassignedB24Ids.add(match[1]);
         }
       }
-      // 2. Por clave de estancia (nombre + check_in + check_out)
-      const guestKey = cleanStr(lr.guest_name);
-      if (guestKey && lr.check_in && lr.check_out && lr.status !== 'cancelled') {
-        const key = `${guestKey}_${lr.check_in}_${lr.check_out}`;
-        localEstanciaKeys.add(key);
-      }
     });
 
     const filteredMappedBookings = mappedBookings.filter(b => {
+      // Exclusión directa por ID de Beds24
       if (reassignedB24Ids.has(String(b.id))) return false;
 
-      const guestKey = cleanStr(b.guest_name);
-      const bKey = `${guestKey}_${b.check_in}_${b.check_out}`;
-      if (localEstanciaKeys.has(bKey)) {
+      // Exclusión laxa por coincidencia de estancia (fechas y nombres laxos)
+      const bNameClean = cleanName(b.guest_name);
+      const isReassignedLax = localRawData.some(lr => {
+        if (lr.status === 'cancelled') return false;
+
+        // Comprobación estricta de fechas de entrada y salida
+        const dateMatches = lr.check_in === b.check_in && lr.check_out === b.check_out;
+        if (!dateMatches) return false;
+
+        // Comprobación laxa de nombre (coincidencia de subcadenas)
+        const lrNameClean = cleanName(lr.guest_name);
+        const nameMatches = bNameClean.includes(lrNameClean) || lrNameClean.includes(bNameClean);
+        return nameMatches;
+      });
+
+      if (isReassignedLax) {
         return false;
       }
       return true;
