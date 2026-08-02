@@ -41,9 +41,18 @@ export async function GET(req: Request) {
       // Obtener el estado del check-in
       const { data: checkinData } = await supabase
         .from('checkins')
-        .select('status, document_url')
+        .select('status, document_url, receipt_url')
         .eq('reservation_id', String(bookingId).toLowerCase().trim())
         .maybeSingle();
+
+      // Obtener si tiene algún comprobante de transferencia
+      const { data: transferData } = await supabase
+        .from('transfer_receipts')
+        .select('receipt_url')
+        .eq('booking_id', Number(bookingId))
+        .limit(1);
+
+      const finalReceiptUrl = checkinData?.receipt_url || (transferData && transferData.length > 0 ? transferData[0].receipt_url : null);
 
       // Obtener settings de pago
       const { data: portalSettings, error: portalSettingsError } = await supabase
@@ -135,7 +144,7 @@ export async function GET(req: Request) {
           is_checked_out: checkinData?.status === 'checked_out',
           is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
           document_url: checkinData?.document_url || null,
-          receipt_url: checkinData?.receipt_url || null,
+          receipt_url: finalReceiptUrl,
           status: localRes.status || 'confirmed',
           booking_time: localRes.created_at || null,
           channel: 'Directo',
@@ -255,9 +264,18 @@ export async function GET(req: Request) {
     if (booking) {
       const { data: checkinData } = await supabase
         .from('checkins')
-        .select('status, document_url')
+        .select('status, document_url, receipt_url')
         .eq('reservation_id', String(bookingId).toLowerCase().trim())
         .maybeSingle();
+
+      // Obtener si tiene algún comprobante de transferencia
+      const { data: transferData } = await supabase
+        .from('transfer_receipts')
+        .select('receipt_url')
+        .eq('booking_id', Number(bookingId))
+        .limit(1);
+
+      const finalReceiptUrl = checkinData?.receipt_url || (transferData && transferData.length > 0 ? transferData[0].receipt_url : null);
 
       const { data: portalSettings, error: portalSettingsError } = await supabase
         .from('booking_portal_settings')
@@ -370,7 +388,7 @@ export async function GET(req: Request) {
             is_checked_out: checkinData?.status === 'checked_out',
             is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
             document_url: checkinData?.document_url || null,
-            receipt_url: checkinData?.receipt_url || null,
+            receipt_url: finalReceiptUrl,
             status: booking.status || 'confirmed',
             booking_time: booking.booking_time || null,
             channel: booking.channel || 'Directo',
