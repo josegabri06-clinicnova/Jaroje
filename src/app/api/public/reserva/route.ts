@@ -19,12 +19,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
     }
 
-    // 1. Buscar en local_reservas de Supabase
-    const { data: localRes } = await supabase
+    // 1. Buscar en local_reservas de Supabase (por ID local o por nota B24:ID de Beds24)
+    let localRes = null;
+    const { data: resById } = await supabase
       .from('local_reservas')
       .select('*')
       .eq('id', bookingId)
       .maybeSingle();
+
+    if (resById) {
+      localRes = resById;
+    } else {
+      const { data: resByB24 } = await supabase
+        .from('local_reservas')
+        .select('*')
+        .like('notes', `%B24:${bookingId}%`)
+        .maybeSingle();
+      if (resByB24) {
+        localRes = resByB24;
+      }
+    }
 
     if (localRes) {
       const UNIT_TO_ROOM: Record<string, string> = {

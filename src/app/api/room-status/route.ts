@@ -62,7 +62,8 @@ export async function POST(req: Request) {
           .from('beds24_reservations')
           .select('*')
           .neq('status', 'cancelled')
-          .neq('status', 'cancelado');
+          .neq('status', 'cancelado')
+          .neq('room_id', '685542');
 
         const b24Bookings = (dbB24Data || []).map((b: any) => ({
           ...b,

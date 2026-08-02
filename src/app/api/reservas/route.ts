@@ -39,6 +39,8 @@ export async function GET(req: Request) {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       query = query.or(`status.neq.cancelled,and(status.eq.cancelled,updated_at.gte.${twentyFourHoursAgo})`);
     }
+    // Excluir la categoría virtual 500 (room_id 685542) para evitar duplicados, ya que se asigna localmente
+    query = query.neq('room_id', '685542');
     const { data: dbB24Reservations, error: dbB24Error } = await query;
     if (dbB24Error) {
       console.error("[Reservas GET] Error al leer beds24_reservations de Supabase:", dbB24Error);
