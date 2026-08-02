@@ -633,6 +633,29 @@ export async function POST(req: Request) {
       })();
     }
 
+    // Sincronizar de inmediato la reserva recién creada en Supabase (Supabase-First)
+    if (bookingId) {
+      try {
+        console.log(`[Reservas POST] Sincronizando reserva recién creada en Beds24 (${bookingId}) en Supabase...`);
+        const b24FetchRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
+          method: 'GET',
+          headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+          cache: 'no-store'
+        });
+        if (b24FetchRes.ok) {
+          const fetchJson = await b24FetchRes.json();
+          const freshBooking = fetchJson.data?.[0];
+          if (freshBooking) {
+            const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+            await syncBeds24BookingLocal(freshBooking);
+            console.log(`[Reservas POST] ✅ Reserva ${bookingId} sincronizada con éxito en Supabase.`);
+          }
+        }
+      } catch (syncErr) {
+        console.error(`[Reservas POST] Error sincronizando reserva creada ${bookingId}:`, syncErr);
+      }
+    }
+
     // Invalidar caché tras creación
     clearBeds24Cache();
 

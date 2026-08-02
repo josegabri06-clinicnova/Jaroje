@@ -50,7 +50,7 @@ export async function POST(req: Request) {
         const { sendTemplate3_ReservacionConfirmada } = await import('@/lib/whatsapp');
         
         const BEDS24_TOKEN = await getBeds24Token();
-        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&status=0,1,2,3,4,5`, {
+        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
           headers: { 'token': BEDS24_TOKEN }
         });
         
@@ -60,13 +60,13 @@ export async function POST(req: Request) {
             let b = b24Json.data[0];
             let country = b.country2 || b.country || b.guestCountry2 || b.guestCountry;
             const bookingIdStr = bookingId.toString();
-
+ 
             // Reintento: si el país viene vacío, esperamos 3.5 segundos y re-consultamos a Beds24
             // para darle tiempo a registrar el país si la reserva es muy nueva (Venta Directa de Google)
             if (!country) {
               console.log(`[Webhook Beds24] País vacío en primera consulta para ID ${bookingIdStr}. Reintentando en 3.5 segundos...`);
               await new Promise(resolve => setTimeout(resolve, 3500));
-              const b24ResRetry = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&status=0,1,2,3,4,5`, {
+              const b24ResRetry = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
                 headers: { 'token': BEDS24_TOKEN }
               });
               if (b24ResRetry.ok) {
