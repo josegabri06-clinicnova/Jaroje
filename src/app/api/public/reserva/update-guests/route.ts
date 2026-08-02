@@ -314,6 +314,23 @@ export async function POST(req: Request) {
       details: `Huésped modificó su número de personas en el portal a ${newAdults}A/${newChildren}N. Precio ajustado en Beds24 de $${groupOriginalPrice} a $${newPrice} MXN.`
     }]);
 
+    // Sincronizar de inmediato la reserva modificada en Supabase (beds24_reservations)
+    try {
+      const freshRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
+        headers: { 'token': BEDS24_TOKEN }
+      });
+      if (freshRes.ok) {
+        const freshJson = await freshRes.json();
+        if (freshJson.success && freshJson.data && freshJson.data.length > 0) {
+          const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+          await syncBeds24BookingLocal(freshJson.data[0]);
+          console.log(`[Update Guests] ✅ Reserva ${bookingId} sincronizada con Supabase tras modificación de huéspedes.`);
+        }
+      }
+    } catch (syncErr) {
+      console.error("[Update Guests] Error al sincronizar reserva modificada con Supabase:", syncErr);
+    }
+
     return NextResponse.json({
       success: true,
       price: newPrice,
