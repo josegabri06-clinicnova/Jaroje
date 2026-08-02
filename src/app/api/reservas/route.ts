@@ -21,36 +21,70 @@ const OTA_ASSIGNABLE_UNITS = ['2', '3', '4', '5', '6', '7', '8'];
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const bypassCache = searchParams.get('bypassCache') === 'true';
     const includeCancelled = searchParams.get('includeCancelled') === 'true';
-    const mappedBookings = await getBeds24Bookings(true, includeCancelled, bypassCache);
-    
-    // Merge beds24_reservations metadata from Supabase (e.g. last_notice_sent status)
-    try {
-      const { data: b24Meta } = await supabase
-        .from('beds24_reservations')
-        .select('*');
-      if (b24Meta && b24Meta.length > 0) {
-        const metaMap = new Map(b24Meta.map(m => [String(m.id), m]));
-        mappedBookings.forEach(b => {
-          const meta = metaMap.get(String(b.id));
-          if (meta) {
-            b.last_notice_sent = Boolean(meta.last_notice_sent);
-            b.is_acknowledged = Boolean(meta.is_acknowledged);
-          } else {
-            b.last_notice_sent = false;
-            b.is_acknowledged = false;
-          }
-        });
-      } else {
-        mappedBookings.forEach(b => {
-          b.last_notice_sent = false;
-          b.is_acknowledged = false;
-        });
-      }
-    } catch (metaErr) {
-      console.error("[Reservas GET] Error merging beds24_reservations metadata:", metaErr);
+    let query = supabase.from('beds24_reservations').select('*');
+    if (!includeCancelled) {
+      // Traer las activas, y además las canceladas de las últimas 24 horas
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      query = query.or(`status.neq.cancelled,and(status.eq.cancelled,updated_at.gte.${twentyFourHoursAgo})`);
     }
+    const { data: dbB24Reservations, error: dbB24Error } = await query;
+    if (dbB24Error) {
+      console.error("[Reservas GET] Error al leer beds24_reservations de Supabase:", dbB24Error);
+    }
+
+    const mappedBookings = (dbB24Reservations || []).map((b: any) => {
+      const arrivalDate = b.check_in ? new Date(b.check_in) : null;
+      const departureDate = b.check_out ? new Date(b.check_out) : null;
+      const nights = (arrivalDate && departureDate)
+        ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
+        : 1;
+
+      return {
+        id: b.id,
+        masterId: b.master_id || null,
+        actualPaid: Number(b.actual_paid || 0),
+        rawDeposit: Number(b.deposit || 0),
+        check_in: b.check_in,
+        check_out: b.check_out,
+        arrival: b.check_in,
+        departure: b.check_out,
+        guest_name: b.guest_name || 'Huésped',
+        firstName: b.guest_name || 'Huésped',
+        lastName: '',
+        guest_phone: b.guest_phone || null,
+        phone: b.guest_phone || '',
+        mobile: b.guest_phone || '',
+        guest_email: b.guest_email || null,
+        email: b.guest_email || null,
+        status: b.status,
+        source: 'beds24',
+        channel: b.channel || 'Directo',
+        room_name: b.room_name,
+        room: b.room || '',
+        room_id: Number(b.room_id || 0),
+        roomId: Number(b.room_id || 0),
+        unit_id: String(b.unit_id || ''),
+        unitId: Number(b.unit_id || 0),
+        nights: nights,
+        price_estimate: Number(b.price || 0),
+        price: Number(b.price || 0),
+        deposit: Number(b.deposit || 0),
+        balance: Number(b.balance || 0),
+        notes: b.notes || null,
+        comments: b.notes || null,
+        num_adult: Number(b.num_adult || 1),
+        numAdult: Number(b.num_adult || 1),
+        num_child: Number(b.num_child || 0),
+        numChild: Number(b.num_child || 0),
+        rooms: { name: b.room_name },
+        invoiceItems: b.invoice_items || [],
+        last_notice_sent: Boolean(b.last_notice_sent),
+        is_acknowledged: Boolean(b.is_acknowledged),
+        booking_time: b.check_in || null,
+        cancelled_at: b.status === 'cancelled' ? (b.updated_at || null) : null
+      };
+    });
     
     // Obtener reservas locales de Supabase
     let localBookings: any[] = [];
