@@ -1135,7 +1135,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
   // Almacenar en variable de módulo para que route.ts pueda accederla
   _lastOtaRoom500Bookings = otaRoom500Bookings;
 
-  return bookingsArray
+  const mappedBookings = bookingsArray
     .filter((b: any) => {
       if (!includeCancelled && (String(b.status) === '0' || b.status === 'cancelled')) {
         // Permitir pasar únicamente si fue modificada/cancelada en las últimas 24 horas
@@ -1254,6 +1254,48 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null
       };
     });
+
+  if (mappedBookings.length > 0) {
+    try {
+      const upsertRows = mappedBookings.map((mb: any) => ({
+        id: String(mb.id),
+        master_id: mb.masterId || null,
+        check_in: mb.check_in,
+        check_out: mb.check_out,
+        guest_name: mb.guest_name,
+        guest_phone: mb.guest_phone || null,
+        guest_email: mb.guest_email || null,
+        status: mb.status,
+        channel: mb.channel,
+        room_name: mb.room_name,
+        room: mb.room,
+        room_id: String(mb.room_id || ''),
+        unit_id: String(mb.unit_id || mb.room || ''),
+        price: mb.price_estimate,
+        deposit: mb.deposit,
+        balance: mb.balance,
+        num_adult: mb.num_adult,
+        num_child: mb.num_child,
+        notes: mb.notes,
+        invoice_items: mb.taxes?.invoiceItems || mb.invoice_items || [],
+        actual_paid: mb.actualPaid,
+        updated_at: new Date().toISOString()
+      }));
+
+      for (let i = 0; i < upsertRows.length; i += 50) {
+        const chunk = upsertRows.slice(i, i + 50);
+        const { error } = await supabase.from('beds24_reservations').upsert(chunk, { onConflict: 'id' });
+        if (error) {
+          console.error(`[Beds24 Sync Lote] Error al guardar bloque de reservas en Supabase:`, error);
+        }
+      }
+      console.log(`[Beds24 Sync Lote] Sincronizadas con éxito ${upsertRows.length} reservas en Supabase.`);
+    } catch (upsertErr) {
+      console.error("[Beds24 Sync Lote] Excepción al sincronizar en lote con Supabase:", upsertErr);
+    }
+  }
+
+  return mappedBookings;
 }
 
 // Variable de módulo para almacenar las reservas OTA de habitación 500

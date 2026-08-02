@@ -22,6 +22,17 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const includeCancelled = searchParams.get('includeCancelled') === 'true';
+    const bypassCache = searchParams.get('bypassCache') === 'true';
+
+    if (bypassCache) {
+      console.log("[Reservas GET] bypassCache detectado. Forzando recarga de Beds24 y sincronización con Supabase...");
+      try {
+        await getBeds24Bookings(true, true, true);
+      } catch (err) {
+        console.error("Error al forzar getBeds24Bookings en GET:", err);
+      }
+    }
+
     let query = supabase.from('beds24_reservations').select('*');
     if (!includeCancelled) {
       // Traer las activas, y además las canceladas de las últimas 24 horas
