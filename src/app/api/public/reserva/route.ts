@@ -241,7 +241,8 @@ export async function GET(req: Request) {
               num_child: Number(rawB.numChild || 0),
               guest_phone: rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || null,
               status: isCancelled ? 'cancelled' : 'confirmed',
-              booking_time: rawB.bookingTime || rawB.arrival || null
+              booking_time: rawB.bookingTime || rawB.arrival || null,
+              channel: channel
             };
           }
         }
