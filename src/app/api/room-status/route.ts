@@ -148,20 +148,28 @@ export async function POST(req: Request) {
         });
 
         if (matchedRes) {
-          const phone = matchedRes.phone || matchedRes.mobile || matchedRes.guest_phone || '';
-          if (phone) {
-            console.log(`[Room Status -> Limpia] Sending 'alojamiento_listo' WhatsApp to ${phone} for room ${room_number}`);
-            const { sendTemplate_AlojamientoListo } = await import('@/lib/whatsapp');
-            const waRes = await sendTemplate_AlojamientoListo({
-              id: String(matchedRes.id),
-              guest_name: matchedRes.guest_name,
-              phone: phone
-            }, true);
-            if (waRes.success) {
-              console.log(`[Room Status -> Limpia] WhatsApp notification sent successfully to ${phone}`);
-            } else {
-              console.warn(`[Room Status -> Limpia] WhatsApp notification failed:`, waRes.error);
+          const channelLower = (matchedRes.channel || '').toLowerCase();
+          const isOta = ['airbnb', 'booking', 'expedia'].some(ota => channelLower.includes(ota));
+          const hasDeposit = Number(matchedRes.deposit || 0) > 0;
+
+          if (isOta || hasDeposit) {
+            const phone = matchedRes.phone || matchedRes.mobile || matchedRes.guest_phone || '';
+            if (phone) {
+              console.log(`[Room Status -> Limpia] Sending 'alojamiento_listo' WhatsApp to ${phone} for room ${room_number}`);
+              const { sendTemplate_AlojamientoListo } = await import('@/lib/whatsapp');
+              const waRes = await sendTemplate_AlojamientoListo({
+                id: String(matchedRes.id),
+                guest_name: matchedRes.guest_name,
+                phone: phone
+              }, true);
+              if (waRes.success) {
+                console.log(`[Room Status -> Limpia] WhatsApp notification sent successfully to ${phone}`);
+              } else {
+                console.warn(`[Room Status -> Limpia] WhatsApp notification failed:`, waRes.error);
+              }
             }
+          } else {
+            console.log(`[Room Status -> Limpia] Omitiendo notificación de alojamiento_listo para B24:${matchedRes.id} (Directo/Google sin anticipo pagado)`);
           }
         }
       } catch (errRes) {
