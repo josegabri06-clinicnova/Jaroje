@@ -284,8 +284,8 @@ export async function GET(req: Request) {
       const isReassignedLax = localRawData.some(lr => {
         if (lr.status === 'cancelled') return false;
 
-        // Comprobación estricta de fechas de entrada y salida
-        const dateMatches = lr.check_in === b.check_in && lr.check_out === b.check_out;
+        // Comprobación de fechas: coincidencia de check-in O check-out
+        const dateMatches = lr.check_in === b.check_in || lr.check_out === b.check_out;
         if (!dateMatches) return false;
 
         // Comprobación laxa de nombre (coincidencia de subcadenas)
