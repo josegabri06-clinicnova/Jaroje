@@ -369,7 +369,7 @@ export async function PUT(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { airbnb, booking, capacitySettings } = body;
+    const { airbnb, booking, capacitySettings, temp_discounts, season_base_prices } = body;
 
     if (capacitySettings) {
       const { error } = await supabase
@@ -386,6 +386,26 @@ export async function POST(req: Request) {
         .from('settings')
         .upsert(
           { key: 'ota_multipliers', value: JSON.stringify({ airbnb, booking }) },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+    }
+
+    if (temp_discounts) {
+      const { error } = await supabase
+        .from('settings')
+        .upsert(
+          { key: 'temp_discounts', value: temp_discounts },
+          { onConflict: 'key' }
+        );
+      if (error) throw error;
+    }
+
+    if (season_base_prices) {
+      const { error } = await supabase
+        .from('settings')
+        .upsert(
+          { key: 'season_base_prices', value: season_base_prices },
           { onConflict: 'key' }
         );
       if (error) throw error;

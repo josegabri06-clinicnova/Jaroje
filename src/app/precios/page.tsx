@@ -56,15 +56,15 @@ export default function PreciosPage() {
 
   const saveSeasonBasePricesToDB = async (updatedPrices: Record<string, Record<string, number>>) => {
     try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      await sb.from('settings').upsert(
-        { key: 'season_base_prices', value: updatedPrices },
-        { onConflict: 'key' }
-      );
+      const res = await fetch('/api/beds24-prices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ season_base_prices: updatedPrices }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al guardar tarifas base de temporada a través del backend');
+      }
     } catch (e) {
       console.error("Error al guardar season_base_prices en DB:", e);
     }
@@ -529,12 +529,15 @@ export default function PreciosPage() {
   };
 
   const saveTempDiscounts = async (list: any[]) => {
-    const { createClient } = await import('@supabase/supabase-js');
-    const sb = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    await sb.from('settings').upsert({ key: 'temp_discounts', value: list }, { onConflict: 'key' });
+    const res = await fetch('/api/beds24-prices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ temp_discounts: list }),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Error al guardar tarifas especiales a través del backend');
+    }
   };
 
   const handleApplyTempDiscount = async () => {
