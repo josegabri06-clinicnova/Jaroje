@@ -601,11 +601,29 @@ export default function PreciosPage() {
   };
 
   const handleDeleteTempDiscount = async (discountId: string) => {
+    const confirmed = window.confirm(
+      "⚠️ ¿Eliminar Tarifa Especial?\n\n" +
+      "Se restablecerán las tarifas base de las temporadas correspondientes y se actualizará Beds24 de inmediato."
+    );
+    if (!confirmed) return;
+
     setTdDeleting(discountId);
+    setTdError('');
+    setTdSuccess('');
     try {
       const updated = tempDiscounts.filter(d => d.id !== discountId);
       setTempDiscounts(updated);
       await saveTempDiscounts(updated);
+
+      // Forzar sincronización inmediata para recalcular tarifas en Beds24 sin el descuento
+      const syncRes = await fetch('/api/precios/sync?t=' + Date.now());
+      const syncJson = await syncRes.json();
+      if (!syncRes.ok || !syncJson.success) {
+        throw new Error(syncJson.error || 'Error al restablecer tarifas en Beds24');
+      }
+      setTdSuccess('✅ Tarifa especial eliminada y calendario de Beds24 restablecido con éxito.');
+    } catch (err: any) {
+      setTdError('Error al eliminar y restablecer: ' + err.message);
     } finally {
       setTdDeleting(null);
     }
