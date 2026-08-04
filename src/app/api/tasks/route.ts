@@ -67,6 +67,7 @@ export async function POST(req: Request) {
       read_by_admin: body.direction === 'admin_to_staff',
       image_base64:  body.image_base64  || null,
       photo_url:     body.photo_url     || null,
+      scheduled_date: body.scheduled_date || null,
     };
 
     const { data, error } = await supabase.from('tasks').insert([newTask]).select().single();
@@ -82,7 +83,7 @@ export async function POST(req: Request) {
 export async function PUT(req: Request) {
   try {
     const body = await req.json();
-    const { id, description, room, type, status } = body;
+    const { id, description, room, type, status, scheduled_date } = body;
 
     if (!id) {
       return NextResponse.json({ success: false, error: 'Falta el ID de la tarea' }, { status: 400 });
@@ -92,6 +93,7 @@ export async function PUT(req: Request) {
     if (description !== undefined) updateFields.description = description;
     if (room !== undefined) updateFields.room = room;
     if (type !== undefined) updateFields.type = type;
+    if (scheduled_date !== undefined) updateFields.scheduled_date = scheduled_date;
     if (status !== undefined) {
       updateFields.status = status;
       if (status === 'resuelta') {

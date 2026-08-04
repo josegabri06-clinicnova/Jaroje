@@ -121,6 +121,7 @@ interface Task {
   photo_url?: string | null;
   resolution_photo_url?: string | null;
   resolved_at?: string | null;
+  scheduled_date?: string | null;
 }
 
 interface RoomStatus {
@@ -473,7 +474,9 @@ export default function StaffPage() {
     setGeneralObservations(text);
     localStorage.setItem('jaroje_general_observations', text);
   };
-  const [taskTab, setTaskTab] = useState<'nuevos' | 'pendientes' | 'en_proceso' | 'resueltos'>('nuevos');
+  const [taskTab, setTaskTab] = useState<'nuevos' | 'pendientes' | 'en_proceso' | 'resueltos' | 'programados'>('nuevos');
+  const [reprogramDateTaskId, setReprogramDateTaskId] = useState<string | null>(null);
+  const [reprogramDateVal, setReprogramDateVal] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
@@ -849,9 +852,10 @@ export default function StaffPage() {
     return true;
   });
 
-  const nuevos      = roleFilteredTasks.filter(t => t.status === 'nuevo');
-  const pendientes  = roleFilteredTasks.filter(t => t.status === 'pendiente');
-  const enProceso   = roleFilteredTasks.filter(t => t.status === 'en_proceso');
+  const nuevos      = roleFilteredTasks.filter(t => t.status === 'nuevo' && (!t.scheduled_date || t.scheduled_date <= todayStr));
+  const pendientes  = roleFilteredTasks.filter(t => t.status === 'pendiente' && (!t.scheduled_date || t.scheduled_date <= todayStr));
+  const enProceso   = roleFilteredTasks.filter(t => t.status === 'en_proceso' && (!t.scheduled_date || t.scheduled_date <= todayStr));
+  const programados = roleFilteredTasks.filter(t => t.scheduled_date && t.scheduled_date > todayStr && t.status !== 'resuelta');
   const resueltos   = roleFilteredTasks.filter(t => t.status === 'resuelta');
 
   const filterBySearch = (list: Task[]) => {
@@ -866,6 +870,7 @@ export default function StaffPage() {
   const filteredNuevos = filterBySearch(nuevos);
   const filteredPendientes = filterBySearch(pendientes);
   const filteredEnProceso = filterBySearch(enProceso);
+  const filteredProgramados = filterBySearch(programados);
   const filteredResueltos = filterBySearch(resueltos);
 
   const handleOpenResolveModal = (task: Task) => {
@@ -988,6 +993,41 @@ export default function StaffPage() {
       }
     }
 
+    fetchData();
+  };
+
+  const handleReprogramTask = async (taskId: string, dateVal: string) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, scheduled_date: dateVal } : t));
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: taskId, scheduled_date: dateVal || null }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error);
+      
+      const emp = getActiveEmployee('mantenimiento');
+      if (emp) {
+        const targetTask = tasks.find(tk => tk.id === taskId);
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'mantenimiento',
+            action: 'reprogram_task',
+            room: targetTask?.room || 'General',
+            details: `Reprogramó tarea técnica en Habitación ${targetTask?.room || 'General'} para el día ${dateVal || 'Fecha eliminada'}: ${targetTask?.description || ''}`
+          })
+        });
+      }
+    } catch (e: any) {
+      console.error(e);
+      alert('Error al reprogramar la tarea: ' + e.message);
+    }
     fetchData();
   };
 
@@ -1987,8 +2027,8 @@ export default function StaffPage() {
 
             {viewMode === 'tasks' ? (
               <>
-                {/* KPIs Grid 2x2 para Móviles */}
-                <div className="grid grid-cols-2 gap-2.5 select-none">
+                {/* KPIs Grid para Móviles/Escritorio */}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 select-none">
                   {/* NUEVOS */}
                   <div 
                     onClick={() => setTaskTab('nuevos')}
@@ -2032,6 +2072,21 @@ export default function StaffPage() {
                       {enProceso.length}
                     </span>
                     <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
+                  </div>
+
+                  {/* PROGRAMADOS */}
+                  <div 
+                    onClick={() => setTaskTab('programados')}
+                    className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+                      taskTab === 'programados' 
+                        ? 'bg-indigo-50/10 border-indigo-500 ring-2 ring-indigo-500/10 shadow-md' 
+                        : 'bg-white border-zinc-200/80 shadow-sm hover:bg-zinc-50/50'
+                    }`}
+                  >
+                    <span className="text-[20px] font-black text-indigo-500 leading-none">
+                      {programados.length}
+                    </span>
+                    <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Programados</p>
                   </div>
 
                   {/* RESUELTAS */}
@@ -2087,6 +2142,7 @@ export default function StaffPage() {
                     const list = taskTab === 'nuevos' ? filteredNuevos
                                : taskTab === 'pendientes' ? filteredPendientes
                                : taskTab === 'en_proceso' ? filteredEnProceso
+                               : taskTab === 'programados' ? filteredProgramados
                                : filteredResueltos;
 
                     if (list.length === 0) {
@@ -2123,6 +2179,11 @@ export default function StaffPage() {
                                 <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">
                                   {dateStr}
                                 </span>
+                                {t.scheduled_date && (
+                                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shrink-0 select-none">
+                                    📅 Inicia: {format(new Date(t.scheduled_date + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
+                                  </span>
+                                )}
                               </div>
                               
                               <p className="text-[12.5px] font-bold text-zinc-850 mt-2 leading-snug whitespace-pre-line text-left">
@@ -2136,36 +2197,110 @@ export default function StaffPage() {
                               </span>
                               
                               {/* Botones de acción según estado */}
-                              {taskTab === 'nuevos' && (
-                                <button
-                                  onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                                  className="px-2.5 py-1.5 bg-purple-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-purple-700 transition-all text-center"
-                                >
-                                  Aceptar ⚡
-                                </button>
-                              )}
-                              {taskTab === 'pendientes' && (
-                                <button
-                                  onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
-                                  className="px-2.5 py-1.5 bg-amber-500 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-amber-600 transition-all text-center"
-                                >
-                                  Iniciar ⚡
-                                </button>
-                              )}
-                              {taskTab === 'en_proceso' && (
+                              {reprogramDateTaskId === t.id ? (
+                                <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                                  <input 
+                                    type="date"
+                                    value={reprogramDateVal}
+                                    onChange={e => setReprogramDateVal(e.target.value)}
+                                    className="px-2 py-0.5 bg-white border border-zinc-200 rounded-lg text-[11px] outline-none font-bold text-zinc-900"
+                                  />
+                                  <button
+                                    onClick={async () => {
+                                      if (!reprogramDateVal) return;
+                                      await handleReprogramTask(t.id, reprogramDateVal);
+                                      setReprogramDateTaskId(null);
+                                      setReprogramDateVal('');
+                                    }}
+                                    className="px-2 py-1 bg-zinc-900 text-white rounded-lg text-[10px] font-black transition-all active:scale-[0.96] hover:bg-zinc-800 shadow-sm"
+                                  >
+                                    Ok
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setReprogramDateTaskId(null);
+                                      setReprogramDateVal('');
+                                    }}
+                                    className="px-2 py-1 bg-zinc-100 text-zinc-500 rounded-lg text-[10px] font-bold border border-zinc-200"
+                                  >
+                                    X
+                                  </button>
+                                </div>
+                              ) : (
                                 <>
-                                  <button
-                                    onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
-                                    className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-250"
-                                  >
-                                    Regresar ↩
-                                  </button>
-                                  <button
-                                    onClick={() => handleOpenResolveModal(t)}
-                                    className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-emerald-700 transition-all text-center"
-                                  >
-                                    Terminar ✅
-                                  </button>
+                                  {taskTab === 'nuevos' && (
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                                        className="px-2.5 py-1.5 bg-purple-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-purple-700 transition-all text-center"
+                                      >
+                                        Aceptar ⚡
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setReprogramDateTaskId(t.id);
+                                          setReprogramDateVal(t.scheduled_date || new Date().toISOString().split('T')[0]);
+                                        }}
+                                        className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-650 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-200"
+                                      >
+                                        Reprogramar 📅
+                                      </button>
+                                    </div>
+                                  )}
+                                  {taskTab === 'pendientes' && (
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'en_proceso')}
+                                        className="px-2.5 py-1.5 bg-amber-500 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-amber-600 transition-all text-center"
+                                      >
+                                        Iniciar ⚡
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setReprogramDateTaskId(t.id);
+                                          setReprogramDateVal(t.scheduled_date || new Date().toISOString().split('T')[0]);
+                                        }}
+                                        className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-650 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-200"
+                                      >
+                                        Reprogramar 📅
+                                      </button>
+                                    </div>
+                                  )}
+                                  {taskTab === 'programados' && (
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'nuevo')}
+                                        className="px-2.5 py-1.5 bg-purple-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-purple-700 transition-all text-center"
+                                      >
+                                        Activar ⚡
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setReprogramDateTaskId(t.id);
+                                          setReprogramDateVal(t.scheduled_date || new Date().toISOString().split('T')[0]);
+                                        }}
+                                        className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-650 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-200"
+                                      >
+                                        Fecha 📅
+                                      </button>
+                                    </div>
+                                  )}
+                                  {taskTab === 'en_proceso' && (
+                                    <>
+                                      <button
+                                        onClick={() => runWithSignature('resolve_task', (status) => updateTaskStatus(t.id, status), 'pendiente')}
+                                        className="px-2 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-lg text-[10px] font-extrabold flex items-center transition-all active:scale-[0.96] hover:bg-zinc-250"
+                                      >
+                                        Regresar ↩
+                                      </button>
+                                      <button
+                                        onClick={() => handleOpenResolveModal(t)}
+                                        className="px-2.5 py-1.5 bg-emerald-600 text-white rounded-xl text-[10.5px] font-extrabold shadow-sm active:scale-[0.96] hover:bg-emerald-700 transition-all text-center"
+                                      >
+                                        Terminar ✅
+                                      </button>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </div>

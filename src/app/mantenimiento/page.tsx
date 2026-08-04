@@ -56,6 +56,7 @@ interface Task {
   photo_url?: string | null;
   resolution_photo_url?: string | null;
   image_base64?: string | null;
+  scheduled_date?: string | null;
 }
 
 const TYPE_CFG: Record<string, any> = {
@@ -73,9 +74,14 @@ export default function MantenimientoPage() {
   const role = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_role') || null) : null;
   
   // Filter
-  const [filterStatus, setFilterStatus] = useState<'nuevo' | 'pendiente' | 'en_proceso' | 'resuelta'>('nuevo');
+  const [filterStatus, setFilterStatus] = useState<'nuevo' | 'pendiente' | 'en_proceso' | 'resuelta' | 'programado'>('nuevo');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('todos');
+
+  // Reprogramming & Form Scheduling States
+  const [reprogramDateTaskId, setReprogramDateTaskId] = useState<string | null>(null);
+  const [reprogramDateVal, setReprogramDateVal] = useState('');
+  const [formScheduledDate, setFormScheduledDate] = useState('');
 
   // Mantenimiento Programado Preventivo State
   const [viewMode, setViewMode] = useState<'tasks' | 'schedules'>('tasks');
@@ -376,6 +382,42 @@ export default function MantenimientoPage() {
     }
   };
 
+  const handleReprogramTask = async (taskId: string, dateVal: string) => {
+    setIsLoading(true);
+    try {
+      const taskToUpdate = tasks.find(t => t.id === taskId);
+      const roomName = taskToUpdate ? taskToUpdate.room : 'General';
+      const description = taskToUpdate ? taskToUpdate.description : '';
+
+      const { error } = await supabase
+        .from('tasks')
+        .update({ scheduled_date: dateVal || null })
+        .eq('id', taskId);
+      
+      if (error) throw error;
+
+      await logAudit(
+        'reprogramar_tarea', 
+        roomName, 
+        JSON.stringify({
+          text: `Tarea reprogramada para iniciar el: ${dateVal || 'Fecha eliminada'}. Descripción: ${description}`,
+          mantenimiento: {
+            taskId,
+            room: roomName,
+            description,
+            scheduled_date: dateVal || null
+          }
+        })
+      );
+
+      fetchTasks();
+    } catch (e) {
+      console.error(e);
+      alert('Error al reprogramar la tarea.');
+      setIsLoading(false);
+    }
+  };
+
   const handleOpenResolutionModal = (task: Task) => {
     setResolvingTask(task);
     setResolveComments('');
@@ -639,7 +681,8 @@ export default function MantenimientoPage() {
       reported_by: editingTask ? editingTask.reported_by : 'Admin',
       direction: editingTask ? editingTask.direction : 'admin_to_staff',
       photo_url: finalPhotoUrl,
-      resolution_photo_url: finalResPhotoUrl
+      resolution_photo_url: finalResPhotoUrl,
+      scheduled_date: formScheduledDate || null
     };
 
     if (editingTask) {
@@ -733,12 +776,14 @@ export default function MantenimientoPage() {
       setFormDesc(t.description);
       setFormType(t.type);
       setFormStatus(t.status);
+      setFormScheduledDate(t.scheduled_date || '');
     } else {
       setEditingTask(null);
       setFormRoom('General');
       setFormDesc('');
       setFormType('mantenimiento');
       setFormStatus('nuevo');
+      setFormScheduledDate('');
     }
     setPhotoFile(null);
     setResolutionPhotoFile(null);
@@ -746,8 +791,20 @@ export default function MantenimientoPage() {
   };
 
   const filteredTasks = tasks.filter(t => {
-    // Status filter
-    if (t.status !== filterStatus) return false;
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Si el filtro seleccionado es "programado", mostramos solo las programadas a futuro que no estén resueltas
+    if (filterStatus === 'programado') {
+      const isFuture = t.scheduled_date && t.scheduled_date > todayStr;
+      if (!isFuture || t.status === 'resuelta') return false;
+    } else {
+      // Para otros filtros, si la tarea está programada a futuro y no está resuelta, la ocultamos
+      const isFuture = t.scheduled_date && t.scheduled_date > todayStr;
+      if (isFuture && t.status !== 'resuelta') return false;
+
+      // Status filter normal
+      if (t.status !== filterStatus) return false;
+    }
     
     // Type filter
     if (filterType !== 'todos' && t.type !== filterType) return false;
@@ -826,7 +883,7 @@ export default function MantenimientoPage() {
       {viewMode === 'tasks' ? (
         <>
           {/* KPIs Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 select-none">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 select-none">
         {/* NUEVOS */}
         <div 
           onClick={() => setFilterStatus('nuevo')}
@@ -837,7 +894,7 @@ export default function MantenimientoPage() {
           }`}
         >
           <span className="text-[20px] font-black text-purple-650 leading-none">
-            {tasks.filter(t => t.status === 'nuevo').length}
+            {tasks.filter(t => t.status === 'nuevo' && (!t.scheduled_date || t.scheduled_date <= new Date().toISOString().split('T')[0])).length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Nuevos</p>
         </div>
@@ -852,7 +909,7 @@ export default function MantenimientoPage() {
           }`}
         >
           <span className="text-[20px] font-black text-amber-500 leading-none">
-            {tasks.filter(t => t.status === 'pendiente').length}
+            {tasks.filter(t => t.status === 'pendiente' && (!t.scheduled_date || t.scheduled_date <= new Date().toISOString().split('T')[0])).length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Pendientes</p>
         </div>
@@ -867,9 +924,24 @@ export default function MantenimientoPage() {
           }`}
         >
           <span className="text-[20px] font-black text-blue-500 leading-none">
-            {tasks.filter(t => t.status === 'en_proceso').length}
+            {tasks.filter(t => t.status === 'en_proceso' && (!t.scheduled_date || t.scheduled_date <= new Date().toISOString().split('T')[0])).length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">En Proceso</p>
+        </div>
+
+        {/* PROGRAMADOS */}
+        <div 
+          onClick={() => setFilterStatus('programado')}
+          className={`border rounded-2xl p-3.5 flex flex-col justify-between cursor-pointer active:scale-95 transition-all ${
+            filterStatus === 'programado' 
+              ? 'bg-indigo-50/10 border-indigo-500 ring-2 ring-indigo-500/10 shadow-md' 
+              : 'bg-white border-zinc-200/85 shadow-sm hover:bg-zinc-50/50'
+          }`}
+        >
+          <span className="text-[20px] font-black text-indigo-500 leading-none">
+            {tasks.filter(t => t.scheduled_date && t.scheduled_date > new Date().toISOString().split('T')[0] && t.status !== 'resuelta').length}
+          </span>
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Programados</p>
         </div>
 
         {/* RESUELTAS */}
@@ -960,6 +1032,11 @@ export default function MantenimientoPage() {
                     <span className="text-[11px] font-medium text-zinc-400">
                       {format(new Date(task.created_at), 'd MMM', { locale: es })}
                     </span>
+                    {task.scheduled_date && (
+                      <span className="text-[11px] font-bold text-indigo-650 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100 flex items-center gap-0.5">
+                        📅 Inicia: {format(new Date(task.scheduled_date + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
+                      </span>
+                    )}
                     {(task.photo_url || task.image_base64) && (
                       <span className="text-[11px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-100 flex items-center gap-0.5">
                         📷 Foto
@@ -974,45 +1051,117 @@ export default function MantenimientoPage() {
                   
                   {/* Action buttons */}
                   <div className="flex gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {filterStatus === 'nuevo' && (
+                    {reprogramDateTaskId === task.id ? (
+                      <div className="flex items-center gap-1.5 animate-in fade-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                        <input 
+                          type="date"
+                          value={reprogramDateVal}
+                          onChange={e => setReprogramDateVal(e.target.value)}
+                          className="px-2 py-0.5 bg-white border border-zinc-200 rounded-lg text-[11px] outline-none font-bold text-zinc-900"
+                        />
+                        <button
+                          onClick={async () => {
+                            if (!reprogramDateVal) return;
+                            await handleReprogramTask(task.id, reprogramDateVal);
+                            setReprogramDateTaskId(null);
+                            setReprogramDateVal('');
+                          }}
+                          className="px-2 py-1 bg-zinc-900 text-white rounded-lg text-[10px] font-black transition-all active:scale-[0.96] hover:bg-zinc-800 shadow-sm"
+                        >
+                          Ok
+                        </button>
+                        <button
+                          onClick={() => {
+                            setReprogramDateTaskId(null);
+                            setReprogramDateVal('');
+                          }}
+                          className="px-2 py-1 bg-zinc-100 text-zinc-500 rounded-lg text-[10px] font-bold border border-zinc-200"
+                        >
+                          X
+                        </button>
+                      </div>
+                    ) : (
                       <>
-                        <button
-                          onClick={() => handleUpdateStatus(task.id, 'pendiente')}
-                          className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-purple-700 shadow-sm"
-                        >
-                          Aprobar ⏳
-                        </button>
-                        <button
-                          onClick={() => handleUpdateStatus(task.id, 'en_proceso')}
-                          className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-amber-600 shadow-sm"
-                        >
-                          Iniciar ⚡
-                        </button>
-                      </>
-                    )}
-                    {filterStatus === 'pendiente' && (
-                      <button
-                        onClick={() => handleUpdateStatus(task.id, 'en_proceso')}
-                        className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-amber-600 shadow-sm"
-                      >
-                        Iniciar Trabajo ⚡
-                      </button>
-                    )}
-                    {filterStatus === 'en_proceso' && (
-                      <>
-                        <button
-                          onClick={() => handleUpdateStatus(task.id, 'pendiente')}
-                          className="px-2 py-1 bg-zinc-100 text-zinc-500 rounded-lg text-[10px] font-extrabold flex items-center gap-0.5 transition-all active:scale-[0.96] hover:bg-zinc-200 border border-zinc-200"
-                          title="Regresar a Pendientes"
-                        >
-                          Regresar ↩
-                        </button>
-                        <button
-                          onClick={() => handleOpenResolutionModal(task)}
-                          className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-emerald-700 shadow-sm"
-                        >
-                          Terminar ✅
-                        </button>
+                        {filterStatus === 'nuevo' && (
+                          <>
+                            <button
+                              onClick={() => handleUpdateStatus(task.id, 'pendiente')}
+                              className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-purple-700 shadow-sm"
+                            >
+                              Aprobar ⏳
+                            </button>
+                            <button
+                              onClick={() => handleUpdateStatus(task.id, 'en_proceso')}
+                              className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-amber-600 shadow-sm"
+                            >
+                              Iniciar ⚡
+                            </button>
+                            <button
+                              onClick={() => {
+                                setReprogramDateTaskId(task.id);
+                                setReprogramDateVal(task.scheduled_date || new Date().toISOString().split('T')[0]);
+                              }}
+                              className="px-2 py-1 bg-zinc-100 text-zinc-700 rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-zinc-200 border border-zinc-200/80 shadow-sm"
+                            >
+                              Reprogramar 📅
+                            </button>
+                          </>
+                        )}
+                        {filterStatus === 'pendiente' && (
+                          <>
+                            <button
+                              onClick={() => handleUpdateStatus(task.id, 'en_proceso')}
+                              className="px-2.5 py-1 bg-amber-500 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-amber-600 shadow-sm"
+                            >
+                              Iniciar Trabajo ⚡
+                            </button>
+                            <button
+                              onClick={() => {
+                                setReprogramDateTaskId(task.id);
+                                setReprogramDateVal(task.scheduled_date || new Date().toISOString().split('T')[0]);
+                              }}
+                              className="px-2 py-1 bg-zinc-100 text-zinc-700 rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-zinc-200 border border-zinc-200/80 shadow-sm"
+                            >
+                              Reprogramar 📅
+                            </button>
+                          </>
+                        )}
+                        {filterStatus === 'programado' && (
+                          <>
+                            <button
+                              onClick={() => handleUpdateStatus(task.id, 'nuevo')}
+                              className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-purple-700 shadow-sm"
+                            >
+                              Activar Ahora ⚡
+                            </button>
+                            <button
+                              onClick={() => {
+                                setReprogramDateTaskId(task.id);
+                                setReprogramDateVal(task.scheduled_date || new Date().toISOString().split('T')[0]);
+                              }}
+                              className="px-2 py-1 bg-zinc-100 text-zinc-700 rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-zinc-200 border border-zinc-200/80 shadow-sm"
+                            >
+                              Cambiar Fecha 📅
+                            </button>
+                          </>
+                        )}
+                        {filterStatus === 'en_proceso' && (
+                          <>
+                            <button
+                              onClick={() => handleUpdateStatus(task.id, 'pendiente')}
+                              className="px-2 py-1 bg-zinc-100 text-zinc-500 rounded-lg text-[10px] font-extrabold flex items-center gap-0.5 transition-all active:scale-[0.96] hover:bg-zinc-200 border border-zinc-200"
+                              title="Regresar a Pendientes"
+                            >
+                              Regresar ↩
+                            </button>
+                            <button
+                              onClick={() => handleOpenResolutionModal(task)}
+                              className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-extrabold flex items-center gap-1 transition-all active:scale-[0.96] hover:bg-emerald-700 shadow-sm"
+                            >
+                              Terminar ✅
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>
@@ -1336,6 +1485,16 @@ export default function MantenimientoPage() {
                   </select>
                 </div>
               )}
+
+              <div>
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Fecha de Inicio Programada (Opcional)</label>
+                <input 
+                  type="date"
+                  value={formScheduledDate}
+                  onChange={e => setFormScheduledDate(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[14px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                />
+              </div>
 
               {editingTask && formStatus === 'resuelta' && (
                 <div className="bg-emerald-50/50 border border-emerald-100 p-4 rounded-2xl animate-in fade-in slide-in-from-top-2">
