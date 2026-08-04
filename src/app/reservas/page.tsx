@@ -589,6 +589,18 @@ export default function ReservasList() {
     }
   };
 
+  // Efecto 1: Cuando el ?id de la URL cambia, primero limpiamos selectedRes
+  // para que el efecto 2 no sobreescriba la URL nueva con la ID vieja
+  useEffect(() => {
+    const searchId = searchParams.get('id');
+    // Si hay un id en la URL y selectedRes ya tiene un id DIFERENTE, lo limpiamos
+    // para evitar que el efecto de escritura de URL sobreescriba la nueva URL
+    if (searchId && selectedRes && String(selectedRes.id) !== String(searchId)) {
+      setSelectedRes(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   useEffect(() => {
     if (typeof window !== 'undefined' && reservas.length > 0) {
       const searchId = searchParams.get('id');
@@ -611,10 +623,17 @@ export default function ReservasList() {
   }, [reservas, searchParams]);
 
   // Sincronizar el parámetro de la URL con el estado de la reserva activa
+  // Sólo escribimos la URL si el ID de selectedRes coincide con la URL actual
+  // (o no hay id en la URL). Así evitamos sobreescribir una URL de navegación nueva.
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const currentUrlId = new URLSearchParams(window.location.search).get('id');
       if (selectedRes) {
-        window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
+        // Solo actualizar la URL si el selectedRes ya está en sincronía con la URL actual
+        // (evita sobreescribir una URL de navegación entrante con el id antiguo)
+        if (!currentUrlId || currentUrlId === String(selectedRes.id)) {
+          window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
+        }
       } else {
         // Solo limpiar el parámetro si ya se cargaron las reservas (evita race condition en mount)
         if (reservas.length > 0) {
