@@ -56,8 +56,23 @@ export async function POST(req: Request) {
         
         if (b24Res.ok) {
           const b24Json = await b24Res.json();
-          if (b24Json.success && b24Json.data && b24Json.data.length > 0) {
-            let b = b24Json.data[0];
+          let dataList = b24Json.data || [];
+          
+          if (b24Json.success && dataList.length === 0) {
+            // Intento 2: Buscar si es una reserva cancelada (Beds24 requiere status=0 para devolverlas)
+            const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&status=0`, {
+              headers: { 'token': BEDS24_TOKEN }
+            });
+            if (b24ResCancel.ok) {
+              const b24JsonCancel = await b24ResCancel.json();
+              if (b24JsonCancel.success && b24JsonCancel.data && b24JsonCancel.data.length > 0) {
+                dataList = b24JsonCancel.data;
+              }
+            }
+          }
+
+          if (b24Json.success && dataList.length > 0) {
+            let b = dataList[0];
             let country = b.country2 || b.country || b.guestCountry2 || b.guestCountry;
             const bookingIdStr = bookingId.toString();
  

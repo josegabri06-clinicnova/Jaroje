@@ -198,8 +198,23 @@ export async function GET(req: Request) {
         });
         if (b24Res.ok) {
           const rawBookingData = await b24Res.json();
-          if (rawBookingData && rawBookingData.success && Array.isArray(rawBookingData.data) && rawBookingData.data.length > 0) {
-            const rawB = rawBookingData.data[0];
+          let dataList = rawBookingData.data || [];
+
+          if (rawBookingData.success && dataList.length === 0) {
+            const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true&status=0`, {
+              headers: { 'token': beds24Token },
+              cache: 'no-store'
+            });
+            if (b24ResCancel.ok) {
+              const b24JsonCancel = await b24ResCancel.json();
+              if (b24JsonCancel.success && b24JsonCancel.data && b24JsonCancel.data.length > 0) {
+                dataList = b24JsonCancel.data;
+              }
+            }
+          }
+
+          if (rawBookingData.success && dataList.length > 0) {
+            const rawB = dataList[0];
             const arrivalDate = rawB.arrival ? new Date(rawB.arrival) : null;
             const departureDate = rawB.departure ? new Date(rawB.departure) : null;
             const nights = (arrivalDate && departureDate)
