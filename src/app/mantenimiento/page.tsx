@@ -109,9 +109,12 @@ export default function MantenimientoPage() {
   const [resolveComments, setResolveComments] = useState('');
   const [resolvePhotoFile, setResolvePhotoFile] = useState<File | null>(null);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const resolutionFileInputRef = useRef<HTMLInputElement>(null);
-  const editResolutionFileInputRef = useRef<HTMLInputElement>(null);
+  const fileCameraInputRef = useRef<HTMLInputElement>(null);
+  const fileGalleryInputRef = useRef<HTMLInputElement>(null);
+  const resolutionCameraFileInputRef = useRef<HTMLInputElement>(null);
+  const resolutionGalleryFileInputRef = useRef<HTMLInputElement>(null);
+  const editResolutionCameraFileInputRef = useRef<HTMLInputElement>(null);
+  const editResolutionGalleryFileInputRef = useRef<HTMLInputElement>(null);
 
   // Read-only Details Drawer State
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -1370,7 +1373,15 @@ export default function MantenimientoPage() {
                 <div>
                   <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Opcional)</label>
                   <input 
-                    ref={fileInputRef}
+                    ref={fileCameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={e => setPhotoFile(e.target.files ? e.target.files[0] : null)}
+                    className="hidden"
+                  />
+                  <input 
+                    ref={fileGalleryInputRef}
                     type="file"
                     accept="image/*"
                     onChange={e => setPhotoFile(e.target.files ? e.target.files[0] : null)}
@@ -1379,11 +1390,19 @@ export default function MantenimientoPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => fileCameraInputRef.current?.click()}
                       className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Camera size={16} />
-                      <span>Tomar Foto</span>
+                      <span>Cámara</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileGalleryInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      <Upload size={16} />
+                      <span>Galería</span>
                     </button>
                     {photoFile && (
                       <button
@@ -1505,7 +1524,15 @@ export default function MantenimientoPage() {
                     </a>
                   ) : null}
                   <input 
-                    ref={editResolutionFileInputRef}
+                    ref={editResolutionCameraFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={e => setResolutionPhotoFile(e.target.files ? e.target.files[0] : null)}
+                    className="hidden"
+                  />
+                  <input 
+                    ref={editResolutionGalleryFileInputRef}
                     type="file"
                     accept="image/*"
                     onChange={e => setResolutionPhotoFile(e.target.files ? e.target.files[0] : null)}
@@ -1514,11 +1541,19 @@ export default function MantenimientoPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => editResolutionFileInputRef.current?.click()}
+                      onClick={() => editResolutionCameraFileInputRef.current?.click()}
                       className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Camera size={16} />
-                      <span>Tomar Foto</span>
+                      <span>Cámara</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => editResolutionGalleryFileInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    >
+                      <Upload size={16} />
+                      <span>Galería</span>
                     </button>
                     {resolutionPhotoFile && (
                       <button
@@ -1600,14 +1635,16 @@ export default function MantenimientoPage() {
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none font-medium text-zinc-900"
                   placeholder="Ej. Se cambió el empaque de la válvula y se verificó que no tuviera fugas..."
                 />
-              </div>
-
-              <div>
-                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
-                  Evidencia Fotográfica (Opcional)
-                </label>
+                     <input
+                  ref={resolutionCameraFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
+                  className="hidden"
+                />
                 <input
-                  ref={resolutionFileInputRef}
+                  ref={resolutionGalleryFileInputRef}
                   type="file"
                   accept="image/*"
                   onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
@@ -1616,11 +1653,19 @@ export default function MantenimientoPage() {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => resolutionFileInputRef.current?.click()}
+                    onClick={() => resolutionCameraFileInputRef.current?.click()}
                     className="flex-1 py-3 px-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     <Camera size={16} />
-                    <span>Tomar Foto / Seleccionar Imagen</span>
+                    <span>Cámara</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => resolutionGalleryFileInputRef.current?.click()}
+                    className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                  >
+                    <Upload size={16} />
+                    <span>Galería</span>
                   </button>
                   {resolvePhotoFile && (
                     <button

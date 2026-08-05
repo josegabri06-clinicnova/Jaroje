@@ -1785,7 +1785,8 @@ export default function RecepcionPage() {
     return { walkinMaxCapacity: totalMax, walkinBaseCapacity: totalBase };
   }, [selectedReserva?.groupRooms, selectedReserva?.room, selectedReserva?.unit_id, roomInventory, capacitySettings]);
 
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileCameraRef = useRef<HTMLInputElement>(null);
+  const fileGalleryRef = useRef<HTMLInputElement>(null);
   const mttoPhotoRef = useRef<HTMLInputElement>(null);
 
   const handleMttoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -6392,14 +6393,32 @@ export default function RecepcionPage() {
                   </div>
                 ) : !dniPreview ? (
                   <div
-                    onClick={() => fileRef.current?.click()}
-                    className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
+                    className="border border-zinc-200 bg-zinc-50 rounded-2xl p-4.5 flex flex-col gap-3"
                   >
-                    <Camera size={20} className="text-zinc-400" />
-                    <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
+                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest text-center">Subir Identificación</span>
+                    <div className="flex gap-2.5 w-full">
+                      <button
+                        type="button"
+                        onClick={() => fileCameraRef.current?.click()}
+                        className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                      >
+                        <Camera size={15} /> Usar Cámara
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileGalleryRef.current?.click()}
+                        className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
+                      >
+                        <Upload size={14} className="text-zinc-500" /> Cargar de Galería
+                      </button>
+                    </div>
+                    <input
+                      type="file" accept="image/*" capture="environment"
+                      ref={fileCameraRef} onChange={handleDniUpload} className="hidden"
+                    />
                     <input
                       type="file" accept="image/*"
-                      ref={fileRef} onChange={handleDniUpload} className="hidden"
+                      ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"
                     />
                   </div>
                 ) : (
@@ -6413,10 +6432,10 @@ export default function RecepcionPage() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => fileRef.current?.click()}
+                        onClick={() => fileCameraRef.current?.click()}
                         className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                       >
-                        <Camera size={14} /> Cambiar Identificación
+                        <Camera size={14} /> Tomar Nueva Foto
                       </button>
                       <button
                         type="button"
@@ -6445,10 +6464,14 @@ export default function RecepcionPage() {
                         <Trash2 size={14} />
                       </button>
                     </div>
-                    {/* Hidden input for change upload */}
+                    {/* Hidden inputs for change upload */}
+                    <input
+                      type="file" accept="image/*" capture="environment"
+                      ref={fileCameraRef} onChange={handleDniUpload} className="hidden"
+                    />
                     <input
                       type="file" accept="image/*"
-                      ref={fileRef} onChange={handleDniUpload} className="hidden"
+                      ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"
                     />
                   </div>
                 )}
