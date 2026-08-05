@@ -98,12 +98,24 @@ export async function GET(req: Request) {
           .eq('check_in', localRes.check_in)
           .neq('id', localRes.id);
 
+        const localChannel = (localRes.channel || '').toLowerCase();
+        const isLocalOta = ['booking.com', 'airbnb', 'expedia'].some(c => localChannel.includes(c));
+
         if (siblingLocal && siblingLocal.length > 0) {
           siblingLocal.forEach(s => {
             if (s.status === 'cancelled' || s.status === 'cancelado' || s.status === 'black') return;
-            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone;
+            
+            const sChannel = (s.channel || '').toLowerCase();
+            const sIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => sChannel.includes(c));
+
+            // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
+            if (isLocalOta !== sIsOta) return;
+
+            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone && mainPhone.length >= 6;
             const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
-            if (samePhone || sameName) {
+            
+            const isMatch = (isLocalOta || sIsOta) ? !!sameName : !!(samePhone || sameName);
+            if (isMatch) {
               localGroupPrice += Number(s.price || 0);
               localGroupAdult += Number(s.num_adult || 0);
               localGroupChild += Number(s.num_child || 0);
@@ -323,15 +335,26 @@ export async function GET(req: Request) {
         const mainPhone = booking.guest_phone || booking.phone || booking.mobile || '';
         const phoneNum = mainPhone ? normalizePhone(mainPhone) : '';
 
+        const mainChannel = (booking.channel || '').toLowerCase();
+        const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => mainChannel.includes(c));
+
         const siblingBeds24 = allBeds24.filter(r => {
           if (r.status === 'cancelled' || r.status === 'cancelado' || r.status === '0') return false;
           if (r.check_in !== booking.check_in) return false;
           if (r.check_out !== booking.check_out) return false;
           if (String(r.id) === String(booking.id)) return false;
+
+          const rChannel = (r.channel || '').toLowerCase();
+          const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
+
+          // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
+          if (isMainOta !== rIsOta) return false;
+
           const rPhone = r.guest_phone || r.phone || r.mobile || '';
-          const samePhone = phoneNum && rPhone && normalizePhone(rPhone) === phoneNum;
+          const samePhone = phoneNum && rPhone && normalizePhone(rPhone) === phoneNum && phoneNum.length >= 6;
           const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
-          return samePhone || sameName;
+
+          return (isMainOta || rIsOta) ? !!sameName : !!(samePhone || sameName);
         });
 
         let b24GroupAdult = Number(booking.num_adult || 1);

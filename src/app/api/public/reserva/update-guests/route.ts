@@ -65,11 +65,22 @@ export async function POST(req: Request) {
           .eq('check_in', localRes.check_in)
           .neq('id', localRes.id);
 
+        const localChannel = (localRes.channel || '').toLowerCase();
+        const isLocalOta = ['booking.com', 'airbnb', 'expedia'].some(c => localChannel.includes(c));
+
         if (siblingLocal && siblingLocal.length > 0) {
           siblingLocal.forEach(s => {
-            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone;
+            const sChannel = (s.channel || '').toLowerCase();
+            const sIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => sChannel.includes(c));
+
+            // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
+            if (isLocalOta !== sIsOta) return;
+
+            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone && mainPhone.length >= 6;
             const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
-            if (samePhone || sameName) {
+            
+            const isMatch = (isLocalOta || sIsOta) ? !!sameName : !!(samePhone || sameName);
+            if (isMatch) {
               const sRules = getCapacityRules(s.unit_id || '', capacitySettings || undefined);
               groupBase += sRules.base;
               groupMax += sRules.max;
@@ -169,13 +180,24 @@ export async function POST(req: Request) {
       const phoneNum = mainPhone ? normalizePhoneStr(mainPhone) : '';
       const mainName = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toLowerCase().trim().replace(/\s+/g, ' ');
 
+      const rawSource = String(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''}`).toLowerCase();
+      const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => rawSource.includes(c));
+
       const siblingBeds24 = allB24.filter(r => {
         if (r.check_in !== currentBooking.arrival) return false;
         if (r.check_out !== currentBooking.departure) return false;
+
+        const rChannel = (r.channel || '').toLowerCase();
+        const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
+
+        // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
+        if (isMainOta !== rIsOta) return false;
+
         const rPhone = r.guest_phone || r.phone || r.mobile || '';
-        const samePhone = phoneNum && rPhone && normalizePhoneStr(rPhone) === phoneNum;
+        const samePhone = phoneNum && rPhone && normalizePhoneStr(rPhone) === phoneNum && phoneNum.length >= 6;
         const sameName = mainName && r.guest_name && (r.guest_name.toLowerCase().includes(mainName) || mainName.includes(r.guest_name.toLowerCase()));
-        return samePhone || sameName;
+
+        return (isMainOta || rIsOta) ? !!sameName : !!(samePhone || sameName);
       });
 
       const groupList = siblingBeds24.length > 0 ? siblingBeds24 : [{
