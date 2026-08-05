@@ -116,7 +116,7 @@ export default function CameraModal({ onCapture, onClose, title = "Tomar Foto" }
   };
 
   return (
-    <div className="fixed inset-0 z-[300] flex flex-col bg-black animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[99999] flex flex-col bg-black animate-in fade-in duration-200">
       {/* Cabecera */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur text-white z-10">
         <span className="text-[14px] font-bold tracking-wider uppercase">{title}</span>
