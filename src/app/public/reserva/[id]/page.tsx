@@ -1286,7 +1286,8 @@ export default function PublicReservaPage() {
       return extraGuests * EXTRA_GUEST_CHARGE * (booking.nights || 1);
     }
   })();
-  const totalConExtras = booking.price + extraChargesTotal;
+  const totalConExtras = booking.price;
+  const basePriceWithoutExtras = Math.max(0, booking.price - extraChargesTotal);
   const anticipoConExtras = Math.round(totalConExtras * 0.5);
 
   const t = TRANSLATIONS[lang];
@@ -1581,7 +1582,9 @@ export default function PublicReservaPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between items-center text-zinc-650">
                 <span>{t.totalEstancia}</span>
-                <strong className="text-zinc-900 font-extrabold">${booking.price.toLocaleString('es-MX')} MXN</strong>
+                <strong className="text-zinc-900 font-extrabold">
+                  ${(extraChargesTotal > 0 ? basePriceWithoutExtras : booking.price).toLocaleString('es-MX')} MXN
+                </strong>
               </div>
               {extraChargesTotal > 0 && (
                 <div className="flex justify-between items-center text-amber-700 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 font-semibold">
