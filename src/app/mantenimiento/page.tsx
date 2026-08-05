@@ -12,6 +12,7 @@ const supabase = createClient(
 );
 
 import { getActiveEmployee } from '@/lib/auth';
+import CameraModal from '@/components/CameraModal';
 
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -112,6 +113,7 @@ export default function MantenimientoPage() {
   const [resolveComments, setResolveComments] = useState('');
   const [resolvePhotoFile, setResolvePhotoFile] = useState<File | null>(null);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
+  const [showCameraModal, setShowCameraModal] = useState<string | null>(null);
   
   const fileCameraInputRef = useRef<HTMLInputElement>(null);
   const fileGalleryInputRef = useRef<HTMLInputElement>(null);
@@ -1377,14 +1379,6 @@ export default function MantenimientoPage() {
                 <div>
                   <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Opcional)</label>
                   <input 
-                    ref={fileCameraInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={e => setPhotoFile(e.target.files ? e.target.files[0] : null)}
-                    className="hidden"
-                  />
-                  <input 
                     ref={fileGalleryInputRef}
                     type="file"
                     accept="image/*"
@@ -1394,7 +1388,7 @@ export default function MantenimientoPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => fileCameraInputRef.current?.click()}
+                      onClick={() => setShowCameraModal('create')}
                       className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Camera size={16} />
@@ -1528,14 +1522,6 @@ export default function MantenimientoPage() {
                     </a>
                   ) : null}
                   <input 
-                    ref={editResolutionCameraFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={e => setResolutionPhotoFile(e.target.files ? e.target.files[0] : null)}
-                    className="hidden"
-                  />
-                  <input 
                     ref={editResolutionGalleryFileInputRef}
                     type="file"
                     accept="image/*"
@@ -1545,7 +1531,7 @@ export default function MantenimientoPage() {
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => editResolutionCameraFileInputRef.current?.click()}
+                      onClick={() => setShowCameraModal('edit')}
                       className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Camera size={16} />
@@ -1639,14 +1625,12 @@ export default function MantenimientoPage() {
                   className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 outline-none text-[15px] focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none font-medium text-zinc-900"
                   placeholder="Ej. Se cambió el empaque de la válvula y se verificó que no tuviera fugas..."
                 />
-                     <input
-                  ref={resolutionCameraFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
-                  className="hidden"
-                />
+              </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">
+                  Foto de la Resolución (Opcional)
+                </label>
                 <input
                   ref={resolutionGalleryFileInputRef}
                   type="file"
@@ -1657,7 +1641,7 @@ export default function MantenimientoPage() {
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => resolutionCameraFileInputRef.current?.click()}
+                    onClick={() => setShowCameraModal('resolve')}
                     className="flex-1 py-3 px-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     <Camera size={16} />
@@ -1892,6 +1876,23 @@ export default function MantenimientoPage() {
             onClick={e => e.stopPropagation()}
           />
         </div>
+      )}
+
+      {showCameraModal && (
+        <CameraModal 
+          title="Tomar Foto de Evidencia"
+          onClose={() => setShowCameraModal(null)}
+          onCapture={(file, b64) => {
+            if (showCameraModal === 'create') {
+              setPhotoFile(file);
+            } else if (showCameraModal === 'resolve') {
+              setResolvePhotoFile(file);
+            } else if (showCameraModal === 'edit') {
+              setResolutionPhotoFile(file);
+            }
+            setShowCameraModal(null);
+          }}
+        />
       )}
     </div>
   );

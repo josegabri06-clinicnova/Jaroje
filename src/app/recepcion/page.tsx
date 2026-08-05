@@ -13,6 +13,7 @@ import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
+import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
 import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
@@ -1787,6 +1788,7 @@ export default function RecepcionPage() {
 
   const fileCameraRef = useRef<HTMLInputElement>(null);
   const fileGalleryRef = useRef<HTMLInputElement>(null);
+  const [showCameraModal, setShowCameraModal] = useState(false);
   const mttoPhotoRef = useRef<HTMLInputElement>(null);
 
   const handleMttoImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2645,6 +2647,61 @@ export default function RecepcionPage() {
     if (!file) return;
     
     const b64 = await compressImage(file);
+    setDniPreview(b64);
+    setDniFile(file);
+
+    if (selectedReserva && selectedReserva.checked_in) {
+      setDniUploadLoading(true);
+      try {
+        const fileExt = file.name.split('.').pop() || 'jpg';
+        const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
+        const { data, error: uploadErr } = await supabase.storage.from('dni_images').upload(fileName, file);
+        if (uploadErr) throw uploadErr;
+
+        const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
+        const newDniUrl = publicUrlData.publicUrl;
+
+        const cleanId = String(selectedReserva.id).toLowerCase().trim();
+        const { data: existingCheckin } = await supabase
+          .from('checkins')
+          .select('reservation_id')
+          .eq('reservation_id', cleanId)
+          .maybeSingle();
+
+        if (existingCheckin) {
+          const { error: updateErr } = await supabase
+            .from('checkins')
+            .update({ document_url: newDniUrl })
+            .eq('reservation_id', cleanId);
+          if (updateErr) throw updateErr;
+        } else {
+          const { error: upsertErr } = await supabase
+            .from('checkins')
+            .upsert({
+              reservation_id: cleanId,
+              guest_name: selectedReserva.guest_name,
+              room: selectedReserva.room,
+              check_in_date: selectedReserva.check_in,
+              check_out_date: selectedReserva.check_out,
+              status: 'checked_in',
+              document_url: newDniUrl
+            });
+          if (upsertErr) throw upsertErr;
+        }
+
+        setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
+        setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
+        alert('✅ Identificación guardada con éxito.');
+      } catch (err: any) {
+        console.error('Error al subir DNI:', err);
+        alert('❌ Error al guardar identificación: ' + err.message);
+      } finally {
+        setDniUploadLoading(false);
+      }
+    }
+  };
+
+  const processCapturedDni = async (file: File, b64: string) => {
     setDniPreview(b64);
     setDniFile(file);
 
@@ -6399,7 +6456,7 @@ export default function RecepcionPage() {
                     <div className="flex gap-2.5 w-full">
                       <button
                         type="button"
-                        onClick={() => fileCameraRef.current?.click()}
+                        onClick={() => setShowCameraModal(true)}
                         className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                       >
                         <Camera size={15} /> Usar Cámara
@@ -6412,10 +6469,6 @@ export default function RecepcionPage() {
                         <Upload size={14} className="text-zinc-500" /> Cargar de Galería
                       </button>
                     </div>
-                    <input
-                      type="file" accept="image/*" capture="environment"
-                      ref={fileCameraRef} onChange={handleDniUpload} className="hidden"
-                    />
                     <input
                       type="file" accept="image/*"
                       ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"
@@ -6432,7 +6485,7 @@ export default function RecepcionPage() {
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => fileCameraRef.current?.click()}
+                        onClick={() => setShowCameraModal(true)}
                         className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                       >
                         <Camera size={14} /> Tomar Nueva Foto
@@ -6465,10 +6518,6 @@ export default function RecepcionPage() {
                       </button>
                     </div>
                     {/* Hidden inputs for change upload */}
-                    <input
-                      type="file" accept="image/*" capture="environment"
-                      ref={fileCameraRef} onChange={handleDniUpload} className="hidden"
-                    />
                     <input
                       type="file" accept="image/*"
                       ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"
@@ -8082,6 +8131,17 @@ export default function RecepcionPage() {
             onClick={(e) => e.stopPropagation()} 
           />
         </div>
+      )}
+
+      {showCameraModal && (
+        <CameraModal 
+          title="Capturar Identificación"
+          onClose={() => setShowCameraModal(false)}
+          onCapture={(file, b64) => {
+            processCapturedDni(file, b64);
+            setShowCameraModal(false);
+          }}
+        />
       )}
     </div>
   );
