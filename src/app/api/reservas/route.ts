@@ -94,7 +94,7 @@ export async function GET(req: Request) {
         invoiceItems: b.invoice_items || [],
         last_notice_sent: Boolean(b.last_notice_sent),
         is_acknowledged: Boolean(b.is_acknowledged),
-        booking_time: b.check_in || null,
+        booking_time: b.booking_time || b.check_in || null,
         cancelled_at: b.status === 'cancelled' ? (b.updated_at || null) : null
       };
     });
