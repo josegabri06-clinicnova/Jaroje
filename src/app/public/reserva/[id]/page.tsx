@@ -422,7 +422,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     guest: 'Huésped',
     bookingId: 'ID de Reserva',
     accommodation: 'Alojamiento (El número del departamento se asigna al llegar)',
-    unregisteredGuestNote: '(Huésped no registrado $1000 por noche)',
+    unregisteredGuestNote: '($500 MXN por persona adicional · por noche)',
     checkin: 'Fecha de Llegada',
     checkinTime: '(Check-in: 3:00 PM)',
     checkout: 'Fecha de Salida',
@@ -544,7 +544,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     guest: 'Guest',
     bookingId: 'Reservation ID',
     accommodation: 'Accommodation (Apartment number is assigned upon arrival)',
-    unregisteredGuestNote: '(Unregistered guest $1000 per night)',
+    unregisteredGuestNote: '($500 MXN per extra guest · per night)',
     checkin: 'Arrival Date',
     checkinTime: '(Check-in: 3:00 PM)',
     checkout: 'Departure Date',
@@ -739,27 +739,46 @@ function getCapacityRules(roomNameOrId: string) {
 
 function getCapacityRulesForSingle(roomNameOrId: string) {
   const r = (roomNameOrId || '').toLowerCase();
-  if (r.includes('500')) {
-    return { base: 2, max: 2 };
-  }
-  if (r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507') || r.includes('685542')) {
-    return { base: 4, max: 4 };
-  }
-  if (r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306') || r.includes('679077')) {
-    return { base: 4, max: 4 };
-  }
-  if (r.includes('1 dormitorio') || r.includes('402') || r.includes('679087') || r.includes('1rec') || r.includes('loft')) {
-    return { base: 4, max: 4 };
-  }
-  if (r.includes('2 dormitorios') || r.includes('201') || r.includes('202') || r.includes('203') || r.includes('204') || r.includes('205') || r.includes('206') || r.includes('679091') || r.includes('2rec')) {
-    return { base: 6, max: 8 };
-  }
+
+  // Reglas de capacidad definidas por el hotel:
+  // - Habitación doble / Apt. 1 dormitorio: base 4, max 4 (sin personas extra permitidas)
+  // - Apt. 2 dormitorios: base 6, max 8 (+2 extras a $500/persona/noche)
+  // - Apt. 3 dormitorios: base 10, max 12 (+2 extras a $500/persona/noche)
+  // - Casa vacacional: base 12, max 16 (+4 extras a $500/persona/noche)
+
+  // Casa vacacional (va primero para no confundir con 401→casa)
   if (r.includes('casa') || r.includes('401') || r.includes('679093')) {
     return { base: 12, max: 16 };
   }
-  if (r.includes('3 dormitorios') || r.includes('101') || r.includes('102') || r.includes('103') || r.includes('104') || r.includes('105') || r.includes('106') || r.includes('107') || r.includes('679092') || r.includes('3rec')) {
+  // 3 dormitorios
+  if (r.includes('3 dormitorios') || r.includes('679092') || r.includes('3rec') ||
+      /\b(101|102|103|104|105|106|107)\b/.test(r)) {
     return { base: 10, max: 12 };
   }
+  // 2 dormitorios
+  if (r.includes('2 dormitorios') || r.includes('679091') || r.includes('2rec') ||
+      /\b(201|202|203|204|205|206)\b/.test(r)) {
+    return { base: 6, max: 8 };
+  }
+  // 1 dormitorio / Loft
+  if (r.includes('1 dormitorio') || r.includes('679087') || r.includes('1rec') || r.includes('loft') ||
+      /\b402\b/.test(r)) {
+    return { base: 4, max: 4 };
+  }
+  // Habitaciones dobles (300-306)
+  if (r.includes('doble') || r.includes('679077') ||
+      /\b(301|302|303|304|305|306)\b/.test(r)) {
+    return { base: 4, max: 4 };
+  }
+  // Habitación Sencilla (500)
+  if (/\b500\b/.test(r) || r.includes('685542_500')) {
+    return { base: 2, max: 2 };
+  }
+  // Unidades 501-507 (Habitaciones dobles / 1 dormitorio en el edificio 500)
+  if (/\b(501|502|503|504|505|506|507)\b/.test(r) || r.includes('685542')) {
+    return { base: 4, max: 4 };
+  }
+  // Fallback: tratar como 2 dormitorios
   return { base: 6, max: 8 };
 }
 
