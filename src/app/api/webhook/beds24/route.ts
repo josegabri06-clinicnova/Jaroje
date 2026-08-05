@@ -219,11 +219,24 @@ export async function POST(req: Request) {
                     deposit: Number(b.deposit || 0)
                   };
 
-                  let waRes;
-                  let templateName = 'reservacion_confirmada';
+                  let actualPaid = 0;
+                  if (b.invoiceItems && Array.isArray(b.invoiceItems)) {
+                    b.invoiceItems.forEach((item: any) => {
+                      const itemBookingId = String(item.bookingId || item.bookId || '');
+                      if (itemBookingId && itemBookingId !== String(b.id)) {
+                        return;
+                      }
+                      const qty = Number(item.qty || 0);
+                      const price = Number(item.price || 0);
+                      const lineTotal = qty * price;
+                      if (lineTotal < 0) {
+                        actualPaid += Math.abs(lineTotal);
+                      }
+                    });
+                  }
 
-                  if (!isOTA && bookingForWA.deposit === 0) {
-                    console.log(`[Webhook Beds24] Reserva sin anticipo ${bookingId} agendada en NUEVAS. Esperando clic en REVISADO para enviar Mensaje 1.`);
+                  if (!isOTA && actualPaid === 0) {
+                    console.log(`[Webhook Beds24] Reserva sin pago real ${bookingId} agendada en NUEVAS. Esperando clic en REVISADO para enviar Mensaje 1.`);
                   } else {
                     const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
                     if (waRes.success) {
