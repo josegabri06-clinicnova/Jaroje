@@ -1279,8 +1279,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         notes: mb.notes,
         invoice_items: mb.taxes?.invoiceItems || mb.invoice_items || [],
         actual_paid: mb.actualPaid,
-        booking_time: mb.booking_time || null,
-        cancelled_at: mb.cancelled_at || null,
+        created_at: mb.booking_time || null,
         updated_at: new Date().toISOString()
       }));
 
@@ -1839,8 +1838,7 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     notes: b.info || b.notes || null,
     invoice_items: b.invoiceItems || [],
     actual_paid: actualPaid,
-    booking_time: b.bookingTime || b.arrival || null,
-    cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null,
+    created_at: b.bookingTime || b.arrival || null,
     updated_at: new Date().toISOString()
   });
 
