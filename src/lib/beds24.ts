@@ -1401,6 +1401,7 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
     }
   }
   
+  clearBeds24Cache();
   return true;
 }
 

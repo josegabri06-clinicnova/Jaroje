@@ -4,6 +4,9 @@ import { supabase } from '@/lib/supabase';
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking
 export async function POST(req: Request) {
   try {
+    const { clearBeds24Cache } = await import('@/lib/beds24');
+    clearBeds24Cache();
+
     const payload = await req.json();
     
     // Beds24 template mapping. Asumimos el siguiente JSON config en Beds24:
