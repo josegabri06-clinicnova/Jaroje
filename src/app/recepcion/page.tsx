@@ -1685,16 +1685,30 @@ export default function RecepcionPage() {
     const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
     const mainName = cleanStr(selectedReserva.guest_name || '');
     const mainPhone = (selectedReserva.guest_phone || '').trim();
+    const mainChannel = (selectedReserva.channel || '').toLowerCase();
+    const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => mainChannel.includes(c));
     
     return reservas.filter(r => {
+      // Mismo check_in, diferente reserva, no ya procesada
       if (r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) {
         return false;
       }
+
+      const rChannel = (r.channel || '').toLowerCase();
+      const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
+
+      // REGLA 1: No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
+      // (Booking.com puede usar teléfonos genéricos del hotel, causando falsos positivos)
+      if (isMainOta !== rIsOta) return false; // no mezclar OTA con directas
       
-      const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone;
+      const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone && mainPhone.length >= 6;
       const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
-      
-      return samePhone || sameName;
+
+      // REGLA 2: Para OTAs, requerir coincidencia de nombre (el teléfono de OTA no es confiable)
+      if (isMainOta || rIsOta) return !!sameName;
+
+      // REGLA 3: Para reservas directas, aceptar mismo teléfono O mismo nombre
+      return !!(samePhone || sameName);
     });
   }, [selectedReserva, reservas]);
 
