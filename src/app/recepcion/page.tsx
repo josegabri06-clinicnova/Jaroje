@@ -8114,7 +8114,7 @@ export default function RecepcionPage() {
 
       {zoomImage && (
         <div 
-          className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setZoomImage(null)}
         >
           <button 
