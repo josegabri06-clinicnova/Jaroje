@@ -165,6 +165,7 @@ async function compressImage(file: File): Promise<string> {
 }
 
 function isReservationNew(r: any): boolean {
+  if (r && r.is_new_override !== undefined) return r.is_new_override;
   if (!r || r.is_acknowledged || r.status === 'cancelled') return false;
   return true;
 }
@@ -1905,52 +1906,60 @@ export default function ReservasList() {
     if (!targetRes) return;
     setAckLoading(true);
     try {
-      const { error } = await supabase.from('checkins').upsert({
-        reservation_id: targetRes.id.toString().toLowerCase().trim(),
-        guest_name: targetRes.guest_name,
-        room: targetRes.room_name,
-        check_in_date: targetRes.check_in,
-        check_out_date: targetRes.check_out,
-        status: 'acknowledged',
-        checked_in_by: 'Admin',
-        document_url: targetRes.document_url || null
-      }, { onConflict: 'reservation_id' });
+      const members = targetRes.group_members || [targetRes];
+      
+      for (const member of members) {
+        const { error } = await supabase.from('checkins').upsert({
+          reservation_id: member.id.toString().toLowerCase().trim(),
+          guest_name: member.guest_name,
+          room: member.room_name || member.room,
+          check_in_date: member.check_in,
+          check_out_date: member.check_out,
+          status: 'acknowledged',
+          checked_in_by: 'Admin',
+          document_url: member.document_url || null
+        }, { onConflict: 'reservation_id' });
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
-      if (selectedRes && selectedRes.id === targetRes.id) {
+      const memberIds = new Set(members.map((m: any) => m.id));
+
+      if (selectedRes && memberIds.has(selectedRes.id)) {
         setSelectedRes((prev: any) => {
           if (!prev) return null;
           return { ...prev, is_acknowledged: true };
         });
       }
-      setReservas(prev => prev.map(r => r.id === targetRes.id ? { ...r, is_acknowledged: true } : r));
+      setReservas(prev => prev.map(r => memberIds.has(r.id) ? { ...r, is_acknowledged: true } : r));
 
-      try {
-        const emp = getOperatorForLog();
-        const employeeNum = emp.employee_num;
-        const employeeName = emp.full_name;
-        const employeeDept = emp.department;
-        
-        await fetch('/api/employee-logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            employee_num: employeeNum,
-            employee_name: employeeName,
-            department: employeeDept,
-            module: 'recepcion',
-            action: 'reserva_enterado',
-            room: targetRes.room_name || 'General',
-            details: JSON.stringify({
-              text: `${targetRes.guest_name} ${targetRes.num_adult || 1}/${targetRes.num_child || 0} (ID: ${targetRes.id}) de la Habitación ${targetRes.room_name || 'General'} - Marcó la reserva como enterado${resData ? ' desde el listado' : ''}.`,
-              bookingId: targetRes.id,
-              guestName: targetRes.guest_name
+      const emp = getOperatorForLog();
+      const employeeNum = emp.employee_num;
+      const employeeName = emp.full_name;
+      const employeeDept = emp.department;
+
+      for (const member of members) {
+        try {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: employeeNum,
+              employee_name: employeeName,
+              department: employeeDept,
+              module: 'recepcion',
+              action: 'reserva_enterado',
+              room: member.room_name || member.room || 'General',
+              details: JSON.stringify({
+                text: `${member.guest_name} ${member.num_adult || 1}/${member.num_child || 0} (ID: ${member.id}) de la Habitación ${member.room_name || member.room || 'General'} - Marcó la reserva como enterado${resData ? ' desde el listado' : ''}.`,
+                bookingId: member.id,
+                guestName: member.guest_name
+              })
             })
-          })
-        });
-      } catch (logErr) {
-        console.error("Error registrando log de enterado:", logErr);
+          });
+        } catch (logErr) {
+          console.error("Error registrando log de enterado:", logErr);
+        }
       }
 
       // Enviar plantilla de WhatsApp correspondiente según canal y depósito
@@ -2007,6 +2016,9 @@ export default function ReservasList() {
       return;
     }
     try {
+      const members = targetRes.group_members || [targetRes];
+
+      // Enviar WhatsApp (una sola vez con la reserva consolidada)
       const res = await fetch('/api/whatsapp/send-template', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2018,8 +2030,29 @@ export default function ReservasList() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error de Meta API');
 
-      setSelectedRes((prev: any) => prev && String(prev.id) === String(targetRes.id) ? { ...prev, last_notice_sent: true, is_acknowledged: true } : prev);
-      setReservas((prev: any[]) => prev.map(r => String(r.id) === String(targetRes.id) ? { ...r, last_notice_sent: true, is_acknowledged: true } : r));
+      // Actualizar estado en Supabase para todos los miembros
+      for (const member of members) {
+        await supabase
+          .from('beds24_reservations')
+          .upsert({ id: String(member.id), last_notice_sent: true, is_acknowledged: true });
+
+        await supabase
+          .from('checkins')
+          .upsert({
+            reservation_id: String(member.id).toLowerCase().trim(),
+            guest_name: member.guest_name,
+            room: member.room_name || member.room,
+            check_in_date: member.check_in,
+            check_out_date: member.check_out,
+            status: 'acknowledged',
+            checked_in_by: 'Admin'
+          }, { onConflict: 'reservation_id' });
+      }
+
+      const memberIds = new Set(members.map((m: any) => String(m.id)));
+
+      setSelectedRes((prev: any) => prev && memberIds.has(String(prev.id)) ? { ...prev, last_notice_sent: true, is_acknowledged: true } : prev);
+      setReservas((prev: any[]) => prev.map(r => memberIds.has(String(r.id)) ? { ...r, last_notice_sent: true, is_acknowledged: true } : r));
 
       alert('✅ Recordatorio de ÚLTIMO AVISO (Mensaje 2) enviado por WhatsApp con éxito.');
     } catch (err: any) {
@@ -2228,6 +2261,73 @@ export default function ReservasList() {
     return matchSearch && matchTab && matchDateRange;
   });
 
+  const groupReservations = (reservationsList: any[]) => {
+    const grouped: any[] = [];
+    const processedIds = new Set<string>();
+
+    reservationsList.forEach(r => {
+      if (processedIds.has(String(r.id))) return;
+
+      const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+      const mainName = cleanStr(r.guest_name || '');
+      const mainPhone = (r.guest_phone || r.phone || r.mobile || '').trim();
+
+      const siblings = reservationsList.filter(o => {
+        if (String(o.id) === String(r.id)) return false;
+        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
+        if (o.status !== r.status) return false;
+        
+        const oPhone = (o.guest_phone || o.phone || o.mobile || '').trim();
+        const samePhone = mainPhone && oPhone && oPhone === mainPhone && mainPhone.length >= 6;
+        const sameName = mainName && o.guest_name && (cleanStr(o.guest_name).includes(mainName) || mainName.includes(cleanStr(o.guest_name)));
+        return samePhone || sameName;
+      });
+
+      if (siblings.length > 0) {
+        const allMembers = [r, ...siblings];
+        allMembers.forEach(m => processedIds.add(String(m.id)));
+
+        const consolidatedId = r.id;
+        const consolidatedGuestName = r.guest_name;
+        
+        const consolidatedRoomNames = allMembers
+          .map(m => m.room_name || m.room)
+          .filter(Boolean)
+          .join(', ');
+
+        const consolidatedPrice = allMembers.reduce((sum, m) => sum + Number(m.price_estimate || m.price || 0), 0);
+        const consolidatedDeposit = allMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
+        const consolidatedBalance = allMembers.reduce((sum, m) => sum + Number(m.balance || 0), 0);
+        const consolidatedAdults = allMembers.reduce((sum, m) => sum + Number(m.num_adult || 1), 0);
+        const consolidatedChildren = allMembers.reduce((sum, m) => sum + Number(m.num_child || 0), 0);
+        const isAnyNew = allMembers.some(m => isReservationNew(m));
+
+        grouped.push({
+          ...r,
+          id: consolidatedId,
+          guest_name: consolidatedGuestName,
+          room_name: consolidatedRoomNames,
+          price_estimate: consolidatedPrice,
+          price: consolidatedPrice,
+          deposit: consolidatedDeposit,
+          balance: consolidatedBalance,
+          num_adult: consolidatedAdults,
+          num_child: consolidatedChildren,
+          is_group_card: true,
+          group_members: allMembers,
+          is_new_override: isAnyNew
+        });
+      } else {
+        processedIds.add(String(r.id));
+        grouped.push(r);
+      }
+    });
+
+    return grouped;
+  };
+
+  const groupedFiltered = groupReservations(filtered);
+
   const tabLabel = (() => {
     switch (activeTab) {
       case 'Todas': return 'activas';
@@ -2253,7 +2353,7 @@ export default function ReservasList() {
         <div>
           <h2 className="text-[22px] font-semibold text-zinc-900 tracking-tight">Reservas</h2>
           <p className="text-[13px] font-medium text-zinc-500 mt-0.5">
-            {isLoading ? '...' : `${filtered.length} ${tabLabel} · MX$${totalRevenue.toLocaleString('es-MX')} estimado`}
+            {isLoading ? '...' : `${groupedFiltered.length} ${tabLabel} · MX$${totalRevenue.toLocaleString('es-MX')} estimado`}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -2487,7 +2587,7 @@ export default function ReservasList() {
             <div key={i} className="bg-white border border-zinc-200/80 rounded-2xl p-4 animate-pulse h-28" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : groupedFiltered.length === 0 ? (
         <div className="bg-white border border-zinc-200/60 border-dashed rounded-2xl p-10 flex flex-col items-center text-center">
           <CheckCircle2 size={28} className="text-zinc-300 mb-3" strokeWidth={1.5} />
           <p className="text-[14px] font-semibold text-zinc-500">
@@ -2496,7 +2596,7 @@ export default function ReservasList() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filtered.map(r => {
+          {groupedFiltered.map(r => {
             const isArrival = r.check_in === todayStr;
             const isDeparture = r.check_out === todayStr;
             return (
