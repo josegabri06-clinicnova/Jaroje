@@ -22,6 +22,9 @@ const getTaskImages = (t: Task | null | undefined): string[] => {
   if (t.photo_url && t.photo_url !== 'null' && t.photo_url.trim() !== '') {
     list.push(t.photo_url);
   }
+  if (t.resolution_photo_url && t.resolution_photo_url !== 'null' && t.resolution_photo_url.trim() !== '') {
+    list.push(t.resolution_photo_url);
+  }
   if (t.image_base64 && t.image_base64 !== 'null' && t.image_base64.trim() !== '') {
     const val = t.image_base64.trim();
     if (val.startsWith('[') && val.endsWith(']')) {
@@ -108,6 +111,7 @@ export default function MantenimientoPage() {
   const [resolvingTask, setResolvingTask] = useState<Task | null>(null);
   const [resolveComments, setResolveComments] = useState('');
   const [resolvePhotoFile, setResolvePhotoFile] = useState<File | null>(null);
+  const [zoomImage, setZoomImage] = useState<string | null>(null);
   
   const fileCameraInputRef = useRef<HTMLInputElement>(null);
   const fileGalleryInputRef = useRef<HTMLInputElement>(null);
@@ -1771,19 +1775,17 @@ export default function MantenimientoPage() {
                     {getTaskImages(selectedTaskForDetails).map((srcUrl, idx) => {
                       const isBase64 = srcUrl.startsWith('data:');
                       return (
-                        <a 
+                        <div 
                           key={idx}
-                          href={isBase64 ? undefined : srcUrl} 
-                          target="_blank" 
-                          rel="noreferrer" 
-                          className={`block overflow-hidden rounded-2xl border border-zinc-200 ${isBase64 ? '' : 'hover:opacity-95 transition-opacity'}`}
+                          onClick={() => setZoomImage(srcUrl)}
+                          className="block overflow-hidden rounded-2xl border border-zinc-200 cursor-zoom-in hover:brightness-95 transition-all bg-zinc-50"
                         >
                           <img 
                             src={srcUrl} 
-                            alt={`Evidencia inicial ${idx + 1}`} 
+                            alt={`Evidencia ${idx + 1}`} 
                             className="w-full h-48 object-cover"
                           />
-                        </a>
+                        </div>
                       );
                     })}
                   </div>
@@ -1868,6 +1870,27 @@ export default function MantenimientoPage() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      
+      {/* Modal Zoom de Evidencia Fotográfica */}
+      {zoomImage && (
+        <div 
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 p-4 animate-in fade-in duration-200"
+          onClick={() => setZoomImage(null)}
+        >
+          <button 
+            onClick={() => setZoomImage(null)} 
+            className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white/20 active:scale-95 text-white flex items-center justify-center rounded-full transition-all cursor-pointer z-50 shadow-md"
+          >
+            <X size={24} strokeWidth={2.5} />
+          </button>
+          <img 
+            src={zoomImage} 
+            alt="Detalle Evidencia" 
+            className="max-w-full max-h-[85vh] object-contain rounded-2xl animate-in zoom-in-95 duration-250 select-none shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
