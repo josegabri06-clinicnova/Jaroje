@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus, CheckCircle2, AlertTriangle, Wrench, Sparkles, X, Edit2, Download, Trash2, Bell, Camera, Image as ImageIcon } from 'lucide-react';
+import { Plus, CheckCircle2, AlertTriangle, Wrench, Sparkles, X, Edit2, Download, Upload, Trash2, Bell, Camera, Image as ImageIcon } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
