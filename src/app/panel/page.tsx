@@ -1519,10 +1519,8 @@ export default function AdminDashboard() {
                         desc = 'La habitación se encuentra limpia, inspeccionada y lista para recibir huéspedes de check-in inmediato.';
                       } else if (operStatus === 'ocupada') {
                         const activeRes = reservas.find(r => {
-                          const rRoom = String(r.room || '').replace(/[\s()]/g, '');
-                          const matches = rRoom.includes(selectedRoomForStatus.room_number);
                           const isActiveToday = (r.check_in <= todayStr && r.check_out > todayStr) || (r.check_in === todayStr);
-                          return matches && isActiveToday && !r.checked_out;
+                          return matchesRoomNumber(r, selectedRoomForStatus.room_number) && isActiveToday && !r.checked_out && r.status !== 'cancelled';
                         });
 
                         if (activeRes) {

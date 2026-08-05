@@ -759,8 +759,7 @@ export default function StaffPage() {
       
       // 1. Verificar si es salida hoy (Check-out)
       const salidaRes = reservas.find(res => {
-        const rRoom = String(res.room || '').replace(/[\s()]/g, '');
-        return rRoom.includes(r) && res.check_out === todayStr && !res.checked_out;
+        return matchesRoomNumber(res, r) && res.check_out === todayStr && !res.checked_out && res.status !== 'cancelled';
       });
       
       if (salidaRes) {
