@@ -1241,22 +1241,31 @@ export default function PublicReservaPage() {
 
   const anticipoRequerido = Math.round(booking.price * 0.5);
 
-  // Cargo extra por huéspedes adicionales ($500 MXN por persona/noche sobre la capacidad base)
-  // IMPORTANTE: Solo aplica a reservas LOCALES (500-507). Las reservas de Beds24 ya tienen
-  // el precio final definido en la plataforma — añadir cargos encima causaría double-charging.
+  // Cargo extra por huéspedes adicionales ($500 MXN por persona × noche sobre la capacidad base)
+  // - OTAs (Airbnb, Booking, Expedia): precio fijo, sin cargo extra adicional
+  // - Directo (local 500-507 o Beds24 Directo): booking.price = tarifa base × noches
+  //   El sistema tiene las reglas de capacidad por habitación y calcula el extra automáticamente
   const EXTRA_GUEST_CHARGE = 500;
-  const isLocalReservation = !booking.rooms_detail; // rooms_detail solo lo envía la API cuando la reserva viene de Beds24
   const extraChargesTotal = (() => {
-    if (isOta) return 0;          // OTAs tienen tarifa fija
-    if (!isLocalReservation) return 0; // Beds24 ya incluye el precio correcto
-    
-    // Solo para reservas locales (500-507): calcular huéspedes sobre capacidad base
-    const totalGuests = (booking.num_adult || 0) + (booking.num_child || 0);
-    const roomName = booking.room_name || '';
-    const baseCapacity = getCapacityRulesForSingle(roomName).base;
-    const extraGuests = Math.max(0, totalGuests - baseCapacity);
-    // Multiplica por noches: $500 por persona extra POR NOCHE
-    return extraGuests * EXTRA_GUEST_CHARGE * (booking.nights || 1);
+    if (isOta) return 0; // OTAs: tarifa fija negociada con la plataforma
+
+    // Para reservas directas (Beds24 o locales): usar rooms_detail si existe (grupos),
+    // si no, usar num_adult/num_child del booking completo
+    if (booking.rooms_detail && booking.rooms_detail.length > 0) {
+      // Grupo: sumar huéspedes y capacidad base de todas las habitaciones
+      const totalGroupGuests = booking.rooms_detail.reduce((sum: number, r: any) => sum + (r.num_adult || 0) + (r.num_child || 0), 0);
+      const totalGroupBaseCapacity = booking.rooms_detail.reduce((sum: number, r: any) => sum + getCapacityRulesForSingle(r.room_name || '').base, 0);
+      const groupExtraGuests = Math.max(0, totalGroupGuests - totalGroupBaseCapacity);
+      // $500 por persona extra × número de noches
+      return groupExtraGuests * EXTRA_GUEST_CHARGE * (booking.nights || 1);
+    } else {
+      // Reserva individual (local o Beds24 sin rooms_detail)
+      const totalGuests = (booking.num_adult || 0) + (booking.num_child || 0);
+      const baseCapacity = getCapacityRulesForSingle(booking.room_name || '').base;
+      const extraGuests = Math.max(0, totalGuests - baseCapacity);
+      // $500 por persona extra × número de noches
+      return extraGuests * EXTRA_GUEST_CHARGE * (booking.nights || 1);
+    }
   })();
   const totalConExtras = booking.price + extraChargesTotal;
   const anticipoConExtras = Math.round(totalConExtras * 0.5);
@@ -1458,8 +1467,8 @@ export default function PublicReservaPage() {
                               </div>
                             </div>
                           </div>
-                          {/* Solo mostrar badge de cargo extra en reservas locales (isLocalReservation) */}
-                          {isLocalReservation && extraCharge > 0 && (
+                          {/* Mostrar badge de cargo extra para todas las reservas directas (no OTA) */}
+                          {!isOta && extraCharge > 0 && (
                             <div className="mt-1.5 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-md px-2 py-1">
                               <AlertTriangle size={10} className="text-amber-500 shrink-0" />
                               <span className="text-amber-700 text-[10.5px] font-semibold">
@@ -1502,8 +1511,8 @@ export default function PublicReservaPage() {
                 <span className="text-zinc-900 font-bold text-[13px] block">
                   {t.guests(booking.num_adult + booking.num_child)}
                 </span>
-                {/* Nota de huésped extra: solo para reservas locales donde aplicamos el cargo */}
-                {isLocalReservation && (
+                {/* Nota de cargo extra: visible para todas las reservas directas (no OTA) */}
+                {!isOta && (
                   <span className="text-zinc-700 text-[9.5px] font-normal mt-1 block leading-tight">
                     {t.unregisteredGuestNote}
                   </span>
