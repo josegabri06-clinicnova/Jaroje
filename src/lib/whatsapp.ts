@@ -162,6 +162,22 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
     cc = countryNameToCode(cc);
   }
 
+  // PRIORIDAD PREFIJO EXISTENTE:
+  // Si el número ingresado ya contiene un código de país conocido y su longitud es la estándar,
+  // respetamos ese prefijo de forma prioritaria, ignorando el código del país de facturación (cc).
+  if (cleaned.startsWith('521') && cleaned.length === 13) {
+    return cleaned; // México Móvil
+  }
+  if (cleaned.startsWith('52') && cleaned.length === 12) {
+    return '521' + cleaned.substring(2); // México Fijo -> normalizar a móvil
+  }
+  if (cleaned.startsWith('1') && cleaned.length === 11) {
+    return cleaned; // US/Canada
+  }
+  if (cleaned.startsWith('34') && cleaned.length === 11) {
+    return cleaned; // España (34 + 9 dígitos)
+  }
+
   // Si no tenemos código de país, aplicamos la lógica clásica basada en la longitud
   if (!cc) {
     if (cleaned.length === 10) {
