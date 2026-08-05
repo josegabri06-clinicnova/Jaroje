@@ -6459,18 +6459,18 @@ export default function RecepcionPage() {
                         onClick={() => setShowCameraModal(true)}
                         className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                       >
-                        <Camera size={15} /> Usar Cámara
+                        <Camera size={15} /> Cámara (Interna)
                       </button>
                       <button
                         type="button"
                         onClick={() => fileGalleryRef.current?.click()}
                         className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
                       >
-                        <Upload size={14} className="text-zinc-500" /> Cargar de Galería
+                        <Upload size={14} className="text-zinc-500" /> Cargar Foto / Archivo
                       </button>
                     </div>
                     <input
-                      type="file" accept="image/*"
+                      type="file" accept="image/*,application/pdf"
                       ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"
                     />
                   </div>
@@ -6488,7 +6488,14 @@ export default function RecepcionPage() {
                         onClick={() => setShowCameraModal(true)}
                         className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                       >
-                        <Camera size={14} /> Tomar Nueva Foto
+                        <Camera size={14} /> Cámara (Interna)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileGalleryRef.current?.click()}
+                        className="flex-1 py-2.5 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
+                      >
+                        <Upload size={14} className="text-zinc-500" /> Cargar Foto / Archivo
                       </button>
                       <button
                         type="button"
@@ -6519,7 +6526,7 @@ export default function RecepcionPage() {
                     </div>
                     {/* Hidden inputs for change upload */}
                     <input
-                      type="file" accept="image/*"
+                      type="file" accept="image/*,application/pdf"
                       ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"
                     />
                   </div>

@@ -1381,7 +1381,7 @@ export default function MantenimientoPage() {
                   <input 
                     ref={fileGalleryInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf"
                     onChange={e => setPhotoFile(e.target.files ? e.target.files[0] : null)}
                     className="hidden"
                   />
@@ -1392,7 +1392,7 @@ export default function MantenimientoPage() {
                       className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Camera size={16} />
-                      <span>Cámara</span>
+                      <span>Cámara (Interna)</span>
                     </button>
                     <button
                       type="button"
@@ -1400,7 +1400,7 @@ export default function MantenimientoPage() {
                       className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Upload size={16} />
-                      <span>Galería</span>
+                      <span>Cargar Foto / Archivo</span>
                     </button>
                     {photoFile && (
                       <button
@@ -1524,7 +1524,7 @@ export default function MantenimientoPage() {
                   <input 
                     ref={editResolutionGalleryFileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf"
                     onChange={e => setResolutionPhotoFile(e.target.files ? e.target.files[0] : null)}
                     className="hidden"
                   />
@@ -1535,7 +1535,7 @@ export default function MantenimientoPage() {
                       className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Camera size={16} />
-                      <span>Cámara</span>
+                      <span>Cámara (Interna)</span>
                     </button>
                     <button
                       type="button"
@@ -1543,7 +1543,7 @@ export default function MantenimientoPage() {
                       className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                     >
                       <Upload size={16} />
-                      <span>Galería</span>
+                      <span>Cargar Foto / Archivo</span>
                     </button>
                     {resolutionPhotoFile && (
                       <button
@@ -1634,7 +1634,7 @@ export default function MantenimientoPage() {
                 <input
                   ref={resolutionGalleryFileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf"
                   onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
                   className="hidden"
                 />
@@ -1645,7 +1645,7 @@ export default function MantenimientoPage() {
                     className="flex-1 py-3 px-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     <Camera size={16} />
-                    <span>Cámara</span>
+                    <span>Cámara (Interna)</span>
                   </button>
                   <button
                     type="button"
@@ -1653,7 +1653,7 @@ export default function MantenimientoPage() {
                     className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     <Upload size={16} />
-                    <span>Galería</span>
+                    <span>Cargar Foto / Archivo</span>
                   </button>
                   {resolvePhotoFile && (
                     <button
