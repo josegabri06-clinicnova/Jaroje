@@ -4908,47 +4908,49 @@ function ReservasListInner() {
                           </button>
                         </div>
                       ) : (
-                        <div className="flex gap-2 w-full pt-1.5 border-t border-zinc-100">
-                          {getRole() !== 'recepcion' && (
-                            <button
-                              onClick={() => {
-                                setAbonoAmount('');
-                                setAbonoPaymentMethod(null);
-                                setAbonoAccountId('');
-                                setAbonoTargetBookingId(siblingBookings.length > 0 ? 'group' : String(selectedRes.id));
-                                setShowAbonoFlow(true);
-                                setShowExtensionFlow(false);
-                              }}
-                              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer text-center"
-                            >
-                              💰 Registrar Anticipo
-                            </button>
-                          )}
-                          {!isOtaRes && (getRole() === 'admin' || selectedRes?.checked_in || (selectedRes?.check_in && selectedRes.check_in <= new Date().toLocaleDateString('sv-SE'))) && (
-                            <button
-                              onClick={() => {
-                                setExtensionNights(1);
-                                setExtensionCustomPrice('');
-                                setExtensionRegisterPayment(true);
-                                setExtensionPaymentMethod(null);
-                                setExtensionAccountId('');
-                                setShowExtensionFlow(true);
-                                setShowAbonoFlow(false);
-                              }}
-                              className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-600/10 cursor-pointer text-center"
-                            >
-                              🗓️ Extender Estancia
-                            </button>
-                          )}
-                        </div>
-                        {isOtaRes && (
-                          <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-xl leading-normal text-left flex gap-2">
-                            <span className="shrink-0 text-[13px]">⚠️</span>
-                            <span>
-                              Las modificaciones de fechas y extensiones de estancia para reservas de OTA (Airbnb, Booking.com, Expedia) deben realizarse directamente en la plataforma de origen.
-                            </span>
+                        <>
+                          <div className="flex gap-2 w-full pt-1.5 border-t border-zinc-100">
+                            {getRole() !== 'recepcion' && (
+                              <button
+                                onClick={() => {
+                                  setAbonoAmount('');
+                                  setAbonoPaymentMethod(null);
+                                  setAbonoAccountId('');
+                                  setAbonoTargetBookingId(siblingBookings.length > 0 ? 'group' : String(selectedRes.id));
+                                  setShowAbonoFlow(true);
+                                  setShowExtensionFlow(false);
+                                }}
+                                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer text-center"
+                              >
+                                💰 Registrar Anticipo
+                              </button>
+                            )}
+                            {!isOtaRes && (getRole() === 'admin' || selectedRes?.checked_in || (selectedRes?.check_in && selectedRes.check_in <= new Date().toLocaleDateString('sv-SE'))) && (
+                              <button
+                                onClick={() => {
+                                  setExtensionNights(1);
+                                  setExtensionCustomPrice('');
+                                  setExtensionRegisterPayment(true);
+                                  setExtensionPaymentMethod(null);
+                                  setExtensionAccountId('');
+                                  setShowExtensionFlow(true);
+                                  setShowAbonoFlow(false);
+                                }}
+                                className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[13px] rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-blue-600/10 cursor-pointer text-center"
+                              >
+                                🗓️ Extender Estancia
+                              </button>
+                            )}
                           </div>
-                        )}
+                          {isOtaRes && (
+                            <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-xl leading-normal text-left flex gap-2">
+                              <span className="shrink-0 text-[13px]">⚠️</span>
+                              <span>
+                                Las modificaciones de fechas y extensiones de estancia para reservas de OTA (Airbnb, Booking.com, Expedia) deben realizarse directamente en la plataforma de origen.
+                              </span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
