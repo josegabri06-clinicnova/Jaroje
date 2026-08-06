@@ -644,6 +644,11 @@ export default function RecepcionPage() {
   const [kpiModalType, setKpiModalType] = useState<'encasa' | 'llegan' | 'salen' | 'disponibles' | 'programada' | 'checkout' | 'terminada' | null>(null);
   const [selectedReserva, setSelectedReserva] = useState<Reserva | null>(null);
 
+  const isOtaRes = useMemo(() => {
+    if (!selectedReserva) return false;
+    return selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => selectedReserva.channel.toLowerCase().includes(c));
+  }, [selectedReserva]);
+
   // Estados para reasignar y editar reservas existentes en Recepción
   const [editedPhone, setEditedPhone] = useState('');
   const [editedAdults, setEditedAdults] = useState(1);
@@ -6417,7 +6422,7 @@ export default function RecepcionPage() {
                               💰 Registrar Anticipo
                             </button>
                           )}
-                          {(getRole() === 'admin' || selectedReserva.checked_in || (selectedReserva.check_in && selectedReserva.check_in <= (todayStr || new Date().toLocaleDateString('sv-SE')))) && (
+                          {!isOtaRes && (getRole() === 'admin' || selectedReserva.checked_in || (selectedReserva.check_in && selectedReserva.check_in <= (todayStr || new Date().toLocaleDateString('sv-SE')))) && (
                             <button
                               onClick={() => {
                                 setExtensionNights(1);
@@ -6434,6 +6439,14 @@ export default function RecepcionPage() {
                             </button>
                           )}
                         </div>
+                        {isOtaRes && (
+                          <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-xl leading-normal text-left flex gap-2">
+                            <span className="shrink-0 text-[13px]">⚠️</span>
+                            <span>
+                              Las modificaciones de fechas y extensiones de estancia para reservas de OTA (Airbnb, Booking.com, Expedia) deben realizarse directamente en la plataforma de origen.
+                            </span>
+                          </div>
+                        )}
                       )}
                     </div>
                   )}
@@ -7421,20 +7434,27 @@ export default function RecepcionPage() {
 
             {selectedReserva.checked_in && (
               <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
-                <button
-                  onClick={() => {
-                    setExtensionNights(1);
-                    setExtensionCustomPrice('');
-                    setExtensionRegisterPayment(true);
-                    setExtensionPaymentMethod(null);
-                    setExtensionAccountId('');
-                    setShowExtensionFlow(true);
-                    setShowAbonoFlow(false);
-                  }}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in duration-200"
-                >
-                  <CheckCircle2 size={18} /> En Casa (Extender Estancia 🗓️)
-                </button>
+                {!isOtaRes ? (
+                  <button
+                    onClick={() => {
+                      setExtensionNights(1);
+                      setExtensionCustomPrice('');
+                      setExtensionRegisterPayment(true);
+                      setExtensionPaymentMethod(null);
+                      setExtensionAccountId('');
+                      setShowExtensionFlow(true);
+                      setShowAbonoFlow(false);
+                    }}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in duration-200"
+                  >
+                    <CheckCircle2 size={18} /> En Casa (Extender Estancia 🗓️)
+                  </button>
+                ) : (
+                  <div className="w-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 select-none">
+                    <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                    <span>Huésped en Casa (Reserva de OTA)</span>
+                  </div>
+                )}
               </div>
             )}
           </div>
