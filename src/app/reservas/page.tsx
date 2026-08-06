@@ -1415,7 +1415,7 @@ export default function ReservasList() {
   const siblingBookings = useMemo(() => {
     if (!selectedRes) return [];
     if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
-      return selectedRes.group_members.filter(m => String(m.id) !== String(selectedRes.id));
+      return selectedRes.group_members.filter((m: any) => String(m.id) !== String(selectedRes.id));
     }
     const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
     const mainName = cleanStr(selectedRes.guest_name || '');
@@ -1443,11 +1443,11 @@ export default function ReservasList() {
   const isOtaRoom = (r: any) => ['Airbnb', 'Booking.com'].includes(r.channel || '');
 
   const directGroupBookings = useMemo(() => {
-    return groupBookings.filter(r => !isOtaRoom(r));
+    return groupBookings.filter((r: any) => !isOtaRoom(r));
   }, [groupBookings]);
 
   const directGroupTotalBalance = useMemo(() => {
-    return directGroupBookings.reduce((sum, r) => {
+    return directGroupBookings.reduce((sum: number, r: any) => {
       const bal = r.balance !== undefined ? r.balance : Math.max(0, (r.price_estimate || 0) - (r.deposit || 0));
       return sum + bal;
     }, 0);
@@ -1839,7 +1839,7 @@ export default function ReservasList() {
         }
       }
 
-      const mainBooking = directGroupBookings.find(b => String(b.id) === String(selectedRes.id));
+      const mainBooking = directGroupBookings.find((b: any) => String(b.id) === String(selectedRes.id));
       if (mainBooking) {
         const mainBalance = mainBooking.balance !== undefined ? mainBooking.balance : Math.max(0, (mainBooking.price_estimate || 0) - (mainBooking.deposit || 0));
         const mainProportion = totalBalance > 0 ? mainBalance / totalBalance : 1 / directGroupBookings.length;
@@ -2156,10 +2156,10 @@ export default function ReservasList() {
             setSelectedRes((prev: any) => {
               if (!prev) return null;
               if (prev.is_group_card) {
-                const consolidatedRoomNames = remainingMembers.map(m => m.room_name || m.room).filter(Boolean).join(', ');
-                const consolidatedPrice = remainingMembers.reduce((sum, m) => sum + Number(m.price_estimate || m.price || 0), 0);
-                const consolidatedDeposit = remainingMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
-                const consolidatedBalance = remainingMembers.reduce((sum, m) => {
+                const consolidatedRoomNames = remainingMembers.map((m: any) => m.room_name || m.room).filter(Boolean).join(', ');
+                const consolidatedPrice = remainingMembers.reduce((sum: number, m: any) => sum + Number(m.price_estimate || m.price || 0), 0);
+                const consolidatedDeposit = remainingMembers.reduce((sum: number, m: any) => sum + Number(m.deposit || 0), 0);
+                const consolidatedBalance = remainingMembers.reduce((sum: number, m: any) => {
                   const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
                   const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
                   return sum + bBal;
@@ -2862,7 +2862,7 @@ export default function ReservasList() {
                 </h3>
                 <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">
                   {siblingBookings.length > 0
-                    ? `IDs del Grupo: ${groupBookings.map(b => b.id).join(', ')}`
+                    ? `IDs del Grupo: ${groupBookings.map((b: any) => b.id).join(', ')}`
                     : `ID: ${selectedRes.id || selectedRes.room_id || 'N/A'}`}
                 </p>
               </div>
@@ -3979,8 +3979,8 @@ export default function ReservasList() {
 
                   {/* Banner de Grupo — siempre visible si hay hermanas */}
                   {siblingBookings.length > 0 && (() => {
-                    const totalGroupBalance = groupBookings.reduce((sum, b) => {
-                      const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
+                    const totalGroupBalance = groupBookings.reduce((sum: number, b: any) => {
+                      const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
                       const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
                       return sum + bBal;
                     }, 0);
@@ -4009,8 +4009,8 @@ export default function ReservasList() {
                           </div>
                         </div>
                         <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
-                          {groupBookings.map(b => {
-                            const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
+                          {groupBookings.map((b: any) => {
+                            const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
                             const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
                             const isCurrent = String(b.id) === String(selectedRes.id);
                             return (
@@ -4019,7 +4019,6 @@ export default function ReservasList() {
                                   <BedDouble size={11} className="text-blue-500 shrink-0" />
                                   {b.room_name || b.room}
                                   {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
-                                  {/* Huéspedes de la habitación */}
                                   {(() => {
                                     const total = (b.num_adult || 0) + (b.num_child || 0);
                                     if (total === 0) return null;
@@ -4090,7 +4089,7 @@ export default function ReservasList() {
                         <>
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total del Grupo (Consolidado)</span>
                           <p className="text-[15px] font-black text-zinc-950 mt-0.5">
-                            {fmtCurrency(groupBookings.reduce((sum, b) => sum + Number(b.price_estimate || b.price || 0), 0), selectedRes.guest_name)}
+                            {fmtCurrency(groupBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0), selectedRes.guest_name)}
                           </p>
                           <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)})</span>
                         </>
@@ -4149,7 +4148,7 @@ export default function ReservasList() {
                         <>
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo Total del Grupo</span>
                           <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                            {fmtCurrency(groupBookings.reduce((sum, b) => sum + Number(b.deposit || 0), 0), selectedRes.guest_name)}
+                            {fmtCurrency(groupBookings.reduce((sum: number, b: any) => sum + Number(b.deposit || 0), 0), selectedRes.guest_name)}
                           </p>
                           <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)})</span>
                         </>
@@ -4174,8 +4173,8 @@ export default function ReservasList() {
                         let balanceVal = (isOta || isCheckedIn) ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
 
                         if (isGroup) {
-                          const totalGroupPrice = groupBookings.reduce((sum, b) => sum + (Number(b.price_estimate) || Number(b.price) || 0), 0);
-                          const totalGroupDeposit = groupBookings.reduce((sum, b) => sum + (Number(b.deposit) || 0), 0);
+                          const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + (Number(b.price_estimate) || Number(b.price) || 0), 0);
+                          const totalGroupDeposit = groupBookings.reduce((sum: number, b: any) => sum + (Number(b.deposit) || 0), 0);
                           balanceVal = Math.max(0, totalGroupPrice - totalGroupDeposit);
                         }
 
@@ -4677,20 +4676,20 @@ export default function ReservasList() {
                           {siblingBookings.length > 0 && (
                             <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 space-y-2.5 animate-in fade-in duration-200">
                               <p className="text-[11px] font-bold text-blue-800 leading-snug">
-                                🏨 Grupo detectado: <span className="font-extrabold">{siblingBookings.length + 1} habitaciones</span> (Hab. {groupBookings.map(b => b.room_name || b.room).join(', ')})
+                                🏨 Grupo detectado: <span className="font-extrabold">{siblingBookings.length + 1} habitaciones</span> (Hab. {groupBookings.map((b: any) => b.room_name || b.room).join(', ')})
                               </p>
                               <div className="flex gap-1.5">
                                 <button
                                   type="button"
                                   onClick={() => { setAbonoGrupalMode(false); setAbonoAmount(''); }}
-                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${!abonoGrupalMode ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}`}
+                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${!abonoGrupalMode ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-650 border-zinc-200 hover:bg-zinc-50'}`}
                                 >
                                   Solo esta hab.
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => { setAbonoGrupalMode(true); setAbonoAmount(''); }}
-                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${abonoGrupalMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'}`}
+                                  className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-extrabold border transition-all cursor-pointer ${abonoGrupalMode ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-zinc-650 border-zinc-200 hover:bg-zinc-50'}`}
                                 >
                                   Distribuir en grupo ({siblingBookings.length + 1} hab.)
                                 </button>
@@ -5018,7 +5017,7 @@ export default function ReservasList() {
                       alert('❌ Error: Solo los administradores pueden cancelar reservas.');
                       return;
                     }
-                    setCancelSelectedIds(groupBookings.map(b => String(b.id)));
+                    setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
                     setShowCancelModal(true);
                   }}
                   disabled={cancelLoading}
@@ -5144,7 +5143,7 @@ export default function ReservasList() {
                       if (allSelected) {
                         setCancelSelectedIds([]);
                       } else {
-                        setCancelSelectedIds(groupBookings.map(b => String(b.id)));
+                        setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
                       }
                     }}
                     className="text-[11.5px] font-extrabold text-indigo-600 hover:text-indigo-750 transition-colors uppercase tracking-wider cursor-pointer border-none bg-transparent"
