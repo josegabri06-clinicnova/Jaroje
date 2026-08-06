@@ -2084,39 +2084,7 @@ function ReservasListInner() {
         }
       }
 
-      // Enviar plantilla de WhatsApp correspondiente según canal y depósito
-      const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
-      if (phoneNum) {
-        try {
-          const isOta = targetRes.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => targetRes.channel.toLowerCase().includes(c));
-
-          // Si es reserva nueva de OTA -> Mensaje 3 (reservacion_confirmada)
-          // Si es Directa/Google/Bot sin anticipo -> Mensaje 1 (solicitud_recibida)
-          const targetTemplate = isOta ? 'reservacion_confirmada' : 'solicitud_recibida';
-
-          const waRes = await fetch('/api/whatsapp/send-template', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              template: targetTemplate,
-              booking: targetRes
-            })
-          });
-          const waData = await waRes.json();
-          if (!waRes.ok) {
-            console.error("Error al enviar WhatsApp:", waData.error);
-            alert(`✅ Reserva marcada como revisada.\n⚠️ Nota: No se pudo enviar el WhatsApp (${waData.error || 'error de Meta API'}).`);
-          } else {
-            const msgName = targetTemplate === 'solicitud_recibida' ? 'Mensaje 1 (Solicitud Recibida)' : 'Mensaje 3 (Confirmación)';
-            alert(`✅ Reserva revisada y ${msgName} enviado por WhatsApp con éxito.`);
-          }
-        } catch (waErr) {
-          console.error("Error de red enviando WhatsApp:", waErr);
-          alert('✅ Reserva marcada como revisada.\n⚠️ Nota: Error de red al enviar el WhatsApp.');
-        }
-      } else {
-        alert('✅ Reserva marcada como revisada (la reserva no tiene teléfono registrado).');
-      }
+      alert('✅ Reserva marcada como revisada con éxito.');
 
     } catch (err: any) {
       console.error(err);

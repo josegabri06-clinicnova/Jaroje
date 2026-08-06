@@ -1296,7 +1296,12 @@ export default function PublicReservaPage() {
     <div className="min-h-screen bg-[#F6F5F2] text-zinc-900 pb-16 font-sans">
       {/* Header Premium */}
       <header className="bg-zinc-900 text-white text-center py-7 px-4 shadow-md relative overflow-hidden flex flex-col items-center">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent)] pointer-events-none" />
+        {/* Logotipo Oficial */}
+        <img 
+          src="/logo-jaroje.png" 
+          alt="Jaroje Condominios" 
+          className="h-16 md:h-20 object-contain mb-3" 
+        />
 
         <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-amber-100">{t.title}</h1>
         <p className="text-zinc-400 text-[10.5px] mt-1 font-medium tracking-wide uppercase">{t.subtitle}</p>
