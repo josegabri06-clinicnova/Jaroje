@@ -532,7 +532,7 @@ function ReservasListInner() {
     const oldPVal = Number(reassigningRes.price_estimate || reassigningRes.price || 0);
     const oldP = oldPVal.toLocaleString('es-MX');
 
-    if (!confirm(`¿Confirmas reasignar la reserva de ${reassigningRes.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá completamente congelada sin cambios.`)) {
+    if (!confirm(`¿Confirmas reasignar la reserva de ${reassigningRes.guest_name || ''} a la Habitación ${targetRoomName}?`)) {
       return;
     }
 
@@ -543,14 +543,18 @@ function ReservasListInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: reassigningRes.id,
-          roomName: targetRoomName,
-          price: oldPVal
+          roomName: targetRoomName
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}. La tarifa de MX$${oldP} se mantuvo sin cambios.`);
+      if (data.recalculated_price) {
+        const newPriceFmt = Number(data.recalculated_price).toLocaleString('es-MX');
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\nLa tarifa se actualizó a MX$${newPriceFmt} debido al cambio de categoría.`);
+      } else {
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}. La tarifa original de MX$${oldP} se mantuvo congelada.`);
+      }
 
       // Registrar log de reasignación
       try {
