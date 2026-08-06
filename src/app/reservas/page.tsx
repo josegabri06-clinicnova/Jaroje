@@ -2237,16 +2237,16 @@ export default function ReservasList() {
     reservationsList.forEach(r => {
       if (processedIds.has(String(r.id))) return;
 
-      const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
-      const mainName = cleanStr(r.guest_name || '');
-      const mainPhone = (r.guest_phone || r.phone || r.mobile || '').trim();
+      const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const mainName = cleanStr(r.guest_name);
+      const mainPhone = String(r.guest_phone || r.phone || r.mobile || '').trim();
 
       const siblings = reservationsList.filter(o => {
         if (String(o.id) === String(r.id)) return false;
         if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
         if (o.status !== r.status) return false;
         
-        const oPhone = (o.guest_phone || o.phone || o.mobile || '').trim();
+        const oPhone = String(o.guest_phone || o.phone || o.mobile || '').trim();
         const samePhone = mainPhone && oPhone && oPhone === mainPhone && mainPhone.length >= 6;
         const sameName = mainName && o.guest_name && (cleanStr(o.guest_name).includes(mainName) || mainName.includes(cleanStr(o.guest_name)));
         return samePhone || sameName;
