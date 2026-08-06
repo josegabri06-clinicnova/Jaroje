@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Plus, CheckCircle2, AlertTriangle, Wrench, Sparkles, X, Edit2, Download, Upload, Trash2, Bell, Camera, Image as ImageIcon } from 'lucide-react';
+import { Plus, CheckCircle2, AlertTriangle, Wrench, Sparkles, X, Edit2, Download, Upload, Trash2, Bell, Camera, Video, Image as ImageIcon } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -1406,30 +1406,31 @@ export default function MantenimientoPage() {
                       <button
                         type="button"
                         onClick={() => setShowCameraModal('create')}
-                        className="flex-1 py-3 px-4 bg-zinc-700 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                        className="flex-1 py-3 px-4 bg-zinc-700 text-white font-bold rounded-2xl hover:bg-zinc-855 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                       >
                         <Video size={15} />
                         <span>Cámara Web 💻</span>
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => fileGalleryInputRef.current?.click()}
-                      className="w-full py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                    >
-                      <Upload size={15} className="text-zinc-500" />
-                      <span>Cargar de Galería / Archivo 📁</span>
-                    </button>
-                  </div>
-                    {photoFile && (
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => setPhotoFile(null)}
-                        className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                        onClick={() => fileGalleryInputRef.current?.click()}
+                        className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                       >
-                        Eliminar
+                        <Upload size={15} className="text-zinc-500" />
+                        <span>Cargar de Galería / Archivo 📁</span>
                       </button>
-                    )}
+                      {photoFile && (
+                        <button
+                          type="button"
+                          onClick={() => setPhotoFile(null)}
+                          className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {photoFile && (
                     <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
@@ -1574,24 +1575,25 @@ export default function MantenimientoPage() {
                         <span>Cámara Web 💻</span>
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => editResolutionGalleryFileInputRef.current?.click()}
-                      className="w-full py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                    >
-                      <Upload size={15} className="text-zinc-500" />
-                      <span>Cargar de Galería / Archivo 📁</span>
-                    </button>
-                  </div>
-                    {resolutionPhotoFile && (
+                    <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => setResolutionPhotoFile(null)}
-                        className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                        onClick={() => editResolutionGalleryFileInputRef.current?.click()}
+                        className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                       >
-                        Eliminar
+                        <Upload size={15} className="text-zinc-500" />
+                        <span>Cargar de Galería / Archivo 📁</span>
                       </button>
-                    )}
+                      {resolutionPhotoFile && (
+                        <button
+                          type="button"
+                          onClick={() => setResolutionPhotoFile(null)}
+                          className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </div>
                   {resolutionPhotoFile && (
                     <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
@@ -1703,24 +1705,25 @@ export default function MantenimientoPage() {
                       <span>Cámara Web 💻</span>
                     </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => resolutionGalleryFileInputRef.current?.click()}
-                    className="w-full py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Upload size={15} className="text-zinc-500" />
-                    <span>Cargar de Galería / Archivo 📁</span>
-                  </button>
-                </div>
-                  {resolvePhotoFile && (
+                  <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setResolvePhotoFile(null)}
-                      className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                      onClick={() => resolutionGalleryFileInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                     >
-                      Eliminar
+                      <Upload size={15} className="text-zinc-500" />
+                      <span>Cargar de Galería / Archivo 📁</span>
                     </button>
-                  )}
+                    {resolvePhotoFile && (
+                      <button
+                        type="button"
+                        onClick={() => setResolvePhotoFile(null)}
+                        className="px-4 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-2xl transition-colors font-bold text-[12px] border border-rose-200"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
                 </div>
                 {resolvePhotoFile && (
                   <p className="text-[12px] text-zinc-500 mt-2 font-medium bg-zinc-50 border border-zinc-200/50 p-2.5 rounded-xl truncate">
