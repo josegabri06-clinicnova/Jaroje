@@ -357,7 +357,7 @@ export function getLengthOfStayMultiplier(nights: number, customDiscounts?: { ni
 
 // Modificador por canal
 export function getChannelMultiplier(referer: string, customMultipliers?: { airbnb?: number; booking?: number; directo?: number }): number {
-  const r = (referer || '').toLowerCase();
+  const r = String(referer || '').toLowerCase();
   const multAirbnb = customMultipliers?.airbnb !== undefined ? customMultipliers.airbnb : 1.20;
   const multBooking = customMultipliers?.booking !== undefined ? customMultipliers.booking : 1.35;
   const multDirecto = customMultipliers?.directo !== undefined ? customMultipliers.directo : 1.00;
@@ -462,7 +462,7 @@ export function getRealPrice(
 // Obtener metadata de la habitación
 export function getRoomMetadata(roomId: string | null | undefined, roomName: string | null | undefined) {
   const id = String(roomId || '');
-  const lowerName = (roomName || '').toLowerCase();
+  const lowerName = String(roomName || '').toLowerCase();
 
   if (id === '685542') {
     if (
@@ -1535,10 +1535,10 @@ export async function addBeds24GroupPayment(
  * Retorna las reglas de capacidad de una habitación específica por su nombre o ID.
  */
 export function getCapacityRules(
-  roomNameOrId: string,
+  roomNameOrId: any,
   customSettings?: Record<string, { base: number; max: number }>
 ): { base: number; max: number } {
-  const r = (roomNameOrId || '').toLowerCase().trim();
+  const r = String(roomNameOrId || '').toLowerCase().trim();
 
   if (customSettings && r) {
     // Para las habitaciones locales 500-507 (roomId 685542), distinguir por unitId si viene en el ID
