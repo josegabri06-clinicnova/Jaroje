@@ -6453,22 +6453,35 @@ export default function RecepcionPage() {
                     className="border border-zinc-200 bg-zinc-50 rounded-2xl p-4.5 flex flex-col gap-3"
                   >
                     <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest text-center">Subir Identificación</span>
-                    <div className="flex gap-2.5 w-full">
-                      <button
-                        type="button"
-                        onClick={() => setShowCameraModal(true)}
-                        className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                      >
-                        <Camera size={15} /> Cámara (Interna)
-                      </button>
+                    <div className="flex flex-col gap-2 w-full">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileCameraRef.current?.click()}
+                          className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                        >
+                          <Camera size={15} /> Cámara Nativa 📸
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowCameraModal(true)}
+                          className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-800 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                        >
+                          <Video size={15} /> Cámara Web 💻
+                        </button>
+                      </div>
                       <button
                         type="button"
                         onClick={() => fileGalleryRef.current?.click()}
-                        className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
+                        className="w-full py-3 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
                       >
-                        <Upload size={14} className="text-zinc-500" /> Cargar Foto / Archivo
+                        <Upload size={14} className="text-zinc-500" /> Cargar de Galería / PDF 📁
                       </button>
                     </div>
+                    <input
+                      type="file" accept="image/*" capture="environment"
+                      ref={fileCameraRef} onChange={handleDniUpload} className="hidden"
+                    />
                     <input
                       type="file" accept="image/*,application/pdf"
                       ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"
@@ -6482,49 +6495,64 @@ export default function RecepcionPage() {
                     >
                       <img src={dniPreview} alt="DNI Preview" className="w-full h-36 object-cover" />
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowCameraModal(true)}
-                        className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                      >
-                        <Camera size={14} /> Cámara (Interna)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => fileGalleryRef.current?.click()}
-                        className="flex-1 py-2.5 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
-                      >
-                        <Upload size={14} className="text-zinc-500" /> Cargar Foto / Archivo
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          if (window.confirm('¿Estás seguro de que deseas eliminar la identificación actual?')) {
-                            if (selectedReserva.checked_in) {
-                              try {
-                                const { error: deleteErr } = await supabase
-                                  .from('checkins')
-                                  .update({ document_url: null })
-                                  .eq('reservation_id', String(selectedReserva.id).toLowerCase().trim());
-                                if (deleteErr) throw deleteErr;
-                                setSelectedReserva(prev => prev ? { ...prev, dni_image: undefined } : null);
-                                setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: undefined } : r));
-                                alert('✅ Identificación eliminada.');
-                              } catch (err: any) {
-                                alert('Error al eliminar: ' + err.message);
+                    <div className="flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileCameraRef.current?.click()}
+                          className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                        >
+                          <Camera size={13} /> Cámara Nativa 📸
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowCameraModal(true)}
+                          className="flex-1 py-2.5 bg-zinc-700 hover:bg-zinc-850 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                        >
+                          <Video size={13} /> Cámara Web 💻
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => fileGalleryRef.current?.click()}
+                          className="flex-1 py-2.5 bg-white border border-zinc-200 text-zinc-800 text-[11px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
+                        >
+                          <Upload size={13} className="text-zinc-500" /> Galería / PDF 📁
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (window.confirm('¿Estás seguro de que deseas eliminar la identificación actual?')) {
+                              if (selectedReserva.checked_in) {
+                                try {
+                                  const { error: deleteErr } = await supabase
+                                    .from('checkins')
+                                    .update({ document_url: null })
+                                    .eq('reservation_id', String(selectedReserva.id).toLowerCase().trim());
+                                  if (deleteErr) throw deleteErr;
+                                  setSelectedReserva(prev => prev ? { ...prev, dni_image: undefined } : null);
+                                  setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: undefined } : r));
+                                  alert('✅ Identificación eliminada.');
+                                } catch (err: any) {
+                                  alert('Error al eliminar: ' + err.message);
+                                }
                               }
+                              setDniPreview(null);
+                              setDniFile(null);
                             }
-                            setDniPreview(null);
-                            setDniFile(null);
-                          }
-                        }}
-                        className="px-3.5 bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                          }}
+                          className="px-3 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
                     {/* Hidden inputs for change upload */}
+                    <input
+                      type="file" accept="image/*" capture="environment"
+                      ref={fileCameraRef} onChange={handleDniUpload} className="hidden"
+                    />
                     <input
                       type="file" accept="image/*,application/pdf"
                       ref={fileGalleryRef} onChange={handleDniUpload} className="hidden"

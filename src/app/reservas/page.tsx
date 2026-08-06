@@ -214,7 +214,8 @@ function ReservasListInner() {
   }, [showPaymentFlow, selectedRes]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
-  const docInputRef = useRef<HTMLInputElement>(null);
+  const docInputCameraRef = useRef<HTMLInputElement>(null);
+  const docInputGalleryRef = useRef<HTMLInputElement>(null);
 
   const [reassigningRes, setReassigningRes] = useState<any | null>(null);
   const [isReassigning, setIsReassigning] = useState(false);
@@ -3268,9 +3269,8 @@ function ReservasListInner() {
                     <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-2">
                       Identificación (DNI/Pasaporte)
                     </label>
-                    <div className="relative">
                       <input 
-                        ref={docInputRef}
+                        ref={docInputCameraRef}
                         type="file"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
@@ -3281,14 +3281,39 @@ function ReservasListInner() {
                         }}
                         className="hidden"
                         accept="image/*"
+                        capture="environment"
+                      />
+                      <input 
+                        ref={docInputGalleryRef}
+                        type="file"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          const b64 = await compressImage(file);
+                          setDniPreview(b64);
+                          setDocumentFile(file);
+                        }}
+                        className="hidden"
+                        accept="image/*,application/pdf"
                       />
                       {!dniPreview ? (
-                        <div
-                          onClick={() => docInputRef.current?.click()}
-                          className="border-2 border-dashed border-zinc-200 hover:border-zinc-400 bg-zinc-50 hover:bg-zinc-100 rounded-2xl h-24 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all"
-                        >
-                          <Camera size={20} className="text-zinc-400" />
-                          <span className="text-[12px] font-bold text-zinc-500">Tomar foto / Cargar archivo</span>
+                        <div className="flex gap-2.5 h-20">
+                          <button
+                            type="button"
+                            onClick={() => docInputCameraRef.current?.click()}
+                            className="flex-1 border-2 border-dashed border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100 bg-zinc-50 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-all outline-none"
+                          >
+                            <Camera size={18} className="text-zinc-500" />
+                            <span className="text-[11px] font-extrabold text-zinc-700">Tomar Foto 📸</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => docInputGalleryRef.current?.click()}
+                            className="flex-1 border-2 border-dashed border-zinc-200 hover:border-zinc-300 hover:bg-zinc-100 bg-zinc-50 rounded-2xl flex flex-col items-center justify-center gap-1 cursor-pointer transition-all outline-none"
+                          >
+                            <Upload size={18} className="text-zinc-500" />
+                            <span className="text-[11px] font-extrabold text-zinc-700">Subir Archivo 📁</span>
+                          </button>
                         </div>
                       ) : (
                         <div className="space-y-2 animate-in fade-in duration-200">
@@ -3301,10 +3326,17 @@ function ReservasListInner() {
                           <div className="flex gap-2">
                             <button
                               type="button"
-                              onClick={() => docInputRef.current?.click()}
-                              className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                              onClick={() => docInputCameraRef.current?.click()}
+                              className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer active:scale-98"
                             >
-                              <Camera size={14} /> Cambiar Identificación
+                              <Camera size={13} /> Cámara 📸
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => docInputGalleryRef.current?.click()}
+                              className="flex-1 py-2.5 bg-white border border-zinc-200 text-zinc-700 hover:bg-zinc-50 text-[11px] font-extrabold rounded-xl transition-all shadow-sm flex items-center justify-center gap-1 cursor-pointer active:scale-98"
+                            >
+                              <Upload size={13} /> Galería 📁
                             </button>
                             <button
                               type="button"
@@ -3314,14 +3346,13 @@ function ReservasListInner() {
                                   setDocumentFile(null);
                                 }
                               }}
-                              className="px-3.5 bg-red-50 border border-red-200 text-red-650 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
+                              className="px-3 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
                             >
-                              <Trash2 size={14} />
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         </div>
                       )}
-                    </div>
                   </div>
 
                   {/* SELECCIÓN DE HABITACIONES A REGISTRAR (CHECK-IN) */}

@@ -1379,29 +1379,48 @@ export default function MantenimientoPage() {
                 <div>
                   <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Incidencia (Opcional)</label>
                   <input 
+                    ref={fileCameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={e => setPhotoFile(e.target.files ? e.target.files[0] : null)}
+                    className="hidden"
+                  />
+                  <input 
                     ref={fileGalleryInputRef}
                     type="file"
                     accept="image/*,application/pdf"
                     onChange={e => setPhotoFile(e.target.files ? e.target.files[0] : null)}
                     className="hidden"
                   />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowCameraModal('create')}
-                      className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                    >
-                      <Camera size={16} />
-                      <span>Cámara (Interna)</span>
-                    </button>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileCameraInputRef.current?.click()}
+                        className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <Camera size={15} />
+                        <span>Cámara Nativa 📸</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCameraModal('create')}
+                        className="flex-1 py-3 px-4 bg-zinc-700 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <Video size={15} />
+                        <span>Cámara Web 💻</span>
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => fileGalleryInputRef.current?.click()}
-                      className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                      className="w-full py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                     >
-                      <Upload size={16} />
-                      <span>Cargar Foto / Archivo</span>
+                      <Upload size={15} className="text-zinc-500" />
+                      <span>Cargar de Galería / Archivo 📁</span>
                     </button>
+                  </div>
                     {photoFile && (
                       <button
                         type="button"
@@ -1522,29 +1541,48 @@ export default function MantenimientoPage() {
                     </a>
                   ) : null}
                   <input 
+                    ref={editResolutionCameraFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={e => setResolutionPhotoFile(e.target.files ? e.target.files[0] : null)}
+                    className="hidden"
+                  />
+                  <input 
                     ref={editResolutionGalleryFileInputRef}
                     type="file"
                     accept="image/*,application/pdf"
                     onChange={e => setResolutionPhotoFile(e.target.files ? e.target.files[0] : null)}
                     className="hidden"
                   />
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowCameraModal('edit')}
-                      className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                    >
-                      <Camera size={16} />
-                      <span>Cámara (Interna)</span>
-                    </button>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => editResolutionCameraFileInputRef.current?.click()}
+                        className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-2xl active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <Camera size={15} />
+                        <span>Cámara Nativa 📸</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowCameraModal('edit')}
+                        className="flex-1 py-3 px-4 bg-zinc-700 hover:bg-zinc-800 text-white font-bold rounded-2xl active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <Video size={15} />
+                        <span>Cámara Web 💻</span>
+                      </button>
+                    </div>
                     <button
                       type="button"
                       onClick={() => editResolutionGalleryFileInputRef.current?.click()}
-                      className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                      className="w-full py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                     >
-                      <Upload size={16} />
-                      <span>Cargar Foto / Archivo</span>
+                      <Upload size={15} className="text-zinc-500" />
+                      <span>Cargar de Galería / Archivo 📁</span>
                     </button>
+                  </div>
                     {resolutionPhotoFile && (
                       <button
                         type="button"
@@ -1632,29 +1670,48 @@ export default function MantenimientoPage() {
                   Foto de la Resolución (Opcional)
                 </label>
                 <input
+                  ref={resolutionCameraFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
+                  className="hidden"
+                />
+                <input
                   ref={resolutionGalleryFileInputRef}
                   type="file"
                   accept="image/*,application/pdf"
                   onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
                   className="hidden"
                 />
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowCameraModal('resolve')}
-                    className="flex-1 py-3 px-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-                  >
-                    <Camera size={16} />
-                    <span>Cámara (Interna)</span>
-                  </button>
+                <div className="flex flex-col gap-2">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => resolutionCameraFileInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Camera size={15} />
+                      <span>Cámara Nativa 📸</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowCameraModal('resolve')}
+                      className="flex-1 py-3 px-4 bg-zinc-700 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Video size={15} />
+                      <span>Cámara Web 💻</span>
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => resolutionGalleryFileInputRef.current?.click()}
-                    className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                    className="w-full py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                   >
-                    <Upload size={16} />
-                    <span>Cargar Foto / Archivo</span>
+                    <Upload size={15} className="text-zinc-500" />
+                    <span>Cargar de Galería / Archivo 📁</span>
                   </button>
+                </div>
                   {resolvePhotoFile && (
                     <button
                       type="button"
