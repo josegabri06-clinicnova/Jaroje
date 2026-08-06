@@ -1406,15 +1406,15 @@ export default function ReservasList() {
   // --- Grupo de reservas para anticipo grupal ---
   const siblingBookings = useMemo(() => {
     if (!selectedRes) return [];
-    const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
+    const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
     const mainName = cleanStr(selectedRes.guest_name || '');
-    const mainPhone = (selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '').trim();
+    const mainPhone = String(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '').trim();
     return reservas.filter(r => {
       if (r.id === selectedRes.id) return false;
       if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
       if (r.status === 'cancelled' || r.status === '0') return false;
       
-      const rPhone = (r.guest_phone || r.phone || r.mobile || '').trim();
+      const rPhone = String(r.guest_phone || r.phone || r.mobile || '').trim();
       const samePhone = mainPhone && rPhone && rPhone === mainPhone && mainPhone.length >= 6;
       const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
       return samePhone || sameName;
