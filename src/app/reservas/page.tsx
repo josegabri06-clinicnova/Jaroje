@@ -2084,7 +2084,37 @@ function ReservasListInner() {
         }
       }
 
-      alert('✅ Reserva marcada como revisada con éxito.');
+      const isOta = targetRes.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => targetRes.channel.toLowerCase().includes(c));
+
+      if (isOta) {
+        alert('✅ Reserva marcada como revisada con éxito.');
+      } else {
+        const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
+        if (phoneNum) {
+          try {
+            const waRes = await fetch('/api/whatsapp/send-template', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                template: 'solicitud_recibida',
+                booking: targetRes
+              })
+            });
+            const waData = await waRes.json();
+            if (!waRes.ok) {
+              console.error("Error al enviar WhatsApp:", waData.error);
+              alert(`✅ Reserva marcada como revisada.\n⚠️ Nota: No se pudo enviar el WhatsApp de confirmación (${waData.error || 'error de Meta API'}).`);
+            } else {
+              alert(`✅ Reserva revisada y Mensaje de Solicitud Recibida enviado por WhatsApp con éxito.`);
+            }
+          } catch (waErr) {
+            console.error("Error de red enviando WhatsApp:", waErr);
+            alert('✅ Reserva marcada como revisada.\n⚠️ Nota: Error de red al enviar el WhatsApp.');
+          }
+        } else {
+          alert('✅ Reserva marcada como revisada (la reserva no tiene teléfono registrado).');
+        }
+      }
 
     } catch (err: any) {
       console.error(err);
