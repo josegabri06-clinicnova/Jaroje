@@ -183,6 +183,11 @@ function ReservasListInner() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [billingRequests, setBillingRequests] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
+  const isOtaRes = useMemo(() => {
+    if (!selectedRes || !selectedRes.channel) return false;
+    const ch = String(selectedRes.channel).toLowerCase();
+    return ['airbnb', 'booking', 'expedia'].some(c => ch.includes(c));
+  }, [selectedRes]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Todas');
   const [search, setSearch] = useState('');
@@ -4967,7 +4972,7 @@ function ReservasListInner() {
                               💰 Registrar Anticipo
                             </button>
                           )}
-                          {(getRole() === 'admin' || selectedRes?.checked_in || (selectedRes?.check_in && selectedRes.check_in <= new Date().toLocaleDateString('sv-SE'))) && (
+                          {!isOtaRes && (getRole() === 'admin' || selectedRes?.checked_in || (selectedRes?.check_in && selectedRes.check_in <= new Date().toLocaleDateString('sv-SE'))) && (
                             <button
                               onClick={() => {
                                 setExtensionNights(1);
@@ -4984,6 +4989,14 @@ function ReservasListInner() {
                             </button>
                           )}
                         </div>
+                        {isOtaRes && (
+                          <div className="mt-2.5 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium rounded-xl leading-normal text-left flex gap-2">
+                            <span className="shrink-0 text-[13px]">⚠️</span>
+                            <span>
+                              Las modificaciones de fechas y extensiones de estancia para reservas de OTA (Airbnb, Booking.com, Expedia) deben realizarse directamente en la plataforma de origen.
+                            </span>
+                          </div>
+                        )}
                       )}
                     </div>
                   )}
@@ -5009,20 +5022,27 @@ function ReservasListInner() {
               )}
               {isCheckedIn ? (
                 <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => {
-                      setExtensionNights(1);
-                      setExtensionCustomPrice('');
-                      setExtensionRegisterPayment(true);
-                      setExtensionPaymentMethod(null);
-                      setExtensionAccountId('');
-                      setShowExtensionFlow(true);
-                      setShowAbonoFlow(false);
-                    }}
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in duration-200"
-                  >
-                    <CheckCircle2 size={18} /> En Casa (Extender Estancia 🗓️)
-                  </button>
+                  {!isOtaRes ? (
+                    <button
+                      onClick={() => {
+                        setExtensionNights(1);
+                        setExtensionCustomPrice('');
+                        setExtensionRegisterPayment(true);
+                        setExtensionPaymentMethod(null);
+                        setExtensionAccountId('');
+                        setShowExtensionFlow(true);
+                        setShowAbonoFlow(false);
+                      }}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-emerald-600/10 cursor-pointer animate-in fade-in duration-200"
+                    >
+                      <CheckCircle2 size={18} /> En Casa (Extender Estancia 🗓️)
+                    </button>
+                  ) : (
+                    <div className="w-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 select-none">
+                      <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
+                      <span>Huésped en Casa (Reserva de OTA)</span>
+                    </div>
+                  )}
                   {selectedRes.document_url && (
                     userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
                       <div className="w-full bg-zinc-100 text-zinc-400 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 border border-zinc-200 select-none">
