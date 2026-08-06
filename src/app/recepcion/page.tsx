@@ -1912,10 +1912,15 @@ export default function RecepcionPage() {
   }, [searchParams, todayStr]);
 
   // Interceptar URL para Check-in / Check-out automáticos desde Admin Dashboard
+  // Interceptar URL para Check-in / Check-out automáticos desde Admin Dashboard (robusto a replaceState)
   useEffect(() => {
     if (reservas.length === 0) return;
-    const paramCheckin = searchParams.get('checkin');
-    const paramCheckout = searchParams.get('checkout');
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const paramCheckin = params.get('checkin');
+    const paramCheckout = params.get('checkout');
+
     if (paramCheckin) {
       const match = reservas.find(r => String(r.id) === String(paramCheckin));
       if (match && !match.checked_in) {

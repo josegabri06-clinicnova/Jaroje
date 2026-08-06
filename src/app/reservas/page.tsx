@@ -691,11 +691,19 @@ function ReservasListInner() {
 
   // 3. Sincronizar Estado local -> URL
   useEffect(() => {
-    if (typeof window !== 'undefined' && selectedRes) {
-      const currentUrlId = new URLSearchParams(window.location.search).get('id');
-      if (currentUrlId !== String(selectedRes.id)) {
-        window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
-        lastSearchId.current = String(selectedRes.id);
+    if (typeof window !== 'undefined') {
+      if (selectedRes) {
+        const currentUrlId = new URLSearchParams(window.location.search).get('id');
+        if (currentUrlId !== String(selectedRes.id)) {
+          window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
+          lastSearchId.current = String(selectedRes.id);
+        }
+      } else {
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('id')) {
+          window.history.replaceState(null, '', '/reservas');
+          lastSearchId.current = null;
+        }
       }
     }
   }, [selectedRes]);
