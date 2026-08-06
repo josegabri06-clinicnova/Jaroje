@@ -590,16 +590,12 @@ export default function ReservasList() {
     }
   };
 
-  // Efecto 1: Cuando el ?id de la URL cambia, primero limpiamos selectedRes
-  // para que el efecto 2 no sobreescriba la URL nueva con la ID vieja
+  // Cuando el ?id de la URL se vacía, cerramos la vista de detalles de reserva
   useEffect(() => {
     const searchId = searchParams.get('id');
-    // Si hay un id en la URL y selectedRes ya tiene un id DIFERENTE, lo limpiamos
-    // para evitar que el efecto de escritura de URL sobreescriba la nueva URL
-    if (searchId && selectedRes && String(selectedRes.id) !== String(searchId)) {
+    if (!searchId) {
       setSelectedRes(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   useEffect(() => {
