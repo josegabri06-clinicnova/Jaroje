@@ -212,6 +212,7 @@ function ReservasListInner() {
   const docInputRef = useRef<HTMLInputElement>(null);
 
   const [reassigningRes, setReassigningRes] = useState<any | null>(null);
+  const [isReassigning, setIsReassigning] = useState(false);
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
@@ -356,6 +357,7 @@ function ReservasListInner() {
       })();
     } else {
       setReassigningRes(null);
+      setIsReassigning(false);
       setTargetRoomName('');
       setAvailableRooms({});
       setIsEditingRes(false);
@@ -488,7 +490,7 @@ function ReservasListInner() {
 
   // Consultar disponibilidad real de habitaciones en las fechas de la reserva
   useEffect(() => {
-    if (reassigningRes && reassigningRes.check_in && reassigningRes.check_out) {
+    if (isReassigning && reassigningRes && reassigningRes.check_in && reassigningRes.check_out) {
       const fetchAvailability = async () => {
         setLoadingAvailability(true);
         try {
@@ -511,7 +513,7 @@ function ReservasListInner() {
       };
       fetchAvailability();
     }
-  }, [reassigningRes]);
+  }, [isReassigning, reassigningRes]);
 
   const handleReassignRoom = async () => {
     if (getRole() !== 'admin') {
@@ -578,6 +580,7 @@ function ReservasListInner() {
       }
 
       setReassigningRes(null);
+      setIsReassigning(false);
       setTargetRoomName('');
       
       // Actualizar estado local reactivo al vuelo para evitar tiempos de espera
@@ -4061,7 +4064,7 @@ function ReservasListInner() {
                       </div>
                       {getRole() === 'admin' && selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isReassigning && (
                         <button
-                          onClick={() => setIsReassigning(true)}
+                          onClick={() => { setIsReassigning(true); setReassigningRes(selectedRes); }}
                           className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                         >
                           Reasignar 🔀
@@ -4102,7 +4105,7 @@ function ReservasListInner() {
 
                         <div className="flex gap-2">
                           <button
-                            onClick={() => { setIsReassigning(false); setTargetRoomName(''); }}
+                            onClick={() => { setIsReassigning(false); setReassigningRes(null); setTargetRoomName(''); }}
                             className="flex-1 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 text-[12px] font-bold rounded-xl transition-all cursor-pointer"
                           >
                             Cancelar
