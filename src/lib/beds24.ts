@@ -1291,6 +1291,33 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         }
       }
       console.log(`[Beds24 Sync Lote] Sincronizadas con éxito ${upsertRows.length} reservas en Supabase.`);
+
+      // --- AUTOLIMPIEZA DE CANCELADAS/ELIMINADAS ---
+      const activeIds = new Set(mappedBookings.filter(b => b.status !== 'cancelled').map(b => String(b.id)));
+      
+      const { data: dbActiveInRange, error: dbErr } = await supabase
+        .from('beds24_reservations')
+        .select('id, guest_name, check_in')
+        .neq('status', 'cancelled')
+        .gte('check_in', arrivalFrom)
+        .lte('check_in', arrivalTo);
+
+      if (!dbErr && dbActiveInRange) {
+        const goneBookings = dbActiveInRange.filter(dbB => !activeIds.has(String(dbB.id)));
+        if (goneBookings.length > 0) {
+          console.log(`[Beds24 Sync Lote] 🔍 Detectadas ${goneBookings.length} reservas que ya no están activas en Beds24. Marcándolas como canceladas:`, goneBookings.map(b => `${b.guest_name} (ID: ${b.id})`));
+          
+          const goneIds = goneBookings.map(b => String(b.id));
+          const { error: updateErr } = await supabase
+            .from('beds24_reservations')
+            .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+            .in('id', goneIds);
+
+          if (updateErr) {
+            console.error(`[Beds24 Sync Lote] Error al actualizar estado de reservas canceladas/eliminadas:`, updateErr);
+          }
+        }
+      }
     } catch (upsertErr) {
       console.error("[Beds24 Sync Lote] Excepción al sincronizar en lote con Supabase:", upsertErr);
     }
