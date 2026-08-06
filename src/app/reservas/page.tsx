@@ -1414,11 +1414,14 @@ export default function ReservasList() {
   // --- Grupo de reservas para anticipo grupal ---
   const siblingBookings = useMemo(() => {
     if (!selectedRes) return [];
+    if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
+      return selectedRes.group_members.filter(m => String(m.id) !== String(selectedRes.id));
+    }
     const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
     const mainName = cleanStr(selectedRes.guest_name || '');
     const mainPhone = String(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '').trim();
     return reservas.filter(r => {
-      if (r.id === selectedRes.id) return false;
+      if (String(r.id) === String(selectedRes.id)) return false;
       if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
       if (r.status === 'cancelled' || r.status === '0') return false;
       
@@ -1431,6 +1434,9 @@ export default function ReservasList() {
 
   const groupBookings = useMemo(() => {
     if (!selectedRes) return [];
+    if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
+      return selectedRes.group_members;
+    }
     return [selectedRes, ...siblingBookings];
   }, [selectedRes, siblingBookings]);
 
