@@ -205,6 +205,11 @@ function ReservasListInner() {
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
 
+  const [showAcknowledgeGroupModal, setShowAcknowledgeGroupModal] = useState(false);
+  const [acknowledgeGroupMembers, setAcknowledgeGroupMembers] = useState<any[]>([]);
+  const [selectedAckMemberIds, setSelectedAckMemberIds] = useState<string[]>([]);
+  const [ackGroupTargetRes, setAckGroupTargetRes] = useState<any>(null);
+
   useEffect(() => {
     if (showPaymentFlow && selectedRes) {
       if (selectedRes.document_url) {
@@ -2024,18 +2029,12 @@ function ReservasListInner() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelSelectedIds, setCancelSelectedIds] = useState<string[]>([]);
 
-  const handleAcknowledgeReserva = async (resData?: any) => {
-    if (userRole !== 'admin') {
-      alert('🔒 Acción no autorizada. Solo los usuarios administradores pueden revisar reservas y enviar mensajes.');
-      return;
-    }
-    const targetRes = resData || selectedRes;
-    if (!targetRes) return;
+  const executeAcknowledge = async (membersToAck: any[], targetResForUpdate: any) => {
+    if (membersToAck.length === 0) return;
     setAckLoading(true);
     try {
-      const members = targetRes.group_members || [targetRes];
-      
-      for (const member of members) {
+      // 1. Guardar revisiones en Supabase
+      for (const member of membersToAck) {
         const { error } = await supabase.from('checkins').upsert({
           reservation_id: member.id.toString().toLowerCase().trim(),
           guest_name: member.guest_name,
@@ -2050,8 +2049,9 @@ function ReservasListInner() {
         if (error) throw error;
       }
 
-      const memberIds = new Set(members.map((m: any) => m.id));
+      const memberIds = new Set(membersToAck.map((m: any) => m.id));
 
+      // 2. Actualizar estado local
       if (selectedRes && memberIds.has(selectedRes.id)) {
         setSelectedRes((prev: any) => {
           if (!prev) return null;
@@ -2060,12 +2060,13 @@ function ReservasListInner() {
       }
       setReservas(prev => prev.map(r => memberIds.has(r.id) ? { ...r, is_acknowledged: true } : r));
 
+      // 3. Crear logs de recepcionista/admin
       const emp = getOperatorForLog();
       const employeeNum = emp.employee_num;
       const employeeName = emp.full_name;
       const employeeDept = emp.department;
 
-      for (const member of members) {
+      for (const member of membersToAck) {
         try {
           await fetch('/api/employee-logs', {
             method: 'POST',
@@ -2078,7 +2079,7 @@ function ReservasListInner() {
               action: 'reserva_enterado',
               room: member.room_name || member.room || 'General',
               details: JSON.stringify({
-                text: `${member.guest_name} ${member.num_adult || 1}/${member.num_child || 0} (ID: ${member.id}) de la Habitación ${member.room_name || member.room || 'General'} - Marcó la reserva como enterado${resData ? ' desde el listado' : ''}.`,
+                text: `${member.guest_name} ${member.num_adult || 1}/${member.num_child || 0} (ID: ${member.id}) de la Habitación ${member.room_name || member.room || 'General'} - Marcó la reserva como enterado.`,
                 bookingId: member.id,
                 guestName: member.guest_name
               })
@@ -2089,12 +2090,13 @@ function ReservasListInner() {
         }
       }
 
-      const isOta = targetRes.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => targetRes.channel.toLowerCase().includes(c));
+      // 4. Gestionar envío de plantilla WhatsApp (si aplica y no es OTA)
+      const isOta = targetResForUpdate.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => targetResForUpdate.channel.toLowerCase().includes(c));
 
       if (isOta) {
-        alert('✅ Reserva marcada como revisada con éxito.');
+        alert('✅ Reserva(s) marcada(s) como revisada(s) con éxito.');
       } else {
-        const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
+        const phoneNum = targetResForUpdate.phone || targetResForUpdate.mobile || targetResForUpdate.guest_phone || '';
         if (phoneNum) {
           try {
             const waRes = await fetch('/api/whatsapp/send-template', {
@@ -2102,22 +2104,22 @@ function ReservasListInner() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 template: 'solicitud_recibida',
-                booking: targetRes
+                booking: targetResForUpdate
               })
             });
             const waData = await waRes.json();
             if (!waRes.ok) {
               console.error("Error al enviar WhatsApp:", waData.error);
-              alert(`✅ Reserva marcada como revisada.\n⚠️ Nota: No se pudo enviar el WhatsApp de confirmación (${waData.error || 'error de Meta API'}).`);
+              alert(`✅ Reserva(s) marcada(s) como revisada(s).\n⚠️ Nota: No se pudo enviar el WhatsApp de confirmación (${waData.error || 'error de Meta API'}).`);
             } else {
-              alert(`✅ Reserva revisada y Mensaje de Solicitud Recibida enviado por WhatsApp con éxito.`);
+              alert(`✅ Reserva(s) revisada(s) y Mensaje de Solicitud Recibida enviado por WhatsApp con éxito.`);
             }
           } catch (waErr) {
             console.error("Error de red enviando WhatsApp:", waErr);
-            alert('✅ Reserva marcada como revisada.\n⚠️ Nota: Error de red al enviar el WhatsApp.');
+            alert('✅ Reserva(s) marcada(s) como revisada(s).\n⚠️ Nota: Error de red al enviar el WhatsApp.');
           }
         } else {
-          alert('✅ Reserva marcada como revisada (la reserva no tiene teléfono registrado).');
+          alert('✅ Reserva(s) marcada(s) como revisada(s) (el huésped no tiene teléfono registrado).');
         }
       }
 
@@ -2126,6 +2128,44 @@ function ReservasListInner() {
       alert(`❌ Error al marcar como revisada:\n\n${err.message}`);
     } finally {
       setAckLoading(false);
+      setShowAcknowledgeGroupModal(false);
+      setAcknowledgeGroupMembers([]);
+      setSelectedAckMemberIds([]);
+      setAckGroupTargetRes(null);
+    }
+  };
+
+  const handleAcknowledgeReserva = async (resData?: any) => {
+    if (userRole !== 'admin') {
+      alert('🔒 Acción no autorizada. Solo los usuarios administradores pueden revisar reservas y enviar mensajes.');
+      return;
+    }
+    const targetRes = resData || selectedRes;
+    if (!targetRes) return;
+
+    // Resolver miembros
+    let members = [targetRes];
+    if (resData && resData.is_group_card && Array.isArray(resData.group_members)) {
+      members = resData.group_members;
+    } else if (!resData && groupBookings.length > 1) {
+      members = groupBookings;
+    }
+
+    // Filtrar los que sigan pendientes
+    const newMembers = members.filter(m => isReservationNew(m));
+
+    if (newMembers.length > 1) {
+      setAcknowledgeGroupMembers(newMembers);
+      setSelectedAckMemberIds(newMembers.map(m => String(m.id)));
+      setAckGroupTargetRes(targetRes);
+      setShowAcknowledgeGroupModal(true);
+      return;
+    }
+
+    if (newMembers.length === 1) {
+      await executeAcknowledge(newMembers, targetRes);
+    } else {
+      alert('ℹ️ Esta reserva (o todo su grupo) ya ha sido marcada como revisada anteriormente.');
     }
   };
 
@@ -2919,7 +2959,7 @@ function ReservasListInner() {
 
                 <StatusBadge status={r.status} isCheckedIn={r.is_checked_in} isCheckedOut={r.is_checked_out} />
 
-                {userRole === 'admin' && isReservationNew(r) && (
+                {userRole === 'admin' && activeTab === 'Nuevas' && isReservationNew(r) && (
                   <button
                     onClick={async (e) => {
                       e.stopPropagation();
@@ -4994,7 +5034,7 @@ function ReservasListInner() {
             
             {/* Acción Botón */}
             <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
-              {userRole === 'admin' && isReservationNew(selectedRes) && (
+              {userRole === 'admin' && activeTab === 'Nuevas' && isReservationNew(selectedRes) && (
                 <button
                   onClick={handleAcknowledgeReserva}
                   disabled={ackLoading}
@@ -5491,6 +5531,106 @@ function ReservasListInner() {
               <button
                 onClick={() => { setShowReassignModal(false); setReassigningRes(null); setTargetRoomName(''); }}
                 disabled={reassignLoading}
+                className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Superpuesto de Revisión Grupal Interactivo */}
+      {showAcknowledgeGroupModal && ackGroupTargetRes && (
+        <div className="fixed inset-0 z-[260] bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] border border-zinc-150">
+            {/* Cabecera */}
+            <div className="p-6 pb-4 border-b border-zinc-100 flex items-center gap-3">
+              <div className="w-10 h-10 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
+                <CheckCircle2 size={20} strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[17px] font-extrabold text-zinc-900 leading-tight">Marcar como Revisada</h3>
+                <p className="text-[12px] font-semibold text-zinc-500 truncate">{ackGroupTargetRes.guest_name}</p>
+              </div>
+              <button
+                onClick={() => { setShowAcknowledgeGroupModal(false); setAcknowledgeGroupMembers([]); setSelectedAckMemberIds([]); setAckGroupTargetRes(null); }}
+                className="ml-auto w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-655 rounded-full transition-colors active:scale-95 cursor-pointer border-none"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Listado de Habitaciones a Revisar */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 font-sans text-left animate-in duration-200">
+              <p className="text-[12.5px] font-semibold text-zinc-655 leading-relaxed">
+                Esta es una reservación grupal con múltiples habitaciones. Selecciona cuáles deseas marcar como revisadas (quitar de nuevas):
+              </p>
+
+              <div className="space-y-2">
+                {acknowledgeGroupMembers.map((m: any) => {
+                  const isSelected = selectedAckMemberIds.includes(String(m.id));
+                  return (
+                    <div 
+                      key={m.id}
+                      onClick={() => {
+                        setSelectedAckMemberIds(prev => 
+                          prev.includes(String(m.id))
+                            ? prev.filter(id => id !== String(m.id))
+                            : [...prev, String(m.id)]
+                        );
+                      }}
+                      className={`p-4 border rounded-2xl cursor-pointer transition-all flex items-start gap-3 select-none active:scale-[0.99] ${
+                        isSelected 
+                          ? 'bg-indigo-50/45 border-indigo-200 shadow-sm' 
+                          : 'bg-white border-zinc-200 hover:border-zinc-300'
+                      }`}
+                    >
+                      <div className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-all ${
+                        isSelected ? 'bg-indigo-650 border-indigo-650 text-white' : 'border-zinc-300 bg-white'
+                      }`}>
+                        {isSelected && <Check size={11} strokeWidth={4} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-baseline gap-2">
+                          <span className="text-[13.5px] font-bold text-zinc-800 truncate">
+                            Hab. {m.room_name || m.room || 'General'}
+                          </span>
+                          <span className="text-[10px] font-extrabold text-zinc-455 uppercase">
+                            ID: {m.id}
+                          </span>
+                        </div>
+                        <p className="text-[11px] font-medium text-zinc-500 mt-0.5">
+                          Estancia: {m.check_in ? format(parseISO(m.check_in), 'dd MMM', { locale: es }) : ''} al {m.check_out ? format(parseISO(m.check_out), 'dd MMM', { locale: es }) : ''}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2.5">
+              <button
+                onClick={async () => {
+                  const toAck = acknowledgeGroupMembers.filter(m => selectedAckMemberIds.includes(String(m.id)));
+                  await executeAcknowledge(toAck, ackGroupTargetRes);
+                }}
+                disabled={ackLoading || selectedAckMemberIds.length === 0}
+                className="w-full py-3.5 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-[13px] uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer border-none"
+              >
+                {ackLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    ✓ Confirmar Revisión ({selectedAckMemberIds.length})
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => { setShowAcknowledgeGroupModal(false); setAcknowledgeGroupMembers([]); setSelectedAckMemberIds([]); setAckGroupTargetRes(null); }}
+                disabled={ackLoading}
                 className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
               >
                 Cancelar
