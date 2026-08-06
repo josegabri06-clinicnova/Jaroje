@@ -2230,43 +2230,6 @@ export default function ReservasList() {
     ? cancelledReservas
     : (activeTab === 'Completadas' ? completedReservas : activeReservas);
 
-  const filtered = baseList.filter(r => {
-    const matchSearch = !search || 
-      normalizeText(r.guest_name).includes(normalizeText(search)) ||
-      r.id?.toString().includes(search);
-    
-    let matchTab = true;
-    if (activeTab === 'Nuevas') matchTab = isReservationNew(r);
-    else if (activeTab === 'Por Aprobar') {
-      matchTab = Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending');
-    }
-    else if (activeTab === 'Sin Anticipo') {
-      const isOtaBooking = ['airbnb', 'booking', 'expedia'].some(c => 
-        (r.channel || '').toLowerCase().includes(c) || 
-        (r.guest_name || '').toLowerCase().includes(c)
-      );
-      const isDirectChannel = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
-      matchTab = Boolean(r.is_acknowledged) && isDirectChannel && !isOtaBooking && (!r.deposit || Number(r.deposit) === 0) && Number(r.price_estimate || r.price || 0) > 0;
-    }
-    else if (activeTab === 'Directas') matchTab = ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
-    else if (activeTab === 'WhatsApp') matchTab = r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
-    else if (activeTab === 'Google') matchTab = r.channel === 'Google';
-    else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas') matchTab = r.channel === activeTab;
-
-    let matchDateRange = true;
-    if (activeTab !== 'Canceladas') {
-      if (startDate && endDate) {
-        matchDateRange = (r.check_in <= endDate) && (r.check_out >= startDate);
-      } else if (startDate) {
-        matchDateRange = r.check_out >= startDate;
-      } else if (endDate) {
-        matchDateRange = r.check_in <= endDate;
-      }
-    }
-
-    return matchSearch && matchTab && matchDateRange;
-  });
-
   const groupReservations = (reservationsList: any[]) => {
     const grouped: any[] = [];
     const processedIds = new Set<string>();
@@ -2332,7 +2295,72 @@ export default function ReservasList() {
     return grouped;
   };
 
-  const groupedFiltered = groupReservations(filtered);
+  const groupedBase = groupReservations(baseList);
+
+  const groupedFiltered = groupedBase.filter(r => {
+    const matchSearch = !search || 
+      normalizeText(r.guest_name).includes(normalizeText(search)) ||
+      (r.is_group_card 
+        ? r.group_members.some((m: any) => m.id?.toString().includes(search))
+        : r.id?.toString().includes(search)
+      );
+    
+    let matchTab = true;
+    if (activeTab === 'Nuevas') {
+      matchTab = r.is_group_card ? r.group_members.some(isReservationNew) : isReservationNew(r);
+    } else if (activeTab === 'Por Aprobar') {
+      matchTab = r.is_group_card 
+        ? r.group_members.some((m: any) => Array.isArray(m.transfer_receipts) && m.transfer_receipts.some((tr: any) => tr.status === 'pending'))
+        : Array.isArray(r.transfer_receipts) && r.transfer_receipts.some((tr: any) => tr.status === 'pending');
+    } else if (activeTab === 'Sin Anticipo') {
+      const isOtaBooking = (x: any) => ['airbnb', 'booking', 'expedia'].some(c => 
+        (x.channel || '').toLowerCase().includes(c) || 
+        (x.guest_name || '').toLowerCase().includes(c)
+      );
+      const isDirectChannel = (x: any) => ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(x.channel || '');
+      
+      if (r.is_group_card) {
+        matchTab = r.group_members.some((m: any) => 
+          Boolean(m.is_acknowledged) && isDirectChannel(m) && !isOtaBooking(m) && (!m.deposit || Number(m.deposit) === 0) && Number(m.price_estimate || m.price || 0) > 0
+        );
+      } else {
+        matchTab = Boolean(r.is_acknowledged) && isDirectChannel(r) && !isOtaBooking(r) && (!r.deposit || Number(r.deposit) === 0) && Number(r.price_estimate || r.price || 0) > 0;
+      }
+    }
+    else if (activeTab === 'Directas') {
+      matchTab = r.is_group_card
+        ? r.group_members.some((m: any) => ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(m.channel || ''))
+        : ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
+    }
+    else if (activeTab === 'WhatsApp') {
+      matchTab = r.is_group_card
+        ? r.group_members.some((m: any) => m.channel === 'WhatsApp' || m.channel === 'WhatsApp Bot')
+        : r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
+    }
+    else if (activeTab === 'Google') {
+      matchTab = r.is_group_card
+        ? r.group_members.some((m: any) => m.channel === 'Google')
+        : r.channel === 'Google';
+    }
+    else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas') {
+      matchTab = r.is_group_card
+        ? r.group_members.some((m: any) => m.channel === activeTab)
+        : r.channel === activeTab;
+    }
+
+    let matchDateRange = true;
+    if (activeTab !== 'Canceladas') {
+      if (startDate && endDate) {
+        matchDateRange = (r.check_in <= endDate) && (r.check_out >= startDate);
+      } else if (startDate) {
+        matchDateRange = r.check_out >= startDate;
+      } else if (endDate) {
+        matchDateRange = r.check_in <= endDate;
+      }
+    }
+
+    return matchSearch && matchTab && matchDateRange;
+  });
 
   const tabLabel = (() => {
     switch (activeTab) {
