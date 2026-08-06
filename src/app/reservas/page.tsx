@@ -218,6 +218,7 @@ function ReservasListInner() {
 
   const [reassigningRes, setReassigningRes] = useState<any | null>(null);
   const [isReassigning, setIsReassigning] = useState(false);
+  const [showReassignModal, setShowReassignModal] = useState(false);
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
@@ -363,6 +364,7 @@ function ReservasListInner() {
     } else {
       setReassigningRes(null);
       setIsReassigning(false);
+      setShowReassignModal(false);
       setTargetRoomName('');
       setAvailableRooms({});
       setIsEditingRes(false);
@@ -586,6 +588,7 @@ function ReservasListInner() {
 
       setReassigningRes(null);
       setIsReassigning(false);
+      setShowReassignModal(false);
       setTargetRoomName('');
       
       // Actualizar estado local reactivo al vuelo para evitar tiempos de espera
@@ -4061,69 +4064,18 @@ function ReservasListInner() {
                   )}
 
                   {/* 3. Habitación asignada */}
-                  <div className="space-y-2">
-                    <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                      <div>
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
-                        <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedRes.room_name || 'Sin asignar'}</p>
-                      </div>
-                      {getRole() === 'admin' && selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && !isReassigning && (
-                        <button
-                          onClick={() => { setIsReassigning(true); setReassigningRes(selectedRes); }}
-                          className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
-                        >
-                          Reasignar 🔀
-                        </button>
-                      )}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
+                      <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedRes.room_name || 'Sin asignar'}</p>
                     </div>
-
-                    {isReassigning && (
-                      <div className="bg-blue-50/50 border border-blue-100 p-4 rounded-2xl space-y-3 animate-in slide-in-from-top-2 duration-200 text-left">
-                        <div>
-                          <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5">
-                            Seleccionar Nueva Habitación (Filtro de Disponibilidad)
-                          </label>
-                          <select
-                            value={targetRoomName}
-                            onChange={e => setTargetRoomName(e.target.value)}
-                            disabled={loadingAvailability}
-                            className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
-                          >
-                            <option value="" disabled>
-                              {loadingAvailability ? '⏳ Analizando ocupación en tiempo real...' : 'Selecciona una habitación física...'}
-                            </option>
-                            {PHYSICAL_ROOM_GROUPS.map(group => (
-                              <optgroup key={group.category} label={group.category}>
-                                {group.rooms.map(room => {
-                                  const isAvail = availableRooms[room] !== false;
-                                  const isCurrent = (selectedRes.room_name || '').includes(room);
-                                  return (
-                                    <option key={room} value={room} disabled={!isAvail || isCurrent}>
-                                      Habitación {room} {isCurrent ? '(Actual)' : isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
-                                    </option>
-                                  );
-                                })}
-                              </optgroup>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => { setIsReassigning(false); setReassigningRes(null); setTargetRoomName(''); }}
-                            className="flex-1 py-2 bg-white hover:bg-zinc-50 border border-zinc-200 text-zinc-600 text-[12px] font-bold rounded-xl transition-all cursor-pointer"
-                          >
-                            Cancelar
-                          </button>
-                          <button
-                            onClick={handleReassignRoom}
-                            disabled={reassignLoading || !targetRoomName}
-                            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-bold rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-sm shadow-blue-600/10 cursor-pointer"
-                          >
-                            Confirmar
-                          </button>
-                        </div>
-                      </div>
+                    {getRole() === 'admin' && selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
+                      <button
+                        onClick={() => { setShowReassignModal(true); setReassigningRes(selectedRes); }}
+                        className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Reasignar 🔀
+                      </button>
                     )}
                   </div>
 
@@ -4186,7 +4138,7 @@ function ReservasListInner() {
                                   {userRole === 'admin' && b.status !== 'cancelled' && (
                                     <button
                                       type="button"
-                                      onClick={() => setReassigningRes(b)}
+                                      onClick={() => { setShowReassignModal(true); setReassigningRes(b); }}
                                       className="text-[9.5px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-all cursor-pointer"
                                     >
                                       Reasignar 🔀
@@ -5248,32 +5200,7 @@ function ReservasListInner() {
                 title="Vista previa del portal"
               />
             </div>
-          </div>
-        </div>
-      )}
-
-      {zoomImage && (
-        <div 
-          className="fixed inset-0 z-[300] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setZoomImage(null)}
-        >
-          <button 
-            type="button"
-            onClick={() => setZoomImage(null)}
-            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 text-white rounded-full flex items-center justify-center cursor-pointer transition-all active:scale-95 shadow-md"
-          >
-            <X size={20} strokeWidth={2.5} />
-          </button>
-          <img 
-            src={zoomImage} 
-            alt="Zoomed DNI" 
-            className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200" 
-            onClick={(e) => e.stopPropagation()} 
-          />
-        </div>
-      )}
-
-      {showCancelModal && selectedRes && (
+          </div>      {showCancelModal && selectedRes && (
         <div className="fixed inset-0 z-[250] bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] border border-zinc-150">
             {/* Cabecera */}
@@ -5287,7 +5214,7 @@ function ReservasListInner() {
               </div>
               <button
                 onClick={() => setShowCancelModal(false)}
-                className="ml-auto w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-650 rounded-full transition-colors active:scale-95 cursor-pointer border-none"
+                className="ml-auto w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-655 rounded-full transition-colors active:scale-95 cursor-pointer border-none"
               >
                 <X size={15} strokeWidth={2.5} />
               </button>
@@ -5396,6 +5323,138 @@ function ReservasListInner() {
                 className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
               >
                 Regresar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Superpuesto de Reasignación */}
+      {showReassignModal && selectedRes && (
+        <div className="fixed inset-0 z-[250] bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] border border-zinc-150">
+            {/* Cabecera */}
+            <div className="p-6 pb-4 border-b border-zinc-100 flex items-center gap-3">
+              <div className="w-10 h-10 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-center text-blue-600 shrink-0">
+                <Users size={20} strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[17px] font-extrabold text-zinc-900 leading-tight">Reasignar Habitación</h3>
+                <p className="text-[12px] font-semibold text-zinc-500 truncate">{selectedRes.guest_name}</p>
+              </div>
+              <button
+                onClick={() => { setShowReassignModal(false); setReassigningRes(null); setTargetRoomName(''); }}
+                className="ml-auto w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-655 rounded-full transition-colors active:scale-95 cursor-pointer border-none"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Selector de Habitación del Grupo */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 font-sans text-left animate-in duration-200">
+              <p className="text-[12.5px] font-semibold text-zinc-655 leading-relaxed">
+                Selecciona cuál de las habitaciones del grupo deseas cambiar de ubicación física:
+              </p>
+
+              <div className="space-y-2">
+                {groupBookings.map((b: any) => {
+                  const isSelected = reassigningRes && String(b.id) === String(reassigningRes.id);
+                  return (
+                    <div 
+                      key={b.id}
+                      onClick={() => {
+                        setReassigningRes(b);
+                        setTargetRoomName('');
+                      }}
+                      className={`p-4 border rounded-2xl cursor-pointer transition-all flex items-start gap-3 select-none active:scale-[0.99] ${
+                        isSelected 
+                          ? 'bg-blue-50/45 border-blue-200 shadow-sm' 
+                          : 'bg-white border-zinc-200/80 hover:border-zinc-300'
+                      }`}
+                    >
+                      <div className={`mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                        isSelected 
+                          ? 'bg-blue-600 border-blue-600 text-white' 
+                          : 'border-zinc-300 bg-white'
+                      }`}>
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className={`text-[13px] font-bold truncate leading-tight ${isSelected ? 'text-blue-950' : 'text-zinc-800'}`}>
+                            {b.room_name || b.room || 'General'}
+                          </span>
+                          <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider">
+                            ID: {b.id}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-semibold mt-1 flex-wrap">
+                          <span>In: <strong className="text-zinc-700">{b.check_in}</strong></span>
+                          <span>·</span>
+                          <span>Out: <strong className="text-zinc-700">{b.check_out}</strong></span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Selector de Nueva Asignación Física */}
+              {reassigningRes && (
+                <div className="bg-blue-50/40 border border-blue-100/80 p-4.5 rounded-2xl space-y-3.5 animate-in slide-in-from-top-2 duration-200 text-left mt-3">
+                  <div>
+                    <label className="block text-[10px] font-extrabold text-blue-800 uppercase tracking-widest mb-1.5 pl-0.5">
+                      Seleccionar Nueva Habitación (Filtro de Disponibilidad)
+                    </label>
+                    <select
+                      value={targetRoomName}
+                      onChange={e => setTargetRoomName(e.target.value)}
+                      disabled={loadingAvailability}
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:ring-2 focus:ring-blue-600/10 cursor-pointer shadow-sm disabled:opacity-50"
+                    >
+                      <option value="" disabled>
+                        {loadingAvailability ? '⏳ Analizando ocupación en tiempo real...' : 'Selecciona una habitación física...'}
+                      </option>
+                      {PHYSICAL_ROOM_GROUPS.map(group => (
+                        <optgroup key={group.category} label={group.category}>
+                          {group.rooms.map(room => {
+                            const isAvail = availableRooms[room] !== false;
+                            const isCurrent = (reassigningRes.room_name || '').includes(room);
+                            return (
+                              <option key={room} value={room} disabled={!isAvail || isCurrent}>
+                                Habitación {room} {isCurrent ? '(Actual)' : isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
+                              </option>
+                            );
+                          })}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2.5">
+              <button
+                onClick={handleReassignRoom}
+                disabled={reassignLoading || !targetRoomName || !reassigningRes}
+                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-2xl text-[13px] uppercase tracking-wider shadow-md shadow-blue-600/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer border-none"
+              >
+                {reassignLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    Confirmar Reasignación
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => { setShowReassignModal(false); setReassigningRes(null); setTargetRoomName(''); }}
+                disabled={reassignLoading}
+                className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
+              >
+                Cancelar
               </button>
             </div>
           </div>
