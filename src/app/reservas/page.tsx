@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -1910,6 +1910,8 @@ export default function ReservasList() {
   };
 
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelSelectedIds, setCancelSelectedIds] = useState<string[]>([]);
 
   const handleAcknowledgeReserva = async (resData?: any) => {
     if (userRole !== 'admin') {
@@ -2074,69 +2076,124 @@ export default function ReservasList() {
     }
   };
 
-  const handleCancelReserva = async () => {
-    if (!selectedRes) return;
-    if (userRole !== 'admin') {
-      alert('❌ Error: Solo los administradores pueden cancelar reservas.');
+  const handleCancelSelectedReservas = async () => {
+    if (cancelSelectedIds.length === 0) {
+      alert('⚠️ Por favor, selecciona al menos una habitación para cancelar.');
       return;
     }
-    const confirmCancel = confirm(`⚠️ ¿Estás seguro de que deseas cancelar permanentemente la reserva de ${selectedRes.guest_name}?\n\nEsta acción eliminará el check-in local y sincronizará la cancelación en Beds24 de inmediato.`);
-    if (!confirmCancel) return;
-
+    
     setCancelLoading(true);
+    let successCount = 0;
+    let errors: string[] = [];
+
+    // Obtenemos los nombres de las habitaciones canceladas para el log
+    const roomsToCancel = groupBookings.filter((b: any) => cancelSelectedIds.includes(String(b.id)));
+
     try {
-      const res = await fetch(`/api/reservas?id=${selectedRes.id}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
+      for (const id of cancelSelectedIds) {
+        try {
+          const res = await fetch(`/api/reservas?id=${id}`, {
+            method: 'DELETE'
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || `Error al cancelar la reserva ${id}`);
+          }
+          successCount++;
+        } catch (err: any) {
+          console.error(`Error cancelando ID ${id}:`, err);
+          errors.push(err.message || String(err));
+        }
+      }
 
-      if (!res.ok) throw new Error(data.error || 'Error al cancelar la reserva');
+      if (successCount > 0) {
+        // Registrar log de cancelación para cada habitación cancelada con éxito
+        try {
+          const emp = getOperatorForLog();
+          const employeeNum = emp.employee_num;
+          const employeeName = emp.full_name;
+          const employeeDept = emp.department;
 
-      alert('✅ Reserva cancelada con éxito en Beds24 y liberada en la App.');
+          for (const room of roomsToCancel) {
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: employeeNum,
+                employee_name: employeeName,
+                department: employeeDept,
+                module: 'recepcion',
+                action: 'reserva_cancelada',
+                room: room.room_name || room.room || 'General',
+                details: JSON.stringify({
+                  text: `${room.guest_name} ${room.num_adult || 1}/${room.num_child || 0} (ID: ${room.id}) de la Habitación ${room.room_name || room.room || 'General'} - Canceló permanentemente la reserva.`,
+                  cancelacion: {
+                    bookingId: room.id,
+                    guestName: room.guest_name,
+                    room: room.room_name || room.room || 'General'
+                  }
+                })
+              })
+            });
+          }
+        } catch (logErr) {
+          console.error("Error registrando log de cancelación:", logErr);
+        }
 
-      // Registrar log de cancelación
-      try {
-        const emp = getOperatorForLog();
-        const employeeNum = emp.employee_num;
-        const employeeName = emp.full_name;
-        const employeeDept = emp.department;
+        alert(`✅ Se cancelaron con éxito ${successCount} de ${cancelSelectedIds.length} habitaciones.`);
         
-        await fetch('/api/employee-logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            employee_num: employeeNum,
-            employee_name: employeeName,
-            department: employeeDept,
-            module: 'recepcion',
-            action: 'reserva_cancelada',
-            room: selectedRes.room_name || 'General',
-            details: JSON.stringify({
-              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Canceló permanentemente la reserva.`,
-              cancelacion: {
-                bookingId: selectedRes.id,
-                guestName: selectedRes.guest_name,
-                room: selectedRes.room_name || 'General'
+        // Si cancelamos todas las habitaciones seleccionadas, cerramos el modal principal de detalles
+        const allCancelled = cancelSelectedIds.length === groupBookings.length;
+        if (allCancelled) {
+          setSelectedRes(null);
+          if (typeof window !== 'undefined') {
+            window.history.replaceState(null, '', '/reservas');
+          }
+        } else {
+          // Si quedan habitaciones en el grupo, mantenemos la reserva seleccionada pero actualizamos su estado
+          const remainingMembers = groupBookings.filter((b: any) => !cancelSelectedIds.includes(String(b.id)));
+          if (remainingMembers.length > 0) {
+            setSelectedRes((prev: any) => {
+              if (!prev) return null;
+              if (prev.is_group_card) {
+                const consolidatedRoomNames = remainingMembers.map(m => m.room_name || m.room).filter(Boolean).join(', ');
+                const consolidatedPrice = remainingMembers.reduce((sum, m) => sum + Number(m.price_estimate || m.price || 0), 0);
+                const consolidatedDeposit = remainingMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
+                const consolidatedBalance = remainingMembers.reduce((sum, m) => {
+                  const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
+                  const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
+                  return sum + bBal;
+                }, 0);
+                return {
+                  ...prev,
+                  room_name: consolidatedRoomNames,
+                  price_estimate: consolidatedPrice,
+                  price: consolidatedPrice,
+                  deposit: consolidatedDeposit,
+                  balance: consolidatedBalance,
+                  group_members: remainingMembers
+                };
+              } else {
+                return null;
               }
-            })
-          })
-        });
-      } catch (logErr) {
-        console.error("Error registrando log de cancelación:", logErr);
+            });
+          } else {
+            setSelectedRes(null);
+          }
+        }
+
+        setShowCancelModal(false);
+        setTimeout(() => {
+          fetchReservas(); // Refrescar base de datos
+        }, 1500);
       }
 
-      setSelectedRes(null);
-      if (typeof window !== 'undefined') {
-        window.history.replaceState(null, '', '/reservas');
+      if (errors.length > 0) {
+        alert(`❌ Errores encontrados durante la cancelación:\n\n${errors.join('\n')}`);
       }
-      
-      // Retrasar consulta de Beds24 para dar tiempo a que se propague el cambio
-      setTimeout(() => {
-        fetchReservas(); // Refrescar el listado
-      }, 3000);
     } catch (err: any) {
       console.error(err);
-      alert(`❌ Error al cancelar reserva:\n\n${err.message}`);
+      alert(`❌ Error al procesar cancelaciones:\n\n${err.message}`);
     } finally {
       setCancelLoading(false);
     }
@@ -4956,9 +5013,16 @@ export default function ReservasList() {
               {/* Cancelar Reserva Button (Solo Admin) */}
               {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin' && (
                 <button 
-                  onClick={handleCancelReserva}
+                  onClick={() => {
+                    if (userRole !== 'admin') {
+                      alert('❌ Error: Solo los administradores pueden cancelar reservas.');
+                      return;
+                    }
+                    setCancelSelectedIds(groupBookings.map(b => String(b.id)));
+                    setShowCancelModal(true);
+                  }}
                   disabled={cancelLoading}
-                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[13.5px] py-3.5 rounded-xl transition-all active:scale-[0.98] border border-rose-200 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[13.5px] py-3.5 rounded-xl transition-all active:scale-[0.98] border border-rose-200 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
                 >
                   {cancelLoading ? (
                     <div className="w-4 h-4 border-2 border-rose-600/30 border-t-rose-600 rounded-full animate-spin" />
@@ -5042,6 +5106,135 @@ export default function ReservasList() {
             className="max-w-full max-h-[85vh] object-contain rounded-xl shadow-2xl animate-in zoom-in-95 duration-200" 
             onClick={(e) => e.stopPropagation()} 
           />
+        </div>
+      )}
+
+      {showCancelModal && selectedRes && (
+        <div className="fixed inset-0 z-[250] bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] border border-zinc-150">
+            {/* Cabecera */}
+            <div className="p-6 pb-4 border-b border-zinc-100 flex items-center gap-3">
+              <div className="w-10 h-10 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center text-rose-600 shrink-0">
+                <AlertTriangle size={20} strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-[17px] font-extrabold text-zinc-900 leading-tight">Cancelar Reserva</h3>
+                <p className="text-[12px] font-semibold text-zinc-500 truncate">{selectedRes.guest_name}</p>
+              </div>
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="ml-auto w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-650 rounded-full transition-colors active:scale-95 cursor-pointer border-none"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Listado de Habitaciones */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 font-sans">
+              <p className="text-[12.5px] font-semibold text-zinc-600 leading-relaxed text-left">
+                Selecciona qué habitaciones deseas cancelar de forma permanente en Beds24 y liberar en la App:
+              </p>
+
+              {groupBookings.length > 1 && (
+                <div className="flex justify-between items-center bg-zinc-50 border border-zinc-150 p-3 rounded-2xl">
+                  <span className="text-[12px] font-bold text-zinc-700">Seleccionar todas ({groupBookings.length})</span>
+                  <button
+                    onClick={() => {
+                      const allSelected = cancelSelectedIds.length === groupBookings.length;
+                      if (allSelected) {
+                        setCancelSelectedIds([]);
+                      } else {
+                        setCancelSelectedIds(groupBookings.map(b => String(b.id)));
+                      }
+                    }}
+                    className="text-[11.5px] font-extrabold text-indigo-600 hover:text-indigo-750 transition-colors uppercase tracking-wider cursor-pointer border-none bg-transparent"
+                  >
+                    {cancelSelectedIds.length === groupBookings.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
+                  </button>
+                </div>
+              )}
+
+              <div className="space-y-2.5 text-left">
+                {groupBookings.map((b: any) => {
+                  const isSelected = cancelSelectedIds.includes(String(b.id));
+                  const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
+                  const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+                  
+                  return (
+                    <div 
+                      key={b.id}
+                      onClick={() => {
+                        setCancelSelectedIds(prev => 
+                          prev.includes(String(b.id)) 
+                            ? prev.filter(id => id !== String(b.id)) 
+                            : [...prev, String(b.id)]
+                        );
+                      }}
+                      className={`p-4 border rounded-2xl cursor-pointer transition-all flex items-start gap-3 select-none active:scale-[0.99] ${
+                        isSelected 
+                          ? 'bg-rose-50/45 border-rose-200 shadow-sm' 
+                          : 'bg-white border-zinc-200/80 hover:border-zinc-300'
+                      }`}
+                    >
+                      <div className={`mt-0.5 w-4.5 h-4.5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                        isSelected 
+                          ? 'bg-rose-600 border-rose-600 text-white' 
+                          : 'border-zinc-300 bg-white'
+                      }`}>
+                        {isSelected && <Check size={11} strokeWidth={4} />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start gap-2">
+                          <span className={`text-[13px] font-bold truncate leading-tight ${isSelected ? 'text-rose-950' : 'text-zinc-800'}`}>
+                            {b.room_name || b.room || 'General'}
+                          </span>
+                          <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider">
+                            ID: {b.id}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-semibold mt-1 flex-wrap">
+                          <span>In: <strong className="text-zinc-700">{b.check_in}</strong></span>
+                          <span>·</span>
+                          <span>Out: <strong className="text-zinc-700">{b.check_out}</strong></span>
+                        </div>
+                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-zinc-100">
+                          <span className="text-[10.5px] font-extrabold text-zinc-400 uppercase tracking-widest">Adeudo</span>
+                          <span className={`text-[12px] font-black ${bBal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                            {fmtCurrency(bBal, selectedRes.guest_name)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Footer de Acciones */}
+            <div className="p-6 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2.5">
+              <button
+                onClick={handleCancelSelectedReservas}
+                disabled={cancelLoading || cancelSelectedIds.length === 0}
+                className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-2xl text-[13px] uppercase tracking-wider shadow-md shadow-rose-600/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer border-none"
+              >
+                {cancelLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    Confirmar Cancelación ({cancelSelectedIds.length})
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setShowCancelModal(false)}
+                disabled={cancelLoading}
+                className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
+              >
+                Regresar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
