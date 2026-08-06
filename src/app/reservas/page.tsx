@@ -5202,7 +5202,11 @@ function ReservasListInner() {
                 title="Vista previa del portal"
               />
             </div>
-          </div>      {showCancelModal && selectedRes && (
+          </div>
+        </div>
+      )}
+
+      {showCancelModal && selectedRes && (
         <div className="fixed inset-0 z-[250] bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] border border-zinc-150">
             {/* Cabecera */}
