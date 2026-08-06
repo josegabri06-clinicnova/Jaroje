@@ -4850,14 +4850,6 @@ export default function ReservasList() {
                             </span>
                           </div>
 
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
                           <div className="space-y-1.5">
                             <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-widest block">Método de Pago</span>
                             <div className="flex gap-1.5">
