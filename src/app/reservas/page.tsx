@@ -2268,7 +2268,11 @@ export default function ReservasList() {
 
         const consolidatedPrice = allMembers.reduce((sum, m) => sum + Number(m.price_estimate || m.price || 0), 0);
         const consolidatedDeposit = allMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
-        const consolidatedBalance = allMembers.reduce((sum, m) => sum + Number(m.balance || 0), 0);
+        const consolidatedBalance = allMembers.reduce((sum, m) => {
+          const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
+          const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
+          return sum + bBal;
+        }, 0);
         const consolidatedAdults = allMembers.reduce((sum, m) => sum + Number(m.num_adult || 1), 0);
         const consolidatedChildren = allMembers.reduce((sum, m) => sum + Number(m.num_child || 0), 0);
         const isAnyNew = allMembers.some(m => isReservationNew(m));
