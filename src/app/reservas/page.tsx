@@ -2195,25 +2195,27 @@ function ReservasListInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error de Meta API');
 
-      let cancelSuccessCount = 0;
-
-      // 1. Cancelar en Beds24 y en Supabase para todos los miembros sin anticipo
+      // 1. Actualizar estado en Supabase para todos los miembros para indicar aviso enviado y marcado revisado
       for (const member of members) {
-        if (Number(member.deposit || 0) === 0) {
-          try {
-            const cancelRes = await fetch(`/api/reservas?id=${member.id}`, {
-              method: 'DELETE'
-            });
-            if (cancelRes.ok) {
-              cancelSuccessCount++;
-            }
-          } catch (cancelErr) {
-            console.error(`Error cancelando miembro ${member.id} en último aviso:`, cancelErr);
-          }
-        }
+        await supabase
+          .from('beds24_reservations')
+          .update({ last_notice_sent: true, is_acknowledged: true })
+          .eq('id', String(member.id));
+
+        await supabase
+          .from('checkins')
+          .upsert({
+            reservation_id: String(member.id).toLowerCase().trim(),
+            guest_name: member.guest_name,
+            room: member.room_name || member.room,
+            check_in_date: member.check_in,
+            check_out_date: member.check_out,
+            status: 'acknowledged',
+            checked_in_by: 'Admin'
+          }, { onConflict: 'reservation_id' });
       }
 
-      // 2. Registrar log de cancelación/último aviso
+      // 2. Registrar log de empleado
       try {
         const emp = getOperatorForLog();
         const employeeNum = emp.employee_num;
@@ -2229,10 +2231,10 @@ function ReservasListInner() {
               employee_name: employeeName,
               department: employeeDept,
               module: 'recepcion',
-              action: 'reserva_cancelada',
+              action: 'reserva_revisada', // Acción informativa
               room: member.room_name || member.room || 'General',
               details: JSON.stringify({
-                text: `${member.guest_name} ${member.num_adult || 1}/${member.num_child || 0} (ID: ${member.id}) de la Habitación ${member.room_name || member.room || 'General'} - Cancelada automáticamente tras enviar Último Aviso (Mensaje 2).`,
+                text: `Envió Último Aviso (Mensaje 2) a ${member.guest_name} (ID: ${member.id}) para la Habitación ${member.room_name || member.room || 'General'}. Se otorgó 1 hora de plazo para realizar el pago antes de su liberación automática.`,
                 bookingId: member.id,
                 guestName: member.guest_name
               })
@@ -2243,17 +2245,14 @@ function ReservasListInner() {
         console.error("Error registrando logs de último aviso:", logErr);
       }
 
-      alert(`✅ Último Aviso enviado y se cancelaron automáticamente ${cancelSuccessCount} de ${members.length} reservaciones (por no contar con anticipo registrado).`);
+      alert('✅ Recordatorio de ÚLTIMO AVISO (Mensaje 2) enviado por WhatsApp con éxito. El huésped cuenta con 1 hora de gracia para registrar su anticipo antes de que el sistema libere la habitación.');
 
-      // 3. Cerrar modal de detalles y limpiar URL
-      setSelectedRes(null);
-      if (typeof window !== 'undefined') {
-        window.history.replaceState(null, '', '/reservas');
-      }
-
-      // 4. Actualizar estado local removiendo las canceladas
+      // 3. Actualizar estado local en React
       const memberIds = new Set(members.map((m: any) => String(m.id)));
-      setReservas((prev: any[]) => prev.map(r => memberIds.has(String(r.id)) ? { ...r, status: 'cancelled', is_acknowledged: true, last_notice_sent: true } : r));
+      
+      setSelectedRes((prev: any) => prev && memberIds.has(String(prev.id)) ? { ...prev, last_notice_sent: true, is_acknowledged: true } : prev);
+      setReservas((prev: any[]) => prev.map(r => memberIds.has(String(r.id)) ? { ...r, last_notice_sent: true, is_acknowledged: true } : r));
+
     } catch (err: any) {
       alert(`⚠️ Error enviando ÚLTIMO AVISO: ${err.message || 'Error de red'}`);
     }
