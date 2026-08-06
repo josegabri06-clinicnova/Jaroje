@@ -1412,10 +1412,14 @@ export default function ReservasList() {
     if (!selectedRes) return [];
     const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
     const mainName = cleanStr(selectedRes.guest_name || '');
-    const mainPhone = (selectedRes.guest_phone || '').trim();
+    const mainPhone = (selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '').trim();
     return reservas.filter(r => {
-      if (r.check_in !== selectedRes.check_in || r.id === selectedRes.id || r.is_checked_out || r.status === 'cancelled' || r.status === '0') return false;
-      const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone;
+      if (r.id === selectedRes.id) return false;
+      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
+      if (r.status === 'cancelled' || r.status === '0') return false;
+      
+      const rPhone = (r.guest_phone || r.phone || r.mobile || '').trim();
+      const samePhone = mainPhone && rPhone && rPhone === mainPhone && mainPhone.length >= 6;
       const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
       return samePhone || sameName;
     });
@@ -2757,7 +2761,11 @@ export default function ReservasList() {
                       ? 'Proceso de Check-In' 
                       : 'Detalles de Reserva'}
                 </h3>
-                <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">ID: {selectedRes.id || selectedRes.room_id || 'N/A'}</p>
+                <p className="text-[12px] font-medium text-zinc-500 mt-0.5 uppercase tracking-wider">
+                  {siblingBookings.length > 0
+                    ? `IDs del Grupo: ${groupBookings.map(b => b.id).join(', ')}`
+                    : `ID: ${selectedRes.id || selectedRes.room_id || 'N/A'}`}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 {userRole === 'admin' && selectedRes.id !== 'walkin' && (
@@ -3979,10 +3987,22 @@ export default function ReservasList() {
                   {/* 6. Total de la reserva */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total de la reserva</span>
-                      <p className="text-[15px] font-black text-zinc-950 mt-0.5">
-                        {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
-                      </p>
+                      {siblingBookings.length > 0 ? (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total del Grupo (Consolidado)</span>
+                          <p className="text-[15px] font-black text-zinc-950 mt-0.5">
+                            {fmtCurrency(groupBookings.reduce((sum, b) => sum + Number(b.price_estimate || b.price || 0), 0), selectedRes.guest_name)}
+                          </p>
+                          <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)})</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total de la reserva</span>
+                          <p className="text-[15px] font-black text-zinc-950 mt-0.5">
+                            {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -4026,10 +4046,22 @@ export default function ReservasList() {
                   {/* 7. Anticipo depositado */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
-                      <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                        {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
-                      </p>
+                      {siblingBookings.length > 0 ? (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo Total del Grupo</span>
+                          <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                            {fmtCurrency(groupBookings.reduce((sum, b) => sum + Number(b.deposit || 0), 0), selectedRes.guest_name)}
+                          </p>
+                          <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)})</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
+                          <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                            {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
+                          </p>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -4037,18 +4069,15 @@ export default function ReservasList() {
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
                       {(() => {
-                        const isGroup = !!(selectedRes.group_id || selectedRes.master_id || selectedRes.group_name);
+                        const isGroup = siblingBookings.length > 0;
                         const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedRes.checked_in === true;
                         let balanceVal = (isOta || isCheckedIn) ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
 
                         if (isGroup) {
-                          const groupMembers = reservas.filter(r => (r.group_id && r.group_id === selectedRes.group_id) || (r.master_id && r.master_id === selectedRes.master_id));
-                          if (groupMembers.length > 0) {
-                            const totalGroupPrice = groupMembers.reduce((sum, r) => sum + (Number(r.price_estimate) || Number(r.price) || 0), 0);
-                            const totalGroupDeposit = groupMembers.reduce((sum, r) => sum + (Number(r.deposit) || 0), 0);
-                            balanceVal = Math.max(0, totalGroupPrice - totalGroupDeposit);
-                          }
+                          const totalGroupPrice = groupBookings.reduce((sum, b) => sum + (Number(b.price_estimate) || Number(b.price) || 0), 0);
+                          const totalGroupDeposit = groupBookings.reduce((sum, b) => sum + (Number(b.deposit) || 0), 0);
+                          balanceVal = Math.max(0, totalGroupPrice - totalGroupDeposit);
                         }
 
                         return (
