@@ -1294,30 +1294,28 @@ export default function PublicReservaPage() {
 
   return (
     <div className="min-h-screen bg-[#F6F5F2] text-zinc-900 pb-16 font-sans">
-      {/* Header Premium */}
-      <header className="bg-zinc-900 text-white text-center py-7 px-4 shadow-md relative overflow-hidden flex flex-col items-center">
-        {/* Logotipo Oficial */}
+      <header className="bg-white text-zinc-900 text-center py-8 px-4 border-b border-zinc-200/80 relative overflow-hidden flex flex-col items-center">
+        {/* Logotipo Oficial Prominente */}
         <img 
           src="/logo-jaroje.png" 
           alt="Jaroje Condominios" 
-          className="h-16 md:h-20 object-contain mb-3" 
+          className="h-28 md:h-36 object-contain mb-2" 
         />
 
-        <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider text-amber-100">{t.title}</h1>
-        <p className="text-zinc-400 text-[10.5px] mt-1 font-medium tracking-wide uppercase">{t.subtitle}</p>
+        <p className="text-zinc-500 text-[10.5px] font-bold tracking-wider uppercase">{t.subtitle}</p>
 
-        {/* Selector de Idioma Centrado */}
-        <div className="mt-3 flex items-center gap-1.5 bg-black/40 backdrop-blur-md p-1 rounded-full border border-white/20 z-20 text-[10px] font-bold shadow-md">
+        {/* Selector de Idioma Centrado (Tema Claro) */}
+        <div className="mt-4 flex items-center gap-1.5 bg-zinc-100 p-1 rounded-full border border-zinc-200 z-20 text-[10px] font-extrabold shadow-xs">
           <button
             onClick={() => changeLanguage('es')}
-            className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'es' ? 'bg-amber-100 text-zinc-950 shadow-sm font-black' : 'text-white/80 hover:text-white'}`}
+            className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'es' ? 'bg-zinc-900 text-white shadow-sm font-black' : 'text-zinc-655 hover:text-zinc-900'}`}
           >
             <span>ESP</span>
             <span>🇪🇸</span>
           </button>
           <button
             onClick={() => changeLanguage('en')}
-            className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'en' ? 'bg-amber-100 text-zinc-950 shadow-sm font-black' : 'text-white/80 hover:text-white'}`}
+            className={`px-3 py-1 rounded-full transition-all cursor-pointer flex items-center gap-1 ${lang === 'en' ? 'bg-zinc-900 text-white shadow-sm font-black' : 'text-zinc-655 hover:text-zinc-900'}`}
           >
             <span>ENG</span>
             <span>🇺🇸</span>
