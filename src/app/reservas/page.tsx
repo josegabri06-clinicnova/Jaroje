@@ -590,22 +590,32 @@ export default function ReservasList() {
     }
   };
 
-  // Cuando el ?id de la URL se vacía, cerramos la vista de detalles de reserva
-  useEffect(() => {
-    const searchId = searchParams.get('id');
-    if (!searchId) {
-      setSelectedRes(null);
-    }
-  }, [searchParams]);
+  const lastSearchId = useRef<string | null>(null);
 
+  // 1. Limpieza preventiva en el montaje para evitar el flash de la reserva anterior
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const searchId = params.get('id');
+      if (searchId) {
+        if (!selectedRes || String(selectedRes.id) !== searchId) {
+          setSelectedRes(null);
+        }
+      } else {
+        setSelectedRes(null);
+      }
+    }
+  }, []);
+
+  // 2. Sincronizar ID de la URL -> Estado local (con ref para evitar race conditions)
   useEffect(() => {
     if (typeof window !== 'undefined' && reservas.length > 0) {
-      const searchId = searchParams.get('id');
+      const params = new URLSearchParams(window.location.search);
+      const searchId = params.get('id');
       if (searchId) {
-        const found = reservas.find(r => r.id.toString() === searchId);
-        if (found) {
-          // Evitar bucles infinitos y renders redundantes si ya está seleccionada
-          if (!selectedRes || String(selectedRes.id) !== String(found.id)) {
+        if (searchId !== lastSearchId.current) {
+          const found = reservas.find(r => String(r.id) === searchId);
+          if (found) {
             setSelectedRes(found);
             setSearch(searchId);
             const today = getLocalDateStr();
@@ -617,18 +627,24 @@ export default function ReservasList() {
               setActiveTab(isCompleted ? 'Completadas' : 'Todas');
             }
           }
+          lastSearchId.current = searchId;
+        }
+      } else {
+        if (lastSearchId.current !== null) {
+          setSelectedRes(null);
+          lastSearchId.current = null;
         }
       }
     }
-  }, [reservas, searchParams, selectedRes]);
+  }, [reservas, searchParams]);
 
-  // Sincronizar el parámetro de la URL con el estado de la reserva activa
-  // Sólo escribimos la URL si el ID de selectedRes coincide con la URL actual o no hay ID.
+  // 3. Sincronizar Estado local -> URL
   useEffect(() => {
     if (typeof window !== 'undefined' && selectedRes) {
       const currentUrlId = new URLSearchParams(window.location.search).get('id');
-      if (!currentUrlId || currentUrlId === String(selectedRes.id)) {
+      if (currentUrlId !== String(selectedRes.id)) {
         window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
+        lastSearchId.current = String(selectedRes.id);
       }
     }
   }, [selectedRes]);
