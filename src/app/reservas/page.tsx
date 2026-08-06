@@ -666,7 +666,12 @@ export default function ReservasList() {
       const currentUrlId = new URLSearchParams(window.location.search).get('id');
       if (currentUrlId !== String(selectedRes.id)) {
         window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
-        lastSearchId.current = String(selectedRes.i  const handleConfirmCheckIn = async () => {
+        lastSearchId.current = String(selectedRes.id);
+      }
+    }
+  }, [selectedRes]);
+
+  const handleConfirmCheckIn = async () => {
     if (checkInSelectedIds.length === 0) {
       alert('⚠️ Por favor, selecciona al menos una habitación para hacer check-in.');
       return;
@@ -1081,13 +1086,6 @@ export default function ReservasList() {
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al completar Check-In:\n\n${err.message}`);
-    } finally {
-      setCheckInLoading(false);
-    }
-  };
-    } catch (error) {
-      console.error(error);
-      alert('Error al realizar el check-in.');
     } finally {
       setCheckInLoading(false);
     }
