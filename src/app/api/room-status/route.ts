@@ -166,10 +166,15 @@ export async function POST(req: Request) {
 
         if (matchedRes) {
           const channelLower = (matchedRes.channel || '').toLowerCase();
-          const isOta = ['airbnb', 'booking', 'expedia'].some(ota => channelLower.includes(ota));
+          const isOta = ['airbnb', 'booking', 'expedia'].some(ota => channelLower.includes(ota)) && !channelLower.includes('engine');
           const hasDeposit = Number(matchedRes.deposit || 0) > 0;
+          
+          // Verificar si ya fue revisada/confirmada (is_acknowledged o estado en checkinMap)
+          const isAcknowledged = matchedRes.is_acknowledged === true || (checkinMap.get(String(matchedRes.id)) === 'acknowledged');
 
-          if (isOta || hasDeposit) {
+          const isConfirmed = isOta || hasDeposit || isAcknowledged;
+
+          if (isConfirmed && matchedRes.status !== 'request' && matchedRes.status !== '0') {
             const phone = matchedRes.phone || matchedRes.mobile || matchedRes.guest_phone || '';
             if (phone) {
               console.log(`[Room Status -> Limpia] Sending 'alojamiento_listo' WhatsApp to ${phone} for room ${room_number}`);
@@ -186,7 +191,7 @@ export async function POST(req: Request) {
               }
             }
           } else {
-            console.log(`[Room Status -> Limpia] Omitiendo notificación de alojamiento_listo para B24:${matchedRes.id} (Directo/Google sin anticipo pagado)`);
+            console.log(`[Room Status -> Limpia] Omitiendo notificación de alojamiento_listo para B24:${matchedRes.id} (Reserva directa/Google sin depósito ni confirmación del hotel, o estado request)`);
           }
         }
       } catch (errRes) {

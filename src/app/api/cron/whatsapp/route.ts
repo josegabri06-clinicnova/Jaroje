@@ -380,7 +380,14 @@ export async function GET(req: Request) {
                 return otherRoom === rRoom && other.check_in <= yesterdayStr && other.check_out >= todayStr;
               });
 
-              if (!occupiedYesterday) {
+              const channelLower = (booking.channel || '').toLowerCase();
+              const isOta = ['airbnb', 'booking', 'expedia'].some(ota => channelLower.includes(ota)) && !channelLower.includes('engine');
+              const hasDeposit = Number(booking.deposit || 0) > 0;
+              const isAcknowledged = booking.is_acknowledged === true || sentSet.has(`${bookingIdStr}_acknowledged`);
+
+              const isConfirmed = isOta || hasDeposit || isAcknowledged;
+
+              if (isConfirmed && booking.status !== 'request' && booking.status !== '0' && !occupiedYesterday) {
                 const res = await sendTemplate_AlojamientoListo(booking);
                 if (res.success) {
                   await supabase.from('whatsapp_logs').insert([{
