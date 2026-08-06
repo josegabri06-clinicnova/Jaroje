@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
@@ -171,6 +171,14 @@ function isReservationNew(r: any): boolean {
 }
 
 export default function ReservasList() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="w-8 h-8 border-2 border-zinc-300 border-t-zinc-900 rounded-full animate-spin" /></div>}>
+      <ReservasListInner />
+    </Suspense>
+  );
+}
+
+function ReservasListInner() {
   const searchParams = useSearchParams();
   const [reservas, setReservas] = useState<any[]>([]);
   const [billingRequests, setBillingRequests] = useState<any[]>([]);
@@ -427,7 +435,7 @@ export default function ReservasList() {
         const name = acc.name.trim().toUpperCase();
         if (abonoPaymentMethod === 'efectivo') {
           setAbonoAccountId('S01');
-          return;
+          return false;
         }
         if (abonoPaymentMethod === 'tarjeta') {
           return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
