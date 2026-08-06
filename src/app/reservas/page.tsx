@@ -818,7 +818,9 @@ export default function ReservasList() {
           if (b24PayRes.ok && payData.success && netRecordId) {
             supabase.from('finances').update({
               description: `${netDesc} [Synced: B24]`
-            }).eq('id', netRecordId).catch(err => console.error("Error updating synced log:", err));
+            }).eq('id', netRecordId).then(({ error }) => {
+              if (error) console.error("Error updating synced log:", error);
+            });
           }
         }).catch(payErr => {
           console.error("Error al registrar pago OTA en Beds24 en segundo plano:", payErr);
@@ -2378,7 +2380,7 @@ export default function ReservasList() {
     }
   })();
 
-  const totalRevenue = filtered.reduce((sum: number, r: any) => sum + (r.price_estimate || 0), 0);
+  const totalRevenue = groupedFiltered.reduce((sum: number, r: any) => sum + (r.price_estimate || 0), 0);
 
   return (
     <div className="space-y-4 pb-24 bg-[#fafafa]">
