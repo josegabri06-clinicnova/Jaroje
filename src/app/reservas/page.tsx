@@ -604,44 +604,34 @@ export default function ReservasList() {
       if (searchId) {
         const found = reservas.find(r => r.id.toString() === searchId);
         if (found) {
-          setSelectedRes(found);
-          setSearch(searchId);
-          const today = getLocalDateStr();
-          const isCompleted = found.is_checked_out || found.check_out < today;
-          const isCancelled = found.status === 'cancelled' || found.status === '0';
-          if (isCancelled) {
-            setActiveTab('Canceladas');
-          } else {
-            setActiveTab(isCompleted ? 'Completadas' : 'Todas');
+          // Evitar bucles infinitos y renders redundantes si ya está seleccionada
+          if (!selectedRes || String(selectedRes.id) !== String(found.id)) {
+            setSelectedRes(found);
+            setSearch(searchId);
+            const today = getLocalDateStr();
+            const isCompleted = found.is_checked_out || found.check_out < today;
+            const isCancelled = found.status === 'cancelled' || found.status === '0';
+            if (isCancelled) {
+              setActiveTab('Canceladas');
+            } else {
+              setActiveTab(isCompleted ? 'Completadas' : 'Todas');
+            }
           }
         }
       }
     }
-  }, [reservas, searchParams]);
+  }, [reservas, searchParams, selectedRes]);
 
   // Sincronizar el parámetro de la URL con el estado de la reserva activa
-  // Sólo escribimos la URL si el ID de selectedRes coincide con la URL actual
-  // (o no hay id en la URL). Así evitamos sobreescribir una URL de navegación nueva.
+  // Sólo escribimos la URL si el ID de selectedRes coincide con la URL actual o no hay ID.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && selectedRes) {
       const currentUrlId = new URLSearchParams(window.location.search).get('id');
-      if (selectedRes) {
-        // Solo actualizar la URL si el selectedRes ya está en sincronía con la URL actual
-        // (evita sobreescribir una URL de navegación entrante con el id antiguo)
-        if (!currentUrlId || currentUrlId === String(selectedRes.id)) {
-          window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
-        }
-      } else {
-        // Solo limpiar el parámetro si ya se cargaron las reservas (evita race condition en mount)
-        if (reservas.length > 0) {
-          const params = new URLSearchParams(window.location.search);
-          if (params.has('id')) {
-            window.history.replaceState(null, '', '/reservas');
-          }
-        }
+      if (!currentUrlId || currentUrlId === String(selectedRes.id)) {
+        window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
       }
     }
-  }, [selectedRes, reservas.length]);
+  }, [selectedRes]);
 
   const handleConfirmCheckIn = async () => {
     setCheckInLoading(true);
