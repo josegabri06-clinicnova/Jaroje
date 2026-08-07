@@ -3564,6 +3564,31 @@ function ReservasListInner() {
                       <label className="block text-[11px] font-extrabold text-zinc-500 uppercase tracking-widest">
                         Habitaciones a Registrar (Check-In)
                       </label>
+                      <div className="flex bg-zinc-200/60 p-1 rounded-xl gap-1 mb-2">
+                        <button
+                          type="button"
+                          onClick={() => setCheckInSelectedIds(groupBookings.map(b => String(b.id)))}
+                          className={`flex-1 py-1.5 text-[11px] font-extrabold rounded-lg transition-all border-none cursor-pointer ${
+                            checkInSelectedIds.length === groupBookings.length
+                              ? 'bg-white text-zinc-950 shadow-sm'
+                              : 'text-zinc-550 hover:text-zinc-700 bg-transparent'
+                          }`}
+                        >
+                          👥 Check-In Grupal (Todas)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCheckInSelectedIds([String(selectedRes.id)])}
+                          className={`flex-1 py-1.5 text-[11px] font-extrabold rounded-lg transition-all border-none cursor-pointer ${
+                            checkInSelectedIds.length === 1 && checkInSelectedIds.includes(String(selectedRes.id))
+                              ? 'bg-white text-zinc-950 shadow-sm'
+                              : 'text-zinc-550 hover:text-zinc-700 bg-transparent'
+                          }`}
+                        >
+                          👤 Check-In Individual (Solo ésta)
+                        </button>
+                      </div>
+
                       <div className="space-y-2">
                         {groupBookings.map((b: any) => {
                           const isSel = checkInSelectedIds.includes(String(b.id));
