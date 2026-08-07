@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
-import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit } from '@/lib/beds24';
+import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -2458,9 +2458,12 @@ export default function CalendarPage() {
                                 {group.rooms.map(room => {
                                   const isAvail = availableRooms[room] !== false;
                                   const isCurrent = (selectedReserva.room || '').includes(room);
+                                  const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
+                                  const capRules = getCapacityRules(room, undefined);
+                                  const exceedsCapacity = totalGuests > capRules.max;
                                   return (
-                                    <option key={room} value={room} disabled={!isAvail || isCurrent}>
-                                      Habitación {room} {isCurrent ? '(Actual)' : isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
+                                    <option key={room} value={room} disabled={!isAvail || isCurrent || exceedsCapacity}>
+                                      Habitación {room} {isCurrent ? '(Actual)' : !isAvail ? '🔴 (Ocupada)' : exceedsCapacity ? `⚠️ (Capacidad excedida: máx ${capRules.max} huéspedes)` : '🟢 (Disponible)'}
                                     </option>
                                   );
                                 })}

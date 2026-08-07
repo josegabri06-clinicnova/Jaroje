@@ -5671,9 +5671,12 @@ function ReservasListInner() {
                           {group.rooms.map(room => {
                             const isAvail = availableRooms[room] !== false;
                             const isCurrent = (reassigningRes.room_name || '').includes(room);
+                            const totalGuests = Number(reassigningRes.num_adult || 1) + Number(reassigningRes.num_child || 0);
+                            const capRules = getCapacityRules(room, capacitySettings || undefined);
+                            const exceedsCapacity = totalGuests > capRules.max;
                             return (
-                              <option key={room} value={room} disabled={!isAvail || isCurrent}>
-                                Habitación {room} {isCurrent ? '(Actual)' : isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
+                              <option key={room} value={room} disabled={!isAvail || isCurrent || exceedsCapacity}>
+                                Habitación {room} {isCurrent ? '(Actual)' : !isAvail ? '🔴 (Ocupada)' : exceedsCapacity ? `⚠️ (Capacidad excedida: máx ${capRules.max} huéspedes)` : '🟢 (Disponible)'}
                               </option>
                             );
                           })}

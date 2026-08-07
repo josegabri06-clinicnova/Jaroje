@@ -5838,9 +5838,12 @@ export default function RecepcionPage() {
                               <optgroup key={group.category} label={group.category}>
                                 {group.rooms.map(roomNum => {
                                   const isAvail = availableRooms[roomNum];
+                                  const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
+                                  const capRules = getCapacityRules(roomNum, capacitySettings || undefined);
+                                  const exceedsCapacity = totalGuests > capRules.max;
                                   return (
-                                    <option key={roomNum} value={roomNum}>
-                                      Habitación {roomNum} {isAvail ? '🟢 (Disponible)' : '🔴 (Ocupada)'}
+                                    <option key={roomNum} value={roomNum} disabled={!isAvail || exceedsCapacity}>
+                                      Habitación {roomNum} {!isAvail ? '🔴 (Ocupada)' : exceedsCapacity ? `⚠️ (Capacidad excedida: máx ${capRules.max} huéspedes)` : '🟢 (Disponible)'}
                                     </option>
                                   );
                                 })}
