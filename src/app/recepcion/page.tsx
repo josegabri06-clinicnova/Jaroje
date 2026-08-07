@@ -6473,29 +6473,20 @@ export default function RecepcionPage() {
                     className="border border-zinc-200 bg-zinc-50 rounded-2xl p-4.5 flex flex-col gap-3"
                   >
                     <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest text-center">Subir Identificación</span>
-                    <div className="flex flex-col gap-2 w-full">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => fileCameraRef.current?.click()}
-                          className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                        >
-                          <Camera size={15} /> Cámara Nativa 📸
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowCameraModal(true)}
-                          className="flex-1 py-3 bg-zinc-700 hover:bg-zinc-800 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                        >
-                          <Video size={15} /> Cámara Web 💻
-                        </button>
-                      </div>
+                    <div className="flex gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => fileCameraRef.current?.click()}
+                        className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                      >
+                        <Camera size={15} /> Cámara 📸
+                      </button>
                       <button
                         type="button"
                         onClick={() => fileGalleryRef.current?.click()}
-                        className="w-full py-3 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
+                        className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-zinc-50"
                       >
-                        <Upload size={14} className="text-zinc-500" /> Cargar de Galería / PDF 📁
+                        <Upload size={14} className="text-zinc-500" /> Cargar Galería / PDF 📁
                       </button>
                     </div>
                     <input
@@ -6522,17 +6513,8 @@ export default function RecepcionPage() {
                           onClick={() => fileCameraRef.current?.click()}
                           className="flex-1 py-2.5 bg-zinc-900 hover:bg-zinc-950 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
                         >
-                          <Camera size={13} /> Cámara Nativa 📸
+                          <Camera size={13} /> Cámara 📸
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowCameraModal(true)}
-                          className="flex-1 py-2.5 bg-zinc-700 hover:bg-zinc-850 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                        >
-                          <Video size={13} /> Cámara Web 💻
-                        </button>
-                      </div>
-                      <div className="flex gap-2">
                         <button
                           type="button"
                           onClick={() => fileGalleryRef.current?.click()}

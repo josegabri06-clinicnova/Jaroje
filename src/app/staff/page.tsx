@@ -521,8 +521,10 @@ export default function StaffPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const resolvePhotoRef = useRef<HTMLInputElement>(null);
+  const fileCameraInputRef = useRef<HTMLInputElement>(null);
+  const fileGalleryInputRef = useRef<HTMLInputElement>(null);
+  const resolveCameraInputRef = useRef<HTMLInputElement>(null);
+  const resolveGalleryInputRef = useRef<HTMLInputElement>(null);
   
   const staffName = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_staff_name') || 'Personal') : 'Personal';
   const role = typeof window !== 'undefined' ? (localStorage.getItem('jaroje_role') || 'staff_limpieza') : 'staff_limpieza';
@@ -2537,7 +2539,16 @@ export default function StaffPage() {
                 <div>
                   <label className="block text-[12px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Foto de la Falla (Opcional - Múltiple)</label>
                   <input 
-                    ref={fileRef}
+                    ref={fileCameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    multiple
+                    onChange={handleImage}
+                    className="hidden"
+                  />
+                  <input 
+                    ref={fileGalleryInputRef}
                     type="file"
                     accept="image/*"
                     multiple
@@ -2547,11 +2558,19 @@ export default function StaffPage() {
                   <div className="flex gap-2 mb-3">
                     <button
                       type="button"
-                      onClick={() => fileRef.current?.click()}
-                      className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[13px] flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+                      onClick={() => fileCameraInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-zinc-900 text-white font-bold rounded-2xl hover:bg-zinc-800 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                     >
-                      <Camera size={16} />
-                      <span>Tomar Foto</span>
+                      <Camera size={15} />
+                      <span>Cámara 📸</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileGalleryInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Upload size={15} className="text-zinc-500" />
+                      <span>Cargar de Galería 📁</span>
                     </button>
                     {imagePreviews.length > 0 && (
                       <button
@@ -3031,7 +3050,15 @@ export default function StaffPage() {
                   Evidencia Fotográfica (Opcional)
                 </label>
                 <input
-                  ref={resolvePhotoRef}
+                  ref={resolveCameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
+                  className="hidden"
+                />
+                <input
+                  ref={resolveGalleryInputRef}
                   type="file"
                   accept="image/*"
                   onChange={e => setResolvePhotoFile(e.target.files ? e.target.files[0] : null)}
@@ -3056,14 +3083,24 @@ export default function StaffPage() {
                     <p className="text-[10px] text-emerald-600 font-bold pl-1">✓ Foto lista para adjuntar</p>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => resolvePhotoRef.current?.click()}
-                    className="w-full border-2 border-dashed border-emerald-200 bg-emerald-50/50 hover:bg-emerald-50 rounded-2xl py-6 flex flex-col items-center justify-center gap-1.5 cursor-pointer text-emerald-600 hover:text-emerald-700 transition-colors"
-                  >
-                    <Camera size={24} className="text-emerald-500" />
-                    <span className="text-[12px] font-bold">Tomar Foto / Seleccionar</span>
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => resolveCameraInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Camera size={15} />
+                      <span>Cámara 📸</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => resolveGalleryInputRef.current?.click()}
+                      className="flex-1 py-3 px-4 bg-white border border-zinc-200 text-zinc-800 font-bold rounded-2xl hover:bg-zinc-50 active:scale-95 transition-all text-center text-[12px] flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                    >
+                      <Upload size={15} className="text-zinc-500" />
+                      <span>Cargar de Galería 📁</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
