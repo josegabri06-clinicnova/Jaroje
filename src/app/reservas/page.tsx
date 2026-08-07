@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, LogOut } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -1178,7 +1178,125 @@ function ReservasListInner() {
       console.error(err);
       alert(`❌ Error al revertir check-in: ${err.message}`);
     }
-  };  const handleEditReceiptAmount = async (receiptId: string, currentAmount: number) => {
+  };
+
+  const handleForcedCheckOut = async () => {
+    if (!selectedRes) return;
+    const todayStrLocal = new Date().toLocaleDateString('sv-SE');
+    const roomNameDisplay = selectedRes.room_name || selectedRes.room || 'Sin Asignar';
+    if (!window.confirm(`🚨 ¿Estás seguro de que deseas ADELANTAR LA SALIDA de la Habitación ${roomNameDisplay} para el día de hoy (${todayStrLocal})?\n\nEsta acción modificará la reserva en Beds24 y el sistema, y registrará el Check-Out de inmediato.`)) {
+      return;
+    }
+    
+    setCheckInLoading(true);
+    try {
+      // 1. Modificar la fecha de check-out a hoy en Beds24 y Supabase
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedRes.id,
+          checkOut: todayStrLocal
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar la fecha de salida en el servidor');
+
+      // 2. Registrar el Check-Out en la base de datos (Supabase)
+      const operatorName = localStorage.getItem('jaroje_operator_name') || 'Admin';
+      const employeeNum = localStorage.getItem('jaroje_employee_num') || '0';
+      const operatorDisplay = `${operatorName} (${employeeNum})`;
+
+      const { error: chkErr } = await supabase.from('checkins').upsert({
+        reservation_id: String(selectedRes.id).toLowerCase().trim(),
+        guest_name: selectedRes.guest_name,
+        room: selectedRes.room_name || selectedRes.room || 'General',
+        check_in_date: selectedRes.check_in,
+        check_out_date: todayStrLocal,
+        status: 'checked_out',
+        checked_in_by: operatorDisplay,
+        document_url: selectedRes.document_url || null
+      }, { onConflict: 'reservation_id' });
+
+      if (chkErr) throw new Error('Error al registrar Check-Out en base de datos: ' + chkErr.message);
+
+      // 3. Trigger Limpieza
+      const roomNumMatch = (selectedRes.room_name || selectedRes.room || '').match(/\(([^)]+)\)/);
+      let roomNumber = roomNumMatch ? roomNumMatch[1] : null;
+      if (!roomNumber) {
+        const genericMatch = (selectedRes.room_name || selectedRes.room || '').match(/([A-Z]?\d+)/i);
+        roomNumber = genericMatch ? genericMatch[1] : (selectedRes.room_name || selectedRes.room || 'General');
+      }
+
+      if (roomNumber) {
+        await fetch('/api/room-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            room_number: roomNumber,
+            status: 'sucio_checkout',
+            updated_by: operatorDisplay,
+            checkout_reservation_id: String(selectedRes.id),
+            guest_name: selectedRes.guest_name,
+          }),
+        });
+      }
+
+      // 4. Crear tarea de limpieza automática
+      await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'limpieza',
+          room: selectedRes.room_name || selectedRes.room || 'General',
+          description: `Check-out completado. Habitación ${selectedRes.room_name || selectedRes.room} lista para limpieza.`,
+          reported_by: operatorDisplay,
+          direction: 'staff_to_staff',
+          status: 'pendiente'
+        }),
+      });
+
+      // 5. Registrar log de empleado
+      await fetch('/api/employee-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_num: employeeNum,
+          employee_name: operatorName,
+          department: 'Administración',
+          module: 'reservas',
+          action: 'check_out_forzado',
+          room: selectedRes.room_name || selectedRes.room || 'General',
+          details: JSON.stringify({
+            text: `ADMIN: Salida Forzada Anticipada de ${selectedRes.guest_name} (ID: ${selectedRes.id}) en la Habitación ${selectedRes.room_name || 'General'}. Check-Out modificado a hoy (${todayStrLocal}).`
+          })
+        })
+      });
+
+      alert(`✅ Salida forzada procesada con éxito. Check-out modificado a hoy.`);
+      
+      // Actualizar el estado local
+      setIsCheckedIn(false);
+      setSelectedRes((prev: any) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          check_out: todayStrLocal,
+          is_checked_in: false,
+          is_checked_out: true
+        };
+      });
+
+      await fetchReservas();
+      
+    } catch (err: any) {
+      alert(`❌ Error al procesar la salida forzada: ${err.message}`);
+    } finally {
+      setCheckInLoading(false);
+    }
+  };
+
+  const handleEditReceiptAmount = async (receiptId: string, currentAmount: number) => {
     if (userRole !== 'admin') {
       alert('⚠️ Solo los administradores pueden editar los montos de las transferencias.');
       return;
@@ -5132,12 +5250,21 @@ function ReservasListInner() {
                     )
                   )}
                   {userRole === 'admin' && (
-                    <button
-                      onClick={handleRevertCheckIn}
-                      className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 cursor-pointer animate-in fade-in"
-                    >
-                      ↩️ Revertir Check-In (Admin)
-                    </button>
+                    <>
+                      <button
+                        onClick={handleRevertCheckIn}
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 cursor-pointer animate-in fade-in"
+                      >
+                        ↩️ Revertir Check-In (Admin)
+                      </button>
+                      <button
+                        onClick={handleForcedCheckOut}
+                        disabled={checkInLoading}
+                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-rose-600/15 cursor-pointer mt-1.5 disabled:opacity-50"
+                      >
+                        <LogOut size={16} /> Adelantar Salida (Salida Hoy) 🚨
+                      </button>
+                    </>
                   )}
                 </div>
               ) : showPaymentFlow ? (
