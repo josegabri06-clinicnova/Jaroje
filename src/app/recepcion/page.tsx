@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
-  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw, Trash2, Video
+  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw, Trash2, Video, LogOut
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
@@ -4401,6 +4401,66 @@ export default function RecepcionPage() {
     alert(`Check-out de ${r.guest_name} completado. Habitación ${roomNumber} marcada en limpieza.`);
   };
 
+  const handleForcedCheckOut = async (r: Reserva) => {
+    const todayStrLocal = new Date().toLocaleDateString('sv-SE');
+    if (!window.confirm(`🚨 ¿Estás seguro de que deseas ADELANTAR LA SALIDA de la Habitación ${getUnitDisplay(r.room)} para el día de hoy (${todayStrLocal})?\n\nEsta acción modificará la reserva en Beds24 y el sistema, y registrará el Check-Out de inmediato.`)) {
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      // 1. Modificar la fecha de check-out a hoy en Beds24 y Supabase
+      const res = await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: r.id,
+          checkOut: todayStrLocal
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al actualizar la fecha de salida en el servidor');
+
+      // 2. Procesar el Check-Out normal (marca checked_out: true, crea tarea de limpieza, etc.)
+      const updatedRes = { ...r, check_out: todayStrLocal, checked_out: true };
+      
+      // Registrar log de empleado para auditoría de Admin
+      try {
+        const emp = getOperatorForLog();
+        const employeeNum = emp ? emp.employee_num : 'Admin';
+        const employeeName = emp ? emp.full_name : 'Administrador';
+        const employeeDept = emp ? emp.department : 'Administración';
+        
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: employeeNum,
+            employee_name: employeeName,
+            department: employeeDept,
+            module: 'recepcion',
+            action: 'check_out_forzado',
+            room: r.room || 'General',
+            details: JSON.stringify({
+              text: `ADMIN: Salida Forzada Anticipada de ${r.guest_name} (ID: ${r.id}) en la Habitación ${r.room || 'General'}. Check-Out modificado a hoy (${todayStrLocal}).`
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error al registrar log de salida forzada:", logErr);
+      }
+
+      await processCheckOut(updatedRes);
+      
+      setShowCheckInModal(false);
+      
+    } catch (err: any) {
+      alert(`❌ Error al procesar la salida forzada: ${err.message}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const updateStock = async (id: string, currentStock: number, change: number) => {
     if (currentStock + change < 0) return;
     setInventory(prev => prev.map(item => item.id === id ? { ...item, stock: item.stock + change } : item));
@@ -7421,7 +7481,7 @@ export default function RecepcionPage() {
               </div>
             )}
 
-            {selectedReserva.checked_in && (
+            {selectedReserva.checked_in && !selectedReserva.checked_out && (
               <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
                 {!isOtaRes ? (
                   <button
@@ -7443,6 +7503,15 @@ export default function RecepcionPage() {
                     <CheckCircle2 size={18} className="text-emerald-600 shrink-0" />
                     <span>Huésped en Casa (Reserva de OTA)</span>
                   </div>
+                )}
+                {getRole() === 'admin' && (
+                  <button
+                    onClick={() => handleForcedCheckOut(selectedReserva)}
+                    disabled={submitting}
+                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-rose-600/15 cursor-pointer mt-1 disabled:opacity-50"
+                  >
+                    <LogOut size={16} /> Adelantar Salida (Salida Hoy) 🚨
+                  </button>
                 )}
               </div>
             )}
