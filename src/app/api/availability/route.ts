@@ -115,25 +115,46 @@ export async function GET(req: Request) {
       console.warn("[Availability API] Failed to fetch Beds24 token or calendar rates:", tokenErr);
     }
 
-    // Calcular ocupación cruzada
-    const occupiedUnits = new Set<string>();
+    // Calcular ocupación cruzada contemplando reservas de categoría general (sin unidad física asignada)
     const reqIn = new Date(checkIn);
     const reqOut = new Date(checkOut);
-
     const bookings = bookingsData.data && Array.isArray(bookingsData.data) ? bookingsData.data : [];
 
+    // Inicializar estadísticas de ocupación por categoría
+    const categoryStats: Record<string, {
+      totalUnits: number;
+      assignedUnits: Set<string>;
+      unassignedCount: number;
+      allPhysicalUnits: string[];
+    }> = {};
+
+    ROOM_MAP.forEach(cat => {
+      categoryStats[cat.roomId] = {
+        totalUnits: cat.units.length,
+        assignedUnits: new Set<string>(),
+        unassignedCount: 0,
+        allPhysicalUnits: cat.units.map(u => u.unitId)
+      };
+    });
+
+    // Procesar reservas de Beds24
     bookings.forEach((b: any) => {
       if (String(b.status) !== '0' && b.status !== 'cancelled') {
         const bIn = new Date(b.arrival);
         const bOut = new Date(b.departure);
         
-        // Hay solapamiento si la entrada de la reserva es ANTES de que el nuevo cliente salga,
-        // Y la salida de la reserva es DESPUÉS de que el nuevo cliente entre.
         if (bIn < reqOut && bOut > reqIn) {
-          const uId = String(b.unitId ?? '').trim();
-          if (b.roomId && uId && uId !== '0') {
+          if (b.roomId) {
             const parent = getParentMapping(b.roomId, b.unitId);
-            occupiedUnits.add(`${parent.roomId}_${parent.unitId}`);
+            const stats = categoryStats[parent.roomId];
+            if (stats) {
+              const uId = String(b.unitId ?? '').trim();
+              if (uId && uId !== '0') {
+                stats.assignedUnits.add(parent.unitId);
+              } else {
+                stats.unassignedCount++;
+              }
+            }
           }
         }
       }
@@ -150,12 +171,41 @@ export async function GET(req: Request) {
         const bIn = new Date(b.check_in);
         const bOut = new Date(b.check_out);
         if (bIn < reqOut && bOut > reqIn) {
-          occupiedUnits.add(`${b.room_id}_${b.unit_id}`);
+          const stats = categoryStats[b.room_id];
+          if (stats) {
+            const uId = String(b.unit_id ?? '').trim();
+            if (uId && uId !== '0') {
+              stats.assignedUnits.add(b.unit_id);
+            } else {
+              stats.unassignedCount++;
+            }
+          }
         }
       });
     } catch (localDbErr) {
       console.error("[Availability API] Error reading local_reservas:", localDbErr);
     }
+
+    // Calcular qué unidades específicas marcar como ocupadas
+    const occupiedUnits = new Set<string>();
+
+    Object.keys(categoryStats).forEach(roomId => {
+      const stats = categoryStats[roomId];
+      
+      // 1. Las asignadas físicamente son ocupadas de forma directa
+      stats.assignedUnits.forEach(unitId => {
+        occupiedUnits.add(`${roomId}_${unitId}`);
+      });
+
+      // 2. Las reservas sin asignar consumen de las habitaciones físicas restantes
+      let remainingUnassigned = stats.unassignedCount;
+      if (remainingUnassigned > 0) {
+        const freePhysicalUnits = stats.allPhysicalUnits.filter(uId => !stats.assignedUnits.has(uId));
+        for (let i = 0; i < Math.min(remainingUnassigned, freePhysicalUnits.length); i++) {
+          occupiedUnits.add(`${roomId}_${freePhysicalUnits[i]}`);
+        }
+      }
+    });
 
     // Cargar dynamicSettings (pricing_unit_settings) de precios
     let dynamicSettings: any = null;
