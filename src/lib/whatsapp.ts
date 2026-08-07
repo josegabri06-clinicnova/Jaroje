@@ -362,7 +362,10 @@ export async function sendWhatsAppTemplate(
       'portal_huesped_link',
       'portal_huesped_link_en',
       'rechazo_solicitud',
-      'alojamiento_listo'
+      'alojamiento_listo',
+      'disponibilidad_liberada',
+      'salida_checkout',
+      'comparte_experiencia'
     ];
 
     let resolvedButtonType = buttonType;

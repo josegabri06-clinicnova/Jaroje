@@ -313,7 +313,7 @@ export async function GET(req: Request) {
               }
 
               // Enviar WhatsApp de disponibilidad liberada
-              const waRes = await sendTemplate4_DisponibilidadLiberada(booking);
+              const waRes = await sendTemplate4_DisponibilidadLiberada(booking, true);
               if (waRes.success) {
                 await supabase.from('whatsapp_logs').insert([{
                   reservation_id: bookingIdStr,
@@ -346,7 +346,7 @@ export async function GET(req: Request) {
         if (booking.status === 'cancelled') {
           const logKey = `${bookingIdStr}_disponibilidad_liberada`;
           if (!sentSet.has(logKey)) {
-            const res = await sendTemplate4_DisponibilidadLiberada(booking);
+            const res = await sendTemplate4_DisponibilidadLiberada(booking, true);
             if (res.success) {
               await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'disponibilidad_liberada', phone: guestPhone }]);
               reports.push(`Enviado Mensaje 4 (Disponibilidad Liberada) a ${booking.guest_name} (ID: ${bookingIdStr})`);
