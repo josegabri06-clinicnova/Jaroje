@@ -396,8 +396,8 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
 
   if (isThreeDayRoom) {
-    // Servicio un día sí y un día no, comenzando desde el primer día completo de estancia (diffDays = 1, 3, 5, etc.)
-    return diffDays >= 1 && diffDays % 2 === 1;
+    // Servicio un día sí y un día no, comenzando desde el segundo día completo de estancia (diffDays = 2, 4, 6, etc.)
+    return diffDays >= 2 && diffDays % 2 === 0;
   } else if (isDailyRoom) {
     return diffDays >= 1;
   }
