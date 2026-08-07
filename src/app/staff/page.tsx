@@ -266,7 +266,7 @@ function getRoomOperationalStatus(
   todayStr: string,
   lastUpdatedAt?: string
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
-  const updateDateStr = lastUpdatedAt ? (lastUpdatedAt || '').split('T')[0].split(' ')[0] : '';
+  const updateDateStr = lastUpdatedAt ? getLocalDateStr(new Date(lastUpdatedAt)) : '';
   const isCleanedToday = (updateDateStr === todayStr) && dbStatus === 'limpia';
   const isEnLimpiezaToday = (dbStatus === 'en_limpieza');
   const isUpdatedToday = (updateDateStr === todayStr);
