@@ -4089,7 +4089,7 @@ function ReservasListInner() {
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
                       <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <svg className="w-3.5 h-3.5 text-indigo-650" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <svg className="w-3.5 h-3.5 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                           </svg>
@@ -4140,7 +4140,7 @@ function ReservasListInner() {
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-2">
                       <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <svg className="w-3.5 h-3.5 text-amber-650" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <svg className="w-3.5 h-3.5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
                             <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
                           </svg>
@@ -4189,7 +4189,7 @@ function ReservasListInner() {
                     {getRole() === 'admin' && selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
                       <button
                         onClick={() => { setShowReassignModal(true); setReassigningRes(selectedRes); }}
-                        className="text-[11px] font-bold text-blue-650 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                       >
                         Reasignar 🔀
                       </button>
@@ -5082,7 +5082,7 @@ function ReservasListInner() {
                 <button
                   onClick={handleAcknowledgeReserva}
                   disabled={ackLoading}
-                  className="w-full bg-indigo-650 hover:bg-indigo-700 text-white font-bold text-[14px] py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-md shadow-indigo-600/10 flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[14px] py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-md shadow-indigo-600/10 flex items-center justify-center gap-2 cursor-pointer"
                 >
                   {ackLoading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -5134,7 +5134,7 @@ function ReservasListInner() {
                   {userRole === 'admin' && (
                     <button
                       onClick={handleRevertCheckIn}
-                      className="w-full bg-orange-650 hover:bg-orange-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 cursor-pointer animate-in fade-in"
+                      className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-orange-600/10 cursor-pointer animate-in fade-in"
                     >
                       ↩️ Revertir Check-In (Admin)
                     </button>
@@ -5631,7 +5631,7 @@ function ReservasListInner() {
                       }`}
                     >
                       <div className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-all ${
-                        isSelected ? 'bg-indigo-650 border-indigo-650 text-white' : 'border-zinc-300 bg-white'
+                        isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-zinc-300 bg-white'
                       }`}>
                         {isSelected && <Check size={11} strokeWidth={4} />}
                       </div>
@@ -5662,7 +5662,7 @@ function ReservasListInner() {
                   await executeAcknowledge(toAck, ackGroupTargetRes);
                 }}
                 disabled={ackLoading || selectedAckMemberIds.length === 0}
-                className="w-full py-3.5 bg-indigo-650 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-[13px] uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer border-none"
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-2xl text-[13px] uppercase tracking-wider shadow-md shadow-indigo-600/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer border-none"
               >
                 {ackLoading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
