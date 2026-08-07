@@ -699,14 +699,17 @@ function ReservasListInner() {
           lastSearchId.current = String(selectedRes.id);
         }
       } else {
-        const params = new URLSearchParams(window.location.search);
-        if (params.has('id')) {
-          window.history.replaceState(null, '', '/reservas');
-          lastSearchId.current = null;
+        // Solo limpiar el parámetro si ya se cargaron las reservas y antes hubo una activa
+        if (reservas.length > 0) {
+          const params = new URLSearchParams(window.location.search);
+          if (params.has('id') && lastSearchId.current !== null) {
+            window.history.replaceState(null, '', '/reservas');
+            lastSearchId.current = null;
+          }
         }
       }
     }
-  }, [selectedRes]);
+  }, [selectedRes, reservas.length]);
 
   const handleConfirmCheckIn = async () => {
     if (checkInSelectedIds.length === 0) {
