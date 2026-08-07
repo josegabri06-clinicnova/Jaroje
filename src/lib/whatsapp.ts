@@ -503,6 +503,67 @@ export async function sendWhatsAppTemplate(
       }
     }
 
+    // Auto-retry without button parameters if it still fails (in case the template in Meta has static buttons or no buttons at all)
+    if (status !== 200 && finalButtonParams && finalButtonParams.length > 0) {
+      console.warn(`Meta API failed with ${status} for template ${templateName} (with buttons). Retrying without button parameters...`);
+      
+      const bodyOnlyComponent = components.filter(c => c.type === 'body');
+      const retryNoButtonsPayload = {
+        ...payload,
+        template: {
+          ...payload.template,
+          components: bodyOnlyComponent
+        }
+      };
+
+      try {
+        const retryRes = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(retryNoButtonsPayload)
+        });
+
+        if (retryRes.ok) {
+          response = retryRes;
+          status = retryRes.status;
+          resBody = await retryRes.json();
+          console.log(`✅ Success retrying template ${templateName} without button parameters.`);
+        } else {
+          console.warn(`Retry without buttons failed:`, await retryRes.clone().json());
+          // Si falló el reintento sin botones, ver si podemos probar también con el idioma alternativo sin botones
+          if (languageCode === 'es_MX' || languageCode === 'es') {
+            const altLang = languageCode === 'es_MX' ? 'es' : 'es_MX';
+            const retryNoButtonsAltLangPayload = {
+              ...retryNoButtonsPayload,
+              template: {
+                ...retryNoButtonsPayload.template,
+                language: { code: altLang }
+              }
+            };
+            const retryAltRes = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(retryNoButtonsAltLangPayload)
+            });
+            if (retryAltRes.ok) {
+              response = retryAltRes;
+              status = retryAltRes.status;
+              resBody = await retryAltRes.json();
+              console.log(`✅ Success retrying template ${templateName} without button parameters in alternative language: ${altLang}`);
+            }
+          }
+        }
+      } catch (retryErr) {
+        console.error(`Error during no-button retry for template ${templateName}:`, retryErr);
+      }
+    }
+
     if (status !== 200) {
       console.error(`Meta API error template ${templateName}:`, resBody);
       return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };

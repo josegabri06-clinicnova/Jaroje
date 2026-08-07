@@ -130,13 +130,6 @@ export async function POST(req: Request) {
               const depositVal = Number(b.deposit || 0);
               if (depositVal === 0 && phone) {
                 try {
-                  const { data: ultimoAvisoEnviado } = await supabase
-                    .from('whatsapp_logs')
-                    .select('id')
-                    .eq('reservation_id', bookingIdStr)
-                    .eq('template_name', 'ultimo_aviso')
-                    .maybeSingle();
-
                   const { data: liberacionYaEnviada } = await supabase
                     .from('whatsapp_logs')
                     .select('id')
@@ -144,7 +137,7 @@ export async function POST(req: Request) {
                     .eq('template_name', 'disponibilidad_liberada')
                     .maybeSingle();
 
-                  if (ultimoAvisoEnviado && !liberacionYaEnviada) {
+                  if (!liberacionYaEnviada) {
                     const { sendTemplate4_DisponibilidadLiberada } = await import('@/lib/whatsapp');
                     const normalizedBooking = {
                       id: b.id,
