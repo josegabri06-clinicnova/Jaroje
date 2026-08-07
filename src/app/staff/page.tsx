@@ -377,7 +377,7 @@ function getRoomOperationalStatus(
 
 function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any[], todayStr: string): boolean {
   const currentRes = activeReservations.find(r => {
-    if (r.status === 'cancelled' || r.status === 'cancelado') return false;
+    if (r.status === 'cancelled' || r.status === 'cancelado' || String(r.status) === '0') return false;
     const cIn = (r.check_in || r.arrival || '').split('T')[0].split(' ')[0];
     const cOut = (r.check_out || r.departure || '').split('T')[0].split(' ')[0];
     return matchesRoomNumber(r, roomNum) && (r.checked_in || (cIn <= todayStr && cOut > todayStr)) && !r.checked_out && cOut >= todayStr;
@@ -396,7 +396,8 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
 
   if (isThreeDayRoom) {
-    return diffDays >= 2 && diffDays % 2 === 0;
+    // Servicio un día sí y un día no, comenzando desde el primer día completo de estancia (diffDays = 1, 3, 5, etc.)
+    return diffDays >= 1 && diffDays % 2 === 1;
   } else if (isDailyRoom) {
     return diffDays >= 1;
   }
@@ -759,7 +760,10 @@ export default function StaffPage() {
       
       // 1. Verificar si es salida hoy (Check-out)
       const salidaRes = reservas.find(res => {
-        return matchesRoomNumber(res, r) && res.check_out === todayStr && !res.checked_out && res.status !== 'cancelled';
+        return matchesRoomNumber(res, r) && 
+               (res.check_out || '').split('T')[0].split(' ')[0] === todayStr && 
+               res.status !== 'cancelled' && 
+               String(res.status) !== '0';
       });
       
       if (salidaRes) {
@@ -778,7 +782,11 @@ export default function StaffPage() {
       
       // 2. Verificar si es stayover hoy (Servicio durante estancia)
       const stayoverRes = reservas.find(res => {
-        return matchesRoomNumber(res, r) && res.check_in <= todayStr && res.check_out > todayStr && res.status !== 'cancelled';
+        return matchesRoomNumber(res, r) && 
+               (res.check_in || '').split('T')[0].split(' ')[0] <= todayStr && 
+               (res.check_out || '').split('T')[0].split(' ')[0] > todayStr && 
+               res.status !== 'cancelled' && 
+               String(res.status) !== '0';
       });
       
       if (stayoverRes && !stayoverRes.checked_out) {
