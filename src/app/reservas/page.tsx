@@ -5286,7 +5286,7 @@ function ReservasListInner() {
                       <button
                         onClick={handleForcedCheckOut}
                         disabled={checkInLoading}
-                        className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] shadow-md shadow-rose-600/15 cursor-pointer mt-1.5 disabled:opacity-50"
+                        className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[14px] py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98] border border-rose-200 shadow-sm cursor-pointer mt-1.5 disabled:opacity-50"
                       >
                         <LogOut size={16} /> Adelantar Salida (Salida Hoy) 🚨
                       </button>
@@ -5410,10 +5410,10 @@ function ReservasListInner() {
                     setShowCancelModal(true);
                   }}
                   disabled={cancelLoading}
-                  className="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[13.5px] py-3.5 rounded-xl transition-all active:scale-[0.98] border border-rose-200 flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                  className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-[13.5px] py-3.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/15 disabled:opacity-50 cursor-pointer"
                 >
                   {cancelLoading ? (
-                    <div className="w-4 h-4 border-2 border-rose-600/30 border-t-rose-600 rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
                       <AlertCircle size={15} />
