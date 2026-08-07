@@ -2269,14 +2269,15 @@ function ReservasListInner() {
       alert('🔒 Acción no autorizada. Solo los usuarios administradores pueden revisar reservas y enviar mensajes.');
       return;
     }
-    const targetRes = resData || selectedRes;
+    const cleanResData = (resData && typeof resData === 'object' && 'id' in resData) ? resData : null;
+    const targetRes = cleanResData || selectedRes;
     if (!targetRes) return;
 
     // Resolver miembros
     let members = [targetRes];
-    if (resData && resData.is_group_card && Array.isArray(resData.group_members)) {
-      members = resData.group_members;
-    } else if (!resData && groupBookings.length > 1) {
+    if (cleanResData && cleanResData.is_group_card && Array.isArray(cleanResData.group_members)) {
+      members = cleanResData.group_members;
+    } else if (!cleanResData && groupBookings.length > 1) {
       members = groupBookings;
     }
 
@@ -5198,7 +5199,7 @@ function ReservasListInner() {
             <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
               {userRole === 'admin' && activeTab === 'Nuevas' && isReservationNew(selectedRes) && (
                 <button
-                  onClick={handleAcknowledgeReserva}
+                  onClick={() => handleAcknowledgeReserva()}
                   disabled={ackLoading}
                   className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[14px] py-3.5 rounded-xl transition-all active:scale-[0.98] shadow-md shadow-indigo-600/10 flex items-center justify-center gap-2 cursor-pointer"
                 >
