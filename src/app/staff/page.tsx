@@ -1819,7 +1819,7 @@ export default function StaffPage() {
                                 setShowStatusModal(true);
                               }
                             }}
-                            className={`aspect-square rounded-2xl border flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
+                            className={`aspect-square rounded-2xl border-[3px] flex flex-col items-center justify-center cursor-pointer shadow-sm hover:scale-[1.06] active:scale-[0.94] transition-all text-center ${colorClasses}`}
                           >
                             <span className="text-[11px] font-black tracking-tight leading-none">{roomNum}</span>
                             <span className={`w-1.5 h-1.5 rounded-full border border-white mt-1 shrink-0 ${dotClass}`} />
