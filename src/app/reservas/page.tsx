@@ -3218,7 +3218,7 @@ function ReservasListInner() {
             </div>
 
             {/* Contenido Modal */}
-            <div className="flex-1 overflow-y-auto overscroll-y-contain p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto overscroll-y-contain p-6 pb-28 space-y-6">
               
               {isEditingRes ? (
                 // Formulario de Edición Admin
@@ -5217,227 +5217,227 @@ function ReservasListInner() {
                   )}
                   </div>
                 </>
-          )}
-            </div>
-            
-            {/* Acción Botón */}
-            <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
-              {userRole === 'admin' && activeTab === 'Nuevas' && isReservationNew(selectedRes) && (
-                <button
-                  onClick={() => handleAcknowledgeReserva()}
-                  disabled={ackLoading}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[13px] py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-md shadow-indigo-600/10 flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {ackLoading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <span>✓ REVISADO (Quitar de Nuevas)</span>
-                  )}
-                </button>
               )}
 
-              {/* Grid de Botones Compactos */}
-              <div className="grid grid-cols-2 gap-2 w-full">
-                {isCheckedIn ? (
-                  <>
-                    {!isOtaRes ? (
-                      <button
-                        onClick={() => {
-                          setExtensionNights(1);
-                          setExtensionCustomPrice('');
-                          setExtensionRegisterPayment(true);
-                          setExtensionPaymentMethod(null);
-                          setExtensionAccountId('');
-                          setShowExtensionFlow(true);
-                          setShowAbonoFlow(false);
-                        }}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
-                      >
-                        <CheckCircle2 size={15} /> Extender Estancia 🗓️
-                      </button>
-                    ) : (
-                      <div className="col-span-2 bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[12px] py-2 rounded-xl flex items-center justify-center gap-1.5 select-none">
-                        <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
-                        <span>Huésped en Casa (OTA)</span>
-                      </div>
-                    )}
-                    {selectedRes.document_url && (
-                      userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
-                        <div className="bg-zinc-100 text-zinc-400 font-bold text-[12px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 select-none">
-                          <Lock size={14} className="text-zinc-400 shrink-0" />
-                          <span>Doc. Oculto</span>
-                        </div>
-                      ) : (
-                        <a 
-                          href={selectedRes.document_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={`bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 transition-colors shadow-sm ${isOtaRes ? 'col-span-2' : ''}`}
-                        >
-                          <FileText size={15} /> Ver Documento
-                        </a>
-                      )
-                    )}
-                    {userRole === 'admin' && (
-                      <>
-                        <button
-                          onClick={handleRevertCheckIn}
-                          className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
-                        >
-                          ↩️ Revertir Check-In
-                        </button>
-                        <button
-                          onClick={handleForcedCheckOut}
-                          disabled={checkInLoading}
-                          className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] border border-rose-200 shadow-sm cursor-pointer disabled:opacity-50"
-                        >
-                          <LogOut size={15} /> Salida Hoy 🚨
-                        </button>
-                      </>
-                    )}
-                  </>
-                ) : showPaymentFlow ? (
-                  <div className="col-span-2 flex gap-2 w-full animate-in fade-in duration-200">
-                    <button 
-                      onClick={() => {
-                        setShowPaymentFlow(false);
-                        setDniPreview(null);
-                        setDocumentFile(null);
-                        setPaymentMethod('efectivo');
-                        setPaymentReference('');
-                        setPaymentAmount('');
-                        setPaymentDescription('');
-                      }} 
-                      className="flex-1 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[12.5px] transition-colors"
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      onClick={handleConfirmCheckIn} 
-                      disabled={(() => {
-                        if (checkInLoading) return true;
-                        if (!dniPreview) return true;
-                        if (checkInSelectedIds.length === 0) return true;
-                        
-                        const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                        const pendingBalance = isOta ? 0 : selectedCheckInTotalBalance;
-
-                        const currentPayment = Number(paymentAmount || 0);
-                        if (currentPayment > 0 && !paymentReference.trim()) return true;
-                        if (pendingBalance > 0) {
-                          if (!paymentReference.trim()) return true;
-                          if (currentPayment < pendingBalance) return true;
-                        }
-
-                        return false;
-                      })()}
-                      className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[12.5px] shadow-sm disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-1.5 cursor-pointer"
-                    >
-                      {checkInLoading ? <RefreshCw size={15} className="animate-spin" /> : <LogIn size={15} />}
-                      {checkInLoading ? 'Procesando...' : 'Completar Check-In'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="col-span-2 w-full">
-                    {(() => {
-                      if (selectedRes.status === 'cancelled') {
-                        return (
-                          <div className="w-full bg-rose-50 text-rose-600 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-rose-200 shadow-sm">
-                            <AlertCircle size={16} className="text-rose-500" />
-                            <span>Reserva Cancelada ✕</span>
-                          </div>
-                        );
-                      }
-                      if (selectedRes.is_checked_out) {
-                        return (
-                          <div className="flex flex-col gap-2 w-full">
-                            <div className="w-full bg-zinc-100 text-zinc-600 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200">
-                              <CheckCircle2 size={16} className="text-zinc-500" />
-                              <span>Estancia Completada (Checked-Out)</span>
-                            </div>
-                            {selectedRes.document_url && (
-                              userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
-                                <div className="w-full bg-zinc-100 text-zinc-400 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 select-none">
-                                  <Lock size={15} className="text-zinc-400 shrink-0" />
-                                  <span>Documento oculto hasta el check-in</span>
-                                </div>
-                              ) : (
-                                <a 
-                                  href={selectedRes.document_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 transition-colors shadow-sm"
-                                >
-                                  <FileText size={15} /> Ver Documento / Pasaporte
-                                </a>
-                              )
-                            )}
-                          </div>
-                        );
-                      }
-
-                      const isFuture = selectedRes.check_in && selectedRes.check_in > todayStr;
-                      
-                      if (isFuture) {
-                        return (
-                          <button 
-                            disabled
-                            className="w-full bg-zinc-100 text-zinc-400 font-bold text-[13px] py-2.5 rounded-xl cursor-not-allowed flex items-center justify-center gap-1.5 border border-zinc-200"
-                          >
-                            <LogIn size={16} strokeWidth={2.5} className="opacity-40" />
-                            <span>Check-In el {format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es })}</span>
-                          </button>
-                        );
-                      }
-
-                      return (
-                        <button 
-                          onClick={() => setShowPaymentFlow(true)}
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-[13.5px] py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5"
-                        >
-                          <LogIn size={16} strokeWidth={2.5} /> Iniciar Check-In
-                        </button>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                {/* Cancelar Reserva Button (Solo Admin) */}
-                {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin' && (
-                  <button 
-                    onClick={() => {
-                      if (userRole !== 'admin') {
-                        alert('❌ Error: Solo los administradores pueden cancelar reservas.');
-                        return;
-                      }
-                      setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
-                      setShowCancelModal(true);
-                    }}
-                    disabled={cancelLoading}
-                    className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1 shadow-sm disabled:opacity-50 cursor-pointer animate-in fade-in"
+              {/* Botones de Acción (Movidos adentro del Scroll para evitar que se corten en móvil) */}
+              <div className="pt-4 border-t border-zinc-150 flex flex-col gap-2 mt-4">
+                {userRole === 'admin' && activeTab === 'Nuevas' && isReservationNew(selectedRes) && (
+                  <button
+                    onClick={() => handleAcknowledgeReserva()}
+                    disabled={ackLoading}
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[13px] py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-md shadow-indigo-600/10 flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    {cancelLoading ? (
-                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {ackLoading ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     ) : (
-                      <>
-                        <AlertCircle size={14} />
-                        Cancelar Reserva
-                      </>
+                      <span>✓ REVISADO (Quitar de Nuevas)</span>
                     )}
                   </button>
                 )}
 
-                {/* Ver Info Original en Beds24 */}
-                <button 
-                  onClick={() => {
-                    window.open(`https://beds24.com/control2.php?pagetype=autoBooking&id=${selectedRes.id}`, '_blank');
-                  }}
-                  className={`bg-white hover:bg-zinc-50 text-zinc-700 font-semibold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] border border-zinc-200 flex items-center justify-center gap-1 shadow-sm ${
-                    (selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin') ? '' : 'col-span-2'
-                  }`}
-                >
-                  Ver en Beds24 🔗
-                </button>
+                {/* Grid de Botones Compactos */}
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  {isCheckedIn ? (
+                    <>
+                      {!isOtaRes ? (
+                        <button
+                          onClick={() => {
+                            setExtensionNights(1);
+                            setExtensionCustomPrice('');
+                            setExtensionRegisterPayment(true);
+                            setExtensionPaymentMethod(null);
+                            setExtensionAccountId('');
+                            setShowExtensionFlow(true);
+                            setShowAbonoFlow(false);
+                          }}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
+                        >
+                          <CheckCircle2 size={15} /> Extender Estancia 🗓️
+                        </button>
+                      ) : (
+                        <div className="col-span-2 bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[12px] py-2 rounded-xl flex items-center justify-center gap-1.5 select-none">
+                          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                          <span>Huésped en Casa (OTA)</span>
+                        </div>
+                      )}
+                      {selectedRes.document_url && (
+                        userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
+                          <div className="bg-zinc-100 text-zinc-400 font-bold text-[12px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 select-none">
+                            <Lock size={14} className="text-zinc-400 shrink-0" />
+                            <span>Doc. Oculto</span>
+                          </div>
+                        ) : (
+                          <a 
+                            href={selectedRes.document_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={`bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 transition-colors shadow-sm ${isOtaRes ? 'col-span-2' : ''}`}
+                          >
+                            <FileText size={15} /> Ver Documento
+                          </a>
+                        )
+                      )}
+                      {userRole === 'admin' && (
+                        <>
+                          <button
+                            onClick={handleRevertCheckIn}
+                            className="bg-orange-600 hover:bg-orange-700 text-white font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] shadow-sm cursor-pointer"
+                          >
+                            ↩️ Revertir Check-In
+                          </button>
+                          <button
+                            onClick={handleForcedCheckOut}
+                            disabled={checkInLoading}
+                            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-[0.98] border border-rose-200 shadow-sm cursor-pointer disabled:opacity-50"
+                          >
+                            <LogOut size={15} /> Salida Hoy 🚨
+                          </button>
+                        </>
+                      )}
+                    </>
+                  ) : showPaymentFlow ? (
+                    <div className="col-span-2 flex gap-2 w-full animate-in fade-in duration-200">
+                      <button 
+                        onClick={() => {
+                          setShowPaymentFlow(false);
+                          setDniPreview(null);
+                          setDocumentFile(null);
+                          setPaymentMethod('efectivo');
+                          setPaymentReference('');
+                          setPaymentAmount('');
+                          setPaymentDescription('');
+                        }} 
+                        className="flex-1 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[12.5px] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        onClick={handleConfirmCheckIn} 
+                        disabled={(() => {
+                          if (checkInLoading) return true;
+                          if (!dniPreview) return true;
+                          if (checkInSelectedIds.length === 0) return true;
+                          
+                          const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                          const pendingBalance = isOta ? 0 : selectedCheckInTotalBalance;
+
+                          const currentPayment = Number(paymentAmount || 0);
+                          if (currentPayment > 0 && !paymentReference.trim()) return true;
+                          if (pendingBalance > 0) {
+                            if (!paymentReference.trim()) return true;
+                            if (currentPayment < pendingBalance) return true;
+                          }
+
+                          return false;
+                        })()}
+                        className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[12.5px] shadow-sm disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-1.5 cursor-pointer"
+                      >
+                        {checkInLoading ? <RefreshCw size={15} className="animate-spin" /> : <LogIn size={15} />}
+                        {checkInLoading ? 'Procesando...' : 'Completar Check-In'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="col-span-2 w-full">
+                      {(() => {
+                        if (selectedRes.status === 'cancelled') {
+                          return (
+                            <div className="w-full bg-rose-50 text-rose-600 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-rose-200 shadow-sm">
+                              <AlertCircle size={16} className="text-rose-500" />
+                              <span>Reserva Cancelada ✕</span>
+                            </div>
+                          );
+                        }
+                        if (selectedRes.is_checked_out) {
+                          return (
+                            <div className="flex flex-col gap-2 w-full">
+                              <div className="w-full bg-zinc-100 text-zinc-600 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200">
+                                <CheckCircle2 size={16} className="text-zinc-500" />
+                                <span>Estancia Completada (Checked-Out)</span>
+                              </div>
+                              {selectedRes.document_url && (
+                                userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
+                                  <div className="w-full bg-zinc-100 text-zinc-400 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 select-none">
+                                    <Lock size={15} className="text-zinc-400 shrink-0" />
+                                    <span>Documento oculto hasta el check-in</span>
+                                  </div>
+                                ) : (
+                                  <a 
+                                    href={selectedRes.document_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold text-[13px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-zinc-200 transition-colors shadow-sm"
+                                  >
+                                    <FileText size={15} /> Ver Documento / Pasaporte
+                                  </a>
+                                )
+                              )}
+                            </div>
+                          );
+                        }
+
+                        const isFuture = selectedRes.check_in && selectedRes.check_in > todayStr;
+                        
+                        if (isFuture) {
+                          return (
+                            <button 
+                              disabled
+                              className="w-full bg-zinc-100 text-zinc-400 font-bold text-[13px] py-2.5 rounded-xl cursor-not-allowed flex items-center justify-center gap-1.5 border border-zinc-200"
+                            >
+                              <LogIn size={16} strokeWidth={2.5} className="opacity-40" />
+                              <span>Check-In el {format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es })}</span>
+                            </button>
+                          );
+                        }
+
+                        return (
+                          <button 
+                            onClick={() => setShowPaymentFlow(true)}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-[13.5px] py-2.5 rounded-xl transition-all active:scale-[0.98] shadow-sm flex items-center justify-center gap-1.5"
+                          >
+                            <LogIn size={16} strokeWidth={2.5} /> Iniciar Check-In
+                          </button>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Cancelar Reserva Button (Solo Admin) */}
+                  {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin' && (
+                    <button 
+                      onClick={() => {
+                        if (userRole !== 'admin') {
+                          alert('❌ Error: Solo los administradores pueden cancelar reservas.');
+                          return;
+                        }
+                        setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
+                        setShowCancelModal(true);
+                      }}
+                      disabled={cancelLoading}
+                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1 shadow-sm disabled:opacity-50 cursor-pointer animate-in fade-in"
+                    >
+                      {cancelLoading ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <AlertCircle size={14} />
+                          Cancelar Reserva
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Ver Info Original en Beds24 */}
+                  <button 
+                    onClick={() => {
+                      window.open(`https://beds24.com/control2.php?pagetype=autoBooking&id=${selectedRes.id}`, '_blank');
+                    }}
+                    className={`bg-white hover:bg-zinc-50 text-zinc-700 font-semibold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] border border-zinc-200 flex items-center justify-center gap-1 shadow-sm ${
+                      (selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin') ? '' : 'col-span-2'
+                    }`}
+                  >
+                    Ver en Beds24 🔗
+                  </button>
+                </div>
               </div>
             </div>
             
