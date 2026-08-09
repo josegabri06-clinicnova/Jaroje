@@ -8,7 +8,7 @@ import {
   ArrowDownLeft, Clock, Plus, X, Send,
   ChevronDown, CheckCheck, Camera, Bell, Package, Minus,
   RefreshCw, ShieldAlert, UserPlus, Trash2, Download, Database, 
-  History, ChevronLeft, Calendar, Moon, Users
+  History, ChevronLeft, Calendar, Moon, Users, Upload
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServer, getOfficialEmployees } from '@/lib/auth';
