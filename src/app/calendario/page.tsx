@@ -421,7 +421,7 @@ export default function CalendarPage() {
       const fetchReassignAvailability = async () => {
         setLoadingAvailability(true);
         try {
-          const res = await fetch(`/api/availability?checkIn=${selectedReserva.check_in}&checkOut=${selectedReserva.check_out}`);
+          const res = await fetch(`/api/availability?checkIn=${selectedReserva.check_in}&checkOut=${selectedReserva.check_out}&t=${Date.now()}`);
           const json = await res.json();
           if (json.success && json.inventory) {
             const availMap: Record<string, boolean> = {};
@@ -2456,14 +2456,14 @@ export default function CalendarPage() {
                             {filteredGroups.map(group => (
                               <optgroup key={group.category} label={group.category}>
                                 {group.rooms.map(room => {
-                                  const isAvail = availableRooms[room] !== false;
+                                  const isAvail = availableRooms[room] === true;
                                   const isCurrent = (selectedReserva.room || '').includes(room);
                                   const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
                                   const capRules = getCapacityRules(room, undefined);
                                   const exceedsCapacity = totalGuests > capRules.max;
                                   return (
                                     <option key={room} value={room} disabled={!isAvail || isCurrent || exceedsCapacity}>
-                                      Habitación {room} {isCurrent ? '(Actual)' : !isAvail ? '🔴 (Ocupada)' : exceedsCapacity ? `⚠️ (Capacidad excedida: máx ${capRules.max} huéspedes)` : '🟢 (Disponible)'}
+                                      Habitación {room} {isCurrent ? '(Actual)' : !isAvail ? (loadingAvailability ? '⏳ (Analizando...)' : '🔴 (Ocupada)') : exceedsCapacity ? `⚠️ (Capacidad excedida: máx ${capRules.max} huéspedes)` : '🟢 (Disponible)'}
                                     </option>
                                   );
                                 })}

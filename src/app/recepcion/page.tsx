@@ -5837,13 +5837,14 @@ export default function RecepcionPage() {
                             {filteredGroups.map(group => (
                               <optgroup key={group.category} label={group.category}>
                                 {group.rooms.map(roomNum => {
-                                  const isAvail = availableRooms[roomNum];
+                                  const isAvail = availableRooms[roomNum] === true;
+                                  const isCurrent = (selectedReserva.room || '').includes(roomNum);
                                   const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
                                   const capRules = getCapacityRules(roomNum, capacitySettings || undefined);
                                   const exceedsCapacity = totalGuests > capRules.max;
                                   return (
-                                    <option key={roomNum} value={roomNum} disabled={!isAvail || exceedsCapacity}>
-                                      Habitación {roomNum} {!isAvail ? '🔴 (Ocupada)' : exceedsCapacity ? `⚠️ (Capacidad excedida: máx ${capRules.max} huéspedes)` : '🟢 (Disponible)'}
+                                    <option key={roomNum} value={roomNum} disabled={!isAvail || isCurrent || exceedsCapacity}>
+                                      Habitación {roomNum} {isCurrent ? '(Actual)' : !isAvail ? (loadingAvailability ? '⏳ (Analizando...)' : '🔴 (Ocupada)') : exceedsCapacity ? `⚠️ (Capacidad excedida: máx ${capRules.max} huéspedes)` : '🟢 (Disponible)'}
                                     </option>
                                   );
                                 })}
