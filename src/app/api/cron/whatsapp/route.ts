@@ -142,10 +142,12 @@ export async function GET(req: Request) {
 
     const allBookings = [...beds24Reservas, ...mappedLocal];
 
-    // 4. Obtener mensajes ya enviados para evitar duplicados
+    // 4. Obtener mensajes ya enviados en los últimos 7 días para evitar duplicados
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: sentLogs } = await supabase
       .from('whatsapp_logs')
-      .select('reservation_id, template_name');
+      .select('reservation_id, template_name')
+      .gte('sent_at', sevenDaysAgo);
 
     const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
 
@@ -343,7 +345,7 @@ export async function GET(req: Request) {
         }
 
         // --- MENSAJE 4: Disponibilidad Liberada (Automático en Cancelaciones) ---
-        if (booking.status === 'cancelled') {
+        if (booking.status === 'cancelled' || String(booking.status) === '0') {
           const logKey = `${bookingIdStr}_disponibilidad_liberada`;
           if (!sentSet.has(logKey)) {
             const res = await sendTemplate4_DisponibilidadLiberada(booking, true);

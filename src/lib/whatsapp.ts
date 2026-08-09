@@ -564,10 +564,21 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    if (status !== 200) {
-      console.error(`Meta API error template ${templateName}:`, resBody);
-      return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
-    }
+     if (status !== 200) {
+       console.error(`Meta API error template ${templateName}:`, resBody);
+       try {
+         await supabase.from('employee_logs').insert([{
+           employee_num: '000',
+           action: 'whatsapp-error',
+           department: 'whatsapp',
+           room: 'Meta API',
+           details: `Error al enviar plantilla '${templateName}' a ${cleanedPhone}: Status ${status} - Response: ${JSON.stringify(resBody)}`
+         }]);
+       } catch (logErr) {
+         console.error("Error al registrar error de WhatsApp en employee_logs:", logErr);
+       }
+       return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
+     }
 
     // Registrar el envío de plantilla en la tabla 'conversations'
     try {

@@ -185,7 +185,12 @@ export async function POST(req: Request) {
                 phone: phone
               }, true);
               if (waRes.success) {
-                console.log(`[Room Status -> Limpia] WhatsApp notification sent successfully to ${phone}`);
+                await supabase.from('whatsapp_logs').insert([{
+                  reservation_id: String(matchedRes.id),
+                  template_name: 'alojamiento_listo',
+                  phone: phone
+                }]);
+                console.log(`[Room Status -> Limpia] WhatsApp notification sent and logged successfully to ${phone}`);
               } else {
                 console.warn(`[Room Status -> Limpia] WhatsApp notification failed:`, waRes.error);
               }
