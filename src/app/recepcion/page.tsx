@@ -605,16 +605,12 @@ export default function RecepcionPage() {
     callback: (...args: any[]) => void;
   } | null>(null);
 
-  const handleCopyDailyReport = async () => {
-    // 1. Abrir la pestaña de WhatsApp de inmediato de forma síncrona para evitar el bloqueo del popup en móviles
-    let waWindow: Window | null = null;
-    if (typeof window !== 'undefined') {
-      waWindow = window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
-    }
+  // Toast para el reporte diario
+  const [dailyReportToast, setDailyReportToast] = useState<string | null>(null);
 
+  const handleCopyDailyReport = async () => {
     try {
       if (reservas.length === 0) {
-        if (waWindow) waWindow.close();
         alert("No hay datos de reservaciones cargados para generar el reporte.");
         return;
       }
@@ -795,11 +791,28 @@ export default function RecepcionPage() {
 
       text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
 
-      await navigator.clipboard.writeText(text);
-      alert("📋 ¡Reporte copiado con éxito! Puedes pegarlo en el grupo de WhatsApp que se acaba de abrir.");
+      // 1. Intentar copiar al portapapeles PRIMERO (antes de abrir WhatsApp)
+      let copiado = false;
+      try {
+        await navigator.clipboard.writeText(text);
+        copiado = true;
+      } catch (clipErr) {
+        console.warn('clipboard.writeText falló, usando fallback:', clipErr);
+      }
+
+      // 2. Abrir WhatsApp con el texto pre-llenado en la URL (funciona en todos los dispositivos)
+      const waText = encodeURIComponent(text);
+      const waUrl = `https://wa.me/?text=${waText}`;
+      window.open(waUrl, '_blank');
+
+      if (copiado) {
+        // pequeño toast visual sin alert bloqueante
+        setDailyReportToast('✅ Reporte copiado y WhatsApp abierto');
+        setTimeout(() => setDailyReportToast(null), 4000);
+      }
     } catch (err: any) {
-      console.error("Error al copiar al portapapeles o generar reporte:", err);
-      alert(`No se pudo copiar el reporte automáticamente: ${err.message || err}`);
+      console.error("Error al generar reporte:", err);
+      alert(`No se pudo generar el reporte: ${err.message || err}`);
     }
   };
 
@@ -5248,14 +5261,19 @@ export default function RecepcionPage() {
             </div>
           </div>
 
-          <div className="pt-2">
+          <div className="pt-2 flex flex-col gap-2">
             <button
               onClick={handleCopyDailyReport}
               className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[14px] py-4 px-6 rounded-2xl shadow-lg shadow-emerald-100/50 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer select-none"
             >
               <MessageCircle size={18} strokeWidth={2.5} />
-              <span>Generar y Copiar Resumen Diario</span>
+              <span>Enviar Resumen Diario por WhatsApp</span>
             </button>
+            {dailyReportToast && (
+              <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[13px] py-2.5 px-4 rounded-xl flex items-center gap-2 animate-in fade-in duration-200">
+                <span>{dailyReportToast}</span>
+              </div>
+            )}
           </div>
 
         </div>
