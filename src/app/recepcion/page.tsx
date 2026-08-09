@@ -16,7 +16,7 @@ import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole,
 import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
-import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit, getSeason } from '@/lib/beds24';
+import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
