@@ -19,6 +19,17 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+const safeFormatDate = (dateVal: any, formatStr: string, options?: any) => {
+  if (!dateVal) return '—';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '—';
+    return format(d, formatStr, options);
+  } catch (err) {
+    return '—';
+  }
+};
+
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -2167,8 +2178,8 @@ export default function StaffPage() {
                       const cfg = TYPE_CFG[t.type] || TYPE_CFG['otro'];
                       const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(t.room);
                       const displayRoom = isRoom ? `Habitación ${t.room}` : t.room;
-                      const dateStr = format(new Date(t.created_at), "d MMM, HH:mm", { locale: es });
-                      const resolvedStr = t.resolved_at ? format(new Date(t.resolved_at), "d MMM, HH:mm", { locale: es }) : '';
+                      const dateStr = safeFormatDate(t.created_at, "d MMM, HH:mm", { locale: es });
+                      const resolvedStr = t.resolved_at ? safeFormatDate(t.resolved_at, "d MMM, HH:mm", { locale: es }) : '';
 
                       return (
                         <div 
@@ -2189,8 +2200,8 @@ export default function StaffPage() {
                                   {dateStr}
                                 </span>
                                 {t.scheduled_date && (
-                                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shrink-0 select-none">
-                                    📅 Inicia: {format(new Date(t.scheduled_date + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
+                                  <span className="text-[10px] font-bold text-indigo-650 bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded-md flex items-center gap-0.5 shrink-0 select-none">
+                                    📅 Inicia: {safeFormatDate(t.scheduled_date + 'T12:00:00', 'd MMM yyyy', { locale: es })}
                                   </span>
                                 )}
                               </div>
@@ -2634,7 +2645,7 @@ export default function StaffPage() {
         const cfg = TYPE_CFG[t.type] || TYPE_CFG['otro'];
         const isRoom = !['General', 'Cocina', 'Recepción', 'Alberca'].includes(t.room);
         const displayRoom = isRoom ? `Habitación ${t.room}` : t.room;
-        const dateStr = format(new Date(t.created_at), "d MMM, HH:mm", { locale: es });
+        const dateStr = safeFormatDate(t.created_at, "d MMM, HH:mm", { locale: es });
         const hasPermission = role === 'admin' || role === 'staff_mantenimiento';
 
         return (
@@ -3379,11 +3390,11 @@ export default function StaffPage() {
                             <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Estancia</span>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
-                                {format(new Date(r.check_in + 'T12:00:00'), 'dd MMM', { locale: es })}
+                                {safeFormatDate(r.check_in + 'T12:00:00', 'dd MMM', { locale: es })}
                               </span>
                               <span className="text-zinc-400 text-[10px] font-bold">➔</span>
                               <span className="text-[11px] font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
-                                {format(new Date(r.check_out + 'T12:00:00'), 'dd MMM', { locale: es })}
+                                {safeFormatDate(r.check_out + 'T12:00:00', 'dd MMM', { locale: es })}
                               </span>
                               <span className="text-[9px] font-black bg-zinc-900 text-white px-2 py-0.5 rounded-full">
                                 {nightsVal}n

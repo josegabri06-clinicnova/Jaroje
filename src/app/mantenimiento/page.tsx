@@ -14,6 +14,17 @@ const supabase = createClient(
 import { getActiveEmployee } from '@/lib/auth';
 import CameraModal from '@/components/CameraModal';
 
+const safeFormatDate = (dateVal: any, formatStr: string, options?: any) => {
+  if (!dateVal) return '—';
+  try {
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '—';
+    return format(d, formatStr, options);
+  } catch (err) {
+    return '—';
+  }
+};
+
 const normalizeText = (text: string) => 
   (text || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
@@ -835,13 +846,13 @@ export default function MantenimientoPage() {
     const csv = [
       headers.join(","),
       ...tasks.map(t => [
-        format(new Date(t.created_at), 'dd/MM/yyyy'),
+        safeFormatDate(t.created_at, 'dd/MM/yyyy'),
         t.status,
         t.type,
         `"${t.room}"`,
         `"${(t.reported_by || '').replace(/"/g, '""')}"`,
         `"${t.description.replace(/"/g, '""')}"`,
-        t.resolved_at ? format(new Date(t.resolved_at), 'dd/MM/yyyy') : '""'
+        t.resolved_at ? safeFormatDate(t.resolved_at, 'dd/MM/yyyy') : '""'
       ].join(","))
     ].join("\n");
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -1039,11 +1050,11 @@ export default function MantenimientoPage() {
                       Ubi: {task.room}
                     </span>
                     <span className="text-[11px] font-medium text-zinc-400">
-                      {format(new Date(task.created_at), 'd MMM', { locale: es })}
+                      {safeFormatDate(task.created_at, 'd MMM', { locale: es })}
                     </span>
                     {task.scheduled_date && (
                       <span className="text-[11px] font-bold text-indigo-650 bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100 flex items-center gap-0.5">
-                        📅 Inicia: {format(new Date(task.scheduled_date + 'T12:00:00'), 'd MMM yyyy', { locale: es })}
+                        📅 Inicia: {safeFormatDate(task.scheduled_date + 'T12:00:00', 'd MMM yyyy', { locale: es })}
                       </span>
                     )}
                     {(task.photo_url || task.image_base64) && (
@@ -1770,7 +1781,7 @@ export default function MantenimientoPage() {
                 <div>
                   <span className="text-zinc-450 font-semibold block text-[10px] uppercase">Fecha de reporte</span>
                   <span className="font-bold text-zinc-700">
-                    {format(new Date(selectedTaskForDetails.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
+                    {safeFormatDate(selectedTaskForDetails.created_at, 'dd/MM/yyyy HH:mm', { locale: es })}
                   </span>
                 </div>
               </div>
