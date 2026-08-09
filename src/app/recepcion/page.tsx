@@ -602,7 +602,10 @@ export default function RecepcionPage() {
   const [pendingAction, setPendingAction] = useState<{
     type: 'checkin' | 'checkout' | 'mantenimiento' | 'room_status';
     payload?: any;
-    callback: (...args: any[]) =>  const handleCopyDailyReport = async () => {
+    callback: (...args: any[]) => void;
+  } | null>(null);
+
+  const handleCopyDailyReport = async () => {
     // 1. Abrir la pestaña de WhatsApp de inmediato de forma síncrona para evitar el bloqueo del popup en móviles
     let waWindow: Window | null = null;
     if (typeof window !== 'undefined') {
