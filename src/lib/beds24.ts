@@ -1465,14 +1465,25 @@ export async function addBeds24GroupPayment(
     const jsonSiblings = await resSiblings.json();
     const allArrival = jsonSiblings.data || [];
 
+    const isOTA = (bookingObj: any) => {
+      const channel = String(`${bookingObj.referer || ''} ${bookingObj.source || ''} ${bookingObj.apiSource || ''}`).toLowerCase();
+      return ['booking.com', 'airbnb', 'expedia'].some(c => channel.includes(c));
+    };
+    const targetIsOta = isOTA(targetB);
+
     const group = allArrival.filter((b: any) => {
       if (b.departure !== targetB.departure) return false;
       if (String(b.status) === '0' || b.status === 'cancelled') return false;
+
+      const bIsOta = isOTA(b);
+      if (targetIsOta !== bIsOta) return false;
+
       const bName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
       const bPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
       const sameName = bName && targetName && (bName.includes(targetName) || targetName.includes(bName));
       const samePhone = bPhone && targetPhone && (bPhone.includes(targetPhone) || targetPhone.includes(bPhone));
-      return sameName || samePhone;
+
+      return (targetIsOta || bIsOta) ? !!sameName : !!samePhone;
     });
 
     if (group.length <= 1) {

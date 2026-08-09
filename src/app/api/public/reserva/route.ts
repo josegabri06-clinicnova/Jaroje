@@ -114,7 +114,8 @@ export async function GET(req: Request) {
             const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone && mainPhone.length >= 6;
             const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
             
-            const isMatch = (isLocalOta || sIsOta) ? !!sameName : !!(samePhone || sameName);
+            // Para OTAs agrupamos por nombre (mismo titular). Para reservas directas, agrupamos ESTRICTAMENTE por teléfono.
+            const isMatch = (isLocalOta || sIsOta) ? !!sameName : !!samePhone;
             if (isMatch) {
               localGroupPrice += Number(s.price || 0);
               localGroupAdult += Number(s.num_adult || 0);
@@ -369,7 +370,8 @@ export async function GET(req: Request) {
           const samePhone = phoneNum && rPhone && normalizePhone(rPhone) === phoneNum && phoneNum.length >= 6;
           const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
 
-          return (isMainOta || rIsOta) ? !!sameName : !!(samePhone || sameName);
+          // Para OTAs agrupamos por nombre (mismo titular). Para reservas directas, agrupamos ESTRICTAMENTE por teléfono.
+          return (isMainOta || rIsOta) ? !!sameName : !!samePhone;
         });
 
         let b24GroupAdult = Number(booking.num_adult || 1);

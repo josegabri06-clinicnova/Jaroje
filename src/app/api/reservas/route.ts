@@ -5,7 +5,8 @@ import {
   sendTemplate1_SolicitudRecibida, 
   sendTemplate3_ReservacionConfirmada,
   sendTemplate4_DisponibilidadLiberada,
-  detectLanguageFromPhone
+  detectLanguageFromPhone,
+  normalizePhone
 } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -309,11 +310,21 @@ export async function GET(req: Request) {
         if (b.status === 'cancelled') return;
         const cleanStr = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
         const guestKey = cleanStr(b.guest_name);
+        const bPhone = b.guest_phone || b.phone || b.mobile || '';
+        const phoneKey = bPhone ? normalizePhone(bPhone) : '';
+
         let key = '';
         if (b.masterId) {
           key = `master_${b.masterId}`;
         } else if (guestKey) {
-          key = `name_${guestKey}_${b.check_in}_${b.check_out}`;
+          const isOta = ['booking.com', 'airbnb', 'expedia'].some(c => (b.channel || '').toLowerCase().includes(c));
+          if (isOta) {
+            key = `name_${guestKey}_${b.check_in}_${b.check_out}`;
+          } else if (phoneKey) {
+            key = `phone_${phoneKey}_${b.check_in}_${b.check_out}`;
+          } else {
+            key = `name_${guestKey}_${b.check_in}_${b.check_out}`;
+          }
         }
         if (key) {
           if (!groupMap.has(key)) {
