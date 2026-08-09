@@ -4737,25 +4737,16 @@ export default function RecepcionPage() {
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCopyDailyReport}
-            className="flex items-center gap-1.5 bg-white border border-emerald-250 text-emerald-650 hover:bg-emerald-50 text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
-          >
-            <MessageCircle size={13} strokeWidth={2.5} />
-            <span>Resumen Diario</span>
-          </button>
-          <button
-            onClick={() => {
-              setForm({ type: 'mantenimiento', room: 'General', description: '' });
-              setShowForm(true);
-            }}
-            className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-md shadow-rose-200 active:scale-95 transition-all cursor-pointer"
-          >
-            <Wrench size={13} strokeWidth={2.5} />
-            <span>Reportar Mtto.</span>
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setForm({ type: 'mantenimiento', room: 'General', description: '' });
+            setShowForm(true);
+          }}
+          className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-md shadow-rose-200 active:scale-95 transition-all cursor-pointer"
+        >
+          <Wrench size={13} strokeWidth={2.5} />
+          <span>Reportar Mtto.</span>
+        </button>
       </div>
 
       {/* ── MAIN TABS ───────────────────────────────────────────────────── */}
@@ -5257,6 +5248,16 @@ export default function RecepcionPage() {
                 ))}
               </div>
             </div>
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={handleCopyDailyReport}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[14px] py-4 px-6 rounded-2xl shadow-lg shadow-emerald-100/50 flex items-center justify-center gap-2 active:scale-[0.98] transition-all cursor-pointer select-none"
+            >
+              <MessageCircle size={18} strokeWidth={2.5} />
+              <span>Generar y Copiar Resumen Diario</span>
+            </button>
           </div>
 
         </div>
