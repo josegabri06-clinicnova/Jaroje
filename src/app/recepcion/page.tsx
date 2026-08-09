@@ -6,7 +6,8 @@ import { es } from 'date-fns/locale';
 import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
-  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw, Trash2, Video, LogOut
+  ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw, Trash2, Video, LogOut,
+  MessageCircle
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
@@ -15,7 +16,7 @@ import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole,
 import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
-import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit } from '@/lib/beds24';
+import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit, getSeason } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -603,6 +604,206 @@ export default function RecepcionPage() {
     payload?: any;
     callback: (...args: any[]) => void;
   } | null>(null);
+
+  const handleCopyDailyReport = async () => {
+    // Abrir la pestaña de inmediato para evitar el bloqueo del navegador
+    const waWindow = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+
+    if (reservas.length === 0) {
+      if (waWindow) waWindow.close();
+      alert("No hay datos de reservaciones cargados para generar el reporte.");
+      return;
+    }
+
+    const dateStr = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
+
+    const sortByRoomNumber = (a: any, b: any) => {
+      const roomA = getUnitDisplay(a.room_name || a.room || '');
+      const roomB = getUnitDisplay(b.room_name || b.room || '');
+      return roomA.localeCompare(roomB, undefined, { numeric: true, sensitivity: 'base' });
+    };
+
+    const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
+    const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
+    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled').sort(sortByRoomNumber);
+
+    let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *Condominios Jaroje*\n📅 *${dateStr.toUpperCase()}*\n\n`;
+
+    // --- LLEGAN HOY ---
+    text += `🚪 *LLEGAN HOY (${llegan.length})*\n`;
+    if (llegan.length === 0) {
+      text += `   _Sin llegadas programadas_\n`;
+    } else {
+      llegan.forEach((r, idx) => {
+        const room = getUnitDisplay(r.room_name || r.room || '');
+        const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
+        
+        // Si es una OTA (Airbnb, Booking.com, Expedia), el cobro lo maneja la plataforma (por lo tanto, para recepción está Pagado)
+        const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
+        const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+        const balanceStr = isOTA ? `(Pagado ✓)` : (balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`);
+        
+        text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} (${paxTotal} pax) - Canal: ${r.channel || 'Directo'} ${balanceStr}\n`;
+      });
+    }
+    text += `\n`;
+
+    // --- SALEN HOY ---
+    text += `🚪 *SALEN HOY (${salen.length})*\n`;
+    if (salen.length === 0) {
+      text += `   _Sin salidas programadas_\n`;
+    } else {
+      salen.forEach((r, idx) => {
+        const room = getUnitDisplay(r.room_name || r.room || '');
+        const status = r.checked_out ? 'Salida completada ✓' : 'Pendiente ⏳';
+        text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} - Estado: ${status}\n`;
+      });
+    }
+    text += `\n`;
+
+    // --- EN CASA ---
+    text += `🏠 *EN CASA (${enCasa.length})*\n`;
+    if (enCasa.length === 0) {
+      text += `   _Sin huéspedes hospedados_\n`;
+    } else {
+      enCasa.forEach((r, idx) => {
+        const room = getUnitDisplay(r.room_name || r.room || '');
+        let checkoutText = r.check_out;
+        try {
+          checkoutText = format(new Date(r.check_out + 'T12:00:00'), 'dd MMM', { locale: es });
+        } catch (e) { }
+        text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} - Sale: ${checkoutText}\n`;
+      });
+    }
+    text += `\n`;
+
+    // --- TARIFAS ESTACIONALES DINÁMICAS ---
+    const todayISO = getLocalDateStr(new Date());
+    let seasonRangesData: any[] = [];
+    let tempDiscountsData: any[] = [];
+    try {
+      const { createClient } = await import('@supabase/supabase-js');
+      const sb = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
+      const [seasonRes, discountsRes] = await Promise.all([
+        sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
+        sb.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle()
+      ]);
+      if (seasonRes.data?.value) {
+        seasonRangesData = typeof seasonRes.data.value === 'string' ? JSON.parse(seasonRes.data.value) : seasonRes.data.value;
+      }
+      if (discountsRes.data?.value) {
+        tempDiscountsData = typeof discountsRes.data.value === 'string' ? JSON.parse(discountsRes.data.value) : discountsRes.data.value;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    const currentSeason = getSeason(todayISO, seasonRangesData);
+    const seasonLabels: Record<string, string> = {
+      baja: 'BAJA',
+      media: 'MEDIA',
+      media_alta: 'MEDIA-ALTA',
+      alta: 'ALTA'
+    };
+
+    // Tarifas de fallback por defecto (con impuestos +19% e indexadas por temporada)
+    let doublePrice = 2000;
+    let cond1Price = 3000;
+    let cond2Price = 4000;
+    let cond3Price = 6000;
+    let casaPrice = 8000;
+
+    const seasonFallbacks: Record<string, { double: number; cond1: number; cond2: number; cond3: number; casa: number }> = {
+      baja: { double: 1600, cond1: 2400, cond2: 3200, cond3: 4800, casa: 6400 },
+      media: { double: 1900, cond1: 2850, cond2: 3800, cond3: 5700, casa: 7600 },
+      media_alta: { double: 2000, cond1: 3000, cond2: 4000, cond3: 6000, casa: 8000 },
+      alta: { double: 2200, cond1: 3300, cond2: 4400, cond3: 6600, casa: 8800 }
+    };
+
+    const fallbacks = seasonFallbacks[currentSeason] || seasonFallbacks.media_alta;
+    doublePrice = fallbacks.double;
+    cond1Price = fallbacks.cond1;
+    cond2Price = fallbacks.cond2;
+    cond3Price = fallbacks.cond3;
+    casaPrice = fallbacks.casa;
+
+    try {
+      const resPrices = await fetch('/api/beds24-prices?t=' + Date.now());
+      const jsonPrices = await resPrices.json();
+      if (jsonPrices.success && Array.isArray(jsonPrices.rooms)) {
+        const getPriceForToday = (roomId: string) => {
+          const roomObj = jsonPrices.rooms.find((r: any) => r.id === roomId);
+          if (roomObj && Array.isArray(roomObj.seasonBlocks)) {
+            const matchedBlock = roomObj.seasonBlocks.find((b: any) => todayISO >= b.from && todayISO <= b.to);
+            if (matchedBlock) return matchedBlock.priceDirecto;
+            
+            const seasonBlock = roomObj.seasonBlocks.find((b: any) => b.season === currentSeason);
+            if (seasonBlock) return seasonBlock.priceDirecto;
+          }
+          return null;
+        };
+
+        doublePrice = getPriceForToday('679077') || doublePrice;
+        cond1Price = getPriceForToday('679087') || cond1Price;
+        cond2Price = getPriceForToday('679091') || cond2Price;
+        cond3Price = getPriceForToday('679092') || cond3Price;
+        casaPrice = getPriceForToday('679093') || casaPrice;
+      }
+    } catch (e) {
+      console.warn("No se pudieron cargar tarifas de Ajustes, usando fallback:", e);
+    }
+
+    const getActiveDiscountForToday = (roomId: string) => {
+      if (!Array.isArray(tempDiscountsData)) return null;
+      return tempDiscountsData.find(d => 
+        Array.isArray(d.rooms) && 
+        d.rooms.includes(roomId) && 
+        todayISO >= d.from && 
+        todayISO <= d.to
+      );
+    };
+
+    const formatPriceLine = (name: string, roomId: string, activePrice: number, basePrice: number) => {
+      const activeDisc = getActiveDiscountForToday(roomId);
+      if (activeDisc) {
+        const isIncrease = activeDisc.priceHuesped > basePrice;
+        const typeLabel = isIncrease ? 'Aumento' : 'Con Descuento';
+        return `• ${name}: *$${activeDisc.priceHuesped}* (${typeLabel} - Reg: $${basePrice})`;
+      }
+      if (activePrice < basePrice) {
+        return `• ${name}: *$${activePrice}* (Con Descuento - Reg: $${basePrice})`;
+      }
+      if (activePrice > basePrice) {
+        return `• ${name}: *$${activePrice}* (Aumento - Reg: $${basePrice})`;
+      }
+      return `• ${name}: $${activePrice}`;
+    };
+
+    const label = seasonLabels[currentSeason] || 'MEDIA-ALTA';
+    text += `💰 *TARIFA TEMP ${label}*\n`;
+    text += formatPriceLine('Habitación doble', '679077', doublePrice, fallbacks.double) + '\n';
+    text += formatPriceLine('Condominio 1 dormitorio', '679087', cond1Price, fallbacks.cond1) + '\n';
+    text += formatPriceLine('Condominio 2 dormitorios', '679091', cond2Price, fallbacks.cond2) + '\n';
+    text += formatPriceLine('Condominio 3 dormitorios', '679092', cond3Price, fallbacks.cond3) + '\n';
+    text += formatPriceLine('Casa vacacional', '679093', casaPrice, fallbacks.casa) + '\n\n';
+
+    text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      alert("📋 ¡Reporte copiado con éxito! Puedes pegarlo en WhatsApp.");
+    }).catch(err => {
+      console.error("Error al copiar al portapapeles:", err);
+      alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
+    });
+
+    if (waWindow) {
+      waWindow.location.href = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0';
+    } else {
+      window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+    }
+  };
 
   // Inicializar Empleado Activo
   useEffect(() => {
@@ -4536,16 +4737,25 @@ export default function RecepcionPage() {
             </span>
           </div>
         </div>
-        <button
-          onClick={() => {
-            setForm({ type: 'mantenimiento', room: 'General', description: '' });
-            setShowForm(true);
-          }}
-          className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-md shadow-rose-200 active:scale-95 transition-all cursor-pointer"
-        >
-          <Wrench size={13} strokeWidth={2.5} />
-          <span>Reportar Mtto.</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopyDailyReport}
+            className="flex items-center gap-1.5 bg-white border border-emerald-250 text-emerald-650 hover:bg-emerald-50 text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer"
+          >
+            <MessageCircle size={13} strokeWidth={2.5} />
+            <span>Resumen Diario</span>
+          </button>
+          <button
+            onClick={() => {
+              setForm({ type: 'mantenimiento', room: 'General', description: '' });
+              setShowForm(true);
+            }}
+            className="flex items-center gap-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold tracking-wider uppercase py-2.5 px-4 rounded-xl shadow-md shadow-rose-200 active:scale-95 transition-all cursor-pointer"
+          >
+            <Wrench size={13} strokeWidth={2.5} />
+            <span>Reportar Mtto.</span>
+          </button>
+        </div>
       </div>
 
       {/* ── MAIN TABS ───────────────────────────────────────────────────── */}
