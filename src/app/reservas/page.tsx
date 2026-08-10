@@ -223,7 +223,6 @@ function ReservasListInner() {
   const docInputGalleryRef = useRef<HTMLInputElement>(null);
 
   const [reassigningRes, setReassigningRes] = useState<any | null>(null);
-  const [isReassigning, setIsReassigning] = useState(false);
   const [showReassignModal, setShowReassignModal] = useState(false);
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
@@ -369,7 +368,6 @@ function ReservasListInner() {
       })();
     } else {
       setReassigningRes(null);
-      setIsReassigning(false);
       setShowReassignModal(false);
       setTargetRoomName('');
       setAvailableRooms({});
@@ -503,7 +501,7 @@ function ReservasListInner() {
 
   // Consultar disponibilidad real de habitaciones en las fechas de la reserva
   useEffect(() => {
-    if (isReassigning && reassigningRes && reassigningRes.check_in && reassigningRes.check_out) {
+    if (showReassignModal && reassigningRes && reassigningRes.check_in && reassigningRes.check_out) {
       const fetchAvailability = async () => {
         setLoadingAvailability(true);
         try {
@@ -526,7 +524,7 @@ function ReservasListInner() {
       };
       fetchAvailability();
     }
-  }, [isReassigning, reassigningRes]);
+  }, [showReassignModal, reassigningRes]);
 
   const handleReassignRoom = async () => {
     if (getRole() !== 'admin') {
@@ -597,7 +595,6 @@ function ReservasListInner() {
       }
 
       setReassigningRes(null);
-      setIsReassigning(false);
       setShowReassignModal(false);
       setTargetRoomName('');
       
