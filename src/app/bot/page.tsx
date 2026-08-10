@@ -1148,7 +1148,7 @@ export default function BotPage() {
                         </div>
                       </div>
 
-                      <div className="pt-1">
+                      <div className="pt-1.5 space-y-1.5">
                         <button
                           onClick={() => {
                             setShowResDetailModal(false);
@@ -1159,6 +1159,16 @@ export default function BotPage() {
                           <Eye size={12} />
                           <span>Ver Portal del Huésped (Vista Previa)</span>
                         </button>
+
+                        <a
+                          href={`/reservas?id=${res.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-2.5 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold text-[11.5px] rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 cursor-pointer font-sans no-underline text-center"
+                        >
+                          <ExternalLink size={12} />
+                          <span>Modificar Reservación (Abrir staySync)</span>
+                        </a>
                       </div>
                     </div>
                   );
