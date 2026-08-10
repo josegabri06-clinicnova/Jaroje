@@ -397,7 +397,8 @@ export default function VercelActionForm() {
         dailyRate,
         roomTotal,
         adults: dist.adults,
-        children: dist.children
+        children: dist.children,
+        discountPct: Math.round((1 - discountMult) * 100)
       };
     });
 
@@ -727,6 +728,19 @@ export default function VercelActionForm() {
         const roomAdults = matchedDetails ? (matchedDetails.adults ?? 1) : 1;
         const roomChildren = matchedDetails ? (matchedDetails.children ?? 0) : 0;
 
+        const discountPct = matchedDetails ? (matchedDetails.discountPct || 0) : 0;
+        let discountNote = '';
+        if (discountPct > 0) {
+          const minNights = discountPct === 15 ? 7 : (discountPct === 25 ? 15 : 30);
+          discountNote = `${discountPct}% Descuento aplicado por ${minNights}+ noches`;
+        }
+
+        const finalNotes = isBlock ? '' : [
+          form.notes || '',
+          discountNote,
+          totalRooms > 1 ? `(Grupo: Habs ${roomNamesList})` : ''
+        ].filter(Boolean).join('\n');
+
         const payload = {
           roomId: room.roomId,
           unitId: room.unitId,
@@ -739,7 +753,7 @@ export default function VercelActionForm() {
           phone: isBlock ? '' : form.phone,
           numAdult: isBlock ? 1 : roomAdults,
           numChild: isBlock ? 0 : roomChildren,
-          notes: isBlock ? '' : `${form.notes || ''}${totalRooms > 1 ? ` (Grupo: Habs ${roomNamesList})` : ''}`,
+          notes: finalNotes,
           sendWhatsApp: i === 0,
           portalSettings: {
             showCardPayment: form.showCardPayment,
