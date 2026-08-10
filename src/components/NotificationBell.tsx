@@ -449,7 +449,7 @@ export function NotificationBell() {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch('/api/employee-logs');
+      const res = await fetch('/api/employee-logs?limit=1000');
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setLogs(json.data);

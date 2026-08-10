@@ -70,6 +70,8 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const moduleParam = searchParams.get('module') || '';
+    const limitParam = searchParams.get('limit');
+    const limitVal = limitParam ? parseInt(limitParam) : 1000;
 
     let query = supabase
       .from('employee_logs')
@@ -82,7 +84,7 @@ export async function GET(req: Request) {
 
     const { data, error } = await query
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(isNaN(limitVal) ? 1000 : limitVal);
 
     if (error) {
       console.error('API Employee Logs GET Error:', error.message);
