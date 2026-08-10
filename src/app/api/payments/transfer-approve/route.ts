@@ -25,6 +25,13 @@ export async function POST(req: Request) {
     if (action === 'approve') {
       console.log(`[Approve Transfer] Approving receipt ${receiptId} for booking ${bookingId}`);
 
+      // 0. Obtener el recibo original de transferencia para verificar la plataforma
+      const { data: receipt } = await supabase
+        .from('transfer_receipts')
+        .select('notes')
+        .eq('id', receiptId)
+        .maybeSingle();
+
       let newDeposit = 0;
       let guestName = 'Huésped';
       let phone = '';
@@ -115,29 +122,45 @@ export async function POST(req: Request) {
       // 2.5 Registrar en Finanzas locales de Supabase
       try {
         const { data: accounts } = await supabase.from('accounts').select('*');
+        
+        const receiptNotes = String(receipt?.notes || '').toUpperCase();
+        const isMercadoPago = receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA');
+
         let accountId = null;
         if (accounts && accounts.length > 0) {
-          const santanderAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
-          if (santanderAcc) {
-            accountId = santanderAcc.id;
-          } else {
-            const bancoAcc = accounts.find(a => a.group_type === 'BANCOS');
-            if (bancoAcc) {
-              accountId = bancoAcc.id;
+          if (isMercadoPago) {
+            const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO'));
+            if (mpAcc) {
+              accountId = mpAcc.id;
+            }
+          }
+          if (!accountId) {
+            const santanderAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
+            if (santanderAcc) {
+              accountId = santanderAcc.id;
             } else {
-              accountId = accounts[0].id;
+              const bancoAcc = accounts.find(a => a.group_type === 'BANCOS');
+              if (bancoAcc) {
+                accountId = bancoAcc.id;
+              } else {
+                accountId = accounts[0].id;
+              }
             }
           }
         }
 
         if (accountId) {
           const todayStr = new Date().toISOString().split('T')[0];
+          const desc = isMercadoPago 
+            ? `${guestName} (ID: ${bookingId}) - Abono con Tarjeta / Mercado Pago (Ref: ${receiptId.substring(0, 8)})`
+            : `${guestName} (ID: ${bookingId}) - Abono por transferencia Santander (Ref: ${receiptId.substring(0, 8)})`;
+
           const { error: finErr } = await supabase.from('finances').insert({
             type: 'ingreso',
             amount: Number(amount),
             category: 'Alojamiento',
-            description: `${guestName} (ID: ${bookingId}) - Abono por transferencia Santander (Ref: ${receiptId.substring(0, 8)})`,
-            payment_method: 'transferencia',
+            description: desc,
+            payment_method: isMercadoPago ? 'tarjeta' : 'transferencia',
             account_id: accountId,
             date: todayStr
           });
