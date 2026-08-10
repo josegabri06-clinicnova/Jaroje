@@ -352,13 +352,11 @@ export default function VercelActionForm() {
         ? Number(activeDiscount.priceRaw)
         : (dynamicPrice > 0 ? dynamicPrice : fallbackPrice);
 
-      // 3. Apply long stay discount ONLY to basePrice if NOT dynamic
+      // 3. Apply long stay discount
       let discountMult = 1.0;
-      if (dynamicPrice <= 0) {
-        if (computedNights >= 30) discountMult = 0.60;
-        else if (computedNights >= 15) discountMult = 0.75;
-        else if (computedNights >= 7) discountMult = 0.85;
-      }
+      if (computedNights >= 30) discountMult = 0.60;
+      else if (computedNights >= 15) discountMult = 0.75;
+      else if (computedNights >= 7) discountMult = 0.85;
 
       // Guest Surcharge distribution
       const roomExtraObj = roomExtraGuestsList.find(x => x.roomId === rm.roomId && x.unitId === rm.unitId);

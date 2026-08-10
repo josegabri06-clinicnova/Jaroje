@@ -2349,11 +2349,9 @@ export default function RecepcionPage() {
         }
         
         let discountMult = 1.0;
-        if (dynamicPrice <= 0) {
-          if (computedNights >= 30) discountMult = 0.60;
-          else if (computedNights >= 15) discountMult = 0.75;
-          else if (computedNights >= 7) discountMult = 0.85;
-        }
+        if (computedNights >= 30) discountMult = 0.60;
+        else if (computedNights >= 15) discountMult = 0.75;
+        else if (computedNights >= 7) discountMult = 0.85;
 
         const nightBase = Math.round(priceUsed * discountMult * 100) / 100;
         const nightWithChannel = Math.round(nightBase * 1.0 * 100) / 100;

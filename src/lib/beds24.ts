@@ -420,7 +420,9 @@ export function getRealPrice(
   // 1. Intentar obtener tarifa dinámica de Beds24
   if (beds24RatesMap && dateStr && beds24RatesMap[id] && beds24RatesMap[id][dateStr]) {
     const dynamicPrice = beds24RatesMap[id][dateStr];
-    const customMultipliers = dynamicSettings?.[id]?.multipliers;
+    const parentMapping = getParentMapping(id, unitId);
+    const parentId = parentMapping.roomId;
+    const customMultipliers = dynamicSettings?.[parentId]?.multipliers || dynamicSettings?.[id]?.multipliers;
     const multiplier = getChannelMultiplier(referer, customMultipliers);
     return Math.ceil(dynamicPrice * multiplier * 100) / 100;
   }
@@ -845,7 +847,9 @@ export function getAverageRatesForDates(
   }
 
   const averageBase = daysCount > 0 ? Math.ceil((totalSum / daysCount) * 100) / 100 : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
-  const customDiscounts = dynamicSettings?.[id]?.discounts;
+  const parentMapping = getParentMapping(id, unitId);
+  const parentId = parentMapping.roomId;
+  const customDiscounts = dynamicSettings?.[parentId]?.discounts || dynamicSettings?.[id]?.discounts;
   const discountMultiplier = getLengthOfStayMultiplier(daysCount, customDiscounts);
   return Math.ceil(averageBase * discountMultiplier * 100) / 100;
 }
