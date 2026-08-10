@@ -791,24 +791,41 @@ export default function RecepcionPage() {
 
       text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
 
-      // 1. Intentar copiar al portapapeles PRIMERO (antes de abrir WhatsApp)
+      // 1. Intentar copiar al portapapeles de forma síncrona usando execCommand de respaldo para mantener el hilo del click
       let copiado = false;
       try {
-        await navigator.clipboard.writeText(text);
-        copiado = true;
-      } catch (clipErr) {
-        console.warn('clipboard.writeText falló, usando fallback:', clipErr);
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        copiado = document.execCommand('copy');
+        document.body.removeChild(textArea);
+      } catch (err) {
+        console.warn('document.execCommand falló, intentando alternativa:', err);
       }
 
-      // 2. Abrir WhatsApp con el texto pre-llenado en la URL (funciona en todos los dispositivos)
-      const waText = encodeURIComponent(text);
-      const waUrl = `https://wa.me/?text=${waText}`;
-      window.open(waUrl, '_blank');
+      if (!copiado) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copiado = true;
+        } catch (clipErr) {
+          console.warn('navigator.clipboard falló:', clipErr);
+        }
+      }
+
+      // 2. Abrir la pestaña del grupo de WhatsApp de inmediato (en el mismo hilo síncrono del click)
+      window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
 
       if (copiado) {
-        // pequeño toast visual sin alert bloqueante
-        setDailyReportToast('✅ Reporte copiado y WhatsApp abierto');
-        setTimeout(() => setDailyReportToast(null), 4000);
+        setDailyReportToast('✅ Reporte copiado. ¡Pégalo en el grupo de WhatsApp abierto!');
+        setTimeout(() => setDailyReportToast(null), 5000);
+      } else {
+        setDailyReportToast('⚠️ Copia automática fallida. Intenta copiarlo de nuevo.');
+        setTimeout(() => setDailyReportToast(null), 5000);
       }
     } catch (err: any) {
       console.error("Error al generar reporte:", err);
