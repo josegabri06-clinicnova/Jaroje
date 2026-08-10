@@ -1251,7 +1251,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         expected_payout: otaDetails.expectedPayout,
         host_fee: otaDetails.hostFee,
         booking_time: b.bookingTime || b.arrival || null,
-        cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null
+        cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null,
+        invoiceItems: b.invoiceItems || []
       };
     });
 
@@ -1277,7 +1278,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         num_adult: mb.num_adult,
         num_child: mb.num_child,
         notes: mb.notes,
-        invoice_items: mb.taxes?.invoiceItems || mb.invoice_items || [],
+        invoice_items: mb.invoiceItems || [],
         actual_paid: mb.actualPaid,
         created_at: mb.booking_time || null,
         updated_at: new Date().toISOString()
@@ -1885,4 +1886,193 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     console.error(`[Supabase Sync] Error al hacer upsert de B24:${b.id}:`, error);
   }
   return { data, error };
+}
+
+// Sincronizar un rango histórico específico de reservas de Beds24 en Supabase
+export async function syncBeds24ReservationsRange(
+  fromDateStr: string,
+  toDateStr: string
+): Promise<{ success: boolean; count: number }> {
+  console.log(`[Beds24 Range Sync] Iniciando sincronización desde ${fromDateStr} hasta ${toDateStr}...`);
+  const token = await getBeds24Token();
+  const bookingsArray = await fetchAllRawBeds24Bookings(fromDateStr, toDateStr, true);
+
+  let dynamicSettings: any = null;
+  try {
+    const { data: settingsData } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'pricing_unit_settings')
+      .maybeSingle();
+    if (settingsData && settingsData.value) {
+      dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+    }
+  } catch (err) {
+    console.error("[Beds24 Range Sync] Error al obtener dynamicSettings:", err);
+  }
+
+  const ROOM_MAP = [
+    { roomId: '679077', units: [{ unitId: '1', name: '301' }, { unitId: '2', name: '302' }, { unitId: '3', name: '303' }, { unitId: '4', name: '304' }, { unitId: '5', name: '305' }, { unitId: '6', name: '306' }] },
+    { roomId: '679087', units: [{ unitId: '1', name: '402' }] },
+    { roomId: '679091', units: [{ unitId: '1', name: '201' }, { unitId: '2', name: '202' }, { unitId: '3', name: '203' }, { unitId: '4', name: '204' }, { unitId: '5', name: '205' }, { unitId: '6', name: '206' }] },
+    { roomId: '679092', units: [{ unitId: '1', name: '101' }, { unitId: '2', name: '102' }, { unitId: '3', name: '103' }, { unitId: '4', name: '104' }, { unitId: '5', name: '105' }, { unitId: '6', name: '106' }, { unitId: '7', name: '107' }] },
+    { roomId: '679093', units: [{ unitId: '1', name: '401' }] }
+  ];
+
+  const unitMap: Record<string, Record<string, string>> = {};
+  ROOM_MAP.forEach(r => {
+    unitMap[r.roomId] = {};
+    r.units.forEach(u => {
+      unitMap[r.roomId][u.unitId] = u.name;
+    });
+  });
+
+  const LOCAL_ROOM_ID = '685542';
+
+  const mappedBookings = bookingsArray
+    .filter((b: any) => {
+      const rId = String(b.roomId || '').trim();
+      if (rId === LOCAL_ROOM_ID) return false;
+      const uId = String(b.unitId ?? '').trim();
+      if (!uId || uId === '0') return false;
+      return true;
+    })
+    .map((b: any) => {
+      const arrivalDate = b.arrival ? new Date(b.arrival) : null;
+      const departureDate = b.departure ? new Date(b.departure) : null;
+      const nights = (arrivalDate && departureDate)
+        ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
+        : 1;
+
+      const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+      const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+
+      let channel = 'Directo';
+      if (rawSource.includes('airbnb') || guestNameUpper.includes('PAGADO A')) channel = 'Airbnb';
+      else if (rawSource.includes('booking') || guestNameUpper.includes('PAGADO B')) channel = 'Booking.com';
+      else if (rawSource.includes('expedia')) channel = 'Expedia';
+      else if (rawSource.includes('whatsapp') || rawSource.includes('n8n') || rawSource.includes('wapp')) channel = 'WhatsApp';
+      else if (rawSource.includes('google') || rawSource.includes('gpa') || rawSource.includes('hpa')) channel = 'Google';
+      else if (rawSource.includes('jaroje') || rawSource.includes('condominiosjaroje')) channel = 'Jaroje Oficial';
+      else if (rawSource.includes('beds24')) channel = 'Google';
+
+      const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
+
+      const roomData = getRoomMetadata(b.roomId, b.roomName);
+      let pricePerNight = (b.price !== undefined && b.price !== null && b.price !== '') ? (Number(b.price) / nights) : null;
+      if (!isOTA && pricePerNight === null) {
+        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, {}, String(b.unitId || ''), dynamicSettings);
+      } else if (isOTA && pricePerNight === null) {
+        pricePerNight = 0;
+      }
+      pricePerNight = Math.round(pricePerNight ?? 0);
+      const totalRevenue = pricePerNight * nights;
+
+      const unitName = getUnitName(b.roomId, b.unitId);
+      const displayRoomName = unitName 
+        ? (roomData.nombre.includes(unitName) ? roomData.nombre : `${roomData.nombre} (${unitName})`)
+        : roomData.nombre;
+
+      const taxInfo = extractTaxesFromInvoice(b.invoiceItems, b.id);
+      const otaDetails = extractOtaDetails(b.invoiceItems, b.id);
+
+      let actualPaid = 0;
+      let totalInvoiceCharges = 0;
+      if (b.invoiceItems && Array.isArray(b.invoiceItems)) {
+        b.invoiceItems.forEach((item: any) => {
+          const itemBookingId = String(item.bookingId || item.bookId || '');
+          if (itemBookingId && itemBookingId !== String(b.id)) {
+            return;
+          }
+          const qty = Number(item.qty || 0);
+          const price = Number(item.price || 0);
+          const lineTotal = qty * price;
+          if (lineTotal < 0) {
+            actualPaid += Math.abs(lineTotal);
+          } else {
+            totalInvoiceCharges += lineTotal;
+          }
+        });
+      }
+
+      const calculatedCharges = totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue;
+      const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
+
+      const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
+      const balanceVal = actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal));
+
+      const dbStatus = (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending');
+
+      return {
+        id: b.id || Math.random().toString(),
+        masterId: b.masterId || null,
+        actualPaid: actualPaid,
+        rawDeposit: b.deposit !== undefined ? Number(b.deposit) : 0,
+        check_in: b.arrival,
+        check_out: b.departure,
+        guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
+        guest_phone: normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry) || null,
+        guest_email: b.email || null,
+        status: dbStatus,
+        source: 'beds24',
+        channel: channel,
+        room_name: displayRoomName,
+        room: unitName || '',
+        room_id: b.roomId,
+        nights: nights,
+        price_estimate: totalRevenue,
+        price_per_night: pricePerNight,
+        deposit: depositVal,
+        balance: balanceVal,
+        notes: b.info || b.notes || null,
+        num_adult: b.numAdult ? Number(b.numAdult) : 1,
+        num_child: b.numChild ? Number(b.numChild) : 0,
+        rooms: { name: roomData.nombre },
+        taxes: taxInfo,
+        expected_payout: otaDetails.expectedPayout,
+        host_fee: otaDetails.hostFee,
+        booking_time: b.bookingTime || b.arrival || null,
+        cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null,
+        invoiceItems: b.invoiceItems || []
+      };
+    });
+
+  if (mappedBookings.length > 0) {
+    const upsertRows = mappedBookings.map((mb: any) => ({
+      id: String(mb.id),
+      master_id: mb.masterId || null,
+      check_in: mb.check_in,
+      check_out: mb.check_out,
+      guest_name: mb.guest_name,
+      guest_phone: mb.guest_phone || null,
+      guest_email: mb.guest_email || null,
+      status: mb.status,
+      channel: mb.channel,
+      room_name: mb.room_name,
+      room: mb.room,
+      room_id: String(mb.room_id || ''),
+      unit_id: String(mb.room || ''),
+      price: mb.price_estimate,
+      deposit: mb.deposit,
+      balance: mb.balance,
+      num_adult: mb.num_adult,
+      num_child: mb.num_child,
+      notes: mb.notes,
+      invoice_items: mb.invoiceItems || [],
+      actual_paid: mb.actualPaid,
+      created_at: mb.booking_time || null,
+      updated_at: new Date().toISOString()
+    }));
+
+    for (let i = 0; i < upsertRows.length; i += 50) {
+      const chunk = upsertRows.slice(i, i + 50);
+      const { error } = await supabase.from('beds24_reservations').upsert(chunk, { onConflict: 'id' });
+      if (error) {
+        console.error(`[Beds24 Range Sync Lote] Error al guardar bloque de reservas:`, error);
+      }
+    }
+    console.log(`[Beds24 Range Sync Lote] Sincronizadas exitosamente ${upsertRows.length} reservas en Supabase.`);
+  }
+
+  return { success: true, count: mappedBookings.length };
 }

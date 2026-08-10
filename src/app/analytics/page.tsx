@@ -18,6 +18,54 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
+// Helper: calcular cobros de Beds24 en un periodo a partir de los invoice_items
+function getBeds24PaymentsInPeriod(r: any, start: string, end: string) {
+  let sum = 0;
+  const items = r.invoiceItems || r.invoice_items || [];
+  if (Array.isArray(items)) {
+    items.forEach((item: any) => {
+      const qty = Number(item.qty || 0);
+      const price = Number(item.price || 0);
+      const lineTotal = qty * price;
+      if (lineTotal < 0) {
+        const itemTime = item.time || item.created_at || r.check_in || '';
+        const itemDate = itemTime.substring(0, 10);
+        const matchStart = start ? itemDate >= start : true;
+        const matchEnd = end ? itemDate <= end : true;
+        if (matchStart && matchEnd) {
+          sum += Math.abs(lineTotal);
+        }
+      }
+    });
+  }
+  return sum;
+}
+
+// Helper: calcular cobros de reservas locales (Habitación 500/501-507 locales) en un periodo
+function getLocalPaymentsInPeriod(r: any, start: string, end: string) {
+  let sum = 0;
+  // 1. Depósito pagado
+  const depTime = r.created_at || r.booking_time || r.check_in || '';
+  const depDate = depTime.substring(0, 10);
+  const matchDepStart = start ? depDate >= start : true;
+  const matchDepEnd = end ? depDate <= end : true;
+  if (matchDepStart && matchDepEnd) {
+    sum += Number(r.deposit || 0);
+  }
+
+  // 2. Liquidación al check-out si se completó la reserva
+  if (r.status !== 'cancelled' && (r.status === 'completed' || r.checked_out)) {
+    const outDate = (r.check_out || '').substring(0, 10);
+    const matchOutStart = start ? outDate >= start : true;
+    const matchOutEnd = end ? outDate <= end : true;
+    if (matchOutStart && matchOutEnd) {
+      const balance = Math.max(0, Number(r.price || 0) - Number(r.deposit || 0));
+      sum += balance;
+    }
+  }
+  return sum;
+}
+
 // ── COMPONENTE: GRÁFICA COMPARATIVA DE DOBLE COLUMNA (YoY) ──────────────────
 function DoubleBarChart({
   title,
@@ -388,12 +436,18 @@ export default function AnalyticsPage() {
     });
   }, [finanzas, startDate, endDate]);
 
-  // Ingresos totales del periodo en finances
+  // Ingresos totales del periodo basados en cobros reales (Beds24 + Locales)
   const ingresosPeriodo = useMemo(() => {
-    return filteredFinanzas
-      .filter(f => f.type === 'ingreso')
-      .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
-  }, [filteredFinanzas]);
+    return reservas
+      .filter(r => r.status !== 'cancelled' && r.status !== '0')
+      .reduce((sum, r) => {
+        if (r.source === 'beds24') {
+          return sum + getBeds24PaymentsInPeriod(r, startDate, endDate);
+        } else {
+          return sum + getLocalPaymentsInPeriod(r, startDate, endDate);
+        }
+      }, 0);
+  }, [reservas, startDate, endDate]);
 
   // Egresos Jaroje (totales - categoría "Personal")
   const egresosJarojePeriodo = useMemo(() => {
@@ -476,9 +530,19 @@ export default function AnalyticsPage() {
           return fDate.getFullYear() === year && fDate.getMonth() === monthIdx;
         });
 
-        const ingresos = monthFinances
-          .filter(f => f.type === 'ingreso')
-          .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
+        const startOfMonthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
+        const endOfMonthDate = new Date(year, monthIdx + 1, 0);
+        const endOfMonthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(endOfMonthDate.getDate()).padStart(2, '0')}`;
+
+        const ingresos = reservas
+          .filter(r => r.status !== 'cancelled' && r.status !== '0')
+          .reduce((sum, r) => {
+            if (r.source === 'beds24') {
+              return sum + getBeds24PaymentsInPeriod(r, startOfMonthStr, endOfMonthStr);
+            } else {
+              return sum + getLocalPaymentsInPeriod(r, startOfMonthStr, endOfMonthStr);
+            }
+          }, 0);
 
         const egresosJaroje = monthFinances
           .filter(f => f.type === 'gasto' && (f.category || '').trim().toLowerCase() !== 'personal')
@@ -787,14 +851,14 @@ export default function AnalyticsPage() {
                     MX${utilidadPeriodo.toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-indigo-300 font-bold mt-2">Negocio Condominios Jaroje (Caja)</p>
+                <p className="text-[10px] text-indigo-300 font-bold mt-2">Ingresos (Beds24) - Egresos (Caja local)</p>
               </div>
             </div>
 
             {/* 2. INGRESOS */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ingresos Totales (Caja)</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ingresos Totales (Beds24)</span>
                 <TrendingUp size={16} className="text-emerald-500" />
               </div>
               <div>
@@ -803,7 +867,7 @@ export default function AnalyticsPage() {
                     MX${ingresosPeriodo.toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Suma de entradas en Libro Contable (Caja Física)</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Cobros y abonos reales liquidados en Beds24 y locales</p>
               </div>
             </div>
 
