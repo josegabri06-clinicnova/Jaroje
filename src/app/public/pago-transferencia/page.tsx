@@ -253,7 +253,7 @@ export default function PagoTransferenciaPage() {
         formData.append('amount', String(amount));
         formData.append('name', String(name));
         formData.append('email', String(email));
-        formData.append('notes', method === 'mercadopago' ? '[Plataforma: Mercado Pago]' : `[Banco Destino: ${activeAccount.banco}]`);
+        formData.append('notes', method === 'mercadopago' ? '[Plataforma: Tarjeta]' : `[Banco Destino: ${activeAccount.banco}]`);
         formData.append('file', fileToUpload);
 
         const res = await fetch('/api/payments/transfer-submit', {
@@ -284,7 +284,7 @@ export default function PagoTransferenciaPage() {
         <div className="bg-[#18181b] px-6 py-5 text-white flex items-center justify-between">
           <div>
             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t.portalTitle}</span>
-            <h2 className="text-lg font-bold">{method === 'mercadopago' ? (lang === 'en' ? 'Mercado Pago Receipt' : 'Comprobante Mercado Pago') : t.pageTitle}</h2>
+            <h2 className="text-lg font-bold">{method === 'mercadopago' ? (lang === 'en' ? 'Card Receipt' : 'Comprobante de Tarjeta') : t.pageTitle}</h2>
           </div>
           <div className="bg-[#25D366] text-[10px] font-black px-2.5 py-1 rounded-full uppercase text-zinc-950 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 animate-ping"></span>
@@ -324,7 +324,7 @@ export default function PagoTransferenciaPage() {
               {method === 'mercadopago' ? (
                 <div className="space-y-3.5">
                   <h3 className="text-[12px] font-extrabold text-[#00A650] uppercase tracking-wider px-1">
-                    {lang === 'en' ? 'Mercado Pago Confirmation' : 'Confirmación Mercado Pago'}
+                    {lang === 'en' ? 'Card Payment Confirmation' : 'Confirmación Pago con Tarjeta'}
                   </h3>
                   
                   <div className="bg-white border border-zinc-200/80 rounded-2xl p-5 space-y-4 shadow-sm text-left">
@@ -334,14 +334,14 @@ export default function PagoTransferenciaPage() {
                       </div>
                       <div>
                         <span className="text-[10px] font-bold text-zinc-400 uppercase block">{lang === 'en' ? 'Payment Method' : 'Método de Pago'}</span>
-                        <p className="text-sm font-extrabold text-zinc-900">Mercado Pago</p>
+                        <p className="text-sm font-extrabold text-zinc-900">{lang === 'en' ? 'Credit / Debit Card' : 'Tarjeta de Crédito / Débito'}</p>
                       </div>
                     </div>
                     
                     <p className="text-xs text-zinc-650 leading-relaxed">
                       {lang === 'en' 
-                        ? 'Please upload the screenshot or receipt of your transaction made on Mercado Pago. We will verify the transaction and confirm your booking.' 
-                        : 'Por favor, sube la captura de pantalla o comprobante de tu pago en Mercado Pago. Validaremos la transacción para confirmar tu reservación.'}
+                        ? 'Please upload the screenshot or receipt of your card payment. We will verify the transaction and confirm your booking.' 
+                        : 'Por favor, sube la captura de pantalla o comprobante de tu pago con tarjeta. Validaremos la transacción para confirmar tu reservación.'}
                     </p>
                   </div>
                 </div>

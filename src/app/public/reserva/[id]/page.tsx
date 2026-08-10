@@ -444,7 +444,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     totalSelector: 'Total (100%)',
     amountSelected: 'Monto a pagar seleccionado',
     optionCard: 'Opción 1: Tarjeta de Crédito / Débito',
-    payWithCard: 'Pagar con Mercado Pago',
+    payWithCard: 'Pagar con Tarjeta',
     cardNote: 'Si realizas tu pago con tarjeta, no es necesario enviar comprobante.',
     optionTransfer: 'Opción 2: Transferencia o Depósito Bancario',
     payWithTransfer: 'Pagar por Transferencia Bancaria',
@@ -566,7 +566,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     totalSelector: 'Total (100%)',
     amountSelected: 'Selected payment amount',
     optionCard: 'Option 1: Credit / Debit Card',
-    payWithCard: 'Pay with Mercado Pago',
+    payWithCard: 'Pay with Card',
     cardNote: 'If you pay with a card, sending a receipt is not required.',
     optionTransfer: 'Option 2: Bank Transfer or Cash Deposit',
     payWithTransfer: 'Pay by Bank Transfer',
@@ -1714,7 +1714,7 @@ export default function PublicReservaPage() {
                       className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                     >
                       <Upload size={14} className="text-zinc-600" />
-                      {lang === 'en' ? 'Upload Mercado Pago Receipt' : 'Subir Comprobante de Mercado Pago'}
+                      {lang === 'en' ? 'Upload Card Receipt' : 'Subir Comprobante de Tarjeta'}
                     </a>
                   </div>
 
