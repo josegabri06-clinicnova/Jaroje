@@ -581,6 +581,7 @@ export default function RecepcionPage() {
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
+  const [beds24Prices, setBeds24Prices] = useState<any>(null);
   const [cleanToast, setCleanToast] = useState<{ room: string; by: string } | null>(null);
   const [mainTab, setMainTab] = useState<'recepcion' | 'inventario'>('recepcion');
   const staffName = 'Recepción';
@@ -608,9 +609,18 @@ export default function RecepcionPage() {
   // Toast para el reporte diario
   const [dailyReportToast, setDailyReportToast] = useState<string | null>(null);
 
-  const handleCopyDailyReport = async () => {
+  const handleCopyDailyReport = () => {
+    // 1. Abrir la pestaña del grupo de WhatsApp de inmediato (síncronamente en el primer instante del click para evitar el bloqueo del popup)
+    let waWindow: Window | null = null;
+    try {
+      waWindow = window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+    } catch (e) {
+      console.warn("No se pudo abrir la ventana de WhatsApp directamente:", e);
+    }
+
     try {
       if (reservas.length === 0) {
+        if (waWindow) waWindow.close();
         alert("No hay datos de reservaciones cargados para generar el reporte.");
         return;
       }
@@ -679,28 +689,7 @@ export default function RecepcionPage() {
 
       // --- TARIFAS ESTACIONALES DINÁMICAS ---
       const todayISO = getLocalDateStr(new Date());
-      let seasonRangesData: any[] = [];
-      let tempDiscountsData: any[] = [];
-      try {
-        const { createClient } = await import('@supabase/supabase-js');
-        const sb = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        );
-        const [seasonRes, discountsRes] = await Promise.all([
-          sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
-          sb.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle()
-        ]);
-        if (seasonRes.data?.value) {
-          seasonRangesData = typeof seasonRes.data.value === 'string' ? JSON.parse(seasonRes.data.value) : seasonRes.data.value;
-        }
-        if (discountsRes.data?.value) {
-          tempDiscountsData = typeof discountsRes.data.value === 'string' ? JSON.parse(discountsRes.data.value) : discountsRes.data.value;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-      const currentSeason = getSeason(todayISO, seasonRangesData);
+      const currentSeason = getSeason(todayISO, seasonRanges);
       const seasonLabels: Record<string, string> = {
         baja: 'BAJA',
         media: 'MEDIA',
@@ -729,35 +718,29 @@ export default function RecepcionPage() {
       cond3Price = fallbacks.cond3;
       casaPrice = fallbacks.casa;
 
-      try {
-        const resPrices = await fetch('/api/beds24-prices?t=' + Date.now());
-        const jsonPrices = await resPrices.json();
-        if (jsonPrices.success && Array.isArray(jsonPrices.rooms)) {
-          const getPriceForToday = (roomId: string) => {
-            const roomObj = jsonPrices.rooms.find((r: any) => r.id === roomId);
-            if (roomObj && Array.isArray(roomObj.seasonBlocks)) {
-              const matchedBlock = roomObj.seasonBlocks.find((b: any) => todayISO >= b.from && todayISO <= b.to);
-              if (matchedBlock) return matchedBlock.priceDirecto;
-              
-              const seasonBlock = roomObj.seasonBlocks.find((b: any) => b.season === currentSeason);
-              if (seasonBlock) return seasonBlock.priceDirecto;
-            }
-            return null;
-          };
+      if (beds24Prices && beds24Prices.success && Array.isArray(beds24Prices.rooms)) {
+        const getPriceForToday = (roomId: string) => {
+          const roomObj = beds24Prices.rooms.find((r: any) => r.id === roomId);
+          if (roomObj && Array.isArray(roomObj.seasonBlocks)) {
+            const matchedBlock = roomObj.seasonBlocks.find((b: any) => todayISO >= b.from && todayISO <= b.to);
+            if (matchedBlock) return matchedBlock.priceDirecto;
+            
+            const seasonBlock = roomObj.seasonBlocks.find((b: any) => b.season === currentSeason);
+            if (seasonBlock) return seasonBlock.priceDirecto;
+          }
+          return null;
+        };
 
-          doublePrice = getPriceForToday('679077') || doublePrice;
-          cond1Price = getPriceForToday('679087') || cond1Price;
-          cond2Price = getPriceForToday('679091') || cond2Price;
-          cond3Price = getPriceForToday('679092') || cond3Price;
-          casaPrice = getPriceForToday('679093') || casaPrice;
-        }
-      } catch (e) {
-        console.warn("No se pudieron cargar tarifas de Ajustes, usando fallback:", e);
+        doublePrice = getPriceForToday('679077') || doublePrice;
+        cond1Price = getPriceForToday('679087') || cond1Price;
+        cond2Price = getPriceForToday('679091') || cond2Price;
+        cond3Price = getPriceForToday('679092') || cond3Price;
+        casaPrice = getPriceForToday('679093') || casaPrice;
       }
 
       const getActiveDiscountForToday = (roomId: string) => {
-        if (!Array.isArray(tempDiscountsData)) return null;
-        return tempDiscountsData.find(d => 
+        if (!Array.isArray(tempDiscounts)) return null;
+        return tempDiscounts.find(d => 
           Array.isArray(d.rooms) && 
           d.rooms.includes(roomId) && 
           todayISO >= d.from && 
@@ -791,7 +774,7 @@ export default function RecepcionPage() {
 
       text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
 
-      // 1. Intentar copiar al portapapeles de forma síncrona usando execCommand de respaldo para mantener el hilo del click
+      // 2. Intentar copiar al portapapeles de forma síncrona
       let copiado = false;
       try {
         const textArea = document.createElement("textarea");
@@ -807,18 +790,6 @@ export default function RecepcionPage() {
       } catch (err) {
         console.warn('document.execCommand falló, intentando alternativa:', err);
       }
-
-      if (!copiado) {
-        try {
-          await navigator.clipboard.writeText(text);
-          copiado = true;
-        } catch (clipErr) {
-          console.warn('navigator.clipboard falló:', clipErr);
-        }
-      }
-
-      // 2. Abrir la pestaña del grupo de WhatsApp de inmediato (en el mismo hilo síncrono del click)
-      window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
 
       if (copiado) {
         setDailyReportToast('✅ Reporte copiado. ¡Pégalo en el grupo de WhatsApp abierto!');
@@ -2606,7 +2577,7 @@ export default function RecepcionPage() {
     window.dispatchEvent(new Event('refresh-start'));
     setIsLoading(true);
     try {
-      const [r, t, inv, chk, acc, rms, prc, psRes, capRes, seasonRes, discountsRes] = await Promise.all([
+      const [r, t, inv, chk, acc, rms, prc, psRes, capRes, seasonRes, discountsRes, bPricesRes] = await Promise.all([
         fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()),
         fetch('/api/tasks?t=' + Date.now()),
         supabase.from('inventory').select('*').order('category').order('item_name'),
@@ -2617,7 +2588,8 @@ export default function RecepcionPage() {
         supabase.from('settings').select('value').eq('key', 'pricing_unit_settings').maybeSingle(),
         supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle(),
         supabase.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
-        supabase.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle()
+        supabase.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle(),
+        fetch('/api/beds24-prices?t=' + Date.now()).then(res => res.json()).catch(() => null)
       ]);
       const rj = await r.json();
       const tj = await t.json();
@@ -2700,6 +2672,11 @@ export default function RecepcionPage() {
         } catch (e) {
           console.error('Error al parsear temp_discounts:', e);
         }
+      }
+
+      // Guardar tarifas de Beds24
+      if (bPricesRes) {
+        setBeds24Prices(bPricesRes);
       }
     } catch (err) {
       console.error(err);
