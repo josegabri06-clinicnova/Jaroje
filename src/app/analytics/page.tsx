@@ -18,52 +18,32 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
-// Helper: calcular cobros de Beds24 en un periodo a partir de los invoice_items
-function getBeds24PaymentsInPeriod(r: any, start: string, end: string) {
-  let sum = 0;
-  const items = r.invoiceItems || r.invoice_items || [];
-  if (Array.isArray(items)) {
-    items.forEach((item: any) => {
-      const qty = Number(item.qty || 0);
-      const price = Number(item.price || 0);
-      const lineTotal = qty * price;
-      if (lineTotal < 0) {
-        const itemTime = item.time || item.created_at || r.check_in || '';
-        const itemDate = itemTime.substring(0, 10);
-        const matchStart = start ? itemDate >= start : true;
-        const matchEnd = end ? itemDate <= end : true;
-        if (matchStart && matchEnd) {
-          sum += Math.abs(lineTotal);
-        }
+// Helper: calcular ingresos prorrateados de una reserva (Beds24 o local) en un periodo (criterio de Devengo)
+function getStayRevenueInPeriod(r: any, start: string, end: string) {
+  if (!r.check_in || !r.check_out) return 0;
+  if (r.status === 'cancelled' || r.status === '0') return 0;
+
+  const rIn = new Date(r.check_in + 'T12:00:00');
+  const rOut = new Date(r.check_out + 'T12:00:00');
+  const sDate = start ? new Date(start + 'T12:00:00') : null;
+  const eDate = end ? new Date(end + 'T12:00:00') : null;
+
+  if (sDate && eDate) {
+    if (rIn < eDate && rOut > sDate) {
+      const overlapStart = new Date(Math.max(rIn.getTime(), sDate.getTime()));
+      const overlapEnd = new Date(Math.min(rOut.getTime(), eDate.getTime()));
+      const diff = (overlapEnd.getTime() - overlapStart.getTime()) / 86400000;
+      const overlapNights = Math.max(0, Math.round(diff));
+
+      if (overlapNights > 0) {
+        const totalNightsOfBooking = Math.max(1, Math.round((rOut.getTime() - rIn.getTime()) / 86400000));
+        const price = Number(r.price_estimate || r.price || 0);
+        const pricePerNight = price / totalNightsOfBooking;
+        return pricePerNight * overlapNights;
       }
-    });
-  }
-  return sum;
-}
-
-// Helper: calcular cobros de reservas locales (Habitación 500/501-507 locales) en un periodo
-function getLocalPaymentsInPeriod(r: any, start: string, end: string) {
-  let sum = 0;
-  // 1. Depósito pagado
-  const depTime = r.created_at || r.booking_time || r.check_in || '';
-  const depDate = depTime.substring(0, 10);
-  const matchDepStart = start ? depDate >= start : true;
-  const matchDepEnd = end ? depDate <= end : true;
-  if (matchDepStart && matchDepEnd) {
-    sum += Number(r.deposit || 0);
-  }
-
-  // 2. Liquidación al check-out si se completó la reserva
-  if (r.status !== 'cancelled' && (r.status === 'completed' || r.checked_out)) {
-    const outDate = (r.check_out || '').substring(0, 10);
-    const matchOutStart = start ? outDate >= start : true;
-    const matchOutEnd = end ? outDate <= end : true;
-    if (matchOutStart && matchOutEnd) {
-      const balance = Math.max(0, Number(r.price || 0) - Number(r.deposit || 0));
-      sum += balance;
     }
   }
-  return sum;
+  return 0;
 }
 
 // ── COMPONENTE: GRÁFICA COMPARATIVA DE DOBLE COLUMNA (YoY) ──────────────────
@@ -327,6 +307,7 @@ export default function AnalyticsPage() {
   const [tokenError, setTokenError] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Estados de navegación y filtros
   const [activeTab, setActiveTab] = useState<'cantidades' | 'graficas'>('cantidades');
@@ -370,6 +351,25 @@ export default function AnalyticsPage() {
       console.error("Error en analytics", e);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch('/api/analytics/sync', { method: 'POST' });
+      const json = await res.json();
+      if (json.success) {
+        alert(`✅ Sincronización rápida con Beds24 finalizada. Se sincronizaron las reservas del periodo: ${json.from} al ${json.to}.`);
+        await fetchData();
+      } else {
+        alert(`❌ Error en la sincronización: ${json.error}`);
+      }
+    } catch (err: any) {
+      console.error("Error en manual sync:", err);
+      alert(`❌ Ocurrió un error inesperado al conectar con el servidor.`);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -436,17 +436,11 @@ export default function AnalyticsPage() {
     });
   }, [finanzas, startDate, endDate]);
 
-  // Ingresos totales del periodo basados en cobros reales (Beds24 + Locales)
+  // Ingresos totales del periodo basados en estancia (Devengo)
   const ingresosPeriodo = useMemo(() => {
     return reservas
       .filter(r => r.status !== 'cancelled' && r.status !== '0')
-      .reduce((sum, r) => {
-        if (r.source === 'beds24') {
-          return sum + getBeds24PaymentsInPeriod(r, startDate, endDate);
-        } else {
-          return sum + getLocalPaymentsInPeriod(r, startDate, endDate);
-        }
-      }, 0);
+      .reduce((sum, r) => sum + getStayRevenueInPeriod(r, startDate, endDate), 0);
   }, [reservas, startDate, endDate]);
 
   // Egresos Jaroje (totales - categoría "Personal")
@@ -536,13 +530,7 @@ export default function AnalyticsPage() {
 
         const ingresos = reservas
           .filter(r => r.status !== 'cancelled' && r.status !== '0')
-          .reduce((sum, r) => {
-            if (r.source === 'beds24') {
-              return sum + getBeds24PaymentsInPeriod(r, startOfMonthStr, endOfMonthStr);
-            } else {
-              return sum + getLocalPaymentsInPeriod(r, startOfMonthStr, endOfMonthStr);
-            }
-          }, 0);
+          .reduce((sum, r) => sum + getStayRevenueInPeriod(r, startOfMonthStr, endOfMonthStr), 0);
 
         const egresosJaroje = monthFinances
           .filter(f => f.type === 'gasto' && (f.category || '').trim().toLowerCase() !== 'personal')
@@ -734,13 +722,29 @@ export default function AnalyticsPage() {
           <h2 className="text-[22px] font-black text-zinc-950 tracking-tight uppercase">Analytics</h2>
           <p className="text-[12px] font-semibold text-zinc-400 mt-0.5">Módulos de Auditoría Contable y Ocupación</p>
         </div>
-        <button
-          onClick={fetchData}
-          disabled={isLoading}
-          className={`w-10 h-10 flex items-center justify-center text-zinc-500 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-xl shadow-sm transition-all ${isLoading ? 'opacity-50' : 'active:scale-95'}`}
-        >
-          <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleManualSync}
+            disabled={isSyncing || isLoading}
+            className={`px-3 py-2 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl shadow-sm transition-all ${
+              isSyncing ? 'animate-pulse' : 'active:scale-95'
+            } cursor-pointer`}
+            title="Sincronizar rango reciente desde Beds24"
+          >
+            <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Beds24'}</span>
+          </button>
+          <button
+            onClick={fetchData}
+            disabled={isLoading || isSyncing}
+            className={`w-9 h-9 flex items-center justify-center text-zinc-500 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-xl shadow-sm transition-all ${
+              isLoading ? 'opacity-50' : 'active:scale-95'
+            } cursor-pointer`}
+            title="Recargar vista local"
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+        </div>
       </div>
 
       {/* Error de token Beds24 */}
