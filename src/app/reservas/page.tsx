@@ -1624,8 +1624,7 @@ function ReservasListInner() {
       
       const rPhone = String(r.guest_phone || r.phone || r.mobile || '').trim();
       const samePhone = mainPhone && rPhone && rPhone === mainPhone && mainPhone.length >= 6;
-      const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
-      return samePhone || sameName;
+      return samePhone;
     });
   }, [selectedRes, reservas]);
 
@@ -2622,8 +2621,7 @@ function ReservasListInner() {
         
         const oPhone = String(o.guest_phone || o.phone || o.mobile || '').trim();
         const samePhone = mainPhone && oPhone && oPhone === mainPhone && mainPhone.length >= 6;
-        const sameName = mainName && o.guest_name && (cleanStr(o.guest_name).includes(mainName) || mainName.includes(cleanStr(o.guest_name)));
-        return samePhone || sameName;
+        return samePhone;
       });
 
       if (siblings.length > 0) {
@@ -3048,8 +3046,7 @@ function ReservasListInner() {
                           const siblings = reservas.filter(o => {
                             if (o.check_in !== r.check_in || o.id === r.id || o.is_checked_out || o.status === 'cancelled' || o.status === '0') return false;
                             const samePhone = mainPhone && o.guest_phone && o.guest_phone.trim() === mainPhone;
-                            const sameName = mainName && o.guest_name && (cleanStr(o.guest_name).includes(mainName) || mainName.includes(cleanStr(o.guest_name)));
-                            return samePhone || sameName;
+                            return samePhone;
                           });
                           if (siblings.length > 0) {
                             return <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-150">GRUPO 🏨 {siblings.length + 1}</span>;
