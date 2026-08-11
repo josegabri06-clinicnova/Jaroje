@@ -33,7 +33,7 @@ function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accou
   };
 }
 
-const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas', 'Facturas', 'Bloqueos'];
+const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas', 'Bloqueos'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -2781,7 +2781,7 @@ function ReservasListInner() {
         ? r.group_members.some((m: any) => ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(m.channel || ''))
         : ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
     }
-    else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas' && activeTab !== 'Bloqueos' && activeTab !== 'Facturas') {
+    else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas' && activeTab !== 'Bloqueos') {
       matchTab = r.is_group_card
         ? r.group_members.some((m: any) => m.channel === activeTab)
         : r.channel === activeTab;
