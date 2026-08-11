@@ -136,11 +136,65 @@ export async function GET(req: Request) {
         num_child: Number(b.num_child || 0),
         channel: b.channel || 'Recepción',
         booking_time: b.created_at || null,
-        nights
+        nights,
+        status: b.status || 'confirmed',
+        masterId: null
       };
     });
 
     const allBookings = [...beds24Reservas, ...mappedLocal];
+
+    // Helper para verificar si alguna reserva del grupo tiene un pago/comprobante pendiente o aprobado
+    const isGroupPaidOrPending = (booking: any): boolean => {
+      const bookingIdStr = String(booking.id);
+      if (paidOrPendingSet.has(bookingIdStr)) return true;
+      
+      const masterId = booking.masterId ? String(booking.masterId) : null;
+      
+      for (const other of allBookings) {
+        const otherIdStr = String(other.id);
+        if (otherIdStr === bookingIdStr) continue;
+        
+        const otherMasterId = other.masterId ? String(other.masterId) : null;
+        const inSameGroup = (masterId && otherIdStr === masterId) || 
+                            (otherMasterId === bookingIdStr) || 
+                            (masterId && masterId === otherMasterId);
+                            
+        if (inSameGroup && paidOrPendingSet.has(otherIdStr)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
+    // Helper para obtener la fecha de último aviso de cualquier reserva del grupo
+    const getGroupNoticeSentAt = (booking: any): string | undefined => {
+      const bookingIdStr = String(booking.id);
+      
+      // 1. Verificación directa
+      if (ultimoAvisoMap.has(bookingIdStr)) {
+        return ultimoAvisoMap.get(bookingIdStr);
+      }
+      
+      // 2. Verificación grupal
+      const masterId = booking.masterId ? String(booking.masterId) : null;
+      
+      for (const other of allBookings) {
+        const otherIdStr = String(other.id);
+        if (otherIdStr === bookingIdStr) continue;
+        
+        const otherMasterId = other.masterId ? String(other.masterId) : null;
+        const inSameGroup = (masterId && otherIdStr === masterId) || 
+                            (otherMasterId === bookingIdStr) || 
+                            (masterId && masterId === otherMasterId);
+                            
+        if (inSameGroup && ultimoAvisoMap.has(otherIdStr)) {
+          return ultimoAvisoMap.get(otherIdStr);
+        }
+      }
+      
+      return undefined;
+    };
 
     // 4. Obtener mensajes ya enviados en los últimos 7 días para evitar duplicados
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -228,14 +282,15 @@ export async function GET(req: Request) {
         const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
         if (!guestPhone) continue;
 
-        // --- REGLA: Cancelación Automática 1h tras Último Aviso ---
+        // --- REGLA: Cancelación Automática 3h tras Último Aviso ---
         const isCancelled = booking.status === 'cancelled' || String(booking.status) === '0';
         const hasDeposit = Number(booking.deposit || 0) > 0;
-        const sentAtStr = ultimoAvisoMap.get(bookingIdStr);
+        const sentAtStr = getGroupNoticeSentAt(booking);
 
         if (!isCancelled && !hasDeposit && sentAtStr) {
           const sentAt = new Date(sentAtStr);
-          const limitTime = new Date(sentAt.getTime() + 50 * 60 * 1000); // 50 minutos (margen para tolerar la frecuencia del cron)
+          // Margen de 3 horas (usando 2 horas y 50 minutos para tolerar la frecuencia del cron de 10 min)
+          const limitTime = new Date(sentAt.getTime() + 170 * 60 * 1000); 
           const now = new Date();
 
           // Registrar evaluación de cancelación en logs del sistema para diagnóstico y visibilidad
@@ -245,16 +300,15 @@ export async function GET(req: Request) {
               action: 'cron-cancel-eval',
               department: 'whatsapp',
               room: booking.room_name || `Habitación ${booking.room || ''}`,
-              details: `Evaluando reserva ${bookingIdStr} (${booking.guest_name}). Último aviso: ${sentAtStr}. Límite: ${limitTime.toISOString()}. Ahora: ${now.toISOString()}.`
+              details: `Evaluando reserva ${bookingIdStr} (${booking.guest_name}). Último aviso: ${sentAtStr}. Límite (3h): ${limitTime.toISOString()}. Ahora: ${now.toISOString()}.`
             }]);
           } catch (e) {
             console.error("Error al registrar cron-cancel-eval:", e);
           }
 
           if (now >= limitTime) {
-            // Ha transcurrido más de 1 hora
-            if (!paidOrPendingSet.has(bookingIdStr)) {
-              console.log(`[Cron Expiración 1h] Reservación ${bookingIdStr} de ${booking.guest_name} no cargó comprobante tras 1 hora. Cancelando...`);
+            if (!isGroupPaidOrPending(booking)) {
+              console.log(`[Cron Expiración 3h] Reservación ${bookingIdStr} de ${booking.guest_name} no cargó comprobante tras 3 horas. Cancelando...`);
 
               const isLocal = bookingIdStr.startsWith('loc_') || 
                               bookingIdStr.startsWith('walkin_') || 
@@ -282,7 +336,6 @@ export async function GET(req: Request) {
                 
                 if (cancelRes.ok) {
                   const resJson = await cancelRes.json();
-                  // En Beds24 v2, la respuesta exitosa suele traer success: true o data con las reservas modificadas
                   if (resJson.success || (Array.isArray(resJson) && resJson[0]?.id) || (Array.isArray(resJson.data) && resJson.data[0]?.id)) {
                     isBeds24Success = true;
                     clearBeds24Cache();
@@ -308,7 +361,7 @@ export async function GET(req: Request) {
                   action: 'cron-cancel-success',
                   department: 'whatsapp',
                   room: booking.room_name || `Habitación ${booking.room || ''}`,
-                  details: `Reserva ${bookingIdStr} (${booking.guest_name}) cancelada automáticamente con éxito en ${isLocal ? 'BD Local' : 'Beds24'} por inactividad de pago (1h).`
+                  details: `Reserva ${bookingIdStr} (${booking.guest_name}) cancelada automáticamente con éxito en ${isLocal ? 'BD Local' : 'Beds24'} por inactividad de pago (3h).`
                 }]);
               } catch (e) {
                 console.error("Error al registrar cron-cancel-success:", e);
@@ -322,20 +375,20 @@ export async function GET(req: Request) {
                   template_name: 'disponibilidad_liberada',
                   phone: guestPhone
                 }]);
-                reports.push(`[Expirado 1h] Reserva ${bookingIdStr} cancelada y notificada con Mensaje 4.`);
+                reports.push(`[Expirado 3h] Reserva ${bookingIdStr} cancelada y notificada con Mensaje 4.`);
               } else {
-                reports.push(`[Expirado 1h] Reserva ${bookingIdStr} cancelada en sistema, pero falló WhatsApp: ${waRes.error}`);
+                reports.push(`[Expirado 3h] Reserva ${bookingIdStr} cancelada en sistema, pero falló WhatsApp: ${waRes.error}`);
               }
               continue; // Saltar el resto de verificaciones para esta reserva
             } else {
-              // Omitido por tener transferencia pendiente o aprobada
+              // Omitido por tener transferencia pendiente o aprobada en el grupo
               try {
                 await supabase.from('employee_logs').insert([{
                   employee_num: '000',
                   action: 'cron-cancel-skipped',
                   department: 'whatsapp',
                   room: booking.room_name || `Habitación ${booking.room || ''}`,
-                  details: `Se omitió la cancelación automática de la reserva ${bookingIdStr} (${booking.guest_name}) porque tiene un comprobante de transferencia pendiente o aprobado en Supabase.`
+                  details: `Se omitió la cancelación automática de la reserva ${bookingIdStr} (${booking.guest_name}) porque tiene un comprobante de transferencia pendiente o aprobado en Supabase (evaluación a nivel de grupo).`
                 }]);
               } catch (e) {
                 console.error("Error al registrar cron-cancel-skipped:", e);

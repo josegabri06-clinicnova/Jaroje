@@ -2151,6 +2151,7 @@ function ReservasListInner() {
   };
 
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [reactivateLoading, setReactivateLoading] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelSelectedIds, setCancelSelectedIds] = useState<string[]>([]);
 
@@ -2381,6 +2382,70 @@ function ReservasListInner() {
 
     } catch (err: any) {
       alert(`⚠️ Error enviando ÚLTIMO AVISO: ${err.message || 'Error de red'}`);
+    }
+  };
+
+  const handleReactivateReserva = async () => {
+    if (!selectedRes) return;
+    if (userRole !== 'admin') {
+      alert('❌ Error: Solo los administradores pueden reactivar reservas.');
+      return;
+    }
+
+    const confirmReactivate = window.confirm(`¿Estás seguro de que deseas reactivar la reservación de ${selectedRes.guest_name}? Esto volverá a activar la reserva en Beds24 y restaurará su estado.`);
+    if (!confirmReactivate) return;
+
+    setReactivateLoading(true);
+    try {
+      const res = await fetch(`/api/reservas`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedRes.id,
+          action: 'reactivate'
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error reactivando la reserva.');
+
+      // Registrar log de empleado
+      try {
+        const emp = getOperatorForLog();
+        await fetch('/api/employee-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employee_num: emp.employee_num,
+            employee_name: emp.full_name,
+            department: emp.department,
+            module: 'recepcion',
+            action: 'reserva_reactivada',
+            room: selectedRes.room_name || selectedRes.room || 'General',
+            details: JSON.stringify({
+              text: `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Reactivó la reserva cancelada.`,
+              bookingId: selectedRes.id,
+              guestName: selectedRes.guest_name
+            })
+          })
+        });
+      } catch (logErr) {
+        console.error("Error registrando log de reactivación:", logErr);
+      }
+
+      alert('✅ Reserva reactivada con éxito.');
+
+      // Forzar la recarga local de los datos para reflejar los cambios
+      setSelectedRes(null);
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        params.set('bypassCache', 'true');
+        window.location.search = params.toString();
+      }
+    } catch (err: any) {
+      alert(`⚠️ Error reactivando la reserva: ${err.message}`);
+    } finally {
+      setReactivateLoading(false);
     }
   };
 
@@ -5420,13 +5485,31 @@ function ReservasListInner() {
                     </button>
                   )}
 
+                  {/* Reactivar Reserva Button (Solo Admin) */}
+                  {selectedRes.status === 'cancelled' && userRole === 'admin' && (
+                    <button 
+                      onClick={handleReactivateReserva}
+                      disabled={reactivateLoading}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer animate-in fade-in"
+                    >
+                      {reactivateLoading ? (
+                        <RefreshCw size={14} className="animate-spin" />
+                      ) : (
+                        <>
+                          <RefreshCw size={14} />
+                          Reactivar Reserva
+                        </>
+                      )}
+                    </button>
+                  )}
+
                   {/* Ver Info Original en Beds24 */}
                   <button 
                     onClick={() => {
                       window.open(`https://beds24.com/control2.php?pagetype=autoBooking&id=${selectedRes.id}`, '_blank');
                     }}
                     className={`bg-white hover:bg-zinc-50 text-zinc-700 font-semibold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] border border-zinc-200 flex items-center justify-center gap-1 shadow-sm ${
-                      (selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin') ? '' : 'col-span-2'
+                      (userRole === 'admin' && (!selectedRes.is_checked_out || selectedRes.status === 'cancelled')) ? '' : 'col-span-2'
                     }`}
                   >
                     Ver en Beds24 🔗

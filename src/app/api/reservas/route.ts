@@ -936,6 +936,97 @@ export async function PUT(req: Request) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
     }
 
+    if (body.action === 'reactivate') {
+      // 1. Intentamos buscar si la reserva es local en Supabase
+      const { data: localRes } = await supabase
+        .from('local_reservas')
+        .select('*')
+        .eq('id', Number(id))
+        .maybeSingle();
+
+      if (localRes) {
+        // Es local! Reactivar localmente en Supabase como confirmed
+        const { error: reactivateErr } = await supabase
+          .from('local_reservas')
+          .update({ status: 'confirmed' })
+          .eq('id', Number(id));
+
+        if (reactivateErr) {
+          console.error("[Reservas PUT Reactivate] Error reactivating local reservation:", reactivateErr);
+          return NextResponse.json({ error: reactivateErr.message }, { status: 500 });
+        }
+
+        return NextResponse.json({ success: true, message: "Reserva local reactivada con éxito." });
+      }
+
+      // 2. Reactivar en Beds24
+      const BEDS24_TOKEN = await getBeds24Token();
+
+      // Consultar detalles antes de reactivar para ver si tiene depósito
+      let hasDeposit = false;
+      try {
+        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31&includeCancelled=true`, {
+          headers: { 'token': BEDS24_TOKEN }
+        });
+        if (b24Res.ok) {
+          const b24Json = await b24Res.json();
+          const b = b24Json.data?.[0];
+          if (b) {
+            hasDeposit = Number(b.deposit || 0) > 0;
+          }
+        }
+      } catch (err) {
+        console.error("[Reservas PUT Reactivate] Error fetching reservation details from Beds24:", err);
+      }
+
+      const reactivateStatus = hasDeposit ? 'confirmed' : 'request';
+
+      const reactivatePayload = {
+        id: Number(id),
+        status: reactivateStatus
+      };
+
+      const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+        method: 'POST',
+        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify([reactivatePayload])
+      });
+
+      if (!beds24Response.ok) {
+        const errText = await beds24Response.text();
+        return NextResponse.json({ error: `Beds24 rechazó la reactivación: ${errText}` }, { status: 400 });
+      }
+
+      const dataB24 = await beds24Response.json();
+      const resultsArray = Array.isArray(dataB24) ? dataB24 : (dataB24 && Array.isArray(dataB24.data) ? dataB24.data : []);
+      const firstResult = resultsArray[0];
+      if (firstResult && firstResult.success === false) {
+        const errorMsg = firstResult.errors 
+          ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
+          : firstResult.message || 'Error individual al reactivar en Beds24';
+        return NextResponse.json({ error: `Beds24 rechazó la reactivación: ${errorMsg}` }, { status: 400 });
+      }
+
+      // Sincronizar de inmediato localmente
+      try {
+        const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+        const b24ResFull = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
+          headers: { 'token': BEDS24_TOKEN }
+        });
+        if (b24ResFull.ok) {
+          const b24JsonFull = await b24ResFull.json();
+          const rawBooking = b24JsonFull.data?.[0];
+          if (rawBooking) {
+            await syncBeds24BookingLocal(rawBooking);
+          }
+        }
+      } catch (syncErr) {
+        console.error("[Reservas PUT Reactivate] Error al sincronizar tras reactivación:", syncErr);
+      }
+
+      return NextResponse.json({ success: true, message: "Reserva reactivada con éxito en Beds24." });
+    }
+
     // Guardar ajustes de portal si vienen en la petición
     if (portalSettings) {
       try {
