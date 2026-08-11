@@ -33,7 +33,7 @@ function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accou
   };
 }
 
-const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas', 'Facturas'];
+const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas', 'Bloqueos', 'Facturas'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -2638,18 +2638,18 @@ function ReservasListInner() {
 
   const todayStr = getLocalDateStr();
 
-  // Reservas activas operativas: no canceladas, no con checkout hecho, y su fecha de SALIDA es hoy o futura
+  // Reservas activas operativas: no canceladas, no bloqueos, no con checkout hecho, y su fecha de SALIDA es hoy o futura
   // Esto incluye reservas en curso (check-in ya ocurrió, huésped en el hotel) y reservas próximas.
   const activeReservas = reservas
-    .filter(r => r.status !== 'cancelled' && !r.is_checked_out && r.check_out >= todayStr)
+    .filter(r => r.status !== 'cancelled' && r.status !== 'black' && !r.is_checked_out && r.check_out >= todayStr)
     .sort((a, b) => {
       const compareIn = (a.check_in || '').localeCompare(b.check_in || '');
       if (compareIn !== 0) return compareIn;
       return (a.check_out || '').localeCompare(b.check_out || '');
     });
-  // Reservas completadas / pasadas: ya hicieron checkout O la fecha de SALIDA ya transcurrió, y no están canceladas.
+  // Reservas completadas / pasadas: ya hicieron checkout O la fecha de SALIDA ya transcurrió, y no están canceladas ni bloqueadas.
   const completedReservas = reservas
-    .filter(r => r.status !== 'cancelled' && (r.is_checked_out || r.check_out < todayStr))
+    .filter(r => r.status !== 'cancelled' && r.status !== 'black' && (r.is_checked_out || r.check_out < todayStr))
     .sort((a, b) => {
       const compareOut = (b.check_out || '').localeCompare(a.check_out || '');
       if (compareOut !== 0) return compareOut;
@@ -2663,10 +2663,18 @@ function ReservasListInner() {
       const dateB = b.cancelled_at || b.booking_time || b.check_in || '';
       return dateB.localeCompare(dateA);
     });
+  // Reservas bloqueadas (mantenimiento): tienen estatus black
+  const blockedReservas = reservas
+    .filter(r => r.status === 'black')
+    .sort((a, b) => {
+      const dateA = a.check_in || '';
+      const dateB = b.check_in || '';
+      return dateB.localeCompare(dateA);
+    });
 
   const baseList = activeTab === 'Canceladas'
     ? cancelledReservas
-    : (activeTab === 'Completadas' ? completedReservas : activeReservas);
+    : (activeTab === 'Completadas' ? completedReservas : (activeTab === 'Bloqueos' ? blockedReservas : activeReservas));
 
   const groupReservations = (reservationsList: any[]) => {
     const grouped: any[] = [];
@@ -2815,6 +2823,7 @@ function ReservasListInner() {
       case 'Booking': return 'de Booking.com';
       case 'Completadas': return 'completadas';
       case 'Canceladas': return 'canceladas';
+      case 'Bloqueos': return 'bloqueadas por mantenimiento';
       default: return 'activas';
     }
   })();
@@ -5465,7 +5474,7 @@ function ReservasListInner() {
                     <button 
                       onClick={() => {
                         if (userRole !== 'admin') {
-                          alert('❌ Error: Solo los administradores pueden cancelar reservas.');
+                          alert('❌ Error: Solo los administradores pueden cancelar reservas o eliminar bloqueos.');
                           return;
                         }
                         setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
@@ -5479,7 +5488,7 @@ function ReservasListInner() {
                       ) : (
                         <>
                           <AlertCircle size={14} />
-                          Cancelar Reserva
+                          {selectedRes.status === 'black' ? 'Eliminar Bloqueo 🔓' : 'Cancelar Reserva'}
                         </>
                       )}
                     </button>
@@ -5570,7 +5579,9 @@ function ReservasListInner() {
                 <AlertTriangle size={20} strokeWidth={2.5} />
               </div>
               <div className="min-w-0">
-                <h3 className="text-[17px] font-extrabold text-zinc-900 leading-tight">Cancelar Reserva</h3>
+                <h3 className="text-[17px] font-extrabold text-zinc-900 leading-tight">
+                  {selectedRes.status === 'black' ? 'Eliminar Bloqueo' : 'Cancelar Reserva'}
+                </h3>
                 <p className="text-[12px] font-semibold text-zinc-500 truncate">{selectedRes.guest_name}</p>
               </div>
               <button
@@ -5584,7 +5595,9 @@ function ReservasListInner() {
             {/* Listado de Habitaciones */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4 font-sans">
               <p className="text-[12.5px] font-semibold text-zinc-600 leading-relaxed text-left">
-                Selecciona qué habitaciones deseas cancelar de forma permanente en Beds24 y liberar en la App:
+                {selectedRes.status === 'black' 
+                  ? 'Selecciona qué habitaciones deseas desbloquear y liberar en la App:' 
+                  : 'Selecciona qué habitaciones deseas cancelar de forma permanente en Beds24 y liberar en la App:'}
               </p>
 
               {groupBookings.length > 1 && (
@@ -5674,7 +5687,7 @@ function ReservasListInner() {
                 ) : (
                   <>
                     <Trash2 size={16} />
-                    Confirmar Cancelación ({cancelSelectedIds.length})
+                    {selectedRes.status === 'black' ? 'Confirmar Desbloqueo' : 'Confirmar Cancelación'} ({cancelSelectedIds.length})
                   </>
                 )}
               </button>
