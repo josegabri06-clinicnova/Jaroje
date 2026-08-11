@@ -1555,7 +1555,22 @@ export function getCapacityRules(
   roomNameOrId: any,
   customSettings?: Record<string, { base: number; max: number }>
 ): { base: number; max: number } {
-  const r = String(roomNameOrId || '').toLowerCase().trim();
+  const rStr = String(roomNameOrId || '');
+  if (rStr.includes(',')) {
+    const parts = rStr.split(',').map(p => p.trim()).filter(Boolean);
+    let totalBase = 0;
+    let totalMax = 0;
+    for (const part of parts) {
+      const cap = getCapacityRules(part, customSettings);
+      totalBase += cap.base;
+      totalMax += cap.max;
+    }
+    if (totalMax > 0) {
+      return { base: totalBase, max: totalMax };
+    }
+  }
+
+  const r = rStr.toLowerCase().trim();
 
   if (customSettings && r) {
     // Para las habitaciones locales 500-507 (roomId 685542), distinguir por unitId si viene en el ID
