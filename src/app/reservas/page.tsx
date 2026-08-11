@@ -2155,6 +2155,97 @@ function ReservasListInner() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelSelectedIds, setCancelSelectedIds] = useState<string[]>([]);
 
+  // Estados para desbloqueo masivo
+  const [showMassUnlockModal, setShowMassUnlockModal] = useState(false);
+  const [massUnlockSelectedIds, setMassUnlockSelectedIds] = useState<string[]>([]);
+  const [massUnlockLoading, setMassUnlockLoading] = useState(false);
+
+  const handleMassUnlock = async () => {
+    if (massUnlockSelectedIds.length === 0) {
+      alert('⚠️ Por favor, selecciona al menos un bloqueo para eliminar.');
+      return;
+    }
+
+    if (!confirm(`¿Estás seguro de que deseas eliminar los ${massUnlockSelectedIds.length} bloqueos seleccionados? Esta acción liberará las habitaciones correspondientes.`)) {
+      return;
+    }
+
+    setMassUnlockLoading(true);
+    let successCount = 0;
+    let errors: string[] = [];
+
+    // Obtenemos los bloques seleccionados para auditoría
+    const blocksToCancel = blockedReservas.filter((b: any) => massUnlockSelectedIds.includes(String(b.id)));
+
+    try {
+      for (const id of massUnlockSelectedIds) {
+        try {
+          const res = await fetch(`/api/reservas?id=${id}`, {
+            method: 'DELETE'
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            throw new Error(data.error || `Error al eliminar el bloqueo ${id}`);
+          }
+          successCount++;
+        } catch (err: any) {
+          console.error(`Error eliminando bloqueo ID ${id}:`, err);
+          errors.push(err.message || String(err));
+        }
+      }
+
+      // Registrar logs de auditoría por cada bloqueo de mantenimiento eliminado con éxito
+      try {
+        const emp = getOperatorForLog();
+        const employeeNum = emp.employee_num;
+        const employeeName = emp.full_name;
+        const employeeDept = emp.department;
+
+        for (const block of blocksToCancel.filter(b => !errors.some(e => e.includes(String(b.id))))) {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: employeeNum,
+              employee_name: employeeName,
+              department: employeeDept,
+              module: 'recepcion',
+              action: 'bloqueo_eliminado',
+              room: block.room_name || block.room || 'General',
+              details: JSON.stringify({
+                text: `${block.guest_name || 'Bloqueo'} (ID: ${block.id}) de la Habitación ${block.room_name || block.room || 'General'} - Se eliminó el bloqueo físico de mantenimiento de forma masiva.`,
+                cancelacion: {
+                  bookingId: block.id,
+                  guestName: block.guest_name,
+                  room: block.room_name || block.room || 'General'
+                }
+              })
+            })
+          });
+        }
+      } catch (logErr) {
+        console.error("Error registrando log de desbloqueo masivo:", logErr);
+      }
+
+      alert(`✅ Se eliminaron con éxito ${successCount} de ${massUnlockSelectedIds.length} bloqueos.`);
+      
+      setShowMassUnlockModal(false);
+      setMassUnlockSelectedIds([]);
+      setTimeout(() => {
+        fetchReservas(); // Refrescar base de datos
+      }, 1500);
+
+      if (errors.length > 0) {
+        alert(`❌ Errores encontrados durante el desbloqueo:\n\n${errors.join('\n')}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`❌ Error al procesar el desbloqueo masivo:\n\n${err.message}`);
+    } finally {
+      setMassUnlockLoading(false);
+    }
+  };
+
   const executeAcknowledge = async (membersToAck: any[], targetResForUpdate: any) => {
     if (membersToAck.length === 0) return;
     setAckLoading(true);
@@ -2831,6 +2922,18 @@ function ReservasListInner() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {activeTab === 'Bloqueos' && userRole === 'admin' && (
+            <button
+              onClick={() => {
+                setMassUnlockSelectedIds([]);
+                setShowMassUnlockModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-2 text-[12px] font-extrabold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer"
+            >
+              <Trash2 size={13} />
+              Desbloqueo Masivo
+            </button>
+          )}
           <button
             onClick={exportCSV}
             disabled={exportLoading || isLoading}
@@ -5684,6 +5787,164 @@ function ReservasListInner() {
               <button
                 onClick={() => setShowCancelModal(false)}
                 disabled={cancelLoading}
+                className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
+              >
+                Regresar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMassUnlockModal && (
+        <div className="fixed inset-0 z-[250] bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh] border border-zinc-150">
+            {/* Cabecera */}
+            <div className="p-6 pb-4 border-b border-zinc-100 flex items-center gap-3">
+              <div className="w-10 h-10 bg-rose-50 border border-rose-100 rounded-2xl flex items-center justify-center text-rose-600 shrink-0">
+                <Trash2 size={20} strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0 text-left">
+                <h3 className="text-[17px] font-extrabold text-zinc-900 leading-tight">
+                  Desbloqueo Masivo
+                </h3>
+                <p className="text-[12px] font-semibold text-zinc-500 truncate">Eliminar múltiples bloqueos de mantenimiento</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowMassUnlockModal(false);
+                  setMassUnlockSelectedIds([]);
+                }}
+                className="ml-auto w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95 cursor-pointer border-none"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Listado de Bloqueos */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 font-sans text-left">
+              <p className="text-[12.5px] font-semibold text-zinc-600 leading-relaxed">
+                Selecciona qué bloqueos físicos deseas eliminar y liberar en la App:
+              </p>
+
+              {blockedReservas.length === 0 ? (
+                <div className="bg-zinc-50 border border-dashed border-zinc-200 rounded-2xl p-8 flex flex-col items-center text-center">
+                  <p className="text-[13px] font-semibold text-zinc-400 font-sans">No hay bloqueos activos para eliminar.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-center bg-zinc-50 border border-zinc-150 p-3 rounded-2xl">
+                    <span className="text-[12px] font-bold text-zinc-700">Seleccionar todos ({blockedReservas.length})</span>
+                    <button
+                      onClick={() => {
+                        const allSelected = massUnlockSelectedIds.length === blockedReservas.length;
+                        if (allSelected) {
+                          setMassUnlockSelectedIds([]);
+                        } else {
+                          setMassUnlockSelectedIds(blockedReservas.map((b: any) => String(b.id)));
+                        }
+                      }}
+                      className="text-[11.5px] font-extrabold text-indigo-600 hover:text-indigo-750 transition-colors uppercase tracking-wider cursor-pointer border-none bg-transparent"
+                    >
+                      {massUnlockSelectedIds.length === blockedReservas.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+                    </button>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {blockedReservas.map((b: any) => {
+                      const isSelected = massUnlockSelectedIds.includes(String(b.id));
+                      const checkInFormatted = b.check_in ? new Date(b.check_in + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
+                      const checkOutFormatted = b.check_out ? new Date(b.check_out + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
+                      const createdDateFormatted = b.created_at ? new Date(b.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'No disp.';
+
+                      return (
+                        <div 
+                          key={b.id}
+                          onClick={() => {
+                            setMassUnlockSelectedIds(prev => 
+                              prev.includes(String(b.id)) 
+                                ? prev.filter(id => id !== String(b.id)) 
+                                : [...prev, String(b.id)]
+                            );
+                          }}
+                          className={`p-4 border rounded-2xl cursor-pointer transition-all flex items-start gap-3 select-none active:scale-[0.99] ${
+                            isSelected 
+                              ? 'bg-rose-50/45 border-rose-200 shadow-sm' 
+                              : 'bg-white border-zinc-200/80 hover:border-zinc-300'
+                          }`}
+                        >
+                          <div className={`mt-0.5 w-4.5 h-4.5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected 
+                              ? 'bg-rose-600 border-rose-600 text-white' 
+                              : 'border-zinc-300 bg-white'
+                          }`}>
+                            {isSelected && <Check size={11} strokeWidth={4} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start gap-2">
+                              <span className={`text-[13px] font-extrabold truncate leading-tight ${isSelected ? 'text-rose-950' : 'text-zinc-800'}`}>
+                                🚪 Habitación: {b.room_name || b.room || 'General'}
+                              </span>
+                              <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider">
+                                ID: {b.id}
+                              </span>
+                            </div>
+                            
+                            {/* Descripción del Bloqueo */}
+                            <p className="text-[11.5px] font-bold text-zinc-700 mt-1 line-clamp-2">
+                              {b.guest_name || '(Sin descripción)'}
+                            </p>
+
+                            {b.notes && (
+                              <p className="text-[10.5px] font-medium text-zinc-500 mt-0.5 line-clamp-1 italic">
+                                Observaciones: {b.notes}
+                              </p>
+                            )}
+
+                            {/* Fechas de Bloqueo */}
+                            <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-semibold mt-2 flex-wrap">
+                              <span>Del: <strong className="text-zinc-700">{checkInFormatted}</strong></span>
+                              <span>al: <strong className="text-zinc-700">{checkOutFormatted}</strong></span>
+                            </div>
+
+                            {/* Fecha de Creación */}
+                            <div className="flex justify-between items-center mt-2 pt-2 border-t border-zinc-100">
+                              <span className="text-[9.5px] font-extrabold text-zinc-400 uppercase tracking-widest">Creado el</span>
+                              <span className="text-[10.5px] font-bold text-zinc-650">
+                                {createdDateFormatted}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer de Acciones */}
+            <div className="p-6 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2.5">
+              <button
+                onClick={handleMassUnlock}
+                disabled={massUnlockLoading || massUnlockSelectedIds.length === 0}
+                className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold rounded-2xl text-[13px] uppercase tracking-wider shadow-md shadow-rose-600/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer border-none"
+              >
+                {massUnlockLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    Confirmar Desbloqueo ({massUnlockSelectedIds.length})
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setShowMassUnlockModal(false);
+                  setMassUnlockSelectedIds([]);
+                }}
+                disabled={massUnlockLoading}
                 className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
               >
                 Regresar
