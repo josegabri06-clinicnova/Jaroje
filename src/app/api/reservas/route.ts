@@ -608,7 +608,7 @@ export async function POST(req: Request) {
         comments: notes || ''
       } : {}),
       actions: {
-        checkAvailability: true,
+        checkAvailability: !isBlock,
         assignBooking: true
       }
     }];
