@@ -548,9 +548,16 @@ export async function POST(req: Request) {
 
     const BEDS24_TOKEN = await getBeds24Token();
 
+    // Los room types individuales de Beds24 (685321-685536) NO aceptan unitId en el POST.
+    // Solo los tipos multi-unidad (ej: 685542 para 500-507) necesitan unitId.
+    // Enviar unitId a un tipo individual hace que Beds24 rechace con "roomId: invalid".
+    const isIndividualRoomType = finalRoomId >= 685312 && finalRoomId <= 685536 && finalRoomId !== 685542;
+    
+    console.log(`[Reservas POST] roomId=${finalRoomId} unitId=${finalUnitId} isIndividual=${isIndividualRoomType}`);
+
     const bookingPayload = [{
       roomId: finalRoomId,
-      unitId: finalUnitId,
+      ...(isIndividualRoomType ? {} : { unitId: finalUnitId }),
       roomQty: 1,
       arrival: checkIn,
       departure: checkOut,
@@ -577,6 +584,7 @@ export async function POST(req: Request) {
         assignBooking: true
       }
     }];
+
 
     let beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
