@@ -137,7 +137,7 @@ export async function GET() {
       const currentRes = matchingReservations.find((r: any) => {
         const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
         const cOut = (r.check_out || '').split('T')[0].split(' ')[0];
-        return cIn <= todayStr && cOut > todayStr && !r.checked_out && r.status !== 'cancelled';
+        return r.checked_in && !r.checked_out && cIn <= todayStr && cOut > todayStr && r.status !== 'cancelled';
       });
 
       let color = 'disponible (verde)';
