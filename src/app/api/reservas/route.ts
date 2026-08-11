@@ -36,9 +36,17 @@ export async function GET(req: Request) {
 
     let query = supabase.from('beds24_reservations').select('*');
     if (!includeCancelled) {
-      // Traer las activas, y además las canceladas de las últimas 24 horas
-      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      query = query.or(`status.neq.cancelled,and(status.eq.cancelled,updated_at.gte.${twentyFourHoursAgo})`);
+      const formatter = new Intl.DateTimeFormat('fr-CA', {
+        timeZone: 'America/Mexico_City',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      // Traer las no canceladas que tengan checkout ayer o posterior (activas y completadas recientes < 24h),
+      // y además las canceladas de las últimas 48 horas.
+      query = query.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,updated_at.gte.${fortyEightHoursAgo})`);
     }
     // Excluir la categoría virtual 500 (room_id 685542) para evitar duplicados, ya que se asigna localmente
     query = query.neq('room_id', '685542');
@@ -106,9 +114,17 @@ export async function GET(req: Request) {
     try {
       let localQuery = supabase.from('local_reservas').select('*');
       if (!includeCancelled) {
-        // Traer todas las activas, y además las canceladas de las últimas 24 horas (usando created_at que sí existe)
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        localQuery = localQuery.or(`status.neq.cancelled,and(status.eq.cancelled,created_at.gte.${twentyFourHoursAgo})`);
+        const formatter = new Intl.DateTimeFormat('fr-CA', {
+          timeZone: 'America/Mexico_City',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
+        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        // Traer las no canceladas que tengan checkout ayer o posterior (activas y completadas recientes < 24h),
+        // y además las canceladas de las últimas 48 horas.
+        localQuery = localQuery.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,created_at.gte.${fortyEightHoursAgo})`);
       }
       const { data } = await localQuery;
       
@@ -945,10 +961,14 @@ export async function PUT(req: Request) {
         .maybeSingle();
 
       if (localRes) {
-        // Es local! Reactivar localmente en Supabase como confirmed
+        // Es local! Reactivar localmente en Supabase como 'pending' (nueva) y resetear banderas de avisos
         const { error: reactivateErr } = await supabase
           .from('local_reservas')
-          .update({ status: 'confirmed' })
+          .update({ 
+            status: 'pending',
+            last_notice_sent: false,
+            is_acknowledged: false
+          })
           .eq('id', Number(id));
 
         if (reactivateErr) {
@@ -962,28 +982,10 @@ export async function PUT(req: Request) {
       // 2. Reactivar en Beds24
       const BEDS24_TOKEN = await getBeds24Token();
 
-      // Consultar detalles antes de reactivar para ver si tiene depósito
-      let hasDeposit = false;
-      try {
-        const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31&includeCancelled=true`, {
-          headers: { 'token': BEDS24_TOKEN }
-        });
-        if (b24Res.ok) {
-          const b24Json = await b24Res.json();
-          const b = b24Json.data?.[0];
-          if (b) {
-            hasDeposit = Number(b.deposit || 0) > 0;
-          }
-        }
-      } catch (err) {
-        console.error("[Reservas PUT Reactivate] Error fetching reservation details from Beds24:", err);
-      }
-
-      const reactivateStatus = hasDeposit ? 'confirmed' : 'request';
-
+      // Las reservas reactivadas siempre regresan a status 'request' (Pendiente / Nueva)
       const reactivatePayload = {
         id: Number(id),
-        status: reactivateStatus
+        status: 'request'
       };
 
       const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
@@ -1017,7 +1019,17 @@ export async function PUT(req: Request) {
           const b24JsonFull = await b24ResFull.json();
           const rawBooking = b24JsonFull.data?.[0];
           if (rawBooking) {
+            // Esto guardará la reserva con status 'pending' (debido a status 'request' de Beds24)
             await syncBeds24BookingLocal(rawBooking);
+
+            // Restablecer las banderas de aviso en nuestra base de datos para habilitar enviar último aviso de nuevo
+            await supabase
+              .from('beds24_reservations')
+              .update({
+                last_notice_sent: false,
+                is_acknowledged: false
+              })
+              .eq('id', String(id));
           }
         }
       } catch (syncErr) {

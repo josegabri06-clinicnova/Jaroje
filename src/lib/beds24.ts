@@ -736,14 +736,14 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
     }
   } else {
     try {
-      // Traer las activas, y además las canceladas de las últimas 24 horas
-      const twentyFourHoursAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('.')[0] + 'Z';
+      // Traer las activas, y además las canceladas de las últimas 48 horas
+      const fortyEightHoursAgoIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split('.')[0] + 'Z';
       const [activeBookings, recentCancelledBookings] = await Promise.all([
         fetchPage(baseUrl).catch(err => {
           console.error("[Beds24 API] Fallo al obtener activas:", err);
           throw err;
         }),
-        fetchPage(`${baseUrl}&status=0&modifiedFrom=${twentyFourHoursAgoIso}`).catch(err => {
+        fetchPage(`${baseUrl}&status=0&modifiedFrom=${fortyEightHoursAgoIso}`).catch(err => {
           console.warn("[Beds24 API] Fallo silencioso al obtener canceladas recientes:", err);
           return [];
         })
@@ -1143,11 +1143,11 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
   const mappedBookings = bookingsArray
     .filter((b: any) => {
       if (!includeCancelled && (String(b.status) === '0' || b.status === 'cancelled')) {
-        // Permitir pasar únicamente si fue modificada/cancelada en las últimas 24 horas
+        // Permitir pasar únicamente si fue modificada/cancelada en las últimas 48 horas
         if (b.modifiedTime) {
           const modTime = new Date(b.modifiedTime).getTime();
-          const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
-          if (modTime >= twentyFourHoursAgo) {
+          const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
+          if (modTime >= fortyEightHoursAgo) {
             return true;
           }
         }
