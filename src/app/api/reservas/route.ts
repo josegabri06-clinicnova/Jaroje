@@ -548,16 +548,18 @@ export async function POST(req: Request) {
 
     const BEDS24_TOKEN = await getBeds24Token();
 
-    // Los room types individuales de Beds24 (685321-685536) NO aceptan unitId en el POST.
-    // Solo los tipos multi-unidad (ej: 685542 para 500-507) necesitan unitId.
-    // Enviar unitId a un tipo individual hace que Beds24 rechace con "roomId: invalid".
-    const isIndividualRoomType = finalRoomId >= 685312 && finalRoomId <= 685536 && finalRoomId !== 685542;
-    
-    console.log(`[Reservas POST] roomId=${finalRoomId} unitId=${finalUnitId} isIndividual=${isIndividualRoomType}`);
+    // Mapear el roomId y unitId usando getParentMapping para garantizar que enviamos el ID padre
+    // que la API de Beds24 acepta, en lugar de IDs de room types individuales.
+    const { getParentMapping } = await import('@/lib/beds24');
+    const parentMapping = getParentMapping(finalRoomId.toString(), finalUnitId.toString());
+    const targetRoomId = Number(parentMapping.roomId);
+    const targetUnitId = Number(parentMapping.unitId);
+
+    console.log(`[Reservas POST] Enviando a Beds24: roomId=${targetRoomId} unitId=${targetUnitId} (original: roomId=${finalRoomId} unitId=${finalUnitId})`);
 
     const bookingPayload = [{
-      roomId: finalRoomId,
-      ...(isIndividualRoomType ? {} : { unitId: finalUnitId }),
+      roomId: targetRoomId,
+      unitId: targetUnitId,
       roomQty: 1,
       arrival: checkIn,
       departure: checkOut,
@@ -585,6 +587,7 @@ export async function POST(req: Request) {
       }
     }];
 
+    console.log("[Reservas POST] Payload Beds24:", JSON.stringify(bookingPayload, null, 2));
 
     let beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
@@ -604,6 +607,7 @@ export async function POST(req: Request) {
 
     if (!beds24Response.ok) {
       const errText = await beds24Response.text();
+      console.error("[Reservas POST] Error en respuesta Beds24 HTTP:", errText);
       if (beds24Response.status === 429 || errText.includes('Credit limit exceeded')) {
         return NextResponse.json({ 
           error: '⏳ El servidor de Beds24 está temporalmente en su límite de solicitudes por minuto. Por favor, reintenta en 10 segundos.' 
@@ -613,6 +617,7 @@ export async function POST(req: Request) {
     }
 
     const dataB24 = await beds24Response.json();
+    console.log("[Reservas POST] Respuesta Beds24 JSON:", JSON.stringify(dataB24, null, 2));
     
     // Validar errores individuales en el array de respuesta de Beds24 v2 (soporta array directo u objeto con campo data)
     const resultsArray = Array.isArray(dataB24) ? dataB24 : (dataB24 && Array.isArray(dataB24.data) ? dataB24.data : []);
@@ -622,6 +627,7 @@ export async function POST(req: Request) {
       const errorMsg = firstResult.errors 
         ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
         : firstResult.message || 'Error individual en Beds24';
+      console.error("[Reservas POST] Falló creación en Beds24:", errorMsg);
       return NextResponse.json({ error: `Beds24 rechazó la reserva: ${errorMsg}` }, { status: 400 });
     }
 

@@ -17,41 +17,57 @@ const supabase = createClient(
 );
 
 const ROOM_MAP = [
-  // ── Piso 1: Apartamentos de 3 habitaciones (101-107) ──────────────────────
-  // Cada habitación tiene su propio room type individual en Beds24 desde 2025
-  { roomId: '685321', name: 'Hab. 101 - Apartamento 3 dorm.', units: [{ unitId: '1', name: '101' }] },
-  { roomId: '685322', name: 'Hab. 102 - Apartamento 3 dorm.', units: [{ unitId: '1', name: '102' }] },
-  { roomId: '685323', name: 'Hab. 103 - Apartamento 3 dorm.', units: [{ unitId: '1', name: '103' }] },
-  { roomId: '685324', name: 'Hab. 104 - Apartamento 3 dorm.', units: [{ unitId: '1', name: '104' }] },
-  { roomId: '685325', name: 'Hab. 105 - Apartamento 3 dorm.', units: [{ unitId: '1', name: '105' }] },
-  { roomId: '685326', name: 'Hab. 106 - Apartamento 3 dorm.', units: [{ unitId: '1', name: '106' }] },
-  { roomId: '685327', name: 'Hab. 107 - Apartamento 3 dorm.', units: [{ unitId: '1', name: '107' }] },
-  // ── Piso 2: Apartamentos de 2 habitaciones (201-206) ──────────────────────
-  { roomId: '685312', name: 'Hab. 201 - Apartamento 2 dorm.', units: [{ unitId: '1', name: '201' }] },
-  { roomId: '685318', name: 'Hab. 202 - Apartamento 2 dorm.', units: [{ unitId: '1', name: '202' }] },
-  { roomId: '685314', name: 'Hab. 203 - Apartamento 2 dorm.', units: [{ unitId: '1', name: '203' }] },
-  { roomId: '685315', name: 'Hab. 204 - Apartamento 2 dorm.', units: [{ unitId: '1', name: '204' }] },
-  { roomId: '685316', name: 'Hab. 205 - Apartamento 2 dorm.', units: [{ unitId: '1', name: '205' }] },
-  { roomId: '685317', name: 'Hab. 206 - Apartamento 2 dorm.', units: [{ unitId: '1', name: '206' }] },
-  // ── Piso 3: Habitaciones dobles (301-306) ─────────────────────────────────
-  { roomId: '685531', name: 'Hab. 301 - Habitación Doble', units: [{ unitId: '1', name: '301' }] },
-  { roomId: '685532', name: 'Hab. 302 - Habitación Doble', units: [{ unitId: '1', name: '302' }] },
-  { roomId: '685533', name: 'Hab. 303 - Habitación Doble', units: [{ unitId: '1', name: '303' }] },
-  { roomId: '685534', name: 'Hab. 304 - Habitación Doble', units: [{ unitId: '1', name: '304' }] },
-  { roomId: '685535', name: 'Hab. 305 - Habitación Doble', units: [{ unitId: '1', name: '305' }] },
-  { roomId: '685536', name: 'Hab. 306 - Habitación Doble', units: [{ unitId: '1', name: '306' }] },
-  // ── Especiales ────────────────────────────────────────────────────────────
+  { 
+    roomId: '679092', 
+    name: 'Apartamento de 3 dormitorios',
+    units: [
+      { unitId: '1', name: '101' },
+      { unitId: '2', name: '102' },
+      { unitId: '3', name: '103' },
+      { unitId: '4', name: '104' },
+      { unitId: '5', name: '105' },
+      { unitId: '6', name: '106' },
+      { unitId: '7', name: '107' }
+    ]
+  },
+  { 
+    roomId: '679091', 
+    name: 'Apartamento de 2 dormitorios',
+    units: [
+      { unitId: '1', name: '201' },
+      { unitId: '2', name: '202' },
+      { unitId: '3', name: '203' },
+      { unitId: '4', name: '204' },
+      { unitId: '5', name: '205' },
+      { unitId: '6', name: '206' }
+    ]
+  },
   { 
     roomId: '679093', 
     name: 'Casa Vacacional de 3 dormitorios',
-    units: [{ unitId: '1', name: '401' }]
+    units: [
+      { unitId: '1', name: '401' }
+    ]
   },
   { 
     roomId: '679087', 
     name: 'Apartamento de 1 dormitorio',
-    units: [{ unitId: '1', name: '402' }]
+    units: [
+      { unitId: '1', name: '402' }
+    ]
   },
-  // ── Piso 5: Apartamentos Nuevos (500-507) – LOCALES, no conectados a Beds24
+  { 
+    roomId: '679077', 
+    name: 'Habitación Doble',
+    units: [
+      { unitId: '1', name: '301' },
+      { unitId: '2', name: '302' },
+      { unitId: '3', name: '303' },
+      { unitId: '4', name: '304' },
+      { unitId: '5', name: '305' },
+      { unitId: '6', name: '306' }
+    ]
+  },
   {
     roomId: '685542',
     name: 'Apartamentos Nuevos (500-507)',
@@ -130,22 +146,20 @@ export async function GET(req: Request) {
         
         if (bIn < reqOut && bOut > reqIn) {
           if (b.roomId) {
-            const bRoomId = String(b.roomId);
-            // Caso 1: El roomId del booking ya es un ID individual nuevo → lookup directo
-            if (categoryStats[bRoomId]) {
-              categoryStats[bRoomId].assignedUnits.add('1');
-            } else {
-              // Caso 2: El roomId es un ID de categoría padre antiguo → convertir al hijo
-              const childId = getChildRoomId(bRoomId, String(b.unitId ?? '1'));
-              if (childId && categoryStats[childId]) {
-                categoryStats[childId].assignedUnits.add('1');
+            const parent = getParentMapping(b.roomId, b.unitId);
+            const stats = categoryStats[parent.roomId];
+            if (stats) {
+              const uId = String(b.unitId ?? '').trim();
+              if (uId && uId !== '0') {
+                stats.assignedUnits.add(parent.unitId);
+              } else {
+                stats.unassignedCount++;
               }
             }
           }
         }
       }
     });
-
 
     // Cargar también las reservas locales activas de Supabase
     try {
@@ -158,15 +172,14 @@ export async function GET(req: Request) {
         const bIn = new Date(b.check_in);
         const bOut = new Date(b.check_out);
         if (bIn < reqOut && bOut > reqIn) {
-          const localRoomId = String(b.room_id ?? '');
-          // Caso 1: room_id ya es un ID individual nuevo → lookup directo
-          if (categoryStats[localRoomId]) {
-            categoryStats[localRoomId].assignedUnits.add('1');
-          } else {
-            // Caso 2: room_id es el padre antiguo → convertir al hijo
-            const childId = getChildRoomId(localRoomId, String(b.unit_id ?? '1'));
-            if (childId && categoryStats[childId]) {
-              categoryStats[childId].assignedUnits.add('1');
+          const parent = getParentMapping(b.room_id, b.unit_id);
+          const stats = categoryStats[parent.roomId];
+          if (stats) {
+            const uId = String(b.unit_id ?? '').trim();
+            if (uId && uId !== '0') {
+              stats.assignedUnits.add(parent.unitId);
+            } else {
+              stats.unassignedCount++;
             }
           }
         }
@@ -174,7 +187,6 @@ export async function GET(req: Request) {
     } catch (localDbErr) {
       console.error("[Availability API] Error reading local_reservas:", localDbErr);
     }
-
 
     // Calcular qué unidades específicas marcar como ocupadas
     const occupiedUnits = new Set<string>();
@@ -244,3 +256,4 @@ export async function GET(req: Request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+
