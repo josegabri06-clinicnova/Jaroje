@@ -33,7 +33,7 @@ function getFinanceAccountFields(selectedVal: string, baseDesc: string): { accou
   };
 }
 
-const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'WhatsApp', 'Google', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas', 'Bloqueos', 'Facturas'];
+const TABS = ['Todas', 'Nuevas', 'Por Aprobar', 'Sin Anticipo', 'Directas', 'Airbnb', 'Booking.com', 'Completadas', 'Canceladas', 'Facturas', 'Bloqueos'];
 
 const PHYSICAL_ROOM_GROUPS = [
   {
@@ -2778,20 +2778,10 @@ function ReservasListInner() {
     }
     else if (activeTab === 'Directas') {
       matchTab = r.is_group_card
-        ? r.group_members.some((m: any) => ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(m.channel || ''))
-        : ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24'].includes(r.channel || '');
+        ? r.group_members.some((m: any) => ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(m.channel || ''))
+        : ['Directo', 'WhatsApp', 'WhatsApp Bot', 'Google', 'Beds24', 'Recepción'].includes(r.channel || '');
     }
-    else if (activeTab === 'WhatsApp') {
-      matchTab = r.is_group_card
-        ? r.group_members.some((m: any) => m.channel === 'WhatsApp' || m.channel === 'WhatsApp Bot')
-        : r.channel === 'WhatsApp' || r.channel === 'WhatsApp Bot';
-    }
-    else if (activeTab === 'Google') {
-      matchTab = r.is_group_card
-        ? r.group_members.some((m: any) => m.channel === 'Google')
-        : r.channel === 'Google';
-    }
-    else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas') {
+    else if (activeTab !== 'Todas' && activeTab !== 'Completadas' && activeTab !== 'Canceladas' && activeTab !== 'Bloqueos' && activeTab !== 'Facturas') {
       matchTab = r.is_group_card
         ? r.group_members.some((m: any) => m.channel === activeTab)
         : r.channel === activeTab;
