@@ -580,7 +580,17 @@ export async function POST(req: Request) {
       arrival: checkIn,
       departure: checkOut,
       ...(() => {
-        const fullName = guestName || (isBlock ? 'Bloqueo' : 'Reserva Directa');
+        if (isBlock) {
+          const rawDesc = guestName ? guestName.trim() : 'Mantenimiento';
+          // Si ya empieza con "bloqueo" (caso insensible), no lo duplicamos
+          const hasPrefix = /^bloqueo:/i.test(rawDesc);
+          const desc = hasPrefix ? rawDesc.substring(8).trim() : rawDesc;
+          return {
+            firstName: 'BLOQUEO:',
+            lastName: desc || 'Mantenimiento'
+          };
+        }
+        const fullName = guestName || 'Reserva Directa';
         const parts = fullName.trim().split(/\s+/);
         return parts.length > 1
           ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
