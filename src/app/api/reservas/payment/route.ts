@@ -115,7 +115,8 @@ export async function POST(req: Request) {
           {
             description: description,
             qty: -1,
-            price: Number(amount)
+            price: Number(amount),
+            amount: -Number(amount)
           }
         ]
       }])
