@@ -2452,7 +2452,7 @@ function ReservasListInner() {
               action: 'reserva_revisada', // Acción informativa
               room: member.room_name || member.room || 'General',
               details: JSON.stringify({
-                text: `Envió Último Aviso (Mensaje 2) a ${member.guest_name} (ID: ${member.id}) para la Habitación ${member.room_name || member.room || 'General'}. Se otorgó 1 hora de plazo para realizar el pago antes de su liberación automática.`,
+                text: `Envió Último Aviso (Mensaje 2) a ${member.guest_name} (ID: ${member.id}) para la Habitación ${member.room_name || member.room || 'General'}. Se otorgó 3 horas de plazo para realizar el pago antes de su liberación automática.`,
                 bookingId: member.id,
                 guestName: member.guest_name
               })
@@ -2463,7 +2463,7 @@ function ReservasListInner() {
         console.error("Error registrando logs de último aviso:", logErr);
       }
 
-      alert('✅ Recordatorio de ÚLTIMO AVISO (Mensaje 2) enviado por WhatsApp con éxito. El huésped cuenta con 1 hora de gracia para registrar su anticipo antes de que el sistema libere la habitación.');
+      alert('✅ Recordatorio de ÚLTIMO AVISO (Mensaje 2) enviado por WhatsApp con éxito. El huésped cuenta con 3 horas de gracia para registrar su anticipo antes de que el sistema libere la habitación.');
 
       // 3. Actualizar estado local en React
       const memberIds = new Set(members.map((m: any) => String(m.id)));
@@ -4147,9 +4147,9 @@ function ReservasListInner() {
                           `${link}`,
 
                           // Mensaje 2
-                          `⏳ Último recordatorio (queda 1 hora para confirmar tu reservación)\n\n` +
+                          `⏳ Último recordatorio (queda 3 horas para confirmar tu reservación)\n\n` +
                           `Hola, ${guestFirstName}.\n\n` +
-                          `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 1 hora.\n\n` +
+                          `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\n` +
                           `En "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n` +
                           `👇 Realizar Depósito\n` +
                           `${link}`,

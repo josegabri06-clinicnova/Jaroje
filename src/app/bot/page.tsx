@@ -72,7 +72,7 @@ function parseTemplateMessage(text: string) {
         resolvedText = `📋 Solicitud de reservación recibida (24 h para confirmar)\n\nHola, ${name}.\n\n¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\nEn tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n👇 Portal del Huésped\n\n[Botón: Portal del Huésped] [Botón: Hablar con nosotros]`;
         break;
       case 'ultimo_aviso':
-        resolvedText = `⏳ Último recordatorio (queda 1 hora para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 1 hora.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito\n\n[Botón: Realizar depósito] [Botón: Hablar con nosotros]`;
+        resolvedText = `⏳ Último recordatorio (queda 3 horas para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito\n\n[Botón: Realizar depósito] [Botón: Hablar con nosotros]`;
         break;
       case 'reservacion_confirmada':
         resolvedText = `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n[Botón: Portal del Huésped] [Botón: Cómo llegar] [Botón: Hablar con nosotros]`;
@@ -137,7 +137,7 @@ function parseTemplateMessage(text: string) {
 
 const META_TEMPLATES = [
   { key: 'solicitud_recibida', name: '📩 Mensaje 1 - Solicitud de Reservación Recibida', desc: 'Pre-reservación con link al Portal del Huésped' },
-  { key: 'ultimo_aviso', name: '⚠️ Mensaje 2 - Último Aviso de Anticipo (1 hr)', desc: 'Recordatorio urgente previo a liberar la habitación' },
+  { key: 'ultimo_aviso', name: '⚠️ Mensaje 2 - Último Aviso de Anticipo (3 hr)', desc: 'Recordatorio urgente previo a liberar la habitación' },
   { key: 'reservacion_confirmada', name: '✅ Mensaje 3 - Confirmación de Reserva y Pago', desc: 'Reserva confirmada con mapa y reglamento' },
   { key: 'disponibilidad_liberada', name: '🔓 Mensaje 4 - Disponibilidad Liberada', desc: 'Aviso de cancelación por falta de anticipo' },
   { key: 'preparacion_llegada', name: '🧳 Mensaje 5 - Preparación para la Llegada', desc: 'Instrucciones de llegada (2 días antes)' },
@@ -1288,7 +1288,7 @@ export default function BotPage() {
                           templateStr = `📋 Solicitud de reservación recibida (24 h para confirmar)\n\nHola, ${name}.\n\n¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\nEn tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n👇 Portal del Huésped`;
                           break;
                         case 'ultimo_aviso':
-                          templateStr = `⏳ Último recordatorio (queda 1 hora para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 1 hora.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito`;
+                          templateStr = `⏳ Último recordatorio (queda 3 horas para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito`;
                           break;
                         case 'reservacion_confirmada':
                           templateStr = `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.`;

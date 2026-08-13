@@ -205,7 +205,7 @@ export async function GET(req: Request) {
 
     const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
 
-    // --- PRECARGA PARA CANCELACIÓN DE 1 HORA ---
+    // --- PRECARGA PARA CANCELACIÓN DE 3 HORAS ---
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
     // Obtener logs de 'ultimo_aviso' enviados en las últimas 48 horas

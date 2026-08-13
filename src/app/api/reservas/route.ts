@@ -123,10 +123,26 @@ export async function GET(req: Request) {
         const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
         const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
         // Traer las no canceladas que tengan checkout ayer o posterior (activas y completadas recientes < 24h),
-        // y además las canceladas de las últimas 48 horas.
-        localQuery = localQuery.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,created_at.gte.${fortyEightHoursAgo})`);
+        // y además las canceladas de las últimas 48 horas (probando updated_at primero).
+        localQuery = localQuery.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,updated_at.gte.${fortyEightHoursAgo})`);
       }
-      const { data } = await localQuery;
+      let { data, error } = await localQuery;
+
+      if (error && error.message.includes('updated_at')) {
+        console.warn("[Reservas GET] La columna 'updated_at' no existe en 'local_reservas'. Ejecutando fallback a 'created_at'...");
+        const formatter = new Intl.DateTimeFormat('fr-CA', {
+          timeZone: 'America/Mexico_City',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
+        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        const fallbackRes = await supabase.from('local_reservas').select('*')
+          .or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,created_at.gte.${fortyEightHoursAgo})`);
+        data = fallbackRes.data;
+        error = fallbackRes.error;
+      }
       
       if (data) {
         localRawData = data;
@@ -173,7 +189,7 @@ export async function GET(req: Request) {
             last_notice_sent: Boolean(b.last_notice_sent),
             booking_time: b.created_at || b.check_in || null,
             nights,
-            cancelled_at: b.status === 'cancelled' ? (b.created_at || null) : null
+            cancelled_at: b.status === 'cancelled' ? (b.updated_at || b.created_at || null) : null
           };
         });
       }
