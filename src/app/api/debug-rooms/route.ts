@@ -143,7 +143,10 @@ export async function GET() {
       let color = 'disponible (verde)';
       let reason = 'Sin reserva activa';
 
-      if (salidaRes && !isCleanedToday) {
+      if (dbStatus === 'limpieza_profunda') {
+        color = 'limpieza_profunda (naranja)';
+        reason = 'Limpieza profunda forzada';
+      } else if (salidaRes && !isCleanedToday) {
         if (isEnLimpiezaToday) {
           color = 'en_limpieza (amarillo)';
           reason = `salidaRes encontrada, en limpieza hoy`;

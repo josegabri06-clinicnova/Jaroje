@@ -32,7 +32,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan room_number y status' }, { status: 400 });
     }
 
-    const validStatuses = ['disponible', 'en_limpieza', 'limpia', 'sucio_checkout', 'limpieza_programada', 'ocupada'];
+    const validStatuses = ['disponible', 'en_limpieza', 'limpia', 'sucio_checkout', 'limpieza_programada', 'ocupada', 'limpieza_profunda'];
     if (!validStatuses.includes(status)) {
       return NextResponse.json({ error: `Estado inválido. Usa: ${validStatuses.join(', ')}` }, { status: 400 });
     }

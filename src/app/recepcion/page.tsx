@@ -401,7 +401,9 @@ function getRoomOperationalStatus(
   activeReservations: any[],
   todayStr: string,
   lastUpdatedAt?: string
-): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' {
+): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' | 'limpieza_profunda' {
+  if (dbStatus === 'limpieza_profunda') return 'limpieza_profunda';
+
   const updateDateStr = lastUpdatedAt ? getLocalDateStr(new Date(lastUpdatedAt)) : '';
   const isCleanedToday = (updateDateStr === todayStr) && dbStatus === 'limpia';
   const isEnLimpiezaToday = (dbStatus === 'en_limpieza');
@@ -2025,6 +2027,14 @@ export default function RecepcionPage() {
       const json = await res.json();
       if (json.success) {
         // Registrar log de auditoría
+        const prevDbStatus = selectedRoomForStatus.status || '';
+        let logDetails = `Cambió el estado de Habitación ${selectedRoomForStatus.room_number} a '${newStatus}' desde Recepción`;
+        if (newStatus === 'limpieza_profunda') {
+          logDetails = `Forzó limpieza profunda en Habitación ${selectedRoomForStatus.room_number} · Reportado por ${operatorName}`;
+        } else if (newStatus === 'disponible' && prevDbStatus === 'limpieza_profunda') {
+          logDetails = `Finalizó limpieza profunda en Habitación ${selectedRoomForStatus.room_number} · Reportado por ${operatorName}`;
+        }
+
         if (emp) {
           await fetch('/api/employee-logs', {
             method: 'POST',
@@ -2036,7 +2046,7 @@ export default function RecepcionPage() {
               module: 'recepcion',
               action: 'change_room_status',
               room: selectedRoomForStatus.room_number,
-              details: `Cambió el estado de Habitación ${selectedRoomForStatus.room_number} a '${newStatus}' desde Recepción`
+              details: logDetails
             })
           });
         }
@@ -5221,6 +5231,9 @@ export default function RecepcionPage() {
                         } else if (operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') {
                           colorClasses = 'bg-amber-400 text-amber-950 border-amber-500 shadow-amber-100/30 font-extrabold';
                           dotClass = 'bg-amber-250';
+                        } else if (operStatus === 'limpieza_profunda') {
+                          colorClasses = 'bg-orange-500 text-white border-orange-600 shadow-orange-100/30 font-extrabold';
+                          dotClass = 'bg-orange-200';
                         } else if (operStatus === 'ocupada') {
                           colorClasses = 'bg-zinc-100 text-zinc-800 border-zinc-300 shadow-sm font-extrabold hover:bg-zinc-200';
                           dotClass = 'bg-zinc-400';
@@ -8112,6 +8125,10 @@ export default function RecepcionPage() {
                         bg = 'bg-amber-400 text-white border-amber-500 shadow-lg shadow-amber-450/10';
                         label = '🟡 Limpieza Programada';
                         desc = 'Se requiere limpieza ordinaria (Stayover diario, cada 3er día o checkout programado para hoy) basada en reservas de Beds24.';
+                      } else if (operStatus === 'limpieza_profunda') {
+                        bg = 'bg-orange-500 text-white border-orange-600 shadow-lg shadow-orange-500/10';
+                        label = '🟠 Limpieza Profunda Forzada';
+                        desc = 'Esta habitación requiere una limpieza profunda completa. Al finalizar, la habitación se marcará como Disponible (Verde) y se registrará en el historial.';
                       }
 
                       return (
@@ -8148,24 +8165,42 @@ export default function RecepcionPage() {
                   </div>
 
                   <div className="pt-2 space-y-2">
-                    {(operStatus === 'sucio_checkout' || operStatus === 'en_limpieza' || operStatus === 'limpieza_programada') && (
-                      <button
-                        onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpia'))}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-[0.98]"
-                      >
-                        <Sparkles size={14} />
-                        <span>Finalizar Limpieza (Marcar en Azul)</span>
-                      </button>
+                    {(operStatus === 'sucio_checkout' || operStatus === 'en_limpieza' || operStatus === 'limpieza_programada' || operStatus === 'limpieza_profunda') && (
+                      operStatus === 'limpieza_profunda' ? (
+                        <button
+                          onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('disponible'))}
+                          className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-[0.98]"
+                        >
+                          <CheckCircle2 size={14} />
+                          <span>Finalizar Limpieza Profunda (Marcar en Verde)</span>
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpia'))}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-md active:scale-[0.98]"
+                        >
+                          <Sparkles size={14} />
+                          <span>Finalizar Limpieza (Marcar en Azul)</span>
+                        </button>
+                      )
                     )}
 
                     {/* Botón especial: Programar limpieza en habitación ocupada o disponible */}
                     {(operStatus === 'ocupada' || operStatus === 'disponible') && (
-                      <button
-                        onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpieza_programada'))}
-                        className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
-                      >
-                        <span>🧹 Programar Limpieza Hoy</span>
-                      </button>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpieza_programada'))}
+                          className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
+                        >
+                          <span>🧹 Programar Limpieza Hoy</span>
+                        </button>
+                        <button
+                          onClick={() => runWithSignature('room_status', () => handleUpdateRoomStatus('limpieza_profunda'))}
+                          className="w-full bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-300 font-extrabold text-[12px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
+                        >
+                          <span>🧹 Forzar Limpieza Profunda</span>
+                        </button>
+                      </div>
                     )}
                     
                     <button
@@ -8231,7 +8266,7 @@ export default function RecepcionPage() {
             const dbStatus = getRoomDbStatus(r, roomStatuses);
             const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
             const s = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
-            return s === 'limpieza_programada';
+            return s === 'limpieza_programada' || s === 'limpieza_profunda';
           });
         } else if (kpiModalType === 'checkout') {
           title = 'Check Out / Salidas';
@@ -8309,6 +8344,8 @@ export default function RecepcionPage() {
                         statusBadge = { label: 'Salida Hoy (Pendiente)', classes: 'bg-rose-100 text-rose-800 border-rose-300 font-extrabold', dot: 'bg-rose-500' };
                       } else if (operStatus === 'sucio_checkout') {
                         statusBadge = { label: 'Check Out Registrado', classes: 'bg-red-600 text-white border-red-700 font-black', dot: 'bg-white' };
+                      } else if (operStatus === 'limpieza_profunda') {
+                        statusBadge = { label: 'Limpieza Profunda', classes: 'bg-orange-500 text-white border-orange-600 font-black', dot: 'bg-orange-200' };
                       } else if (operStatus === 'limpieza_programada' || isRoomStayoverServiceScheduled(roomNum, reservas, todayStr)) {
                         statusBadge = { label: 'Limpieza Programada', classes: 'bg-amber-400 text-amber-950 border-amber-500 font-black', dot: 'bg-amber-900' };
                       } else if (operStatus === 'limpia') {
