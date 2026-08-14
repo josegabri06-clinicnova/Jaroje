@@ -424,9 +424,9 @@ export default function AdminDashboard() {
         const prevDbStatus = selectedRoomForStatus.status || '';
         let logDetails = `Habitación ${selectedRoomForStatus.room_number} - Cambió el estado a '${newStatus}' desde el Dashboard de Administración.`;
         if (newStatus === 'limpieza_profunda') {
-          logDetails = `Forzó limpieza profunda en Habitación ${selectedRoomForStatus.room_number} · Reportado por Administrador`;
+          logDetails = `Forzó limpieza forzada en Habitación ${selectedRoomForStatus.room_number} · Reportado por Administrador`;
         } else if (newStatus === 'disponible' && prevDbStatus === 'limpieza_profunda') {
-          logDetails = `Finalizó limpieza profunda en Habitación ${selectedRoomForStatus.room_number} · Reportado por Administrador`;
+          logDetails = `Finalizó limpieza forzada en Habitación ${selectedRoomForStatus.room_number} · Reportado por Administrador`;
         }
 
         await fetch('/api/employee-logs', {
@@ -1681,22 +1681,14 @@ export default function AdminDashboard() {
                       </button>
                     </div>
 
-                    {/* Botón especial: Programar limpieza en habitación ocupada o disponible */}
+                    {/* Botón especial: Forzar limpieza en habitación ocupada o disponible */}
                     {(operStatus === 'ocupada' || operStatus === 'disponible') && (
-                      <div className="space-y-2">
-                        <button
-                          onClick={() => handleUpdateRoomStatus('limpieza_programada')}
-                          className="w-full py-3.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 rounded-xl font-extrabold text-[12px] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
-                        >
-                          <span>🧹 Programar Limpieza Hoy</span>
-                        </button>
-                        <button
-                          onClick={() => handleUpdateRoomStatus('limpieza_profunda')}
-                          className="w-full py-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-300 rounded-xl font-extrabold text-[12px] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
-                        >
-                          <span>🧹 Forzar Limpieza Profunda</span>
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => handleUpdateRoomStatus('limpieza_profunda')}
+                        className="w-full py-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-300 rounded-xl font-extrabold text-[12px] transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm active:scale-[0.98]"
+                      >
+                        <span>🧹 Forzar Limpieza</span>
+                      </button>
                     )}
 
                     <button

@@ -1069,10 +1069,10 @@ export default function StaffPage() {
     if (newStatus === 'limpia' || (newStatus === 'disponible' && prevDbStatus === 'limpieza_profunda')) {
       const taskDesc = newStatus === 'limpia' 
         ? 'Habitación limpia y lista para check-in (Tablero Staff).'
-        : 'Limpieza profunda terminada (Tablero Staff).';
+        : 'Limpieza forzada terminada (Tablero Staff).';
       const apiDesc = newStatus === 'limpia'
         ? `Habitación limpia y lista para check-in · Reportado por ${operatorName}`
-        : `Limpieza profunda finalizada · Reportado por ${operatorName}`;
+        : `Limpieza forzada finalizada · Reportado por ${operatorName}`;
 
       const tempTask: Task = {
         id: Math.random().toString(),
@@ -1121,9 +1121,9 @@ export default function StaffPage() {
     if (emp) {
       let logDetails = `Cambió el estado de Habitación ${roomNumber} a '${newStatus}'`;
       if (newStatus === 'limpieza_profunda') {
-        logDetails = `Forzó limpieza profunda en Habitación ${roomNumber} · Reportado por ${operatorName}`;
+        logDetails = `Forzó limpieza forzada en Habitación ${roomNumber} · Reportado por ${operatorName}`;
       } else if (newStatus === 'disponible' && prevDbStatus === 'limpieza_profunda') {
-        logDetails = `Finalizó limpieza profunda en Habitación ${roomNumber} · Reportado por ${operatorName}`;
+        logDetails = `Finalizó limpieza forzada en Habitación ${roomNumber} · Reportado por ${operatorName}`;
       }
 
       try {
@@ -2924,7 +2924,7 @@ export default function StaffPage() {
                         className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer shadow-md shadow-emerald-600/15 flex items-center justify-center gap-2 active:scale-[0.98]"
                       >
                         <CheckCircle2 size={16} strokeWidth={2.5} />
-                        <span>Finalizar Limpieza Profunda (Marcar en Verde)</span>
+                        <span>Limpieza Terminada</span>
                       </button>
                     ) : (
                       operStatus !== 'salida_hoy' && (
@@ -3010,22 +3010,14 @@ export default function StaffPage() {
                   </div>
 
                   <div className="pt-2 space-y-2">
-                    {/* Botón especial: Programar limpieza en habitación ocupada o disponible */}
+                    {/* Botón especial: Forzar limpieza en habitación ocupada o disponible */}
                     {(operStatus === 'ocupada' || operStatus === 'disponible') && (
-                      <div className="space-y-2">
-                        <button
-                          onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: 'limpieza_programada' })}
-                          className="w-full bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
-                        >
-                          <span>🧹 Programar Limpieza Hoy</span>
-                        </button>
-                        <button
-                          onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: 'limpieza_profunda' })}
-                          className="w-full bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-300 font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
-                        >
-                          <span>🧹 Forzar Limpieza Profunda</span>
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => runWithSignature('room_status', (payload) => changeRoomStatus(payload.room, payload.status), { room: selectedRoom, status: 'limpieza_profunda' })}
+                        className="w-full bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-300 font-extrabold text-[13px] tracking-wide uppercase py-4 rounded-2xl transition-all cursor-pointer flex items-center justify-center gap-2 shadow-sm active:scale-[0.98]"
+                      >
+                        <span>🧹 Forzar Limpieza</span>
+                      </button>
                     )}
                     <button
                       onClick={() => {

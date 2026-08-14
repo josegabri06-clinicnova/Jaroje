@@ -757,16 +757,16 @@ export default function HistorialPage() {
       // Para change_room_status, detectar si es programación forzada o limpieza terminada
       if (rawAction === 'change_room_status') {
         const detLower = detailsStr.toLowerCase();
-        if (detLower.includes('profunda')) {
+        if (detLower.includes('profunda') || detLower.includes('forzada')) {
           if (detLower.includes('forzó') || detLower.includes('forzo') || detLower.includes('forzada')) {
-            friendlyActions['change_room_status'] = 'Limpieza Profunda Forzada 🟠';
+            friendlyActions['change_room_status'] = 'Limpieza Forzada 🟠';
           } else if (detLower.includes('finalizó') || detLower.includes('finalizo') || detLower.includes('completada') || detLower.includes('terminada') || detLower.includes('concluida')) {
-            friendlyActions['change_room_status'] = 'Limpieza Profunda Terminada 🟢';
+            friendlyActions['change_room_status'] = 'Limpieza Terminada ✅';
           }
         } else {
           if (detLower.includes('limpia') || detLower.includes('completada') || detLower.includes('terminada') || detLower.includes('✅')) {
             friendlyActions['change_room_status'] = 'Limpieza Terminada ✅';
-          } else if (detLower.includes('forzada') || detLower.includes('programación') || detLower.includes('asignada')) {
+          } else if (detLower.includes('programación') || detLower.includes('asignada')) {
             friendlyActions['change_room_status'] = 'Limpieza Programada 🧹';
           }
         }
