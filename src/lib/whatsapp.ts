@@ -357,15 +357,12 @@ export async function sendWhatsAppTemplate(
       'preparacion_llegada',
       'bienvenida_checkin',
       'seguimiento_satisfaccion',
-      'recibimiento_nuevamente',
       'pago_anticipo_recibido',
       'portal_huesped_link',
       'portal_huesped_link_en',
       'rechazo_solicitud',
       'alojamiento_listo',
-      'disponibilidad_liberada',
-      'salida_checkout',
-      'comparte_experiencia'
+      'salida_checkout'
     ];
 
     let resolvedButtonType = buttonType;
