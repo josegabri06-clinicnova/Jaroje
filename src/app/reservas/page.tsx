@@ -5857,6 +5857,13 @@ function ReservasListInner() {
                       const checkOutFormatted = b.check_out ? new Date(b.check_out + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
                       const createdDateFormatted = b.created_at ? new Date(b.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'No disp.';
 
+                      const roomNumMatch = (b.room_name || b.room || '').match(/\(([^)]+)\)/);
+                      let roomNumber = roomNumMatch ? roomNumMatch[1] : null;
+                      if (!roomNumber) {
+                        const genericMatch = (b.room_name || b.room || '').match(/([A-Z]?\d+)/i);
+                        roomNumber = genericMatch ? genericMatch[1] : (b.room_name || b.room || 'General');
+                      }
+
                       return (
                         <div 
                           key={b.id}
@@ -5905,6 +5912,10 @@ function ReservasListInner() {
                             <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-semibold mt-2 flex-wrap">
                               <span>Del: <strong className="text-zinc-700">{checkInFormatted}</strong></span>
                               <span>al: <strong className="text-zinc-700">{checkOutFormatted}</strong></span>
+                              <span className="mx-1 text-zinc-300">|</span>
+                              <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-rose-700 font-extrabold rounded-md text-[10px] tracking-wide">
+                                Hab. {roomNumber}
+                              </span>
                             </div>
 
                             {/* Fecha de Creación */}
