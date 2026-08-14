@@ -110,7 +110,7 @@ interface Reserva {
 
 interface CleanTask {
   room: string;
-  type: 'checkout' | 'stayover';
+  type: 'checkout' | 'stayover' | 'forced';
   dbStatus: string;
   operStatus: string;
   guestName?: string;
@@ -773,6 +773,17 @@ export default function StaffPage() {
       const dbStatusObj = roomStatuses.find(rs => String(rs.room_number) === String(r));
       const operStatus = getRoomOperationalStatus(r, dbStatus, reservas, todayStr, dbStatusObj?.updated_at);
       
+      const wasForcedToday = tasks.some(t => {
+        const descLower = (t.description || '').toLowerCase();
+        return String(t.room) === String(r) && 
+               t.type === 'limpieza' && 
+               t.status === 'resuelta' && 
+               isDateToday(t.created_at) && 
+               (descLower.includes('profunda') || descLower.includes('forzada'));
+      });
+      const isCurrentlyForced = dbStatus === 'limpieza_profunda' || operStatus === 'limpieza_profunda';
+      const isForced = isCurrentlyForced || wasForcedToday;
+
       // 1. Verificar si es salida hoy (Check-out)
       const salidaRes = reservas.find(res => {
         return matchesRoomNumber(res, r) && 
@@ -784,7 +795,7 @@ export default function StaffPage() {
       if (salidaRes) {
         list.push({
           room: r,
-          type: 'checkout',
+          type: isForced ? 'forced' : 'checkout',
           dbStatus,
           operStatus,
           guestName: salidaRes.guest_name,
@@ -808,10 +819,10 @@ export default function StaffPage() {
       if (stayoverRes && !stayoverRes.checked_out) {
         const requiresService = isRoomStayoverServiceScheduled(r, reservas, todayStr);
         
-        if (requiresService) {
+        if (requiresService || isForced) {
           list.push({
             room: r,
-            type: 'stayover',
+            type: isForced ? 'forced' : 'stayover',
             dbStatus,
             operStatus,
             guestName: stayoverRes.guest_name,
@@ -819,14 +830,16 @@ export default function StaffPage() {
             reserva: stayoverRes,
             isUpdatedToday: isDateToday(dbStatusObj?.updated_at)
           });
+          return;
         }
       }
 
       // 3. Fallback Unificador: Si la habitación está en estado sucio o limpieza y no tiene una reserva activa hoy
-      // registrada en la lista, o si ya fue marcada como limpia (azul) o disponible (verde) hoy, se agrega.
+      // registrada en la lista, o si ya fue marcada como limpia (azul) o disponible (verde) hoy, o si es forzada.
       const alreadyAdded = list.some(item => item.room === r);
       const isDbStatusUpdatedToday = dbStatusObj?.updated_at ? isDateToday(dbStatusObj.updated_at) : false;
       if (!alreadyAdded && (
+        isForced ||
         operStatus === 'sucio_checkout' || 
         operStatus === 'en_limpieza' || 
         operStatus === 'limpieza_programada' ||
@@ -836,13 +849,13 @@ export default function StaffPage() {
       )) {
         list.push({
           room: r,
-          type: (operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'checkout' : 'stayover',
+          type: isForced ? 'forced' : ((operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'checkout' : 'stayover'),
           dbStatus,
           operStatus,
-          guestName: (operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'Check-Out' : (dbStatus === 'limpia' ? 'Limpia' : 'Servicio'),
+          guestName: isForced ? 'Limpieza Forzada' : ((operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'Check-Out' : (dbStatus === 'limpia' ? 'Limpia' : 'Servicio')),
           keysReturned: operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout',
           reserva: null,
-          isUpdatedToday: isDbStatusUpdatedToday
+          isUpdatedToday: isDbStatusUpdatedToday || isCurrentlyForced
         });
       }
     });
@@ -1560,7 +1573,11 @@ export default function StaffPage() {
       text += `*Habitaciones por Limpieza:*\n`;
       allRooms.forEach((task, idx) => {
         const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
-        const typeLabel = task.type === 'checkout' ? 'Check Out 🔴' : 'Servicio 🟡';
+        const typeLabel = task.type === 'forced' 
+          ? 'Forzada 🟠' 
+          : task.type === 'checkout' 
+            ? 'Check Out 🔴' 
+            : 'Servicio 🟡';
         const statusLabel = isFinished 
           ? 'Limpia ✅' 
           : (task.type === 'checkout' && !task.keysReturned)
@@ -1896,11 +1913,13 @@ export default function StaffPage() {
                                 <td className="py-2.5 pr-2">
                                   <div className="flex flex-col gap-1 items-start">
                                     <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border select-none ${
-                                      isCheckout 
-                                        ? 'bg-rose-50 text-rose-700 border-rose-100' 
-                                        : 'bg-amber-50 text-amber-700 border-amber-100'
+                                      task.type === 'forced'
+                                        ? 'bg-orange-50 text-orange-700 border-orange-100'
+                                        : isCheckout 
+                                          ? 'bg-rose-50 text-rose-700 border-rose-100' 
+                                          : 'bg-amber-50 text-amber-700 border-amber-100'
                                     }`}>
-                                      {isCheckout ? 'Check Out' : 'Servicio'}
+                                      {task.type === 'forced' ? 'Forzada' : (isCheckout ? 'Check Out' : 'Servicio')}
                                     </span>
                                     {isCheckout && !task.keysReturned && (
                                       <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-750 border border-amber-200/60 select-none">
