@@ -484,14 +484,11 @@ function getRoomOperationalStatus(
 
     // CASO A: Entra HOY y el huésped AÚN NO HACE CHECK-IN -> AZUL (Check-in pendiente / Llegada hoy)
     if (isTodayArrival && !currentRes.checked_in) {
-      if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible') {
+      if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible' || dbStatus === 'limpieza_programada') {
         return 'limpia'; // Azul
       }
       if (dbStatus === 'en_limpieza') {
         return 'en_limpieza';
-      }
-      if (dbStatus === 'limpieza_programada') {
-        return 'limpieza_programada';
       }
       return 'sucio_checkout'; // Rojo fuerte si falta limpiar antes de llegada
     }
@@ -507,12 +504,9 @@ function getRoomOperationalStatus(
     return 'ocupada'; // GRIS (No disponible / Ocupada)
   }
 
-  // 3. Si fue marcada sucio_checkout o limpieza_programada previamente en DB
+  // 3. Si fue marcada sucio_checkout previamente en DB
   if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
     return 'sucio_checkout';
-  }
-  if (dbStatus === 'limpieza_programada' && !isCleanedToday) {
-    return 'limpieza_programada';
   }
   if (isEnLimpiezaToday) {
     return 'en_limpieza';

@@ -163,15 +163,12 @@ export async function GET() {
           reason = `salidaRes checkout=${(salidaRes.check_out || '').split('T')[0]}, checked_out=${salidaRes.checked_out}`;
         }
       } else if (arrivalTodayRes) {
-        if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible') {
+        if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible' || dbStatus === 'limpieza_programada') {
           color = 'limpia (azul)';
           reason = `Llegada hoy pendiente (clean/disponible en DB)`;
         } else if (isEnLimpiezaToday) {
           color = 'en_limpieza (amarillo)';
           reason = `Llegada hoy pendiente, actualmente en limpieza`;
-        } else if (dbStatus === 'limpieza_programada' && !isCleanedToday) {
-          color = 'limpieza_programada (amarillo)';
-          reason = `Llegada hoy pendiente, limpieza programada en DB`;
         } else {
           color = 'sucio_checkout (rojo fuerte)';
           reason = `Llegada hoy pendiente, requiere limpieza antes de check-in`;
@@ -179,9 +176,6 @@ export async function GET() {
       } else if (isSucioCheckoutToday && !isCleanedToday) {
         color = 'sucio_checkout (rojo fuerte)';
         reason = 'isSucioCheckoutToday=true y !isCleanedToday';
-      } else if (dbStatus === 'limpieza_programada' && !isCleanedToday) {
-        color = 'limpieza_programada (amarillo)';
-        reason = 'dbStatus=limpieza_programada y !isCleanedToday';
       } else if (isEnLimpiezaToday) {
         color = 'en_limpieza (amarillo)';
         reason = 'isEnLimpiezaToday=true';
