@@ -623,17 +623,8 @@ export default function RecepcionPage() {
   const [dailyReportToast, setDailyReportToast] = useState<string | null>(null);
 
   const handleCopyDailyReport = () => {
-    // 1. Abrir la pestaña del grupo de WhatsApp de inmediato (síncronamente en el primer instante del click para evitar el bloqueo del popup)
-    let waWindow: Window | null = null;
-    try {
-      waWindow = window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
-    } catch (e) {
-      console.warn("No se pudo abrir la ventana de WhatsApp directamente:", e);
-    }
-
     try {
       if (reservas.length === 0) {
-        if (waWindow) waWindow.close();
         alert("No hay datos de reservaciones cargados para generar el reporte.");
         return;
       }
@@ -807,6 +798,14 @@ export default function RecepcionPage() {
       if (copiado) {
         setDailyReportToast('✅ Reporte copiado. ¡Pégalo en el grupo de WhatsApp abierto!');
         setTimeout(() => setDailyReportToast(null), 5000);
+      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          setDailyReportToast('✅ Reporte copiado. ¡Pégalo en el grupo de WhatsApp abierto!');
+          setTimeout(() => setDailyReportToast(null), 5000);
+        }).catch(err => {
+          console.error("Error al copiar al portapapeles:", err);
+          alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
+        });
       } else {
         setDailyReportToast('⚠️ Copia automática fallida. Intenta copiarlo de nuevo.');
         setTimeout(() => setDailyReportToast(null), 5000);
@@ -814,6 +813,12 @@ export default function RecepcionPage() {
     } catch (err: any) {
       console.error("Error al generar reporte:", err);
       alert(`No se pudo generar el reporte: ${err.message || err}`);
+    }
+
+    try {
+      window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+    } catch (e) {
+      console.warn("No se pudo abrir WhatsApp:", e);
     }
   };
 

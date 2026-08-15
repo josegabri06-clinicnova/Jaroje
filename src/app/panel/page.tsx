@@ -322,6 +322,9 @@ export default function AdminDashboard() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [roomStatuses, setRoomStatuses] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
+  const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
+  const [beds24Prices, setBeds24Prices] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tokenError, setTokenError] = useState<false | 'TOKEN_EXPIRED' | 'REFRESH_TOKEN_EXPIRED'>(false);
   const [newRefreshToken, setNewRefreshToken] = useState('');
@@ -340,12 +343,30 @@ export default function AdminDashboard() {
     if (!silent) setIsLoading(true);
     setTokenError(false);
     try {
-      const [resRes, roomsRes, tasksRes, chkRes] = await Promise.all([
+      const [resRes, roomsRes, tasksRes, chkRes, seasonRes, discountsRes, pricesRes] = await Promise.all([
         fetch(`/api/reservas?bypassCache=${bypassCache ? 'true' : 'false'}&t=` + Date.now()).catch(() => null),
         fetch('/api/room-status?t=' + Date.now()).catch(() => null),
         fetch('/api/tasks?t=' + Date.now()).catch(() => null),
-        supabase.from('checkins').select('*')
+        supabase.from('checkins').select('*'),
+        supabase.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
+        supabase.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle(),
+        fetch('/api/beds24-prices?t=' + Date.now()).catch(() => null)
       ]);
+
+      if (seasonRes?.data?.value) {
+        setSeasonRanges(typeof seasonRes.data.value === 'string' ? JSON.parse(seasonRes.data.value) : seasonRes.data.value);
+      }
+      if (discountsRes?.data?.value) {
+        setTempDiscounts(typeof discountsRes.data.value === 'string' ? JSON.parse(discountsRes.data.value) : discountsRes.data.value);
+      }
+      if (pricesRes) {
+        try {
+          const jsonPrices = await pricesRes.json();
+          setBeds24Prices(jsonPrices);
+        } catch (e) {
+          console.warn("Error parsing beds24-prices:", e);
+        }
+      }
 
       let checkinMap: Record<string, any> = {};
       if (chkRes && chkRes.data) {
@@ -470,12 +491,8 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCopyDailyReport = async () => {
-    // Abrir la pestaña de inmediato para evitar el bloqueo del navegador
-    const waWindow = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
-
+  const handleCopyDailyReport = () => {
     if (reservas.length === 0) {
-      if (waWindow) waWindow.close();
       alert("No hay datos de reservaciones cargados para generar el reporte.");
       return;
     }
@@ -503,7 +520,6 @@ export default function AdminDashboard() {
         const room = getUnitDisplay(r.room_name || r.room || '');
         const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
         
-        // Si es una OTA (Airbnb, Booking.com, Expedia), el cobro lo maneja la plataforma (por lo tanto, para recepción está Pagado)
         const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
         const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
         const balanceStr = isOTA ? `(Pagado ✓)` : (balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`);
@@ -544,27 +560,6 @@ export default function AdminDashboard() {
 
     // --- TARIFAS ESTACIONALES DINÁMICAS ---
     const todayISO = getLocalDateStr(new Date());
-    let seasonRanges: any[] = [];
-    let tempDiscounts: any[] = [];
-    try {
-      const { createClient } = await import('@supabase/supabase-js');
-      const sb = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-      const [seasonRes, discountsRes] = await Promise.all([
-        sb.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
-        sb.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle()
-      ]);
-      if (seasonRes.data?.value) {
-        seasonRanges = typeof seasonRes.data.value === 'string' ? JSON.parse(seasonRes.data.value) : seasonRes.data.value;
-      }
-      if (discountsRes.data?.value) {
-        tempDiscounts = typeof discountsRes.data.value === 'string' ? JSON.parse(discountsRes.data.value) : discountsRes.data.value;
-      }
-    } catch (e) {
-      console.error(e);
-    }
     const currentSeason = getSeason(todayISO, seasonRanges);
     const seasonLabels: Record<string, string> = {
       baja: 'BAJA',
@@ -573,7 +568,6 @@ export default function AdminDashboard() {
       alta: 'ALTA'
     };
 
-    // Tarifas de fallback por defecto (con impuestos +19% e indexadas por temporada)
     let doublePrice = 2000;
     let cond1Price = 3000;
     let cond2Price = 4000;
@@ -594,30 +588,24 @@ export default function AdminDashboard() {
     cond3Price = fallbacks.cond3;
     casaPrice = fallbacks.casa;
 
-    try {
-      const resPrices = await fetch('/api/beds24-prices?t=' + Date.now());
-      const jsonPrices = await resPrices.json();
-      if (jsonPrices.success && Array.isArray(jsonPrices.rooms)) {
-        const getPriceForToday = (roomId: string) => {
-          const roomObj = jsonPrices.rooms.find((r: any) => r.id === roomId);
-          if (roomObj && Array.isArray(roomObj.seasonBlocks)) {
-            const matchedBlock = roomObj.seasonBlocks.find((b: any) => todayISO >= b.from && todayISO <= b.to);
-            if (matchedBlock) return matchedBlock.priceDirecto;
-            
-            const seasonBlock = roomObj.seasonBlocks.find((b: any) => b.season === currentSeason);
-            if (seasonBlock) return seasonBlock.priceDirecto;
-          }
-          return null;
-        };
+    if (beds24Prices && beds24Prices.success && Array.isArray(beds24Prices.rooms)) {
+      const getPriceForToday = (roomId: string) => {
+        const roomObj = beds24Prices.rooms.find((r: any) => r.id === roomId);
+        if (roomObj && Array.isArray(roomObj.seasonBlocks)) {
+          const matchedBlock = roomObj.seasonBlocks.find((b: any) => todayISO >= b.from && todayISO <= b.to);
+          if (matchedBlock) return matchedBlock.priceDirecto;
+          
+          const seasonBlock = roomObj.seasonBlocks.find((b: any) => b.season === currentSeason);
+          if (seasonBlock) return seasonBlock.priceDirecto;
+        }
+        return null;
+      };
 
-        doublePrice = getPriceForToday('679077') || doublePrice;
-        cond1Price = getPriceForToday('679087') || cond1Price;
-        cond2Price = getPriceForToday('679091') || cond2Price;
-        cond3Price = getPriceForToday('679092') || cond3Price;
-        casaPrice = getPriceForToday('679093') || casaPrice;
-      }
-    } catch (e) {
-      console.warn("No se pudieron cargar tarifas de Ajustes, usando fallback:", e);
+      doublePrice = getPriceForToday('679077') || doublePrice;
+      cond1Price = getPriceForToday('679087') || cond1Price;
+      cond2Price = getPriceForToday('679091') || cond2Price;
+      cond3Price = getPriceForToday('679092') || cond3Price;
+      casaPrice = getPriceForToday('679093') || casaPrice;
     }
 
     const getActiveDiscountForToday = (roomId: string) => {
@@ -656,18 +644,41 @@ export default function AdminDashboard() {
 
     text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
 
-    navigator.clipboard.writeText(text).then(() => {
+    let copiado = false;
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.top = "0";
+      textArea.style.left = "0";
+      textArea.style.position = "fixed";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      copiado = document.execCommand('copy');
+      document.body.removeChild(textArea);
+    } catch (err) {
+      console.warn("document.execCommand falló, intentando alternativa:", err);
+    }
+
+    if (copiado) {
       setToastMsg('📋 ¡Reporte copiado! Pegar en WhatsApp');
       setTimeout(() => setToastMsg(''), 4000);
-    }).catch(err => {
-      console.error("Error al copiar al portapapeles:", err);
-      alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
-    });
-
-    if (waWindow) {
-      waWindow.location.href = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0';
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        setToastMsg('📋 ¡Reporte copiado! Pegar en WhatsApp');
+        setTimeout(() => setToastMsg(''), 4000);
+      }).catch(err => {
+        console.error("Error al copiar al portapapeles:", err);
+        alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
+      });
     } else {
+      alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
+    }
+
+    try {
       window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
+    } catch (e) {
+      console.warn("No se pudo abrir WhatsApp:", e);
     }
   };
 
