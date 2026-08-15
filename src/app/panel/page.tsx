@@ -309,6 +309,13 @@ function getRoomCategoryLabel(roomNum: string): string {
   return ROOM_ROWS.find(row => row.rooms.includes(roomNum))?.label || `Habitación ${roomNum}`;
 }
 
+function isBlockReservation(r: any): boolean {
+  if (!r) return false;
+  return r.status === 'black' || 
+         (r.channel && String(r.channel).toLowerCase() === 'bloqueo') || 
+         (r.guest_name && String(r.guest_name).toLowerCase().startsWith('bloqueo'));
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [reservas, setReservas] = useState<any[]>([]);
@@ -481,9 +488,9 @@ export default function AdminDashboard() {
       return roomA.localeCompare(roomB, undefined, { numeric: true, sensitivity: 'base' });
     };
 
-    const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
-    const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
-    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled').sort(sortByRoomNumber);
+    const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled' && !isBlockReservation(r)).sort(sortByRoomNumber);
+    const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled' && !isBlockReservation(r)).sort(sortByRoomNumber);
+    const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled' && !isBlockReservation(r)).sort(sortByRoomNumber);
 
     let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *Condominios Jaroje*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
@@ -690,7 +697,7 @@ export default function AdminDashboard() {
   }, []);
   const llegadasHoy = useMemo(() => {
     return reservas
-      .filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled')
+      .filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled' && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -702,7 +709,7 @@ export default function AdminDashboard() {
 
   const todasLlegadasHoy = useMemo(() => {
     return reservas
-      .filter(r => r.status !== 'cancelled' && r.check_in === todayStr)
+      .filter(r => r.status !== 'cancelled' && r.check_in === todayStr && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -717,7 +724,7 @@ export default function AdminDashboard() {
     limit.setDate(limit.getDate() - 5);
     const limitStr = limit.toISOString().split('T')[0];
     return reservas
-      .filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled')
+      .filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled' && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -729,7 +736,7 @@ export default function AdminDashboard() {
 
   const todasSalidasHoy = useMemo(() => {
     return reservas
-      .filter(r => r.status !== 'cancelled' && r.check_out === todayStr)
+      .filter(r => r.status !== 'cancelled' && r.check_out === todayStr && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -783,7 +790,8 @@ export default function AdminDashboard() {
     r.status !== 'cancelled' && 
     r.status !== 'cancelado' && 
     r.check_out > todayStr && 
-    r.checked_in
+    r.checked_in &&
+    !isBlockReservation(r)
   ).length;
 
   return (
@@ -1728,7 +1736,8 @@ export default function AdminDashboard() {
             r.status !== 'cancelled' && 
             r.status !== 'cancelado' && 
             r.check_out > todayStr && 
-            r.checked_in
+            r.checked_in &&
+            !isBlockReservation(r)
           );
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';

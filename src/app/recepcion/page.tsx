@@ -576,6 +576,13 @@ function fmtCurrency(amount: number, guestName?: string) {
   return (isUSD ? 'USD$' : 'MX$') + rounded.toLocaleString('es-MX', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+function isBlockReservation(r: any): boolean {
+  if (!r) return false;
+  return r.status === 'black' || 
+         (r.channel && String(r.channel).toLowerCase() === 'bloqueo') || 
+         (r.guest_name && String(r.guest_name).toLowerCase().startsWith('bloqueo'));
+}
+
 export default function RecepcionPage() {
   const [reservas, setReservas] = useState<Reserva[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -639,9 +646,9 @@ export default function RecepcionPage() {
         return roomA.localeCompare(roomB, undefined, { numeric: true, sensitivity: 'base' });
       };
 
-      const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
-      const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled').sort(sortByRoomNumber);
-      const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled').sort(sortByRoomNumber);
+      const llegan = reservas.filter(r => r.check_in === todayStr && r.status !== 'cancelled' && !isBlockReservation(r)).sort(sortByRoomNumber);
+      const salen = reservas.filter(r => r.check_out === todayStr && r.status !== 'cancelled' && !isBlockReservation(r)).sort(sortByRoomNumber);
+      const enCasa = reservas.filter(r => r.check_out > todayStr && r.checked_in && r.status !== 'cancelled' && !isBlockReservation(r)).sort(sortByRoomNumber);
 
       let text = `📋 *RESUMEN DIARIO DE OPERACIONES*\n🏨 *Condominios Jaroje*\n📅 *${dateStr.toUpperCase()}*\n\n`;
 
@@ -2821,7 +2828,7 @@ export default function RecepcionPage() {
 
   const llegadas = useMemo(() => {
     return reservas
-      .filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0')
+      .filter(r => r.check_out >= todayStr && r.check_in <= todayStr && !r.checked_in && !r.checked_out && r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0' && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -2833,7 +2840,7 @@ export default function RecepcionPage() {
 
   const todasLlegadas = useMemo(() => {
     return reservas
-      .filter(r => r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0' && r.check_in === todayStr)
+      .filter(r => r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0' && r.check_in === todayStr && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -2848,7 +2855,7 @@ export default function RecepcionPage() {
     limit.setDate(limit.getDate() - 5);
     const limitStr = limit.toISOString().split('T')[0];
     return reservas
-      .filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0')
+      .filter(r => r.check_out <= todayStr && r.check_out >= limitStr && r.checked_in && !r.checked_out && r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0' && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -2860,7 +2867,7 @@ export default function RecepcionPage() {
 
   const todasSalidas = useMemo(() => {
     return reservas
-      .filter(r => r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0' && r.check_out === todayStr)
+      .filter(r => r.status !== 'cancelled' && r.status !== 'cancelado' && r.status !== '0' && r.check_out === todayStr && !isBlockReservation(r))
       .sort((a, b) => {
         const roomA = getUnitDisplay(a.room_name || a.room || '');
         const roomB = getUnitDisplay(b.room_name || b.room || '');
@@ -4800,7 +4807,7 @@ export default function RecepcionPage() {
               className="bg-white border border-zinc-200/80 rounded-2xl p-3 text-center shadow-sm cursor-pointer hover:bg-zinc-50/50 hover:border-zinc-300 active:scale-95 transition-all outline-none"
             >
               <p className="text-[20px] font-bold text-zinc-900">
-                {reservas.filter(r => r.check_out > todayStr && r.checked_in).length}
+                {reservas.filter(r => r.check_out > todayStr && r.checked_in && !isBlockReservation(r)).length}
               </p>
               <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide">En casa</p>
             </button>
@@ -8229,7 +8236,7 @@ export default function RecepcionPage() {
         if (kpiModalType === 'encasa') {
           title = 'Huéspedes En Casa';
           badgeColor = 'bg-zinc-900 text-white';
-          filtered = reservas.filter(r => r.check_out > todayStr && r.checked_in);
+          filtered = reservas.filter(r => r.check_out > todayStr && r.checked_in && !isBlockReservation(r));
         } else if (kpiModalType === 'llegan') {
           title = 'Llegadas Hoy';
           badgeColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
