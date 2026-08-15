@@ -246,6 +246,12 @@ function getRoomOperationalStatus(
       if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible') {
         return 'limpia'; // Azul
       }
+      if (dbStatus === 'en_limpieza') {
+        return 'en_limpieza';
+      }
+      if (dbStatus === 'limpieza_programada') {
+        return 'limpieza_programada';
+      }
       return 'sucio_checkout'; // Rojo fuerte si falta limpiar antes de llegada
     }
 
@@ -260,9 +266,12 @@ function getRoomOperationalStatus(
     return 'ocupada'; // GRIS (No disponible / Ocupada)
   }
 
-  // 3. Si fue marcada sucio_checkout previamente en DB
+  // 3. Si fue marcada sucio_checkout o limpieza_programada previamente en DB
   if (dbStatus === 'sucio_checkout' && !isCleanedToday) {
     return 'sucio_checkout';
+  }
+  if (dbStatus === 'limpieza_programada' && !isCleanedToday) {
+    return 'limpieza_programada';
   }
   if (isEnLimpiezaToday) {
     return 'en_limpieza';
@@ -289,12 +298,12 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   const tDate = new Date(todayStr + 'T12:00:00');
   const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
 
-  const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
+  const isTwoDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
   const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
 
-  if (isThreeDayRoom) {
-    // Servicio el tercer día de estancia (llegada = día 1, servicio = día 3 -> diffDays = 2), y luego cada 3 días (diffDays = 5, 8, 11, etc.)
-    return diffDays >= 2 && diffDays % 3 === 2;
+  if (isTwoDayRoom) {
+    // Servicio cada 2 días de estancia (llegada = día 1, servicio = día 3 -> diffDays = 2, luego día 5 -> diffDays = 4, etc.)
+    return diffDays >= 2 && diffDays % 2 === 0;
   } else if (isDailyRoom) {
     return diffDays >= 1;
   }

@@ -140,6 +140,11 @@ export async function GET() {
         return r.checked_in && !r.checked_out && cIn <= todayStr && cOut > todayStr && r.status !== 'cancelled';
       });
 
+      const arrivalTodayRes = matchingReservations.find((r: any) => {
+        const cIn = (r.check_in || '').split('T')[0].split(' ')[0];
+        return cIn === todayStr && !r.checked_in && r.status !== 'cancelled';
+      });
+
       let color = 'disponible (verde)';
       let reason = 'Sin reserva activa';
 
@@ -157,32 +162,47 @@ export async function GET() {
           color = 'salida_hoy (rojo claro)';
           reason = `salidaRes checkout=${(salidaRes.check_out || '').split('T')[0]}, checked_out=${salidaRes.checked_out}`;
         }
+      } else if (arrivalTodayRes) {
+        if (isCleanedToday || dbStatus === 'limpia' || dbStatus === 'disponible') {
+          color = 'limpia (azul)';
+          reason = `Llegada hoy pendiente (clean/disponible en DB)`;
+        } else if (isEnLimpiezaToday) {
+          color = 'en_limpieza (amarillo)';
+          reason = `Llegada hoy pendiente, actualmente en limpieza`;
+        } else if (dbStatus === 'limpieza_programada' && !isCleanedToday) {
+          color = 'limpieza_programada (amarillo)';
+          reason = `Llegada hoy pendiente, limpieza programada en DB`;
+        } else {
+          color = 'sucio_checkout (rojo fuerte)';
+          reason = `Llegada hoy pendiente, requiere limpieza antes de check-in`;
+        }
       } else if (isSucioCheckoutToday && !isCleanedToday) {
         color = 'sucio_checkout (rojo fuerte)';
         reason = 'isSucioCheckoutToday=true y !isCleanedToday';
+      } else if (dbStatus === 'limpieza_programada' && !isCleanedToday) {
+        color = 'limpieza_programada (amarillo)';
+        reason = 'dbStatus=limpieza_programada y !isCleanedToday';
+      } else if (isEnLimpiezaToday) {
+        color = 'en_limpieza (amarillo)';
+        reason = 'isEnLimpiezaToday=true';
       } else if (currentRes) {
-        if (!currentRes.checked_in) {
-          color = 'limpia (azul)';
-          reason = `currentRes check_in=${currentRes.check_in}, checked_in=false → Esperando llegada`;
-        } else {
-          const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
-          const cInDate = new Date(cIn + 'T12:00:00');
-          const tDate = new Date(todayStr + 'T12:00:00');
-          const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
-          const dayOfStay = diffDays + 1;
-          const isThreeDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
-          const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
-          let requiresService = false;
-          if (isThreeDayRoom && diffDays >= 2 && diffDays % 3 === 2) requiresService = true;
-          else if (isDailyRoom && diffDays >= 1) requiresService = true;
+        const cIn = (currentRes.check_in || '').split('T')[0].split(' ')[0];
+        const cInDate = new Date(cIn + 'T12:00:00');
+        const tDate = new Date(todayStr + 'T12:00:00');
+        const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
+        const dayOfStay = diffDays + 1;
+        const isTwoDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
+        const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
+        let requiresService = false;
+        if (isTwoDayRoom && diffDays >= 2 && diffDays % 2 === 0) requiresService = true;
+        else if (isDailyRoom && diffDays >= 1) requiresService = true;
 
-          if (requiresService && !isCleanedToday) {
-            color = 'limpieza_programada (amarillo)';
-            reason = `Día ${dayOfStay} de estancia, servicio programado`;
-          } else {
-            color = 'ocupada (gris)';
-            reason = `Día ${dayOfStay} de estancia, checked_in=true`;
-          }
+        if (requiresService && !isCleanedToday) {
+          color = 'limpieza_programada (amarillo)';
+          reason = `Día ${dayOfStay} de estancia, servicio programado`;
+        } else {
+          color = 'ocupada (gris)';
+          reason = `Día ${dayOfStay} de estancia, checked_in=true`;
         }
       }
 
