@@ -2393,6 +2393,15 @@ function ReservasListInner() {
       return;
     }
     if (!targetRes) return;
+
+    // Evitar envíos accidentales (Floren protection)
+    const guestName = targetRes.guest_name || 'el huésped';
+    const hasConfirmed = window.confirm(
+      `⚠️ ¿Estás seguro de que deseas enviar el ÚLTIMO AVISO a ${guestName}?\n\n` +
+      `Esto notificará al cliente por WhatsApp y activará la cuenta regresiva de 3 horas para la cancelación automática de su reservación.`
+    );
+    if (!hasConfirmed) return;
+
     const phoneNum = targetRes.phone || targetRes.mobile || targetRes.guest_phone || '';
     if (!phoneNum) {
       alert('⚠️ La reservación no tiene número de teléfono registrado.');
@@ -4289,6 +4298,15 @@ function ReservasListInner() {
 
                         const handleSendApiTemplate = async () => {
                           if (!apiTemplateKey) return;
+
+                          if (apiTemplateKey === 'ultimo_aviso') {
+                            const guestName = selectedRes.guest_name || 'el huésped';
+                            const hasConfirmed = window.confirm(
+                              `⚠️ ¿Estás seguro de que deseas enviar el ÚLTIMO AVISO a ${guestName}?\n\n` +
+                              `Esto notificará al cliente por WhatsApp y activará la cuenta regresiva de 3 horas para la cancelación automática de su reservación.`
+                            );
+                            if (!hasConfirmed) return;
+                          }
                           
                           let cleanPhone = String(selectedRes.guest_phone || '').replace(/\D/g, '');
                           if (!cleanPhone) {
