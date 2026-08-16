@@ -6,9 +6,12 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    // 1. Autenticación básica de cron mediante token secreto
+    // 1. Autenticación básica de cron mediante token secreto (URL, x-cron-secret, o Authorization Bearer)
     const { searchParams } = new URL(req.url);
-    const cronToken = searchParams.get('token');
+    const authHeader = req.headers.get('authorization') || '';
+    const cronToken = searchParams.get('token') || 
+                      req.headers.get('x-cron-secret') || 
+                      authHeader.replace(/^bearer\s+/i, '').trim();
     const expectedToken = process.env.CRON_SECRET;
 
     if (expectedToken && cronToken !== expectedToken) {
