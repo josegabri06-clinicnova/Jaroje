@@ -110,7 +110,7 @@ interface Reserva {
 
 interface CleanTask {
   room: string;
-  type: 'checkout' | 'stayover' | 'forced';
+  type: 'checkout' | 'stayover' | 'forced' | 'bloqueo';
   dbStatus: string;
   operStatus: string;
   guestName?: string;
@@ -419,6 +419,13 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   }
 
   return false;
+}
+
+function isBlockReservation(r: any): boolean {
+  if (!r) return false;
+  return r.status === 'black' || 
+         (r.channel && String(r.channel).toLowerCase() === 'bloqueo') || 
+         (r.guest_name && String(r.guest_name).toLowerCase().startsWith('bloqueo'));
 }
 
 export default function StaffPage() {
@@ -796,13 +803,14 @@ export default function StaffPage() {
       });
       
       if (salidaRes) {
+        const isBlock = isBlockReservation(salidaRes);
         list.push({
           room: r,
-          type: isForced ? 'forced' : 'checkout',
+          type: isBlock ? 'bloqueo' : (isForced ? 'forced' : 'checkout'),
           dbStatus,
           operStatus,
-          guestName: salidaRes.guest_name,
-          keysReturned: dbStatus === 'sucio_checkout' || salidaRes.checked_out || false,
+          guestName: isBlock ? (salidaRes.guest_name || 'BLOQUEO') : salidaRes.guest_name,
+          keysReturned: isBlock || dbStatus === 'sucio_checkout' || salidaRes.checked_out || false,
           reserva: salidaRes,
           isUpdatedToday: isDateToday(dbStatusObj?.updated_at)
         });
@@ -811,8 +819,9 @@ export default function StaffPage() {
       
       // 2. Verificar si es stayover hoy (Servicio durante estancia)
       const stayoverRes = reservas.find(res => {
+        const isBlock = isBlockReservation(res);
         return matchesRoomNumber(res, r) && 
-               res.checked_in && 
+               (res.checked_in || isBlock) && 
                (res.check_in || '').split('T')[0].split(' ')[0] <= todayStr && 
                (res.check_out || '').split('T')[0].split(' ')[0] > todayStr && 
                res.status !== 'cancelled' && 
@@ -820,15 +829,16 @@ export default function StaffPage() {
       });
       
       if (stayoverRes && !stayoverRes.checked_out) {
-        const requiresService = isRoomStayoverServiceScheduled(r, reservas, todayStr);
+        const isBlock = isBlockReservation(stayoverRes);
+        const requiresService = isBlock ? false : isRoomStayoverServiceScheduled(r, reservas, todayStr);
         
         if (requiresService || isForced) {
           list.push({
             room: r,
-            type: isForced ? 'forced' : 'stayover',
+            type: isBlock ? 'bloqueo' : (isForced ? 'forced' : 'stayover'),
             dbStatus,
             operStatus,
-            guestName: stayoverRes.guest_name,
+            guestName: isBlock ? (stayoverRes.guest_name || 'BLOQUEO') : stayoverRes.guest_name,
             keysReturned: false,
             reserva: stayoverRes,
             isUpdatedToday: isDateToday(dbStatusObj?.updated_at)
@@ -850,14 +860,24 @@ export default function StaffPage() {
         (dbStatus === 'limpia' && isDbStatusUpdatedToday) ||
         (dbStatus === 'disponible' && isDbStatusUpdatedToday)
       )) {
+        // Encontrar si hay alguna reserva de bloqueo para esta habitación hoy
+        const blockRes = reservas.find(res => {
+          return matchesRoomNumber(res, r) && 
+                 res.status !== 'cancelled' && 
+                 String(res.status) !== '0' && 
+                 isBlockReservation(res) &&
+                 (res.check_in <= todayStr && res.check_out >= todayStr);
+        });
+
+        const isBlock = !!blockRes;
         list.push({
           room: r,
-          type: isForced ? 'forced' : ((operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'checkout' : 'stayover'),
+          type: isBlock ? 'bloqueo' : (isForced ? 'forced' : ((operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'checkout' : 'stayover')),
           dbStatus,
           operStatus,
-          guestName: isForced ? 'Limpieza Forzada' : ((operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'Check-Out' : (dbStatus === 'limpia' ? 'Limpia' : 'Servicio')),
-          keysReturned: operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout',
-          reserva: null,
+          guestName: isBlock ? (blockRes.guest_name || 'BLOQUEO') : (isForced ? 'Limpieza Forzada' : ((operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout') ? 'Check-Out' : (dbStatus === 'limpia' ? 'Limpia' : 'Servicio'))),
+          keysReturned: isBlock || operStatus === 'sucio_checkout' || dbStatus === 'sucio_checkout',
+          reserva: blockRes || null,
           isUpdatedToday: isDbStatusUpdatedToday || isCurrentlyForced
         });
       }
@@ -1578,9 +1598,11 @@ export default function StaffPage() {
         const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
         const typeLabel = task.type === 'forced' 
           ? 'Forzada 🟠' 
-          : task.type === 'checkout' 
-            ? 'Check Out 🔴' 
-            : 'Servicio 🟡';
+          : task.type === 'bloqueo'
+            ? 'Bloqueo 🚫'
+            : task.type === 'checkout' 
+              ? 'Check Out 🔴' 
+              : 'Servicio 🟡';
         const statusLabel = isFinished 
           ? 'Limpia ✅' 
           : (task.type === 'checkout' && !task.keysReturned)
@@ -1619,16 +1641,43 @@ export default function StaffPage() {
 
     text += `_Generado automáticamente desde Jaroje OS_`;
 
-    navigator.clipboard.writeText(text).then(() => {
+    let copiado = false;
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.top = "0";
+      textArea.style.left = "0";
+      textArea.style.position = "fixed";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      copiado = document.execCommand('copy');
+      document.body.removeChild(textArea);
+    } catch (err) {
+      console.warn("document.execCommand falló, intentando alternativa:", err);
+    }
+
+    if (copiado) {
       setSuccessMsg('📋 ¡Reporte copiado! Abriendo WhatsApp...');
       setTimeout(() => setSuccessMsg(''), 4000);
-    }).catch(err => {
-      console.error("Error al copiar al portapapeles:", err);
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        setSuccessMsg('📋 ¡Reporte copiado! Abriendo WhatsApp...');
+        setTimeout(() => setSuccessMsg(''), 4000);
+      }).catch(err => {
+        console.error("Error al copiar al portapapeles:", err);
+        alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
+      });
+    } else {
       alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
-    });
+    }
 
     // Abrir de inmediato el enlace de invitación al grupo de WhatsApp
-    window.open('https://chat.whatsapp.com/GB3Mz5s1unl6wZhp5kzv4X', '_blank');
+    try {
+      window.open('https://chat.whatsapp.com/GB3Mz5s1unl6wZhp5kzv4X', '_blank');
+    } catch (e) {
+      console.warn("No se pudo abrir WhatsApp:", e);
+    }
   };
 
   // Obtener estado de una habitación
@@ -1901,6 +1950,7 @@ export default function StaffPage() {
                           {allRooms.map(task => {
                             const assignment = assignments[task.room] || { employeeNum: '', notes: '' };
                             const isCheckout = task.type === 'checkout';
+                            const isBloqueo = task.type === 'bloqueo';
                             const isFinished = (task.dbStatus === 'limpia' || task.dbStatus === 'disponible') && task.isUpdatedToday;
 
                             return (
@@ -1918,11 +1968,13 @@ export default function StaffPage() {
                                     <span className={`inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded-md border select-none ${
                                       task.type === 'forced'
                                         ? 'bg-orange-50 text-orange-700 border-orange-100'
-                                        : isCheckout 
-                                          ? 'bg-rose-50 text-rose-700 border-rose-100' 
-                                          : 'bg-amber-50 text-amber-700 border-amber-100'
+                                        : isBloqueo
+                                          ? 'bg-orange-50 text-orange-700 border-orange-200/80 shadow-sm'
+                                          : isCheckout 
+                                            ? 'bg-rose-50 text-rose-700 border-rose-100' 
+                                            : 'bg-amber-50 text-amber-700 border-amber-100'
                                     }`}>
-                                      {task.type === 'forced' ? 'Forzada' : (isCheckout ? 'Check Out' : 'Servicio')}
+                                      {task.type === 'forced' ? 'Forzada' : (isBloqueo ? 'Bloqueo' : (isCheckout ? 'Check Out' : 'Servicio'))}
                                     </span>
                                     {isCheckout && !task.keysReturned && (
                                       <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-amber-50 text-amber-750 border border-amber-200/60 select-none">
