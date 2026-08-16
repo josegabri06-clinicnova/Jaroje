@@ -300,6 +300,7 @@ export async function GET(req: Request) {
           try {
             await supabase.from('employee_logs').insert([{
               employee_num: '000',
+              employee_name: 'System Cron',
               action: 'cron-cancel-eval',
               department: 'whatsapp',
               room: booking.room_name || `Habitación ${booking.room || ''}`,
@@ -361,6 +362,7 @@ export async function GET(req: Request) {
               try {
                 await supabase.from('employee_logs').insert([{
                   employee_num: '000',
+                  employee_name: 'System Cron',
                   action: 'cron-cancel-success',
                   department: 'whatsapp',
                   room: booking.room_name || `Habitación ${booking.room || ''}`,
@@ -388,6 +390,7 @@ export async function GET(req: Request) {
               try {
                 await supabase.from('employee_logs').insert([{
                   employee_num: '000',
+                  employee_name: 'System Cron',
                   action: 'cron-cancel-skipped',
                   department: 'whatsapp',
                   room: booking.room_name || `Habitación ${booking.room || ''}`,
@@ -542,6 +545,7 @@ export async function GET(req: Request) {
         try {
           await supabase.from('employee_logs').insert([{
             employee_num: '000',
+            employee_name: 'System Cron',
             action: 'cron-booking-error',
             department: 'whatsapp',
             room: booking.room_name || `Habitación ${booking.room || ''}`,
@@ -557,6 +561,7 @@ export async function GET(req: Request) {
     try {
       await supabase.from('employee_logs').insert([{
         employee_num: '000',
+        employee_name: 'System Cron',
         action: 'cron-execution-success',
         department: 'whatsapp',
         room: 'Sistema / Cron',

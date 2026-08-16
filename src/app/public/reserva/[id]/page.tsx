@@ -1614,38 +1614,23 @@ export default function PublicReservaPage() {
                       const roomExtraCharge = extraGuests * EXTRA_CHARGE * roomNights;
                       const totalRoomWithExtras = roomPrice + roomExtraCharge;
 
+                      const detailText = lang === 'en'
+                        ? `${roomNights} ${roomNights === 1 ? 'night' : 'nights'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + extra pax (${extraGuests} x $500 x ${roomNights} n.)` : ''}`
+                        : `${roomNights} ${roomNights === 1 ? 'noche' : 'noches'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + pax extra (${extraGuests} x $500 x ${roomNights} n.)` : ''}`;
+
                       return (
-                        <div key={idx} className="py-2.5 first:pt-1 last:pb-1 space-y-1">
-                          <div className="flex justify-between items-start">
-                            <span className="font-bold text-zinc-900 leading-snug max-w-[70%]">
+                        <div key={idx} className="py-2.5 first:pt-1 last:pb-1 flex justify-between items-start gap-4">
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-semibold text-zinc-900 leading-snug truncate">
                               🏨 {room.room_name}
                             </span>
-                            <span className="font-extrabold text-zinc-900 text-right shrink-0">
-                              ${totalRoomWithExtras.toLocaleString('es-MX')} MXN
+                            <span className="text-[10px] text-zinc-450 leading-normal">
+                              {detailText}
                             </span>
                           </div>
-                          <div className="text-[10px] text-zinc-450 space-y-0.5 pl-4">
-                            <div className="flex justify-between">
-                              <span>{lang === 'en' ? 'Nights:' : 'Noches:'}</span>
-                              <span>{roomNights}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span>{lang === 'en' ? 'Daily rate:' : 'Tarifa diaria:'}</span>
-                              <span>${dailyRate.toLocaleString('es-MX')} MXN</span>
-                            </div>
-                            <div className="flex justify-between font-medium">
-                              <span>{lang === 'en' ? 'Base total:' : 'Total base:'}</span>
-                              <span>${roomPrice.toLocaleString('es-MX')} MXN</span>
-                            </div>
-                            {roomExtraCharge > 0 && (
-                              <div className="flex justify-between text-amber-600 font-medium">
-                                <span>
-                                  {lang === 'en' ? 'Extra guests fee:' : 'Cargos huéspedes extra:'} ({extraGuests} × $500)
-                                </span>
-                                <span>+${roomExtraCharge.toLocaleString('es-MX')} MXN</span>
-                              </div>
-                            )}
-                          </div>
+                          <span className="font-extrabold text-zinc-900 text-right shrink-0 mt-0.5">
+                            ${totalRoomWithExtras.toLocaleString('es-MX')} MXN
+                          </span>
                         </div>
                       );
                     })}
