@@ -713,7 +713,7 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
           console.error("[Beds24 API] Fallo al obtener activas:", err);
           throw err; // Si fallan las activas, sí lanzamos el error porque el listado estaría incompleto
         }),
-        fetchPage(`${baseUrl}&status=0`).catch(err => {
+        fetchPage(`${baseUrl}&status=cancelled`).catch(err => {
           console.warn("[Beds24 API] Fallo silencioso al obtener canceladas (se omite para no romper el flujo principal):", err);
           return []; // Si fallan las canceladas, devolvemos un array vacío para no afectar el resto de la app
         })
@@ -743,7 +743,7 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
           console.error("[Beds24 API] Fallo al obtener activas:", err);
           throw err;
         }),
-        fetchPage(`${baseUrl}&status=0&modifiedFrom=${fortyEightHoursAgoIso}`).catch(err => {
+        fetchPage(`${baseUrl}&status=cancelled&modifiedFrom=${fortyEightHoursAgoIso}`).catch(err => {
           console.warn("[Beds24 API] Fallo silencioso al obtener canceladas recientes:", err);
           return [];
         })

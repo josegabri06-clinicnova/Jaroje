@@ -219,7 +219,7 @@ export async function GET(req: Request) {
           let dataList = rawBookingData.data || [];
 
           if (rawBookingData.success && dataList.length === 0) {
-            const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true&status=0`, {
+            const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true&status=cancelled`, {
               headers: { 'token': beds24Token },
               cache: 'no-store'
             });

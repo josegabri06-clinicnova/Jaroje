@@ -62,8 +62,8 @@ export async function POST(req: Request) {
           let dataList = b24Json.data || [];
           
           if (b24Json.success && dataList.length === 0) {
-            // Intento 2: Buscar si es una reserva cancelada (Beds24 requiere status=0 para devolverlas)
-            const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&status=0`, {
+            // Intento 2: Buscar si es una reserva cancelada (Beds24 requiere status=cancelled para devolverlas)
+            const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&status=cancelled`, {
               headers: { 'token': BEDS24_TOKEN }
             });
             if (b24ResCancel.ok) {
