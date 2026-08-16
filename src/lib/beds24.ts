@@ -499,7 +499,7 @@ let _cachedTokenExpiry: number = 0; // timestamp en ms
 let _refreshPromise: Promise<string> | null = null; // mutex de refresh
 
 // Auto-refresh del token de autenticación Beds24 con persistencia en Supabase
-export async function getBeds24Token(): Promise<string> {
+export async function getBeds24Token(force: boolean = false): Promise<string> {
   // Si ya tenemos un refresh en curso, esperar a que termine (previene race conditions)
   if (_refreshPromise) {
     return _refreshPromise;
@@ -507,18 +507,18 @@ export async function getBeds24Token(): Promise<string> {
 
   // Si el token en caché sigue válido (con 5 min de margen), devolverlo directamente
   const now = Date.now();
-  if (_cachedToken && _cachedTokenExpiry > now + 5 * 60 * 1000) {
+  if (!force && _cachedToken && _cachedTokenExpiry > now + 5 * 60 * 1000) {
     return _cachedToken;
   }
 
   // Iniciar refresh (con mutex para evitar llamadas paralelas)
-  _refreshPromise = _doRefresh().finally(() => {
+  _refreshPromise = _doRefresh(force).finally(() => {
     _refreshPromise = null;
   });
   return _refreshPromise;
 }
 
-async function _doRefresh(): Promise<string> {
+async function _doRefresh(force: boolean = false): Promise<string> {
   let tempToken: string | null = null;
   let refreshToken: string | null = null;
 
@@ -536,7 +536,7 @@ async function _doRefresh(): Promise<string> {
 
       // Si el token en DB fue actualizado en los últimos 20 minutos, probablemente sigue válido
       // (los tokens de Beds24 duran típicamente 24h, pero el timestamp nos da un hint)
-      if (tempToken && data.updated_at) {
+      if (!force && tempToken && data.updated_at) {
         const updatedAt = new Date(data.updated_at).getTime();
         const minutesSinceUpdate = (Date.now() - updatedAt) / (1000 * 60);
         // Los tokens de Beds24 duran 24h. Si tiene menos de 20h de antigüedad, usarlo directamente
@@ -654,89 +654,80 @@ async function _doRefresh(): Promise<string> {
 
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
 export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false): Promise<any[]> {
-  const BEDS24_TOKEN = await getBeds24Token();
+  let beds24Token = await getBeds24Token();
 
-  const fetchPage = async (apiUrl: string) => {
-    let bookings: any[] = [];
-    let url = apiUrl;
-    let hasNextPage = true;
+  const doFetchAttempt = async (token: string) => {
+    const fetchPage = async (apiUrl: string) => {
+      let bookings: any[] = [];
+      let url = apiUrl;
+      let hasNextPage = true;
 
-    while (hasNextPage) {
-      let res = await fetch(url, {
-        method: 'GET',
-        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-        cache: 'no-store'
-      });
-
-      if (res.status === 429) {
-        console.warn('[Beds24 GET] Rate limit (429) detectado. Reintentando en 2.5 segundos...');
-        await new Promise(r => setTimeout(r, 2500));
-        res = await fetch(url, {
+      while (hasNextPage) {
+        let res = await fetch(url, {
           method: 'GET',
-          headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+          headers: { 'token': token, 'Content-Type': 'application/json' },
           cache: 'no-store'
         });
-      }
 
-      if (res.status === 401 || res.status === 403) {
-        throw new Error('TOKEN_EXPIRED');
-      }
-
-      if (!res.ok) {
-        throw new Error(`Error BEDS24 ${res.status}: ${await res.text()}`);
-      }
-
-      const dataB24 = await res.json();
-      if (dataB24.data && Array.isArray(dataB24.data)) {
-        bookings = bookings.concat(dataB24.data);
-      }
-
-      // Seguir el enlace de la siguiente página si existe
-      if (dataB24.pages && dataB24.pages.nextPageExists && dataB24.pages.nextPageLink) {
-        url = dataB24.pages.nextPageLink;
-        if (url.startsWith('/')) {
-          url = `https://api.beds24.com${url}`;
+        if (res.status === 429) {
+          console.warn('[Beds24 GET] Rate limit (429) detectado. Reintentando en 2.5 segundos...');
+          await new Promise(r => setTimeout(r, 2500));
+          res = await fetch(url, {
+            method: 'GET',
+            headers: { 'token': token, 'Content-Type': 'application/json' },
+            cache: 'no-store'
+          });
         }
-      } else {
-        hasNextPage = false;
-      }
-    }
-    return bookings;
-  };
 
-  const baseUrl = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
-  if (includeCancelled) {
-    try {
+        if (res.status === 401 || res.status === 403) {
+          throw new Error('TOKEN_EXPIRED');
+        }
+
+        if (!res.ok) {
+          throw new Error(`Error BEDS24 ${res.status}: ${await res.text()}`);
+        }
+
+        const dataB24 = await res.json();
+        if (dataB24.data && Array.isArray(dataB24.data)) {
+          bookings = bookings.concat(dataB24.data);
+        }
+
+        // Seguir el enlace de la siguiente página si existe
+        if (dataB24.pages && dataB24.pages.nextPageExists && dataB24.pages.nextPageLink) {
+          url = dataB24.pages.nextPageLink;
+          if (url.startsWith('/')) {
+            url = `https://api.beds24.com${url}`;
+          }
+        } else {
+          hasNextPage = false;
+        }
+      }
+      return bookings;
+    };
+
+    const baseUrl = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
+    if (includeCancelled) {
       // Llamadas en paralelo con tolerancia a fallos
       const [activeBookings, cancelledBookings] = await Promise.all([
         fetchPage(baseUrl).catch(err => {
           console.error("[Beds24 API] Fallo al obtener activas:", err);
-          throw err; // Si fallan las activas, sí lanzamos el error porque el listado estaría incompleto
+          throw err;
         }),
         fetchPage(`${baseUrl}&status=cancelled`).catch(err => {
-          console.warn("[Beds24 API] Fallo silencioso al obtener canceladas (se omite para no romper el flujo principal):", err);
-          return []; // Si fallan las canceladas, devolvemos un array vacío para no afectar el resto de la app
+          console.warn("[Beds24 API] Fallo silencioso al obtener canceladas:", err);
+          return [];
         })
       ]);
 
       const combined = [...activeBookings];
       const activeIds = new Set(activeBookings.map(b => String(b.id)));
-      
-      // Combinar canceladas evitando duplicados
       cancelledBookings.forEach(b => {
         if (!activeIds.has(String(b.id))) {
           combined.push(b);
         }
       });
-
       return combined;
-    } catch (err) {
-      console.error("[Beds24 API] Error al obtener reservas combinadas:", err);
-      throw err;
-    }
-  } else {
-    try {
-      // Traer las activas, y además las canceladas de las últimas 48 horas
+    } else {
       const fortyEightHoursAgoIso = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString().split('.')[0] + 'Z';
       const [activeBookings, recentCancelledBookings] = await Promise.all([
         fetchPage(baseUrl).catch(err => {
@@ -751,18 +742,24 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
 
       const combined = [...activeBookings];
       const activeIds = new Set(activeBookings.map(b => String(b.id)));
-      
       recentCancelledBookings.forEach(b => {
         if (!activeIds.has(String(b.id))) {
           combined.push(b);
         }
       });
-
       return combined;
-    } catch (err) {
-      console.error("[Beds24 API] Error al obtener reservas combinadas:", err);
-      throw err;
     }
+  };
+
+  try {
+    return await doFetchAttempt(beds24Token);
+  } catch (err: any) {
+    if (err.message === 'TOKEN_EXPIRED') {
+      console.warn('[Beds24 API] Token expirado detectado en fetch. Intentando autorefresco forzado de token...');
+      beds24Token = await getBeds24Token(true);
+      return await doFetchAttempt(beds24Token);
+    }
+    throw err;
   }
 }
 
