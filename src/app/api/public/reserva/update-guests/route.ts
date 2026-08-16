@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
         const { data: siblingLocal } = await supabase
           .from('local_reservas')
-          .select('id, unit_id, guest_name, phone, num_adult, num_child, price, deposit')
+          .select('id, unit_id, guest_name, phone, num_adult, num_child, price, deposit, channel')
           .eq('check_in', localRes.check_in)
           .neq('id', localRes.id);
 

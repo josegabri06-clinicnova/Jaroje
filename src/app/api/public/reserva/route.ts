@@ -86,6 +86,15 @@ export async function GET(req: Request) {
       let localGroupChild = Number(localRes.num_child || 0);
       let localRoomNames = [`Habitación ${physicalName}`];
       const localGroupBookings = [localRes];
+      const localRoomsDetail: { room_name: string; room_id: string | number; num_adult: number; num_child: number; price: number }[] = [
+        {
+          room_name: physicalName ? `Habitación ${physicalName}` : 'Sin asignar',
+          room_id: localRes.id,
+          num_adult: Number(localRes.num_adult || 1),
+          num_child: Number(localRes.num_child || 0),
+          price: Number(localRes.price || 0),
+        }
+      ];
 
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
@@ -94,7 +103,7 @@ export async function GET(req: Request) {
 
         const { data: siblingLocal } = await supabase
           .from('local_reservas')
-          .select('id, guest_name, phone, price, deposit, unit_id, num_adult, num_child, status')
+          .select('id, guest_name, phone, price, deposit, unit_id, num_adult, num_child, status, channel')
           .eq('check_in', localRes.check_in)
           .neq('id', localRes.id);
 
@@ -123,6 +132,13 @@ export async function GET(req: Request) {
               localGroupBookings.push(s);
               const siblingPhysicalName = s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : '';
               localRoomNames.push(`Habitación ${siblingPhysicalName}`);
+              localRoomsDetail.push({
+                room_name: siblingPhysicalName ? `Habitación ${siblingPhysicalName}` : 'Sin asignar',
+                room_id: s.id,
+                num_adult: Number(s.num_adult || 0),
+                num_child: Number(s.num_child || 0),
+                price: Number(s.price || 0),
+              });
             }
           });
         }
@@ -157,6 +173,7 @@ export async function GET(req: Request) {
           id: localRes.id,
           guest_name: localRes.guest_name,
           room_name: localRoomNames.join(', '),
+          rooms_detail: localRoomsDetail,
           check_in: localRes.check_in,
           check_out: localRes.check_out,
           price: localGroupPrice,
@@ -333,13 +350,14 @@ export async function GET(req: Request) {
       let b24GroupPrice = Number(booking.price_estimate || booking.price || 0);
       let b24RoomNames = [booking.room_name || `Habitación ${booking.roomId}`];
 
-      // rooms_detail: desglose por habitación (nombre, num_adult, num_child)
-      const b24RoomsDetail: { room_name: string; room_id: string | number; num_adult: number; num_child: number }[] = [
+      // rooms_detail: desglose por habitación (nombre, num_adult, num_child, precio)
+      const b24RoomsDetail: { room_name: string; room_id: string | number; num_adult: number; num_child: number; price: number }[] = [
         {
           room_name: booking.room_name || `Habitación ${(booking as any).roomId || ''}`,
           room_id: booking.id,
           num_adult: Number(booking.num_adult || 1),
           num_child: Number(booking.num_child || 0),
+          price: Number(booking.price_estimate || booking.price || 0),
         }
       ];
 
@@ -389,6 +407,7 @@ export async function GET(req: Request) {
               room_id: s.id,
               num_adult: Number(s.num_adult || 1),
               num_child: Number(s.num_child || 0),
+              price: Number(s.price_estimate || s.price || 0),
             });
           });
         }

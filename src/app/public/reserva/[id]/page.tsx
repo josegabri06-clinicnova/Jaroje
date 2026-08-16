@@ -825,6 +825,7 @@ export default function PublicReservaPage() {
   const [maintenanceSuccess, setMaintenanceSuccess] = useState(false);
   const [showWifiInfo, setShowWifiInfo] = useState(false);
   const [showCancellationPolicies, setShowCancellationPolicies] = useState(false);
+  const [showPaymentBreakdown, setShowPaymentBreakdown] = useState(false);
 
   // Estados para Solicitud de Factura
   const [showFacturaModal, setShowFacturaModal] = useState(false);
@@ -1581,6 +1582,77 @@ export default function PublicReservaPage() {
               <Clock size={18} className="text-indigo-600" />
               <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">{t.accountTitle}</h3>
             </div>
+
+            {/* Desglose de Pagos Colapsable */}
+            {booking && booking.rooms_detail && booking.rooms_detail.length > 0 && (
+              <div className="border border-zinc-100 rounded-xl overflow-hidden bg-zinc-50/50">
+                <button
+                  type="button"
+                  onClick={() => setShowPaymentBreakdown(!showPaymentBreakdown)}
+                  className="w-full flex justify-between items-center px-4 py-2.5 text-left text-xs font-black text-zinc-700 hover:bg-zinc-100/60 transition-colors select-none"
+                >
+                  <span className="flex items-center gap-1.5">
+                    💵 {lang === 'en' ? 'Payment Breakdown' : 'Desglose de pagos'}
+                  </span>
+                  <span className="text-[10px] text-zinc-400">
+                    {showPaymentBreakdown ? '▲ ' + (lang === 'en' ? 'Hide' : 'Ocultar') : '▼ ' + (lang === 'en' ? 'Show' : 'Mostrar')}
+                  </span>
+                </button>
+
+                {showPaymentBreakdown && (
+                  <div className="p-3.5 pt-0 border-t border-zinc-100 bg-white divide-y divide-zinc-100 text-[11px] md:text-xs">
+                    {booking.rooms_detail.map((room: any, idx: number) => {
+                      const roomNights = booking.nights || 1;
+                      const roomPrice = room.price || 0;
+                      const dailyRate = Math.round(roomPrice / roomNights);
+
+                      // Calcular cargo por persona extra si aplica
+                      const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
+                      const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
+                      const EXTRA_CHARGE = 500;
+                      const extraGuests = Math.max(0, totalGuests - baseCapacity);
+                      const roomExtraCharge = extraGuests * EXTRA_CHARGE * roomNights;
+                      const totalRoomWithExtras = roomPrice + roomExtraCharge;
+
+                      return (
+                        <div key={idx} className="py-2.5 first:pt-1 last:pb-1 space-y-1">
+                          <div className="flex justify-between items-start">
+                            <span className="font-bold text-zinc-900 leading-snug max-w-[70%]">
+                              🏨 {room.room_name}
+                            </span>
+                            <span className="font-extrabold text-zinc-900 text-right shrink-0">
+                              ${totalRoomWithExtras.toLocaleString('es-MX')} MXN
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-zinc-450 space-y-0.5 pl-4">
+                            <div className="flex justify-between">
+                              <span>{lang === 'en' ? 'Nights:' : 'Noches:'}</span>
+                              <span>{roomNights}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>{lang === 'en' ? 'Daily rate:' : 'Tarifa diaria:'}</span>
+                              <span>${dailyRate.toLocaleString('es-MX')} MXN</span>
+                            </div>
+                            <div className="flex justify-between font-medium">
+                              <span>{lang === 'en' ? 'Base total:' : 'Total base:'}</span>
+                              <span>${roomPrice.toLocaleString('es-MX')} MXN</span>
+                            </div>
+                            {roomExtraCharge > 0 && (
+                              <div className="flex justify-between text-amber-600 font-medium">
+                                <span>
+                                  {lang === 'en' ? 'Extra guests fee:' : 'Cargos huéspedes extra:'} ({extraGuests} × $500)
+                                </span>
+                                <span>+${roomExtraCharge.toLocaleString('es-MX')} MXN</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2 text-sm">
               <div className="flex justify-between items-center text-zinc-650">
