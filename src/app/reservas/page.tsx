@@ -2307,38 +2307,9 @@ function ReservasListInner() {
         }
       }
 
-      // 4. Gestionar envío de plantilla WhatsApp (si aplica y no es OTA)
-      const isOta = targetResForUpdate.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => targetResForUpdate.channel.toLowerCase().includes(c));
-
-      if (isOta) {
-        alert('✅ Reserva(s) marcada(s) como revisada(s) con éxito.');
-      } else {
-        const phoneNum = targetResForUpdate.phone || targetResForUpdate.mobile || targetResForUpdate.guest_phone || '';
-        if (phoneNum) {
-          try {
-            const waRes = await fetch('/api/whatsapp/send-template', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                template: 'solicitud_recibida',
-                booking: targetResForUpdate
-              })
-            });
-            const waData = await waRes.json();
-            if (!waRes.ok) {
-              console.error("Error al enviar WhatsApp:", waData.error);
-              alert(`✅ Reserva(s) marcada(s) como revisada(s).\n⚠️ Nota: No se pudo enviar el WhatsApp de confirmación (${waData.error || 'error de Meta API'}).`);
-            } else {
-              alert(`✅ Reserva(s) revisada(s) y Mensaje de Solicitud Recibida enviado por WhatsApp con éxito.`);
-            }
-          } catch (waErr) {
-            console.error("Error de red enviando WhatsApp:", waErr);
-            alert('✅ Reserva(s) marcada(s) como revisada(s).\n⚠️ Nota: Error de red al enviar el WhatsApp.');
-          }
-        } else {
-          alert('✅ Reserva(s) marcada(s) como revisada(s) (el huésped no tiene teléfono registrado).');
-        }
-      }
+      // 4. Con el nuevo proceso, la plantilla 'solicitud_recibida' se envía instantáneamente al crearse la reserva.
+      // Al hacer clic en REVISADO en la interfaz, ya no se envía ningún mensaje duplicado.
+      alert('✅ Reserva(s) marcada(s) como revisada(s) con éxito.');
 
     } catch (err: any) {
       console.error(err);

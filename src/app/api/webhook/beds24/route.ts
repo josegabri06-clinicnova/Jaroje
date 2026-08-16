@@ -274,7 +274,18 @@ export async function POST(req: Request) {
                   }
 
                   if (!isOTA && actualPaid === 0) {
-                    console.log(`[Webhook Beds24] Reserva sin pago real ${bookingId} agendada en NUEVAS. Esperando clic en REVISADO para enviar Mensaje 1.`);
+                    const { sendTemplate1_SolicitudRecibida } = await import('@/lib/whatsapp');
+                    const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
+                    if (waRes.success) {
+                      await supabase.from('whatsapp_logs').insert([{
+                        reservation_id: bookingId.toString(),
+                        template_name: 'solicitud_recibida',
+                        phone: phone
+                      }]);
+                      console.log(`[Webhook Beds24] ✅ WhatsApp solicitud_recibida enviado al instante a reserva ${bookingId}`);
+                    } else {
+                      console.error(`[Webhook Beds24] Error al enviar WhatsApp de solicitud_recibida:`, waRes.error);
+                    }
                   } else {
                     const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
                     if (waRes.success) {

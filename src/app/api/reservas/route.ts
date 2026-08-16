@@ -563,7 +563,15 @@ export async function POST(req: Request) {
                 console.log(`[WA reservas local] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
               }
             } else {
-              console.log(`[WA reservas local] Reserva sin anticipo ${bookingIdStr} agendada en NUEVAS. Esperando clic en REVISADO para enviar Mensaje 1.`);
+              waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
+              if (waRes?.success) {
+                await supabase.from('whatsapp_logs').insert([{
+                  reservation_id: bookingIdStr,
+                  template_name: 'solicitud_recibida',
+                  phone: data.phone
+                }]);
+                console.log(`[WA reservas local] solicitud_recibida enviado al instante a reserva ${bookingIdStr}`);
+              }
             }
           } catch (waErr) {
             console.error("Error en WhatsApp local:", waErr);
@@ -750,7 +758,15 @@ export async function POST(req: Request) {
               console.log(`[WA reservas B24] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
             }
           } else {
-            console.log(`[WA reservas B24] Reserva sin anticipo ${bookingIdStr} agendada en NUEVAS. Esperando clic en REVISADO para enviar Mensaje 1.`);
+            waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
+            if (waRes?.success) {
+              await supabase.from('whatsapp_logs').insert([{
+                reservation_id: bookingIdStr,
+                template_name: 'solicitud_recibida',
+                phone: phone
+              }]);
+              console.log(`[WA reservas B24] solicitud_recibida enviado al instante a reserva ${bookingIdStr}`);
+            }
           }
         } catch (waErr) {
           console.error("Error en WhatsApp Beds24:", waErr);
