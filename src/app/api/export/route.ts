@@ -14,7 +14,7 @@ async function fetchBeds24Bookings() {
   toDate.setDate(today.getDate() + 1000);
   const arrivalTo = toDate.toISOString().split('T')[0];
 
-  return fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo);
+  return fetchAllRawBeds24Bookings(arrivalFrom, arrivalTo, true);
 }
 
 function mapBooking(b: any, dynamicSettings?: any) {
@@ -35,7 +35,7 @@ function mapBooking(b: any, dynamicSettings?: any) {
   else if (rawSource.includes('jaroje') || rawSource.includes('condominiosjaroje')) channel = 'Jaroje Oficial';
   else if (rawSource.includes('beds24')) channel = 'Google'; // Booking Page de Beds24
 
-  const status = (b.status === '1' || b.status === 'confirmed') ? 'Confirmada' : 'Pendiente';
+  const status = (b.status === '0' || b.status === 'cancelled') ? 'Cancelada' : (b.status === '1' || b.status === 'confirmed') ? 'Confirmada' : 'Pendiente';
 
   // ── Calcular Metadata Condominios Jaroje ──
   const roomData = getRoomMetadata(b.roomId, b.roomName);
@@ -104,9 +104,7 @@ export async function GET(req: Request) {
     }
 
     const raw      = await fetchBeds24Bookings();
-    const bookings = raw
-      .filter((b: any) => String(b.status) !== '0' && b.status !== 'cancelled')
-      .map((b: any) => mapBooking(b, dynamicSettings));
+    const bookings = raw.map((b: any) => mapBooking(b, dynamicSettings));
 
     // ── JSON (para Power Query "From Web" o SQL directo) ──────────────────
     if (format === 'json') {

@@ -1153,9 +1153,6 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       const rId = String(b.roomId || '').trim();
       // Excluir habitaciones locales 500-507 que Beds24 no gestiona
       if (rId === LOCAL_ROOM_ID) return false;
-      // Excluir "Unallocated": sin unitId o unitId = 0
-      const uId = String(b.unitId ?? '').trim();
-      if (!uId || uId === '0') return false;
       return true;
     })
     .map((b: any) => {
@@ -1952,8 +1949,6 @@ export async function syncBeds24ReservationsRange(
     .filter((b: any) => {
       const rId = String(b.roomId || '').trim();
       if (rId === LOCAL_ROOM_ID) return false;
-      const uId = String(b.unitId ?? '').trim();
-      if (!uId || uId === '0') return false;
       return true;
     })
     .map((b: any) => {
