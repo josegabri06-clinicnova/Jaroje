@@ -109,10 +109,10 @@ export async function POST(req: Request) {
         }
       }
 
-      // 2. Actualizar estado en Supabase transfer_receipts
+      // 2. Actualizar estado en Supabase transfer_receipts (guardando también el monto aprobado/revisado)
       const { error: dbError } = await supabase
         .from('transfer_receipts')
-        .update({ status: 'approved', notes })
+        .update({ status: 'approved', amount: Number(amount), notes })
         .eq('id', receiptId);
 
       if (dbError) {

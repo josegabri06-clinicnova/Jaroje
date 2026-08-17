@@ -1822,11 +1822,16 @@ export default function PublicReservaPage() {
                   <div key={r.id} className="p-3.5 rounded-xl border border-zinc-150/80 bg-zinc-50/50 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex flex-col">
-                        <span className="text-xs font-black text-zinc-900">
+                        <span className="text-[9px] font-extrabold uppercase tracking-wider text-zinc-400 leading-none mb-1">
+                          {r.status === 'approved' 
+                            ? (lang === 'en' ? 'Approved Amount' : 'Monto Aprobado')
+                            : (lang === 'en' ? 'Declared Amount' : 'Monto Declarado')}
+                        </span>
+                        <span className={`text-xs font-black ${r.status === 'approved' ? 'text-emerald-800 font-black' : 'text-zinc-900'}`}>
                           MX${Number(r.amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                         </span>
                         {dateVal && (
-                          <span className="text-[10px] text-zinc-400 font-bold">
+                          <span className="text-[10px] text-zinc-400 font-bold mt-0.5">
                             {dateVal}
                           </span>
                         )}

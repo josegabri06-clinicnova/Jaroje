@@ -304,16 +304,32 @@ export default function PagoTransferenciaPage() {
 
           {!success ? (
             <>
-              {/* Payment Summary */}
-              <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{t.totalToTransfer}</p>
-                  <p className="text-2xl font-black text-zinc-950 mt-0.5">
-                    ${amount.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-zinc-500">MXN</span>
-                  </p>
+              {/* Payment Summary (Editable Input) */}
+              <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-5 flex items-center justify-between gap-4">
+                <div className="flex-1 text-left">
+                  <label htmlFor="amount-input" className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block mb-1">
+                    {lang === 'en' ? 'Declared Amount (MXN)' : 'Monto Declarado a Pagar (MXN)'}
+                  </label>
+                  <div className="relative flex items-center">
+                    <span className="text-base font-black text-zinc-550 absolute left-2 select-none">$</span>
+                    <input
+                      type="number"
+                      id="amount-input"
+                      value={amount || ''}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setAmount(isNaN(val) ? 0 : val);
+                      }}
+                      className="w-full bg-white border border-zinc-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl pl-6 pr-3 py-1.5 text-base font-black text-zinc-900 tracking-tight transition-all"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <span className="text-[9px] text-zinc-400 font-bold block mt-1.5 leading-none">
+                    {lang === 'en' ? 'You can edit the amount if you paid a different value' : 'Puedes modificar el monto si realizaste un pago diferente'}
+                  </span>
                 </div>
                 {bookingId && (
-                  <div className="text-right">
+                  <div className="text-right self-start mt-1">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-zinc-400">{t.bookingLabel}</p>
                     <p className="text-sm font-black text-zinc-900 mt-0.5">#{bookingId}</p>
                   </div>
