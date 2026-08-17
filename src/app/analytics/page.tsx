@@ -311,6 +311,8 @@ export default function AnalyticsPage() {
 
   // Estados de navegación y filtros
   const [activeTab, setActiveTab] = useState<'cantidades' | 'graficas'>('cantidades');
+  const [sortField, setSortField] = useState<'roomName' | 'occupiedNights' | 'occupancyRate' | 'revenue' | 'adr'>('roomName');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   // Inicializar rango de fechas por defecto: primer día del mes actual al último día del mes actual
   const { defaultStart, defaultEnd } = useMemo(() => {
@@ -425,6 +427,34 @@ export default function AnalyticsPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const exportRoomPerformanceCSV = () => {
+    if (roomPerformanceData.length === 0) {
+      alert("No hay datos de rendimiento por habitación para exportar.");
+      return;
+    }
+    const headers = ['Habitacion', 'Noches Ocupadas', 'Ocupacion %', 'Ingresos Proporcionales (MXN)', 'ADR (MXN)'];
+    const rows = roomPerformanceData.map(r => [
+      r.roomName,
+      r.occupiedNights,
+      `${r.occupancyRate}%`,
+      r.revenue,
+      r.adr
+    ]);
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `rendimiento_habitaciones_${startDate || 'todo'}_${endDate || 'todo'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   // ── CÓMPUTO DE SECCIÓN 1: CANTIDADES (FILTRADO POR FECHAS) ────────────────
   const filteredFinanzas = useMemo(() => {
     return finanzas.filter(f => {
@@ -506,6 +536,157 @@ export default function AnalyticsPage() {
       totalNochesPeriodo: occupiedNights
     };
   }, [reservas, startDate, endDate]);
+
+  // Cómputo de métricas premium (ADR, RevPAR, ALOS, Cancelación)
+  const premiumMetrics = useMemo(() => {
+    let sDate: Date;
+    let eDate: Date;
+    
+    if (!startDate || !endDate) {
+      if (reservas.length === 0) {
+        return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0 };
+      }
+      const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
+      const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
+      if (checkIns.length === 0 || checkOuts.length === 0) {
+        return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0 };
+      }
+      sDate = new Date(checkIns[0] + 'T12:00:00');
+      eDate = new Date(checkOuts[checkOuts.length - 1] + 'T12:00:00');
+    } else {
+      sDate = new Date(startDate + 'T12:00:00');
+      eDate = new Date(endDate + 'T12:00:00');
+    }
+    
+    const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
+    const totalPossibleRoomNights = 22 * rangeDays;
+
+    // Reservas que tocan el periodo
+    const totalBookingsInPeriod = reservas.filter(r => {
+      if (!r.check_in || !r.check_out) return false;
+      const rIn = new Date(r.check_in + 'T12:00:00');
+      const rOut = new Date(r.check_out + 'T12:00:00');
+      return rIn < eDate && rOut > sDate;
+    });
+
+    const activeBookings = totalBookingsInPeriod.filter(r => r.status !== 'cancelled' && r.status !== '0');
+    const cancelledBookings = totalBookingsInPeriod.filter(r => r.status === 'cancelled' || r.status === '0');
+
+    const alos = activeBookings.length > 0 
+      ? (totalNochesPeriodo / activeBookings.length).toFixed(1) 
+      : '0.0';
+
+    const cancellationRate = totalBookingsInPeriod.length > 0
+      ? Math.round((cancelledBookings.length / totalBookingsInPeriod.length) * 100)
+      : 0;
+
+    const adr = totalNochesPeriodo > 0 ? Math.round(ingresosPeriodo / totalNochesPeriodo) : 0;
+    const revpar = totalPossibleRoomNights > 0 ? Math.round(ingresosPeriodo / totalPossibleRoomNights) : 0;
+
+    return { adr, revpar, alos, cancellationRate };
+  }, [reservas, startDate, endDate, totalNochesPeriodo, ingresosPeriodo]);
+
+  // Cómputo de rendimiento por habitación
+  const roomPerformanceData = useMemo(() => {
+    let sDate: Date;
+    let eDate: Date;
+    
+    if (!startDate || !endDate) {
+      if (reservas.length === 0) return [];
+      const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
+      const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
+      if (checkIns.length === 0 || checkOuts.length === 0) return [];
+      sDate = new Date(checkIns[0] + 'T12:00:00');
+      eDate = new Date(checkOuts[checkOuts.length - 1] + 'T12:00:00');
+    } else {
+      sDate = new Date(startDate + 'T12:00:00');
+      eDate = new Date(endDate + 'T12:00:00');
+    }
+    const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
+
+    const coreRooms = [
+      '101', '102', '103', '104', '105', '106', '107',
+      '201', '202', '203', '204', '205', '206',
+      '301', '302', '303', '304', '305', '306',
+      '401', '402'
+    ];
+
+    const statsMap: Record<string, { roomName: string; occupiedNights: number; revenue: number }> = {};
+    coreRooms.forEach(roomName => {
+      statsMap[roomName] = { roomName, occupiedNights: 0, revenue: 0 };
+    });
+    statsMap['Sin asignar'] = { roomName: 'Sin asignar', occupiedNights: 0, revenue: 0 };
+
+    reservas.forEach(r => {
+      if (!r.check_in || !r.check_out) return;
+      if (r.status === 'cancelled' || r.status === '0') return;
+
+      const rIn = new Date(r.check_in + 'T12:00:00');
+      const rOut = new Date(r.check_out + 'T12:00:00');
+
+      if (rIn < eDate && rOut > sDate) {
+        const overlapStart = new Date(Math.max(rIn.getTime(), sDate.getTime()));
+        const overlapEnd = new Date(Math.min(rOut.getTime(), eDate.getTime()));
+        const diff = (overlapEnd.getTime() - overlapStart.getTime()) / 86400000;
+        const overlapNights = Math.max(0, Math.round(diff));
+
+        if (overlapNights > 0) {
+          const totalNightsOfBooking = Math.max(1, Math.round((rOut.getTime() - rIn.getTime()) / 86400000));
+          const price = Number(r.price_estimate || r.price || 0);
+          const pricePerNight = price / totalNightsOfBooking;
+          const proportionalRevenue = pricePerNight * overlapNights;
+
+          let roomKey = String(r.room || '').trim();
+          if (!roomKey || roomKey === '0') {
+            roomKey = 'Sin asignar';
+          }
+
+          if (!statsMap[roomKey]) {
+            statsMap[roomKey] = { roomName: roomKey, occupiedNights: 0, revenue: 0 };
+          }
+
+          statsMap[roomKey].occupiedNights += overlapNights;
+          statsMap[roomKey].revenue += proportionalRevenue;
+        }
+      }
+    });
+
+    return Object.values(statsMap).map(s => {
+      const isUnassigned = s.roomName === 'Sin asignar';
+      const occupancyRate = (rangeDays > 0 && !isUnassigned)
+        ? Math.min(100, Math.round((s.occupiedNights / rangeDays) * 100))
+        : 0;
+      const adr = s.occupiedNights > 0 ? Math.round(s.revenue / s.occupiedNights) : 0;
+
+      return {
+        roomName: s.roomName,
+        occupiedNights: s.occupiedNights,
+        occupancyRate,
+        revenue: Math.round(s.revenue),
+        adr
+      };
+    });
+  }, [reservas, startDate, endDate]);
+
+  const sortedRoomPerformance = useMemo(() => {
+    return [...roomPerformanceData].sort((a, b) => {
+      const aVal = a[sortField];
+      const bVal = b[sortField];
+
+      if (sortField === 'roomName') {
+        const aNum = parseInt(String(aVal), 10);
+        const bNum = parseInt(String(bVal), 10);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+        }
+        return sortDirection === 'asc' 
+          ? String(aVal).localeCompare(String(bVal)) 
+          : String(bVal).localeCompare(String(aVal));
+      }
+
+      return sortDirection === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number);
+    });
+  }, [roomPerformanceData, sortField, sortDirection]);
 
   // ── CÓMPUTO DE SECCIÓN 2: GRÁFICAS HISTÓRICAS (AÑO ACTUAL VS ANTERIOR) ─────
   const currentYear = useMemo(() => new Date().getFullYear(), []);
@@ -924,7 +1105,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* 5. OCUPACIÓN */}
-            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300 md:col-span-2 lg:col-span-1">
+            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Porcentaje Ocupación</span>
                 <span className="text-[11px] font-bold text-zinc-500 flex items-center gap-1">
@@ -944,9 +1125,73 @@ export default function AnalyticsPage() {
               </div>
             </div>
 
-          </div>
+            {/* 6. ADR */}
+            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">ADR (Tarifa Promedio)</span>
+                <DollarSign size={16} className="text-zinc-650" />
+              </div>
+              <div>
+                {isLoading ? <Skeleton /> : (
+                  <p className="text-3xl font-black text-zinc-950 tracking-tight">
+                    MX${premiumMetrics.adr.toLocaleString('es-MX')}
+                  </p>
+                )}
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Tarifa promedio diaria cobrada por noche ocupada</p>
+              </div>
+            </div>
 
-          {/* Por Canal (Beds24) - Conservado */}
+            {/* 7. RevPAR */}
+            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">RevPAR (Hab. Disponible)</span>
+                <BarChart3 size={16} className="text-zinc-650" />
+              </div>
+              <div>
+                {isLoading ? <Skeleton /> : (
+                  <p className="text-3xl font-black text-zinc-950 tracking-tight">
+                    MX${premiumMetrics.revpar.toLocaleString('es-MX')}
+                  </p>
+                )}
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Ingreso promedio por cada habitación física disponible</p>
+              </div>
+            </div>
+
+            {/* 8. ALOS */}
+            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Estancia Promedio (ALOS)</span>
+                <span className="text-[11px] font-bold text-zinc-500 flex items-center gap-1">
+                  <Calendar size={11} /> Noches
+                </span>
+              </div>
+              <div>
+                {isLoading ? <Skeleton /> : (
+                  <p className="text-3xl font-black text-zinc-950 tracking-tight">
+                    {premiumMetrics.alos} noches
+                  </p>
+                )}
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Duración promedio de las reservas del periodo</p>
+              </div>
+            </div>
+
+            {/* 9. Tasa de Cancelación */}
+            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Tasa de Cancelación</span>
+                <TrendingDown size={16} className="text-rose-500" />
+              </div>
+              <div>
+                {isLoading ? <Skeleton /> : (
+                  <p className="text-3xl font-black text-zinc-950 tracking-tight">
+                    {premiumMetrics.cancellationRate}%
+                  </p>
+                )}
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Porcentaje de reservas que fueron canceladas</p>
+              </div>
+            </div>
+
+          </div>
           {channelData.length > 0 ? (
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
               <div className="flex items-center justify-between mb-5 select-none">
@@ -985,6 +1230,138 @@ export default function AnalyticsPage() {
               <p className="text-[13px] font-medium text-zinc-500">Sin datos de canales para este rango de fechas.</p>
             </div>
           )}
+
+          {/* Rendimiento por Habitación Física (BI) */}
+          <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 select-none">
+              <div>
+                <h3 className="text-[14px] font-extrabold text-zinc-950 uppercase tracking-wider">Rendimiento por Habitación (BI)</h3>
+                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Métricas de eficiencia y ventas por unidad física</p>
+              </div>
+              <button
+                onClick={exportRoomPerformanceCSV}
+                className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm self-start sm:self-auto"
+              >
+                <Download size={12} />
+                <span>Exportar Reporte</span>
+              </button>
+            </div>
+
+            <div className="overflow-x-auto border border-zinc-150 rounded-2xl">
+              <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead>
+                  <tr className="bg-zinc-50 border-b border-zinc-150 select-none">
+                    <th 
+                      onClick={() => {
+                        if (sortField === 'roomName') {
+                          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('roomName');
+                          setSortDirection('asc');
+                        }
+                      }}
+                      className="p-4 text-[10px] font-black uppercase text-zinc-400 tracking-wider cursor-pointer hover:bg-zinc-100/80 transition-colors"
+                    >
+                      Habitación {sortField === 'roomName' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => {
+                        if (sortField === 'occupiedNights') {
+                          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('occupiedNights');
+                          setSortDirection('desc');
+                        }
+                      }}
+                      className="p-4 text-[10px] font-black uppercase text-zinc-400 tracking-wider cursor-pointer hover:bg-zinc-100/80 transition-colors"
+                    >
+                      Noches Ocupadas {sortField === 'occupiedNights' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => {
+                        if (sortField === 'occupancyRate') {
+                          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('occupancyRate');
+                          setSortDirection('desc');
+                        }
+                      }}
+                      className="p-4 text-[10px] font-black uppercase text-zinc-400 tracking-wider cursor-pointer hover:bg-zinc-100/80 transition-colors"
+                    >
+                      Ocupación % {sortField === 'occupancyRate' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => {
+                        if (sortField === 'revenue') {
+                          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('revenue');
+                          setSortDirection('desc');
+                        }
+                      }}
+                      className="p-4 text-[10px] font-black uppercase text-zinc-400 tracking-wider cursor-pointer hover:bg-zinc-100/80 transition-colors"
+                    >
+                      Revenue Estimado {sortField === 'revenue' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                    <th 
+                      onClick={() => {
+                        if (sortField === 'adr') {
+                          setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+                        } else {
+                          setSortField('adr');
+                          setSortDirection('desc');
+                        }
+                      }}
+                      className="p-4 text-[10px] font-black uppercase text-zinc-400 tracking-wider cursor-pointer hover:bg-zinc-100/80 transition-colors"
+                    >
+                      ADR Promedio {sortField === 'adr' && (sortDirection === 'asc' ? '↑' : '↓')}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 text-[13px] font-semibold text-zinc-700">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-zinc-400 animate-pulse uppercase text-[11px] font-black tracking-widest">
+                        Cargando métricas de unidades...
+                      </td>
+                    </tr>
+                  ) : sortedRoomPerformance.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="p-8 text-center text-zinc-400 font-medium">
+                        No hay reservas activas en este periodo para las habitaciones.
+                      </td>
+                    </tr>
+                  ) : sortedRoomPerformance.map(r => (
+                    <tr key={r.roomName} className="hover:bg-zinc-50/50 transition-colors">
+                      <td className="p-4 font-bold text-zinc-900">
+                        Habitación {r.roomName}
+                      </td>
+                      <td className="p-4">
+                        {r.occupiedNights} noches
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-10 tabular-nums">{r.occupancyRate}%</span>
+                          <div className="w-16 h-1.5 bg-zinc-100 rounded-full overflow-hidden shrink-0">
+                            <div 
+                              className="h-full bg-zinc-800 rounded-full transition-all duration-500" 
+                              style={{ width: `${r.occupancyRate}%` }} 
+                            />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4 font-extrabold text-zinc-950 tabular-nums">
+                        MX${r.revenue.toLocaleString('es-MX')}
+                      </td>
+                      <td className="p-4 tabular-nums">
+                        MX${r.adr.toLocaleString('es-MX')}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
         </div>
       )}
