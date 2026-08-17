@@ -297,6 +297,16 @@ function DoubleBarChart({
   );
 }
 
+// Helper para parsear fechas de forma segura en zona horaria local (evita desfases en iOS Safari y Android)
+const parseLocalDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  const cleanStr = dateStr.split('T')[0];
+  const parts = cleanStr.split('-');
+  if (parts.length < 3) return new Date(dateStr);
+  const [y, m, d] = parts.map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0);
+};
+
 // ── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────
 export default function AnalyticsPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -332,8 +342,8 @@ export default function AnalyticsPage() {
     setIsLoading(true);
     setTokenError(false);
     try {
-      // 1. Fetch de reservas desde Beds24 + Locales
-      const res = await fetch('/api/reservas');
+      // 1. Fetch de reservas desde Beds24 + Locales (incluyendo histórico)
+      const res = await fetch('/api/reservas?includeCancelled=true');
       const json = await res.json();
       if (json.error === 'TOKEN_EXPIRED') { 
         setTokenError(true); 
@@ -502,11 +512,11 @@ export default function AnalyticsPage() {
       const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
       const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
       if (checkIns.length === 0 || checkOuts.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0 };
-      sDate = new Date(checkIns[0] + 'T12:00:00');
-      eDate = new Date(checkOuts[checkOuts.length - 1] + 'T12:00:00');
+      sDate = parseLocalDate(checkIns[0]);
+      eDate = parseLocalDate(checkOuts[checkOuts.length - 1]);
     } else {
-      sDate = new Date(startDate + 'T12:00:00');
-      eDate = new Date(endDate + 'T12:00:00');
+      sDate = parseLocalDate(startDate);
+      eDate = parseLocalDate(endDate);
     }
     
     const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
@@ -516,8 +526,8 @@ export default function AnalyticsPage() {
     reservas.forEach(r => {
       if (!r.check_in || !r.check_out) return;
       if (r.status === 'cancelled' || r.status === '0') return; // Excluir canceladas
-      const rIn = new Date(r.check_in + 'T12:00:00');
-      const rOut = new Date(r.check_out + 'T12:00:00');
+      const rIn = parseLocalDate(r.check_in);
+      const rOut = parseLocalDate(r.check_out);
 
       if (rIn < eDate && rOut > sDate) {
         const overlapStart = new Date(Math.max(rIn.getTime(), sDate.getTime()));
@@ -551,11 +561,11 @@ export default function AnalyticsPage() {
       if (checkIns.length === 0 || checkOuts.length === 0) {
         return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0 };
       }
-      sDate = new Date(checkIns[0] + 'T12:00:00');
-      eDate = new Date(checkOuts[checkOuts.length - 1] + 'T12:00:00');
+      sDate = parseLocalDate(checkIns[0]);
+      eDate = parseLocalDate(checkOuts[checkOuts.length - 1]);
     } else {
-      sDate = new Date(startDate + 'T12:00:00');
-      eDate = new Date(endDate + 'T12:00:00');
+      sDate = parseLocalDate(startDate);
+      eDate = parseLocalDate(endDate);
     }
     
     const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
@@ -564,8 +574,8 @@ export default function AnalyticsPage() {
     // Reservas que tocan el periodo
     const totalBookingsInPeriod = reservas.filter(r => {
       if (!r.check_in || !r.check_out) return false;
-      const rIn = new Date(r.check_in + 'T12:00:00');
-      const rOut = new Date(r.check_out + 'T12:00:00');
+      const rIn = parseLocalDate(r.check_in);
+      const rOut = parseLocalDate(r.check_out);
       return rIn < eDate && rOut > sDate;
     });
 
@@ -596,11 +606,11 @@ export default function AnalyticsPage() {
       const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
       const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
       if (checkIns.length === 0 || checkOuts.length === 0) return [];
-      sDate = new Date(checkIns[0] + 'T12:00:00');
-      eDate = new Date(checkOuts[checkOuts.length - 1] + 'T12:00:00');
+      sDate = parseLocalDate(checkIns[0]);
+      eDate = parseLocalDate(checkOuts[checkOuts.length - 1]);
     } else {
-      sDate = new Date(startDate + 'T12:00:00');
-      eDate = new Date(endDate + 'T12:00:00');
+      sDate = parseLocalDate(startDate);
+      eDate = parseLocalDate(endDate);
     }
     const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
 
@@ -621,8 +631,8 @@ export default function AnalyticsPage() {
       if (!r.check_in || !r.check_out) return;
       if (r.status === 'cancelled' || r.status === '0') return;
 
-      const rIn = new Date(r.check_in + 'T12:00:00');
-      const rOut = new Date(r.check_out + 'T12:00:00');
+      const rIn = parseLocalDate(r.check_in);
+      const rOut = parseLocalDate(r.check_out);
 
       if (rIn < eDate && rOut > sDate) {
         const overlapStart = new Date(Math.max(rIn.getTime(), sDate.getTime()));
