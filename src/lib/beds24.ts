@@ -1388,9 +1388,8 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
       invoiceItems: [
         {
           description,
-          qty: -1,
-          price: Number(amount),
-          amount: -Number(amount)
+          type: 'payment',
+          amount: Number(amount)
         }
       ]
     }
@@ -1517,9 +1516,8 @@ export async function addBeds24GroupPayment(
           invoiceItems: [
             {
               description: `${description} (Grupo ${items.length} habs)`,
-              qty: -1,
-              price: shareAmount,
-              amount: -shareAmount
+              type: 'payment',
+              amount: shareAmount
             }
           ]
         }

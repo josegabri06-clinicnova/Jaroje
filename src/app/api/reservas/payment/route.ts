@@ -114,9 +114,8 @@ export async function POST(req: Request) {
         invoiceItems: [
           {
             description: description,
-            qty: -1,
-            price: Number(amount),
-            amount: -Number(amount)
+            type: 'payment',
+            amount: Number(amount)
           }
         ]
       }])
