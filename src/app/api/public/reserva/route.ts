@@ -259,10 +259,9 @@ export async function GET(req: Request) {
                 if (itemBookingId && itemBookingId !== String(rawB.id)) {
                   return;
                 }
-                const qty = Number(item.qty || 0);
-                const price = Number(item.price || 0);
-                const lineTotal = qty * price;
-                if (lineTotal < 0) {
+                const type = item.type || '';
+                const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
+                if (type === 'payment' || lineTotal < 0) {
                   actualPaid += Math.abs(lineTotal);
                 } else {
                   totalInvoiceCharges += lineTotal;
