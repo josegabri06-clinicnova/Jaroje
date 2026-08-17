@@ -19,6 +19,13 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
     }
 
+    // Obtener el listado de comprobantes de transferencia de la reserva
+    const { data: transferReceipts } = await supabase
+      .from('transfer_receipts')
+      .select('id, amount, status, receipt_url, notes, created_at')
+      .eq('booking_id', Number(bookingId))
+      .order('created_at', { ascending: false });
+
     // 1. Buscar en local_reservas de Supabase (por ID local o por nota B24:ID de Beds24)
     let localRes = null;
     const { data: resById } = await supabase
@@ -192,6 +199,7 @@ export async function GET(req: Request) {
           status: localRes.status || 'confirmed',
           booking_time: localRes.created_at || null,
           channel: 'Directo',
+          transfer_receipts: transferReceipts || [],
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment !== false,
             transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
@@ -464,6 +472,7 @@ export async function GET(req: Request) {
             status: booking.status || 'confirmed',
             booking_time: booking.booking_time || null,
             channel: booking.channel || 'Directo',
+            transfer_receipts: transferReceipts || [],
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment !== false,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),

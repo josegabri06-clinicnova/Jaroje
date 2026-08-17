@@ -1799,6 +1799,101 @@ export default function PublicReservaPage() {
           );
         })()}
 
+        {/* SECCIÓN HISTORIAL DE COMPROBANTES DE TRANSFERENCIA (Solo si hay comprobantes subidos) */}
+        {booking && booking.transfer_receipts && booking.transfer_receipts.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
+            <div className="flex items-center gap-2 border-b border-zinc-100 pb-2.5">
+              <FileText size={18} className="text-zinc-650" />
+              <h3 className="font-extrabold text-zinc-900 text-[14.5px] uppercase tracking-wider">
+                {lang === 'en' ? 'Payment Receipts History' : 'Historial de Comprobantes'}
+              </h3>
+            </div>
+
+            <div className="space-y-3">
+              {booking.transfer_receipts.map((r: any) => {
+                const dateVal = r.created_at ? new Date(r.created_at).toLocaleDateString(lang === 'en' ? 'en-US' : 'es-MX', {
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : '';
+
+                return (
+                  <div key={r.id} className="p-3.5 rounded-xl border border-zinc-150/80 bg-zinc-50/50 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black text-zinc-900">
+                          MX${Number(r.amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                        </span>
+                        {dateVal && (
+                          <span className="text-[10px] text-zinc-400 font-bold">
+                            {dateVal}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Badge de estado */}
+                      {r.status === 'pending' && (
+                        <span className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-700 font-black uppercase text-[9px] rounded-full flex items-center gap-1 select-none">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-600 animate-pulse" />
+                          {lang === 'en' ? 'In Review' : 'En revisión'}
+                        </span>
+                      )}
+                      {r.status === 'approved' && (
+                        <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 font-black uppercase text-[9px] rounded-full flex items-center gap-1 select-none">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          {lang === 'en' ? 'Approved' : 'Aprobado'}
+                        </span>
+                      )}
+                      {r.status === 'rejected' && (
+                        <span className="px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-700 font-black uppercase text-[9px] rounded-full flex items-center gap-1 select-none">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-600" />
+                          {lang === 'en' ? 'Rejected' : 'Rechazado'}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Nota o Motivo de rechazo */}
+                    {r.status === 'rejected' && r.notes && (
+                      <div className="bg-rose-50/30 border border-rose-100 p-2.5 rounded-lg text-[11.5px] text-rose-800 font-semibold leading-relaxed">
+                        <strong>{lang === 'en' ? 'Reason:' : 'Motivo:'}</strong> {r.notes}
+                      </div>
+                    )}
+
+                    {r.status === 'pending' && (
+                      <p className="text-[10.5px] text-zinc-500 font-semibold leading-snug">
+                        {lang === 'en' 
+                          ? 'We are verifying your transfer. Your booking status is safe.'
+                          : 'Estamos validando tu transferencia. Tu reservación está protegida de cancelación.'}
+                      </p>
+                    )}
+
+                    {r.status === 'approved' && (
+                      <p className="text-[10.5px] text-emerald-700 font-semibold leading-snug">
+                        {lang === 'en' 
+                          ? 'This payment has been successfully confirmed and applied to your booking.'
+                          : 'Este pago ha sido confirmado y aplicado a tu reservación exitosamente.'}
+                      </p>
+                    )}
+
+                    <div className="pt-1.5 flex items-center justify-between border-t border-zinc-150/40 mt-1">
+                      <a
+                        href={r.receipt_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10.5px] font-bold text-indigo-650 hover:text-indigo-800 flex items-center gap-1 cursor-pointer select-none"
+                      >
+                        <FileText size={12} />
+                        {lang === 'en' ? 'View Document' : 'Ver Comprobante'}
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* SECCIÓN REGISTRO DE IDENTIFICACIÓN / DNI */}
         {booking && currentState !== 'liberada' && (
           <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
