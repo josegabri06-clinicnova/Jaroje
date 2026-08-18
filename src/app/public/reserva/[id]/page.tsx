@@ -1618,19 +1618,41 @@ export default function PublicReservaPage() {
                         ? `${roomNights} ${roomNights === 1 ? 'night' : 'nights'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + extra pax (${extraGuests} x $500 x ${roomNights} n.)` : ''}`
                         : `${roomNights} ${roomNights === 1 ? 'noche' : 'noches'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + pax extra (${extraGuests} x $500 x ${roomNights} n.)` : ''}`;
 
+                      const basePrice = Number((totalRoomWithExtras / 1.19).toFixed(2));
+                      const vatAmount = Number((basePrice * 0.16).toFixed(2));
+                      const lodgingTaxAmount = Number((totalRoomWithExtras - basePrice - vatAmount).toFixed(2));
+
                       return (
-                        <div key={idx} className="py-2.5 first:pt-1 last:pb-1 flex justify-between items-start gap-4">
-                          <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-zinc-900 leading-snug truncate">
-                              🏨 {room.room_name}
-                            </span>
-                            <span className="text-[10px] text-zinc-450 leading-normal">
-                              {detailText}
+                        <div key={idx} className="py-2.5 first:pt-1 last:pb-1 flex flex-col gap-1 border-b border-zinc-100/60 last:border-b-0">
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-semibold text-zinc-900 leading-snug truncate">
+                                🏨 {room.room_name}
+                              </span>
+                              <span className="text-[10px] text-zinc-450 leading-normal">
+                                {detailText}
+                              </span>
+                            </div>
+                            <span className="font-extrabold text-zinc-900 text-right shrink-0 mt-0.5">
+                              ${totalRoomWithExtras.toLocaleString('es-MX')} MXN
                             </span>
                           </div>
-                          <span className="font-extrabold text-zinc-900 text-right shrink-0 mt-0.5">
-                            ${totalRoomWithExtras.toLocaleString('es-MX')} MXN
-                          </span>
+
+                          {/* Desglose de Impuestos Incluidos */}
+                          <div className="mt-1 pl-4 border-l border-zinc-200 space-y-0.5 text-[10px] text-zinc-400 w-full max-w-[280px]">
+                            <div className="flex justify-between w-full">
+                              <span>{lang === 'en' ? 'Base Rate (excl. tax)' : 'Tarifa base (sin imp.)'}</span>
+                              <span className="font-medium">${basePrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
+                            </div>
+                            <div className="flex justify-between w-full">
+                              <span>{lang === 'en' ? 'VAT (16% included)' : 'IVA (16% incluido)'}</span>
+                              <span className="font-medium">${vatAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
+                            </div>
+                            <div className="flex justify-between w-full">
+                              <span>{lang === 'en' ? 'Lodging Tax (3% included)' : 'Imp. Hospedaje (3% incluido)'}</span>
+                              <span className="font-medium">${lodgingTaxAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
