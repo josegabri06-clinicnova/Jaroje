@@ -1184,8 +1184,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       } else if (isOTA && pricePerNight === null) {
         pricePerNight = 0;
       }
-      pricePerNight = Math.round(pricePerNight ?? 0);
-      const totalRevenue = pricePerNight * nights;
+      pricePerNight = Number((pricePerNight ?? 0).toFixed(2));
+      const totalRevenue = Number(((b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : (pricePerNight * nights)).toFixed(2));
 
       const unitName = getUnitName(b.roomId, b.unitId);
       const displayRoomName = unitName 
@@ -1996,8 +1996,8 @@ export async function syncBeds24ReservationsRange(
       } else if (isOTA && pricePerNight === null) {
         pricePerNight = 0;
       }
-      pricePerNight = Math.round(pricePerNight ?? 0);
-      const totalRevenue = pricePerNight * nights;
+      pricePerNight = Number((pricePerNight ?? 0).toFixed(2));
+      const totalRevenue = Number(((b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : (pricePerNight * nights)).toFixed(2));
 
       const unitName = getUnitName(b.roomId, b.unitId);
       const displayRoomName = unitName 

@@ -1259,7 +1259,7 @@ export default function PublicReservaPage() {
   const photos = [...roomSpecificPhotos, ...COMMON_PHOTOS];
   const captions = Array(photos.length).fill('');
 
-  const anticipoRequerido = Math.round(booking.price * 0.5);
+  const anticipoRequerido = Math.ceil(booking.price * 0.5 * 100) / 100;
 
   // Cargo extra por huéspedes adicionales ($500 MXN por persona × noche sobre la capacidad base)
   // - OTAs (Airbnb, Booking, Expedia): precio fijo, sin cargo extra adicional
@@ -1289,7 +1289,7 @@ export default function PublicReservaPage() {
   })();
   const totalConExtras = booking.price;
   const basePriceWithoutExtras = Math.max(0, booking.price - extraChargesTotal);
-  const anticipoConExtras = Math.round(totalConExtras * 0.5);
+  const anticipoConExtras = Math.ceil(totalConExtras * 0.5 * 100) / 100;
 
   const t = TRANSLATIONS[lang];
 
@@ -1719,8 +1719,8 @@ export default function PublicReservaPage() {
         {/* 5. PAGO / CARGA DE COMPROBANTE (Solo cuando aplica saldo pendiente) */}
         {!isOta && booking.balance > 0 && currentState !== 'liberada' && !isCheckedOut && (() => {
           const targetAmount = booking.deposit === 0
-            ? (paymentSplit === '50' ? booking.price * 0.5 : booking.price)
-            : booking.balance;
+            ? (paymentSplit === '50' ? Math.ceil(booking.price * 0.5 * 100) / 100 : Number(booking.price.toFixed(2)))
+            : Number(booking.balance.toFixed(2));
 
           return (
             <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
@@ -1745,7 +1745,7 @@ export default function PublicReservaPage() {
                     >
                       <span>{t.anticipoSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '50' ? 'text-indigo-200' : 'text-zinc-500'}`}>
-                        ${(booking.price * 0.5).toLocaleString('es-MX')} MXN
+                        ${(Math.ceil(booking.price * 0.5 * 100) / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
                       </span>
                     </button>
                     <button
@@ -1757,7 +1757,7 @@ export default function PublicReservaPage() {
                     >
                       <span>{t.totalSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '100' ? 'text-indigo-200' : 'text-zinc-500'}`}>
-                        ${booking.price.toLocaleString('es-MX')} MXN
+                        ${Number(booking.price.toFixed(2)).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
                       </span>
                     </button>
                   </div>
