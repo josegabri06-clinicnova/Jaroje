@@ -1531,6 +1531,26 @@ export async function addBeds24GroupPayment(
       if (!postRes.ok) allSuccess = false;
     }
 
+    // Sincronizar todas las habitaciones del grupo en la base de datos local
+    try {
+      const idsStr = group.map((b: any) => b.id).join(',');
+      const resUpdated = await fetch(`https://api.beds24.com/v2/bookings?id=${idsStr}&includeInvoice=true`, {
+        headers: { 'token': token },
+        cache: 'no-store'
+      });
+      if (resUpdated.ok) {
+        const jsonUpdated = await resUpdated.json();
+        if (jsonUpdated.success && Array.isArray(jsonUpdated.data)) {
+          for (const rawB of jsonUpdated.data) {
+            await syncBeds24BookingLocal(rawB);
+          }
+          console.log(`[Beds24 Group Payment] Sincronizados de forma síncrona en Supabase: ${idsStr}`);
+        }
+      }
+    } catch (syncErr) {
+      console.error("[Beds24 Group Payment] Error al sincronizar grupo tras abono:", syncErr);
+    }
+
     clearBeds24Cache();
     return allSuccess;
   } catch (err) {

@@ -174,6 +174,14 @@ export async function GET(req: Request) {
       const finalDeposit = isSettled ? localGroupPrice : localGroupDeposit;
       const finalBalance = isSettled ? 0 : Math.max(0, localGroupPrice - localGroupDeposit);
 
+      // Obtener comprobantes de transferencia de todas las habitaciones del grupo local
+      const localGroupIds = localGroupBookings.map(b => b.id);
+      const { data: groupTransferReceipts } = await supabase
+        .from('transfer_receipts')
+        .select('id, amount, status, receipt_url, notes, created_at')
+        .in('booking_id', localGroupIds)
+        .order('created_at', { ascending: false });
+
       return NextResponse.json({
         success: true,
         data: {
@@ -199,7 +207,7 @@ export async function GET(req: Request) {
           status: localRes.status || 'confirmed',
           booking_time: localRes.created_at || null,
           channel: 'Directo',
-          transfer_receipts: transferReceipts || [],
+          transfer_receipts: groupTransferReceipts || [],
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment !== false,
             transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
@@ -447,6 +455,14 @@ export async function GET(req: Request) {
         const finalDeposit = isSettled ? b24GroupPrice : b24GroupDeposit;
         const finalBalance = isSettled ? 0 : b24GroupBalance;
 
+        // Obtener comprobantes de transferencia de todas las habitaciones del grupo Beds24
+        const b24GroupIds = beds24GroupBookings.map(b => Number(b.id));
+        const { data: groupTransferReceipts } = await supabase
+          .from('transfer_receipts')
+          .select('id, amount, status, receipt_url, notes, created_at')
+          .in('booking_id', b24GroupIds)
+          .order('created_at', { ascending: false });
+
         return NextResponse.json({
           success: true,
           data: {
@@ -472,7 +488,7 @@ export async function GET(req: Request) {
             status: booking.status || 'confirmed',
             booking_time: booking.booking_time || null,
             channel: booking.channel || 'Directo',
-            transfer_receipts: transferReceipts || [],
+            transfer_receipts: groupTransferReceipts || [],
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment !== false,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
