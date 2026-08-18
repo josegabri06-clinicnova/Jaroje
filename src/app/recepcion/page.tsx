@@ -654,7 +654,7 @@ export default function RecepcionPage() {
           
           // Si es una OTA (Airbnb, Booking.com, Expedia), el cobro lo maneja la plataforma (por lo tanto, para recepción está Pagado)
           const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
-          const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+          const balanceVal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
           const balanceStr = isOTA ? `(Pagado ✓)` : (balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`);
           
           text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} (${paxTotal} pax) - Canal: ${r.channel || 'Directo'} ${balanceStr}\n`;
@@ -1640,9 +1640,7 @@ export default function RecepcionPage() {
 
       // Procesar cada habitación del grupo proporcionalmente
       for (const booking of directGroupBookings) {
-        const bookingBalance = booking.balance !== undefined
-          ? booking.balance
-          : Math.max(0, (booking.price_estimate || 0) - (booking.deposit || 0));
+        const bookingBalance = Math.max(0, Number(booking.price_estimate || booking.price || 0) - Number(booking.deposit || 0));
 
         // Proporción: si el balance total es 0, distribuir en partes iguales
         const proportion = totalBalance > 0
@@ -1715,7 +1713,7 @@ export default function RecepcionPage() {
       // Actualizar selectedReserva
       const mainBooking = directGroupBookings.find(b => String(b.id) === String(selectedReserva.id));
       if (mainBooking) {
-        const mainBalance = mainBooking.balance !== undefined ? mainBooking.balance : Math.max(0, (mainBooking.price_estimate || 0) - (mainBooking.deposit || 0));
+        const mainBalance = Math.max(0, Number(mainBooking.price_estimate || mainBooking.price || 0) - Number(mainBooking.deposit || 0));
         const mainProportion = totalBalance > 0 ? mainBalance / totalBalance : 1 / directGroupBookings.length;
         const mainAmount = Math.round(totalAmount * mainProportion * 100) / 100;
         const newMainDeposit = (selectedReserva.deposit || 0) + mainAmount;
@@ -1970,7 +1968,11 @@ export default function RecepcionPage() {
 
   const directGroupTotalBalance = useMemo(() => {
     return directGroupBookings.reduce((sum, r) => {
-      const bal = r.balance !== undefined ? r.balance : Math.max(0, (r.price_estimate || 0) - (r.deposit || 0));
+      const isOta = !!(r.channel && ['airbnb', 'booking', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c)));
+      const isCheckedIn = r.checked_in === true;
+      if (isOta || isCheckedIn) return sum;
+
+      const bal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
       return sum + bal;
     }, 0);
   }, [directGroupBookings]);
@@ -2534,9 +2536,7 @@ export default function RecepcionPage() {
             setPaymentAmount('');
           }
         } else {
-          const balanceVal = selectedReserva.balance !== undefined
-            ? selectedReserva.balance
-            : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+          const balanceVal = Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
           
           if (balanceVal > 0) {
             setPaymentAmount(balanceVal.toString());
@@ -2637,7 +2637,7 @@ export default function RecepcionPage() {
 
             const priceVal = Number(res.price_estimate || res.price || 0);
             const depositVal = isSettled ? priceVal : Number(res.deposit || 0);
-            const balanceVal = isSettled ? 0 : (res.balance !== undefined ? Number(res.balance) : Math.max(0, priceVal - depositVal));
+            const balanceVal = isSettled ? 0 : Math.max(0, priceVal - depositVal);
 
             const alreadyCheckedIn = prevReservas.find(p => String(p.id).toLowerCase().trim() === resIdStr)?.checked_in;
             return {
@@ -3508,7 +3508,7 @@ export default function RecepcionPage() {
         const paymentSplits: Record<string, number> = {};
 
         sortedDirectRooms.forEach(r => {
-          const rBal = r.balance !== undefined ? r.balance : Math.max(0, (r.price_estimate || 0) - (r.deposit || 0));
+          const rBal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
           const rShare = directGroupTotalBalance > 0 
             ? Math.round(totalPayment * (rBal / directGroupTotalBalance)) 
             : 0;
@@ -3614,9 +3614,7 @@ export default function RecepcionPage() {
             let taxesRetained = 0;
 
             if (netRevenue === 0 && commission === 0) {
-              const balanceVal = r.balance !== undefined
-                ? r.balance
-                : (r.price_estimate || 0) - (r.deposit || 0);
+              const balanceVal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
 
               const otaSplit = computeOtaSplit(
                 balanceVal > 0 ? balanceVal : (r.price_estimate || 0),
@@ -4135,9 +4133,7 @@ export default function RecepcionPage() {
           let taxesRetained = 0;
 
           if (netRevenue === 0 && commission === 0) {
-            const balanceVal = selectedReserva.balance !== undefined
-              ? selectedReserva.balance
-              : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+            const balanceVal = Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
 
             const otaSplit = computeOtaSplit(
               balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0),
@@ -4908,7 +4904,7 @@ export default function RecepcionPage() {
                       const unit = getUnitDisplay(r.room);
                       const isPending = !r.checked_in;
                       const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
-                      const rawBalance = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+                      const rawBalance = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
                       const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
                       const balanceVal = isOta ? 0 : rawBalance;
                       return (
@@ -6628,7 +6624,7 @@ export default function RecepcionPage() {
                                 <div className="space-y-1.5 pt-1 border-t border-blue-200/60 animate-in fade-in duration-150">
                                   <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-widest">Distribución proporcional al balance</p>
                                   {directGroupBookings.map(b => {
-                                    const bBal = b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0));
+                                    const bBal = Math.max(0, Number(b.price_estimate || b.price || 0) - Number(b.deposit || 0));
                                     const prop = directGroupTotalBalance > 0 ? bBal / directGroupTotalBalance : 1 / directGroupBookings.length;
                                     const amt = Math.round(Number(abonoAmount) * prop * 100) / 100;
                                     return (
@@ -7093,7 +7089,7 @@ export default function RecepcionPage() {
                       <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                         {groupBookings.map((r) => {
                           const isMain = r.id === selectedReserva.id;
-                          const bal = r.balance !== undefined ? r.balance : Math.max(0, (r.price_estimate || 0) - (r.deposit || 0));
+                          const bal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
                           const ota = isOtaRoom(r);
                           return (
                             <div 
@@ -7234,9 +7230,7 @@ export default function RecepcionPage() {
                         const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
                         const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
 
-                        const balanceVal = selectedReserva.balance !== undefined
-                          ? selectedReserva.balance
-                          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
+                        const balanceVal = Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
 
                         const totalAmount = balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0);
                         let expectedPayout = selectedReserva.expected_payout || 0;
@@ -7683,9 +7677,7 @@ export default function RecepcionPage() {
                     // Calcular balance pendiente
                     const pendingBalance = selectedReserva.id === 'walkin'
                       ? Number(paymentAmount || 0)
-                      : (selectedReserva.balance !== undefined
-                          ? selectedReserva.balance
-                          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
+                      : Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
 
                     if (isSplitPayment) {
                       const totalPaid = (Number(paymentAmount) || 0) + (Number(paymentAmount2) || 0);
