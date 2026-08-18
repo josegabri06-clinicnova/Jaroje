@@ -633,7 +633,8 @@ export async function POST(req: Request) {
       } : {}),
       actions: {
         checkAvailability: !isBlock,
-        assignBooking: true
+        assignBooking: true,
+        ...(!isBlock ? { autoInvoiceItemCharge: true } : {})
       }
     }];
 
