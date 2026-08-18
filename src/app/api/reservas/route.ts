@@ -621,7 +621,32 @@ export async function POST(req: Request) {
           : { firstName: fullName.trim(), lastName: '' };
       })(),
       status: isBlock ? "black" : (Number(deposit || 0) > 0 ? "confirmed" : "request"),
-      ...(!isBlock && price !== undefined && price !== null ? { price: Number(price) } : {}),
+      ...(!isBlock && price !== undefined && price !== null ? { 
+        price: Number(price),
+        invoiceItems: [
+          {
+            description: '[ROOMNAME1] [FIRSTNIGHT] - [LEAVINGDAY]',
+            type: 'charge',
+            amount: Number(price),
+            qty: 1,
+            vatRate: 19
+          },
+          {
+            description: 'IVA 16% (Incluido en el precio)',
+            type: 'charge',
+            amount: 0,
+            qty: 1,
+            vatRate: 0
+          },
+          {
+            description: 'Tax Hospedaje 3% (Incluido en el precio)',
+            type: 'charge',
+            amount: 0,
+            qty: 1,
+            vatRate: 0
+          }
+        ]
+      } : {}),
       ...(!isBlock && deposit !== undefined && deposit !== null ? { deposit: Number(deposit) } : {}),
       ...(!isBlock ? {
         mobile: phone || '',
@@ -633,8 +658,7 @@ export async function POST(req: Request) {
       } : {}),
       actions: {
         checkAvailability: !isBlock,
-        assignBooking: true,
-        ...(!isBlock ? { autoInvoiceItemCharge: true } : {})
+        assignBooking: true
       }
     }];
 
