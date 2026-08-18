@@ -2791,6 +2791,13 @@ function ReservasListInner() {
         const consolidatedChildren = allMembers.reduce((sum, m) => sum + Number(m.num_child || 0), 0);
         const isAnyNew = allMembers.some(m => isReservationNew(m));
 
+        const consolidatedReceipts = allMembers.reduce((arr, m) => {
+          if (Array.isArray(m.transfer_receipts)) {
+            return [...arr, ...m.transfer_receipts];
+          }
+          return arr;
+        }, [] as any[]);
+
         grouped.push({
           ...r,
           id: consolidatedId,
@@ -2804,7 +2811,8 @@ function ReservasListInner() {
           num_child: consolidatedChildren,
           is_group_card: true,
           group_members: allMembers,
-          is_new_override: isAnyNew
+          is_new_override: isAnyNew,
+          transfer_receipts: consolidatedReceipts
         });
       } else {
         processedIds.add(String(r.id));
@@ -4894,14 +4902,14 @@ function ReservasListInner() {
                                     
                                     <div className="flex gap-2">
                                       <button
-                                        onClick={() => handleProcessTransferReceipt(receipt.id, selectedRes.id.toString(), receipt.amount, 'reject')}
+                                        onClick={() => handleProcessTransferReceipt(receipt.id, receipt.booking_id.toString(), receipt.amount, 'reject')}
                                         disabled={isProcessing}
                                         className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-lg text-[11px] transition-colors disabled:opacity-55 cursor-pointer"
                                       >
                                         <span>❌ Rechazar</span>
                                       </button>
                                       <button
-                                        onClick={() => handleProcessTransferReceipt(receipt.id, selectedRes.id.toString(), receipt.amount, 'approve')}
+                                        onClick={() => handleProcessTransferReceipt(receipt.id, receipt.booking_id.toString(), receipt.amount, 'approve')}
                                         disabled={isProcessing}
                                         className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-all disabled:opacity-55 flex justify-center items-center gap-1.5 shadow shadow-emerald-600/10 cursor-pointer"
                                       >
