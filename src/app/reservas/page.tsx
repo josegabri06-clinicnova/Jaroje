@@ -3226,7 +3226,7 @@ function ReservasListInner() {
                     <span className="text-[9px] font-bold text-zinc-450 uppercase tracking-wider block">Adeudo</span>
                     {(() => {
                       const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some(c => r.channel.toLowerCase().includes(c));
-                      const balanceVal = isOta ? 0 : (r.balance ?? ((r.price_estimate || 0) - (r.deposit || 0)));
+                      const balanceVal = isOta ? 0 : Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
                       return (
                         <span className={`font-black ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
                           {fmtCurrency(balanceVal, r.guest_name)}
@@ -4694,7 +4694,7 @@ function ReservasListInner() {
                         const isGroup = siblingBookings.length > 0;
                         const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedRes.checked_in === true;
-                        let balanceVal = (isOta || isCheckedIn) ? 0 : (selectedRes.balance ?? (selectedRes.price_estimate - (selectedRes.deposit || 0)));
+                        let balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, Number(selectedRes.price_estimate || selectedRes.price || 0) - Number(selectedRes.deposit || 0));
 
                         if (isGroup) {
                           const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + (Number(b.price_estimate) || Number(b.price) || 0), 0);

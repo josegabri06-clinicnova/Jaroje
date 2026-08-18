@@ -2552,7 +2552,7 @@ export default function CalendarPage() {
                       {(() => {
                         const isOta = selectedReserva.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedReserva.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedReserva.checked_in === true;
-                        const balanceVal = (isOta || isCheckedIn) ? 0 : (selectedReserva.balance ?? ((selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0)));
+                        const balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
                         return (
                           <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
                             {fmtCurrency(balanceVal, selectedReserva.guest_name)}
