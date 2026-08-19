@@ -812,7 +812,7 @@ function ReservasListInner() {
             taxesRetained = Number(otaSplit.taxesRetained) || 0;
           } else {
             const totalEstimate = Number(room.price_estimate || 0);
-            taxesRetained = channel === 'Airbnb' ? Math.max(0, totalEstimate - netRevenue - commission) : 0;
+            taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalEstimate - netRevenue - commission) : 0;
           }
 
           if (isNaN(netRevenue)) netRevenue = 0;
@@ -858,6 +858,26 @@ function ReservasListInner() {
               const newCommBalance = commAcc.balance + commission;
               await supabase.from('accounts').update({ balance: newCommBalance }).eq('id', commAcc.id);
               setAccounts(prev => prev.map(a => a.id === commAcc.id ? { ...a, balance: newCommBalance } : a));
+            }
+          }
+
+          if (taxesRetained > 0) {
+            const taxAcc = accounts.find(a => (a.name || '').toUpperCase().includes('RETENCIÓN') || (a.name || '').toUpperCase().includes('RETENCION'));
+            const taxDesc = `${room.guest_name} (ID: ${room.id}) - Hab ${room.room_name || room.room || 'General'} - Retención de Impuestos ${channel}`;
+            const { error: taxErr } = await supabase.from('finances').insert([{
+              type: 'gasto',
+              amount: taxesRetained,
+              category: 'Impuestos',
+              description: taxDesc,
+              payment_method: 'transferencia',
+              account_id: taxAcc?.id || null,
+              date: safeDateStr
+            }]);
+
+            if (!taxErr && taxAcc) {
+              const newTaxBalance = taxAcc.balance + taxesRetained;
+              await supabase.from('accounts').update({ balance: newTaxBalance }).eq('id', taxAcc.id);
+              setAccounts(prev => prev.map(a => a.id === taxAcc.id ? { ...a, balance: newTaxBalance } : a));
             }
           }
 
@@ -967,6 +987,27 @@ function ReservasListInner() {
                 const newCommBal = commAcc.balance + otaSplit.commission;
                 await supabase.from('accounts').update({ balance: newCommBal }).eq('id', commAcc.id);
                 setAccounts(prev => prev.map(a => a.id === commAcc.id ? { ...a, balance: newCommBal } : a));
+              }
+            }
+
+            if (otaSplit.isOTA && otaSplit.taxesRetained > 0) {
+              const taxAcc = accounts.find(a => (a.name || '').toUpperCase().includes('RETENCIÓN') || (a.name || '').toUpperCase().includes('RETENCION'));
+              const taxDesc = `${room.guest_name} (ID: ${room.id}) - Hab ${room.room_name || room.room || 'General'} - Retención de Impuestos ${otaSplit.channelLabel}`;
+              
+              const { error: taxErr } = await supabase.from('finances').insert([{
+                type: 'gasto',
+                amount: otaSplit.taxesRetained,
+                category: 'Impuestos',
+                description: taxDesc,
+                payment_method: paymentMethod,
+                account_id: taxAcc?.id || null,
+                date: todayStr
+              }]);
+
+              if (!taxErr && taxAcc) {
+                const newTaxBal = taxAcc.balance + otaSplit.taxesRetained;
+                await supabase.from('accounts').update({ balance: newTaxBal }).eq('id', taxAcc.id);
+                setAccounts(prev => prev.map(a => a.id === taxAcc.id ? { ...a, balance: newTaxBal } : a));
               }
             }
 
@@ -3834,7 +3875,7 @@ function ReservasListInner() {
                         hostFee = otaSplit.commission;
                         taxesRetained = otaSplit.taxesRetained || 0;
                       } else {
-                        taxesRetained = channel === 'Airbnb' ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
+                        taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
                       }
 
                       return (
@@ -3854,7 +3895,7 @@ function ReservasListInner() {
                               </div>
                               {taxesRetained > 0 && (
                                 <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
-                                  <span className="font-semibold text-zinc-600">Retención de Impuestos (12%):</span>
+                                  <span className="font-semibold text-zinc-600">Retención de Impuestos ({channel === 'Airbnb' ? '17%' : '12%'}):</span>
                                   <span className="font-bold text-zinc-900">{fmtCurrency(taxesRetained, selectedRes.guest_name)}</span>
                                 </div>
                               )}

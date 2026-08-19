@@ -2878,7 +2878,7 @@ export default function CalendarPage() {
                             hostFee = otaSplit.commission;
                             taxesRetained = otaSplit.taxesRetained || 0;
                           } else {
-                            taxesRetained = channel === 'Airbnb' ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
+                            taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
                           }
 
                           return (
@@ -2897,7 +2897,7 @@ export default function CalendarPage() {
                                 </div>
                                 {taxesRetained > 0 && (
                                   <div className="flex justify-between items-center text-[13px] pt-1.5 border-t border-zinc-200">
-                                    <span className="font-semibold text-zinc-650">Retención de Impuestos (12%):</span>
+                                    <span className="font-semibold text-zinc-650">Retención de Impuestos ({channel === 'Airbnb' ? '17%' : '12%'}):</span>
                                     <span className="font-bold text-zinc-900">{fmtCurrency(taxesRetained, selectedReserva.guest_name)}</span>
                                   </div>
                                 )}

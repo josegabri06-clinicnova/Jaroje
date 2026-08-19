@@ -1803,19 +1803,19 @@ export function computeOtaSplit(
     let commission = 0;
     let taxesRetained = 0;
 
+    const roomRate = Number((totalAmount / 1.19).toFixed(2));
+
     if (isAirbnb) {
-      // Fórmula matemática exacta para Airbnb México (15.5% + IVA de host fee, 8% IVA + 4% ISR withholding, 16% Lodging Tax)
-      // tarifa_cuarto = totalAmount / 1.16
-      // host_fee = tarifa_cuarto * 15.5% * 1.16 = tarifa_cuarto * 17.98%
-      // expected_payout = tarifa_cuarto * (1 + 16% Lodging Tax - 17.98% host fee - 12% retenciones) = tarifa_cuarto * 86.02%
-      const roomRate = Math.round(totalAmount / 1.16);
-      commission = Math.round(roomRate * 0.1798);
-      netRevenue = Math.round(roomRate * 0.8602);
-      taxesRetained = totalAmount - commission - netRevenue;
+      commission = Number((roomRate * 0.186).toFixed(2));
+      taxesRetained = Number((roomRate * 0.17).toFixed(2));
+      netRevenue = Number((totalAmount - commission - taxesRetained).toFixed(2));
+    } else if (isBooking) {
+      commission = Number((roomRate * 0.186).toFixed(2));
+      taxesRetained = Number((roomRate * 0.12).toFixed(2));
+      netRevenue = Number((totalAmount - commission - taxesRetained).toFixed(2));
     } else {
-      // Booking.com o Expedia: 15% de comisión estándar
-      commission = Math.round(totalAmount * 0.15);
-      netRevenue = totalAmount - commission;
+      commission = Number((totalAmount * 0.15).toFixed(2));
+      netRevenue = Number((totalAmount - commission).toFixed(2));
       taxesRetained = 0;
     }
 
