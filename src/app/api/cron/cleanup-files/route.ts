@@ -28,8 +28,8 @@ export async function GET(req: Request) {
     }
 
     const now = new Date();
-    // Límite de 48 horas para check-out y creación
-    const limitDateObj = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+    // Límite de 365 días (1 año) para check-out y creación
+    const limitDateObj = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
     const limitDateStr = limitDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
     const limitTimestamp = limitDateObj.toISOString();
 
