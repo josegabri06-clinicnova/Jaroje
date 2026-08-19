@@ -721,6 +721,20 @@ function getGroupCapacityRules(booking: any) {
   return getCapacityRules(booking.room_name || '');
 }
 
+function getIndividualRoomCapacityRules(booking: any) {
+  if (!booking) return { base: 6, max: 8 };
+  
+  if (booking.rooms_detail && Array.isArray(booking.rooms_detail) && booking.rooms_detail.length > 0) {
+    const currentRoom = booking.rooms_detail.find((r: any) => String(r.room_id) === String(booking.id));
+    if (currentRoom) {
+      return getCapacityRules(currentRoom.room_name || '');
+    }
+  }
+  
+  const firstRoomName = (booking.room_name || '').split(',')[0].trim();
+  return getCapacityRules(firstRoomName);
+}
+
 function getCapacityRules(roomNameOrId: string) {
   // Si hay múltiples habitaciones (separadas por coma), sumar capacidades
   const parts = roomNameOrId.split(',').map(p => p.trim()).filter(Boolean);
@@ -1548,8 +1562,8 @@ export default function PublicReservaPage() {
                     if (isOta) {
                       setShowOtaWarningModal(true);
                     } else {
-                      setTempAdults(booking.num_adult || 1);
-                      setTempChildren(booking.num_child || 0);
+                      setTempAdults(booking.individual_num_adult !== undefined ? booking.individual_num_adult : (booking.num_adult || 1));
+                      setTempChildren(booking.individual_num_child !== undefined ? booking.individual_num_child : (booking.num_child || 0));
                       setUpdateGuestsError('');
                       setShowEditGuestsModal(true);
                     }
@@ -2594,7 +2608,7 @@ export default function PublicReservaPage() {
               {/* Información de capacidades */}
               <div className="bg-[#FAF9F6] border border-zinc-200/50 rounded-2xl p-3.5 space-y-1.5 text-xs text-zinc-650">
                 <p className="font-bold text-zinc-800">
-                  {t.capacityInfo(getGroupCapacityRules(booking).base, getGroupCapacityRules(booking).max)}
+                  {t.capacityInfo(getIndividualRoomCapacityRules(booking).base, getIndividualRoomCapacityRules(booking).max)}
                 </p>
                 <p className="text-[11px] text-zinc-500">
                   {t.extraChargeInfo}
@@ -2618,7 +2632,7 @@ export default function PublicReservaPage() {
                   <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempAdults}</span>
                   <button
                     onClick={() => setTempAdults(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getGroupCapacityRules(booking).max}
+                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(booking).max}
                     className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
                   >
                     +
@@ -2643,7 +2657,7 @@ export default function PublicReservaPage() {
                   <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempChildren}</span>
                   <button
                     onClick={() => setTempChildren(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getGroupCapacityRules(booking).max}
+                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(booking).max}
                     className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
                   >
                     +
@@ -2653,9 +2667,10 @@ export default function PublicReservaPage() {
 
               {/* Cálculo en vivo de tarifas si aplica */}
               {(() => {
-                const rules = getGroupCapacityRules(booking);
+                const rules = getIndividualRoomCapacityRules(booking);
                 const totalTemp = tempAdults + tempChildren;
-                const originalTotal = booking.num_adult + booking.num_child;
+                const originalTotal = (booking.individual_num_adult !== undefined ? booking.individual_num_adult : booking.num_adult) + 
+                                      (booking.individual_num_child !== undefined ? booking.individual_num_child : booking.num_child);
                 const originalExtra = Math.max(0, originalTotal - rules.base);
                 const newExtra = Math.max(0, totalTemp - rules.base);
                 const diff = newExtra - originalExtra;
@@ -2678,10 +2693,10 @@ export default function PublicReservaPage() {
                 );
               })()}
 
-              {tempAdults + tempChildren > getGroupCapacityRules(booking).max && (
+              {tempAdults + tempChildren > getIndividualRoomCapacityRules(booking).max && (
                 <div className="text-red-600 bg-red-50 border border-red-200 p-3 rounded-2xl text-xs font-bold flex items-center gap-1.5">
                   <AlertTriangle size={14} className="shrink-0" />
-                  <span>{t.maxCapacityExceeded(getGroupCapacityRules(booking).max)}</span>
+                  <span>{t.maxCapacityExceeded(getIndividualRoomCapacityRules(booking).max)}</span>
                 </div>
               )}
 
@@ -2718,13 +2733,21 @@ export default function PublicReservaPage() {
                       });
                       const json = await res.json();
                       if (json.success) {
-                        setBooking((prev: any) => ({
-                          ...prev,
-                          num_adult: tempAdults,
-                          num_child: tempChildren,
-                          price: json.price,
-                          balance: json.balance
-                        }));
+                        setBooking((prev: any) => {
+                          const oldIndAdult = prev.individual_num_adult !== undefined ? prev.individual_num_adult : prev.num_adult;
+                          const oldIndChild = prev.individual_num_child !== undefined ? prev.individual_num_child : prev.num_child;
+                          const diffAdult = tempAdults - oldIndAdult;
+                          const diffChild = tempChildren - oldIndChild;
+                          return {
+                            ...prev,
+                            individual_num_adult: tempAdults,
+                            individual_num_child: tempChildren,
+                            num_adult: prev.num_adult + diffAdult,
+                            num_child: prev.num_child + diffChild,
+                            price: json.price,
+                            balance: json.balance
+                          };
+                        });
                         setShowEditGuestsModal(false);
                       } else {
                         setUpdateGuestsError(json.error || 'Error al guardar');
@@ -2735,7 +2758,7 @@ export default function PublicReservaPage() {
                       setIsUpdatingGuests(false);
                     }
                   }}
-                  disabled={isUpdatingGuests || tempAdults + tempChildren > getGroupCapacityRules(booking).max}
+                  disabled={isUpdatingGuests || tempAdults + tempChildren > getIndividualRoomCapacityRules(booking).max}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-center text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   {isUpdatingGuests && <Loader2 className="animate-spin" size={14} />}
