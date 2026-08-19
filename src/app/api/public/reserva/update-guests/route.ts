@@ -115,8 +115,9 @@ export async function POST(req: Request) {
         : 1;
 
       const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
-      const newPrice = Math.round(groupOriginalPrice + priceAdjustment);
-      const newBalance = Math.max(0, newPrice - groupDeposit);
+      const groupNewPrice = Math.round(groupOriginalPrice + priceAdjustment);
+      const newPrice = Math.round(Number(localRes.price || 0) + priceAdjustment);
+      const newBalance = Math.max(0, groupNewPrice - groupDeposit);
 
       // 2.3. Guardar en base de datos local
       const { error: dbErr } = await supabase
@@ -143,7 +144,7 @@ export async function POST(req: Request) {
 
       return NextResponse.json({
         success: true,
-        price: newPrice,
+        price: groupNewPrice,
         balance: newBalance,
         num_adult: newAdults,
         num_child: newChildren
@@ -171,6 +172,7 @@ export async function POST(req: Request) {
     let groupMax = 0;
     let groupOriginalPax = 0;
     let groupOriginalPrice = 0;
+    let groupTotalPaid = 0;
 
     try {
       const allB24 = await getBeds24Bookings(true);
@@ -215,6 +217,7 @@ export async function POST(req: Request) {
         groupMax += rRules.max;
         groupOriginalPax += (Number(b.num_adult || b.numAdult || 1) + Number(b.num_child || b.numChild || 0));
         groupOriginalPrice += Number(b.price || b.price_estimate || 0);
+        groupTotalPaid += Number(b.deposit || b.actual_paid || 0);
       });
 
     } catch (err) {
@@ -253,24 +256,10 @@ export async function POST(req: Request) {
       : 1;
 
     const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
-    const newPrice = Math.round(groupOriginalPrice + priceAdjustment);
-
-    // Calcular depósitos reales hechos en la reserva para estimar saldo restante
-     let actualPaid = 0;
-     if (currentBooking.invoiceItems && Array.isArray(currentBooking.invoiceItems)) {
-       currentBooking.invoiceItems.forEach((item: any) => {
-         const itemBookingId = String(item.bookingId || item.bookId || '');
-         if (itemBookingId && itemBookingId !== String(currentBooking.id)) {
-           return;
-         }
-         const type = item.type || '';
-         const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-         if (type === 'payment' || lineTotal < 0) {
-           actualPaid += Math.abs(lineTotal);
-         }
-       });
-     }
-    const newBalance = Math.max(0, newPrice - actualPaid);
+    const bookingOriginalPrice = Number(currentBooking.price || 0);
+    const newPrice = Math.round(bookingOriginalPrice + priceAdjustment);
+    const groupNewPrice = Math.round(groupOriginalPrice + priceAdjustment);
+    const newBalance = Math.max(0, groupNewPrice - groupTotalPaid);
 
     // 3.3. Actualizar en Beds24
     const updatePayload: any = {
@@ -354,7 +343,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      price: newPrice,
+      price: groupNewPrice,
       balance: newBalance,
       num_adult: newAdults,
       num_child: newChildren
