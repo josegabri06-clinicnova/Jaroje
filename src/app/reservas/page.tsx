@@ -2767,9 +2767,17 @@ function ReservasListInner() {
       if (compareOut !== 0) return compareOut;
       return (b.check_in || '').localeCompare(a.check_in || '');
     });
-  // Reservas canceladas: tienen estatus cancelado
+  // Reservas canceladas: tienen estatus cancelado y se cancelaron hace menos de 48 horas
   const cancelledReservas = reservas
-    .filter(r => r.status === 'cancelled')
+    .filter(r => {
+      if (r.status !== 'cancelled') return false;
+      if (!r.cancelled_at) return true; // Por seguridad, si no tiene fecha de cancelación, se queda visible
+      const cancelledDate = new Date(r.cancelled_at);
+      const now = new Date();
+      const diffMs = now.getTime() - cancelledDate.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      return diffHours <= 48;
+    })
     .sort((a, b) => {
       const dateA = a.cancelled_at || a.booking_time || a.check_in || '';
       const dateB = b.cancelled_at || b.booking_time || b.check_in || '';
