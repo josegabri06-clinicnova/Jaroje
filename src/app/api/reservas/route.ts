@@ -42,11 +42,11 @@ export async function GET(req: Request) {
         month: '2-digit',
         day: '2-digit'
       });
-      const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      const oneYearAgoStr = formatter.format(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000));
       const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      // Traer las no canceladas que tengan checkout ayer o posterior (activas y completadas recientes < 24h),
+      // Traer las no canceladas que tengan checkout en el último año,
       // y además las canceladas de las últimas 48 horas.
-      query = query.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,updated_at.gte.${fortyEightHoursAgo})`);
+      query = query.or(`and(status.neq.cancelled,check_out.gte.${oneYearAgoStr}),and(status.eq.cancelled,updated_at.gte.${fortyEightHoursAgo})`);
     }
     // Excluir la categoría virtual 500 (room_id 685542) para evitar duplicados, ya que se asigna localmente
     query = query.neq('room_id', '685542');
