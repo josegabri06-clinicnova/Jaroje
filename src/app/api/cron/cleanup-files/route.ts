@@ -49,48 +49,68 @@ export async function GET(req: Request) {
       console.error("[Cron Cleanup] Error querying checkins:", checkinsErr);
       errors.push(`Checkins query error: ${checkinsErr.message}`);
     } else if (checkinsToClean && checkinsToClean.length > 0) {
+      const dniPathsToDelete: string[] = [];
+      const receiptPathsToDelete: string[] = [];
+      const checkinIdsToUpdate: string[] = [];
+
       for (const c of checkinsToClean) {
         let updated = false;
 
-        // Borrar DNI de storage si existe
+        // DNI de storage
         if (c.document_url) {
           const filePath = getStoragePath(c.document_url);
           if (filePath) {
-            const { error: delErr } = await supabase.storage.from('dni_images').remove([filePath]);
-            if (delErr) {
-              console.error(`[Cron Cleanup] Error removing DNI file ${filePath}:`, delErr);
-            } else {
-              cleanedDniCount++;
-            }
+            dniPathsToDelete.push(filePath);
           }
           updated = true;
         }
 
-        // Borrar recibo de checkin de storage si existe
+        // Recibo de checkin de storage
         if (c.receipt_url) {
           const filePath = getStoragePath(c.receipt_url);
           if (filePath) {
-            const { error: delErr } = await supabase.storage.from('transfer-receipts').remove([filePath]);
-            if (delErr) {
-              console.error(`[Cron Cleanup] Error removing receipt file ${filePath}:`, delErr);
-            } else {
-              cleanedReceiptsCount++;
-            }
+            receiptPathsToDelete.push(filePath);
           }
           updated = true;
         }
 
-        // Actualizar base de datos a null
         if (updated) {
-          const { error: updErr } = await supabase
-            .from('checkins')
-            .update({ document_url: null, receipt_url: null })
-            .eq('id', c.id);
+          checkinIdsToUpdate.push(c.id);
+        }
+      }
 
-          if (updErr) {
-            console.error(`[Cron Cleanup] Error updating checkin row ID ${c.id}:`, updErr);
-            errors.push(`Checkin update error ID ${c.id}: ${updErr.message}`);
-          }
+      // Borrar DNIs de storage en lote
+      if (dniPathsToDelete.length > 0) {
+        const { error: delErr } = await supabase.storage.from('dni_images').remove(dniPathsToDelete);
+        if (delErr) {
+          console.error("[Cron Cleanup] Error removing DNIs batch:", delErr);
+          errors.push(`DNI storage deletion batch error: ${delErr.message}`);
+        } else {
+          cleanedDniCount += dniPathsToDelete.length;
+        }
+      }
+
+      // Borrar recibos de checkin de storage en lote
+      if (receiptPathsToDelete.length > 0) {
+        const { error: delErr } = await supabase.storage.from('transfer-receipts').remove(receiptPathsToDelete);
+        if (delErr) {
+          console.error("[Cron Cleanup] Error removing checkin receipts batch:", delErr);
+          errors.push(`Checkin receipts storage deletion batch error: ${delErr.message}`);
+        } else {
+          cleanedReceiptsCount += receiptPathsToDelete.length;
+        }
+      }
+
+      // Actualizar base de datos en lote
+      if (checkinIdsToUpdate.length > 0) {
+        const { error: updErr } = await supabase
+          .from('checkins')
+          .update({ document_url: null, receipt_url: null })
+          .in('id', checkinIdsToUpdate);
+
+        if (updErr) {
+          console.error("[Cron Cleanup] Error updating checkins batch in DB:", updErr);
+          errors.push(`Checkins DB update batch error: ${updErr.message}`);
         }
       }
     }
@@ -107,53 +127,70 @@ export async function GET(req: Request) {
       console.error("[Cron Cleanup] Error querying transfer_receipts:", receiptsErr);
       errors.push(`Receipts query error: ${receiptsErr.message}`);
     } else if (receiptsToClean && receiptsToClean.length > 0) {
+      const bookingIds = receiptsToClean.map(tr => Number(tr.booking_id)).filter(Boolean);
+      
+      // Obtener todas las reservaciones asociadas en una sola consulta
+      const { data: bookings } = await supabase
+        .from('beds24_reservations')
+        .select('id, check_out, status')
+        .in('id', bookingIds);
+
+      const bookingMap = new Map(bookings?.map(b => [b.id, b]) || []);
+
+      const filePathsToDelete: string[] = [];
+      const trIdsToUpdate: string[] = [];
+
       for (const tr of receiptsToClean) {
         let shouldDelete = false;
 
-        // Intentar buscar la reserva asociada en beds24_reservations
         if (tr.booking_id) {
-          const { data: booking } = await supabase
-            .from('beds24_reservations')
-            .select('check_out, status')
-            .eq('id', Number(tr.booking_id))
-            .maybeSingle();
-
+          const booking = bookingMap.get(Number(tr.booking_id));
           if (booking) {
             // Si la reserva está cancelada o su checkout ocurrió hace más de 48 horas
             if (booking.status === 'cancelled' || booking.check_out <= limitDateStr) {
               shouldDelete = true;
             }
           } else {
-            // Si no se encuentra la reservación y el recibo ya tiene más de 48h creado,
-            // lo borramos por seguridad/limpieza.
+            // Si no se encuentra la reservación y el recibo ya tiene más de 48h, lo borramos
             shouldDelete = true;
           }
         } else {
-          // Si no tiene booking_id asociado, lo borramos
           shouldDelete = true;
         }
 
         if (shouldDelete && tr.receipt_url) {
           const filePath = getStoragePath(tr.receipt_url);
           if (filePath) {
-            const { error: delErr } = await supabase.storage.from('transfer-receipts').remove([filePath]);
-            if (delErr) {
-              console.error(`[Cron Cleanup] Error removing receipt file ${filePath}:`, delErr);
-            } else {
-              cleanedReceiptsCount++;
-            }
+            filePathsToDelete.push(filePath);
           }
+          trIdsToUpdate.push(tr.id);
+        }
+      }
 
-          // Actualizar base de datos
-          const { error: updErr } = await supabase
-            .from('transfer_receipts')
-            .update({ receipt_url: null })
-            .eq('id', tr.id);
+      // Borrar archivos del storage en lote
+      if (filePathsToDelete.length > 0) {
+        const { error: delErr } = await supabase.storage
+          .from('transfer-receipts')
+          .remove(filePathsToDelete);
+        
+        if (delErr) {
+          console.error("[Cron Cleanup] Error removing receipts batch from storage:", delErr);
+          errors.push(`Storage deletion batch error: ${delErr.message}`);
+        } else {
+          cleanedReceiptsCount += filePathsToDelete.length;
+        }
+      }
 
-          if (updErr) {
-            console.error(`[Cron Cleanup] Error updating receipt row ID ${tr.id}:`, updErr);
-            errors.push(`Receipt update error ID ${tr.id}: ${updErr.message}`);
-          }
+      // Actualizar base de datos en lote
+      if (trIdsToUpdate.length > 0) {
+        const { error: updErr } = await supabase
+          .from('transfer_receipts')
+          .update({ receipt_url: null })
+          .in('id', trIdsToUpdate);
+
+        if (updErr) {
+          console.error("[Cron Cleanup] Error updating receipts batch in DB:", updErr);
+          errors.push(`Receipts DB update batch error: ${updErr.message}`);
         }
       }
     }
