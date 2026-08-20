@@ -825,6 +825,7 @@ export default function PublicReservaPage() {
   // Estados para Modal de Edición de Huéspedes
   const [showEditGuestsModal, setShowEditGuestsModal] = useState(false);
   const [showOtaWarningModal, setShowOtaWarningModal] = useState(false);
+  const [editingRoom, setEditingRoom] = useState<any>(null);
   const [tempAdults, setTempAdults] = useState(1);
   const [tempChildren, setTempChildren] = useState(0);
   const [isUpdatingGuests, setIsUpdatingGuests] = useState(false);
@@ -1491,19 +1492,48 @@ export default function PublicReservaPage() {
 
                       return (
                         <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
-                          <div className="flex items-start gap-2">
-                            <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
-                            <div className="flex-1">
-                              <strong style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} className="text-zinc-900 font-bold text-[12px] leading-tight block">
-                                {room.room_name}
-                              </strong>
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <Users size={10} className="text-zinc-400 shrink-0" />
-                                <span className="text-zinc-600 font-semibold text-[11px]">
-                                  {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
-                                </span>
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-start gap-2 min-w-0">
+                              <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
+                              <div className="flex-1 min-w-0">
+                                <strong style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} className="text-zinc-900 font-bold text-[12px] leading-tight block truncate">
+                                  {room.room_name}
+                                </strong>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <Users size={10} className="text-zinc-400 shrink-0" />
+                                  <span className="text-zinc-600 font-semibold text-[11px]">
+                                    {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
+                            {booking.status !== 'cancelled' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (isOta) {
+                                    setShowOtaWarningModal(true);
+                                  } else {
+                                    const editTarget = {
+                                      id: room.room_id || room.id || booking.id,
+                                      room_name: room.room_name || booking.room_name,
+                                      num_adult: room.num_adult,
+                                      num_child: room.num_child,
+                                      individual_num_adult: room.individual_num_adult !== undefined ? room.individual_num_adult : room.num_adult,
+                                      individual_num_child: room.individual_num_child !== undefined ? room.individual_num_child : room.num_child,
+                                    };
+                                    setEditingRoom(editTarget);
+                                    setTempAdults(editTarget.individual_num_adult);
+                                    setTempChildren(editTarget.individual_num_child);
+                                    setUpdateGuestsError('');
+                                    setShowEditGuestsModal(true);
+                                  }
+                                }}
+                                className="text-blue-600 hover:text-blue-700 text-[10.5px] font-extrabold px-2 py-1 rounded bg-blue-50 border border-blue-100 hover:bg-blue-100/50 transition-all shrink-0 flex items-center gap-1 cursor-pointer select-none"
+                              >
+                                ✏️ {lang === 'en' ? 'Edit' : 'Editar'}
+                              </button>
+                            )}
                           </div>
                           {/* Mostrar badge de cargo extra para todas las reservas directas (no OTA) */}
                           {!isOta && extraCharge > 0 && (
@@ -1562,6 +1592,7 @@ export default function PublicReservaPage() {
                     if (isOta) {
                       setShowOtaWarningModal(true);
                     } else {
+                      setEditingRoom(null);
                       setTempAdults(booking.individual_num_adult !== undefined ? booking.individual_num_adult : (booking.num_adult || 1));
                       setTempChildren(booking.individual_num_child !== undefined ? booking.individual_num_child : (booking.num_child || 0));
                       setUpdateGuestsError('');
@@ -2608,7 +2639,7 @@ export default function PublicReservaPage() {
               {/* Información de capacidades */}
               <div className="bg-[#FAF9F6] border border-zinc-200/50 rounded-2xl p-3.5 space-y-1.5 text-xs text-zinc-650">
                 <p className="font-bold text-zinc-800">
-                  {t.capacityInfo(getIndividualRoomCapacityRules(booking).base, getIndividualRoomCapacityRules(booking).max)}
+                  {t.capacityInfo(getIndividualRoomCapacityRules(editingRoom || booking).base, getIndividualRoomCapacityRules(editingRoom || booking).max)}
                 </p>
                 <p className="text-[11px] text-zinc-500">
                   {t.extraChargeInfo}
@@ -2632,7 +2663,7 @@ export default function PublicReservaPage() {
                   <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempAdults}</span>
                   <button
                     onClick={() => setTempAdults(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(booking).max}
+                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(editingRoom || booking).max}
                     className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
                   >
                     +
@@ -2657,7 +2688,7 @@ export default function PublicReservaPage() {
                   <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempChildren}</span>
                   <button
                     onClick={() => setTempChildren(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(booking).max}
+                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(editingRoom || booking).max}
                     className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
                   >
                     +
@@ -2667,10 +2698,11 @@ export default function PublicReservaPage() {
 
               {/* Cálculo en vivo de tarifas si aplica */}
               {(() => {
-                const rules = getIndividualRoomCapacityRules(booking);
+                const rules = getIndividualRoomCapacityRules(editingRoom || booking);
                 const totalTemp = tempAdults + tempChildren;
-                const originalTotal = (booking.individual_num_adult !== undefined ? booking.individual_num_adult : booking.num_adult) + 
-                                      (booking.individual_num_child !== undefined ? booking.individual_num_child : booking.num_child);
+                const targetRoom = editingRoom || booking;
+                const originalTotal = (targetRoom.individual_num_adult !== undefined ? targetRoom.individual_num_adult : targetRoom.num_adult) + 
+                                      (targetRoom.individual_num_child !== undefined ? targetRoom.individual_num_child : targetRoom.num_child);
                 const originalExtra = Math.max(0, originalTotal - rules.base);
                 const newExtra = Math.max(0, totalTemp - rules.base);
                 const diff = newExtra - originalExtra;
@@ -2693,10 +2725,10 @@ export default function PublicReservaPage() {
                 );
               })()}
 
-              {tempAdults + tempChildren > getIndividualRoomCapacityRules(booking).max && (
+              {tempAdults + tempChildren > getIndividualRoomCapacityRules(editingRoom || booking).max && (
                 <div className="text-red-600 bg-red-50 border border-red-200 p-3 rounded-2xl text-xs font-bold flex items-center gap-1.5">
                   <AlertTriangle size={14} className="shrink-0" />
-                  <span>{t.maxCapacityExceeded(getIndividualRoomCapacityRules(booking).max)}</span>
+                  <span>{t.maxCapacityExceeded(getIndividualRoomCapacityRules(editingRoom || booking).max)}</span>
                 </div>
               )}
 
@@ -2726,7 +2758,7 @@ export default function PublicReservaPage() {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                          bookingId: booking.id,
+                          bookingId: (editingRoom || booking).id,
                           numAdult: tempAdults,
                           numChild: tempChildren
                         })
@@ -2734,14 +2766,30 @@ export default function PublicReservaPage() {
                       const json = await res.json();
                       if (json.success) {
                         setBooking((prev: any) => {
-                          const oldIndAdult = prev.individual_num_adult !== undefined ? prev.individual_num_adult : prev.num_adult;
-                          const oldIndChild = prev.individual_num_child !== undefined ? prev.individual_num_child : prev.num_child;
+                          const targetRoomObj = editingRoom || prev;
+                          const oldIndAdult = targetRoomObj.individual_num_adult !== undefined ? targetRoomObj.individual_num_adult : targetRoomObj.num_adult;
+                          const oldIndChild = targetRoomObj.individual_num_child !== undefined ? targetRoomObj.individual_num_child : targetRoomObj.num_child;
                           const diffAdult = tempAdults - oldIndAdult;
                           const diffChild = tempChildren - oldIndChild;
+
+                          const newRoomsDetail = prev.rooms_detail ? prev.rooms_detail.map((r: any) => {
+                            if (String(r.id || r.room_id) === String(targetRoomObj.id || targetRoomObj.room_id)) {
+                              return {
+                                ...r,
+                                num_adult: tempAdults,
+                                num_child: tempChildren,
+                                individual_num_adult: tempAdults,
+                                individual_num_child: tempChildren
+                              };
+                            }
+                            return r;
+                          }) : null;
+
                           return {
                             ...prev,
-                            individual_num_adult: tempAdults,
-                            individual_num_child: tempChildren,
+                            rooms_detail: newRoomsDetail,
+                            individual_num_adult: String(prev.id) === String(targetRoomObj.id) ? tempAdults : prev.individual_num_adult,
+                            individual_num_child: String(prev.id) === String(targetRoomObj.id) ? tempChildren : prev.individual_num_child,
                             num_adult: prev.num_adult + diffAdult,
                             num_child: prev.num_child + diffChild,
                             price: json.price,
@@ -2758,7 +2806,7 @@ export default function PublicReservaPage() {
                       setIsUpdatingGuests(false);
                     }
                   }}
-                  disabled={isUpdatingGuests || tempAdults + tempChildren > getIndividualRoomCapacityRules(booking).max}
+                  disabled={isUpdatingGuests || tempAdults + tempChildren > getIndividualRoomCapacityRules(editingRoom || booking).max}
                   className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-center text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
                 >
                   {isUpdatingGuests && <Loader2 className="animate-spin" size={14} />}
