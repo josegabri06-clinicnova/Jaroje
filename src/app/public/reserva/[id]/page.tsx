@@ -825,7 +825,7 @@ export default function PublicReservaPage() {
   // Estados para Modal de Edición de Huéspedes
   const [showEditGuestsModal, setShowEditGuestsModal] = useState(false);
   const [showOtaWarningModal, setShowOtaWarningModal] = useState(false);
-  const [editingRoom, setEditingRoom] = useState<any>(null);
+  const [tempRooms, setTempRooms] = useState<any[]>([]);
   const [tempAdults, setTempAdults] = useState(1);
   const [tempChildren, setTempChildren] = useState(0);
   const [isUpdatingGuests, setIsUpdatingGuests] = useState(false);
@@ -1492,48 +1492,19 @@ export default function PublicReservaPage() {
 
                       return (
                         <div key={idx} className="bg-white rounded-lg border border-zinc-200 px-3 py-2">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-start gap-2 min-w-0">
-                              <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
-                              <div className="flex-1 min-w-0">
-                                <strong style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} className="text-zinc-900 font-bold text-[12px] leading-tight block truncate">
-                                  {room.room_name}
-                                </strong>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <Users size={10} className="text-zinc-400 shrink-0" />
-                                  <span className="text-zinc-600 font-semibold text-[11px]">
-                                    {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
-                                  </span>
-                                </div>
+                          <div className="flex items-start gap-2">
+                            <span className="text-[15px] mt-0.5 shrink-0">🛏️</span>
+                            <div className="flex-1">
+                              <strong style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }} className="text-zinc-900 font-bold text-[12px] leading-tight block">
+                                {room.room_name}
+                              </strong>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <Users size={10} className="text-zinc-400 shrink-0" />
+                                <span className="text-zinc-600 font-semibold text-[11px]">
+                                  {totalGuests} {lang === 'en' ? 'guest(s)' : 'huésped(es)'}
+                                </span>
                               </div>
                             </div>
-                            {booking.status !== 'cancelled' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (isOta) {
-                                    setShowOtaWarningModal(true);
-                                  } else {
-                                    const editTarget = {
-                                      id: room.room_id || room.id || booking.id,
-                                      room_name: room.room_name || booking.room_name,
-                                      num_adult: room.num_adult,
-                                      num_child: room.num_child,
-                                      individual_num_adult: room.individual_num_adult !== undefined ? room.individual_num_adult : room.num_adult,
-                                      individual_num_child: room.individual_num_child !== undefined ? room.individual_num_child : room.num_child,
-                                    };
-                                    setEditingRoom(editTarget);
-                                    setTempAdults(editTarget.individual_num_adult);
-                                    setTempChildren(editTarget.individual_num_child);
-                                    setUpdateGuestsError('');
-                                    setShowEditGuestsModal(true);
-                                  }
-                                }}
-                                className="text-blue-600 hover:text-blue-700 text-[10.5px] font-extrabold px-2 py-1 rounded bg-blue-50 border border-blue-100 hover:bg-blue-100/50 transition-all shrink-0 flex items-center gap-1 cursor-pointer select-none"
-                              >
-                                ✏️ {lang === 'en' ? 'Edit' : 'Editar'}
-                              </button>
-                            )}
                           </div>
                           {/* Mostrar badge de cargo extra para todas las reservas directas (no OTA) */}
                           {!isOta && extraCharge > 0 && (
@@ -1592,9 +1563,25 @@ export default function PublicReservaPage() {
                     if (isOta) {
                       setShowOtaWarningModal(true);
                     } else {
-                      setEditingRoom(null);
-                      setTempAdults(booking.individual_num_adult !== undefined ? booking.individual_num_adult : (booking.num_adult || 1));
-                      setTempChildren(booking.individual_num_child !== undefined ? booking.individual_num_child : (booking.num_child || 0));
+                      if (booking.rooms_detail && booking.rooms_detail.length > 1) {
+                        setTempRooms(booking.rooms_detail.map((r: any) => ({
+                          bookingId: r.room_id || r.id,
+                          room_name: r.room_name,
+                          numAdult: r.individual_num_adult !== undefined ? r.individual_num_adult : (r.num_adult || 1),
+                          numChild: r.individual_num_child !== undefined ? r.individual_num_child : (r.num_child || 0),
+                          max: getIndividualRoomCapacityRules(r).max,
+                          base: getIndividualRoomCapacityRules(r).base
+                        })));
+                      } else {
+                        setTempRooms([{
+                          bookingId: booking.id,
+                          room_name: booking.room_name,
+                          numAdult: booking.individual_num_adult !== undefined ? booking.individual_num_adult : (booking.num_adult || 1),
+                          numChild: booking.individual_num_child !== undefined ? booking.individual_num_child : (booking.num_child || 0),
+                          max: getIndividualRoomCapacityRules(booking).max,
+                          base: getIndividualRoomCapacityRules(booking).base
+                        }]);
+                      }
                       setUpdateGuestsError('');
                       setShowEditGuestsModal(true);
                     }
@@ -2624,8 +2611,8 @@ export default function PublicReservaPage() {
       {/* MODAL EDITAR HUÉSPEDES */}
       {showEditGuestsModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-zinc-150 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-zinc-150 animate-in fade-in zoom-in-95 duration-200 max-h-[85vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3 shrink-0">
               <h3 className="font-black text-zinc-900 text-base uppercase tracking-wider">{t.editGuestsTitle}</h3>
               <button
                 onClick={() => setShowEditGuestsModal(false)}
@@ -2635,76 +2622,117 @@ export default function PublicReservaPage() {
               </button>
             </div>
 
-            <div className="mt-4 space-y-4">
+            <div className="mt-4 overflow-y-auto pr-1 flex-1 space-y-5">
               {/* Información de capacidades */}
               <div className="bg-[#FAF9F6] border border-zinc-200/50 rounded-2xl p-3.5 space-y-1.5 text-xs text-zinc-650">
                 <p className="font-bold text-zinc-800">
-                  {t.capacityInfo(getIndividualRoomCapacityRules(editingRoom || booking).base, getIndividualRoomCapacityRules(editingRoom || booking).max)}
+                  {booking.rooms_detail && booking.rooms_detail.length > 1
+                    ? `Capacidad máxima del grupo: ${booking.rooms_detail.reduce((sum: number, r: any) => sum + getIndividualRoomCapacityRules(r).max, 0)} huéspedes.`
+                    : t.capacityInfo(getIndividualRoomCapacityRules(booking).base, getIndividualRoomCapacityRules(booking).max)}
                 </p>
                 <p className="text-[11px] text-zinc-500">
                   {t.extraChargeInfo}
                 </p>
               </div>
 
-              {/* Controles de Adultos */}
-              <div className="flex items-center justify-between bg-[#FAF9F6] p-3 rounded-2xl border border-zinc-100">
-                <div>
-                  <span className="font-extrabold text-zinc-900 text-sm block">{t.adultsLabel}</span>
-                  <span className="text-[10px] text-zinc-500 block">Edad 13+</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setTempAdults(prev => Math.max(1, prev - 1))}
-                    disabled={tempAdults <= 1}
-                    className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
-                  >
-                    -
-                  </button>
-                  <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempAdults}</span>
-                  <button
-                    onClick={() => setTempAdults(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(editingRoom || booking).max}
-                    className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
+              {/* Lista de Habitaciones para Editar */}
+              <div className="space-y-6 divide-y divide-zinc-100">
+                {(() => {
+                  const updateRoomCount = (idx: number, field: 'numAdult' | 'numChild', val: number) => {
+                    setTempRooms(prev => prev.map((r, i) => {
+                      if (i === idx) {
+                        const newVal = Math.max(field === 'numAdult' ? 1 : 0, val);
+                        const total = field === 'numAdult' ? newVal + r.numChild : r.numAdult + newVal;
+                        if (total > r.max) return r;
+                        return { ...r, [field]: newVal };
+                      }
+                      return r;
+                    }));
+                  };
 
-              {/* Controles de Niños */}
-              <div className="flex items-center justify-between bg-[#FAF9F6] p-3 rounded-2xl border border-zinc-100">
-                <div>
-                  <span className="font-extrabold text-zinc-900 text-sm block">{t.childrenLabel}</span>
-                  <span className="text-[10px] text-zinc-500 block">Edad 2-12</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setTempChildren(prev => Math.max(0, prev - 1))}
-                    disabled={tempChildren <= 0}
-                    className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
-                  >
-                    -
-                  </button>
-                  <span className="font-bold text-sm text-zinc-900 w-4 text-center">{tempChildren}</span>
-                  <button
-                    onClick={() => setTempChildren(prev => prev + 1)}
-                    disabled={tempAdults + tempChildren >= getIndividualRoomCapacityRules(editingRoom || booking).max}
-                    className="w-8 h-8 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-800 flex items-center justify-center font-bold text-base transition-all disabled:opacity-40 cursor-pointer select-none"
-                  >
-                    +
-                  </button>
-                </div>
+                  return tempRooms.map((room, idx) => (
+                    <div key={idx} className="pt-4 first:pt-0">
+                      <h4 className="font-black text-zinc-850 text-xs uppercase mb-2.5 flex items-center gap-1.5">
+                        🏨 {room.room_name}
+                      </h4>
+                      
+                      <div className="bg-[#FAF9F6] border border-zinc-200/35 rounded-xl px-3 py-1.5 mb-3 text-[10.5px] text-zinc-500 font-semibold inline-block">
+                        Capacidad base: {room.base} · Máxima: {room.max}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3.5">
+                        {/* Controles de Adultos */}
+                        <div className="flex items-center justify-between bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
+                          <div>
+                            <span className="font-bold text-zinc-800 text-xs block">{t.adultsLabel}</span>
+                            <span className="text-[9px] text-zinc-400 block">Edad 13+</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateRoomCount(idx, 'numAdult', room.numAdult - 1)}
+                              disabled={room.numAdult <= 1}
+                              className="w-7 h-7 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-855 flex items-center justify-center font-bold text-sm transition-all disabled:opacity-40 cursor-pointer select-none"
+                            >
+                              -
+                            </button>
+                            <span className="font-bold text-sm text-zinc-900 w-4 text-center">{room.numAdult}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateRoomCount(idx, 'numAdult', room.numAdult + 1)}
+                              disabled={room.numAdult + room.numChild >= room.max}
+                              className="w-7 h-7 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-855 flex items-center justify-center font-bold text-sm transition-all disabled:opacity-40 cursor-pointer select-none"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Controles de Niños */}
+                        <div className="flex items-center justify-between bg-[#FAF9F6] p-2.5 rounded-xl border border-zinc-100">
+                          <div>
+                            <span className="font-bold text-zinc-800 text-xs block">{t.childrenLabel}</span>
+                            <span className="text-[9px] text-zinc-400 block">Edad 2-12</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateRoomCount(idx, 'numChild', room.numChild - 1)}
+                              disabled={room.numChild <= 0}
+                              className="w-7 h-7 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-855 flex items-center justify-center font-bold text-sm transition-all disabled:opacity-40 cursor-pointer select-none"
+                            >
+                              -
+                            </button>
+                            <span className="font-bold text-sm text-zinc-900 w-4 text-center">{room.numChild}</span>
+                            <button
+                              type="button"
+                              onClick={() => updateRoomCount(idx, 'numChild', room.numChild + 1)}
+                              disabled={room.numAdult + room.numChild >= room.max}
+                              className="w-7 h-7 rounded-full bg-zinc-200 hover:bg-zinc-300 text-zinc-855 flex items-center justify-center font-bold text-sm transition-all disabled:opacity-40 cursor-pointer select-none"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
               </div>
 
               {/* Cálculo en vivo de tarifas si aplica */}
               {(() => {
-                const rules = getIndividualRoomCapacityRules(editingRoom || booking);
-                const totalTemp = tempAdults + tempChildren;
-                const targetRoom = editingRoom || booking;
-                const originalTotal = (targetRoom.individual_num_adult !== undefined ? targetRoom.individual_num_adult : targetRoom.num_adult) + 
-                                      (targetRoom.individual_num_child !== undefined ? targetRoom.individual_num_child : targetRoom.num_child);
-                const originalExtra = Math.max(0, originalTotal - rules.base);
-                const newExtra = Math.max(0, totalTemp - rules.base);
+                const totalTemp = tempRooms.reduce((sum, r) => sum + r.numAdult + r.numChild, 0);
+                const totalOriginal = (booking.rooms_detail && booking.rooms_detail.length > 1)
+                  ? booking.rooms_detail.reduce((sum: number, r: any) => sum + (r.individual_num_adult !== undefined ? r.individual_num_adult : r.num_adult) + (r.individual_num_child !== undefined ? r.individual_num_child : r.num_child), 0)
+                  : (booking.individual_num_adult !== undefined ? booking.individual_num_adult : booking.num_adult) + (booking.individual_num_child !== undefined ? booking.individual_num_child : booking.num_child);
+
+                const groupBase = (booking.rooms_detail && booking.rooms_detail.length > 1)
+                  ? booking.rooms_detail.reduce((sum: number, r: any) => sum + getIndividualRoomCapacityRules(r).base, 0)
+                  : getIndividualRoomCapacityRules(booking).base;
+
+                const originalExtra = Math.max(0, totalOriginal - groupBase);
+                const newExtra = Math.max(0, totalTemp - groupBase);
                 const diff = newExtra - originalExtra;
                 const adj = diff * 500 * booking.nights;
                 const estNewPrice = booking.price + adj;
@@ -2725,94 +2753,92 @@ export default function PublicReservaPage() {
                 );
               })()}
 
-              {tempAdults + tempChildren > getIndividualRoomCapacityRules(editingRoom || booking).max && (
-                <div className="text-red-600 bg-red-50 border border-red-200 p-3 rounded-2xl text-xs font-bold flex items-center gap-1.5">
-                  <AlertTriangle size={14} className="shrink-0" />
-                  <span>{t.maxCapacityExceeded(getIndividualRoomCapacityRules(editingRoom || booking).max)}</span>
-                </div>
-              )}
-
               {updateGuestsError && (
                 <div className="text-red-600 bg-red-50 border border-red-200 p-3 rounded-2xl text-xs font-bold flex items-center gap-1.5">
                   <AlertTriangle size={14} className="shrink-0" />
                   <span>{updateGuestsError}</span>
                 </div>
               )}
+            </div>
 
-              {/* Botones de acción */}
-              <div className="flex gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowEditGuestsModal(false)}
-                  className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold rounded-xl text-center text-xs transition-all cursor-pointer"
-                >
-                  {lang === 'en' ? 'Cancel' : 'Cancelar'}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setUpdateGuestsError('');
-                    setIsUpdatingGuests(true);
-                    try {
-                      const res = await fetch('/api/public/reserva/update-guests', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          bookingId: (editingRoom || booking).id,
-                          numAdult: tempAdults,
-                          numChild: tempChildren
-                        })
+            {/* Botones de acción */}
+            <div className="flex gap-2.5 pt-4 border-t border-zinc-100 mt-4 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowEditGuestsModal(false)}
+                className="flex-1 py-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold rounded-xl text-center text-xs transition-all cursor-pointer"
+              >
+                {lang === 'en' ? 'Cancel' : 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setUpdateGuestsError('');
+                  setIsUpdatingGuests(true);
+                  try {
+                    const res = await fetch('/api/public/reserva/update-guests', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        bookingId: booking.id,
+                        rooms: tempRooms.map(r => ({
+                          bookingId: r.bookingId,
+                          numAdult: r.numAdult,
+                          numChild: r.numChild
+                        }))
+                      })
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                      setBooking((prev: any) => {
+                        const newRoomsDetail = prev.rooms_detail ? prev.rooms_detail.map((r: any) => {
+                          const update = tempRooms.find(tr => String(tr.bookingId) === String(r.room_id || r.id));
+                          if (update) {
+                            return {
+                              ...r,
+                              num_adult: update.numAdult,
+                              num_child: update.numChild,
+                              individual_num_adult: update.numAdult,
+                              individual_num_child: update.numChild
+                            };
+                          }
+                          return r;
+                        }) : null;
+
+                        const mainUpdate = tempRooms.find(tr => String(tr.bookingId) === String(prev.id));
+                        const individualAdults = mainUpdate ? mainUpdate.numAdult : prev.individual_num_adult;
+                        const individualChildren = mainUpdate ? mainUpdate.numChild : prev.individual_num_child;
+
+                        const totalAdults = tempRooms.reduce((sum, r) => sum + r.numAdult, 0);
+                        const totalChildren = tempRooms.reduce((sum, r) => sum + r.numChild, 0);
+
+                        return {
+                          ...prev,
+                          rooms_detail: newRoomsDetail,
+                          individual_num_adult: individualAdults,
+                          individual_num_child: individualChildren,
+                          num_adult: totalAdults,
+                          num_child: totalChildren,
+                          price: json.price,
+                          balance: json.balance
+                        };
                       });
-                      const json = await res.json();
-                      if (json.success) {
-                        setBooking((prev: any) => {
-                          const targetRoomObj = editingRoom || prev;
-                          const oldIndAdult = targetRoomObj.individual_num_adult !== undefined ? targetRoomObj.individual_num_adult : targetRoomObj.num_adult;
-                          const oldIndChild = targetRoomObj.individual_num_child !== undefined ? targetRoomObj.individual_num_child : targetRoomObj.num_child;
-                          const diffAdult = tempAdults - oldIndAdult;
-                          const diffChild = tempChildren - oldIndChild;
-
-                          const newRoomsDetail = prev.rooms_detail ? prev.rooms_detail.map((r: any) => {
-                            if (String(r.id || r.room_id) === String(targetRoomObj.id || targetRoomObj.room_id)) {
-                              return {
-                                ...r,
-                                num_adult: tempAdults,
-                                num_child: tempChildren,
-                                individual_num_adult: tempAdults,
-                                individual_num_child: tempChildren
-                              };
-                            }
-                            return r;
-                          }) : null;
-
-                          return {
-                            ...prev,
-                            rooms_detail: newRoomsDetail,
-                            individual_num_adult: String(prev.id) === String(targetRoomObj.id) ? tempAdults : prev.individual_num_adult,
-                            individual_num_child: String(prev.id) === String(targetRoomObj.id) ? tempChildren : prev.individual_num_child,
-                            num_adult: prev.num_adult + diffAdult,
-                            num_child: prev.num_child + diffChild,
-                            price: json.price,
-                            balance: json.balance
-                          };
-                        });
-                        setShowEditGuestsModal(false);
-                      } else {
-                        setUpdateGuestsError(json.error || 'Error al guardar');
-                      }
-                    } catch (e: any) {
-                      setUpdateGuestsError(e.message || 'Error de conexión');
-                    } finally {
-                      setIsUpdatingGuests(false);
+                      setShowEditGuestsModal(false);
+                    } else {
+                      setUpdateGuestsError(json.error || 'Error al guardar');
                     }
-                  }}
-                  disabled={isUpdatingGuests || tempAdults + tempChildren > getIndividualRoomCapacityRules(editingRoom || booking).max}
-                  className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-center text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
-                >
-                  {isUpdatingGuests && <Loader2 className="animate-spin" size={14} />}
-                  {t.confirmChanges}
-                </button>
-              </div>
+                  } catch (e: any) {
+                    setUpdateGuestsError(e.message || 'Error de conexión');
+                  } finally {
+                    setIsUpdatingGuests(false);
+                  }
+                }}
+                disabled={isUpdatingGuests}
+                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold rounded-xl text-center text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {isUpdatingGuests && <Loader2 className="animate-spin" size={14} />}
+                {isUpdatingGuests ? (lang === 'en' ? 'Saving...' : 'Guardando...') : (lang === 'en' ? 'Confirm Changes' : 'Confirmar Cambios')}
+              </button>
             </div>
           </div>
         </div>

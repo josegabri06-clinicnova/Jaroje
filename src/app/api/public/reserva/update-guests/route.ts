@@ -6,17 +6,30 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { bookingId, numAdult, numChild } = body;
+    const body = await req.json().catch(() => null);
+    if (!body) return NextResponse.json({ success: false, error: 'Request body required' }, { status: 400 });
 
-    if (!bookingId || numAdult === undefined || numChild === undefined) {
+    const bookingId = body.bookingId;
+    let rooms = body.rooms;
+
+    if (!bookingId) {
       return NextResponse.json({ success: false, error: 'Faltan parámetros obligatorios' }, { status: 400 });
     }
 
+    const normalizePhoneStr = (p?: string) => (p || '').replace(/\D/g, '');
+
+    if (!rooms || !Array.isArray(rooms)) {
+      if (body.numAdult === undefined || body.numChild === undefined) {
+        return NextResponse.json({ success: false, error: 'Faltan parámetros obligatorios' }, { status: 400 });
+      }
+      rooms = [{
+        bookingId: body.bookingId,
+        numAdult: Number(body.numAdult),
+        numChild: Number(body.numChild)
+      }];
+    }
+
     const id = Number(bookingId);
-    const newAdults = Number(numAdult);
-    const newChildren = Number(numChild);
-    const totalNewGuests = newAdults + newChildren;
 
     // 1. Cargar capacity_settings de la base de datos
     let capacitySettings: any = null;
@@ -54,39 +67,42 @@ export async function POST(req: Request) {
           .eq('check_in', localRes.check_in)
           .neq('id', localRes.id);
 
-        const localChannel = (localRes.channel || '').toLowerCase();
-        const isLocalOta = ['booking.com', 'airbnb', 'expedia'].some(c => localChannel.includes(c));
-
-        if (siblings && siblings.length > 0) {
-          siblingLocal = siblings.filter(s => {
-            const sChannel = (s.channel || '').toLowerCase();
-            const sIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => sChannel.includes(c));
-
-            // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
-            if (isLocalOta !== sIsOta) return false;
-
-            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone && mainPhone.length >= 6;
-            const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
-            
-            return (isLocalOta || sIsOta) ? !!sameName : !!(samePhone || sameName);
+        if (siblings) {
+          siblingLocal = siblings.filter(r => {
+            const rPhone = (r.phone || '').trim();
+            const samePhone = mainPhone && rPhone && normalizePhoneStr(rPhone) === normalizePhoneStr(mainPhone);
+            const sameName = mainName && r.guest_name && cleanStr(r.guest_name).includes(mainName);
+            return samePhone || sameName;
           });
         }
       } catch (err) {
-        console.error("Error al consolidar grupo localRes en update-guests:", err);
+        console.error("Error al buscar hermanos locales en update-guests:", err);
       }
 
       const UNIT_TO_ROOM: Record<string, string> = {
-        '1': '500', '2': '501', '3': '502', '4': '503',
-        '5': '504', '6': '505', '7': '506', '8': '507'
+        '685542-1': '500', '685542-2': '501', '685542-3': '502', '685542-4': '503',
+        '685542-5': '504', '685542-6': '505', '685542-7': '506', '685542-8': '507'
       };
-      
+
       const localResMapped = {
-        ...localRes,
+        id: localRes.id,
+        roomId: '685542',
+        unitId: localRes.unit_id || '',
+        num_adult: Number(localRes.num_adult || 1),
+        num_child: Number(localRes.num_child || 0),
+        price: Number(localRes.price || 0),
+        deposit: Number(localRes.deposit || 0),
         room: localRes.unit_id ? (UNIT_TO_ROOM[localRes.unit_id] || localRes.unit_id) : ''
       };
-      
+
       const siblingLocalMapped = siblingLocal.map(s => ({
-        ...s,
+        id: s.id,
+        roomId: '685542',
+        unitId: s.unit_id || '',
+        num_adult: Number(s.num_adult || 1),
+        num_child: Number(s.num_child || 0),
+        price: Number(s.price || 0),
+        deposit: Number(s.deposit || 0),
         room: s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : ''
       }));
 
@@ -106,25 +122,40 @@ export async function POST(req: Request) {
         groupDeposit += Number(b.deposit || 0);
       });
 
-      // 2.1. Calcular el total de huéspedes del grupo considerando el nuevo valor de esta habitación
-      const currentLocalAdj = adjLocal.members[0] || localRes;
-      const oldAdjAdults = currentLocalAdj.display_num_adult !== undefined ? currentLocalAdj.display_num_adult : Number(localRes.num_adult || 1);
-      const oldAdjChildren = currentLocalAdj.display_num_child !== undefined ? currentLocalAdj.display_num_child : Number(localRes.num_child || 0);
-
-      const diffAdults = newAdults - oldAdjAdults;
-      const diffChildren = newChildren - oldAdjChildren;
-
       const groupOriginalPax = adjLocal.groupTotalAdults + adjLocal.groupTotalChildren;
-      const totalNewGroupGuests = (adjLocal.groupTotalAdults + diffAdults) + (adjLocal.groupTotalChildren + diffChildren);
 
-      // Validar capacidad individual de la habitación
-      const currentRoomRules = getCapacityRules(currentLocalAdj.room || '', capacitySettings || undefined);
-      if (totalNewGuests > currentRoomRules.max) {
-        return NextResponse.json({
-          success: false,
-          error: `La capacidad máxima de la habitación es de ${currentRoomRules.max} personas. Has seleccionado ${totalNewGuests}.`
-        }, { status: 400 });
+      // 2.1. Calcular el total de huéspedes del grupo considerando los nuevos valores
+      let totalNewGroupAdults = 0;
+      let totalNewGroupChildren = 0;
+      let hasValidationError = false;
+      let validationErrorMsg = '';
+
+      adjLocal.members.forEach((b: any) => {
+        const update = rooms.find((r: any) => String(r.bookingId) === String(b.id));
+        const rRules = getCapacityRules(b.room || '', capacitySettings || undefined);
+        
+        let mAdults = b.display_num_adult !== undefined ? b.display_num_adult : Number(b.num_adult || 1);
+        let mChildren = b.display_num_child !== undefined ? b.display_num_child : Number(b.num_child || 0);
+
+        if (update) {
+          mAdults = Number(update.numAdult);
+          mChildren = Number(update.numChild);
+          const totalRoomNew = mAdults + mChildren;
+          if (totalRoomNew > rRules.max) {
+            hasValidationError = true;
+            validationErrorMsg = `La capacidad máxima de la habitación ${b.room || ''} es de ${rRules.max} personas. Has seleccionado ${totalRoomNew}.`;
+          }
+        }
+
+        totalNewGroupAdults += mAdults;
+        totalNewGroupChildren += mChildren;
+      });
+
+      if (hasValidationError) {
+        return NextResponse.json({ success: false, error: validationErrorMsg }, { status: 400 });
       }
+
+      const totalNewGroupGuests = totalNewGroupAdults + totalNewGroupChildren;
 
       if (totalNewGroupGuests > groupMax) {
         return NextResponse.json({ 
@@ -152,18 +183,35 @@ export async function POST(req: Request) {
       const newBalance = Math.max(0, groupNewPrice - groupDeposit);
 
       // 2.3. Guardar en base de datos local
-      const { error: dbErr } = await supabase
-        .from('local_reservas')
-        .update({
-          num_adult: newAdults,
-          num_child: newChildren,
-          price: newPrice
-        })
-        .eq('id', id);
+      for (const r of rooms) {
+        const isMain = String(r.bookingId) === String(id);
+        const { error: dbErr } = await supabase
+          .from('local_reservas')
+          .update({
+            num_adult: Number(r.numAdult),
+            num_child: Number(r.numChild),
+            ...(isMain ? { price: newPrice, balance: newBalance } : {})
+          })
+          .eq('id', r.bookingId);
 
-      if (dbErr) throw dbErr;
+        if (dbErr) {
+          throw new Error(`Error al actualizar habitación ${r.bookingId} en BD local: ${dbErr.message}`);
+        }
+      }
+
+      if (priceAdjustment !== 0 && !rooms.some((r: any) => String(r.bookingId) === String(id))) {
+        const { error: dbErr } = await supabase
+          .from('local_reservas')
+          .update({
+            price: newPrice,
+            balance: newBalance
+          })
+          .eq('id', id);
+        if (dbErr) throw dbErr;
+      }
 
       // Log de auditoría
+      const logDetails = rooms.map((r: any) => `Hab. ${r.bookingId}: ${r.numAdult}A/${r.numChild}N`).join(', ');
       await supabase.from('employee_logs').insert([{
         employee_num: '000',
         employee_name: `Huésped: ${localRes.guest_name}`,
@@ -171,15 +219,19 @@ export async function POST(req: Request) {
         module: 'portal_publico',
         action: 'huespedes_modificados',
         room: localRes.unit_id || 'Local',
-        details: `Huésped modificó su número de personas en el portal a ${newAdults}A/${newChildren}N. Precio ajustado de $${localRes.price} a $${newPrice} MXN.`
+        details: `Huésped modificó personas en el portal local: ${logDetails}. Precio de grupo ajustado de $${groupOriginalPrice} a $${groupNewPrice} MXN.`
       }]);
+
+      const mainRoomUpdate = rooms.find((r: any) => String(r.bookingId) === String(id));
+      const mainNewAdults = mainRoomUpdate ? Number(mainRoomUpdate.numAdult) : Number(localRes.num_adult || 1);
+      const mainNewChildren = mainRoomUpdate ? Number(mainRoomUpdate.numChild) : Number(localRes.num_child || 0);
 
       return NextResponse.json({
         success: true,
         price: groupNewPrice,
         balance: newBalance,
-        num_adult: newAdults,
-        num_child: newChildren
+        num_adult: mainNewAdults,
+        num_child: mainNewChildren
       });
     }
 
@@ -209,9 +261,7 @@ export async function POST(req: Request) {
 
     try {
       const allB24 = await getBeds24Bookings(true);
-      const normalizePhoneStr = (p?: string) => (p || '').replace(/\D/g, '');
-
-      const mainPhone = currentBooking.phone || currentBooking.mobile || currentBooking.guestPhone || currentBooking.guestMobile || '';
+      const mainPhone = currentBooking.phone || currentBooking.mobile || '';
       const phoneNum = mainPhone ? normalizePhoneStr(mainPhone) : '';
       const mainName = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toLowerCase().trim().replace(/\s+/g, ' ');
 
@@ -225,7 +275,6 @@ export async function POST(req: Request) {
         const rChannel = (r.channel || '').toLowerCase();
         const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
 
-        // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
         if (isMainOta !== rIsOta) return false;
 
         const rPhone = r.guest_phone || r.phone || r.mobile || '';
@@ -271,28 +320,56 @@ export async function POST(req: Request) {
       groupOriginalPrice = Number(currentBooking.price || 0);
     }
 
-    // 3.1. Calcular el total de huéspedes del grupo considerando el nuevo valor de esta habitación
-    let totalNewGroupGuests = totalNewGuests;
-    if (currentBooking) {
-      const currentB24Adj = (adjB24 && adjB24.members) ? adjB24.members.find((m: any) => String(m.id) === String(id)) : null;
-      const oldAdjAdults = currentB24Adj && currentB24Adj.display_num_adult !== undefined ? currentB24Adj.display_num_adult : Number(currentBooking.numAdult || 1);
-      const oldAdjChildren = currentB24Adj && currentB24Adj.display_num_child !== undefined ? currentB24Adj.display_num_child : Number(currentBooking.numChild || 0);
+    // 3.1. Calcular el total de huéspedes del grupo considerando los nuevos valores
+    let totalNewGroupAdults = 0;
+    let totalNewGroupChildren = 0;
+    let hasValidationError = false;
+    let validationErrorMsg = '';
 
-      const diffAdults = newAdults - oldAdjAdults;
-      const diffChildren = newChildren - oldAdjChildren;
+    if (currentBooking && adjB24 && adjB24.members) {
+      adjB24.members.forEach((b: any) => {
+        const update = rooms.find((r: any) => String(r.bookingId) === String(b.id));
+        const roomIdentifier = String(b.roomId || b.unitId || b.room_name || b.roomName || b.room || '');
+        const rRules = getCapacityRules(roomIdentifier, capacitySettings || undefined);
 
-      totalNewGroupGuests = (groupOriginalPax + diffAdults + diffChildren);
+        let mAdults = b.display_num_adult !== undefined ? b.display_num_adult : Number(b.num_adult || 1);
+        let mChildren = b.display_num_child !== undefined ? b.display_num_child : Number(b.num_child || 0);
 
-      // Validar capacidad individual de la habitación
+        if (update) {
+          mAdults = Number(update.numAdult);
+          mChildren = Number(update.numChild);
+          const totalRoomNew = mAdults + mChildren;
+          if (totalRoomNew > rRules.max) {
+            hasValidationError = true;
+            validationErrorMsg = `La capacidad máxima de la habitación es de ${rRules.max} personas. Has seleccionado ${totalRoomNew}.`;
+          }
+        }
+
+        totalNewGroupAdults += mAdults;
+        totalNewGroupChildren += mChildren;
+      });
+    } else {
+      const mainUpdate = rooms.find((r: any) => String(r.bookingId) === String(id));
+      const mAdults = mainUpdate ? Number(mainUpdate.numAdult) : Number(currentBooking.numAdult || 1);
+      const mChildren = mainUpdate ? Number(mainUpdate.numChild) : Number(currentBooking.numChild || 0);
+      const totalRoomNew = mAdults + mChildren;
       const roomIdentifier = String(currentBooking.roomId || currentBooking.roomName || '');
-      const currentRoomRules = getCapacityRules(roomIdentifier, capacitySettings || undefined);
-      if (totalNewGuests > currentRoomRules.max) {
-        return NextResponse.json({
-          success: false,
-          error: `La capacidad máxima de la habitación es de ${currentRoomRules.max} personas. Has seleccionado ${totalNewGuests}.`
-        }, { status: 400 });
+      const rRules = getCapacityRules(roomIdentifier, capacitySettings || undefined);
+
+      if (totalRoomNew > rRules.max) {
+        hasValidationError = true;
+        validationErrorMsg = `La capacidad máxima de la habitación es de ${rRules.max} personas. Has seleccionado ${totalRoomNew}.`;
       }
+
+      totalNewGroupAdults = mAdults;
+      totalNewGroupChildren = mChildren;
     }
+
+    if (hasValidationError) {
+      return NextResponse.json({ success: false, error: validationErrorMsg }, { status: 400 });
+    }
+
+    const totalNewGroupGuests = totalNewGroupAdults + totalNewGroupChildren;
 
     if (totalNewGroupGuests > groupMax) {
       return NextResponse.json({ 
@@ -320,16 +397,7 @@ export async function POST(req: Request) {
     const groupNewPrice = Math.round(groupOriginalPrice + priceAdjustment);
     const newBalance = Math.max(0, groupNewPrice - groupTotalPaid);
 
-    // 3.3. Actualizar en Beds24
-    const updatePayload: any = {
-      id: id,
-      bookId: id,
-      numAdult: newAdults,
-      numChild: newChildren,
-      price: newPrice
-    };
-
-    // Actualizar los ítems de factura
+    // Actualizar los ítems de factura de la habitación principal
     const currentItems = Array.isArray(currentBooking.invoiceItems) ? currentBooking.invoiceItems : [];
     const charges = currentItems.filter((item: any) => item.type === 'charge');
     const invoiceItemsUpdate: any[] = [];
@@ -423,12 +491,37 @@ export async function POST(req: Request) {
       }
     });
 
-    updatePayload.invoiceItems = invoiceItemsUpdate;
+    // 3.3. Preparar la lista de actualizaciones para Beds24
+    const updatedIds = new Set(rooms.map((r: any) => String(r.bookingId)));
+    const beds24Updates = rooms.map((r: any) => {
+      const payload: any = {
+        id: String(r.bookingId),
+        numAdult: r.numAdult,
+        numChild: r.numChild
+      };
+
+      if (String(r.bookingId) === String(id)) {
+        payload.price = newPrice;
+        payload.invoiceItems = invoiceItemsUpdate;
+      }
+
+      return payload;
+    });
+
+    if (priceAdjustment !== 0 && !updatedIds.has(String(id))) {
+      beds24Updates.push({
+        id: String(id),
+        numAdult: Number(currentBooking.numAdult || 1),
+        numChild: Number(currentBooking.numChild || 0),
+        price: newPrice,
+        invoiceItems: invoiceItemsUpdate
+      });
+    }
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify([updatePayload])
+      body: JSON.stringify(beds24Updates)
     });
 
     if (!beds24Response.ok) {
@@ -438,6 +531,7 @@ export async function POST(req: Request) {
 
     // Log de auditoría
     const guestFullName = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.trim() || 'Huésped';
+    const logDetailsB24 = rooms.map((r: any) => `Hab. ${r.bookingId}: ${r.numAdult}A/${r.numChild}N`).join(', ');
     await supabase.from('employee_logs').insert([{
       employee_num: '000',
       employee_name: `Huésped: ${guestFullName}`,
@@ -445,32 +539,39 @@ export async function POST(req: Request) {
       module: 'portal_publico',
       action: 'huespedes_modificados',
       room: currentBooking.roomName || 'Beds24',
-      details: `Huésped modificó su número de personas en el portal a ${newAdults}A/${newChildren}N. Precio ajustado en Beds24 de $${groupOriginalPrice} a $${newPrice} MXN.`
+      details: `Huésped modificó personas en el portal: ${logDetailsB24}. Precio de grupo ajustado de $${groupOriginalPrice} a $${groupNewPrice} MXN.`
     }]);
 
-    // Sincronizar de inmediato la reserva modificada en Supabase (beds24_reservations)
+    // Sincronizar de inmediato las reservas modificadas en Supabase (beds24_reservations)
     try {
-      const freshRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
-        headers: { 'token': BEDS24_TOKEN }
-      });
-      if (freshRes.ok) {
-        const freshJson = await freshRes.json();
-        if (freshJson.success && freshJson.data && freshJson.data.length > 0) {
-          const { syncBeds24BookingLocal } = await import('@/lib/beds24');
-          await syncBeds24BookingLocal(freshJson.data[0]);
-          console.log(`[Update Guests] ✅ Reserva ${bookingId} sincronizada con Supabase tras modificación de huéspedes.`);
+      const idsToSync = Array.from(new Set([String(id), ...rooms.map((r: any) => String(r.bookingId))]));
+      const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+      for (const syncId of idsToSync) {
+        const freshRes = await fetch(`https://api.beds24.com/v2/bookings?id=${syncId}&includeInvoiceItems=true`, {
+          headers: { 'token': BEDS24_TOKEN }
+        });
+        if (freshRes.ok) {
+          const freshJson = await freshRes.json();
+          if (freshJson.success && freshJson.data && freshJson.data.length > 0) {
+            await syncBeds24BookingLocal(freshJson.data[0]);
+          }
         }
       }
+      console.log(`[Update Guests] ✅ Reservas ${idsToSync.join(', ')} sincronizadas con Supabase tras modificación.`);
     } catch (syncErr) {
-      console.error("[Update Guests] Error al sincronizar reserva modificada con Supabase:", syncErr);
+      console.error("[Update Guests] Error al sincronizar reservas modificadas con Supabase:", syncErr);
     }
+
+    const mainRoomUpdate = rooms.find((r: any) => String(r.bookingId) === String(id));
+    const mainNewAdults = mainRoomUpdate ? Number(mainRoomUpdate.numAdult) : Number(currentBooking.numAdult || 1);
+    const mainNewChildren = mainRoomUpdate ? Number(mainRoomUpdate.numChild) : Number(currentBooking.numChild || 0);
 
     return NextResponse.json({
       success: true,
       price: groupNewPrice,
       balance: newBalance,
-      num_adult: newAdults,
-      num_child: newChildren
+      num_adult: mainNewAdults,
+      num_child: mainNewChildren
     });
 
   } catch (err: any) {
