@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    clearBeds24Cache();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
 
@@ -222,8 +223,8 @@ export async function GET(req: Request) {
       }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
-    // 2. Buscar en Beds24 activo (caché)
-    const allBeds24 = await getBeds24Bookings(true);
+    // 2. Buscar en Beds24 activo (bypassing caché)
+    const allBeds24 = await getBeds24Bookings(true, false, true);
     let booking = allBeds24.find(r => String(r.id) === String(bookingId));
 
     // 2.1. Fallback: Buscar directamente en Beds24 por ID si no está activo (ej: si está cancelada)

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    clearBeds24Cache();
     const body = await req.json().catch(() => null);
     if (!body) return NextResponse.json({ success: false, error: 'Request body required' }, { status: 400 });
 
@@ -260,7 +261,7 @@ export async function POST(req: Request) {
     let adjB24: any = null;
 
     try {
-      const allB24 = await getBeds24Bookings(true);
+      const allB24 = await getBeds24Bookings(true, false, true);
       const mainPhone = currentBooking.phone || currentBooking.mobile || '';
       const phoneNum = mainPhone ? normalizePhoneStr(mainPhone) : '';
       const mainName = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toLowerCase().trim().replace(/\s+/g, ' ');
