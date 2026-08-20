@@ -240,9 +240,10 @@ export async function POST(req: Request) {
     const BEDS24_TOKEN = await getBeds24Token();
     let currentBooking: any = null;
     
-    // Obtener detalles actuales de la reserva desde Beds24
+    // Obtener detalles actuales de la reserva desde Beds24 (bypassing Next.js fetch cache)
     const getRes = await fetch(`https://api.beds24.com/v2/bookings?id[]=${id}&includeInvoiceItems=true`, {
-      headers: { 'token': BEDS24_TOKEN }
+      headers: { 'token': BEDS24_TOKEN },
+      cache: 'no-store'
     });
     const getJson = await getRes.json().catch(() => null);
     
@@ -269,7 +270,19 @@ export async function POST(req: Request) {
       const rawSource = String(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''}`).toLowerCase();
       const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => rawSource.includes(c));
 
+      const mainBookingMapped = {
+        id: String(currentBooking.id),
+        roomId: String(currentBooking.roomId || ''),
+        roomName: currentBooking.roomName || '',
+        num_adult: Number(currentBooking.numAdult || 1),
+        num_child: Number(currentBooking.numChild || 0),
+        price: Number(currentBooking.price || 0),
+        deposit: Number(currentBooking.deposit || 0),
+        channel: currentBooking.channel || 'direct'
+      };
+
       const siblingBeds24 = allB24.filter(r => {
+        if (String(r.id) === String(id)) return false; // Excluir la principal de los hermanos para evitar duplicación
         if (r.check_in !== currentBooking.arrival) return false;
         if (r.check_out !== currentBooking.departure) return false;
 
@@ -285,13 +298,7 @@ export async function POST(req: Request) {
         return (isMainOta || rIsOta) ? !!sameName : !!(samePhone || sameName);
       });
 
-      const groupList = siblingBeds24.length > 0 ? siblingBeds24 : [{
-        roomId: String(currentBooking.roomId || ''),
-        roomName: currentBooking.roomName || '',
-        num_adult: Number(currentBooking.numAdult || 1),
-        num_child: Number(currentBooking.numChild || 0),
-        price: Number(currentBooking.price || 0)
-      }];
+      const groupList = [mainBookingMapped, ...siblingBeds24];
 
       adjB24 = detectAndAdjustGroupGuests(groupList, capacitySettings || undefined);
 
@@ -394,8 +401,8 @@ export async function POST(req: Request) {
 
     const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
     const bookingOriginalPrice = Number(currentBooking.price || 0);
-    const newPrice = Math.round(bookingOriginalPrice + priceAdjustment);
-    const groupNewPrice = Math.round(groupOriginalPrice + priceAdjustment);
+    const newPrice = Math.max(0, Math.round(bookingOriginalPrice + priceAdjustment));
+    const groupNewPrice = Math.max(0, Math.round(groupOriginalPrice + priceAdjustment));
     const newBalance = Math.max(0, groupNewPrice - groupTotalPaid);
 
     // Actualizar los ítems de factura de la habitación principal
@@ -549,7 +556,8 @@ export async function POST(req: Request) {
       const { syncBeds24BookingLocal } = await import('@/lib/beds24');
       for (const syncId of idsToSync) {
         const freshRes = await fetch(`https://api.beds24.com/v2/bookings?id=${syncId}&includeInvoiceItems=true`, {
-          headers: { 'token': BEDS24_TOKEN }
+          headers: { 'token': BEDS24_TOKEN },
+          cache: 'no-store'
         });
         if (freshRes.ok) {
           const freshJson = await freshRes.json();
