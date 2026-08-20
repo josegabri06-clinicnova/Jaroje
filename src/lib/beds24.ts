@@ -2127,3 +2127,123 @@ export async function syncBeds24ReservationsRange(
 
   return { success: true, count: mappedBookings.length };
 }
+
+/**
+ * Detecta si una reservación grupal tiene el número de huéspedes replicado en cada habitación,
+ * y de ser así, distribuye los huéspedes de manera proporcional entre las habitaciones del grupo.
+ */
+export function detectAndAdjustGroupGuests(
+  members: any[],
+  customSettings?: any
+): {
+  isReplicated: boolean;
+  members: any[];
+  groupTotalAdults: number;
+  groupTotalChildren: number;
+} {
+  if (!members || members.length <= 1) {
+    return {
+      isReplicated: false,
+      members: (members || []).map(m => ({
+        ...m,
+        display_num_adult: Number(m.num_adult || m.numAdult || 1),
+        display_num_child: Number(m.num_child || m.numChild || 0)
+      })),
+      groupTotalAdults: (members || []).reduce((sum, m) => sum + Number(m.num_adult || m.numAdult || 1), 0),
+      groupTotalChildren: (members || []).reduce((sum, m) => sum + Number(m.num_child || m.numChild || 0), 0)
+    };
+  }
+
+  const counts = members.map(m => Number(m.num_adult || m.numAdult || 1));
+  const uniqueCounts = [...new Set(counts)];
+  
+  let isReplicated = false;
+  const commonValue = counts[0];
+  
+  if (uniqueCounts.length === 1 && commonValue > 1) {
+    const hasExceeded = members.some(m => {
+      const roomKey = m.room_name || m.roomName || m.room || '';
+      const max = getCapacityRules(roomKey, customSettings).max;
+      return commonValue > max;
+    });
+    if (hasExceeded) {
+      isReplicated = true;
+    }
+  }
+
+  if (isReplicated) {
+    const groupTotalAdults = commonValue;
+    const groupTotalChildren = Number(members[0].num_child || members[0].numChild || 0);
+    
+    const roomCaps = members.map(m => {
+      const roomKey = m.room_name || m.roomName || m.room || '';
+      return getCapacityRules(roomKey, customSettings);
+    });
+    const totalMaxCap = roomCaps.reduce((sum, c) => sum + c.max, 0);
+    
+    let distributedMembers: any[] = [];
+    if (groupTotalAdults >= totalMaxCap) {
+      distributedMembers = members.map((m, idx) => {
+        const cap = roomCaps[idx];
+        return {
+          ...m,
+          display_num_adult: cap.max,
+          display_num_child: 0,
+          is_replicated_estimate: true
+        };
+      });
+    } else {
+      let remaining = groupTotalAdults;
+      const allocated = members.map(() => 0);
+      
+      for (let i = 0; i < members.length; i++) {
+        const base = roomCaps[i].base;
+        const take = Math.min(base, remaining);
+        allocated[i] = take;
+        remaining -= take;
+      }
+      
+      if (remaining > 0) {
+        for (let i = 0; i < members.length; i++) {
+          const max = roomCaps[i].max;
+          const current = allocated[i];
+          const take = Math.min(max - current, remaining);
+          allocated[i] += take;
+          remaining -= take;
+        }
+      }
+      
+      if (remaining > 0) {
+        allocated[0] += remaining;
+      }
+      
+      distributedMembers = members.map((m, idx) => {
+        return {
+          ...m,
+          display_num_adult: allocated[idx],
+          display_num_child: 0,
+          is_replicated_estimate: true
+        };
+      });
+    }
+    
+    return {
+      isReplicated: true,
+      members: distributedMembers,
+      groupTotalAdults,
+      groupTotalChildren
+    };
+  }
+  
+  return {
+    isReplicated: false,
+    members: members.map(m => ({
+      ...m,
+      display_num_adult: Number(m.num_adult || m.numAdult || 1),
+      display_num_child: Number(m.num_child || m.numChild || 0)
+    })),
+    groupTotalAdults: counts.reduce((sum, c) => sum + c, 0),
+    groupTotalChildren: members.reduce((sum, m) => sum + Number(m.num_child || m.numChild || 0), 0)
+  };
+}
+

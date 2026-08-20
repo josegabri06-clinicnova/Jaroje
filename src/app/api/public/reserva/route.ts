@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -87,28 +87,13 @@ export async function GET(req: Request) {
         fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[GET PUBLIC LOCAL] bookingId=${bookingId} db_show_card_payment=${portalSettings?.show_card_payment} (typeof=${typeof portalSettings?.show_card_payment}) map_value=${portalSettings?.show_card_payment !== false} time=${new Date().toISOString()}\n`);
       } catch (logErr) {}
 
-      // Obtener todos los localRes de la misma fecha de checkin, mismo nombre o telefono para consolidar el total del grupo
-      let localGroupPrice = Number(localRes.price || 0);
-      let localGroupAdult = Number(localRes.num_adult || 1);
-      let localGroupChild = Number(localRes.num_child || 0);
-      let localRoomNames = [`Habitación ${physicalName}`];
-      const localGroupBookings = [localRes];
-      const localRoomsDetail: { room_name: string; room_id: string | number; num_adult: number; num_child: number; price: number }[] = [
-        {
-          room_name: physicalName ? `Habitación ${physicalName}` : 'Sin asignar',
-          room_id: localRes.id,
-          num_adult: Number(localRes.num_adult || 1),
-          num_child: Number(localRes.num_child || 0),
-          price: Number(localRes.price || 0),
-        }
-      ];
-
+      let siblingLocal: any[] = [];
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
         const mainName = cleanStr(localRes.guest_name || '');
         const mainPhone = (localRes.phone || '').trim();
 
-        const { data: siblingLocal } = await supabase
+        const { data: siblings } = await supabase
           .from('local_reservas')
           .select('id, guest_name, phone, price, deposit, unit_id, num_adult, num_child, status, channel')
           .eq('check_in', localRes.check_in)
@@ -117,41 +102,58 @@ export async function GET(req: Request) {
         const localChannel = (localRes.channel || '').toLowerCase();
         const isLocalOta = ['booking.com', 'airbnb', 'expedia'].some(c => localChannel.includes(c));
 
-        if (siblingLocal && siblingLocal.length > 0) {
-          siblingLocal.forEach(s => {
-            if (s.status === 'cancelled' || s.status === 'cancelado' || s.status === 'black') return;
+        if (siblings && siblings.length > 0) {
+          siblingLocal = siblings.filter(s => {
+            if (s.status === 'cancelled' || s.status === 'cancelado' || s.status === 'black') return false;
             
             const sChannel = (s.channel || '').toLowerCase();
             const sIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => sChannel.includes(c));
 
             // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
-            if (isLocalOta !== sIsOta) return;
+            if (isLocalOta !== sIsOta) return false;
 
             const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone && mainPhone.length >= 6;
             const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
             
             // Para OTAs agrupamos por nombre (mismo titular). Para reservas directas, agrupamos ESTRICTAMENTE por teléfono.
-            const isMatch = (isLocalOta || sIsOta) ? !!sameName : !!samePhone;
-            if (isMatch) {
-              localGroupPrice += Number(s.price || 0);
-              localGroupAdult += Number(s.num_adult || 0);
-              localGroupChild += Number(s.num_child || 0);
-              localGroupBookings.push(s);
-              const siblingPhysicalName = s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : '';
-              localRoomNames.push(`Habitación ${siblingPhysicalName}`);
-              localRoomsDetail.push({
-                room_name: siblingPhysicalName ? `Habitación ${siblingPhysicalName}` : 'Sin asignar',
-                room_id: s.id,
-                num_adult: Number(s.num_adult || 0),
-                num_child: Number(s.num_child || 0),
-                price: Number(s.price || 0),
-              });
-            }
+            return (isLocalOta || sIsOta) ? !!sameName : !!samePhone;
           });
         }
       } catch (err) {
         console.error("Error al agrupar localRes:", err);
       }
+
+      // Preparar miembros con sus nombres físicos de habitación para validar capacidad
+      const localResMapped = {
+        ...localRes,
+        room: physicalName
+      };
+      
+      const siblingLocalMapped = siblingLocal.map(s => {
+        const siblingPhysicalName = s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : '';
+        return {
+          ...s,
+          room: siblingPhysicalName
+        };
+      });
+
+      const allLocalMembers = [localResMapped, ...siblingLocalMapped];
+      const adjLocal = detectAndAdjustGroupGuests(allLocalMembers);
+
+      let localGroupAdult = adjLocal.groupTotalAdults;
+      let localGroupChild = adjLocal.groupTotalChildren;
+
+      const localGroupBookings = adjLocal.members;
+      const localRoomNames = adjLocal.members.map(m => m.room ? `Habitación ${m.room}` : 'Habitación Sin asignar');
+      const localGroupPrice = adjLocal.members.reduce((sum, m) => sum + Number(m.price || 0), 0);
+
+      const localRoomsDetail = adjLocal.members.map(m => ({
+        room_name: m.room ? `Habitación ${m.room}` : 'Sin asignar',
+        room_id: m.id,
+        num_adult: m.display_num_adult !== undefined ? m.display_num_adult : Number(m.num_adult || 1),
+        num_child: m.display_num_child !== undefined ? m.display_num_child : Number(m.num_child || 0),
+        price: Number(m.price || 0),
+      }));
 
       // Calcular depósito del grupo local de forma segura
       let localGroupDeposit = 0;
@@ -364,22 +366,7 @@ export async function GET(req: Request) {
         fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[GET PUBLIC BEDS24] bookingId=${bookingId} db_show_card_payment=${portalSettings?.show_card_payment} (typeof=${typeof portalSettings?.show_card_payment}) map_value=${portalSettings?.show_card_payment !== false} time=${new Date().toISOString()}\n`);
       } catch (logErr) {}
 
-      let b24GroupPrice = Number(booking.price_estimate || booking.price || 0);
-      let b24RoomNames = [booking.room_name || `Habitación ${booking.roomId}`];
-
-      // rooms_detail: desglose por habitación (nombre, num_adult, num_child, precio)
-      const b24RoomsDetail: { room_name: string; room_id: string | number; num_adult: number; num_child: number; price: number }[] = [
-        {
-          room_name: booking.room_name || `Habitación ${(booking as any).roomId || ''}`,
-          room_id: booking.id,
-          num_adult: Number(booking.num_adult || 1),
-          num_child: Number(booking.num_child || 0),
-          price: Number(booking.price_estimate || booking.price || 0),
-        }
-      ];
-
-      const beds24GroupBookings = [booking];
-
+      let siblingBeds24: any[] = [];
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
         const mainName = cleanStr(booking.guest_name || '');
@@ -389,7 +376,7 @@ export async function GET(req: Request) {
         const mainChannel = (booking.channel || '').toLowerCase();
         const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => mainChannel.includes(c));
 
-        const siblingBeds24 = allBeds24.filter(r => {
+        siblingBeds24 = allBeds24.filter(r => {
           if (r.status === 'cancelled' || r.status === 'cancelado' || r.status === '0') return false;
           if (r.check_in !== booking.check_in) return false;
           if (r.check_out !== booking.check_out) return false;
@@ -408,26 +395,28 @@ export async function GET(req: Request) {
           // Para OTAs agrupamos por nombre (mismo titular). Para reservas directas, agrupamos ESTRICTAMENTE por teléfono.
           return (isMainOta || rIsOta) ? !!sameName : !!samePhone;
         });
+      } catch (err) {
+        console.error("Error al buscar hermanos Beds24 en ruta GET:", err);
+      }
 
-        let b24GroupAdult = Number(booking.num_adult || 1);
-        let b24GroupChild = Number(booking.num_child || 0);
-
-        if (siblingBeds24.length > 0) {
-          siblingBeds24.forEach(s => {
-            b24GroupPrice += Number(s.price_estimate || s.price || 0);
-            b24GroupAdult += Number(s.num_adult || 0);
-            b24GroupChild += Number(s.num_child || 0);
-            beds24GroupBookings.push(s);
-            b24RoomNames.push(s.room_name || `Habitación ${s.roomId}`);
-            b24RoomsDetail.push({
-              room_name: s.room_name || `Habitación ${s.roomId}`,
-              room_id: s.id,
-              num_adult: Number(s.num_adult || 1),
-              num_child: Number(s.num_child || 0),
-              price: Number(s.price_estimate || s.price || 0),
-            });
-          });
-        }
+      // Ajustar el conteo de adultos y niños si vienen duplicados/consolidados de Beds24
+      const allB24Members = [booking, ...siblingBeds24];
+      const adjB24 = detectAndAdjustGroupGuests(allB24Members);
+      
+      let b24GroupAdult = adjB24.groupTotalAdults;
+      let b24GroupChild = adjB24.groupTotalChildren;
+      
+      const beds24GroupBookings = adjB24.members;
+      const b24RoomNames = adjB24.members.map((m: any) => m.room_name || `Habitación ${m.roomId || ''}`);
+      const b24GroupPrice = adjB24.members.reduce((sum: number, m: any) => sum + Number(m.price_estimate || m.price || 0), 0);
+      
+      const b24RoomsDetail = adjB24.members.map((m: any) => ({
+        room_name: m.room_name || `Habitación ${m.roomId || ''}`,
+        room_id: m.id,
+        num_adult: m.display_num_adult !== undefined ? m.display_num_adult : Number(m.num_adult || 1),
+        num_child: m.display_num_child !== undefined ? m.display_num_child : Number(m.num_child || 0),
+        price: Number(m.price_estimate || m.price || 0),
+      }));
 
         // Calcular depósito del grupo Beds24 de forma segura
         const totalPaidFromInvoices = beds24GroupBookings.reduce((sum, b) => sum + (b.actualPaid || 0), 0);
@@ -501,9 +490,6 @@ export async function GET(req: Request) {
             }
           }
         }, { headers: { 'Cache-Control': 'no-store' } });
-      } catch (err) {
-        console.error("Error al agrupar Beds24 bookings:", err);
-      }
     } // fin if (booking)
 
     return NextResponse.json({ error: 'Reserva no encontrada' }, { status: 404 });

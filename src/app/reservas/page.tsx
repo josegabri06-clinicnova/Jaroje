@@ -7,7 +7,7 @@ import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
-import { computeOtaSplit, getCapacityRules } from '@/lib/beds24';
+import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -320,8 +320,8 @@ function ReservasListInner() {
       setInlineDepositValue('');
       setEditGuestName(selectedRes.guest_name || '');
       setEditPhone(selectedRes.guest_phone || '');
-      setEditAdults(Number(selectedRes.num_adult || 1));
-      setEditChildren(Number(selectedRes.num_child || 0));
+      setEditAdults(Number(selectedRes.display_num_adult !== undefined ? selectedRes.display_num_adult : (selectedRes.num_adult || 1)));
+      setEditChildren(Number(selectedRes.display_num_child !== undefined ? selectedRes.display_num_child : (selectedRes.num_child || 0)));
       const priceEstimate = selectedRes.price_estimate || 0;
       const nights = selectedRes.nights || 1;
       setEditPrice(String(priceEstimate));
@@ -2837,8 +2837,11 @@ function ReservasListInner() {
           const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
           return sum + bBal;
         }, 0);
-        const consolidatedAdults = allMembers.reduce((sum, m) => sum + Number(m.num_adult || 1), 0);
-        const consolidatedChildren = allMembers.reduce((sum, m) => sum + Number(m.num_child || 0), 0);
+
+        // Ajustar el conteo de adultos y niños si vienen duplicados/consolidados de Beds24
+        const adjResult = detectAndAdjustGroupGuests(allMembers, capacitySettings || undefined);
+        const consolidatedAdults = adjResult.groupTotalAdults;
+        const consolidatedChildren = adjResult.groupTotalChildren;
         const isAnyNew = allMembers.some(m => isReservationNew(m));
 
         const consolidatedReceipts = allMembers.reduce((arr, m) => {
@@ -2860,13 +2863,17 @@ function ReservasListInner() {
           num_adult: consolidatedAdults,
           num_child: consolidatedChildren,
           is_group_card: true,
-          group_members: allMembers,
+          group_members: adjResult.members,
           is_new_override: isAnyNew,
           transfer_receipts: consolidatedReceipts
         });
       } else {
         processedIds.add(String(r.id));
-        grouped.push(r);
+        grouped.push({
+          ...r,
+          display_num_adult: Number(r.num_adult || 1),
+          display_num_child: Number(r.num_child || 0)
+        });
       }
     });
 
@@ -3766,7 +3773,7 @@ function ReservasListInner() {
                       <div className="flex bg-zinc-200/60 p-1 rounded-xl gap-1 mb-2">
                         <button
                           type="button"
-                          onClick={() => setCheckInSelectedIds(groupBookings.map(b => String(b.id)))}
+                          onClick={() => setCheckInSelectedIds(groupBookings.map((b: any) => String(b.id)))}
                           className={`flex-1 py-1.5 text-[11px] font-extrabold rounded-lg transition-all border-none cursor-pointer ${
                             checkInSelectedIds.length === groupBookings.length
                               ? 'bg-white text-zinc-950 shadow-sm'
@@ -4591,7 +4598,8 @@ function ReservasListInner() {
                                   {b.room_name || b.room}
                                   {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
                                   {(() => {
-                                    const total = (b.num_adult || 0) + (b.num_child || 0);
+                                    const total = (b.display_num_adult !== undefined ? b.display_num_adult : (b.num_adult || 0)) + 
+                                                  (b.display_num_child !== undefined ? b.display_num_child : (b.num_child || 0));
                                     if (total === 0) return null;
                                     const baseCapacity = getCapacityRules(b.room_name || b.room || '', capacitySettings || undefined).base;
                                     const isExtra = total > baseCapacity;
@@ -6103,7 +6111,8 @@ function ReservasListInner() {
                           {group.rooms.map(room => {
                             const isAvail = availableRooms[room] === true;
                             const isCurrent = (reassigningRes.room_name || '').includes(room);
-                            const totalGuests = Number(reassigningRes.num_adult || 1) + Number(reassigningRes.num_child || 0);
+                            const totalGuests = Number(reassigningRes.display_num_adult !== undefined ? reassigningRes.display_num_adult : (reassigningRes.num_adult || 1)) + 
+                                                Number(reassigningRes.display_num_child !== undefined ? reassigningRes.display_num_child : (reassigningRes.num_child || 0));
                             const capRules = getCapacityRules(room, capacitySettings || undefined);
                             const exceedsCapacity = totalGuests > capRules.max;
                             return (

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
-import { getCapacityRules } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,23 +42,13 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (localRes) {
-      // 2.1. Consolidar capacidad si es una reservación de grupo local
-      let groupBase = 0;
-      let groupMax = 0;
-      let groupOriginalPax = Number(localRes.num_adult || 1) + Number(localRes.num_child || 0);
-      let groupOriginalPrice = Number(localRes.price || 0);
-      let groupDeposit = Number(localRes.deposit || 0);
-
-      const mainRules = getCapacityRules(localRes.unit_id || '', capacitySettings || undefined);
-      groupBase += mainRules.base;
-      groupMax += mainRules.max;
-
+      let siblingLocal: any[] = [];
       try {
         const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
         const mainName = cleanStr(localRes.guest_name || '');
         const mainPhone = (localRes.phone || '').trim();
 
-        const { data: siblingLocal } = await supabase
+        const { data: siblings } = await supabase
           .from('local_reservas')
           .select('id, unit_id, guest_name, phone, num_adult, num_child, price, deposit, channel')
           .eq('check_in', localRes.check_in)
@@ -68,31 +57,56 @@ export async function POST(req: Request) {
         const localChannel = (localRes.channel || '').toLowerCase();
         const isLocalOta = ['booking.com', 'airbnb', 'expedia'].some(c => localChannel.includes(c));
 
-        if (siblingLocal && siblingLocal.length > 0) {
-          siblingLocal.forEach(s => {
+        if (siblings && siblings.length > 0) {
+          siblingLocal = siblings.filter(s => {
             const sChannel = (s.channel || '').toLowerCase();
             const sIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => sChannel.includes(c));
 
             // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
-            if (isLocalOta !== sIsOta) return;
+            if (isLocalOta !== sIsOta) return false;
 
             const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone && mainPhone.length >= 6;
             const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
             
-            const isMatch = (isLocalOta || sIsOta) ? !!sameName : !!(samePhone || sameName);
-            if (isMatch) {
-              const sRules = getCapacityRules(s.unit_id || '', capacitySettings || undefined);
-              groupBase += sRules.base;
-              groupMax += sRules.max;
-              groupOriginalPax += (Number(s.num_adult || 0) + Number(s.num_child || 0));
-              groupOriginalPrice += Number(s.price || 0);
-              groupDeposit += Number(s.deposit || 0);
-            }
+            return (isLocalOta || sIsOta) ? !!sameName : !!(samePhone || sameName);
           });
         }
       } catch (err) {
         console.error("Error al consolidar grupo localRes en update-guests:", err);
       }
+
+      const UNIT_TO_ROOM: Record<string, string> = {
+        '1': '500', '2': '501', '3': '502', '4': '503',
+        '5': '504', '6': '505', '7': '506', '8': '507'
+      };
+      
+      const localResMapped = {
+        ...localRes,
+        room: localRes.unit_id ? (UNIT_TO_ROOM[localRes.unit_id] || localRes.unit_id) : ''
+      };
+      
+      const siblingLocalMapped = siblingLocal.map(s => ({
+        ...s,
+        room: s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : ''
+      }));
+
+      const allLocalMembers = [localResMapped, ...siblingLocalMapped];
+      const adjLocal = detectAndAdjustGroupGuests(allLocalMembers, capacitySettings || undefined);
+
+      let groupBase = 0;
+      let groupMax = 0;
+      let groupOriginalPrice = 0;
+      let groupDeposit = 0;
+
+      adjLocal.members.forEach((b: any) => {
+        const rRules = getCapacityRules(b.room || '', capacitySettings || undefined);
+        groupBase += rRules.base;
+        groupMax += rRules.max;
+        groupOriginalPrice += Number(b.price || 0);
+        groupDeposit += Number(b.deposit || 0);
+      });
+
+      let groupOriginalPax = adjLocal.groupTotalAdults + adjLocal.groupTotalChildren;
 
       if (totalNewGuests > groupMax) {
         return NextResponse.json({ 
@@ -210,15 +224,18 @@ export async function POST(req: Request) {
         price: Number(currentBooking.price || 0)
       }];
 
-      groupList.forEach((b: any) => {
-        const roomIdentifier = String(b.roomId || b.unitId || b.room_name || b.roomName || '');
+      const adjB24 = detectAndAdjustGroupGuests(groupList, capacitySettings || undefined);
+
+      adjB24.members.forEach((b: any) => {
+        const roomIdentifier = String(b.roomId || b.unitId || b.room_name || b.roomName || b.room || '');
         const rRules = getCapacityRules(roomIdentifier, capacitySettings || undefined);
         groupBase += rRules.base;
         groupMax += rRules.max;
-        groupOriginalPax += (Number(b.num_adult || b.numAdult || 1) + Number(b.num_child || b.numChild || 0));
         groupOriginalPrice += Number(b.price || b.price_estimate || 0);
         groupTotalPaid += Number(b.deposit || b.actual_paid || 0);
       });
+
+      groupOriginalPax = adjB24.groupTotalAdults + adjB24.groupTotalChildren;
 
     } catch (err) {
       console.error("Error al consolidar grupo Beds24:", err);
