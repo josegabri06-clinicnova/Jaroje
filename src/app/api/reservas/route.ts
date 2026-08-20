@@ -1315,7 +1315,7 @@ export async function PUT(req: Request) {
         // Detectar si hay cambios reales respecto a los valores actuales
         const arrivalChanged = arrival && arrival !== currentBooking.arrival;
         const departureChanged = departure && departure !== currentBooking.departure;
-        const roomTypeChanged = currentParent.roomId !== newParent.roomId;
+        const roomTypeChanged = String(currentParent.roomId || '').trim() !== String(newParent.roomId || '').trim();
         // También detectar cambio de unitId dentro del mismo tipo (ej: 301 → 302)
         const unitChanged = roomName && (String(currentBooking.roomId) !== String(newRoomId) || String(currentBooking.unitId || '1') !== String(newUnitId));
 

@@ -547,7 +547,8 @@ function ReservasListInner() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: reassigningRes.id,
-          roomName: targetRoomName
+          roomName: targetRoomName,
+          price: oldPVal
         })
       });
       const data = await res.json();
