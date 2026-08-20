@@ -290,13 +290,6 @@ export async function GET(req: Request) {
 
     // Excluir reservas de Beds24 que ya han sido clonadas o reasignadas localmente
     const reassignedB24Ids = new Set<string>();
-    const cleanName = (s: string) => {
-      return (s || '')
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "") // Quitar acentos
-        .replace(/[^a-z0-9]/g, ''); // Dejar sólo letras y números
-    };
 
     localRawData.forEach(lr => {
       // 1. Por ID explícito en notas
@@ -311,25 +304,6 @@ export async function GET(req: Request) {
     const filteredMappedBookings = mappedBookings.filter(b => {
       // Exclusión directa por ID de Beds24
       if (reassignedB24Ids.has(String(b.id))) return false;
-
-      // Exclusión laxa por coincidencia de estancia (fechas y nombres laxos)
-      const bNameClean = cleanName(b.guest_name);
-      const isReassignedLax = localRawData.some(lr => {
-        if (lr.status === 'cancelled') return false;
-
-        // Comprobación de fechas: coincidencia de check-in O check-out
-        const dateMatches = lr.check_in === b.check_in || lr.check_out === b.check_out;
-        if (!dateMatches) return false;
-
-        // Comprobación laxa de nombre (coincidencia de subcadenas)
-        const lrNameClean = cleanName(lr.guest_name);
-        const nameMatches = bNameClean.includes(lrNameClean) || lrNameClean.includes(bNameClean);
-        return nameMatches;
-      });
-
-      if (isReassignedLax) {
-        return false;
-      }
       return true;
     });
 
