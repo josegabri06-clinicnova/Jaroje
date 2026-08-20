@@ -272,33 +272,98 @@ export async function POST(req: Request) {
 
     // Actualizar los ítems de factura
     const currentItems = Array.isArray(currentBooking.invoiceItems) ? currentBooking.invoiceItems : [];
-    const charges = currentItems.filter((item: any) => Number(item.qty || 0) > 0);
+    const charges = currentItems.filter((item: any) => item.type === 'charge');
     const invoiceItemsUpdate: any[] = [];
 
-    if (charges.length > 0) {
-      const firstCharge = charges[0];
+    let mainRoomCharge = charges.find((c: any) => 
+      (c.description || '').includes('[ROOMNAME1]') || 
+      (c.description || '').toLowerCase().includes('room charge')
+    );
+    const ivaCharge = charges.find((c: any) => 
+      (c.description || '').toLowerCase().includes('iva')
+    );
+    const lodgingTaxCharge = charges.find((c: any) => 
+      (c.description || '').toLowerCase().includes('hospedaje') || 
+      (c.description || '').toLowerCase().includes('tax')
+    );
+
+    if (!mainRoomCharge) {
+      mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge);
+    }
+
+    // 1. Cargo principal de habitación
+    if (mainRoomCharge) {
       invoiceItemsUpdate.push({
-        id: firstCharge.id,
-        description: firstCharge.description || "Room Charge",
+        id: mainRoomCharge.id,
+        description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
         qty: 1,
-        amount: newPrice
+        amount: newPrice,
+        vatRate: 19
       });
-      for (let i = 1; i < charges.length; i++) {
+    } else {
+      invoiceItemsUpdate.push({
+        description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
+        qty: 1,
+        amount: newPrice,
+        vatRate: 19
+      });
+    }
+
+    // 2. IVA 16% (Incluido en el precio)
+    if (ivaCharge) {
+      invoiceItemsUpdate.push({
+        id: ivaCharge.id,
+        description: 'IVA 16% (Incluido en el precio)',
+        qty: 1,
+        amount: 0,
+        vatRate: 0
+      });
+    } else {
+      invoiceItemsUpdate.push({
+        description: 'IVA 16% (Incluido en el precio)',
+        qty: 1,
+        amount: 0,
+        vatRate: 0
+      });
+    }
+
+    // 3. Tax Hospedaje 3% (Incluido en el precio)
+    if (lodgingTaxCharge) {
+      invoiceItemsUpdate.push({
+        id: lodgingTaxCharge.id,
+        description: 'Tax Hospedaje 3% (Incluido en el precio)',
+        qty: 1,
+        amount: 0,
+        vatRate: 0
+      });
+    } else {
+      invoiceItemsUpdate.push({
+        description: 'Tax Hospedaje 3% (Incluido en el precio)',
+        qty: 1,
+        amount: 0,
+        vatRate: 0
+      });
+    }
+
+    // 4. Cancelar / eliminar cualquier otro cargo extra duplicado
+    const handledIds = new Set([
+      mainRoomCharge?.id,
+      ivaCharge?.id,
+      lodgingTaxCharge?.id
+    ].filter(Boolean));
+
+    charges.forEach((c: any) => {
+      if (!handledIds.has(c.id)) {
         invoiceItemsUpdate.push({
-          id: charges[i].id,
+          id: c.id,
           description: "",
           qty: "",
           amount: "",
           status: ""
         });
       }
-    } else {
-      invoiceItemsUpdate.push({
-        description: "Room Charge",
-        qty: 1,
-        amount: newPrice
-      });
-    }
+    });
+
     updatePayload.invoiceItems = invoiceItemsUpdate;
 
     const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
