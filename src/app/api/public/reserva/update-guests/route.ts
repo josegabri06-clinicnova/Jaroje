@@ -106,18 +106,36 @@ export async function POST(req: Request) {
         groupDeposit += Number(b.deposit || 0);
       });
 
-      let groupOriginalPax = adjLocal.groupTotalAdults + adjLocal.groupTotalChildren;
+      // 2.1. Calcular el total de huéspedes del grupo considerando el nuevo valor de esta habitación
+      const currentLocalAdj = adjLocal.members[0] || localRes;
+      const oldAdjAdults = currentLocalAdj.display_num_adult !== undefined ? currentLocalAdj.display_num_adult : Number(localRes.num_adult || 1);
+      const oldAdjChildren = currentLocalAdj.display_num_child !== undefined ? currentLocalAdj.display_num_child : Number(localRes.num_child || 0);
 
-      if (totalNewGuests > groupMax) {
+      const diffAdults = newAdults - oldAdjAdults;
+      const diffChildren = newChildren - oldAdjChildren;
+
+      const groupOriginalPax = adjLocal.groupTotalAdults + adjLocal.groupTotalChildren;
+      const totalNewGroupGuests = (adjLocal.groupTotalAdults + diffAdults) + (adjLocal.groupTotalChildren + diffChildren);
+
+      // Validar capacidad individual de la habitación
+      const currentRoomRules = getCapacityRules(currentLocalAdj.room || '', capacitySettings || undefined);
+      if (totalNewGuests > currentRoomRules.max) {
+        return NextResponse.json({
+          success: false,
+          error: `La capacidad máxima de la habitación es de ${currentRoomRules.max} personas. Has seleccionado ${totalNewGuests}.`
+        }, { status: 400 });
+      }
+
+      if (totalNewGroupGuests > groupMax) {
         return NextResponse.json({ 
           success: false, 
-          error: `La capacidad máxima de la reservación es de ${groupMax} personas. Has seleccionado ${totalNewGuests}.` 
+          error: `La capacidad máxima del grupo es de ${groupMax} personas. Has seleccionado un total de ${totalNewGroupGuests} en el grupo.` 
         }, { status: 400 });
       }
 
       // 2.2. Calcular ajuste de precio basado en la capacidad base del grupo
       const originalExtraGuests = Math.max(0, groupOriginalPax - groupBase);
-      const newExtraGuests = Math.max(0, totalNewGuests - groupBase);
+      const newExtraGuests = Math.max(0, totalNewGroupGuests - groupBase);
       const diffExtra = newExtraGuests - originalExtraGuests;
 
       const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
@@ -187,6 +205,7 @@ export async function POST(req: Request) {
     let groupOriginalPax = 0;
     let groupOriginalPrice = 0;
     let groupTotalPaid = 0;
+    let adjB24: any = null;
 
     try {
       const allB24 = await getBeds24Bookings(true);
@@ -224,7 +243,7 @@ export async function POST(req: Request) {
         price: Number(currentBooking.price || 0)
       }];
 
-      const adjB24 = detectAndAdjustGroupGuests(groupList, capacitySettings || undefined);
+      adjB24 = detectAndAdjustGroupGuests(groupList, capacitySettings || undefined);
 
       adjB24.members.forEach((b: any) => {
         const roomIdentifier = String(b.roomId || b.unitId || b.room_name || b.roomName || b.room || '');
@@ -252,16 +271,39 @@ export async function POST(req: Request) {
       groupOriginalPrice = Number(currentBooking.price || 0);
     }
 
-    if (totalNewGuests > groupMax) {
+    // 3.1. Calcular el total de huéspedes del grupo considerando el nuevo valor de esta habitación
+    let totalNewGroupGuests = totalNewGuests;
+    if (currentBooking) {
+      const currentB24Adj = (adjB24 && adjB24.members) ? adjB24.members.find((m: any) => String(m.id) === String(id)) : null;
+      const oldAdjAdults = currentB24Adj && currentB24Adj.display_num_adult !== undefined ? currentB24Adj.display_num_adult : Number(currentBooking.numAdult || 1);
+      const oldAdjChildren = currentB24Adj && currentB24Adj.display_num_child !== undefined ? currentB24Adj.display_num_child : Number(currentBooking.numChild || 0);
+
+      const diffAdults = newAdults - oldAdjAdults;
+      const diffChildren = newChildren - oldAdjChildren;
+
+      totalNewGroupGuests = (groupOriginalPax + diffAdults + diffChildren);
+
+      // Validar capacidad individual de la habitación
+      const roomIdentifier = String(currentBooking.roomId || currentBooking.roomName || '');
+      const currentRoomRules = getCapacityRules(roomIdentifier, capacitySettings || undefined);
+      if (totalNewGuests > currentRoomRules.max) {
+        return NextResponse.json({
+          success: false,
+          error: `La capacidad máxima de la habitación es de ${currentRoomRules.max} personas. Has seleccionado ${totalNewGuests}.`
+        }, { status: 400 });
+      }
+    }
+
+    if (totalNewGroupGuests > groupMax) {
       return NextResponse.json({ 
         success: false, 
-        error: `La capacidad máxima de la reservación es de ${groupMax} personas. Has seleccionado ${totalNewGuests}.` 
+        error: `La capacidad máxima del grupo es de ${groupMax} personas. Has seleccionado un total de ${totalNewGroupGuests} en el grupo.` 
       }, { status: 400 });
     }
 
     // 3.2. Calcular ajuste de precio
     const originalExtraGuests = Math.max(0, groupOriginalPax - groupBase);
-    const newExtraGuests = Math.max(0, totalNewGuests - groupBase);
+    const newExtraGuests = Math.max(0, totalNewGroupGuests - groupBase);
     const diffExtra = newExtraGuests - originalExtraGuests;
 
     const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
