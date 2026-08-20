@@ -6072,10 +6072,21 @@ function ReservasListInner() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2">
-                          <span className={`text-[13px] font-bold truncate leading-tight ${isSelected ? 'text-blue-950' : 'text-zinc-800'}`}>
-                            {b.room_name || b.room || 'General'}
-                          </span>
-                          <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider">
+                          <div className="min-w-0 flex-1">
+                            <span className={`text-[13px] font-bold truncate leading-tight block ${isSelected ? 'text-blue-950' : 'text-zinc-850'}`}>
+                              {b.room_name || b.room || 'General'}
+                            </span>
+                            {(() => {
+                              const roomNum = extractRoomNumber(b.room_name || b.room);
+                              if (!roomNum) return null;
+                              return (
+                                <span className="inline-flex items-center mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-100">
+                                  Habitación {roomNum}
+                                </span>
+                              );
+                            })()}
+                          </div>
+                          <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider shrink-0 mt-0.5">
                             ID: {b.id}
                           </span>
                         </div>
