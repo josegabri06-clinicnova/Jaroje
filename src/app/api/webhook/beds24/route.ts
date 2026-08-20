@@ -127,8 +127,9 @@ export async function POST(req: Request) {
               }
 
               // Enviar WhatsApp de disponibilidad liberada si no tenía depósito y se había enviado el último aviso
+              const isMaster = !b.masterId || String(b.masterId) === String(b.id) || Number(b.masterId) === 0;
               const depositVal = Number(b.deposit || 0);
-              if (depositVal === 0 && phone) {
+              if (isMaster && depositVal === 0 && phone) {
                 try {
                   const { data: liberacionYaEnviada } = await supabase
                     .from('whatsapp_logs')
@@ -223,6 +224,17 @@ export async function POST(req: Request) {
               if (existingLog && existingLog.length > 0) {
                 console.log(`[Webhook Beds24] Omitiendo duplicado exacto a reserva ${bookingIdStr}`);
               } else {
+                const isMaster = !b.masterId || String(b.masterId) === String(b.id) || Number(b.masterId) === 0;
+                if (!isMaster) {
+                  await supabase.from('whatsapp_logs').insert([{
+                    reservation_id: bookingIdStr,
+                    template_name: 'omitido_multi_habitacion_sibling',
+                    phone: phone
+                  }]);
+                  console.log(`[Webhook Beds24] Omitiendo reserva sibling ${bookingIdStr} (masterId: ${b.masterId})`);
+                  return NextResponse.json({ success: true, message: 'Reserva sibling, se omite notificación.' });
+                }
+
                 // 2. Deduplicación por teléfono en ventana de 5 minutos
                 const { data: recentPhoneLog } = await supabase
                   .from('whatsapp_logs')
