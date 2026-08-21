@@ -113,6 +113,7 @@ export default function PagoTransferenciaPage() {
   
   const [transferAccount, setTransferAccount] = useState<string>('santander');
   const [loadingAccount, setLoadingAccount] = useState<boolean>(true);
+  const curr = transferAccount === 'wise' ? 'USD' : 'MXN';
 
   useEffect(() => {
     if (rawAmount) {
@@ -308,7 +309,7 @@ export default function PagoTransferenciaPage() {
               <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-5 flex items-center justify-between gap-4">
                 <div className="flex-1 text-left">
                   <label htmlFor="amount-input" className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block mb-1">
-                    {lang === 'en' ? 'Declared Amount (MXN)' : 'Monto Declarado a Pagar (MXN)'}
+                    {lang === 'en' ? `Declared Amount (${curr})` : `Monto Declarado a Pagar (${curr})`}
                   </label>
                   <div className="relative flex items-center">
                     <span className="text-base font-black text-zinc-550 absolute left-2 select-none">$</span>

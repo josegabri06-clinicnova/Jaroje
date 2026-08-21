@@ -805,6 +805,8 @@ export default function PublicReservaPage() {
   const queryAction = searchParams?.get('action');
 
   const [booking, setBooking] = useState<any | null>(null);
+  const isUSD = booking?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+  const curr = isUSD ? 'USD' : 'MXN';
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentSplit, setPaymentSplit] = useState<'50' | '100'>('50');
@@ -942,7 +944,7 @@ export default function PublicReservaPage() {
         `1. Constancia: ${pdfUrl}`,
         `2. Correo: ${facturaEmail}`,
         `3. Uso del CFDI: ${facturaCfdi}`,
-        `4. Total pagado: $${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} MXN`,
+        `4. Total pagado: $${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} ${curr}`,
         `5. Habitación: ${booking.room_name}`,
         `6. Observaciones: ${facturaNotes || '(Ninguna)'}`,
         '',
@@ -1280,7 +1282,7 @@ export default function PublicReservaPage() {
   // - OTAs (Airbnb, Booking, Expedia): precio fijo, sin cargo extra adicional
   // - Directo (local 500-507 o Beds24 Directo): booking.price = tarifa base × noches
   //   El sistema tiene las reglas de capacidad por habitación y calcula el extra automáticamente
-  const EXTRA_GUEST_CHARGE = 500;
+  const EXTRA_GUEST_CHARGE = isUSD ? 25 : 500;
   const extraChargesTotal = (() => {
     if (isOta) return 0; // OTAs: tarifa fija negociada con la plataforma
 
@@ -1306,7 +1308,24 @@ export default function PublicReservaPage() {
   const basePriceWithoutExtras = Math.max(0, booking.price - extraChargesTotal);
   const anticipoConExtras = Math.ceil(totalConExtras * 0.5 * 100) / 100;
 
-  const t = TRANSLATIONS[lang];
+  const rawT = TRANSLATIONS[lang];
+  const t = React.useMemo(() => {
+    const clone: any = {};
+    for (const key in rawT) {
+      const val = rawT[key];
+      if (typeof val === 'function') {
+        clone[key] = (...args: any[]) => {
+          const res = val(...args);
+          return isUSD ? res.replace(/500 MXN/g, '25 USD').replace(/MXN/g, 'USD') : res;
+        };
+      } else if (typeof val === 'string') {
+        clone[key] = isUSD ? val.replace(/500 MXN/g, '25 USD').replace(/MXN/g, 'USD') : val;
+      } else {
+        clone[key] = val;
+      }
+    }
+    return clone;
+  }, [rawT, isUSD]);
 
   return (
     <div className="min-h-screen bg-[#F6F5F2] text-zinc-900 pb-16 font-sans">
@@ -1512,8 +1531,8 @@ export default function PublicReservaPage() {
                               <AlertTriangle size={10} className="text-amber-500 shrink-0" />
                               <span className="text-amber-700 text-[10.5px] font-semibold">
                                 {lang === 'en'
-                                  ? `${roomExtraGuests} extra guest(s) · +$${extraCharge.toLocaleString()} MXN`
-                                  : `${roomExtraGuests} huésped(es) extra · +$${extraCharge.toLocaleString()} MXN`}
+                                  ? `${roomExtraGuests} extra guest(s) · +$${extraCharge.toLocaleString()} ${curr}`
+                                  : `${roomExtraGuests} huésped(es) extra · +$${extraCharge.toLocaleString()} ${curr}`}
                               </span>
                             </div>
                           )}
@@ -1647,8 +1666,8 @@ export default function PublicReservaPage() {
                       const totalRoomWithExtras = roomPrice + roomExtraCharge;
 
                       const detailText = lang === 'en'
-                        ? `${roomNights} ${roomNights === 1 ? 'night' : 'nights'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + extra pax (${extraGuests} x $500 x ${roomNights} n.)` : ''}`
-                        : `${roomNights} ${roomNights === 1 ? 'noche' : 'noches'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + pax extra (${extraGuests} x $500 x ${roomNights} n.)` : ''}`;
+                        ? `${roomNights} ${roomNights === 1 ? 'night' : 'nights'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + extra pax (${extraGuests} x $${EXTRA_GUEST_CHARGE} x ${roomNights} n.)` : ''}`
+                        : `${roomNights} ${roomNights === 1 ? 'noche' : 'noches'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + pax extra (${extraGuests} x $${EXTRA_GUEST_CHARGE} x ${roomNights} n.)` : ''}`;
 
                       const basePrice = Number((totalRoomWithExtras / 1.19).toFixed(2));
                       const vatAmount = Number((basePrice * 0.16).toFixed(2));
@@ -1666,7 +1685,7 @@ export default function PublicReservaPage() {
                               </span>
                             </div>
                             <span className="font-extrabold text-zinc-900 text-right shrink-0 mt-0.5">
-                              ${totalRoomWithExtras.toLocaleString('es-MX')} MXN
+                              ${totalRoomWithExtras.toLocaleString('es-MX')} {curr}
                             </span>
                           </div>
 
@@ -1674,15 +1693,15 @@ export default function PublicReservaPage() {
                           <div className="mt-1 pl-4 border-l border-zinc-200 space-y-0.5 text-[10px] text-zinc-400 w-full max-w-[280px]">
                             <div className="flex justify-between w-full">
                               <span>{lang === 'en' ? 'Base Rate (excl. tax)' : 'Tarifa base (sin imp.)'}</span>
-                              <span className="font-medium">${basePrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
+                              <span className="font-medium">${basePrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })} {curr}</span>
                             </div>
                             <div className="flex justify-between w-full">
                               <span>{lang === 'en' ? 'VAT (16% included)' : 'IVA (16% incluido)'}</span>
-                              <span className="font-medium">${vatAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
+                              <span className="font-medium">${vatAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} {curr}</span>
                             </div>
                             <div className="flex justify-between w-full">
                               <span>{lang === 'en' ? 'Lodging Tax (3% included)' : 'Imp. Hospedaje (3% incluido)'}</span>
-                              <span className="font-medium">${lodgingTaxAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN</span>
+                              <span className="font-medium">${lodgingTaxAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} {curr}</span>
                             </div>
                           </div>
                         </div>
@@ -1697,7 +1716,7 @@ export default function PublicReservaPage() {
               <div className="flex justify-between items-center text-zinc-650">
                 <span>{t.totalEstancia}</span>
                 <strong className="text-zinc-900 font-extrabold">
-                  ${(extraChargesTotal > 0 ? basePriceWithoutExtras : booking.price).toLocaleString('es-MX')} MXN
+                  ${(extraChargesTotal > 0 ? basePriceWithoutExtras : booking.price).toLocaleString('es-MX')} {curr}
                 </strong>
               </div>
               {extraChargesTotal > 0 && (
@@ -1706,25 +1725,25 @@ export default function PublicReservaPage() {
                     <AlertTriangle size={12} className="text-amber-500 shrink-0" />
                     {lang === 'en' ? 'Extra guests charge' : 'Cargo huéspedes extra'}
                   </span>
-                  <strong className="font-black">+${extraChargesTotal.toLocaleString('es-MX')} MXN</strong>
+                  <strong className="font-black">+${extraChargesTotal.toLocaleString('es-MX')} {curr}</strong>
                 </div>
               )}
               {extraChargesTotal > 0 && (
                 <div className="flex justify-between items-center text-zinc-800 border-t border-dashed border-zinc-200 pt-2">
                   <span className="font-bold">{lang === 'en' ? 'Total (with extras):' : 'Total con cargos extra:'}</span>
-                  <strong className="text-zinc-900 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
+                  <strong className="text-zinc-900 font-black text-base">${totalConExtras.toLocaleString('es-MX')} {curr}</strong>
                 </div>
               )}
               {hasPaid ? (
                 <>
                   <div className="flex justify-between items-center text-emerald-600 font-semibold bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
                     <span className="flex items-center gap-1">{t.anticipoRecibido}</span>
-                    <strong className="font-black">${booking.deposit.toLocaleString('es-MX')} MXN</strong>
+                    <strong className="font-black">${booking.deposit.toLocaleString('es-MX')} {curr}</strong>
                   </div>
                   <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
                     <span className="font-bold">{t.saldoRestante}</span>
                     <strong className="text-indigo-600 font-black text-base">
-                      ${(Math.max(0, totalConExtras - booking.deposit)).toLocaleString('es-MX')} MXN
+                      ${(Math.max(0, totalConExtras - booking.deposit)).toLocaleString('es-MX')} {curr}
                     </strong>
                   </div>
                 </>
@@ -1732,15 +1751,15 @@ export default function PublicReservaPage() {
                 <>
                   <div className="flex justify-between items-center text-indigo-600 font-semibold bg-indigo-50/50 px-3 py-2 rounded-xl border border-indigo-100/80">
                     <span>{t.anticipoRequerido}</span>
-                    <strong className="font-black">${(extraChargesTotal > 0 ? anticipoConExtras : anticipoRequerido).toLocaleString('es-MX')} MXN</strong>
+                    <strong className="font-black">${(extraChargesTotal > 0 ? anticipoConExtras : anticipoRequerido).toLocaleString('es-MX')} {curr}</strong>
                   </div>
                   <div className="flex justify-between items-center text-zinc-500">
                     <span>{t.anticipoDepositado}</span>
-                    <strong className="font-bold">$0 MXN</strong>
+                    <strong className="font-bold">$0 {curr}</strong>
                   </div>
                   <div className="flex justify-between items-center text-zinc-800 pt-2 border-t border-dashed border-zinc-200">
                     <span className="font-bold">{t.saldoRestante}</span>
-                    <strong className="text-indigo-600 font-black text-base">${totalConExtras.toLocaleString('es-MX')} MXN</strong>
+                    <strong className="text-indigo-600 font-black text-base">${totalConExtras.toLocaleString('es-MX')} {curr}</strong>
                   </div>
                 </>
               )}
@@ -1777,7 +1796,7 @@ export default function PublicReservaPage() {
                     >
                       <span>{t.anticipoSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '50' ? 'text-indigo-200' : 'text-zinc-500'}`}>
-                        ${(Math.ceil(booking.price * 0.5 * 100) / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                        ${(Math.ceil(booking.price * 0.5 * 100) / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 })} {curr}
                       </span>
                     </button>
                     <button
@@ -1789,7 +1808,7 @@ export default function PublicReservaPage() {
                     >
                       <span>{t.totalSelector}</span>
                       <span className={`text-[10px] opacity-90 mt-0.5 ${paymentSplit === '100' ? 'text-indigo-200' : 'text-zinc-500'}`}>
-                        ${Number(booking.price.toFixed(2)).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                        ${Number(booking.price.toFixed(2)).toLocaleString('es-MX', { minimumFractionDigits: 2 })} {curr}
                       </span>
                     </button>
                   </div>
@@ -1802,7 +1821,7 @@ export default function PublicReservaPage() {
               <div className="bg-indigo-50/40 border border-indigo-100/50 rounded-xl p-3.5 text-center">
                 <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-wider block">{t.amountSelected}</span>
                 <span className="text-xl font-black text-indigo-950">
-                  ${targetAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                  ${targetAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} {curr}
                 </span>
               </div>
 
@@ -1882,7 +1901,7 @@ export default function PublicReservaPage() {
                             : (lang === 'en' ? 'Declared Amount' : 'Monto Declarado')}
                         </span>
                         <span className={`text-xs font-black ${r.status === 'approved' ? 'text-emerald-800 font-black' : 'text-zinc-900'}`}>
-                          MX${Number(r.amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
+                          {curr}${Number(r.amount || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}
                         </span>
                         {dateVal && (
                           <span className="text-[10px] text-zinc-400 font-bold mt-0.5">
@@ -2407,7 +2426,7 @@ export default function PublicReservaPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-zinc-500 font-semibold">Total pagado:</span>
-                      <span className="font-extrabold text-indigo-700">${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} MXN</span>
+                      <span className="font-extrabold text-indigo-700">${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} {curr}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-zinc-500 font-semibold">Check-in:</span>
@@ -2518,7 +2537,7 @@ export default function PublicReservaPage() {
                     <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Correo:</span><span className="font-bold text-zinc-900">{facturaEmail}</span></div>
                     <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">CFDI:</span><span className="font-bold text-zinc-900">{facturaCfdi}</span></div>
                     <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Habitación:</span><span className="font-bold text-zinc-900">{booking.room_name}</span></div>
-                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Monto:</span><span className="font-extrabold text-indigo-700">${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} MXN</span></div>
+                    <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Monto:</span><span className="font-extrabold text-indigo-700">${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} {curr}</span></div>
                     {facturaNotes && <div className="flex gap-2"><span className="text-zinc-500 w-20 shrink-0">Obs.:</span><span className="font-bold text-zinc-900">{facturaNotes}</span></div>}
                   </div>
 
@@ -2743,11 +2762,11 @@ export default function PublicReservaPage() {
                   <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 space-y-1.5 text-xs text-amber-900">
                     <div className="flex justify-between font-bold">
                       <span>{t.priceAdjustmentLabel}</span>
-                      <span>{adj > 0 ? `+$${adj}` : `-$${Math.abs(adj)}`} MXN</span>
+                      <span>{adj > 0 ? `+$${adj}` : `-$${Math.abs(adj)}`} {curr}</span>
                     </div>
                     <div className="flex justify-between font-extrabold text-[13px] border-t border-amber-200/50 pt-1.5">
                       <span>{t.estimatedTotal}</span>
-                      <span>${estNewPrice} MXN</span>
+                      <span>${estNewPrice} {curr}</span>
                     </div>
                   </div>
                 );
