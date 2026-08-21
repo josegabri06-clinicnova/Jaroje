@@ -114,6 +114,43 @@ export async function POST(req: Request) {
             const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || '', country);
             const bStatus = String(b.status || '');
 
+            let isMaster = !b.masterId || String(b.masterId) === String(b.id) || Number(b.masterId) === 0;
+            if (isMaster && phone) {
+              try {
+                const cleanPhone = phone.replace(/\D/g, '');
+                const { data: groupReservations } = await supabase
+                  .from('local_reservas')
+                  .select('id, phone, guest_name')
+                  .eq('check_in', b.arrival)
+                  .eq('check_out', b.departure);
+                
+                if (groupReservations && groupReservations.length > 1) {
+                  const bName = `${b.firstName || ''} ${b.lastName || ''}`.toLowerCase().trim().replace(/\s+/g, ' ');
+                  const matchedIds: number[] = [];
+                  for (const r of groupReservations) {
+                    const rPhone = (r.phone || '').replace(/\D/g, '');
+                    const rName = (r.guest_name || '').toLowerCase().trim().replace(/\s+/g, ' ');
+                    
+                    const samePhone = cleanPhone && rPhone && cleanPhone === rPhone;
+                    const sameName = bName && rName && (bName.includes(rName) || rName.includes(bName));
+                    
+                    if (samePhone || sameName) {
+                      matchedIds.push(Number(r.id));
+                    }
+                  }
+                  if (matchedIds.length > 1) {
+                    const minId = Math.min(...matchedIds);
+                    if (Number(b.id) !== minId) {
+                      isMaster = false;
+                      console.log(`[Webhook Beds24] Booking ${b.id} detectado como sibling implícito (ID principal: ${minId})`);
+                    }
+                  }
+                }
+              } catch (groupErr) {
+                console.error("[Webhook Beds24] Error al validar master implícito:", groupErr);
+              }
+            }
+
             if (bStatus === '0' || bStatus === 'cancelled') {
               console.log(`[Webhook Beds24] Reservación cancelada detectada para ID ${bookingIdStr}`);
               await supabase.from('checkins').delete().eq('reservation_id', bookingIdStr.toLowerCase().trim());
@@ -127,7 +164,6 @@ export async function POST(req: Request) {
               }
 
               // Enviar WhatsApp de disponibilidad liberada si no tenía depósito y se había enviado el último aviso
-              const isMaster = !b.masterId || String(b.masterId) === String(b.id) || Number(b.masterId) === 0;
               const depositVal = Number(b.deposit || 0);
               if (isMaster && depositVal === 0 && phone) {
                 try {
@@ -224,7 +260,6 @@ export async function POST(req: Request) {
               if (existingLog && existingLog.length > 0) {
                 console.log(`[Webhook Beds24] Omitiendo duplicado exacto a reserva ${bookingIdStr}`);
               } else {
-                const isMaster = !b.masterId || String(b.masterId) === String(b.id) || Number(b.masterId) === 0;
                 if (!isMaster) {
                   await supabase.from('whatsapp_logs').insert([{
                     reservation_id: bookingIdStr,
