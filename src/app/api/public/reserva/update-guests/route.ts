@@ -271,14 +271,34 @@ export async function POST(req: Request) {
       const rawSource = String(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''}`).toLowerCase();
       const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => rawSource.includes(c));
 
+      let mainActualPaid = 0;
+      let mainTotalInvoiceCharges = 0;
+      if (currentBooking.invoiceItems && Array.isArray(currentBooking.invoiceItems)) {
+        currentBooking.invoiceItems.forEach((item: any) => {
+          const itemBookingId = String(item.bookingId || item.bookId || '');
+          if (itemBookingId && itemBookingId !== String(currentBooking.id)) {
+            return;
+          }
+          const type = item.type || '';
+          const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
+          if (type === 'payment' || lineTotal < 0) {
+            mainActualPaid += Math.abs(lineTotal);
+          } else {
+            mainTotalInvoiceCharges += lineTotal;
+          }
+        });
+      }
+      const mainCalculatedCharges = mainTotalInvoiceCharges > 0 ? mainTotalInvoiceCharges : Number(currentBooking.price || 0);
+      const mainDepositVal = mainActualPaid > 0 ? mainActualPaid : (currentBooking.deposit !== undefined ? Number(currentBooking.deposit) : 0);
+
       const mainBookingMapped = {
         id: String(currentBooking.id),
         roomId: String(currentBooking.roomId || ''),
         roomName: currentBooking.roomName || '',
         num_adult: Number(currentBooking.numAdult || 1),
         num_child: Number(currentBooking.numChild || 0),
-        price: Number(currentBooking.price || 0),
-        deposit: Number(currentBooking.deposit || 0),
+        price: mainCalculatedCharges,
+        deposit: mainDepositVal,
         channel: currentBooking.channel || 'direct'
       };
 
@@ -402,7 +422,28 @@ export async function POST(req: Request) {
       : 1;
 
     const priceAdjustment = Math.round(diffExtra * extraGuestPrice * nights);
-    const bookingOriginalPrice = Number(currentBooking.price || 0);
+    
+    // Calcular el precio real del invoice de la principal
+    let mainActualPaid = 0;
+    let mainTotalInvoiceCharges = 0;
+    if (currentBooking.invoiceItems && Array.isArray(currentBooking.invoiceItems)) {
+      currentBooking.invoiceItems.forEach((item: any) => {
+        const itemBookingId = String(item.bookingId || item.bookId || '');
+        if (itemBookingId && itemBookingId !== String(currentBooking.id)) {
+          return;
+        }
+        const type = item.type || '';
+        const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
+        if (type === 'payment' || lineTotal < 0) {
+          mainActualPaid += Math.abs(lineTotal);
+        } else {
+          mainTotalInvoiceCharges += lineTotal;
+        }
+      });
+    }
+    const mainCalculatedCharges = mainTotalInvoiceCharges > 0 ? mainTotalInvoiceCharges : Number(currentBooking.price || 0);
+
+    const bookingOriginalPrice = mainCalculatedCharges;
     const newPrice = Math.max(0, Math.round(bookingOriginalPrice + priceAdjustment));
     const groupNewPrice = Math.max(0, Math.round(groupOriginalPrice + priceAdjustment));
     const newBalance = Math.max(0, groupNewPrice - groupTotalPaid);

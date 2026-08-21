@@ -1502,7 +1502,7 @@ export default function PublicReservaPage() {
                     return booking.rooms_detail.map((room: any, idx: number) => {
                       const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
                       const baseCapacity = getCapacityRulesForSingle(room.room_name || '').base;
-                      const EXTRA_CHARGE = 500;
+                      const EXTRA_CHARGE = EXTRA_GUEST_CHARGE;
 
                       let roomExtraGuests = 0;
                       if (groupExtraGuests > 0 && totalGuests > baseCapacity) {
