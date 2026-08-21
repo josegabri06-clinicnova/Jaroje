@@ -384,9 +384,13 @@ export async function GET(req: Request) {
       combined.forEach((b: any) => {
         const isCheckedIn = b.is_checked_in || b.status === 'checked_in' || String(b.status).toLowerCase() === 'checked_in';
         const isCheckedOut = b.is_checked_out || b.status === 'checked_out' || String(b.status).toLowerCase() === 'checked_out';
+        const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
         if (isCheckedIn || isCheckedOut) {
           const bPrice = Number(b.price_estimate || b.price || 0);
           b.deposit = bPrice;
+          b.balance = 0;
+        } else if (isOta) {
+          b.deposit = 0;
           b.balance = 0;
         }
       });

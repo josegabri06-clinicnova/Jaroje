@@ -365,12 +365,25 @@ export default function CalendarPage() {
       if (json.success && json.data) {
         const merged = json.data.map((res: any) => {
           const resIdStr = String(res.id).toLowerCase().trim();
+          const isChIn = checkinMap[resIdStr]?.status === 'checked_in';
+          const isChOut = checkinMap[resIdStr]?.status === 'checked_out';
+          const isSettled = isChIn || isChOut;
+
+          const priceVal = Number(res.price_estimate || res.price || 0);
+          const isOta = res.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => res.channel.toLowerCase().includes(c));
+          const depositVal = isSettled 
+            ? priceVal 
+            : (isOta ? 0 : Number(res.deposit || 0));
+          const balanceVal = (isOta || isSettled) ? 0 : (res.balance !== undefined ? Number(res.balance) : Math.max(0, priceVal - depositVal));
+
           return {
             ...res,
             room: res.room_name || res.room || 'Sin asignar',
-            checked_in: checkinMap[resIdStr]?.status === 'checked_in',
-            checked_out: checkinMap[resIdStr]?.status === 'checked_out',
-            dni_image: checkinMap[resIdStr]?.document_url
+            checked_in: isChIn,
+            checked_out: isChOut,
+            dni_image: checkinMap[resIdStr]?.document_url,
+            deposit: depositVal,
+            balance: balanceVal
           };
         });
         setReservas(merged);

@@ -1496,8 +1496,11 @@ function ReservasListInner() {
           const isSettled = isChIn || isChOut;
 
           const priceVal = Number(r.price_estimate || r.price || 0);
-          const depositVal = isSettled ? priceVal : Number(r.deposit || 0);
-          const balanceVal = isSettled ? 0 : (r.balance !== undefined ? Number(r.balance) : Math.max(0, priceVal - depositVal));
+          const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => r.channel.toLowerCase().includes(c));
+          const depositVal = isSettled 
+            ? priceVal 
+            : (isOta ? 0 : Number(r.deposit || 0));
+          const balanceVal = (isOta || isSettled) ? 0 : (r.balance !== undefined ? Number(r.balance) : Math.max(0, priceVal - depositVal));
 
           return {
             ...r,

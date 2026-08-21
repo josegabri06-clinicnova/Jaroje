@@ -2636,8 +2636,11 @@ export default function RecepcionPage() {
             const isSettled = isChIn || isChOut;
 
             const priceVal = Number(res.price_estimate || res.price || 0);
-            const depositVal = isSettled ? priceVal : Number(res.deposit || 0);
-            const balanceVal = isSettled ? 0 : Math.max(0, priceVal - depositVal);
+            const isOta = res.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => res.channel.toLowerCase().includes(c));
+            const depositVal = isSettled 
+              ? priceVal 
+              : (isOta ? 0 : Number(res.deposit || 0));
+            const balanceVal = (isOta || isSettled) ? 0 : Math.max(0, priceVal - depositVal);
 
             const alreadyCheckedIn = prevReservas.find(p => String(p.id).toLowerCase().trim() === resIdStr)?.checked_in;
             return {
