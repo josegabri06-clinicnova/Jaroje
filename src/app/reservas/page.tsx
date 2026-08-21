@@ -803,7 +803,7 @@ function ReservasListInner() {
               undefined,
               Number(room.num_adult || 1),
               Number(room.num_child || 0),
-              Number(room.deposit || 0)
+              Number(room.rawDeposit || room.deposit || 0)
             );
             netRevenue = Number(otaSplit.netRevenue) || 0;
             commission = Number(otaSplit.commission) || 0;
@@ -3886,7 +3886,7 @@ function ReservasListInner() {
                           undefined,
                           Number(selectedRes.num_adult || 1),
                           Number(selectedRes.num_child || 0),
-                          Number(selectedRes.deposit || 0)
+                          Number(selectedRes.rawDeposit || selectedRes.deposit || 0)
                         );
                         expectedPayout = otaSplit.netRevenue;
                         hostFee = otaSplit.commission;

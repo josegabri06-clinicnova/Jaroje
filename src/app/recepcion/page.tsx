@@ -3626,7 +3626,7 @@ export default function RecepcionPage() {
                 rules,
                 r.num_adult || 1,
                 r.num_child || 0,
-                r.deposit || 0
+                Number(r.rawDeposit || r.deposit || 0)
               );
               netRevenue = otaSplit.netRevenue;
               commission = otaSplit.commission;
@@ -4195,7 +4195,7 @@ export default function RecepcionPage() {
               rules,
               selectedReserva.num_adult || 1,
               selectedReserva.num_child || 0,
-              selectedReserva.deposit || 0
+              Number(selectedReserva.rawDeposit || selectedReserva.deposit || 0)
             );
             netRevenue = otaSplit.netRevenue;
             commission = otaSplit.commission;
@@ -7342,7 +7342,7 @@ export default function RecepcionPage() {
                             rules,
                             selectedReserva.num_adult || 1,
                             selectedReserva.num_child || 0,
-                            selectedReserva.deposit || 0
+                            Number(selectedReserva.rawDeposit || selectedReserva.deposit || 0)
                           );
                           expectedPayout = otaSplit.netRevenue;
                           hostFee = otaSplit.commission;

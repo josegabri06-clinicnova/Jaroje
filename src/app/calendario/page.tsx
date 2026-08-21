@@ -1351,7 +1351,7 @@ export default function CalendarPage() {
           undefined,
           Number(selectedReserva.num_adult || 1),
           Number(selectedReserva.num_child || 0),
-          Number(selectedReserva.deposit || 0)
+          Number(selectedReserva.rawDeposit || selectedReserva.deposit || 0)
         );
         netRevenue = otaSplit.netRevenue;
         commission = otaSplit.commission;
@@ -2879,7 +2879,7 @@ export default function CalendarPage() {
                               undefined,
                               Number(selectedReserva.num_adult || 1),
                               Number(selectedReserva.num_child || 0),
-                              Number(selectedReserva.deposit || 0)
+                              Number(selectedReserva.rawDeposit || selectedReserva.deposit || 0)
                             );
                             expectedPayout = otaSplit.netRevenue;
                             hostFee = otaSplit.commission;
