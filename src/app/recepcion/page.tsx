@@ -3614,15 +3614,16 @@ export default function RecepcionPage() {
             let taxesRetained = 0;
 
             if (netRevenue === 0 && commission === 0) {
-              const balanceVal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
-
               const otaSplit = computeOtaSplit(
-                balanceVal > 0 ? balanceVal : (r.price_estimate || 0),
+                Number(r.price_estimate || r.price || 0),
                 channel,
                 r.room,
                 r.check_in,
                 r.check_out,
-                rules
+                rules,
+                r.num_adult || 1,
+                r.num_child || 0,
+                r.deposit || 0
               );
               netRevenue = otaSplit.netRevenue;
               commission = otaSplit.commission;
@@ -3696,6 +3697,7 @@ export default function RecepcionPage() {
             }
 
             const totalAmount = netRevenue + commission + taxesRetained;
+            const isChannelCollect = channel === 'Airbnb' || (channel === 'Booking.com' && (r.deposit || 0) > 0);
             let syncedSuccess = false;
             try {
               const b24PayRes = await fetch('/api/reservas/payment', {
@@ -3703,7 +3705,7 @@ export default function RecepcionPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   bookId: r.id,
-                  amount: totalAmount,
+                  amount: isChannelCollect ? commission : totalAmount,
                   paymentMethod: 'transferencia',
                   employeeNum: emp?.employee_num || null,
                   description: `Cobro Check-in Automático ${channel}`
@@ -4181,15 +4183,16 @@ export default function RecepcionPage() {
           let taxesRetained = 0;
 
           if (netRevenue === 0 && commission === 0) {
-            const balanceVal = Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
-
             const otaSplit = computeOtaSplit(
-              balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0),
+              Number(selectedReserva.price_estimate || selectedReserva.price || 0),
               channel,
               selectedReserva.room,
               selectedReserva.check_in,
               selectedReserva.check_out,
-              rules
+              rules,
+              selectedReserva.num_adult || 1,
+              selectedReserva.num_child || 0,
+              selectedReserva.deposit || 0
             );
             netRevenue = otaSplit.netRevenue;
             commission = otaSplit.commission;
@@ -4264,6 +4267,7 @@ export default function RecepcionPage() {
           }
 
           const totalAmount = netRevenue + commission + taxesRetained;
+          const isChannelCollect = channel === 'Airbnb' || (channel === 'Booking.com' && (selectedReserva.deposit || 0) > 0);
           let syncedSuccess = false;
           try {
             const b24PayRes = await fetch('/api/reservas/payment', {
@@ -4271,7 +4275,7 @@ export default function RecepcionPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 bookId: selectedReserva.id,
-                amount: totalAmount,
+                amount: isChannelCollect ? commission : totalAmount,
                 paymentMethod: 'transferencia',
                 employeeNum: emp?.employee_num || null,
                 description: `Cobro Check-in Automático ${channel}`
@@ -7321,27 +7325,28 @@ export default function RecepcionPage() {
                         const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
                         const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
 
-                        const balanceVal = Math.max(0, Number(selectedReserva.price_estimate || selectedReserva.price || 0) - Number(selectedReserva.deposit || 0));
-
-                        const totalAmount = balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0);
                         let expectedPayout = selectedReserva.expected_payout || 0;
                         let hostFee = selectedReserva.host_fee || 0;
                         let taxesRetained = 0;
 
                         if (expectedPayout === 0 && hostFee === 0) {
                           const otaSplit = computeOtaSplit(
-                            totalAmount,
+                            Number(selectedReserva.price_estimate || selectedReserva.price || 0),
                             channel,
                             selectedReserva.room,
                             selectedReserva.check_in,
                             selectedReserva.check_out,
-                            rules
+                            rules,
+                            selectedReserva.num_adult || 1,
+                            selectedReserva.num_child || 0,
+                            selectedReserva.deposit || 0
                           );
                           expectedPayout = otaSplit.netRevenue;
                           hostFee = otaSplit.commission;
                           taxesRetained = otaSplit.taxesRetained || 0;
                         } else {
-                          taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
+                          const totalEstimate = selectedReserva.price_estimate || 0;
+                          taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalEstimate - expectedPayout - hostFee) : 0;
                         }
 
                         return (

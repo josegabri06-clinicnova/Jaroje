@@ -1329,19 +1329,16 @@ export default function CalendarPage() {
       let taxesRetained = 0;
 
       if (netRevenue === 0 && commission === 0) {
-        const balanceVal = selectedReserva.balance !== undefined
-          ? selectedReserva.balance
-          : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
-
         const otaSplit = computeOtaSplit(
-          balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0),
+          Number(selectedReserva.price_estimate || selectedReserva.price || 0),
           channel,
           selectedReserva.room,
           selectedReserva.check_in,
           selectedReserva.check_out,
           undefined,
           Number(selectedReserva.num_adult || 1),
-          Number(selectedReserva.num_child || 0)
+          Number(selectedReserva.num_child || 0),
+          Number(selectedReserva.deposit || 0)
         );
         netRevenue = otaSplit.netRevenue;
         commission = otaSplit.commission;
@@ -1394,6 +1391,7 @@ export default function CalendarPage() {
       }
 
       const totalAmount = netRevenue + commission + taxesRetained;
+      const isChannelCollect = channel === 'Airbnb' || (channel === 'Booking.com' && (selectedReserva.deposit || 0) > 0);
       let syncedSuccess = false;
       try {
         const b24PayRes = await fetch('/api/reservas/payment', {
@@ -1401,7 +1399,7 @@ export default function CalendarPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             bookId: selectedReserva.id,
-            amount: totalAmount,
+            amount: isChannelCollect ? commission : totalAmount,
             paymentMethod: 'transferencia',
             employeeNum: emp?.employee_num || null,
             description: `Cobro Check-in Automático ${channel}`
@@ -2854,31 +2852,28 @@ export default function CalendarPage() {
                           const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
                           const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
 
-                          const balanceVal = selectedReserva.balance !== undefined
-                            ? selectedReserva.balance
-                            : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
-
-                          const totalAmount = balanceVal > 0 ? balanceVal : (selectedReserva.price_estimate || 0);
                           let expectedPayout = selectedReserva.expected_payout || 0;
                           let hostFee = selectedReserva.host_fee || 0;
                           let taxesRetained = 0;
 
                           if (expectedPayout === 0 && hostFee === 0) {
                             const otaSplit = computeOtaSplit(
-                              totalAmount,
+                              Number(selectedReserva.price_estimate || selectedReserva.price || 0),
                               channel,
                               selectedReserva.room,
                               selectedReserva.check_in,
                               selectedReserva.check_out,
                               undefined,
                               Number(selectedReserva.num_adult || 1),
-                              Number(selectedReserva.num_child || 0)
+                              Number(selectedReserva.num_child || 0),
+                              Number(selectedReserva.deposit || 0)
                             );
                             expectedPayout = otaSplit.netRevenue;
                             hostFee = otaSplit.commission;
                             taxesRetained = otaSplit.taxesRetained || 0;
                           } else {
-                            taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
+                            const totalEstimate = Number(selectedReserva.price_estimate || 0);
+                            taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalEstimate - expectedPayout - hostFee) : 0;
                           }
 
                           return (

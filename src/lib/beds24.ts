@@ -1793,7 +1793,8 @@ export function computeOtaSplit(
   checkOut: string,
   rulesList?: any[],
   numAdults: number = 1,
-  numChildren: number = 0
+  numChildren: number = 0,
+  deposit: number = 0
 ): {
   isOTA: boolean;
   netRevenue: number;
@@ -1813,20 +1814,26 @@ export function computeOtaSplit(
     let commission = 0;
     let taxesRetained = 0;
 
-    const roomRate = Number((totalAmount / 1.19).toFixed(2));
-
-    if (isAirbnb) {
-      commission = Number((roomRate * 0.186).toFixed(2));
-      taxesRetained = Number((roomRate * 0.17).toFixed(2));
-      netRevenue = Number((totalAmount - commission - taxesRetained).toFixed(2));
-    } else if (isBooking) {
-      commission = Number((roomRate * 0.186).toFixed(2));
-      taxesRetained = Number((roomRate * 0.12).toFixed(2));
-      netRevenue = Number((totalAmount - commission - taxesRetained).toFixed(2));
-    } else {
-      commission = Number((totalAmount * 0.15).toFixed(2));
-      netRevenue = Number((totalAmount - commission).toFixed(2));
+    if ((isAirbnb && deposit > 0) || (isBooking && deposit > 0)) {
+      netRevenue = deposit;
+      commission = Number((totalAmount - deposit).toFixed(2));
       taxesRetained = 0;
+    } else {
+      const roomRate = Number((totalAmount / 1.16).toFixed(2));
+
+      if (isAirbnb) {
+        commission = Number((roomRate * 0.3056).toFixed(2));
+        netRevenue = Number((totalAmount - commission).toFixed(2));
+        taxesRetained = 0;
+      } else if (isBooking) {
+        commission = Number((roomRate * 0.306).toFixed(2));
+        netRevenue = Number((totalAmount - commission).toFixed(2));
+        taxesRetained = 0;
+      } else {
+        commission = Number((totalAmount * 0.15).toFixed(2));
+        netRevenue = Number((totalAmount - commission).toFixed(2));
+        taxesRetained = 0;
+      }
     }
 
     return {

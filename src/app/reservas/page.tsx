@@ -794,19 +794,16 @@ function ReservasListInner() {
           let taxesRetained = 0;
 
           if (netRevenue === 0 && commission === 0) {
-            const balanceVal = room.balance !== undefined
-              ? Number(room.balance)
-              : Number(room.price_estimate || 0) - Number(room.deposit || 0);
-
             const otaSplit = computeOtaSplit(
-              (isNaN(balanceVal) || balanceVal <= 0) ? Number(room.price_estimate || 0) : balanceVal,
+              Number(room.price_estimate || room.price || 0),
               channel,
               room.room_name || room.room || '',
               room.check_in || '',
               room.check_out || '',
               undefined,
               Number(room.num_adult || 1),
-              Number(room.num_child || 0)
+              Number(room.num_child || 0),
+              Number(room.deposit || 0)
             );
             netRevenue = Number(otaSplit.netRevenue) || 0;
             commission = Number(otaSplit.commission) || 0;
@@ -884,13 +881,14 @@ function ReservasListInner() {
 
           // Sincronizar pago de OTA con Beds24 en segundo plano
           const totalAmount = netRevenue + commission + taxesRetained;
+          const isChannelCollect = channel === 'Airbnb' || (channel === 'Booking.com' && (room.deposit || 0) > 0);
           const currentDep = room.deposit || 0;
           fetch('/api/reservas/payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               bookId: room.id,
-              amount: totalAmount,
+              amount: isChannelCollect ? commission : totalAmount,
               paymentMethod: 'transferencia',
               employeeNum: '999',
               description: `Cobro Check-in Automático ${channel}`,
@@ -3871,27 +3869,28 @@ function ReservasListInner() {
                       const netAccName = channel === 'Airbnb' ? 'HSBC FISCAL' : 'BOOKING';
                       const commAccName = channel === 'Airbnb' ? 'COMISIÓN AIRBNB' : 'COMISIÓN BOOKING';
 
-                      const totalAmount = pendingBalance > 0 ? pendingBalance : (selectedRes.price_estimate || 0);
                       let expectedPayout = selectedRes.expected_payout || 0;
                       let hostFee = selectedRes.host_fee || 0;
                       let taxesRetained = 0;
 
                       if (expectedPayout === 0 && hostFee === 0) {
                         const otaSplit = computeOtaSplit(
-                          totalAmount,
+                          Number(selectedRes.price_estimate || selectedRes.price || 0),
                           channel,
                           selectedRes.room_name || '',
                           selectedRes.check_in || '',
                           selectedRes.check_out || '',
                           undefined,
                           Number(selectedRes.num_adult || 1),
-                          Number(selectedRes.num_child || 0)
+                          Number(selectedRes.num_child || 0),
+                          Number(selectedRes.deposit || 0)
                         );
                         expectedPayout = otaSplit.netRevenue;
                         hostFee = otaSplit.commission;
                         taxesRetained = otaSplit.taxesRetained || 0;
                       } else {
-                        taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalAmount - expectedPayout - hostFee) : 0;
+                        const totalEstimate = Number(selectedRes.price_estimate || 0);
+                        taxesRetained = ['Airbnb', 'Booking.com'].includes(channel) ? Math.max(0, totalEstimate - expectedPayout - hostFee) : 0;
                       }
 
                       return (
