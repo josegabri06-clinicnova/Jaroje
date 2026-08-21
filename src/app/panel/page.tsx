@@ -163,7 +163,7 @@ function getRoomOperationalStatus(
 ): 'disponible' | 'en_limpieza' | 'limpia' | 'sucio_checkout' | 'limpieza_programada' | 'ocupada' | 'salida_hoy' | 'limpieza_profunda' {
   if (dbStatus === 'limpieza_profunda') return 'limpieza_profunda';
 
-  const updateDateStr = lastUpdatedAt ? (lastUpdatedAt || '').split('T')[0].split(' ')[0] : '';
+  const updateDateStr = lastUpdatedAt ? getLocalDateStr(new Date(lastUpdatedAt)) : '';
   const isCleanedToday = (updateDateStr === todayStr) && dbStatus === 'limpia';
   const isEnLimpiezaToday = (dbStatus === 'en_limpieza');
   const isUpdatedToday = (updateDateStr === todayStr);
@@ -1258,7 +1258,7 @@ export default function AdminDashboard() {
                 </p>
                 <span className="text-zinc-300 text-[10px]">•</span>
                 <p className="text-[11px] font-bold text-emerald-600">
-                  {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === todayStr).length} hoy
+                  {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && getLocalDateStr(new Date(t.resolved_at)) === todayStr).length} hoy
                 </p>
               </div>
             </div>

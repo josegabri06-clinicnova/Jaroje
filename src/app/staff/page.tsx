@@ -2216,8 +2216,8 @@ export default function StaffPage() {
                     <span className="text-[20px] font-black text-emerald-650 leading-none">
                       {resueltos.filter(t => {
                         if (!t.resolved_at) return false;
-                        const todayStr = new Date().toISOString().split('T')[0];
-                        return t.resolved_at.split('T')[0] === todayStr;
+                        const todayStr = getLocalDateStr();
+                        return getLocalDateStr(new Date(t.resolved_at)) === todayStr;
                       }).length}
                     </span>
                     <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>

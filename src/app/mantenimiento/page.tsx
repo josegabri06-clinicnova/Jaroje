@@ -974,7 +974,7 @@ export default function MantenimientoPage() {
           }`}
         >
           <span className="text-[20px] font-black text-emerald-650 leading-none">
-            {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && t.resolved_at.split('T')[0] === new Date().toISOString().split('T')[0]).length}
+            {tasks.filter(t => t.status === 'resuelta' && t.resolved_at && new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date(t.resolved_at)) === new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date())).length}
           </span>
           <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mt-1">Resueltos Hoy</p>
         </div>
