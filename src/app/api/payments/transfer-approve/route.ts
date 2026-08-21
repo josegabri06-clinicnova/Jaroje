@@ -98,7 +98,52 @@ export async function POST(req: Request) {
               try {
                 const { syncBeds24BookingLocal } = await import('@/lib/beds24');
                 await syncBeds24BookingLocal(rawB);
-                console.log(`[Approve Transfer] ✅ Reserva B24:${bookingId} sincronizada síncronamente en Supabase con depósito $${newDeposit}`);
+                console.log(`[Approve Transfer] ✅ Reserva principal B24:${bookingId} sincronizada síncronamente con depósito $${newDeposit}`);
+
+                // Sincronizar también de inmediato las reservas hermanas del grupo
+                try {
+                  const targetName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim().toLowerCase();
+                  const targetPhone = (rawB.phone || rawB.mobile || rawB.guestPhone || '').trim();
+                  
+                  const resSiblings = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${rawB.arrival}&arrivalTo=${rawB.arrival}&includeInvoice=true`, {
+                    headers: { 'token': beds24Token },
+                    cache: 'no-store'
+                  });
+                  if (resSiblings.ok) {
+                    const jsonSiblings = await resSiblings.json();
+                    const allArrival = jsonSiblings.data || [];
+                    
+                    const isOTA = (bookingObj: any) => {
+                      const channel = String(`${bookingObj.referer || ''} ${bookingObj.source || ''} ${bookingObj.apiSource || ''}`).toLowerCase();
+                      return ['booking.com', 'airbnb', 'expedia'].some(c => channel.includes(c));
+                    };
+                    const targetIsOta = isOTA(rawB);
+
+                    const groupMembers = allArrival.filter((b: any) => {
+                      if (b.departure !== rawB.departure) return false;
+                      if (String(b.status) === '0' || b.status === 'cancelled') return false;
+                      if (String(b.id) === String(rawB.id)) return false;
+
+                      const bIsOta = isOTA(b);
+                      if (targetIsOta !== bIsOta) return false;
+
+                      const bName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+                      const bPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
+                      const sameName = bName && targetName && (bName.includes(targetName) || targetName.includes(bName));
+                      const samePhone = bPhone && targetPhone && (bPhone.includes(targetPhone) || targetPhone.includes(bPhone));
+
+                      return (targetIsOta || bIsOta) ? !!sameName : !!samePhone;
+                    });
+
+                    console.log(`[Approve Transfer] Detectados ${groupMembers.length} hermanos en Beds24 para sincronizar.`);
+                    for (const member of groupMembers) {
+                      await syncBeds24BookingLocal(member);
+                      console.log(`[Approve Transfer] ✅ Reserva hermana B24:${member.id} sincronizada síncronamente.`);
+                    }
+                  }
+                } catch (siblingsErr) {
+                  console.error("[Approve Transfer] Error al sincronizar reservas hermanas:", siblingsErr);
+                }
               } catch (syncErr) {
                 console.error("[Approve Transfer] Error al sincronizar reserva tras aprobar transferencia:", syncErr);
               }
