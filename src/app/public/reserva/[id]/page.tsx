@@ -2755,7 +2755,7 @@ export default function PublicReservaPage() {
                 const originalExtra = Math.max(0, totalOriginal - groupBase);
                 const newExtra = Math.max(0, totalTemp - groupBase);
                 const diff = newExtra - originalExtra;
-                const adj = diff * 500 * booking.nights;
+                const adj = diff * EXTRA_GUEST_CHARGE * booking.nights;
                 const estNewPrice = booking.price + adj;
 
                 if (diff === 0) return null;

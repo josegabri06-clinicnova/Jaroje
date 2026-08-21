@@ -170,7 +170,8 @@ export async function POST(req: Request) {
       const newExtraGuests = Math.max(0, totalNewGroupGuests - groupBase);
       const diffExtra = newExtraGuests - originalExtraGuests;
 
-      const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+      const isUSD = (localRes.guest_name || '').toUpperCase().includes('(US DOLLARS)');
+      const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
       
       const arrivalDate = localRes.check_in ? new Date(localRes.check_in) : null;
       const departureDate = localRes.check_out ? new Date(localRes.check_out) : null;
@@ -391,7 +392,8 @@ export async function POST(req: Request) {
     const newExtraGuests = Math.max(0, totalNewGroupGuests - groupBase);
     const diffExtra = newExtraGuests - originalExtraGuests;
 
-    const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
+    const isUSD = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.toUpperCase().includes('(US DOLLARS)');
+    const extraGuestPrice = isUSD ? 25 : (capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500);
     
     const arrivalDate = currentBooking.arrival ? new Date(currentBooking.arrival) : null;
     const departureDate = currentBooking.departure ? new Date(currentBooking.departure) : null;
