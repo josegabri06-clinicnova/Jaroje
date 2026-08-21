@@ -580,7 +580,47 @@ export async function sendWhatsAppTemplate(
     // Registrar el envío de plantilla en la tabla 'conversations'
     try {
       const getTemplateText = (tName: string, params: string[]) => {
-        const name = params[0] || 'Huésped';
+        const name = params[0] || (detectedLang === 'en' ? 'Guest' : 'Huésped');
+        
+        if (detectedLang === 'en') {
+          switch (tName) {
+            case 'solicitud_recibida':
+              return `📋 Reservation request received (24 h to confirm)\n\nHello, ${name}.\n\nThank you for choosing Condominios Jaroje for your next vacation in Huatulco! 🌴\n\nIn your "Guest Portal" you will find all the information about your reservation, including photos and description of your accommodation, reservation details, hotel and cancellation policies, as well as payment options, if you need them.\n\n👇 Guest Portal\n\n[Button: Guest Portal] [Button: Location]`;
+            case 'ultimo_aviso':
+              return `⏳ Last reminder (3 hours left to confirm your reservation)\n\nHello, ${name}.\n\nWe just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 3 hours.\n\nIn "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n👇 Make Deposit\n\n[Button: Make deposit]`;
+            case 'reservacion_confirmada':
+              return `🎉 Your reservation is confirmed!\n\nExcellent, ${name}!\n\nWe are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\nIn "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n[Button: Guest Portal] [Button: How to get there]`;
+            case 'disponibilidad_liberada':
+              return `😔 Availability released\n\nHello, ${name}.\n\nWe regret to inform you that since we did not receive the deposit within the indicated period, the availability of your accommodation was released.\n\nIf you still wish to stay with us, press "Check availability" to see if we still have accommodation available for your travel dates and, if available, make a new reservation.\n\n👇 Check availability\n\n[Button: Check availability] [Button: Photos and Rates]`;
+            case 'preparacion_llegada':
+              return `🚗 Everything ready for your arrival\n\nHello, ${name}.\n\nVery soon we will welcome you to Condominios Jaroje! We want your arrival to be as comfortable as possible.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\nIn "My reservation" you will find the gate code, location, directions, photos, description and services of your accommodation, as well as everything you need to prepare for your arrival.\n\nArriving after 8:00 p.m.? Let us know in advance to welcome you.\n\nWe wish you an excellent trip!\n\n[Button: My reservation] [Button: How to get there] [Button: WiFi and Keys]`;
+            case 'bienvenida_checkin':
+              return `🏡 Welcome to Condominios Jaroje!\n\nWhat a pleasure to welcome you, ${name}!\n\nWe hope you had an excellent trip. We hope you enjoy an excellent stay and feel at home.\n\nIn "My stay" you will find the gate code, WiFi network and password, photos, description and services of your accommodation, as well as all the necessary information to enjoy your stay.\n\nIf during your stay you need to report any maintenance details, you can do so from "My stay".\n\nWe wish you a wonderful stay. If you need anything, we are here to help.\n\n👇 My stay\n\n[Button: My stay] [Button: Maintenance Report] [Button: WiFi and Keys]`;
+            case 'seguimiento_satisfaccion':
+              return `😊 How is your stay going?\n\nGood morning, ${name}.\n\nWe want to make sure everything is going as expected.\n\nIf there is anything we can do to make you enjoy your stay even more, we will gladly be at your service.\n\n👇 My stay\n\n[Button: My stay] [Button: Maintenance Report] [Button: WiFi and Keys]`;
+            case 'salida_checkout':
+              return `🚪 Check-out 12:00 p.m.\n\nVery good morning, ${name}.\n\nToday your stay with us ends. Thank you very much for choosing us and we hope you enjoyed your stay.\n\nIf you need to store your luggage after check-out or require assistance with your departure, we will gladly be here to help.\n\nIf there was anything that did not meet your expectations, please let us know so we can help you.\n\nIf you feel your experience was ⭐⭐⭐⭐⭐, we would love for you to share your review.\n\n👇 Write review\n\n[Button: Write review]`;
+            case 'comparte_experiencia':
+              return `⭐ How was your experience?\n\nHello, ${name}.\n\nWe hope you arrived home safely and keep an excellent memory of your stay with us.\n\nIf there was anything that did not meet your expectations, please let us know so we can help you.\n\nIf your experience was ⭐⭐⭐⭐⭐, it would make us very happy if you shared your review. Your review helps other travelers choose us with greater confidence and motivates us to keep improving.\n\n👇 Rate accommodation\n\n[Button: Rate your accommodation]`;
+            case 'recibimiento_nuevamente':
+              return `🌴 We would love to welcome you again!\n\nHello again, ${name}.\n\nToday we remembered your stay with us and wanted to say hello. We hope you keep a great memory of Huatulco and your stay with us.\n\nIf you are thinking of returning to Huatulco, it will be a pleasure to welcome you again. In "Check availability" you can consult availability and start a new reservation.\n\n👇 Check availability\n\n[Button: Check availability]`;
+            case 'pago_anticipo_recibido':
+              const abonadoEn = params[1] || '$0.00';
+              const saldoEn = params[2] || '$0.00';
+              return `Hello ${name}!\n\nWe have successfully registered your payment in the amount of *${abonadoEn}*.\n\nYour current outstanding balance is *${saldoEn}*.\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+            case 'portal_huesped_link':
+            case 'portal_huesped_link_en':
+              return `Hello ${name}, here is your access to your real-time booking details. From your portal you can view your room status, guidelines, WiFi info, and record additional payments.✅\n\n👇 *Guest Portal*\n\n[Button: Guest Portal]`;
+            case 'alojamiento_listo':
+              return `✨ Great news, ${name}!\n\nYour accommodation is now clean, sanitized, and ready to welcome you.\n\nIf you are already in Huatulco, you can check in whenever you like. In "My stay" you will find all the arrival information, including gate access, WiFi, and your stay details.\n\nWe look forward to seeing you! 🏡\n\n[Button: My stay] [Button: How to get there]`;
+            case 'rechazo_solicitud':
+              const motivo = params[2] || 'Not specified';
+              return `❌ Reservation Request Rejected\n\nHello, ${name}.\n\nWe inform you that your reservation request #${params[1] || ''} has been rejected for the following reason:\n\n*${motivo}*\n\nWe apologize for any inconvenience this may cause you.`;
+            default:
+              return `[Template: ${tName}]` + (params.length > 0 ? ` (Parameters: ${params.join(', ')})` : '');
+          }
+        }
+
         switch (tName) {
           case 'solicitud_recibida':
             return `📋 Solicitud de reservación recibida (24 h para confirmar)\n\nHola, ${name}.\n\n¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\nEn tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n👇 Portal del Huésped\n\n[Botón: Portal del Huésped] [Botón: Ubicación]`;
@@ -605,7 +645,7 @@ export async function sendWhatsAppTemplate(
           case 'pago_anticipo_recibido':
             const abonado = params[1] || '$0.00';
             const saldo = params[2] || '$0.00';
-            return `¡Hola ${name}!\n\nHemos registrado con éxito tu pago por la cantidad de *${abonado} MXN*.\n\nTu saldo pendiente actual es de *${saldo} MXN*.\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
+            return `¡Hola ${name}!\n\nHemos registrado con éxito tu pago por la cantidad de *${abonado}*.\n\nTu saldo pendiente actual es de *${saldo}*.\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'portal_huesped_link':
             return `Hola ${name}, aquí tienes acceso a tu reservación en tiempo real. Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales.✅\n\n👇 *Portal del Huésped*\n\n[Botón: Portal del Huésped]`;
           case 'portal_huesped_link_en':
@@ -904,10 +944,13 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any, bypassPa
   const bal = Math.max(0, total - dep);
   const lastPayment = Number(booking.last_payment_amount || dep || 0);
 
+  const isUSD = booking.guest_name?.toUpperCase().includes('(US DOLLARS)');
+  const suffix = isUSD ? ' USD' : ' MXN';
+
   const params = [
     getFirstName(booking.guest_name),      // {{1}} Nombre
-    formatCurrency(lastPayment),           // {{2}} MontoAbonado
-    formatCurrency(bal)                    // {{3}} SaldoPendiente
+    formatCurrency(lastPayment) + suffix,  // {{2}} MontoAbonado
+    formatCurrency(bal) + suffix           // {{3}} SaldoPendiente
   ];
 
   return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, undefined, booking.id, 'url', bypassPause);

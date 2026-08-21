@@ -119,51 +119,54 @@ export async function POST(req: Request) {
           if (rawBookingData && rawBookingData.success && Array.isArray(rawBookingData.data) && rawBookingData.data.length > 0) {
              const rawB = rawBookingData.data[0];
 
-             // ¡Sincronizar de inmediato en Supabase local!
-             try {
-               const { syncBeds24BookingLocal } = await import('@/lib/beds24');
-               await syncBeds24BookingLocal(rawB);
-               console.log(`[Stripe Webhook] ✅ Reserva B24:${bookingId} sincronizada síncronamente en Supabase.`);
-             } catch (syncErr) {
-               console.error("[Stripe Webhook] Error al sincronizar reserva tras pago de Stripe:", syncErr);
-             }
-
-             const phone = rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile;
-             if (phone) {
-              const formattedName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || guestName;
-              const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${bookingId}`;
-              const guestsCount = String(Number(rawB.numAdult || 1) + Number(rawB.numChild || 0));
-
-              const price = Number(rawB.price || 0);
-              const deposit = Number(rawB.deposit || 0);
-              const balance = Math.max(0, price - deposit);
-
-              const { getFirstName } = await import('@/lib/whatsapp');
-              const firstName = getFirstName(formattedName);
-
-              if (balance > 0) {
-                console.log(`[Stripe Webhook] Sending WhatsApp pago_anticipo_recibido to ${phone}`);
-                const formattedAmount = Number(amount).toLocaleString('es-MX', { maximumFractionDigits: 0 });
-                const formattedBalance = Number(balance).toLocaleString('es-MX', { maximumFractionDigits: 0 });
-                await sendWhatsAppTemplate(
-                  phone,
-                  'pago_anticipo_recibido',
-                  [firstName, formattedAmount, formattedBalance],
-                  [`public/reserva/${bookingId}`],
-                  bookingId
-                );
-              } else {
-                console.log(`[Stripe Webhook] Sending WhatsApp reservacion_confirmada to ${phone}`);
-                await sendWhatsAppTemplate(
-                  phone,
-                  'reservacion_confirmada',
-                  [firstName],
-                  [`public/reserva/${bookingId}`],
-                  bookingId
-                );
+              // ¡Sincronizar de inmediato en Supabase local!
+              try {
+                const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+                await syncBeds24BookingLocal(rawB);
+                console.log(`[Stripe Webhook] ✅ Reserva B24:${bookingId} sincronizada síncronamente en Supabase.`);
+              } catch (syncErr) {
+                console.error("[Stripe Webhook] Error al sincronizar reserva tras pago de Stripe:", syncErr);
               }
-            }
-          }
+
+              const phone = rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile;
+              if (phone) {
+                const formattedName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || guestName;
+                const isUSD = formattedName.toUpperCase().includes('(US DOLLARS)');
+                const currencySuffix = isUSD ? ' USD' : ' MXN';
+
+                const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${bookingId}`;
+                const guestsCount = String(Number(rawB.numAdult || 1) + Number(rawB.numChild || 0));
+
+                const price = Number(rawB.price || 0);
+                const deposit = Number(rawB.deposit || 0);
+                const balance = Math.max(0, price - deposit);
+
+                const { getFirstName } = await import('@/lib/whatsapp');
+                const firstName = getFirstName(formattedName);
+
+                if (balance > 0) {
+                  console.log(`[Stripe Webhook] Sending WhatsApp pago_anticipo_recibido to ${phone}`);
+                  const formattedAmount = Number(amount).toLocaleString('es-MX', { maximumFractionDigits: 0 }) + currencySuffix;
+                  const formattedBalance = Number(balance).toLocaleString('es-MX', { maximumFractionDigits: 0 }) + currencySuffix;
+                  await sendWhatsAppTemplate(
+                    phone,
+                    'pago_anticipo_recibido',
+                    [firstName, formattedAmount, formattedBalance],
+                    [`public/reserva/${bookingId}`],
+                    bookingId
+                  );
+                } else {
+                  console.log(`[Stripe Webhook] Sending WhatsApp reservacion_confirmada to ${phone}`);
+                  await sendWhatsAppTemplate(
+                    phone,
+                    'reservacion_confirmada',
+                    [firstName],
+                    [`public/reserva/${bookingId}`],
+                    bookingId
+                  );
+                }
+              }
+           }
         }
       } catch (errWa) {
         console.error("[Stripe Webhook] Error sending WhatsApp notification:", errWa);
