@@ -59,6 +59,18 @@ const PHYSICAL_ROOM_GROUPS = [
 ];
 
 
+const isSameRoomCategory = (room1: string, room2: string) => {
+  const cleanRoom = (r: string) => r.replace(/^(habitación|habitacion|hab\.|hab)\s+/i, '').trim();
+  const r1 = cleanRoom(room1);
+  const r2 = cleanRoom(room2);
+  
+  const cat1 = PHYSICAL_ROOM_GROUPS.find(group => group.rooms.includes(r1))?.category;
+  const cat2 = PHYSICAL_ROOM_GROUPS.find(group => group.rooms.includes(r2))?.category;
+  
+  return cat1 && cat2 && cat1 === cat2;
+};
+
+
 function StatusBadge({ status, isCheckedIn, isCheckedOut }: { status: string, isCheckedIn?: boolean, isCheckedOut?: boolean }) {
   if (status === 'cancelled') return (
     <span className="flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
@@ -228,6 +240,9 @@ function ReservasListInner() {
   const [reassignLoading, setReassignLoading] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<Record<string, boolean>>({});
   const [loadingAvailability, setLoadingAvailability] = useState(false);
+  const [reassignedPrice, setReassignedPrice] = useState<string>('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [isCategoryChanged, setIsCategoryChanged] = useState(false);
   const [checkInSelectedIds, setCheckInSelectedIds] = useState<string[]>([]);
 
   // Estados para búsqueda por fecha
@@ -526,6 +541,47 @@ function ReservasListInner() {
     }
   }, [showReassignModal, reassigningRes]);
 
+  // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
+  useEffect(() => {
+    if (showReassignModal && reassigningRes && targetRoomName) {
+      const changed = !isSameRoomCategory(reassigningRes.room_name || reassigningRes.room, targetRoomName);
+      setIsCategoryChanged(changed);
+      if (changed) {
+        const fetchPreview = async () => {
+          setPreviewLoading(true);
+          try {
+            const res = await fetch('/api/reservas', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: reassigningRes.id,
+                roomName: targetRoomName,
+                preview: true
+              })
+            });
+            const data = await res.json();
+            if (data.success && data.recalculated_price !== undefined) {
+              setReassignedPrice(String(data.recalculated_price));
+            } else {
+              setReassignedPrice(String(reassigningRes.price_estimate || reassigningRes.price || 0));
+            }
+          } catch (err) {
+            console.error("Error al obtener preview de precio:", err);
+            setReassignedPrice(String(reassigningRes.price_estimate || reassigningRes.price || 0));
+          } finally {
+            setPreviewLoading(false);
+          }
+        };
+        fetchPreview();
+      } else {
+        setReassignedPrice('');
+      }
+    } else {
+      setIsCategoryChanged(false);
+      setReassignedPrice('');
+    }
+  }, [targetRoomName, reassigningRes, showReassignModal]);
+
   const handleReassignRoom = async () => {
     if (getRole() !== 'admin') {
       alert('⚠️ Sólo los administradores pueden reasignar habitaciones.');
@@ -535,6 +591,8 @@ function ReservasListInner() {
 
     const oldPVal = Number(reassigningRes.price_estimate || reassigningRes.price || 0);
     const oldP = oldPVal.toLocaleString('es-MX');
+
+    const finalPrice = isCategoryChanged && reassignedPrice !== '' ? Number(reassignedPrice) : oldPVal;
 
     if (!confirm(`¿Confirmas reasignar la reserva de ${reassigningRes.guest_name || ''} a la Habitación ${targetRoomName}?`)) {
       return;
@@ -548,7 +606,7 @@ function ReservasListInner() {
         body: JSON.stringify({
           id: reassigningRes.id,
           roomName: targetRoomName,
-          price: oldPVal
+          price: finalPrice
         })
       });
       const data = await res.json();
@@ -6138,6 +6196,39 @@ function ReservasListInner() {
                       ))}
                     </select>
                   </div>
+
+                  {isCategoryChanged && (
+                    <div className="mt-3.5 bg-amber-50 border border-amber-250 p-4 rounded-xl space-y-2.5 animate-in fade-in duration-200">
+                      <div className="flex gap-2 text-amber-800">
+                        <AlertTriangle className="shrink-0 mt-0.5" size={16} />
+                        <div className="text-[12px] font-semibold leading-normal">
+                          La habitación seleccionada es de un <strong>tipo o categoría diferente</strong>. 
+                          Se recomienda actualizar la tarifa de la reserva.
+                        </div>
+                      </div>
+                      <div className="mt-2.5 text-left">
+                        <label className="block text-[10px] font-extrabold text-amber-800 uppercase tracking-widest mb-1.5 pl-0.5">
+                          Nueva Tarifa de la Reserva (Editable):
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-zinc-500">$</span>
+                          <input
+                            type="number"
+                            disabled={previewLoading}
+                            value={reassignedPrice}
+                            onChange={e => setReassignedPrice(e.target.value)}
+                            className="w-full bg-white border border-zinc-200 rounded-xl py-2 pl-6 pr-3 font-bold text-[13.5px] text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-sm"
+                            placeholder={previewLoading ? 'Calculando tarifa recomendada...' : 'Ingresa la tarifa...'}
+                          />
+                        </div>
+                        {previewLoading && (
+                          <span className="text-[10px] text-amber-700 font-medium block mt-1 animate-pulse">
+                            ⏳ Obteniendo tarifa recomendada desde Beds24...
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

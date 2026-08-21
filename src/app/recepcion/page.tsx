@@ -166,6 +166,18 @@ const PHYSICAL_ROOM_GROUPS = [
 ];
 
 
+const isSameRoomCategory = (room1: string, room2: string) => {
+  const cleanRoom = (r: string) => r.replace(/^(habitación|habitacion|hab\.|hab)\s+/i, '').replace(/[^0-9]/g, '').trim();
+  const r1 = cleanRoom(room1);
+  const r2 = cleanRoom(room2);
+  
+  const cat1 = PHYSICAL_ROOM_GROUPS.find(group => group.rooms.includes(r1))?.category;
+  const cat2 = PHYSICAL_ROOM_GROUPS.find(group => group.rooms.includes(r2))?.category;
+  
+  return cat1 && cat2 && cat1 === cat2;
+};
+
+
 function getSeason(dateStr: string, dbRanges?: { season: string; from: string; to: string }[]): string {
   if (!dateStr) return 'media';
 
@@ -885,6 +897,9 @@ export default function RecepcionPage() {
   const [isReassigning, setIsReassigning] = useState(false);
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
+  const [reassignedPrice, setReassignedPrice] = useState<string>('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [isCategoryChanged, setIsCategoryChanged] = useState(false);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [savingNotesOnly, setSavingNotesOnly] = useState(false);
@@ -1244,6 +1259,47 @@ export default function RecepcionPage() {
       fetchReassignAvailability();
     }
   }, [isReassigning, selectedReserva]);
+
+  // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
+  useEffect(() => {
+    if (isReassigning && selectedReserva && targetRoomName) {
+      const changed = !isSameRoomCategory(selectedReserva.room || '', targetRoomName);
+      setIsCategoryChanged(changed);
+      if (changed) {
+        const fetchPreview = async () => {
+          setPreviewLoading(true);
+          try {
+            const res = await fetch('/api/reservas', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: selectedReserva.id,
+                roomName: targetRoomName,
+                preview: true
+              })
+            });
+            const data = await res.json();
+            if (data.success && data.recalculated_price !== undefined) {
+              setReassignedPrice(String(data.recalculated_price));
+            } else {
+              setReassignedPrice(String(selectedReserva.price_estimate || selectedReserva.price || 0));
+            }
+          } catch (err) {
+            console.error("Error al obtener preview de precio:", err);
+            setReassignedPrice(String(selectedReserva.price_estimate || selectedReserva.price || 0));
+          } finally {
+            setPreviewLoading(false);
+          }
+        };
+        fetchPreview();
+      } else {
+        setReassignedPrice('');
+      }
+    } else {
+      setIsCategoryChanged(false);
+      setReassignedPrice('');
+    }
+  }, [targetRoomName, selectedReserva, isReassigning]);
 
   const handleSaveChanges = async () => {
     if (!selectedReserva) return;
@@ -1758,7 +1814,9 @@ export default function RecepcionPage() {
     const oldPVal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
     const oldP = oldPVal.toLocaleString('es-MX');
 
-    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?\n\nLa tarifa original de MX$${oldP} se mantendrá completamente congelada sin cambios.`)) {
+    const finalPrice = isCategoryChanged && reassignedPrice !== '' ? Number(reassignedPrice) : oldPVal;
+
+    if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?`)) {
       return;
     }
 
@@ -1770,13 +1828,18 @@ export default function RecepcionPage() {
         body: JSON.stringify({
           id: selectedReserva.id,
           roomName: targetRoomName,
-          price: oldPVal
+          price: finalPrice
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}. La tarifa de MX$${oldP} se mantuvo sin cambios.`);
+      if (data.recalculated_price && Number(data.recalculated_price) !== oldPVal) {
+        const newPriceFmt = Number(data.recalculated_price).toLocaleString('es-MX');
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\nLa tarifa se actualizó a MX$${newPriceFmt} debido al cambio de categoría.`);
+      } else {
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}. La tarifa original de MX$${oldP} se mantuvo sin cambios.`);
+      }
 
       try {
         const emp = getOperatorForLog();
@@ -6196,7 +6259,7 @@ export default function RecepcionPage() {
                         </div>
 
                         {/* PREVIEW DE NUEVO PRECIO ANTES DE CONFIRMAR */}
-                        {targetRoomName && selectedReserva && (() => {
+                        {!isCategoryChanged && targetRoomName && selectedReserva && (() => {
                           const nights = selectedReserva.nights || 1;
                           const checkIn = selectedReserva.check_in;
                           const checkOut = selectedReserva.check_out;
@@ -6238,6 +6301,39 @@ export default function RecepcionPage() {
                             </div>
                           );
                         })()}
+
+                        {isCategoryChanged && (
+                          <div className="bg-amber-50 border border-amber-250 p-4 rounded-xl space-y-2.5 animate-in fade-in duration-200">
+                            <div className="flex gap-2 text-amber-800">
+                              <AlertTriangle className="shrink-0 mt-0.5" size={16} />
+                              <div className="text-[12px] font-semibold leading-normal">
+                                La habitación seleccionada es de un <strong>tipo o categoría diferente</strong>. 
+                                Se recomienda actualizar la tarifa de la reserva.
+                              </div>
+                            </div>
+                            <div className="mt-2 text-left">
+                              <label className="block text-[10px] font-extrabold text-amber-800 uppercase tracking-widest mb-1.5 pl-0.5">
+                                Nueva Tarifa de la Reserva (Editable):
+                              </label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-zinc-500">$</span>
+                                <input
+                                  type="number"
+                                  disabled={previewLoading}
+                                  value={reassignedPrice}
+                                  onChange={e => setReassignedPrice(e.target.value)}
+                                  className="w-full bg-white border border-zinc-200 rounded-xl py-2 pl-6 pr-3 font-bold text-[13.5px] text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-sm"
+                                  placeholder={previewLoading ? 'Calculando tarifa recomendada...' : 'Ingresa la tarifa...'}
+                                />
+                              </div>
+                              {previewLoading && (
+                                <span className="text-[10px] text-amber-700 font-medium block mt-1 animate-pulse">
+                                  ⏳ Obteniendo tarifa recomendada desde Beds24...
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         <div className="flex gap-2">
                           <button

@@ -1366,8 +1366,8 @@ export async function PUT(req: Request) {
         success: true,
         preview: true,
         old_price: currentBooking?.price || 0,
-        recalculated_price: currentBooking?.price || 0,
-        price_changed: false,
+        recalculated_price: recalculatedPrice !== undefined ? recalculatedPrice : (currentBooking?.price || 0),
+        price_changed: recalculatedPrice !== undefined && recalculatedPrice !== currentBooking?.price,
         same_room_type: !roomTypeChanged
       });
     }
