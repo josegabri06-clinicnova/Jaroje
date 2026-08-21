@@ -1185,7 +1185,15 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         pricePerNight = 0;
       }
       pricePerNight = Number((pricePerNight ?? 0).toFixed(2));
-      const totalRevenue = Number(((b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : (pricePerNight * nights)).toFixed(2));
+      const baseRevenue = Number(((b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : (pricePerNight * nights)).toFixed(2));
+      let ishVal = 0;
+      if (b.rateDescription) {
+        const ishMatch = b.rateDescription.match(/(?:ISH|Lodging Tax|Impuesto sobre.*hospedaje)[^\n]*?(\d+(?:\.\d+)?)\s*(?:MXN|USD|\$)/i);
+        if (ishMatch) {
+          ishVal = Number(ishMatch[1]);
+        }
+      }
+      const totalRevenue = baseRevenue + ishVal;
 
       const unitName = getUnitName(b.roomId, b.unitId);
       const displayRoomName = unitName 
@@ -1214,11 +1222,14 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         });
       }
 
-      const calculatedCharges = totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue;
+      // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
+      // no el precio total de la reserva pagado por el huésped. Usamos totalRevenue directamente.
+      const calculatedCharges = isOTA ? totalRevenue : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
       const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
-      const balanceVal = actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal));
+      // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
+      const balanceVal = (isOTA && actualPaid > 0) ? 0 : (actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal)));
 
       return {
         id: b.id || Math.random().toString(),
@@ -1883,10 +1894,11 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
       if (itemBookingId && itemBookingId !== String(b.id)) {
         return;
       }
+      const type = item.type || '';
       const qty = Number(item.qty || 0);
       const price = Number(item.price || 0);
-      const lineTotal = qty * price;
-      if (lineTotal < 0) {
+      const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (qty * price);
+      if (type === 'payment' || lineTotal < 0) {
         actualPaid += Math.abs(lineTotal);
       } else {
         totalInvoiceCharges += lineTotal;
@@ -1895,11 +1907,25 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
   }
 
   const priceVal = (b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : 0;
-  const calculatedCharges = totalInvoiceCharges > 0 ? totalInvoiceCharges : priceVal;
+  let ishVal = 0;
+  if (b.rateDescription) {
+    const ishMatch = b.rateDescription.match(/(?:ISH|Lodging Tax|Impuesto sobre.*hospedaje)[^\n]*?(\d+(?:\.\d+)?)\s*(?:MXN|USD|\$)/i);
+    if (ishMatch) {
+      ishVal = Number(ishMatch[1]);
+    }
+  }
+  const finalPriceVal = priceVal + ishVal;
+
+  const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
+
+  // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
+  // no el precio total de la reserva pagado por el huésped. Usamos finalPriceVal directamente.
+  const calculatedCharges = isOTA ? finalPriceVal : (totalInvoiceCharges > 0 ? totalInvoiceCharges : finalPriceVal);
   const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
   const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
-  const balanceVal = actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal));
+  // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
+  const balanceVal = (isOTA && actualPaid > 0) ? 0 : (actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal)));
 
   const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry);
   const email = b.email || null;
@@ -2025,7 +2051,15 @@ export async function syncBeds24ReservationsRange(
         pricePerNight = 0;
       }
       pricePerNight = Number((pricePerNight ?? 0).toFixed(2));
-      const totalRevenue = Number(((b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : (pricePerNight * nights)).toFixed(2));
+      const baseRevenue = Number(((b.price !== undefined && b.price !== null && b.price !== '') ? Number(b.price) : (pricePerNight * nights)).toFixed(2));
+      let ishVal = 0;
+      if (b.rateDescription) {
+        const ishMatch = b.rateDescription.match(/(?:ISH|Lodging Tax|Impuesto sobre.*hospedaje)[^\n]*?(\d+(?:\.\d+)?)\s*(?:MXN|USD|\$)/i);
+        if (ishMatch) {
+          ishVal = Number(ishMatch[1]);
+        }
+      }
+      const totalRevenue = baseRevenue + ishVal;
 
       const unitName = getUnitName(b.roomId, b.unitId);
       const displayRoomName = unitName 
@@ -2053,11 +2087,14 @@ export async function syncBeds24ReservationsRange(
         });
       }
 
-      const calculatedCharges = totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue;
+      // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
+      // no el precio total de la reserva pagado por el huésped. Usamos totalRevenue directamente.
+      const calculatedCharges = isOTA ? totalRevenue : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
       const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
-      const balanceVal = actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal));
+      // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
+      const balanceVal = (isOTA && actualPaid > 0) ? 0 : (actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal)));
 
       const dbStatus = (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending');
 
