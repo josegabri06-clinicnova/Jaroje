@@ -1337,7 +1337,10 @@ export async function PUT(req: Request) {
             dynamicSettings
           );
           
-          const totalNewPrice = Math.round(averagePrice * nightsCount);
+          const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
+          const totalNewPrice = isOtaChannel 
+            ? Math.round(averagePrice * nightsCount) 
+            : Math.round(averagePrice * nightsCount * 1.19);
           const oldPrice = currentBooking.price || 0;
 
           if (totalNewPrice > 0 && totalNewPrice !== oldPrice) {

@@ -612,9 +612,9 @@ function ReservasListInner() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al reasignar la habitación');
 
-      if (data.recalculated_price) {
-        const newPriceFmt = Number(data.recalculated_price).toLocaleString('es-MX');
-        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\nLa tarifa se actualizó a MX$${newPriceFmt} debido al cambio de categoría.`);
+      if (isCategoryChanged) {
+        const finalPriceFmt = finalPrice.toLocaleString('es-MX');
+        alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}.\nLa tarifa se actualizó a MX$${finalPriceFmt} debido al cambio de categoría.`);
       } else {
         alert(`✅ Habitación reasignada exitosamente a la ${targetRoomName}. La tarifa original de MX$${oldP} se mantuvo congelada.`);
       }
