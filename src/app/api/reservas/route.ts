@@ -950,6 +950,10 @@ export async function DELETE(req: Request) {
     }
 
     // Enviar WhatsApp de disponibilidad liberada para Beds24
+    // NOTA: Se comenta esta sección porque el webhook de Beds24 (api/webhook/beds24) ya recibe la notificación
+    // de cancelación de forma asíncrona y posee la lógica consolidada de deduplicación grupal e idiomas.
+    // Dejarlo aquí provocaba notificaciones duplicadas en cancelaciones grupales.
+    /*
     if (bookingForWA) {
       try {
         await sendTemplate4_DisponibilidadLiberada(bookingForWA);
@@ -957,6 +961,7 @@ export async function DELETE(req: Request) {
         console.error("[Reservas DELETE] Error sending WhatsApp cancellation for Beds24 booking:", waErr);
       }
     }
+    */
 
     // Actualizar de inmediato en Supabase local (Supabase-First)
     if (bookingB24Raw) {
