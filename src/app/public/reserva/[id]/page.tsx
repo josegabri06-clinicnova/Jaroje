@@ -817,6 +817,25 @@ export default function PublicReservaPage() {
     return 'es';
   });
 
+  const rawT = TRANSLATIONS[lang];
+  const t = React.useMemo(() => {
+    const clone: any = {};
+    for (const key in rawT) {
+      const val = rawT[key];
+      if (typeof val === 'function') {
+        clone[key] = (...args: any[]) => {
+          const res = val(...args);
+          return isUSD ? res.replace(/500 MXN/g, '25 USD').replace(/MXN/g, 'USD') : res;
+        };
+      } else if (typeof val === 'string') {
+        clone[key] = isUSD ? val.replace(/500 MXN/g, '25 USD').replace(/MXN/g, 'USD') : val;
+      } else {
+        clone[key] = val;
+      }
+    }
+    return clone;
+  }, [rawT, isUSD]);
+
   // Sincronizar idioma si cambia el parámetro de búsqueda
   useEffect(() => {
     if (queryLang === 'en' || queryLang === 'es') {
@@ -1308,24 +1327,7 @@ export default function PublicReservaPage() {
   const basePriceWithoutExtras = Math.max(0, booking.price - extraChargesTotal);
   const anticipoConExtras = Math.ceil(totalConExtras * 0.5 * 100) / 100;
 
-  const rawT = TRANSLATIONS[lang];
-  const t = React.useMemo(() => {
-    const clone: any = {};
-    for (const key in rawT) {
-      const val = rawT[key];
-      if (typeof val === 'function') {
-        clone[key] = (...args: any[]) => {
-          const res = val(...args);
-          return isUSD ? res.replace(/500 MXN/g, '25 USD').replace(/MXN/g, 'USD') : res;
-        };
-      } else if (typeof val === 'string') {
-        clone[key] = isUSD ? val.replace(/500 MXN/g, '25 USD').replace(/MXN/g, 'USD') : val;
-      } else {
-        clone[key] = val;
-      }
-    }
-    return clone;
-  }, [rawT, isUSD]);
+
 
   return (
     <div className="min-h-screen bg-[#F6F5F2] text-zinc-900 pb-16 font-sans">
