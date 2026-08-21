@@ -249,7 +249,7 @@ export async function POST(req: Request) {
     const getJson = await getRes.json().catch(() => null);
     
     if (getJson && getJson.data && getJson.data.length > 0) {
-      currentBooking = getJson.data[0];
+      currentBooking = getJson.data.find((b: any) => String(b.id) === String(id)) || getJson.data[0];
     } else {
       return NextResponse.json({ success: false, error: 'No se encontró la reserva en Beds24' }, { status: 404 });
     }
@@ -617,6 +617,8 @@ export async function POST(req: Request) {
     const mainRoomUpdate = rooms.find((r: any) => String(r.bookingId) === String(id));
     const mainNewAdults = mainRoomUpdate ? Number(mainRoomUpdate.numAdult) : Number(currentBooking.numAdult || 1);
     const mainNewChildren = mainRoomUpdate ? Number(mainRoomUpdate.numChild) : Number(currentBooking.numChild || 0);
+
+    clearBeds24Cache();
 
     return NextResponse.json({
       success: true,
