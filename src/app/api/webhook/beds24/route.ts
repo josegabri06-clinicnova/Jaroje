@@ -119,8 +119,8 @@ export async function POST(req: Request) {
               try {
                 const cleanPhone = phone.replace(/\D/g, '');
                 const { data: groupReservations } = await supabase
-                  .from('local_reservas')
-                  .select('id, phone, guest_name')
+                  .from('beds24_reservations')
+                  .select('id, guest_phone, guest_name')
                   .eq('check_in', b.arrival)
                   .eq('check_out', b.departure);
                 
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
                   const bName = `${b.firstName || ''} ${b.lastName || ''}`.toLowerCase().trim().replace(/\s+/g, ' ');
                   const matchedIds: number[] = [];
                   for (const r of groupReservations) {
-                    const rPhone = (r.phone || '').replace(/\D/g, '');
+                    const rPhone = (r.guest_phone || '').replace(/\D/g, '');
                     const rName = (r.guest_name || '').toLowerCase().trim().replace(/\s+/g, ' ');
                     
                     const samePhone = cleanPhone && rPhone && cleanPhone === rPhone;
