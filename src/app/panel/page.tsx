@@ -521,7 +521,8 @@ export default function AdminDashboard() {
         const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
         
         const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
-        const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
+        const rawBalance = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
+        const balanceVal = isOTA ? 0 : rawBalance;
         const balanceStr = isOTA ? `(Pagado ✓)` : (balanceVal > 0 ? `(Adeuda: $${balanceVal.toLocaleString('es-MX')})` : `(Pagado ✓)`);
         
         text += `   ${idx + 1}. *Hab ${room}* - ${r.guest_name || 'Sin nombre'} (${paxTotal} pax) - Canal: ${r.channel || 'Directo'} ${balanceStr}\n`;
@@ -988,8 +989,9 @@ export default function AdminDashboard() {
                     const paxTotal = (r.num_adult || 1) + (r.num_child || 0);
                     const unit = getUnitDisplay(r.room || r.room_name || '');
                     const dailyRate = r.price_per_night || (r.price_estimate && r.nights ? Math.round(r.price_estimate / r.nights) : 0);
-                    const balanceVal = r.balance !== undefined ? r.balance : ((r.price_estimate || 0) - (r.deposit || 0));
                     const isOTA = ['booking.com', 'airbnb', 'expedia'].some(c => (r.channel || '').toLowerCase().includes(c));
+                    const rawBalance = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
+                    const balanceVal = isOTA ? 0 : rawBalance;
                     return (
                       <tr
                         key={r.id}

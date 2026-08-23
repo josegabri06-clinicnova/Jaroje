@@ -484,9 +484,8 @@ function ReservasListInner() {
 
   useEffect(() => {
     if (showPaymentFlow && selectedRes) {
-      const balanceVal = selectedRes.balance !== undefined
-        ? selectedRes.balance
-        : (selectedRes.price_estimate || 0) - (selectedRes.deposit || 0);
+      const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => (selectedRes.channel || '').toLowerCase().includes(c));
+      const balanceVal = isOta ? 0 : Math.max(0, (selectedRes.price_estimate || selectedRes.price || 0) - (selectedRes.deposit || 0));
       
       if (balanceVal > 0) {
         setPaymentAmount(balanceVal.toString());
@@ -1161,7 +1160,7 @@ function ReservasListInner() {
         if (prev.is_group_card && Array.isArray(prev.group_members)) {
           const updatedMembers = prev.group_members.map((m: any) => {
             if (allCheckedIds.includes(String(m.id))) {
-              const roomBalance = m.balance !== undefined ? m.balance : Math.max(0, (m.price_estimate || 0) - (m.deposit || 0));
+              const roomBalance = Math.max(0, (m.price_estimate || m.price || 0) - (m.deposit || 0));
               const proportion = selectedCheckInTotalBalance > 0 ? roomBalance / selectedCheckInTotalBalance : 1 / selectedCheckInBookings.length;
               const roomPaymentAmount = Math.round(paymentAmountNum * proportion * 100) / 100;
               const newDeposit = (m.deposit || 0) + roomPaymentAmount;
@@ -1169,7 +1168,7 @@ function ReservasListInner() {
                 ...m, 
                 checked_in: true, 
                 deposit: newDeposit,
-                balance: Math.max(0, (m.price_estimate || 0) - newDeposit)
+                balance: Math.max(0, (m.price_estimate || m.price || 0) - newDeposit)
               };
             }
             return m;
@@ -1178,7 +1177,7 @@ function ReservasListInner() {
           const consolidatedDeposit = updatedMembers.reduce((sum: number, m: any) => sum + Number(m.deposit || 0), 0);
           const consolidatedBalance = updatedMembers.reduce((sum: number, m: any) => {
             const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
-            const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
+            const bBal = isOta ? 0 : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0));
             return sum + bBal;
           }, 0);
           
@@ -1558,7 +1557,7 @@ function ReservasListInner() {
           const depositVal = isSettled 
             ? priceVal 
             : (isOta ? 0 : Number(r.deposit || 0));
-          const balanceVal = (isOta || isSettled) ? 0 : (r.balance !== undefined ? Number(r.balance) : Math.max(0, priceVal - depositVal));
+          const balanceVal = (isOta || isSettled) ? 0 : Math.max(0, priceVal - depositVal);
 
           return {
             ...r,
@@ -1744,7 +1743,7 @@ function ReservasListInner() {
   const selectedCheckInTotalBalance = useMemo(() => {
     return selectedCheckInBookings.reduce((sum: number, b: any) => {
       const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
-      const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+      const bBal = isOta ? 0 : Math.max(0, (b.price_estimate || b.price || 0) - (b.deposit || 0));
       return sum + bBal;
     }, 0);
   }, [selectedCheckInBookings]);
@@ -1763,7 +1762,7 @@ function ReservasListInner() {
 
   const directGroupTotalBalance = useMemo(() => {
     return directGroupBookings.reduce((sum: number, r: any) => {
-      const bal = r.balance !== undefined ? r.balance : Math.max(0, (r.price_estimate || 0) - (r.deposit || 0));
+      const bal = Math.max(0, (r.price_estimate || r.price || 0) - (r.deposit || 0));
       return sum + bal;
     }, 0);
   }, [directGroupBookings]);
