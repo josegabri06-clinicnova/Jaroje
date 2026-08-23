@@ -1253,11 +1253,12 @@ export async function PUT(req: Request) {
     // Siempre obtener la reserva actual si es reasignación O si se está cambiando el precio manualmente
     if (roomName || price !== undefined) {
       try {
-        let getRes = await fetch(`https://api.beds24.com/v2/bookings?id[]=${id}&includeInvoiceItems=true`, {
+        let getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&includeInvoiceItems=true`, {
           headers: { 
             'token': BEDS24_TOKEN,
             'Content-Type': 'application/json'
-          }
+          },
+          cache: 'no-store'
         });
         let getJson = await getRes.json().catch(() => null);
 
@@ -1267,7 +1268,8 @@ export async function PUT(req: Request) {
             headers: { 
               'token': BEDS24_TOKEN,
               'Content-Type': 'application/json'
-            }
+            },
+            cache: 'no-store'
           });
           getJson = await getRes.json().catch(() => null);
         }
@@ -1291,7 +1293,7 @@ export async function PUT(req: Request) {
         const newRoomId = updatePayload.roomId ? String(updatePayload.roomId) : (currentBooking.roomId ? String(currentBooking.roomId) : null);
         const newUnitId = updatePayload.unitId ? String(updatePayload.unitId) : (currentBooking.unitId ? String(currentBooking.unitId) : '1');
 
-        const { getParentMapping, getAverageRatesForDates } = await import('@/lib/beds24');
+        const { getParentMapping } = await import('@/lib/beds24');
         const currentParent = getParentMapping(currentBooking.roomId, currentBooking.unitId || '1');
         const newParent = getParentMapping(newRoomId, newUnitId);
 
@@ -1304,48 +1306,63 @@ export async function PUT(req: Request) {
 
         // Recalcular si cambiaron las fechas O si cambió el tipo de habitación (upgrade/downgrade de categoría)
         if ((arrivalChanged || departureChanged || roomTypeChanged) && arrival && departure && newRoomId) {
-          console.log(`[Reservas PUT] Detectado cambio de fechas que requiere recálculo. Rango: ${arrival} al ${departure}`);
+          console.log(`[Reservas PUT] Detectado cambio de fechas o categoría de habitación que requiere recálculo. Rango: ${arrival} al ${departure}`);
           
-          const ratesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, arrival, departure);
-          const nightsCount = Math.round((new Date(departure + 'T12:00:00').getTime() - new Date(arrival + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24));
-          
-          // Cargar dynamicSettings de Supabase para multiplicadores de canal y descuentos por estancia
-          let dynamicSettings: any = null;
-          try {
-            const { data: settingsData } = await supabase
-              .from('settings')
-              .select('value')
-              .eq('key', 'pricing_unit_settings')
-              .maybeSingle();
-            if (settingsData && settingsData.value) {
-              dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
-            }
-          } catch (dsErr) {
-            console.warn("[Reservas PUT] No se pudieron cargar dynamicSettings:", dsErr);
-          }
-
-          // Detectar canal de la reserva para aplicar multiplicadores correctos
           const rawSource = String(`${currentBooking.referer || ''} ${currentBooking.source || ''} ${currentBooking.apiSource || ''} ${currentBooking.apiReference || ''}`).toLowerCase();
-
-          const averagePrice = getAverageRatesForDates(
-            newParent.roomId,
-            arrival,
-            departure,
-            rawSource || 'Directo',
-            ratesMap,
-            newParent.unitId,
-            dynamicSettings
-          );
-          
           const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
-          const totalNewPrice = isOtaChannel 
-            ? Math.round(averagePrice * nightsCount) 
-            : Math.round(averagePrice * nightsCount * 1.19);
           const oldPrice = currentBooking.price || 0;
 
-          if (totalNewPrice > 0 && totalNewPrice !== oldPrice) {
-            recalculatedPrice = totalNewPrice;
-            console.log(`[Reservas PUT] Tarifa recalculada por cambio de fechas: $${oldPrice} → $${totalNewPrice}`);
+          if (isOtaChannel) {
+            console.log(`[Reservas PUT] Reserva OTA. Manteniendo tarifa original.`);
+          } else {
+            // Cargar capacitySettings de la base de datos
+            let capacitySettings: any = null;
+            try {
+              const { data: settingsRow } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('key', 'capacity_settings')
+                .maybeSingle();
+              if (settingsRow && settingsRow.value) {
+                capacitySettings = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value;
+              }
+            } catch (csErr) {
+              console.warn("[Reservas PUT] No se pudieron cargar capacitySettings:", csErr);
+            }
+
+            // Cargar pricing rules de la base de datos
+            let rulesList: any[] = [];
+            try {
+              const { data: rulesData } = await supabase
+                .from('pricing_rules')
+                .select('*');
+              if (rulesData) {
+                rulesList = rulesData;
+              }
+            } catch (rulesErr) {
+              console.warn("[Reservas PUT] No se pudieron cargar pricing_rules:", rulesErr);
+            }
+
+            const { getDirectTotalForStay } = await import('@/lib/beds24');
+            const targetRoomString = roomName || currentBooking.room || currentBooking.roomName || '';
+            const cleanRoomNum = targetRoomString.replace(/[^0-9]/g, '');
+            const numAdults = Number(currentBooking.numAdult || 1);
+            const numChildren = Number(currentBooking.numChild || 0);
+
+            const calculatedTotal = getDirectTotalForStay(
+              cleanRoomNum,
+              arrival,
+              departure,
+              rulesList,
+              numAdults,
+              numChildren,
+              capacitySettings
+            );
+
+            if (calculatedTotal > 0 && calculatedTotal !== oldPrice) {
+              recalculatedPrice = calculatedTotal;
+              console.log(`[Reservas PUT] Tarifa recalculada por cambio de categoría usando getDirectTotalForStay: $${oldPrice} → $${calculatedTotal}`);
+            }
           }
         } else {
           console.log(`[Reservas PUT] Reasignación de habitación o sin cambio de fechas. Manteniendo tarifa original.`);
@@ -1475,12 +1492,10 @@ export async function PUT(req: Request) {
 
       charges.forEach((c: any) => {
         if (!handledIds.has(c.id)) {
+          // En la API V2 de Beds24, para eliminar por completo un item de la factura,
+          // se debe enviar únicamente un objeto con su ID, sin ningún otro campo.
           invoiceItemsUpdate.push({
-            id: c.id,
-            description: "",
-            qty: "",
-            amount: "",
-            status: ""
+            id: c.id
           });
         }
       });
