@@ -1827,49 +1827,81 @@ export default function PublicReservaPage() {
                 </span>
               </div>
 
-              {/* Método 1: Tarjeta */}
-              {(booking.portal_settings?.show_card_payment !== false) && (
+              {/* Métodos de Pago */}
+              {isUSD ? (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">
+                    {lang === 'en' ? 'Option: Wise Payment (Only USD)' : 'Opción: Pago vía Wise (Solo USD)'}
+                  </span>
+                  <a
+                    href="https://wise.com/pay/me/rolandod148"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Check size={18} />
+                    {lang === 'en' ? 'Pay via Wise (USD) ↗' : 'Pagar vía Wise (USD) ↗'}
+                  </a>
+                  <a
+                    href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=wise`}
+                    className="w-full mt-2 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Upload size={14} className="text-zinc-200" />
+                    {lang === 'en' ? 'Upload Wise Receipt' : 'Subir Comprobante de Wise'}
+                  </a>
+                  <p className="text-[10px] text-zinc-500 italic text-center mt-1">
+                    {lang === 'en'
+                      ? 'Please complete your payment on Wise using the green button above, then upload your transaction screenshot or receipt.'
+                      : 'Por favor realiza tu pago en Wise usando el botón verde de arriba, y luego sube tu comprobante o captura de pantalla.'}
+                  </p>
+                </div>
+              ) : (
                 <>
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">{t.optionCard}</span>
-                    <a
-                      href="https://link.mercadopago.com.mx/jaroje"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <CreditCard size={18} />
-                      {t.payWithCard}
-                    </a>
-                    <a
-                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=mercadopago`}
-                      className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                    >
-                      <Upload size={14} className="text-zinc-600" />
-                      {lang === 'en' ? 'Upload Card Receipt' : 'Subir Comprobante de Tarjeta'}
-                    </a>
-                  </div>
+                  {/* Método 1: Tarjeta */}
+                  {(booking.portal_settings?.show_card_payment !== false) && (
+                    <>
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">{t.optionCard}</span>
+                        <a
+                          href="https://link.mercadopago.com.mx/jaroje"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <CreditCard size={18} />
+                          {t.payWithCard}
+                        </a>
+                        <a
+                          href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=mercadopago`}
+                          className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                        >
+                          <Upload size={14} className="text-zinc-600" />
+                          {lang === 'en' ? 'Upload Card Receipt' : 'Subir Comprobante de Tarjeta'}
+                        </a>
+                      </div>
 
-                  <div className="relative flex py-1 items-center">
-                    <div className="flex-grow border-t border-zinc-200"></div>
-                    <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">{lang === 'en' ? 'or' : 'ó'}</span>
-                    <div className="flex-grow border-t border-zinc-200"></div>
+                      <div className="relative flex py-1 items-center">
+                        <div className="flex-grow border-t border-zinc-200"></div>
+                        <span className="flex-shrink mx-4 text-zinc-400 text-xs font-bold uppercase">{lang === 'en' ? 'or' : 'ó'}</span>
+                        <div className="flex-grow border-t border-zinc-200"></div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Método 2: Transferencia */}
+                  <div className="space-y-3 pt-2">
+                    <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">{t.optionTransfer}</span>
+                    <a
+                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}`}
+                      className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <FileText size={18} />
+                      {t.payWithTransfer}
+                    </a>
+                    <p className="text-[10px] text-zinc-500 italic text-center mt-1">{t.transferNote}</p>
                   </div>
                 </>
               )}
-
-              {/* Método 2: Transferencia */}
-              <div className="space-y-3 pt-2">
-                <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">{t.optionTransfer}</span>
-                <a
-                  href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}`}
-                  className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <FileText size={18} />
-                  {t.payWithTransfer}
-                </a>
-                <p className="text-[10px] text-zinc-500 italic text-center mt-1">{t.transferNote}</p>
-              </div>
             </div>
           );
         })()}

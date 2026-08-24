@@ -111,7 +111,7 @@ export default function PagoTransferenciaPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
-  const [transferAccount, setTransferAccount] = useState<string>('santander');
+  const [transferAccount, setTransferAccount] = useState<string>(method === 'wise' ? 'wise' : 'santander');
   const [loadingAccount, setLoadingAccount] = useState<boolean>(true);
   const curr = transferAccount === 'wise' ? 'USD' : 'MXN';
 
@@ -137,7 +137,7 @@ export default function PagoTransferenciaPage() {
           .eq('booking_id', String(bookingId))
           .maybeSingle();
         if (!error && data) {
-          setTransferAccount(data.transfer_account || 'santander');
+          setTransferAccount(method === 'wise' ? 'wise' : (data.transfer_account || 'santander'));
         }
       } catch (err) {
         console.error("Error loading transfer settings:", err);
@@ -145,7 +145,7 @@ export default function PagoTransferenciaPage() {
         setLoadingAccount(false);
       }
     })();
-  }, [bookingId]);
+  }, [bookingId, method]);
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -254,7 +254,14 @@ export default function PagoTransferenciaPage() {
         formData.append('amount', String(amount));
         formData.append('name', String(name));
         formData.append('email', String(email));
-        formData.append('notes', method === 'mercadopago' ? '[Plataforma: Tarjeta]' : `[Banco Destino: ${activeAccount.banco}]`);
+        formData.append(
+          'notes',
+          method === 'mercadopago'
+            ? '[Plataforma: Tarjeta]'
+            : (method === 'wise'
+              ? '[Plataforma: Wise]'
+              : `[Banco Destino: ${activeAccount.banco}]`)
+        );
         formData.append('file', fileToUpload);
 
         const res = await fetch('/api/payments/transfer-submit', {
@@ -285,7 +292,13 @@ export default function PagoTransferenciaPage() {
         <div className="bg-[#18181b] px-6 py-5 text-white flex items-center justify-between">
           <div>
             <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t.portalTitle}</span>
-            <h2 className="text-lg font-bold">{method === 'mercadopago' ? (lang === 'en' ? 'Card Receipt' : 'Comprobante de Tarjeta') : t.pageTitle}</h2>
+            <h2 className="text-lg font-bold">
+              {method === 'mercadopago' 
+                ? (lang === 'en' ? 'Card Receipt' : 'Comprobante de Tarjeta') 
+                : (method === 'wise' 
+                  ? (lang === 'en' ? 'Wise Receipt' : 'Comprobante de Wise') 
+                  : t.pageTitle)}
+            </h2>
           </div>
           <div className="bg-[#25D366] text-[10px] font-black px-2.5 py-1 rounded-full uppercase text-zinc-950 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 animate-ping"></span>
@@ -296,7 +309,13 @@ export default function PagoTransferenciaPage() {
         <div className="p-6 space-y-6">
           {/* Progress Indicator */}
           <div className="flex items-center justify-between px-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
-            <span className="text-blue-600">{method === 'mercadopago' ? (lang === 'en' ? '1. Card Payment' : '1. Pago Tarjeta') : t.step1}</span>
+            <span className="text-blue-600">
+              {method === 'mercadopago' 
+                ? (lang === 'en' ? '1. Card Payment' : '1. Pago Tarjeta') 
+                : (method === 'wise' 
+                  ? (lang === 'en' ? '1. Wise Payment' : '1. Pago Wise') 
+                  : t.step1)}
+            </span>
             <ArrowRight size={12} className="text-zinc-300" />
             <span className={success ? "text-blue-600" : ""}>{t.step2}</span>
             <ArrowRight size={12} className="text-zinc-300" />
