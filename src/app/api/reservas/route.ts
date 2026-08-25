@@ -1395,112 +1395,119 @@ export async function PUT(req: Request) {
     // Determinar el precio final a usar (explícito > recalculado > original)
     // Si no hay recálculo automático y no viene un precio explícito, enviamos el precio actual de la reserva.
     // Esto previene que los servidores de Beds24 recalculen e impongan tarifas por defecto.
-    const finalPrice = price !== undefined 
-      ? Number(price) 
-      : (recalculatedPrice !== undefined 
-          ? recalculatedPrice 
-          : (currentBooking ? Number(currentBooking.price) : undefined));
+    const rawSource = String(`${currentBooking?.referer || ''} ${currentBooking?.source || ''} ${currentBooking?.apiSource || ''} ${currentBooking?.apiReference || ''} ${currentBooking?.channel || ''}`).toLowerCase();
+    const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
 
-    if (finalPrice !== undefined) {
-      updatePayload.price = finalPrice;
-      // Actualizar la factura de Beds24 con el precio final (explícito o recalculado)
-      const currentItems = (currentBooking && Array.isArray(currentBooking.invoiceItems)) 
-        ? currentBooking.invoiceItems.filter((item: any) => {
-            const itemBookingId = String(item.bookingId || item.bookId || '');
-            return !itemBookingId || itemBookingId === String(id);
-          })
-        : [];
-      const charges = currentItems.filter((item: any) => item.type === 'charge');
-      const invoiceItemsUpdate: any[] = [];
+    if (isOtaChannel) {
+      console.log(`[Reservas PUT] Reserva OTA. Omitiendo actualizaciones de tarifas y facturas para proteger el precio del canal.`);
+    } else {
+      const finalPrice = price !== undefined 
+        ? Number(price) 
+        : (recalculatedPrice !== undefined 
+            ? recalculatedPrice 
+            : (currentBooking ? Number(currentBooking.price) : undefined));
 
-      let mainRoomCharge = charges.find((c: any) => 
-        (c.description || '').includes('[ROOMNAME1]') || 
-        (c.description || '').toLowerCase().includes('room charge')
-      );
-      const ivaCharge = charges.find((c: any) => 
-        (c.description || '').toLowerCase().includes('iva')
-      );
-      const lodgingTaxCharge = charges.find((c: any) => 
-        (c.description || '').toLowerCase().includes('hospedaje') || 
-        (c.description || '').toLowerCase().includes('tax')
-      );
+      if (finalPrice !== undefined) {
+        updatePayload.price = finalPrice;
+        // Actualizar la factura de Beds24 con el precio final (explícito o recalculado)
+        const currentItems = (currentBooking && Array.isArray(currentBooking.invoiceItems)) 
+          ? currentBooking.invoiceItems.filter((item: any) => {
+              const itemBookingId = String(item.bookingId || item.bookId || '');
+              return !itemBookingId || itemBookingId === String(id);
+            })
+          : [];
+        const charges = currentItems.filter((item: any) => item.type === 'charge');
+        const invoiceItemsUpdate: any[] = [];
 
-      if (!mainRoomCharge) {
-        mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge);
-      }
+        let mainRoomCharge = charges.find((c: any) => 
+          (c.description || '').includes('[ROOMNAME1]') || 
+          (c.description || '').toLowerCase().includes('room charge')
+        );
+        const ivaCharge = charges.find((c: any) => 
+          (c.description || '').toLowerCase().includes('iva')
+        );
+        const lodgingTaxCharge = charges.find((c: any) => 
+          (c.description || '').toLowerCase().includes('hospedaje') || 
+          (c.description || '').toLowerCase().includes('tax')
+        );
 
-      // 1. Cargo principal de habitación
-      if (mainRoomCharge) {
-        invoiceItemsUpdate.push({
-          id: mainRoomCharge.id,
-          description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
-          qty: 1,
-          amount: finalPrice,
-          vatRate: 19
-        });
-      } else {
-        invoiceItemsUpdate.push({
-          description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
-          qty: 1,
-          amount: finalPrice,
-          vatRate: 19
-        });
-      }
+        if (!mainRoomCharge) {
+          mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge);
+        }
 
-      // 2. IVA 16% (Incluido en el precio)
-      if (ivaCharge) {
-        invoiceItemsUpdate.push({
-          id: ivaCharge.id,
-          description: 'IVA 16% (Incluido en el precio)',
-          qty: 1,
-          amount: 0,
-          vatRate: 0
-        });
-      } else {
-        invoiceItemsUpdate.push({
-          description: 'IVA 16% (Incluido en el precio)',
-          qty: 1,
-          amount: 0,
-          vatRate: 0
-        });
-      }
-
-      // 3. Tax Hospedaje 3% (Incluido en el precio)
-      if (lodgingTaxCharge) {
-        invoiceItemsUpdate.push({
-          id: lodgingTaxCharge.id,
-          description: 'Tax Hospedaje 3% (Incluido en el precio)',
-          qty: 1,
-          amount: 0,
-          vatRate: 0
-        });
-      } else {
-        invoiceItemsUpdate.push({
-          description: 'Tax Hospedaje 3% (Incluido en el precio)',
-          qty: 1,
-          amount: 0,
-          vatRate: 0
-        });
-      }
-
-      // 4. Cancelar / eliminar cualquier otro cargo extra duplicado
-      const handledIds = new Set([
-        mainRoomCharge?.id,
-        ivaCharge?.id,
-        lodgingTaxCharge?.id
-      ].filter(Boolean));
-
-      charges.forEach((c: any) => {
-        if (!handledIds.has(c.id)) {
-          // En la API V2 de Beds24, para eliminar por completo un item de la factura,
-          // se debe enviar únicamente un objeto con su ID, sin ningún otro campo.
+        // 1. Cargo principal de habitación
+        if (mainRoomCharge) {
           invoiceItemsUpdate.push({
-            id: c.id
+            id: mainRoomCharge.id,
+            description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
+            qty: 1,
+            amount: finalPrice,
+            vatRate: 19
+          });
+        } else {
+          invoiceItemsUpdate.push({
+            description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
+            qty: 1,
+            amount: finalPrice,
+            vatRate: 19
           });
         }
-      });
 
-      updatePayload.invoiceItems = invoiceItemsUpdate;
+        // 2. IVA 16% (Incluido en el precio)
+        if (ivaCharge) {
+          invoiceItemsUpdate.push({
+            id: ivaCharge.id,
+            description: 'IVA 16% (Incluido en el precio)',
+            qty: 1,
+            amount: 0,
+            vatRate: 0
+          });
+        } else {
+          invoiceItemsUpdate.push({
+            description: 'IVA 16% (Incluido en el precio)',
+            qty: 1,
+            amount: 0,
+            vatRate: 0
+          });
+        }
+
+        // 3. Tax Hospedaje 3% (Incluido en el precio)
+        if (lodgingTaxCharge) {
+          invoiceItemsUpdate.push({
+            id: lodgingTaxCharge.id,
+            description: 'Tax Hospedaje 3% (Incluido en el precio)',
+            qty: 1,
+            amount: 0,
+            vatRate: 0
+          });
+        } else {
+          invoiceItemsUpdate.push({
+            description: 'Tax Hospedaje 3% (Incluido en el precio)',
+            qty: 1,
+            amount: 0,
+            vatRate: 0
+          });
+        }
+
+        // 4. Cancelar / eliminar cualquier otro cargo extra duplicado
+        const handledIds = new Set([
+          mainRoomCharge?.id,
+          ivaCharge?.id,
+          lodgingTaxCharge?.id
+        ].filter(Boolean));
+
+        charges.forEach((c: any) => {
+          if (!handledIds.has(c.id)) {
+            // En la API V2 de Beds24, para eliminar por completo un item de la factura,
+            // se debe enviar únicamente un objeto con su ID, sin ningún otro campo.
+            invoiceItemsUpdate.push({
+              id: c.id
+            });
+          }
+        });
+
+        updatePayload.invoiceItems = invoiceItemsUpdate;
+      }
     }
     if (deposit !== undefined) {
       updatePayload.deposit = Number(deposit);
