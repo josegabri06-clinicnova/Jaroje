@@ -797,7 +797,7 @@ export default function CalendarPage() {
           if (upsertErr) throw upsertErr;
         }
 
-        setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
+        setSelectedReserva((prev: any) => prev ? { ...prev, dni_image: newDniUrl } : null);
         setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
         alert('✅ Identificación guardada con éxito.');
       } catch (err: any) {
@@ -2925,7 +2925,7 @@ export default function CalendarPage() {
                                   .update({ document_url: null })
                                   .eq('reservation_id', String(selectedReserva.id).toLowerCase().trim());
                                 if (deleteErr) throw deleteErr;
-                                setSelectedReserva(prev => prev ? { ...prev, dni_image: undefined } : null);
+                                setSelectedReserva((prev: any) => prev ? { ...prev, dni_image: undefined } : null);
                                 setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: undefined } : r));
                                 alert('✅ Identificación eliminada.');
                               } catch (err: any) {

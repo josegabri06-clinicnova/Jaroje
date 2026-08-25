@@ -64,6 +64,7 @@ interface Reserva {
   num_adult?: number;
   num_child?: number;
   deposit?: number;
+  rawDeposit?: number;
   balance?: number;
   notes?: string;
   comments?: string;
