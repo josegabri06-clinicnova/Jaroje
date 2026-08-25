@@ -1285,6 +1285,8 @@ export async function PUT(req: Request) {
       }
     }
 
+    let roomTypeChanged = false;
+
     // Recalcular tarifa si hay cambios reales en las fechas o en el tipo de habitación (roomId)
     if (price === undefined && currentBooking) {
       try {
@@ -1300,7 +1302,7 @@ export async function PUT(req: Request) {
         // Detectar si hay cambios reales respecto a los valores actuales
         const arrivalChanged = arrival && arrival !== currentBooking.arrival;
         const departureChanged = departure && departure !== currentBooking.departure;
-        const roomTypeChanged = String(currentParent.roomId || '').trim() !== String(newParent.roomId || '').trim();
+        roomTypeChanged = String(currentParent.roomId || '').trim() !== String(newParent.roomId || '').trim();
         // También detectar cambio de unitId dentro del mismo tipo (ej: 301 → 302)
         const unitChanged = roomName && (String(currentBooking.roomId) !== String(newRoomId) || String(currentBooking.unitId || '1') !== String(newUnitId));
 
@@ -1398,8 +1400,8 @@ export async function PUT(req: Request) {
     const rawSource = String(`${currentBooking?.referer || ''} ${currentBooking?.source || ''} ${currentBooking?.apiSource || ''} ${currentBooking?.apiReference || ''} ${currentBooking?.channel || ''}`).toLowerCase();
     const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
 
-    if (isOtaChannel) {
-      console.log(`[Reservas PUT] Reserva OTA. Omitiendo actualizaciones de tarifas y facturas para proteger el precio del canal.`);
+    if (isOtaChannel && price === undefined && !roomTypeChanged) {
+      console.log(`[Reservas PUT] Reserva OTA y misma categoría. Omitiendo actualizaciones de tarifas y facturas para proteger el precio del canal.`);
     } else {
       const finalPrice = price !== undefined 
         ? Number(price) 

@@ -1267,9 +1267,7 @@ export default function RecepcionPage() {
   // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
   useEffect(() => {
     if (isReassigning && selectedReserva && targetRoomName) {
-      const channel = selectedReserva.channel || '';
-      const isOta = channel && ['airbnb', 'booking', 'expedia'].some((c: string) => channel.toLowerCase().includes(c));
-      const changed = !isOta && !isSameRoomCategory(selectedReserva.room || '', targetRoomName);
+      const changed = !isSameRoomCategory(selectedReserva.room || '', targetRoomName);
       setIsCategoryChanged(changed);
       if (changed) {
         const fetchPreview = async () => {
