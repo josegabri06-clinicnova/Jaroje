@@ -60,7 +60,10 @@ const PHYSICAL_ROOM_GROUPS = [
 
 
 const isSameRoomCategory = (room1: string, room2: string) => {
-  const cleanRoom = (r: string) => r.replace(/^(habitación|habitacion|hab\.|hab)\s+/i, '').trim();
+  const cleanRoom = (r: string) => {
+    const match = r.match(/\b(\d{3})\b/) || r.match(/(\d+)/);
+    return match ? match[1] : r.replace(/[^0-9]/g, '').trim();
+  };
   const r1 = cleanRoom(room1);
   const r2 = cleanRoom(room2);
   
@@ -543,7 +546,8 @@ function ReservasListInner() {
   // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
   useEffect(() => {
     if (showReassignModal && reassigningRes && targetRoomName) {
-      const changed = !isSameRoomCategory(reassigningRes.room_name || reassigningRes.room, targetRoomName);
+      const isOta = reassigningRes.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => reassigningRes.channel.toLowerCase().includes(c));
+      const changed = !isOta && !isSameRoomCategory(reassigningRes.room_name || reassigningRes.room, targetRoomName);
       setIsCategoryChanged(changed);
       if (changed) {
         const fetchPreview = async () => {
