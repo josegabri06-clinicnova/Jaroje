@@ -546,7 +546,7 @@ function ReservasListInner() {
   // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
   useEffect(() => {
     if (showReassignModal && reassigningRes && targetRoomName) {
-      const changed = !isSameRoomCategory(reassigningRes.room_name || reassigningRes.room, targetRoomName);
+      const changed = !isSameRoomCategory(reassigningRes.room || '', targetRoomName);
       setIsCategoryChanged(changed);
       if (changed) {
         const fetchPreview = async () => {
@@ -639,11 +639,11 @@ function ReservasListInner() {
             action: 'reasignacion_habitacion',
             room: targetRoomName,
             details: JSON.stringify({
-              text: `${reassigningRes.guest_name} ${reassigningRes.num_adult || 1}/${reassigningRes.num_child || 0} (ID: ${reassigningRes.id}) de la Habitación ${reassigningRes.room_name || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName}.${data.recalculated_price ? ` Precio actualizado: $${data.old_price} → $${data.recalculated_price}` : ''}`,
+              text: `${reassigningRes.guest_name} ${reassigningRes.num_adult || 1}/${reassigningRes.num_child || 0} (ID: ${reassigningRes.id}) de la Habitación ${reassigningRes.room || reassigningRes.room_name || 'Sin asignar'} - Reasignó la habitación a ${targetRoomName}.${data.recalculated_price ? ` Precio actualizado: $${data.old_price} → $${data.recalculated_price}` : ''}`,
               reasignacion: {
                 bookingId: reassigningRes.id,
                 guestName: reassigningRes.guest_name,
-                fromRoom: reassigningRes.room_name || 'Sin asignar',
+                fromRoom: reassigningRes.room || reassigningRes.room_name || 'Sin asignar',
                 toRoom: targetRoomName,
                 oldPrice: data.old_price || undefined,
                 newPrice: data.recalculated_price || undefined
@@ -6183,7 +6183,7 @@ function ReservasListInner() {
                         <optgroup key={group.category} label={group.category}>
                           {group.rooms.map(room => {
                             const isAvail = availableRooms[room] === true;
-                            const isCurrent = (reassigningRes.room_name || '').includes(room);
+                            const isCurrent = (reassigningRes.room || '').includes(room);
                             const totalGuests = Number(reassigningRes.display_num_adult !== undefined ? reassigningRes.display_num_adult : (reassigningRes.num_adult || 1)) + 
                                                 Number(reassigningRes.display_num_child !== undefined ? reassigningRes.display_num_child : (reassigningRes.num_child || 0));
                             const capRules = getCapacityRules(room, capacitySettings || undefined);
