@@ -294,8 +294,10 @@ export async function GET(req: Request) {
             const calculatedCharges = totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue;
             const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
-            const depositVal = actualPaid > 0 ? actualPaid : (rawB.deposit !== undefined ? Number(rawB.deposit) : 0);
-            const balanceVal = actualPaid > 0 ? calculatedBalance : (rawB.balance !== undefined ? Number(rawB.balance) : (calculatedCharges - depositVal));
+            const depositVal = (rawB.deposit !== undefined && Number(rawB.deposit) > 0)
+              ? Number(rawB.deposit)
+              : (actualPaid > 0 ? actualPaid : 0);
+            const balanceVal = Math.max(0, calculatedCharges - depositVal);
 
             const isCancelled = String(rawB.status) === '0' || rawB.status === 'cancelled';
 
