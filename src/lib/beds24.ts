@@ -962,6 +962,123 @@ let cacheTimestamp = 0;
 let cacheAllTimestamp = 0;
 const CACHE_TTL_MS = 90000; // 90 segundos de ciclo de vida (TTL) para soportar múltiples usuarios concurrentes sin saturar Beds24
 
+/**
+ * Determina si el precio de Beds24 ya fue ajustado por staySync.
+ * Si es así, significa que ya incluye ISH e IVA y no debe sumarse de nuevo.
+ */
+export async function checkIfOtaIsAlreadyAdjusted(
+  b: any,
+  priceVal: number,
+  channel: string,
+  rulesList: any[],
+  capacitySettings: any,
+  otaMultipliers: { airbnb: number; booking: number },
+  allBookings?: any[]
+): Promise<boolean> {
+  const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
+  if (!isOTA) return false;
+
+  try {
+    const cleanRoomNum = String(b.roomName || '').replace(/[^0-9]/g, '');
+    
+    let numAdults = Number(b.numAdult || 1);
+    let numChildren = Number(b.numChild || 0);
+
+    // Si la reserva pertenece a un grupo, debemos redistribuir huéspedes de forma proporcional 
+    if (b.arrival && b.departure) {
+      let group: any[] = [];
+
+      if (allBookings && allBookings.length > 0) {
+        const targetName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+        const targetPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
+
+        group = allBookings.filter((sib: any) => {
+          if (sib.departure !== b.departure) return false;
+          if (String(sib.status) === '0' || sib.status === 'cancelled') return false;
+          const sibName = `${sib.firstName || ''} ${sib.lastName || ''}`.trim().toLowerCase();
+          const sibPhone = (sib.phone || sib.mobile || sib.guestPhone || '').trim();
+          const sameName = sibName && targetName && (sibName.includes(targetName) || targetName.includes(sibName));
+          const samePhone = sibPhone && targetPhone && (sibPhone.includes(targetPhone) || targetPhone.includes(sibPhone));
+          return sameName || samePhone;
+        });
+      } else {
+        // Consultar hermanos de Supabase de forma rápida
+        const { data: siblings } = await supabase
+          .from('beds24_reservations')
+          .select('*')
+          .eq('check_in', b.arrival)
+          .eq('check_out', b.departure);
+
+        if (siblings && siblings.length > 0) {
+          const targetName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+          const targetPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
+
+          group = siblings.filter((sib: any) => {
+            if (String(sib.status) === 'cancelled') return false;
+            const sibName = (sib.guest_name || '').trim().toLowerCase();
+            const sibPhone = (sib.phone || '').trim();
+            const sameName = sibName && targetName && (sibName.includes(targetName) || targetName.includes(sibName));
+            const samePhone = sibPhone && targetPhone && (sibPhone.includes(targetPhone) || targetPhone.includes(sibPhone));
+            return sameName || samePhone;
+          }).map(sib => ({
+            id: sib.id,
+            numAdult: sib.num_adult,
+            numChild: sib.num_child,
+            roomName: sib.room || sib.room_name || ''
+          }));
+
+          // Añadir el elemento actual si no está en la lista de hermanos
+          if (!group.some(g => String(g.id) === String(b.id))) {
+            group.push({
+              id: b.id,
+              numAdult: b.numAdult,
+              numChild: b.numChild,
+              roomName: b.roomName || b.room || ''
+            });
+          }
+        }
+      }
+
+      if (group.length > 1) {
+        const adjustedResult = detectAndAdjustGroupGuests(group, capacitySettings);
+        const currentAdjusted = adjustedResult.members.find((m: any) => String(m.id) === String(b.id));
+        if (currentAdjusted) {
+          numAdults = currentAdjusted.display_num_adult;
+          numChildren = currentAdjusted.display_num_child;
+        }
+      }
+    }
+
+    const calculatedTotal = getDirectTotalForStay(
+      cleanRoomNum,
+      b.arrival,
+      b.departure,
+      rulesList,
+      numAdults,
+      numChildren,
+      capacitySettings
+    );
+
+    let expectedPrice = calculatedTotal;
+    const channelLower = channel.toLowerCase();
+    if (channelLower.includes('airbnb')) {
+      expectedPrice = Math.round(calculatedTotal * otaMultipliers.airbnb);
+    } else if (channelLower.includes('booking')) {
+      expectedPrice = Math.round(calculatedTotal * otaMultipliers.booking);
+    }
+
+    const diff = Math.abs(priceVal - expectedPrice);
+    if (diff < 5.0) {
+      console.log(`[checkIfOtaIsAlreadyAdjusted] Reserva ${b.id} coincide con tarifa staySync (${expectedPrice}). Marcando como ajustada.`);
+      return true;
+    }
+  } catch (err) {
+    console.error("[checkIfOtaIsAlreadyAdjusted] Error:", err);
+  }
+
+  return false;
+}
+
 // Función para limpiar/invalidar el caché de Beds24 (útil tras POST/PUT/DELETE)
 export function clearBeds24Cache() {
   console.log("[Beds24 Cache] Invalidando y limpiando la caché global de reservas.");
@@ -1137,7 +1254,47 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
   // Almacenar en variable de módulo para que route.ts pueda accederla
   _lastOtaRoom500Bookings = otaRoom500Bookings;
 
-  const mappedBookings = bookingsArray
+  // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
+  let rulesList: any[] = [];
+  let capacitySettings: any = null;
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+
+  try {
+    const { data: rulesData } = await supabase.from('pricing_rules').select('*');
+    if (rulesData) rulesList = rulesData;
+  } catch (err) {
+    console.error("Error al obtener pricing_rules:", err);
+  }
+
+  try {
+    const { data: settingsRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'capacity_settings')
+      .maybeSingle();
+    if (settingsRow && settingsRow.value) {
+      capacitySettings = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value;
+    }
+  } catch (err) {
+    console.error("Error al obtener capacity_settings:", err);
+  }
+
+  try {
+    const { data: otaRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'ota_multipliers')
+      .maybeSingle();
+    if (otaRow && otaRow.value) {
+      const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
+      if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
+      if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+    }
+  } catch (err) {
+    console.error("Error al obtener ota_multipliers:", err);
+  }
+
+  const filteredBookings = bookingsArray
     .filter((b: any) => {
       if (!includeCancelled && (String(b.status) === '0' || b.status === 'cancelled')) {
         // Permitir pasar únicamente si fue modificada/cancelada en las últimas 48 horas
@@ -1154,8 +1311,10 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       // Excluir habitaciones locales 500-507 que Beds24 no gestiona
       if (rId === LOCAL_ROOM_ID) return false;
       return true;
-    })
-    .map((b: any) => {
+    });
+
+  const mappedBookings = await Promise.all(
+    filteredBookings.map(async (b: any) => {
       const arrivalDate = b.arrival ? new Date(b.arrival) : null;
       const departureDate = b.departure ? new Date(b.departure) : null;
       const nights = (arrivalDate && departureDate)
@@ -1224,11 +1383,19 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
       // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
       // no el precio total de la reserva pagado por el huésped. Usamos totalRevenue directamente.
-      // Sin embargo, si totalInvoiceCharges es igual a baseRevenue (el precio de Beds24),
-      // significa que la reserva fue reasignada y ajustada por nuestra app (por lo que ya incluye impuestos y recargos).
-      // En ese caso, NO debemos sumar de nuevo ishVal.
+      // Sin embargo, si la reserva fue reasignada y ajustada por nuestra app (por lo que ya incluye impuestos y recargos),
+      // o si totalInvoiceCharges es igual a baseRevenue, NO debemos sumar de nuevo ishVal.
+      const otaIsAlreadyAdjusted = await checkIfOtaIsAlreadyAdjusted(
+        b,
+        baseRevenue,
+        channel,
+        rulesList,
+        capacitySettings,
+        otaMultipliers,
+        bookingsArray
+      );
       const calculatedCharges = isOTA 
-        ? (totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
+        ? (otaIsAlreadyAdjusted || totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
@@ -1272,7 +1439,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null,
         invoiceItems: b.invoiceItems || []
       };
-    });
+    }));
 
   if (mappedBookings.length > 0) {
     try {
@@ -1954,15 +2121,63 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
   }
   const finalPriceVal = priceVal + ishVal;
 
+  // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
+  let rulesList: any[] = [];
+  let capacitySettings: any = null;
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+
+  try {
+    const { data: rulesData } = await supabase.from('pricing_rules').select('*');
+    if (rulesData) rulesList = rulesData;
+  } catch (err) {
+    console.error("Error al obtener pricing_rules:", err);
+  }
+
+  try {
+    const { data: settingsRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'capacity_settings')
+      .maybeSingle();
+    if (settingsRow && settingsRow.value) {
+      capacitySettings = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value;
+    }
+  } catch (err) {
+    console.error("Error al obtener capacity_settings:", err);
+  }
+
+  try {
+    const { data: otaRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'ota_multipliers')
+      .maybeSingle();
+    if (otaRow && otaRow.value) {
+      const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
+      if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
+      if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+    }
+  } catch (err) {
+    console.error("Error al obtener ota_multipliers:", err);
+  }
+
   const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
+
+  const otaIsAlreadyAdjusted = await checkIfOtaIsAlreadyAdjusted(
+    b,
+    priceVal,
+    channel,
+    rulesList,
+    capacitySettings,
+    otaMultipliers
+  );
 
   // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
   // no el precio total de la reserva pagado por el huésped. Usamos finalPriceVal directamente.
-  // Sin embargo, si totalInvoiceCharges es exactamente igual al price de Beds24 (priceVal),
-  // significa que la reserva fue reasignada y ajustada por nuestra app (por lo que priceVal ya incluye impuestos y recargos).
-  // En ese caso, NO debemos sumar de nuevo ishVal de la rateDescription estática.
+  // Sin embargo, si la reserva fue reasignada y ajustada por nuestra app, o si totalInvoiceCharges es exactamente igual al price de Beds24 (priceVal),
+  // no debemos sumar de nuevo ishVal de la rateDescription estática.
   const calculatedCharges = isOTA 
-    ? (totalInvoiceCharges === priceVal ? priceVal : finalPriceVal) 
+    ? (otaIsAlreadyAdjusted || totalInvoiceCharges === priceVal ? priceVal : finalPriceVal) 
     : (totalInvoiceCharges > 0 ? totalInvoiceCharges : finalPriceVal);
   const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
@@ -2063,13 +2278,55 @@ export async function syncBeds24ReservationsRange(
 
   const LOCAL_ROOM_ID = '685542';
 
-  const mappedBookings = bookingsArray
+  // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
+  let rulesList: any[] = [];
+  let capacitySettings: any = null;
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+
+  try {
+    const { data: rulesData } = await supabase.from('pricing_rules').select('*');
+    if (rulesData) rulesList = rulesData;
+  } catch (err) {
+    console.error("Error al obtener pricing_rules en syncBeds24ReservationsRange:", err);
+  }
+
+  try {
+    const { data: settingsRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'capacity_settings')
+      .maybeSingle();
+    if (settingsRow && settingsRow.value) {
+      capacitySettings = typeof settingsRow.value === 'string' ? JSON.parse(settingsRow.value) : settingsRow.value;
+    }
+  } catch (err) {
+    console.error("Error al obtener capacity_settings en syncBeds24ReservationsRange:", err);
+  }
+
+  try {
+    const { data: otaRow } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'ota_multipliers')
+      .maybeSingle();
+    if (otaRow && otaRow.value) {
+      const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
+      if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
+      if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+    }
+  } catch (err) {
+    console.error("Error al obtener ota_multipliers en syncBeds24ReservationsRange:", err);
+  }
+
+  const filteredBookings = bookingsArray
     .filter((b: any) => {
       const rId = String(b.roomId || '').trim();
       if (rId === LOCAL_ROOM_ID) return false;
       return true;
-    })
-    .map((b: any) => {
+    });
+
+  const mappedBookings = await Promise.all(
+    filteredBookings.map(async (b: any) => {
       const arrivalDate = b.arrival ? new Date(b.arrival) : null;
       const departureDate = b.departure ? new Date(b.departure) : null;
       const nights = (arrivalDate && departureDate)
@@ -2136,11 +2393,19 @@ export async function syncBeds24ReservationsRange(
 
       // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
       // no el precio total de la reserva pagado por el huésped. Usamos totalRevenue directamente.
-      // Sin embargo, si totalInvoiceCharges es igual a baseRevenue (el precio de Beds24),
-      // significa que la reserva fue reasignada y ajustada por nuestra app (por lo que ya incluye impuestos y recargos).
-      // En ese caso, NO debemos sumar de nuevo ishVal.
+      // Sin embargo, si la reserva fue reasignada y ajustada por nuestra app (por lo que ya incluye impuestos y recargos),
+      // o si totalInvoiceCharges es igual a baseRevenue, NO debemos sumar de nuevo ishVal.
+      const otaIsAlreadyAdjusted = await checkIfOtaIsAlreadyAdjusted(
+        b,
+        baseRevenue,
+        channel,
+        rulesList,
+        capacitySettings,
+        otaMultipliers,
+        bookingsArray
+      );
       const calculatedCharges = isOTA 
-        ? (totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
+        ? (otaIsAlreadyAdjusted || totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
@@ -2186,7 +2451,7 @@ export async function syncBeds24ReservationsRange(
         cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null,
         invoiceItems: b.invoiceItems || []
       };
-    });
+    }));
 
   if (mappedBookings.length > 0) {
     const upsertRows = mappedBookings.map((mb: any) => ({
