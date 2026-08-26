@@ -1314,8 +1314,8 @@ export async function PUT(req: Request) {
           const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
           const oldPrice = currentBooking.price || 0;
 
-          if (isOtaChannel) {
-            console.log(`[Reservas PUT] Reserva OTA. Manteniendo tarifa original.`);
+          if (isOtaChannel && !roomTypeChanged) {
+            console.log(`[Reservas PUT] Reserva OTA y misma categoría. Manteniendo tarifa original.`);
           } else {
             // Cargar capacitySettings de la base de datos
             let capacitySettings: any = null;
