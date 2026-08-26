@@ -1224,7 +1224,12 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
       // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
       // no el precio total de la reserva pagado por el huésped. Usamos totalRevenue directamente.
-      const calculatedCharges = isOTA ? totalRevenue : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
+      // Sin embargo, si totalInvoiceCharges es igual a baseRevenue (el precio de Beds24),
+      // significa que la reserva fue reasignada y ajustada por nuestra app (por lo que ya incluye impuestos y recargos).
+      // En ese caso, NO debemos sumar de nuevo ishVal.
+      const calculatedCharges = isOTA 
+        ? (totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
+        : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
       const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
@@ -1920,7 +1925,12 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
 
   // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
   // no el precio total de la reserva pagado por el huésped. Usamos finalPriceVal directamente.
-  const calculatedCharges = isOTA ? finalPriceVal : (totalInvoiceCharges > 0 ? totalInvoiceCharges : finalPriceVal);
+  // Sin embargo, si totalInvoiceCharges es exactamente igual al price de Beds24 (priceVal),
+  // significa que la reserva fue reasignada y ajustada por nuestra app (por lo que priceVal ya incluye impuestos y recargos).
+  // En ese caso, NO debemos sumar de nuevo ishVal de la rateDescription estática.
+  const calculatedCharges = isOTA 
+    ? (totalInvoiceCharges === priceVal ? priceVal : finalPriceVal) 
+    : (totalInvoiceCharges > 0 ? totalInvoiceCharges : finalPriceVal);
   const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
   const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
@@ -2089,7 +2099,12 @@ export async function syncBeds24ReservationsRange(
 
       // Para reservas OTA (Airbnb, Booking, Expedia), totalInvoiceCharges representa el payout de la OTA,
       // no el precio total de la reserva pagado por el huésped. Usamos totalRevenue directamente.
-      const calculatedCharges = isOTA ? totalRevenue : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
+      // Sin embargo, si totalInvoiceCharges es igual a baseRevenue (el precio de Beds24),
+      // significa que la reserva fue reasignada y ajustada por nuestra app (por lo que ya incluye impuestos y recargos).
+      // En ese caso, NO debemos sumar de nuevo ishVal.
+      const calculatedCharges = isOTA 
+        ? (totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
+        : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
       const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
