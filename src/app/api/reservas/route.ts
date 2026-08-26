@@ -1348,8 +1348,56 @@ export async function PUT(req: Request) {
             const { getDirectTotalForStay } = await import('@/lib/beds24');
             const targetRoomString = roomName || currentBooking.room || currentBooking.roomName || '';
             const cleanRoomNum = targetRoomString.replace(/[^0-9]/g, '');
-            const numAdults = Number(currentBooking.numAdult || 1);
-            const numChildren = Number(currentBooking.numChild || 0);
+            let numAdults = Number(currentBooking.numAdult || 1);
+            let numChildren = Number(currentBooking.numChild || 0);
+
+            // Si la reserva pertenece a un grupo, resolver los huéspedes ajustados de forma proporcional
+            // para evitar cobrar recargos de persona extra falsos en habitaciones individuales.
+            try {
+              const targetName = `${currentBooking.firstName || ''} ${currentBooking.lastName || ''}`.trim().toLowerCase();
+              const targetPhone = (currentBooking.phone || currentBooking.mobile || currentBooking.guestPhone || '').trim();
+
+              const resSiblings = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${currentBooking.arrival}&arrivalTo=${currentBooking.arrival}`, {
+                headers: { 'token': BEDS24_TOKEN },
+                cache: 'no-store'
+              });
+              const jsonSiblings = await resSiblings.json().catch(() => null);
+              const allArrival = jsonSiblings?.data || [];
+
+              const group = allArrival.filter((b: any) => {
+                if (b.departure !== currentBooking.departure) return false;
+                if (String(b.status) === '0' || b.status === 'cancelled') return false;
+                const bName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+                const bPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
+                const sameName = bName && targetName && (bName.includes(targetName) || targetName.includes(bName));
+                const samePhone = bPhone && targetPhone && (bPhone.includes(targetPhone) || targetPhone.includes(bPhone));
+                return sameName || samePhone;
+              });
+
+              if (group.length > 1) {
+                // Actualizar la habitación temporalmente en el grupo para usar la capacidad de la habitación destino
+                const groupWithNewRoom = group.map((b: any) => {
+                  if (String(b.id) === String(id)) {
+                    return {
+                      ...b,
+                      roomName: roomName || b.roomName || b.room || ''
+                    };
+                  }
+                  return b;
+                });
+
+                const { detectAndAdjustGroupGuests } = await import('@/lib/beds24');
+                const adjustedResult = detectAndAdjustGroupGuests(groupWithNewRoom, capacitySettings);
+                const currentAdjusted = adjustedResult.members.find((m: any) => String(m.id) === String(id));
+                if (currentAdjusted) {
+                  numAdults = currentAdjusted.display_num_adult;
+                  numChildren = currentAdjusted.display_num_child;
+                  console.log(`[Reservas PUT] Reserva grupal detectada. Distribuidos huéspedes para la habitación ${roomName || currentBooking.roomName}: ${numAdults} adultos, ${numChildren} niños`);
+                }
+              }
+            } catch (groupErr) {
+              console.error("[Reservas PUT] Error resolviendo huéspedes grupales:", groupErr);
+            }
 
             const calculatedTotal = getDirectTotalForStay(
               cleanRoomNum,
