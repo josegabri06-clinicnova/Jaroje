@@ -1102,7 +1102,7 @@ export default function StaffPage() {
     const prevDbStatus = roomStatuses.find(rs => String(rs.room_number) === String(roomNumber))?.status || '';
 
     // Si cambia a limpia (o disponible viniendo de limpieza profunda), crear también una tarea resuelta en /api/tasks para mantener el registro
-    if (newStatus === 'limpia' || (newStatus === 'disponible' && prevDbStatus === 'limpieza_profunda')) {
+    if (newStatus === 'limpia' || (newStatus === 'disponible' && (prevDbStatus as string) === 'limpieza_profunda')) {
       const taskDesc = newStatus === 'limpia' 
         ? 'Habitación limpia y lista para check-in (Tablero Staff).'
         : 'Limpieza forzada terminada (Tablero Staff).';
@@ -1158,7 +1158,7 @@ export default function StaffPage() {
       let logDetails = `Cambió el estado de Habitación ${roomNumber} a '${newStatus}'`;
       if (newStatus === 'limpieza_profunda') {
         logDetails = `Forzó limpieza forzada en Habitación ${roomNumber} · Reportado por ${operatorName}`;
-      } else if (newStatus === 'disponible' && prevDbStatus === 'limpieza_profunda') {
+      } else if (newStatus === 'disponible' && (prevDbStatus as string) === 'limpieza_profunda') {
         logDetails = `Finalizó limpieza forzada en Habitación ${roomNumber} · Reportado por ${operatorName}`;
       }
 

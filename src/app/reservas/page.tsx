@@ -3455,12 +3455,23 @@ function ReservasListInner() {
                   </button>
                 )}
                 {selectedRes.status !== 'cancelled' && userRole === 'admin' && (
-                  <button
-                    onClick={() => setIsEditingRes(!isEditingRes)}
-                    className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
-                  >
-                    {isEditingRes ? 'Cancelar' : 'Editar 📝'}
-                  </button>
+                  selectedRes.is_group_card ? (
+                    <button
+                      onClick={() => {
+                        alert("⚠️ Para editar tarifas, depósitos o huéspedes, por favor selecciona un condominio de forma individual en la sección de 'Grupo Detectado' abajo.");
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-100 transition-colors"
+                    >
+                      Editar 📝
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsEditingRes(!isEditingRes)}
+                      className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
+                    >
+                      {isEditingRes ? 'Cancelar' : 'Editar 📝'}
+                    </button>
+                  )
                 )}
                 <button 
                   onClick={() => {
@@ -4634,9 +4645,25 @@ function ReservasListInner() {
                           <div className="flex-1 flex justify-between items-center min-w-0">
                             <div>
                               <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">Grupo Detectado</span>
-                              <p className="text-[13px] font-bold text-blue-900 leading-tight">
-                                {groupBookings.length} habitaciones · Mismo huésped
-                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <p className="text-[13px] font-bold text-blue-900 leading-tight">
+                                  {groupBookings.length} habitaciones
+                                </p>
+                                {!selectedRes.is_group_card && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const groupCard = groupedBase.find(g => g.is_group_card && g.group_members.some((m: any) => String(m.id) === String(selectedRes.id)));
+                                      if (groupCard) {
+                                        setSelectedRes(groupCard);
+                                      }
+                                    }}
+                                    className="px-2 py-0.5 text-[9px] font-extrabold text-blue-700 bg-blue-100 border border-blue-200 hover:bg-blue-200 rounded transition-all cursor-pointer uppercase select-none active:scale-[0.97]"
+                                  >
+                                    🔍 Ver Consolidado
+                                  </button>
+                                )}
+                              </div>
                             </div>
                             {totalGroupBalance > 0 && (
                               <div className="text-right shrink-0">
@@ -4648,6 +4675,21 @@ function ReservasListInner() {
                             )}
                           </div>
                         </div>
+
+                        {selectedRes.is_group_card ? (
+                          <div className="bg-amber-50/70 border border-amber-200 p-2.5 rounded-xl text-left">
+                            <p className="text-[10.5px] text-amber-900 font-semibold leading-relaxed">
+                              💡 <b>Estás viendo el grupo consolidado.</b> Para editar la tarifa, depósitos o huéspedes de una habitación en particular, por favor haz clic en <b>"Seleccionar 🔎"</b> abajo.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-indigo-50/75 border border-indigo-200/80 p-2.5 rounded-xl text-left">
+                            <p className="text-[10.5px] text-indigo-900 font-semibold leading-relaxed">
+                              💡 <b>Estás editando esta habitación individualmente.</b> Los cambios de tarifa, anticipo o huéspedes se aplicarán solo a esta habitación. Para ver los totales del grupo, haz clic en "Ver Consolidado" arriba.
+                            </p>
+                          </div>
+                        )}
+
                         <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
                           {groupBookings.map((b: any) => {
                             const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
@@ -4675,13 +4717,31 @@ function ReservasListInner() {
                                 </span>
                                 <div className="flex items-center gap-2 shrink-0">
                                   {userRole === 'admin' && b.status !== 'cancelled' && (
-                                    <button
-                                      type="button"
-                                      onClick={() => { setShowReassignModal(true); setReassigningRes(b); }}
-                                      className="text-[9.5px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-all cursor-pointer"
-                                    >
-                                      Reasignar 🔀
-                                    </button>
+                                    <>
+                                      {!isCurrent && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const found = reservas.find((r: any) => String(r.id) === String(b.id));
+                                            if (found) {
+                                              setSelectedRes(found);
+                                            } else {
+                                              setSelectedRes(b);
+                                            }
+                                          }}
+                                          className="text-[9.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-all cursor-pointer active:scale-95"
+                                        >
+                                          Seleccionar 🔎
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => { setShowReassignModal(true); setReassigningRes(b); }}
+                                        className="text-[9.5px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-all cursor-pointer active:scale-95"
+                                      >
+                                        Reasignar 🔀
+                                      </button>
+                                    </>
                                   )}
                                   <span className={`font-extrabold ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
                                     {bBal > 0 ? `Adeudo: ${fmtCurrency(bBal, b.guest_name)}` : '✅ Pagado'}
