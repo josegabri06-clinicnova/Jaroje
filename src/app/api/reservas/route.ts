@@ -1361,9 +1361,36 @@ export async function PUT(req: Request) {
               capacitySettings
             );
 
-            if (calculatedTotal > 0 && calculatedTotal !== oldPrice) {
-              recalculatedPrice = calculatedTotal;
-              console.log(`[Reservas PUT] Tarifa recalculada por cambio de categoría usando getDirectTotalForStay: $${oldPrice} → $${calculatedTotal}`);
+            // Cargar multiplicadores de OTA de la base de datos
+            let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+            try {
+              const { data: otaRow } = await supabase
+                .from('settings')
+                .select('value')
+                .eq('key', 'ota_multipliers')
+                .maybeSingle();
+              if (otaRow && otaRow.value) {
+                const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
+                if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
+                if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+              }
+            } catch (otaErr) {
+              console.warn("[Reservas PUT] No se pudieron cargar ota_multipliers:", otaErr);
+            }
+
+            let finalCalculated = calculatedTotal;
+            const channelLower = String(currentBooking.channel || currentBooking.referer || '').toLowerCase();
+            if (channelLower.includes('airbnb')) {
+              finalCalculated = Math.round(calculatedTotal * otaMultipliers.airbnb);
+              console.log(`[Reservas PUT] Aplicando recargo Airbnb (${otaMultipliers.airbnb}): ${calculatedTotal} → ${finalCalculated}`);
+            } else if (channelLower.includes('booking')) {
+              finalCalculated = Math.round(calculatedTotal * otaMultipliers.booking);
+              console.log(`[Reservas PUT] Aplicando recargo Booking (${otaMultipliers.booking}): ${calculatedTotal} → ${finalCalculated}`);
+            }
+
+            if (finalCalculated > 0 && finalCalculated !== oldPrice) {
+              recalculatedPrice = finalCalculated;
+              console.log(`[Reservas PUT] Tarifa recalculada por cambio de categoría usando getDirectTotalForStay con recargos de canal: $${oldPrice} → $${finalCalculated}`);
             }
           }
         } else {
