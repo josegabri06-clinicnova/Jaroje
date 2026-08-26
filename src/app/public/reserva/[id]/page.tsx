@@ -858,6 +858,7 @@ export default function PublicReservaPage() {
   const [maintenanceDesc, setMaintenanceDesc] = useState('');
   const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState('');
+  const [showWiseGuide, setShowWiseGuide] = useState(false);
   const [maintenanceSuccess, setMaintenanceSuccess] = useState(false);
   const [showWifiInfo, setShowWifiInfo] = useState(false);
   const [showCancellationPolicies, setShowCancellationPolicies] = useState(false);
@@ -1854,6 +1855,103 @@ export default function PublicReservaPage() {
                       ? 'Please complete your payment on Wise using the green button above, then upload your transaction screenshot or receipt.'
                       : 'Por favor realiza tu pago en Wise usando el botón verde de arriba, y luego sube tu comprobante o captura de pantalla.'}
                   </p>
+
+                  {/* Wise Step-by-Step Guide Accordion */}
+                  <div className="mt-4 border border-emerald-200 bg-emerald-50/20 rounded-xl overflow-hidden transition-all shadow-sm">
+                    <button
+                      onClick={() => setShowWiseGuide(!showWiseGuide)}
+                      type="button"
+                      className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-emerald-50/40 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Info size={15} className="text-emerald-600" />
+                        <span className="text-[11px] font-black text-emerald-950 uppercase tracking-wider">
+                          {lang === 'en' ? 'Wise Payment Guide' : 'Guía de Pago por Wise'}
+                        </span>
+                      </div>
+                      <span className="text-emerald-700 text-xs font-bold">
+                        {showWiseGuide ? '▲' : '▼'}
+                      </span>
+                    </button>
+
+                    {showWiseGuide && (
+                      <div className="px-4 pb-4 pt-1 text-xs text-zinc-700 space-y-3.5 border-t border-emerald-100 bg-white">
+                        <div className="space-y-2">
+                          <p className="font-extrabold text-zinc-900 mt-1">
+                            {lang === 'en' ? 'How to open a Wise account and make the transfer:' : 'Cómo abrir una cuenta de Wise y hacer la transferencia:'}
+                          </p>
+                          <ol className="list-decimal pl-4 space-y-2 text-[11px] text-zinc-600">
+                            <li>
+                              {lang === 'en' ? (
+                                <>Go to <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a> or download the Wise app.</>
+                              ) : (
+                                <>Ve a <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a> o descarga la app de Wise.</>
+                              )}
+                            </li>
+                            <li>
+                              {lang === 'en' 
+                                ? 'Create a free account and complete the identity verification.' 
+                                : 'Crea una cuenta gratuita y completa la verificación de identidad.'}
+                            </li>
+                            <li>
+                              {lang === 'en' 
+                                ? 'Add funds to Wise using either a credit/debit card, or a bank account (lower fees).' 
+                                : 'Agrega fondos a Wise usando una tarjeta de crédito/débito o cuenta bancaria (menor comisión).'}
+                            </li>
+                            <li>
+                              {lang === 'en' 
+                                ? 'Once your account is ready, select Send money.' 
+                                : 'Cuando tu cuenta esté lista, selecciona Enviar dinero.'}
+                            </li>
+                            <li>
+                              {lang === 'en' 
+                                ? 'Choose to send the payment in USD (our prices are in USD).' 
+                                : 'Elige enviar el pago en USD (nuestras tarifas están en USD).'}
+                            </li>
+                            <li>
+                              {lang === 'en' ? (
+                                <>Enter my Wise bank details: <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a></>
+                              ) : (
+                                <>Ingresa mis datos bancarios de Wise: <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a></>
+                              )}
+                            </li>
+                            <li>
+                              {lang === 'en' 
+                                ? 'Confirm the transfer.' 
+                                : 'Confirma la transferencia.'}
+                            </li>
+                          </ol>
+                        </div>
+
+                        <div className="bg-emerald-50/30 rounded-lg p-3 border border-emerald-100/50 space-y-1.5">
+                          <p className="font-extrabold text-emerald-950 flex items-center gap-1">
+                            <span>✨</span>
+                            <span>{lang === 'en' ? 'Why Wise?' : '¿Por qué Wise?'}</span>
+                          </p>
+                          <ul className="list-disc pl-4 space-y-1 text-[11px] text-emerald-900/90">
+                            <li>
+                              <strong>{lang === 'en' ? 'Very low and transparent fees:' : 'Comisiones muy bajas y transparentes:'}</strong> {lang === 'en' ? 'No hidden markups.' : 'Sin comisiones ocultas.'}
+                            </li>
+                            <li>
+                              <strong>{lang === 'en' ? 'Real exchange rate:' : 'Tipo de cambio real:'}</strong> {lang === 'en' ? 'Mid-market rate.' : 'El tipo de cambio real del mercado.'}
+                            </li>
+                            <li>
+                              <strong>{lang === 'en' ? 'Fast transfers:' : 'Transferencias rápidas:'}</strong> {lang === 'en' ? 'Often completed on the same day.' : 'A menudo completadas el mismo día.'}
+                            </li>
+                            <li>
+                              <strong>{lang === 'en' ? 'Convenient funding:' : 'Fácil de fondear:'}</strong> {lang === 'en' ? 'You can pay using a card or bank account.' : 'Puedes pagar usando una tarjeta o cuenta bancaria.'}
+                            </li>
+                          </ul>
+                        </div>
+
+                        <p className="text-[10px] text-zinc-500 italic mt-2 text-center">
+                          {lang === 'en'
+                            ? 'If you have any questions during the process, feel free to let me know — I will be happy to assist.'
+                            : 'Si tienes alguna duda durante el proceso, no dudes en contactarme; con gusto te ayudaré.'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <>
