@@ -484,7 +484,7 @@ export default function CalendarPage() {
   // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
   useEffect(() => {
     if (isReassigning && selectedReserva && targetRoomName) {
-      const changed = !isSameRoomCategory(selectedReserva.room || '', targetRoomName);
+      const changed = !isSameRoomCategory(`${selectedReserva.room || ''} ${selectedReserva.room_name || ''}`, targetRoomName);
       setIsCategoryChanged(changed);
       if (changed) {
         const fetchPreview = async () => {
