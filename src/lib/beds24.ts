@@ -1232,9 +1232,13 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
-      const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
+      const depositVal = (b.deposit !== undefined && Number(b.deposit) > 0) 
+        ? Number(b.deposit) 
+        : (actualPaid > 0 ? actualPaid : 0);
       // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
-      const balanceVal = (isOTA && actualPaid > 0) ? 0 : (actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal)));
+      const balanceVal = isOTA 
+        ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
+        : Math.max(0, calculatedCharges - depositVal);
 
       return {
         id: b.id || Math.random().toString(),
@@ -1609,16 +1613,23 @@ export function getCapacityRules(
     }
   }
 
-  const r = rStr.toLowerCase().trim();
+  // Resolver el ID de habitación padre si es un ID de Beds24
+  const parent = getParentMapping(roomNameOrId, undefined);
+  const standardizedId = parent.roomId;
+
+  const r = String(standardizedId || roomNameOrId || '').toLowerCase().trim();
 
   if (customSettings && r) {
     // Para las habitaciones locales 500-507 (roomId 685542), distinguir por unitId si viene en el ID
     // unitId 1 = hab 500, unitId 2-8 = hab 501-507
-    if (roomNameOrId === '685542') {
+    if (roomNameOrId === '685542' || standardizedId === '685542') {
       // Sin unitId adicional, consultar la key '685542_501' (las dobles) porque
       // cuando se llama con solo el roomId, se asume el grupo 501-507
       if (customSettings['685542_501']) return customSettings['685542_501'];
       return { base: 4, max: 4 };
+    }
+    if (customSettings[standardizedId]) {
+      return customSettings[standardizedId];
     }
     if (customSettings[roomNameOrId]) {
       return customSettings[roomNameOrId];
@@ -1704,18 +1715,40 @@ export function getDirectTotalForStay(
 
     // 1. Buscar en reglas de Supabase si se proveen
     if (rulesList && rulesList.length > 0) {
+      const season = getSeason(dateStr);
+
       const specialRule = rulesList.find(rule => 
         rule.room_type_id === roomB24.roomId && 
         rule.rule_type === 'special' && 
         rule.start_date <= dateStr && 
         rule.end_date >= dateStr
       );
-      const seasonalRule = rulesList.find(rule => 
+
+      // Intentar buscar regla estacional por rango de fechas específico
+      let seasonalRule = rulesList.find(rule => 
         rule.room_type_id === roomB24.roomId && 
         rule.rule_type === 'seasonal' && 
+        rule.start_date && 
+        rule.end_date &&
         rule.start_date <= dateStr && 
         rule.end_date >= dateStr
       );
+
+      // Si no hay rango de fecha específico, buscar la regla estacional base por nombre de temporada (donde start_date/end_date son null)
+      if (!seasonalRule) {
+        let targetRuleName = 'Temporada Baja';
+        if (season === 'media') targetRuleName = 'Temporada Media';
+        else if (season === 'media_alta') targetRuleName = 'Temporada Media-Alta';
+        else if (season === 'alta') targetRuleName = 'Temporada Alta';
+
+        seasonalRule = rulesList.find(rule => 
+          rule.room_type_id === roomB24.roomId && 
+          rule.rule_type === 'seasonal' && 
+          (!rule.start_date || !rule.end_date) &&
+          rule.name === targetRuleName
+        );
+      }
+
       const baseRule = rulesList.find(rule => 
         rule.room_type_id === roomB24.roomId && 
         rule.rule_type === 'base'
@@ -1933,9 +1966,13 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     : (totalInvoiceCharges > 0 ? totalInvoiceCharges : finalPriceVal);
   const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
-  const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
+  const depositVal = (b.deposit !== undefined && Number(b.deposit) > 0) 
+    ? Number(b.deposit) 
+    : (actualPaid > 0 ? actualPaid : 0);
   // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
-  const balanceVal = (isOTA && actualPaid > 0) ? 0 : (actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal)));
+  const balanceVal = isOTA 
+    ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
+    : Math.max(0, calculatedCharges - depositVal);
 
   const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry);
   const email = b.email || null;
@@ -2107,9 +2144,13 @@ export async function syncBeds24ReservationsRange(
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
-      const depositVal = actualPaid > 0 ? actualPaid : (b.deposit !== undefined ? Number(b.deposit) : 0);
+      const depositVal = (b.deposit !== undefined && Number(b.deposit) > 0) 
+        ? Number(b.deposit) 
+        : (actualPaid > 0 ? actualPaid : 0);
       // Para reservas OTA canal-collect, el saldo restante al huésped en el hotel siempre es 0
-      const balanceVal = (isOTA && actualPaid > 0) ? 0 : (actualPaid > 0 ? calculatedBalance : (b.balance !== undefined ? Number(b.balance) : (calculatedCharges - depositVal)));
+      const balanceVal = isOTA 
+        ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
+        : Math.max(0, calculatedCharges - depositVal);
 
       const dbStatus = (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending');
 
