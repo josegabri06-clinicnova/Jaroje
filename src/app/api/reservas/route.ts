@@ -1314,8 +1314,8 @@ export async function PUT(req: Request) {
           const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
           const oldPrice = currentBooking.price || 0;
 
-          if (isOtaChannel && !roomTypeChanged) {
-            console.log(`[Reservas PUT] Reserva OTA y misma categoría. Manteniendo tarifa original.`);
+          if (isOtaChannel) {
+            console.log(`[Reservas PUT] Reserva OTA. Manteniendo tarifa original sin importar cambio de categoría.`);
           } else {
             // Cargar capacitySettings de la base de datos
             let capacitySettings: any = null;
@@ -1475,8 +1475,8 @@ export async function PUT(req: Request) {
     const rawSource = String(`${currentBooking?.referer || ''} ${currentBooking?.source || ''} ${currentBooking?.apiSource || ''} ${currentBooking?.apiReference || ''} ${currentBooking?.channel || ''}`).toLowerCase();
     const isOtaChannel = ['airbnb', 'booking', 'expedia'].some(ota => rawSource.includes(ota));
 
-    if (isOtaChannel && price === undefined && !roomTypeChanged) {
-      console.log(`[Reservas PUT] Reserva OTA y misma categoría. Omitiendo actualizaciones de tarifas y facturas para proteger el precio del canal.`);
+    if (isOtaChannel && price === undefined) {
+      console.log(`[Reservas PUT] Reserva OTA. Omitiendo actualizaciones de tarifas y facturas para proteger el precio del canal.`);
     } else {
       const finalPrice = price !== undefined 
         ? Number(price) 

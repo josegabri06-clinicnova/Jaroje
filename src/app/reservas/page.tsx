@@ -248,6 +248,12 @@ function ReservasListInner() {
   const [isCategoryChanged, setIsCategoryChanged] = useState(false);
   const [checkInSelectedIds, setCheckInSelectedIds] = useState<string[]>([]);
 
+  const isReassigningOta = useMemo(() => {
+    if (!reassigningRes || !reassigningRes.channel) return false;
+    const ch = String(reassigningRes.channel).toLowerCase();
+    return ['airbnb', 'booking', 'expedia'].some(c => ch.includes(c));
+  }, [reassigningRes]);
+
   // Estados para búsqueda por fecha
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -547,7 +553,7 @@ function ReservasListInner() {
   // Efecto para recargar tarifas y detectar cambio de categoría en reasignación
   useEffect(() => {
     if (showReassignModal && reassigningRes && targetRoomName) {
-      const changed = !isSameRoomCategory(reassigningRes.room || '', targetRoomName);
+      const changed = !isReassigningOta && !isSameRoomCategory(reassigningRes.room || '', targetRoomName);
       setIsCategoryChanged(changed);
       if (changed) {
         const fetchPreview = async () => {
@@ -609,7 +615,7 @@ function ReservasListInner() {
         body: JSON.stringify({
           id: reassigningRes.id,
           roomName: targetRoomName,
-          price: finalPrice
+          ...(isReassigningOta ? {} : { price: finalPrice })
         })
       });
       const data = await res.json();
@@ -6562,6 +6568,15 @@ function ReservasListInner() {
                       ))}
                     </select>
                   </div>
+
+                  {isReassigningOta && (
+                    <div className="mt-3.5 bg-amber-50 border border-amber-200 text-amber-900 text-[11.5px] font-bold p-3.5 rounded-xl flex items-start gap-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.01)] animate-in fade-in duration-200">
+                      <span className="text-sm shrink-0">⚠️</span>
+                      <span className="leading-relaxed">
+                        Esta es una reserva de <b>{reassigningRes.channel}</b>. La tarifa original de <b>${reassigningRes.price_estimate || reassigningRes.price || 0}</b> no se alterará ni se recalculará tras la reasignación para proteger los montos del canal.
+                      </span>
+                    </div>
+                  )}
 
                   {isCategoryChanged && (
                     <div className="mt-3.5 bg-amber-50 border border-amber-250 p-4 rounded-xl space-y-2.5 animate-in fade-in duration-200">
