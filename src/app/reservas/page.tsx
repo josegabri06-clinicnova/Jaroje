@@ -267,6 +267,7 @@ function ReservasListInner() {
   const [editDailyRate, setEditDailyRate] = useState('');
   const [editDeposit, setEditDeposit] = useState('');
   const [editNotes, setEditNotes] = useState('');
+  const [editGroupMembers, setEditGroupMembers] = useState<any[]>([]);
   const [approvingReceiptId, setApprovingReceiptId] = useState<string | null>(null);
   const [rejectionNotes, setRejectionNotes] = useState<Record<string, string>>({});
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
@@ -1598,30 +1599,54 @@ function ReservasListInner() {
     if (!selectedRes) return;
 
     // Validar capacidad máxima de la habitación
-    const rules = getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined);
-    const totalGuests = Number(editAdults) + Number(editChildren);
-    if (totalGuests > rules.max) {
-      alert(`⚠️ La capacidad máxima de la habitación ${selectedRes.room_name || 'seleccionada'} es de ${rules.max} personas. Has ingresado ${totalGuests} huéspedes.`);
-      return;
+    if (editGroupMembers.length > 1) {
+      for (const member of editGroupMembers) {
+        const rules = getCapacityRules(member.room_name || '', capacitySettings || undefined);
+        const totalGuests = Number(member.num_adult) + Number(member.num_child);
+        if (totalGuests > rules.max) {
+          alert(`⚠️ La capacidad máxima de la habitación ${member.room_name} es de ${rules.max} personas. Has ingresado ${totalGuests} huéspedes.`);
+          return;
+        }
+      }
+    } else {
+      const rules = getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined);
+      const totalGuests = Number(editAdults) + Number(editChildren);
+      if (totalGuests > rules.max) {
+        alert(`⚠️ La capacidad máxima de la habitación ${selectedRes.room_name || 'seleccionada'} es de ${rules.max} personas. Has ingresado ${totalGuests} huéspedes.`);
+        return;
+      }
     }
 
     setSaveEditLoading(true);
     try {
+      const payload: any = {
+        id: selectedRes.id,
+        guestName: editGuestName,
+        phone: editPhone,
+        notes: editNotes,
+        checkIn: editCheckIn,
+        checkOut: editCheckOut
+      };
+
+      if (editGroupMembers.length > 1) {
+        payload.groupBookings = editGroupMembers.map(m => ({
+          id: m.id,
+          numAdult: m.num_adult,
+          numChild: m.num_child,
+          price: Number(m.price),
+          deposit: Number(m.deposit)
+        }));
+      } else {
+        payload.numAdult = editAdults;
+        payload.numChild = editChildren;
+        payload.price = Number(editPrice);
+        payload.deposit = Number(editDeposit);
+      }
+
       const res = await fetch('/api/reservas', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: selectedRes.id,
-          guestName: editGuestName,
-          phone: editPhone,
-          numAdult: editAdults,
-          numChild: editChildren,
-          price: Number(editPrice),
-          deposit: Number(editDeposit),
-          notes: editNotes,
-          checkIn: editCheckIn,
-          checkOut: editCheckOut
-        })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar los cambios');
@@ -1634,6 +1659,10 @@ function ReservasListInner() {
         const employeeName = emp.full_name;
         const employeeDept = emp.department;
         
+        const detailsText = editGroupMembers.length > 1
+          ? `Grupo consolidado ${editGuestName} (ID: ${selectedRes.id}) - Modificó la reserva grupal con ${editGroupMembers.length} condominios: ${editGroupMembers.map(m => `${m.room_name} ($${m.price}, Dep: $${m.deposit})`).join(', ')}.`
+          : `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Modificó la reserva (Nombre: ${editGuestName}, Tel: ${editPhone}, Pax: ${editAdults}A/${editChildren}N, Total: MX$${editPrice}, Anticipo: MX$${editDeposit}).`;
+
         await fetch('/api/employee-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1645,7 +1674,7 @@ function ReservasListInner() {
             action: 'reserva_modificada_admin',
             room: selectedRes.room_name || 'General',
             details: JSON.stringify({
-              text: `${selectedRes.guest_name} ${selectedRes.num_adult || 1}/${selectedRes.num_child || 0} (ID: ${selectedRes.id}) de la Habitación ${selectedRes.room_name || 'General'} - Modificó la reserva (Nombre: ${editGuestName}, Tel: ${editPhone}, Pax: ${editAdults}A/${editChildren}N, Total: MX$${editPrice}, Anticipo: MX$${editDeposit}).`,
+              text: detailsText,
               modificacion: {
                 bookingId: selectedRes.id,
                 guestName: editGuestName,
@@ -1654,7 +1683,8 @@ function ReservasListInner() {
                 numChild: editChildren,
                 price: Number(editPrice),
                 deposit: Number(editDeposit),
-                notes: editNotes
+                notes: editNotes,
+                groupBookings: payload.groupBookings
               }
             })
           })
@@ -1663,39 +1693,129 @@ function ReservasListInner() {
         console.error("Error registrando log de modificación:", logErr);
       }
 
-      setSelectedRes((prev: any) => ({
-        ...prev,
-        guest_name: editGuestName,
-        guest_phone: editPhone,
-        num_adult: editAdults,
-        num_child: editChildren,
-        price_estimate: Number(editPrice),
-        deposit: Number(editDeposit),
-        balance: Number(editPrice) - Number(editDeposit),
-        notes: editNotes,
-        arrival: editCheckIn,
-        check_in: editCheckIn,
-        departure: editCheckOut,
-        check_out: editCheckOut,
-        nights: getNightsBetweenDates(editCheckIn, editCheckOut)
-      }));
+      const totalGroupPrice = editGroupMembers.length > 1
+        ? editGroupMembers.reduce((sum, m) => sum + Number(m.price), 0)
+        : Number(editPrice);
+      const totalGroupDeposit = editGroupMembers.length > 1
+        ? editGroupMembers.reduce((sum, m) => sum + Number(m.deposit), 0)
+        : Number(editDeposit);
 
-      setReservas(prev => prev.map(r => r.id === selectedRes.id ? {
-        ...r,
-        guest_name: editGuestName,
-        guest_phone: editPhone,
-        num_adult: editAdults,
-        num_child: editChildren,
-        price_estimate: Number(editPrice),
-        deposit: Number(editDeposit),
-        balance: Number(editPrice) - Number(editDeposit),
-        notes: editNotes,
-        arrival: editCheckIn,
-        check_in: editCheckIn,
-        departure: editCheckOut,
-        check_out: editCheckOut,
-        nights: getNightsBetweenDates(editCheckIn, editCheckOut)
-      } : r));
+      setSelectedRes((prev: any) => {
+        if (!prev) return prev;
+        const isGroupCard = prev.is_group_card;
+        if (isGroupCard && editGroupMembers.length > 1) {
+          const updatedMembers = (prev.group_members || []).map((gb: any) => {
+            const memberUpdate = editGroupMembers.find(m => String(m.id) === String(gb.id));
+            if (memberUpdate) {
+              return {
+                ...gb,
+                guest_name: editGuestName,
+                guest_phone: editPhone,
+                num_adult: memberUpdate.num_adult,
+                num_child: memberUpdate.num_child,
+                price_estimate: Number(memberUpdate.price),
+                deposit: Number(memberUpdate.deposit),
+                notes: editNotes,
+                arrival: editCheckIn,
+                check_in: editCheckIn,
+                departure: editCheckOut,
+                check_out: editCheckOut
+              };
+            }
+            return gb;
+          });
+          return {
+            ...prev,
+            guest_name: editGuestName,
+            guest_phone: editPhone,
+            price_estimate: totalGroupPrice,
+            deposit: totalGroupDeposit,
+            balance: Math.max(0, totalGroupPrice - totalGroupDeposit),
+            notes: editNotes,
+            arrival: editCheckIn,
+            check_in: editCheckIn,
+            departure: editCheckOut,
+            check_out: editCheckOut,
+            nights: getNightsBetweenDates(editCheckIn, editCheckOut),
+            group_members: updatedMembers
+          };
+        } else {
+          return {
+            ...prev,
+            guest_name: editGuestName,
+            guest_phone: editPhone,
+            num_adult: editAdults,
+            num_child: editChildren,
+            price_estimate: Number(editPrice),
+            deposit: Number(editDeposit),
+            balance: Number(editPrice) - Number(editDeposit),
+            notes: editNotes,
+            arrival: editCheckIn,
+            check_in: editCheckIn,
+            departure: editCheckOut,
+            check_out: editCheckOut,
+            nights: getNightsBetweenDates(editCheckIn, editCheckOut)
+          };
+        }
+      });
+
+      setReservas(prev => prev.map(r => {
+        if (editGroupMembers.length > 1) {
+          const memberUpdate = editGroupMembers.find(m => String(m.id) === String(r.id));
+          if (memberUpdate) {
+            return {
+              ...r,
+              guest_name: editGuestName,
+              guest_phone: editPhone,
+              num_adult: memberUpdate.num_adult,
+              num_child: memberUpdate.num_child,
+              price_estimate: Number(memberUpdate.price),
+              deposit: Number(memberUpdate.deposit),
+              balance: Number(memberUpdate.price) - Number(memberUpdate.deposit),
+              notes: editNotes,
+              arrival: editCheckIn,
+              check_in: editCheckIn,
+              departure: editCheckOut,
+              check_out: editCheckOut,
+              nights: memberUpdate.nights
+            };
+          }
+          if (String(r.id) === String(selectedRes.id)) {
+            return {
+              ...r,
+              guest_name: editGuestName,
+              guest_phone: editPhone,
+              notes: editNotes,
+              arrival: editCheckIn,
+              check_in: editCheckIn,
+              departure: editCheckOut,
+              check_out: editCheckOut,
+              price_estimate: totalGroupPrice,
+              deposit: totalGroupDeposit,
+              balance: Math.max(0, totalGroupPrice - totalGroupDeposit),
+              nights: getNightsBetweenDates(editCheckIn, editCheckOut)
+            };
+          }
+        } else if (r.id === selectedRes.id) {
+          return {
+            ...r,
+            guest_name: editGuestName,
+            guest_phone: editPhone,
+            num_adult: editAdults,
+            num_child: editChildren,
+            price_estimate: Number(editPrice),
+            deposit: Number(editDeposit),
+            balance: Number(editPrice) - Number(editDeposit),
+            notes: editNotes,
+            arrival: editCheckIn,
+            check_in: editCheckIn,
+            departure: editCheckOut,
+            check_out: editCheckOut,
+            nights: getNightsBetweenDates(editCheckIn, editCheckOut)
+          };
+        }
+        return r;
+      }));
 
       setIsEditingRes(false);
       
@@ -1756,6 +1876,28 @@ function ReservasListInner() {
       setCheckInSelectedIds(groupBookings.map((b: any) => String(b.id)));
     }
   }, [showPaymentFlow, selectedRes, groupBookings]);
+
+  useEffect(() => {
+    if (isEditingRes && selectedRes && groupBookings.length > 1) {
+      setEditGroupMembers(groupBookings.map((gb: any) => {
+        const gbNights = gb.nights || 1;
+        const gbPrice = Number(gb.price_estimate || gb.price || 0);
+        return {
+          id: String(gb.id),
+          room_name: gb.room_name || gb.room || 'Sin Nombre',
+          num_adult: Number(gb.display_num_adult !== undefined ? gb.display_num_adult : (gb.num_adult || 1)),
+          num_child: Number(gb.display_num_child !== undefined ? gb.display_num_child : (gb.num_child || 0)),
+          price: gbPrice,
+          daily_rate: String(Math.round(gbPrice / gbNights)),
+          deposit: String(gb.deposit || '0'),
+          nights: gbNights,
+          channel: gb.channel || ''
+        };
+      }));
+    } else if (!isEditingRes) {
+      setEditGroupMembers([]);
+    }
+  }, [isEditingRes, selectedRes, groupBookings]);
 
   const isOtaRoom = (r: any) => ['Airbnb', 'Booking.com'].includes(r.channel || '');
 
@@ -3455,23 +3597,12 @@ function ReservasListInner() {
                   </button>
                 )}
                 {selectedRes.status !== 'cancelled' && userRole === 'admin' && (
-                  selectedRes.is_group_card ? (
-                    <button
-                      onClick={() => {
-                        alert("⚠️ Para editar tarifas, depósitos o huéspedes, por favor selecciona un condominio de forma individual en la sección de 'Grupo Detectado' abajo.");
-                      }}
-                      className="px-2.5 py-1 text-[11px] font-bold text-zinc-400 bg-zinc-50 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-100 transition-colors"
-                    >
-                      Editar 📝
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setIsEditingRes(!isEditingRes)}
-                      className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
-                    >
-                      {isEditingRes ? 'Cancelar' : 'Editar 📝'}
-                    </button>
-                  )
+                  <button
+                    onClick={() => setIsEditingRes(!isEditingRes)}
+                    className="px-2.5 py-1 text-[11px] font-bold text-zinc-650 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    {isEditingRes ? 'Cancelar' : 'Editar 📝'}
+                  </button>
                 )}
                 <button 
                   onClick={() => {
@@ -3501,6 +3632,14 @@ function ReservasListInner() {
               {isEditingRes ? (
                 // Formulario de Edición Admin
                 <div className="space-y-4 text-left font-sans animate-in fade-in duration-200">
+                  {isOtaRes && (
+                    <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-bold p-3.5 rounded-2xl flex items-start gap-2.5 shadow-[0_2px_8px_rgba(0,0,0,0.01)] mb-4">
+                      <span className="text-sm shrink-0">⚠️</span>
+                      <span className="leading-relaxed">
+                        Las tarifas y el número de huéspedes de esta reserva provienen de un canal en línea (<b>{selectedRes.channel}</b>) y no se pueden modificar directamente en staySync ya que no se reflejarán de vuelta en la OTA.
+                      </span>
+                    </div>
+                  )}
                   {/* 1. Nombre del huésped (No. Huéspedes) */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl space-y-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
                     <div>
@@ -3512,7 +3651,7 @@ function ReservasListInner() {
                         className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm"
                       />
                     </div>
-                    {(() => {
+                    {groupBookings.length <= 1 && (() => {
                       const rules = selectedRes 
                         ? getCapacityRules(selectedRes.room_name || selectedRes.room_id || '', capacitySettings || undefined)
                         : { base: 6, max: 8 };
@@ -3529,9 +3668,12 @@ function ReservasListInner() {
                             <div>
                               <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Adultos</label>
                               <select
+                                disabled={isOtaRes}
                                 value={editAdults}
                                 onChange={e => setEditAdults(Number(e.target.value))}
-                                className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
+                                className={`w-full border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold shadow-sm ${
+                                  isOtaRes ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
+                                }`}
                               >
                                 {Array.from({ length: maxAdultOptions }, (_, i) => i + 1).map(n => (
                                   <option key={n} value={n}>{n}</option>
@@ -3541,9 +3683,12 @@ function ReservasListInner() {
                             <div>
                               <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Niños</label>
                               <select
+                                disabled={isOtaRes}
                                 value={editChildren}
                                 onChange={e => setEditChildren(Number(e.target.value))}
-                                className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 cursor-pointer shadow-sm"
+                                className={`w-full border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] font-semibold shadow-sm ${
+                                  isOtaRes ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
+                                }`}
                               >
                                 {Array.from({ length: maxChildOptions + 1 }, (_, i) => i).map(n => (
                                   <option key={n} value={n}>{n}</option>
@@ -3644,54 +3789,206 @@ function ReservasListInner() {
                     <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
                   </div>
 
-                  {/* 5. Tarifa diaria */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa diaria</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
-                      <input
-                        type="number"
-                        value={editDailyRate}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setEditDailyRate(val);
-                          if (val !== '') {
-                            const nights = getNightsBetweenDates(editCheckIn, editCheckOut) || 1;
-                            setEditPrice(String(Math.round(Number(val) * nights)));
-                          }
-                        }}
-                        className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"
-                      />
-                    </div>
-                  </div>
+                  {/* 5. Tarifa diaria, total y anticipo depositado */}
+                  {editGroupMembers.length > 1 ? (
+                    <div className="space-y-4 pt-2">
+                      <span className="text-[11px] font-extrabold text-blue-600 uppercase tracking-widest pl-0.5 block">
+                        Distribución de Tarifas y Pax del Grupo
+                      </span>
+                      
+                      {editGroupMembers.map((member) => {
+                        const rules = getCapacityRules(member.room_name || '', capacitySettings || undefined);
+                        const totalGuests = member.num_adult + member.num_child;
+                        const isOver = totalGuests > rules.max;
+                        
+                        const maxAdultOptions = Math.max(16, rules.max, member.num_adult);
+                        const maxChildOptions = Math.max(10, rules.max, member.num_child);
 
-                  {/* 6. Total de la reserva */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Total de la reserva</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-450 text-sm">$</span>
-                      <input
-                        type="number"
-                        value={editPrice}
-                        readOnly
-                        className="w-full bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] cursor-not-allowed outline-none shadow-sm"
-                      />
-                    </div>
-                  </div>
+                        const isMemberOta = member.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => member.channel.toLowerCase().includes(c));
 
-                  {/* 7. Anticipo depositado */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Anticipo depositado</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
-                      <input
-                        type="number"
-                        value={editDeposit}
-                        onChange={e => setEditDeposit(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"
-                      />
+                        return (
+                          <div 
+                            key={member.id} 
+                            className="bg-blue-50/40 border border-blue-200/60 p-4 rounded-2xl space-y-3.5 shadow-sm"
+                          >
+                            <div className="flex items-center justify-between border-b border-blue-100/60 pb-2">
+                              <span className="text-[12px] font-extrabold text-blue-900 flex items-center gap-1.5">
+                                <BedDouble size={13} className="text-blue-500" />
+                                {member.room_name}
+                              </span>
+                              <span className="text-[9.5px] font-bold text-blue-400">
+                                ID: {member.id}
+                              </span>
+                            </div>
+
+                            {isMemberOta && (
+                              <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[10px] font-bold p-2.5 rounded-xl leading-snug">
+                                ⚠️ Tarifa y huéspedes no editables (Reserva del canal {member.channel}).
+                              </div>
+                            )}
+
+                            {/* Pax */}
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider pl-0.5 mb-1 block">Adultos</label>
+                                <select
+                                  disabled={isMemberOta}
+                                  value={member.num_adult}
+                                  onChange={e => {
+                                    const val = Number(e.target.value);
+                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? { ...m, num_adult: val } : m));
+                                  }}
+                                  className={`w-full border border-zinc-200 rounded-xl px-2.5 py-2 outline-none text-[12px] font-semibold shadow-sm ${
+                                    isMemberOta ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
+                                  }`}
+                                >
+                                  {Array.from({ length: maxAdultOptions }, (_, i) => i + 1).map(n => (
+                                    <option key={n} value={n}>{n}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider pl-0.5 mb-1 block">Niños</label>
+                                <select
+                                  disabled={isMemberOta}
+                                  value={member.num_child}
+                                  onChange={e => {
+                                    const val = Number(e.target.value);
+                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? { ...m, num_child: val } : m));
+                                  }}
+                                  className={`w-full border border-zinc-200 rounded-xl px-2.5 py-2 outline-none text-[12px] font-semibold shadow-sm ${
+                                    isMemberOta ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900 cursor-pointer focus:border-zinc-400'
+                                  }`}
+                                >
+                                  {Array.from({ length: maxChildOptions + 1 }, (_, i) => i).map(n => (
+                                    <option key={n} value={n}>{n}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+
+                            <div className={`text-[10px] font-bold pl-0.5 ${isOver ? 'text-rose-600 animate-pulse' : 'text-emerald-600'}`}>
+                              {isOver 
+                                ? `⚠️ Límite excedido. Máximo permitido: ${rules.max} personas.` 
+                                : `✓ Capacidad permitida (Máx: ${rules.max} personas).`}
+                            </div>
+
+                            {/* Tarifa diaria */}
+                            <div className="grid grid-cols-2 gap-3 pt-1">
+                              <div>
+                                <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider pl-0.5 mb-1 block">Tarifa diaria</label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-xs">$</span>
+                                  <input
+                                    type="number"
+                                    disabled={isMemberOta}
+                                    value={member.daily_rate}
+                                    onChange={e => {
+                                      const val = e.target.value;
+                                      setEditGroupMembers(prev => prev.map(m => {
+                                        if (m.id === member.id) {
+                                          const pr = val !== '' ? String(Math.round(Number(val) * m.nights)) : '';
+                                          return { ...m, daily_rate: val, price: pr };
+                                        }
+                                        return m;
+                                      }));
+                                    }}
+                                    className={`w-full border border-zinc-200 rounded-xl py-2 pl-6 pr-2 font-bold text-[13px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 shadow-sm ${
+                                      isMemberOta ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900'
+                                    }`}
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider pl-0.5 mb-1 block">Total Habitación</label>
+                                <div className="relative">
+                                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-xs">$</span>
+                                  <input
+                                    type="number"
+                                    value={member.price}
+                                    readOnly
+                                    className="w-full bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-xl py-2 pl-6 pr-2 font-bold text-[13px] cursor-not-allowed outline-none shadow-sm"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Anticipo */}
+                            <div>
+                              <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider pl-0.5 mb-1 block">Anticipo de Habitación</label>
+                              <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-xs">$</span>
+                                <input
+                                  type="number"
+                                  value={member.deposit}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setEditGroupMembers(prev => prev.map(m => m.id === member.id ? { ...m, deposit: val } : m));
+                                  }}
+                                  className="w-full bg-white border border-zinc-200 rounded-xl py-2 pl-6 pr-2 font-bold text-[13px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      {/* 5. Tarifa diaria */}
+                      <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                        <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Tarifa diaria</label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
+                          <input
+                            type="number"
+                            disabled={isOtaRes}
+                            value={editDailyRate}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setEditDailyRate(val);
+                              if (val !== '') {
+                                const nights = getNightsBetweenDates(editCheckIn, editCheckOut) || 1;
+                                setEditPrice(String(Math.round(Number(val) * nights)));
+                              }
+                            }}
+                            className={`w-full border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 shadow-sm ${
+                              isOtaRes ? 'bg-zinc-150 text-zinc-400 cursor-not-allowed border-zinc-100' : 'bg-white text-zinc-900'
+                            }`}
+                          />
+                        </div>
+                      </div>
+
+                      {/* 6. Total de la reserva */}
+                      <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                        <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Total de la reserva</label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-450 text-sm">$</span>
+                          <input
+                            type="number"
+                            value={editPrice}
+                            readOnly
+                            className="w-full bg-zinc-100 border border-zinc-200 text-zinc-500 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] cursor-not-allowed outline-none shadow-sm"
+                          />
+                        </div>
+                      </div>
+
+                      {/* 7. Anticipo depositado */}
+                      <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                        <label className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest pl-0.5 mb-1.5 block">Anticipo depositado</label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400 text-sm">$</span>
+                          <input
+                            type="number"
+                            value={editDeposit}
+                            onChange={e => setEditDeposit(e.target.value)}
+                            className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-4 font-bold text-[14px] focus:outline-none focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 shadow-sm"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   {/* 8. Adeudo Pendiente */}
                   <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
@@ -3700,9 +3997,16 @@ function ReservasListInner() {
                       {(() => {
                         const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
                         const isCheckedIn = selectedRes.checked_in === true;
-                        const balanceVal = (isOta || isCheckedIn) ? 0 : (Number(editPrice || 0) - Number(editDeposit || 0));
+                        let balanceVal = 0;
+                        if (editGroupMembers.length > 1) {
+                          const totalGroupPrice = editGroupMembers.reduce((sum: number, m: any) => sum + (Number(m.price) || 0), 0);
+                          const totalGroupDeposit = editGroupMembers.reduce((sum: number, m: any) => sum + (Number(m.deposit) || 0), 0);
+                          balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, totalGroupPrice - totalGroupDeposit);
+                        } else {
+                          balanceVal = (isOta || isCheckedIn) ? 0 : (Number(editPrice || 0) - Number(editDeposit || 0));
+                        }
                         return (
-                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-655'}`}>
+                          <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-rose-600' : 'text-zinc-600'}`}>
                             {fmtCurrency(balanceVal, selectedRes.guest_name)}
                           </p>
                         );
@@ -4677,15 +4981,15 @@ function ReservasListInner() {
                         </div>
 
                         {selectedRes.is_group_card ? (
-                          <div className="bg-amber-50/70 border border-amber-200 p-2.5 rounded-xl text-left">
-                            <p className="text-[10.5px] text-amber-900 font-semibold leading-relaxed">
-                              💡 <b>Estás viendo el grupo consolidado.</b> Para editar la tarifa, depósitos o huéspedes de una habitación en particular, por favor haz clic en <b>"Seleccionar 🔎"</b> abajo.
+                          <div className="bg-blue-50 border border-blue-200 p-3 rounded-2xl text-left shadow-sm">
+                            <p className="text-[11px] text-blue-900 font-bold leading-relaxed">
+                              👥 <b>Estás viendo el grupo consolidado.</b> Al hacer clic en <b>"Editar 📝"</b> arriba, podrás editar el nombre del huésped, teléfono, fechas y distribuir las tarifas, pax y anticipos de cada condominio en una sola pantalla.
                             </p>
                           </div>
                         ) : (
-                          <div className="bg-indigo-50/75 border border-indigo-200/80 p-2.5 rounded-xl text-left">
-                            <p className="text-[10.5px] text-indigo-900 font-semibold leading-relaxed">
-                              💡 <b>Estás editando esta habitación individualmente.</b> Los cambios de tarifa, anticipo o huéspedes se aplicarán solo a esta habitación. Para ver los totales del grupo, haz clic en "Ver Consolidado" arriba.
+                          <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-2xl text-left shadow-sm">
+                            <p className="text-[11px] text-zinc-900 font-bold leading-relaxed">
+                              🏢 <b>Estás editando esta habitación individualmente.</b> Los cambios de tarifa, anticipo o pax se aplicarán solo a esta habitación. Para editar todo el grupo a la vez, haz clic en <b>"Ver Consolidado"</b> arriba.
                             </p>
                           </div>
                         )}
