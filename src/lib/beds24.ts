@@ -1394,8 +1394,9 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         otaMultipliers,
         bookingsArray
       );
+      const isProtectedOta = ['airbnb', 'booking', 'expedia'].some(ota => channel.toLowerCase().includes(ota));
       const calculatedCharges = isOTA 
-        ? (otaIsAlreadyAdjusted || totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
+        ? (isProtectedOta ? totalRevenue : (otaIsAlreadyAdjusted || totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue)) 
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
@@ -2176,8 +2177,9 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
   // no el precio total de la reserva pagado por el huésped. Usamos finalPriceVal directamente.
   // Sin embargo, si la reserva fue reasignada y ajustada por nuestra app, o si totalInvoiceCharges es exactamente igual al price de Beds24 (priceVal),
   // no debemos sumar de nuevo ishVal de la rateDescription estática.
+  const isProtectedOta = ['airbnb', 'booking', 'expedia'].some(ota => channel.toLowerCase().includes(ota));
   const calculatedCharges = isOTA 
-    ? (otaIsAlreadyAdjusted || totalInvoiceCharges === priceVal ? priceVal : finalPriceVal) 
+    ? (isProtectedOta ? finalPriceVal : (otaIsAlreadyAdjusted || totalInvoiceCharges === priceVal ? priceVal : finalPriceVal)) 
     : (totalInvoiceCharges > 0 ? totalInvoiceCharges : finalPriceVal);
   const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
@@ -2404,8 +2406,9 @@ export async function syncBeds24ReservationsRange(
         otaMultipliers,
         bookingsArray
       );
+      const isProtectedOta = ['airbnb', 'booking', 'expedia'].some(ota => channel.toLowerCase().includes(ota));
       const calculatedCharges = isOTA 
-        ? (otaIsAlreadyAdjusted || totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue) 
+        ? (isProtectedOta ? totalRevenue : (otaIsAlreadyAdjusted || totalInvoiceCharges === baseRevenue ? baseRevenue : totalRevenue)) 
         : (totalInvoiceCharges > 0 ? totalInvoiceCharges : totalRevenue);
       const calculatedBalance = Math.max(0, calculatedCharges - actualPaid);
 
