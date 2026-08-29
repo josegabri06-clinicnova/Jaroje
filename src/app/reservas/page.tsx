@@ -4930,7 +4930,14 @@ function ReservasListInner() {
                     </div>
                     {getRole() === 'admin' && selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
                       <button
-                        onClick={() => { setShowReassignModal(true); setReassigningRes(selectedRes); }}
+                        onClick={() => {
+                          setShowReassignModal(true);
+                          if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0) {
+                            setReassigningRes(selectedRes.group_members[0]);
+                          } else {
+                            setReassigningRes(selectedRes);
+                          }
+                        }}
                         className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
                       >
                         Reasignar 🔀
