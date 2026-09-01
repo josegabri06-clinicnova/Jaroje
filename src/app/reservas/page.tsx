@@ -349,8 +349,15 @@ function ReservasListInner() {
       setEditChildren(Number(selectedRes.display_num_child !== undefined ? selectedRes.display_num_child : (selectedRes.num_child || 0)));
       const priceEstimate = selectedRes.price_estimate || 0;
       const nights = selectedRes.nights || 1;
+      const isGroup = selectedRes.is_group_card && Array.isArray(selectedRes.group_members);
       setEditPrice(String(priceEstimate));
-      setEditDailyRate(String(Math.round(priceEstimate / nights)));
+      if (isGroup && selectedRes.group_members.length > 0) {
+        const firstMemberPrice = Number(selectedRes.group_members[0].price_estimate || selectedRes.group_members[0].price || 0);
+        const firstMemberNights = selectedRes.group_members[0].nights || nights;
+        setEditDailyRate(String(Math.round(firstMemberPrice / firstMemberNights)));
+      } else {
+        setEditDailyRate(String(Math.round(priceEstimate / nights)));
+      }
       setEditDeposit(String(selectedRes.deposit || '0'));
       setEditNotes(selectedRes.notes || '');
       setEditCheckIn(selectedRes.arrival || selectedRes.check_in || '');
@@ -668,26 +675,39 @@ function ReservasListInner() {
       
       // Actualizar estado local reactivo al vuelo para evitar tiempos de espera
       const updatedRoomName = data.room_name || `Habitación ${targetRoomName}`;
-      const priceUpdate: any = { room_name: updatedRoomName };
-      if (data.recalculated_price) {
+      const priceUpdate: any = { room_name: updatedRoomName, room: targetRoomName };
+      if (data.recalculated_price !== undefined) {
         priceUpdate.price_estimate = data.recalculated_price;
+        priceUpdate.price = data.recalculated_price;
         priceUpdate.balance = data.recalculated_price - (reassigningRes.deposit || 0);
       }
 
       setSelectedRes((prev: any) => {
         if (!prev) return null;
-        if (String(prev.id) === String(reassigningRes.id)) {
-          return { ...prev, ...priceUpdate };
-        } else if (prev.is_group_card && Array.isArray(prev.group_members)) {
+        if (prev.is_group_card && Array.isArray(prev.group_members)) {
           const updatedMembers = prev.group_members.map((m: any) => 
             String(m.id) === String(reassigningRes.id) ? { ...m, ...priceUpdate } : m
           );
           const consolidatedRoomNames = updatedMembers.map((m: any) => m.room_name || m.room).filter(Boolean).join(', ');
+          const consolidatedPrice = updatedMembers.reduce((sum: number, m: any) => sum + Number(m.price_estimate || m.price || 0), 0);
+          const consolidatedDeposit = updatedMembers.reduce((sum: number, m: any) => sum + Number(m.deposit || 0), 0);
+          const consolidatedBalance = updatedMembers.reduce((sum: number, m: any) => {
+            const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
+            const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
+            return sum + bBal;
+          }, 0);
+
           return { 
             ...prev, 
             room_name: consolidatedRoomNames,
+            price_estimate: consolidatedPrice,
+            price: consolidatedPrice,
+            deposit: consolidatedDeposit,
+            balance: consolidatedBalance,
             group_members: updatedMembers 
           };
+        } else if (String(prev.id) === String(reassigningRes.id)) {
+          return { ...prev, ...priceUpdate };
         }
         return prev;
       });
@@ -1776,6 +1796,7 @@ function ReservasListInner() {
               num_adult: memberUpdate.num_adult,
               num_child: memberUpdate.num_child,
               price_estimate: Number(memberUpdate.price),
+              price: Number(memberUpdate.price),
               deposit: Number(memberUpdate.deposit),
               balance: Number(memberUpdate.price) - Number(memberUpdate.deposit),
               notes: editNotes,
@@ -1786,23 +1807,8 @@ function ReservasListInner() {
               nights: memberUpdate.nights
             };
           }
-          if (String(r.id) === String(selectedRes.id)) {
-            return {
-              ...r,
-              guest_name: editGuestName,
-              guest_phone: editPhone,
-              notes: editNotes,
-              arrival: editCheckIn,
-              check_in: editCheckIn,
-              departure: editCheckOut,
-              check_out: editCheckOut,
-              price_estimate: totalGroupPrice,
-              deposit: totalGroupDeposit,
-              balance: Math.max(0, totalGroupPrice - totalGroupDeposit),
-              nights: getNightsBetweenDates(editCheckIn, editCheckOut)
-            };
-          }
-        } else if (r.id === selectedRes.id) {
+          return r;
+        } else if (String(r.id) === String(selectedRes.id)) {
           return {
             ...r,
             guest_name: editGuestName,
@@ -1810,6 +1816,7 @@ function ReservasListInner() {
             num_adult: editAdults,
             num_child: editChildren,
             price_estimate: Number(editPrice),
+            price: Number(editPrice),
             deposit: Number(editDeposit),
             balance: Number(editPrice) - Number(editDeposit),
             notes: editNotes,
@@ -3067,6 +3074,7 @@ function ReservasListInner() {
           room_name: consolidatedRoomNames,
           price_estimate: consolidatedPrice,
           price: consolidatedPrice,
+          price_per_night: undefined,
           deposit: consolidatedDeposit,
           balance: consolidatedBalance,
           num_adult: consolidatedAdults,
@@ -5102,13 +5110,57 @@ function ReservasListInner() {
                   </div>
 
                   {/* 5. Tarifa diaria */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Tarifa diaria</span>
-                      <p className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
-                        {fmtCurrency(selectedRes.price_per_night || Math.round((selectedRes.price_estimate || 0) / (selectedRes.nights || 1)), selectedRes.guest_name)}
-                      </p>
-                    </div>
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2.5">
+                    {selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 1 ? (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tarifas diarias del Grupo</span>
+                          <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                            {selectedRes.group_members.length} Habitaciones
+                          </span>
+                        </div>
+                        <div className="divide-y divide-zinc-200/60 pt-0.5">
+                          {selectedRes.group_members.map((m: any) => {
+                            const mNights = m.nights || selectedRes.nights || 1;
+                            const mPrice = Number(m.price_estimate || m.price || 0);
+                            const mDaily = m.price_per_night || Math.round(mPrice / mNights);
+                            return (
+                              <div key={m.id} className="flex justify-between items-center py-1.5 text-[12.5px]">
+                                <span className="font-semibold text-zinc-600 truncate max-w-[190px]">
+                                  {m.room_name || m.room || 'Habitación'}
+                                </span>
+                                <span className="font-bold text-zinc-900">
+                                  {fmtCurrency(mDaily, selectedRes.guest_name)} <span className="text-[10px] font-normal text-zinc-400">/ noche</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="pt-2 border-t border-zinc-200/80 flex justify-between items-center text-[12px]">
+                          <span className="font-extrabold text-zinc-500 uppercase tracking-wider text-[9.5px]">Total Diario del Grupo:</span>
+                          <span className="font-black text-zinc-900">
+                            {fmtCurrency(
+                              selectedRes.group_members.reduce((sum: number, m: any) => {
+                                const mNights = m.nights || selectedRes.nights || 1;
+                                const mPrice = Number(m.price_estimate || m.price || 0);
+                                return sum + (m.price_per_night || Math.round(mPrice / mNights));
+                              }, 0),
+                              selectedRes.guest_name
+                            )} <span className="text-[10px] font-semibold text-zinc-400">/ noche</span>
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Tarifa diaria</span>
+                        <p className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
+                          {fmtCurrency(
+                            selectedRes.price_per_night || Math.round((Number(selectedRes.price_estimate || selectedRes.price || 0)) / (selectedRes.nights || 1)),
+                            selectedRes.guest_name
+                          )}
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {/* 6. Total de la reserva */}
