@@ -89,6 +89,13 @@ const cleanDescription = (desc: string, accName?: string, paymentMethod?: string
 
   return cleaned;
 };
+
+const getLocalDateString = (d: Date = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
  
 const ENVELOPES = Array.from({ length: 99 }, (_, i) => 'S' + String(i + 1).padStart(2, '0'));
 
@@ -107,6 +114,7 @@ export default function FinanzasPage() {
   const [transferFromId, setTransferFromId] = useState('');
   const [transferToId, setTransferToId] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
+  const [transferDate, setTransferDate] = useState(getLocalDateString());
   const [transferDescription, setTransferDescription] = useState('');
  
   const [showAddAccountModal, setShowAddAccountModal] = useState(false);
@@ -341,7 +349,7 @@ export default function FinanzasPage() {
   const [formDescription, setFormDescription] = useState('');
   const [formAccountId, setFormAccountId] = useState('');
   const [formEnvelope, setFormEnvelope] = useState('');
-  const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
+  const [formDate, setFormDate] = useState(getLocalDateString());
   const [isSaving, setIsSaving] = useState(false);
 
 
@@ -378,7 +386,7 @@ export default function FinanzasPage() {
         setFormAmount('');
         setFormDescription('');
         setFormEnvelope('');
-        setFormDate(new Date().toISOString().split('T')[0]);
+        setFormDate(getLocalDateString());
         setShowMoveModal(true);
       }
     }
@@ -641,7 +649,7 @@ export default function FinanzasPage() {
         description: `Traspaso enviado a ${toAcc.name} (${toAcc.currency}). ${transferDescription}`.trim(),
         account_id: transferFromId,
         payment_method: resolvePaymentMethod(transferFromId),
-        date: new Date().toISOString().split('T')[0]
+        date: transferDate || getLocalDateString()
       };
 
       // 2. Registro de ingreso en sobre destino
@@ -652,7 +660,7 @@ export default function FinanzasPage() {
         description: `Traspaso recibido desde ${fromAcc.name} (${fromAcc.currency}). ${transferDescription}`.trim(),
         account_id: transferToId,
         payment_method: resolvePaymentMethod(transferToId),
-        date: new Date().toISOString().split('T')[0]
+        date: transferDate || getLocalDateString()
       };
 
       const [gastoRes, ingresoRes] = await Promise.all([
@@ -692,7 +700,8 @@ export default function FinanzasPage() {
                 toCurrency: toAcc.currency,
                 account: fromAcc.name,
                 toAccount: toAcc.name,
-                description: transferDescription || 'Traspaso de fondos'
+                description: transferDescription || 'Traspaso de fondos',
+                date: transferDate || getLocalDateString()
               }
             })
           })
@@ -706,6 +715,7 @@ export default function FinanzasPage() {
       setTransferFromId('');
       setTransferToId('');
       setTransferAmount('');
+      setTransferDate(getLocalDateString());
       setTransferDescription('');
       fetchData();
     } catch (err: any) {
@@ -746,7 +756,7 @@ export default function FinanzasPage() {
             description: 'Saldo inicial de apertura de la cuenta',
             account_id: newAcc.id,
             payment_method: 'efectivo',
-            date: new Date().toISOString().split('T')[0]
+            date: getLocalDateString()
           }]);
         }
       }
@@ -1026,7 +1036,7 @@ export default function FinanzasPage() {
     const link = document.createElement('a');
     link.href = url;
     link.target = '_blank';
-    link.setAttribute('download', `Finanzas_Jaroje_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `Finanzas_Jaroje_${getLocalDateString()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1041,7 +1051,7 @@ export default function FinanzasPage() {
       const csvText = await response.text();
       
       const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
-      const filename = `Finanzas_Jaroje_${new Date().toISOString().split('T')[0]}.csv`;
+      const filename = `Finanzas_Jaroje_${getLocalDateString()}.csv`;
       const file = new File([blob], filename, { type: 'text/csv' });
       
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -1253,6 +1263,7 @@ export default function FinanzasPage() {
               setTransferFromId('');
               setTransferToId('');
               setTransferAmount('');
+              setTransferDate(getLocalDateString());
               setTransferDescription('');
               setShowTransferModal(true);
             }}
@@ -1286,7 +1297,7 @@ export default function FinanzasPage() {
               setFormAmount('');
               setFormDescription('');
               setFormEnvelope('');
-              setFormDate(new Date().toISOString().split('T')[0]);
+              setFormDate(getLocalDateString());
               setShowMoveModal(true);
             }} 
             className="w-10 h-10 bg-zinc-900 text-white rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
@@ -2224,6 +2235,17 @@ export default function FinanzasPage() {
                     <option key={acc.id} value={acc.id}>{acc.name} (${Math.round(acc.balance).toLocaleString('es-MX')} {acc.currency})</option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Fecha del Traspaso</label>
+                <input 
+                  type="date" 
+                  required
+                  value={transferDate}
+                  onChange={e => setTransferDate(e.target.value)}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none font-bold text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 cursor-pointer transition-all duration-300"
+                />
               </div>
 
               <div>
