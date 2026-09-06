@@ -61,15 +61,61 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Error al registrar la transferencia en base de datos.' }, { status: 500 });
     }
 
-    // 4. Enviar notificación por WhatsApp a Recepción (958 116 8698)
-    const receptionistPhone = '529581168698';
-    const cleanGuestName = name || 'Invitado';
-    const notificationBody = `🔔 *Nuevo Comprobante de Transferencia* 🔔\n\n*Huésped:* ${cleanGuestName}\n*Reserva:* #${bookingId}\n*Monto:* $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\nValida y aprueba esta transferencia aquí:\nhttps://jaroje-app.vercel.app/reservas?id=${bookingId}\n\nVer comprobante:\n${publicUrl}`;
+    // 4. Enviar notificación por WhatsApp a Gerencia y Recepción
+    let adminPhones: string[] = [];
+    try {
+      const { data: phoneSetting } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'admin_notification_phone')
+        .maybeSingle();
 
-    console.log(`[Submit Transfer] Sending WA notification to reception: ${receptionistPhone}`);
-    const waRes = await sendWhatsAppTextMessage(receptionistPhone, notificationBody);
-    if (!waRes.success) {
-      console.warn("[Submit Transfer] WhatsApp notification warning:", waRes.error);
+      if (phoneSetting && phoneSetting.value) {
+        const phones = String(phoneSetting.value).split(',').map(p => p.trim()).filter(Boolean);
+        adminPhones.push(...phones);
+      }
+    } catch (e) {
+      console.error("[Submit Transfer] Error leyendo admin_notification_phone desde settings:", e);
+    }
+
+    if (process.env.OWNER_PERSONAL_PHONE) {
+      adminPhones.push(process.env.OWNER_PERSONAL_PHONE);
+    }
+
+    if (adminPhones.length === 0) {
+      adminPhones.push('529581168698');
+    }
+
+    const uniqueAdminPhones = Array.from(new Set(adminPhones.map(p => p.replace(/\D/g, '')).filter(Boolean)));
+    const cleanGuestName = name || 'Invitado';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+    const reviewUrl = `${siteUrl}/reservas?tab=Por+Aprobar&id=${bookingId}`;
+
+    const notificationBody = `🔔 *¡Nuevo Anticipo en "POR APROBAR"!* 🔔\n\n👤 *Huésped:* ${cleanGuestName}\n🏷 *Reserva:* #${bookingId}\n💵 *Monto Subido:* $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN\n\n⚡ *Aprobar o revisar en el panel:*\n👉 ${reviewUrl}\n\n📄 *Ver comprobante adjunto:*\n${publicUrl}`;
+
+    for (const phoneTarget of uniqueAdminPhones) {
+      console.log(`[Submit Transfer] Sending WA notification to admin: ${phoneTarget}`);
+      const waRes = await sendWhatsAppTextMessage(phoneTarget, notificationBody);
+      if (!waRes.success) {
+        console.warn(`[Submit Transfer] WhatsApp notification warning for ${phoneTarget}:`, waRes.error);
+      }
+    }
+
+    // 4.1. Registrar log en employee_logs para activar campana y toast sonoro en el Dashboard en tiempo real
+    try {
+      await supabase
+        .from('employee_logs')
+        .insert([{
+          employee_num: 'guest-portal',
+          employee_name: String(cleanGuestName).slice(0, 50),
+          department: 'recepcion',
+          module: 'reservas',
+          action: 'transfer_receipt_submitted',
+          details: `Comprobante de anticipo subido por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para Reserva #${bookingId}. Pendiente en pestaña Por Aprobar.`,
+          created_at: new Date().toISOString()
+        }]);
+    } catch (logErr) {
+      console.error("[Submit Transfer] Error registrando employee_log:", logErr);
     }
 
     // 5. Obtener teléfono del huésped para enviarle una notificación automática por WhatsApp

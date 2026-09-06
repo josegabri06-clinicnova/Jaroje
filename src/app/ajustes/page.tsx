@@ -9,7 +9,7 @@ import {
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
   Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench,
-  TrendingUp, RotateCcw
+  TrendingUp, RotateCcw, Bell
 } from 'lucide-react';
 import { 
   getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, 
@@ -53,6 +53,8 @@ export default function AjustesPage() {
 
   const [disableAutoWA, setDisableAutoWA] = useState(false);
   const [savingAutoWA, setSavingAutoWA] = useState(false);
+  const [adminNotificationPhone, setAdminNotificationPhone] = useState('');
+  const [savingAdminNotificationPhone, setSavingAdminNotificationPhone] = useState(false);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -411,6 +413,41 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchAdminNotificationPhone = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'admin_notification_phone')
+        .maybeSingle();
+      if (!error && data && data.value) {
+        setAdminNotificationPhone(String(data.value));
+      } else {
+        setAdminNotificationPhone('529581168698');
+      }
+    } catch (e) {
+      console.error('Error fetching admin notification phone setting:', e);
+    }
+  };
+
+  const handleSaveAdminNotificationPhone = async () => {
+    setSavingAdminNotificationPhone(true);
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'admin_notification_phone', value: adminNotificationPhone.trim() }, { onConflict: 'key' });
+      
+      if (error) throw error;
+      setToastMessage("✅ Teléfono de alertas guardado correctamente.");
+      setTimeout(() => setToastMessage(''), 3000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Error al guardar teléfono de alertas: ${err.message}`);
+    } finally {
+      setSavingAdminNotificationPhone(false);
+    }
+  };
+
   const fetchPasskeys = async () => {
     try {
       const { data, error } = await supabase
@@ -484,6 +521,7 @@ export default function AjustesPage() {
         fetchPasskeys(),
         fetchRecoveryKey(),
         fetchDisableAutoWA(),
+        fetchAdminNotificationPhone(),
         expandedSections.depuracion ? fetchDepurarData() : Promise.resolve()
       ]);
     } catch (e) {
@@ -502,6 +540,7 @@ export default function AjustesPage() {
     fetchPasskeys();
     fetchRecoveryKey();
     fetchDisableAutoWA();
+    fetchAdminNotificationPhone();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
@@ -1077,6 +1116,35 @@ export default function AjustesPage() {
                     disableAutoWA ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
+              </button>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-zinc-100">
+            <div className="flex flex-col gap-1 mb-2">
+              <span className="text-[14px] font-bold text-zinc-800 flex items-center gap-1.5">
+                <Bell size={14} className="text-amber-500" />
+                Teléfono de Alertas WhatsApp (Gerencia)
+              </span>
+              <span className="text-[11px] text-zinc-400 font-sans leading-normal">
+                Número(s) donde el sistema enviará alertas cuando un cliente responda en el <b>Inbox</b> o suba un anticipo en <b>Por Aprobar</b>. Puedes ingresar uno o más números separados por comas con código de país (ej: <code>529581168698, 529511234567</code>).
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-2">
+              <input
+                type="text"
+                value={adminNotificationPhone}
+                onChange={(e) => setAdminNotificationPhone(e.target.value)}
+                placeholder="529581168698"
+                className="flex-1 px-3 py-2 text-[13px] bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleSaveAdminNotificationPhone}
+                disabled={savingAdminNotificationPhone}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                {savingAdminNotificationPhone ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>

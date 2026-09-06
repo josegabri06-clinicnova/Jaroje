@@ -132,19 +132,30 @@ export default function RealtimeLogNotifier() {
             'toggle_mode': 'Modo Bot Alternado 🤖',
             'webhook_received': 'Notificación Recibida 📥',
             'change_room_status': 'Estado de Habitación Cambiado 🧹',
+            'transfer_receipt_submitted': 'Anticipo por Aprobar 💳',
+            'guest_message_received': 'Mensaje de Huésped 💬',
           };
           const friendlyTitle = friendlyActions[actionText] || actionText.replace(/_/g, ' ');
 
           // Reproducir el sonido sintético premium
           playPremiumChime();
 
+          let destinationUrl = `/historial?id=${newLog.id}`;
+          if (newLog.action === 'transfer_receipt_submitted') {
+            destinationUrl = '/reservas?tab=Por+Aprobar';
+          } else if (newLog.action === 'guest_message_received' || newLog.action === 'human_mode_activated') {
+            destinationUrl = '/bot';
+          }
+
           // Activar notificación toast
           setNotification({
             id: String(newLog.id),
             title: friendlyTitle,
-            desc: `${employeeName} en ${moduleName.toUpperCase()}`,
+            desc: newLog.action === 'transfer_receipt_submitted'
+              ? `${newLog.details || 'Nuevo anticipo subido'}`
+              : `${employeeName} en ${moduleName.toUpperCase()}`,
             module: moduleName,
-            destinationUrl: `/historial?id=${newLog.id}`
+            destinationUrl
           });
         }
       )

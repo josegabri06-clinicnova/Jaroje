@@ -641,107 +641,157 @@ export async function POST(req: Request) {
       }
     }
 
-    // --- NOTIFICAR AL ADMINISTRADOR (VÍA WHATSAPP) ---
+    // --- NOTIFICAR AL ADMINISTRADOR (VÍA WHATSAPP & REALTIME LOGS) ---
     try {
-      const ownerPhone = process.env.OWNER_PERSONAL_PHONE;
+      const guestNameClean = body.guest_name || (existing ? existing.guest_name : '') || phone;
+
+      // 1. Registrar SIEMPRE en employee_logs para activar campana y toast sonoro en el Dashboard en tiempo real
+      try {
+        await supabase
+          .from('employee_logs')
+          .insert([{
+            employee_num: 'wa-guest',
+            employee_name: String(guestNameClean).slice(0, 50),
+            department: 'recepcion',
+            module: 'whatsapp',
+            action: 'guest_message_received',
+            details: `Mensaje de huésped: "${String(guestMsgText).slice(0, 200)}" (Tel: ${phone})`,
+            created_at: new Date().toISOString()
+          }]);
+      } catch (logErr) {
+        console.error("[Conversations] Error registrando guest_message_received en employee_logs:", logErr);
+      }
+
+      // 2. Obtener teléfono(s) de destino de alertas (prioridad: settings DB -> ENV OWNER_PERSONAL_PHONE -> recepción default)
+      let adminPhones: string[] = [];
+      try {
+        const { data: phoneSetting } = await supabase
+          .from('settings')
+          .select('value')
+          .eq('key', 'admin_notification_phone')
+          .maybeSingle();
+
+        if (phoneSetting && phoneSetting.value) {
+          const phones = String(phoneSetting.value).split(',').map(p => p.trim()).filter(Boolean);
+          adminPhones.push(...phones);
+        }
+      } catch (sErr) {
+        console.error("[Conversations] Error al consultar admin_notification_phone en settings:", sErr);
+      }
+
+      if (process.env.OWNER_PERSONAL_PHONE) {
+        adminPhones.push(process.env.OWNER_PERSONAL_PHONE);
+      }
+
+      if (adminPhones.length === 0) {
+        adminPhones.push('529581168698');
+      }
+
+      const uniqueAdminPhones = Array.from(new Set(adminPhones.map(p => p.replace(/\D/g, '')).filter(Boolean)));
       const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
       const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
 
-      if (ownerPhone && WHATSAPP_TOKEN && WHATSAPP_PHONE_ID && guestMsgText) {
-        // Cooldown de 5 minutos por conversación (evitar spam si están chateando seguido)
+      if (uniqueAdminPhones.length > 0 && WHATSAPP_TOKEN && WHATSAPP_PHONE_ID && guestMsgText) {
+        // Cooldown inteligente: Solo suprimir si el huésped envía múltiples mensajes consecutivos en menos de 20 segundos (ráfaga).
+        // NUNCA suprimir si el mensaje previo fue del hotel/bot o si es la primera respuesta del cliente.
         let shouldAlertOwner = true;
         if (existing && Array.isArray(existing.messages) && existing.messages.length > 0) {
-          const lastMsg = existing.messages[existing.messages.length - 1];
-          if (lastMsg && lastMsg.timestamp) {
-            const lastTime = new Date(lastMsg.timestamp).getTime();
+          const previousGuestMsgs = existing.messages.filter((m: any) => m.role_guest && m.timestamp);
+          if (previousGuestMsgs.length > 0) {
+            const lastGuestMsg = previousGuestMsgs[previousGuestMsgs.length - 1];
+            const lastTime = new Date(lastGuestMsg.timestamp).getTime();
             const diffMs = Date.now() - lastTime;
-            if (diffMs < 5 * 60 * 1000) {
+            if (diffMs < 20 * 1000) {
               shouldAlertOwner = false;
-              console.log(`[Owner Notifier] Omitiendo alerta al dueño por cooldown de 5 minutos (última actividad hace ${Math.round(diffMs / 1000)}s)`);
+              console.log(`[Owner Notifier] Omitiendo alerta al dueño por ráfaga rápida de mensajes del huésped (${Math.round(diffMs / 1000)}s)`);
             }
           }
         }
 
         if (shouldAlertOwner) {
           const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-          const cleanOwnerPhone = ownerPhone.replace(/\D/g, '');
           const currentConvId = existing ? existing.id : newConvId;
           const chatUrl = `${siteUrl}/bot?chatId=${currentConvId}`;
-          const guestNameClean = body.guest_name || (existing ? existing.guest_name : '') || phone;
 
           const alertText = `🌴 *Jaroje Inbox Alert* 🌴\n\n💬 *Nuevo mensaje de:* ${guestNameClean}\n📱 *Teléfono:* +${phone}\n\n📝 *Mensaje:* "${guestMsgText}"\n\n👉 *Responder aquí:* ${chatUrl}`;
-
           const templateName = process.env.OWNER_NOTIFY_TEMPLATE || '';
-          let sendSuccess = false;
 
-          if (templateName) {
-            try {
-              const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  messaging_product: 'whatsapp',
-                  to: cleanOwnerPhone,
-                  type: 'template',
-                  template: {
-                    name: templateName,
-                    language: { code: 'es_MX' },
-                    components: [
-                      {
-                        type: 'body',
-                        parameters: [
-                          { type: 'text', text: String(guestNameClean).slice(0, 30) },
-                          { type: 'text', text: String(phone) },
-                          { type: 'text', text: String(guestMsgText).slice(0, 150) }
-                        ]
-                      },
-                      {
-                        type: 'button',
-                        sub_type: 'url',
-                        index: '0',
-                        parameters: [
-                          { type: 'text', text: String(currentConvId) }
-                        ]
-                      }
-                    ]
-                  }
-                }),
-              });
-              if (waRes.ok) {
-                sendSuccess = true;
-                console.log(`[Owner Notifier] Alerta enviada con plantilla ${templateName} a +${cleanOwnerPhone}`);
-              } else {
-                const errText = await waRes.text();
-                console.warn(`[Owner Notifier] Falló envío con plantilla, intentando texto libre... Error:`, errText);
+          for (const targetPhone of uniqueAdminPhones) {
+            let sendSuccess = false;
+
+            if (templateName) {
+              try {
+                const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    to: targetPhone,
+                    type: 'template',
+                    template: {
+                      name: templateName,
+                      language: { code: 'es_MX' },
+                      components: [
+                        {
+                          type: 'body',
+                          parameters: [
+                            { type: 'text', text: String(guestNameClean).slice(0, 30) },
+                            { type: 'text', text: String(phone) },
+                            { type: 'text', text: String(guestMsgText).slice(0, 150) }
+                          ]
+                        },
+                        {
+                          type: 'button',
+                          sub_type: 'url',
+                          index: '0',
+                          parameters: [
+                            { type: 'text', text: String(currentConvId) }
+                          ]
+                        }
+                      ]
+                    }
+                  }),
+                });
+                if (waRes.ok) {
+                  sendSuccess = true;
+                  console.log(`[Owner Notifier] Alerta enviada con plantilla ${templateName} a +${targetPhone}`);
+                } else {
+                  const errText = await waRes.text();
+                  console.warn(`[Owner Notifier] Falló envío con plantilla a +${targetPhone}, intentando texto libre... Error:`, errText);
+                }
+              } catch (tErr) {
+                console.error("[Owner Notifier] Error intentando enviar plantilla:", tErr);
               }
-            } catch (tErr) {
-              console.error("[Owner Notifier] Error intentando enviar plantilla:", tErr);
             }
-          }
 
-          if (!sendSuccess) {
-            // Enviar como texto libre (requiere ventana de 24h activa)
-            const waTextRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: cleanOwnerPhone,
-                type: 'text',
-                text: { body: alertText },
-              }),
-            });
-            if (waTextRes.ok) {
-              console.log(`[Owner Notifier] Alerta enviada como texto libre a +${cleanOwnerPhone}`);
-            } else {
-              const textErrText = await waTextRes.text();
-              console.error(`[Owner Notifier] Falló también el envío como texto libre. Error:`, textErrText);
+            if (!sendSuccess) {
+              // Enviar como texto libre
+              try {
+                const waTextRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    to: targetPhone,
+                    type: 'text',
+                    text: { body: alertText },
+                  }),
+                });
+                if (waTextRes.ok) {
+                  console.log(`[Owner Notifier] Alerta enviada como texto libre a +${targetPhone}`);
+                } else {
+                  const textErrText = await waTextRes.text();
+                  console.error(`[Owner Notifier] Falló envío como texto libre a +${targetPhone}. Error:`, textErrText);
+                }
+              } catch (textFetchErr) {
+                console.error(`[Owner Notifier] Error en fetch de texto libre a +${targetPhone}:`, textFetchErr);
+              }
             }
           }
         }
