@@ -1213,7 +1213,10 @@ export default function PublicReservaPage() {
   const rawChannel = (booking.channel || '').toLowerCase();
   const rawName = (booking.guest_name || '').toLowerCase();
   const rawNotes = (booking.notes || '').toLowerCase();
-  const isOta = ['airbnb', 'booking', 'expedia'].some(c => rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c));
+  const rawSource = ((booking as any).source || (booking as any).apiSource || (booking as any).referer || '').toLowerCase();
+  const isOta = ['airbnb', 'booking', 'expedia', 'vrbo'].some(c => 
+    rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c) || rawSource.includes(c)
+  ) || rawName.includes('pagado a') || rawName.includes('pagado b');
   const isConfirmed = hasPaid || isOta;
 
   // Fechas clave
@@ -1452,8 +1455,8 @@ export default function PublicReservaPage() {
           </div>
         )}
 
-        {/* ALERTA DE PAGO PARCIAL / SALDO PENDIENTE */}
-        {currentState !== 'liberada' && booking.deposit > 0 && booking.balance > 0 && (
+        {/* ALERTA DE PAGO PARCIAL / SALDO PENDIENTE (Solo para reservas directas) */}
+        {currentState !== 'liberada' && !isOta && booking.deposit > 0 && booking.balance > 0 && (
           <div className="bg-amber-50 border border-amber-250/30 rounded-2xl p-4 flex gap-3 text-amber-900 text-xs shadow-sm">
             <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5 animate-pulse" />
             <div className="space-y-1">
@@ -1737,7 +1740,17 @@ export default function PublicReservaPage() {
                   <strong className="text-zinc-900 font-black text-base">${totalConExtras.toLocaleString('es-MX')} {curr}</strong>
                 </div>
               )}
-              {hasPaid ? (
+              {isOta ? (
+                <div className="flex justify-between items-center text-emerald-700 font-semibold bg-emerald-50 px-3 py-2.5 rounded-xl border border-emerald-100">
+                  <span className="flex items-center gap-1.5">
+                    <Check size={15} className="text-emerald-600" />
+                    <span>{lang === 'en' ? `Payment managed by ${booking.channel || 'OTA'}` : `Pago gestionado vía ${booking.channel || 'OTA'}`}</span>
+                  </span>
+                  <strong className="font-extrabold text-emerald-800 text-xs uppercase tracking-wide">
+                    {lang === 'en' ? 'Covered' : 'Cubierto ✓'}
+                  </strong>
+                </div>
+              ) : hasPaid ? (
                 <>
                   <div className="flex justify-between items-center text-emerald-600 font-semibold bg-emerald-50 px-3 py-2 rounded-xl border border-emerald-100">
                     <span className="flex items-center gap-1">{t.anticipoRecibido}</span>
