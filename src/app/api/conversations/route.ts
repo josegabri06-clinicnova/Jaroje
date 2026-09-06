@@ -692,19 +692,35 @@ export async function POST(req: Request) {
       const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
 
       if (uniqueAdminPhones.length > 0 && WHATSAPP_TOKEN && WHATSAPP_PHONE_ID && guestMsgText) {
-        // Cooldown inteligente: Solo suprimir si el huésped envía múltiples mensajes consecutivos en menos de 20 segundos (ráfaga).
-        // NUNCA suprimir si el mensaje previo fue del hotel/bot o si es la primera respuesta del cliente.
-        let shouldAlertOwner = true;
-        if (existing && Array.isArray(existing.messages) && existing.messages.length > 0) {
-          const previousGuestMsgs = existing.messages.filter((m: any) => m.role_guest && m.timestamp);
-          if (previousGuestMsgs.length > 0) {
-            const lastGuestMsg = previousGuestMsgs[previousGuestMsgs.length - 1];
-            const lastTime = new Date(lastGuestMsg.timestamp).getTime();
-            const diffMs = Date.now() - lastTime;
-            if (diffMs < 20 * 1000) {
-              shouldAlertOwner = false;
-              console.log(`[Owner Notifier] Omitiendo alerta al dueño por ráfaga rápida de mensajes del huésped (${Math.round(diffMs / 1000)}s)`);
-            }
+        // Lógica de alerta exclusiva para el primer mensaje de la conversación / sesión:
+        // Se alerta si:
+        // 1. Es el primer mensaje del huésped en la conversación (no hay mensajes de rol guest previos).
+        // 2. La conversación estaba inactiva o resuelta y han pasado más de 30 minutos desde el último mensaje (nueva consulta/sesión).
+        // 3. El huésped solicita explícitamente hablar con el administrador.
+        // Si la conversación está activa en curso (mensajes recientes dentro de los últimos 30 minutos),
+        // se omite la alerta por WhatsApp para no saturar al gerente mientras está chateando activamente con el huésped.
+        let shouldAlertOwner = false;
+        const previousGuestMsgs = existing && Array.isArray(existing.messages)
+          ? existing.messages.filter((m: any) => m.role_guest && m.timestamp)
+          : [];
+
+        if (previousGuestMsgs.length === 0) {
+          shouldAlertOwner = true;
+          console.log(`[Owner Notifier] Alertando al dueño: Primer mensaje del huésped en esta conversación.`);
+        } else {
+          const lastMsg = existing.messages[existing.messages.length - 1];
+          const lastTimestamp = lastMsg?.timestamp ? new Date(lastMsg.timestamp).getTime() : 0;
+          const diffMs = Date.now() - lastTimestamp;
+          const INACTIVITY_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutos de inactividad
+
+          if (existing.resolved || diffMs > INACTIVITY_THRESHOLD_MS) {
+            shouldAlertOwner = true;
+            console.log(`[Owner Notifier] Alertando al dueño: Conversación reactivada tras ${Math.round(diffMs / 60000)} minutos.`);
+          } else if (guestMsgClean.includes('administrador') || guestMsgClean.includes('administracion') || guestMsgClean.includes('administración')) {
+            shouldAlertOwner = true;
+            console.log(`[Owner Notifier] Alertando al dueño: Huésped solicitó explícitamente hablar con el administrador.`);
+          } else {
+            console.log(`[Owner Notifier] Omitiendo alerta al dueño por WhatsApp: Conversación activa en curso (última actividad hace ${Math.round(diffMs / 1000)}s).`);
           }
         }
 
