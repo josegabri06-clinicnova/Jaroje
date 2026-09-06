@@ -1003,15 +1003,71 @@ export async function PUT(req: Request) {
     }
 
     if (body.action === 'reactivate') {
-      // 1. Intentamos buscar si la reserva es local en Supabase
-      const { data: localRes } = await supabase
-        .from('local_reservas')
-        .select('*')
-        .eq('id', Number(id))
-        .maybeSingle();
+      let targetIds: string[] = [];
+      if (Array.isArray(body.ids) && body.ids.length > 0) {
+        targetIds = body.ids.map((i: any) => String(i));
+      } else if (id) {
+        targetIds = [String(id)];
+      }
 
-      if (localRes) {
-        // Es local! Reactivar localmente en Supabase como 'pending' (nueva) y resetear banderas de avisos
+      // Si solo viene 1 ID, buscar automáticamente reservas hermanas del grupo en Supabase/Beds24
+      if (targetIds.length === 1) {
+        try {
+          const mainId = targetIds[0];
+          const { data: mainB24 } = await supabase
+            .from('beds24_reservations')
+            .select('*')
+            .eq('id', mainId)
+            .maybeSingle();
+
+          if (mainB24) {
+            const cleanPhone = (mainB24.guest_phone || mainB24.phone || '').trim();
+            const { data: siblings } = await supabase
+              .from('beds24_reservations')
+              .select('id, guest_phone, phone, guest_name')
+              .eq('check_in', mainB24.check_in)
+              .eq('check_out', mainB24.check_out)
+              .neq('id', mainId);
+
+            if (siblings && siblings.length > 0) {
+              const matchedSiblings = siblings.filter((s: any) => {
+                const sPhone = (s.guest_phone || s.phone || '').trim();
+                const samePhone = cleanPhone && sPhone && cleanPhone.length >= 7 && (cleanPhone === sPhone || cleanPhone.endsWith(sPhone) || sPhone.endsWith(cleanPhone));
+                const sName = (s.guest_name || '').toLowerCase().trim();
+                const mName = (mainB24.guest_name || '').toLowerCase().trim();
+                const sameName = sName && mName && (sName === mName || sName.includes(mName) || mName.includes(sName));
+                return samePhone || sameName;
+              });
+              matchedSiblings.forEach((s: any) => {
+                if (!targetIds.includes(String(s.id))) {
+                  targetIds.push(String(s.id));
+                }
+              });
+            }
+          }
+        } catch (groupSearchErr) {
+          console.error("[Reservas PUT Reactivate] Error buscando hermanos de grupo:", groupSearchErr);
+        }
+      }
+
+      // Separar entre locales y Beds24
+      const localIds: number[] = [];
+      const beds24Ids: number[] = [];
+
+      for (const tId of targetIds) {
+        const isLocal = tId.startsWith('loc_') || 
+                        tId.startsWith('walkin_') || 
+                        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tId) || 
+                        tId.length < 7;
+        if (isLocal) {
+          localIds.push(Number(tId));
+        } else {
+          beds24Ids.push(Number(tId));
+        }
+      }
+
+      // 1. Reactivar en BD Local
+      if (localIds.length > 0) {
         const { error: reactivateErr } = await supabase
           .from('local_reservas')
           .update({ 
@@ -1019,74 +1075,78 @@ export async function PUT(req: Request) {
             last_notice_sent: false,
             is_acknowledged: false
           })
-          .eq('id', Number(id));
+          .in('id', localIds);
 
         if (reactivateErr) {
-          console.error("[Reservas PUT Reactivate] Error reactivating local reservation:", reactivateErr);
+          console.error("[Reservas PUT Reactivate] Error reactivating local reservations:", reactivateErr);
           return NextResponse.json({ error: reactivateErr.message }, { status: 500 });
         }
-
-        return NextResponse.json({ success: true, message: "Reserva local reactivada con éxito." });
       }
 
-      // 2. Reactivar en Beds24
-      const BEDS24_TOKEN = await getBeds24Token();
+      // 2. Reactivar en Beds24 en lote (batch)
+      if (beds24Ids.length > 0) {
+        const BEDS24_TOKEN = await getBeds24Token();
+        const reactivatePayloads = beds24Ids.map(bId => ({
+          id: Number(bId),
+          status: 'request' // Las reservas reactivadas regresan a status 'request' (Pendiente / Nueva)
+        }));
 
-      // Las reservas reactivadas siempre regresan a status 'request' (Pendiente / Nueva)
-      const reactivatePayload = {
-        id: Number(id),
-        status: 'request'
-      };
-
-      const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
-        method: 'POST',
-        headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify([reactivatePayload])
-      });
-
-      if (!beds24Response.ok) {
-        const errText = await beds24Response.text();
-        return NextResponse.json({ error: `Beds24 rechazó la reactivación: ${errText}` }, { status: 400 });
-      }
-
-      const dataB24 = await beds24Response.json();
-      const resultsArray = Array.isArray(dataB24) ? dataB24 : (dataB24 && Array.isArray(dataB24.data) ? dataB24.data : []);
-      const firstResult = resultsArray[0];
-      if (firstResult && firstResult.success === false) {
-        const errorMsg = firstResult.errors 
-          ? firstResult.errors.map((e: any) => `${e.field}: ${e.message}`).join(', ')
-          : firstResult.message || 'Error individual al reactivar en Beds24';
-        return NextResponse.json({ error: `Beds24 rechazó la reactivación: ${errorMsg}` }, { status: 400 });
-      }
-
-      // Sincronizar de inmediato localmente
-      try {
-        const { syncBeds24BookingLocal } = await import('@/lib/beds24');
-        const b24ResFull = await fetch(`https://api.beds24.com/v2/bookings?id=${id}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
-          headers: { 'token': BEDS24_TOKEN }
+        const beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
+          method: 'POST',
+          headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify(reactivatePayloads)
         });
-        if (b24ResFull.ok) {
-          const b24JsonFull = await b24ResFull.json();
-          const rawBooking = b24JsonFull.data?.[0];
-          if (rawBooking) {
-            // Esto guardará la reserva con status 'pending' (debido a status 'request' de Beds24)
-            await syncBeds24BookingLocal(rawBooking);
 
-            // Restablecer las banderas de aviso en nuestra base de datos para habilitar enviar último aviso de nuevo
+        if (!beds24Response.ok) {
+          const errText = await beds24Response.text();
+          return NextResponse.json({ error: `Beds24 rechazó la reactivación: ${errText}` }, { status: 400 });
+        }
+
+        const dataB24 = await beds24Response.json();
+        const resultsArray = Array.isArray(dataB24) ? dataB24 : (dataB24 && Array.isArray(dataB24.data) ? dataB24.data : []);
+        const errors = resultsArray.filter((r: any) => r.success === false);
+        if (errors.length > 0 && errors.length === resultsArray.length) {
+          return NextResponse.json({ error: `Beds24 rechazó la reactivación del grupo.` }, { status: 400 });
+        }
+
+        // Sincronizar de inmediato en Supabase localmente para cada miembro reactivado
+        try {
+          const { syncBeds24BookingLocal, clearBeds24Cache } = await import('@/lib/beds24');
+          clearBeds24Cache();
+
+          for (const bId of beds24Ids) {
+            const b24ResFull = await fetch(`https://api.beds24.com/v2/bookings?id=${bId}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
+              headers: { 'token': BEDS24_TOKEN }
+            });
+            if (b24ResFull.ok) {
+              const b24JsonFull = await b24ResFull.json();
+              const rawBooking = b24JsonFull.data?.[0];
+              if (rawBooking) {
+                await syncBeds24BookingLocal(rawBooking);
+              }
+            }
+
+            // Restablecer banderas de aviso en beds24_reservations
             await supabase
               .from('beds24_reservations')
               .update({
+                status: 'pending',
                 last_notice_sent: false,
-                is_acknowledged: false
+                is_acknowledged: false,
+                updated_at: new Date().toISOString()
               })
-              .eq('id', String(id));
+              .eq('id', String(bId));
           }
+        } catch (syncErr) {
+          console.error("[Reservas PUT Reactivate] Error al sincronizar tras reactivación:", syncErr);
         }
-      } catch (syncErr) {
-        console.error("[Reservas PUT Reactivate] Error al sincronizar tras reactivación:", syncErr);
       }
 
-      return NextResponse.json({ success: true, message: "Reserva reactivada con éxito en Beds24." });
+      return NextResponse.json({ 
+        success: true, 
+        count: targetIds.length,
+        message: `Se reactivaron con éxito ${targetIds.length} condominio(s) de la reserva.` 
+      });
     }
 
     // Guardar ajustes de portal si vienen en la petición

@@ -2726,11 +2726,16 @@ function ReservasListInner() {
 
     setReactivateLoading(true);
     try {
+      const memberIds = (selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0)
+        ? selectedRes.group_members.map((m: any) => m.id)
+        : [selectedRes.id];
+
       const res = await fetch(`/api/reservas`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: selectedRes.id,
+          ids: memberIds,
           action: 'reactivate'
         })
       });
