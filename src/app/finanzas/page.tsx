@@ -1,13 +1,20 @@
 "use client";
  
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, ArrowUp, Eye, Share2, ArrowLeft, ArrowRight, Percent } from 'lucide-react';
+import { 
+  ArrowDownLeft, ArrowUpRight, Plus, Download, Search, Edit2, X, Wallet, Landmark, 
+  PiggyBank, Globe, Lock, Trash2, RefreshCw, ArrowLeftRight, Settings, ArrowDown, 
+  ArrowUp, Eye, Share2, ArrowLeft, ArrowRight, Percent, Calendar, Building2, 
+  ExternalLink, TrendingUp, CheckCircle2, Filter, Layers, Tag, ChevronRight, 
+  FileSpreadsheet, AlertCircle, Sparkles, Receipt
+} from 'lucide-react';
 import Link from 'next/link';
 import EmployeeModal from '@/components/EmployeeModal';
 import { Employee, validatePinAsync, getActiveEmployee } from '@/lib/auth';
+import { computeOtaSplit } from '@/lib/beds24';
  
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -278,11 +285,20 @@ export default function FinanzasPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pinLocked, pinInput]);
 
-  const [activeTab, setActiveTab] = useState<'libro' | 'registro'>('libro');
+  const [activeTab, setActiveTab] = useState<'libro' | 'registro' | 'otas'>('libro');
+  const [selectedOta, setSelectedOta] = useState<'airbnb' | 'booking' | 'expedia'>('airbnb');
   
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [records, setRecords] = useState<FinanceRecord[]>([]);
+  const [reservations, setReservations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Filtros específicos para la vista de OTAs
+  const [otaPeriodFilter, setOtaPeriodFilter] = useState<'mes_actual' | 'mes_anterior' | 'este_ano' | 'historico' | 'custom'>('este_ano');
+  const [otaStartDate, setOtaStartDate] = useState('');
+  const [otaEndDate, setOtaEndDate] = useState('');
+  const [otaStatusFilter, setOtaStatusFilter] = useState<'todos' | 'activos' | 'finalizadas' | 'canceladas'>('activos');
+  const [otaSearchQuery, setOtaSearchQuery] = useState('');
 
   const [accountsOrder, setAccountsOrder] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -362,13 +378,15 @@ export default function FinanzasPage() {
   const fetchData = async () => {
     setIsLoading(true);
     
-    const [accRes, recRes] = await Promise.all([
+    const [accRes, recRes, resRes] = await Promise.all([
       supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
-      supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false })
+      supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false }),
+      supabase.from('beds24_reservations').select('*').order('check_in', { ascending: false })
     ]);
     
     if (!accRes.error) setAccounts(accRes.data || []);
     if (!recRes.error) setRecords(recRes.data || []);
+    if (!resRes.error) setReservations(resRes.data || []);
     
     setIsLoading(false);
   };
@@ -1167,6 +1185,211 @@ export default function FinanzasPage() {
     }
   };
 
+  const otaPeriodLabels: Record<string, string> = {
+    mes_actual: 'Este Mes',
+    mes_anterior: 'Mes Anterior',
+    este_ano: 'Este Año',
+    historico: 'Histórico Completo',
+    custom: 'Rango Personalizado'
+  };
+
+  const isOtaMatch = (r: any, targetOta: 'airbnb' | 'booking' | 'expedia') => {
+    const ch = (r.channel || '').toLowerCase();
+    const g = (r.guest_name || '').toLowerCase();
+    const s = String(r.source || r.apiSource || r.referer || (r.raw_data && r.raw_data.source) || '').toLowerCase();
+    if (targetOta === 'airbnb') {
+      return ch.includes('airbnb') || g.includes('pagado a') || s.includes('airbnb');
+    }
+    if (targetOta === 'booking') {
+      return ch.includes('booking') || g.includes('pagado b') || s.includes('booking');
+    }
+    if (targetOta === 'expedia') {
+      return ch.includes('expedia') || s.includes('expedia');
+    }
+    return false;
+  };
+
+  const getOtaReservationMetrics = (r: any, otaType: 'airbnb' | 'booking' | 'expedia') => {
+    const rawPrice = Number(r.price || 0);
+    const rawDeposit = Number(r.deposit || 0);
+    
+    let totalBruto = rawPrice;
+    let netRevenue = rawDeposit;
+    let commission = 0;
+
+    const ch = (r.channel || '').toLowerCase();
+    const isAirbnb = otaType === 'airbnb' || ch.includes('airbnb');
+    const isBooking = otaType === 'booking' || ch.includes('booking');
+    const isExpedia = otaType === 'expedia' || ch.includes('expedia');
+
+    if (rawDeposit > 0 && rawPrice > rawDeposit) {
+      netRevenue = rawDeposit;
+      commission = Number((rawPrice - rawDeposit).toFixed(2));
+    } else if (rawPrice > 0) {
+      const roomRate = Number((rawPrice / 1.16).toFixed(2));
+      if (isAirbnb) {
+        commission = Number((roomRate * 0.3056).toFixed(2));
+        netRevenue = Number((rawPrice - commission).toFixed(2));
+      } else if (isBooking) {
+        commission = Number((roomRate * 0.3060).toFixed(2));
+        netRevenue = Number((rawPrice - commission).toFixed(2));
+      } else {
+        commission = Number((rawPrice * 0.15).toFixed(2));
+        netRevenue = Number((rawPrice - commission).toFixed(2));
+      }
+    } else if (rawDeposit > 0) {
+      netRevenue = rawDeposit;
+      totalBruto = Number((rawDeposit / 0.85).toFixed(2));
+      commission = Number((totalBruto - rawDeposit).toFixed(2));
+    }
+
+    return {
+      totalBruto: Math.max(0, totalBruto),
+      commission: Math.max(0, commission),
+      netRevenue: Math.max(0, netRevenue),
+      commissionPct: totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(1) : '15.0'
+    };
+  };
+
+  const otaAnalytics = useMemo(() => {
+    const today = new Date();
+    const currentYear = today.getFullYear();
+
+    const now = new Date();
+    const firstDayCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const lastDayCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
+    const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+
+    const firstDayYear = `${currentYear}-01-01`;
+    const lastDayYear = `${currentYear}-12-31`;
+
+    const getOtaStats = (otaKey: 'airbnb' | 'booking' | 'expedia') => {
+      const allForOta = reservations.filter(r => isOtaMatch(r, otaKey));
+
+      const filtered = allForOta.filter(r => {
+        const dateToCheck = r.check_in || (r.created_at ? r.created_at.split('T')[0] : '');
+
+        if (otaPeriodFilter === 'mes_actual') {
+          if (!dateToCheck || dateToCheck < firstDayCurrentMonth || dateToCheck > lastDayCurrentMonth) return false;
+        } else if (otaPeriodFilter === 'mes_anterior') {
+          if (!dateToCheck || dateToCheck < firstDayPrevMonth || dateToCheck > lastDayPrevMonth) return false;
+        } else if (otaPeriodFilter === 'este_ano') {
+          if (!dateToCheck || dateToCheck < firstDayYear || dateToCheck > lastDayYear) return false;
+        } else if (otaPeriodFilter === 'custom') {
+          if (otaStartDate && dateToCheck < otaStartDate) return false;
+          if (otaEndDate && dateToCheck > otaEndDate) return false;
+        }
+
+        if (otaStatusFilter === 'activos') {
+          if (r.status === 'cancelled') return false;
+        } else if (otaStatusFilter === 'finalizadas') {
+          if (r.status === 'cancelled') return false;
+          const isFinished = r.is_checked_out || (r.check_out && new Date(r.check_out) < today);
+          if (!isFinished) return false;
+        } else if (otaStatusFilter === 'canceladas') {
+          if (r.status !== 'cancelled') return false;
+        }
+
+        if (otaSearchQuery.trim()) {
+          const q = normalizeText(otaSearchQuery.trim());
+          const matchGuest = normalizeText(r.guest_name || '').includes(q);
+          const matchId = String(r.id || '').includes(q);
+          const matchRoom = normalizeText(r.room_name || '').includes(q);
+          if (!matchGuest && !matchId && !matchRoom) return false;
+        }
+
+        return true;
+      });
+
+      let totalBruto = 0;
+      let totalComision = 0;
+      let totalNeto = 0;
+      let totalNoches = 0;
+
+      const itemsWithMetrics = filtered.map(r => {
+        const metrics = getOtaReservationMetrics(r, otaKey);
+        totalBruto += metrics.totalBruto;
+        totalComision += metrics.commission;
+        totalNeto += metrics.netRevenue;
+
+        let noches = 1;
+        if (r.check_in && r.check_out) {
+          const inD = new Date(r.check_in);
+          const outD = new Date(r.check_out);
+          noches = Math.max(1, Math.round((outD.getTime() - inD.getTime()) / (1000 * 60 * 60 * 24)));
+        }
+        totalNoches += noches;
+
+        return {
+          ...r,
+          metrics,
+          noches
+        };
+      });
+
+      const avgCommissionPct = totalBruto > 0 ? ((totalComision / totalBruto) * 100).toFixed(1) : '0.0';
+
+      return {
+        allCount: allForOta.length,
+        filteredCount: filtered.length,
+        totalBruto,
+        totalComision,
+        totalNeto,
+        totalNoches,
+        avgCommissionPct,
+        items: itemsWithMetrics
+      };
+    };
+
+    const airbnbStats = getOtaStats('airbnb');
+    const bookingStats = getOtaStats('booking');
+    const expediaStats = getOtaStats('expedia');
+
+    return {
+      airbnb: airbnbStats,
+      booking: bookingStats,
+      expedia: expediaStats
+    };
+  }, [reservations, otaPeriodFilter, otaStartDate, otaEndDate, otaStatusFilter, otaSearchQuery]);
+
+  const exportOtaToCSV = (otaName: string, items: any[]) => {
+    if (!items || items.length === 0) {
+      alert("No hay reservaciones de esta OTA para exportar con los filtros actuales.");
+      return;
+    }
+
+    const headers = ["ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", "Total Bruto (MXN)", "Comision OTA (MXN)", "% Comision", "Neto Hotel (MXN)", "Estado", "Telefono"];
+    
+    const rows = items.map(item => [
+      item.id,
+      `"${(item.guest_name || '').replace(/"/g, '""')}"`,
+      item.channel || otaName,
+      `"${(item.room_name || '').replace(/"/g, '""')}"`,
+      item.check_in || '',
+      item.check_out || '',
+      item.noches || 1,
+      item.metrics?.totalBruto?.toFixed(2) || '0.00',
+      item.metrics?.commission?.toFixed(2) || '0.00',
+      `${item.metrics?.commissionPct || '0'}%`,
+      item.metrics?.netRevenue?.toFixed(2) || '0.00',
+      item.status || '',
+      `"${(item.guest_phone || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const filename = `Comisiones_${otaName.replace(/\s+/g, '_')}_${getLocalDateString()}.csv`;
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const totalGeneral = accounts
     .filter(curr => curr.group_type !== 'COMISIONES')
     .reduce((acc, curr) => acc + convertToMXN(curr.balance, curr.currency), 0);
@@ -1311,15 +1534,24 @@ export default function FinanzasPage() {
       <div className="flex bg-zinc-200/60 p-1 rounded-2xl">
         <button 
           onClick={() => setActiveTab('libro')}
-          className={`flex-1 py-2.5 text-[14px] font-bold rounded-xl transition-all ${activeTab === 'libro' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}
+          className={`flex-1 py-2.5 text-[13.5px] font-bold rounded-xl transition-all ${activeTab === 'libro' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
         >
           Libro Contable
         </button>
         <button 
           onClick={() => setActiveTab('registro')}
-          className={`flex-1 py-2.5 text-[14px] font-bold rounded-xl transition-all ${activeTab === 'registro' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500'}`}
+          className={`flex-1 py-2.5 text-[13.5px] font-bold rounded-xl transition-all ${activeTab === 'registro' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
         >
           Registro
+        </button>
+        <button 
+          onClick={() => setActiveTab('otas')}
+          className={`flex-1 py-2.5 text-[13.5px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === 'otas' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
+        >
+          <span>Canales OTAs</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 font-extrabold border border-rose-100">
+            3
+          </span>
         </button>
       </div>
 
@@ -1450,7 +1682,7 @@ export default function FinanzasPage() {
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'registro' ? (
         // VISTA REGISTRO (Movimientos)
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -1632,6 +1864,379 @@ export default function FinanzasPage() {
               })
             )}
           </div>
+        </div>
+      ) : (
+        // VISTA CANALES OTAs (3 Pestañas: Airbnb, Booking.com, Expedia)
+        <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* 3 SUBTABS DE LAS OTAS */}
+          <div className="grid grid-cols-3 gap-2 bg-zinc-100/80 p-1.5 rounded-2xl border border-zinc-200/60 shadow-inner">
+            {/* Airbnb Tab */}
+            <button
+              onClick={() => setSelectedOta('airbnb')}
+              className={`py-3 px-3 rounded-xl transition-all flex flex-col items-center justify-center relative cursor-pointer ${
+                selectedOta === 'airbnb'
+                  ? 'bg-white text-zinc-950 shadow-md ring-2 ring-rose-500/20'
+                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/50'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#FF385C]" />
+                <span className="font-extrabold text-[13px] tracking-tight">Airbnb</span>
+              </div>
+              <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'airbnb' ? 'text-rose-600' : 'text-zinc-400'}`}>
+                {otaAnalytics.airbnb.filteredCount} reservas
+              </span>
+            </button>
+
+            {/* Booking.com Tab */}
+            <button
+              onClick={() => setSelectedOta('booking')}
+              className={`py-3 px-3 rounded-xl transition-all flex flex-col items-center justify-center relative cursor-pointer ${
+                selectedOta === 'booking'
+                  ? 'bg-white text-zinc-950 shadow-md ring-2 ring-blue-600/20'
+                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/50'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#003580]" />
+                <span className="font-extrabold text-[13px] tracking-tight">Booking.com</span>
+              </div>
+              <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'booking' ? 'text-blue-600' : 'text-zinc-400'}`}>
+                {otaAnalytics.booking.filteredCount} reservas
+              </span>
+            </button>
+
+            {/* Expedia Tab */}
+            <button
+              onClick={() => setSelectedOta('expedia')}
+              className={`py-3 px-3 rounded-xl transition-all flex flex-col items-center justify-center relative cursor-pointer ${
+                selectedOta === 'expedia'
+                  ? 'bg-white text-zinc-950 shadow-md ring-2 ring-amber-500/20'
+                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/50'
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#FFCC00] border border-amber-400" />
+                <span className="font-extrabold text-[13px] tracking-tight">Expedia</span>
+              </div>
+              <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'expedia' ? 'text-amber-600' : 'text-zinc-400'}`}>
+                {otaAnalytics.expedia.filteredCount} reservas
+              </span>
+            </button>
+          </div>
+
+          {/* BANNER COMPARATIVO GLOBAL DE LAS 3 OTAs */}
+          <div className="bg-gradient-to-r from-zinc-900 via-zinc-850 to-zinc-900 text-white rounded-[28px] p-5 shadow-xl border border-zinc-800 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={16} className="text-amber-400 animate-pulse" />
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
+                    Consolidado de Comisiones ({otaPeriodLabels[otaPeriodFilter] || 'Este Año'})
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl text-zinc-400 font-bold">$</span>
+                  <span className="text-3xl sm:text-4xl font-black tracking-tight text-white">
+                    {Math.round(
+                      otaAnalytics.airbnb.totalComision + 
+                      otaAnalytics.booking.totalComision + 
+                      otaAnalytics.expedia.totalComision
+                    ).toLocaleString('es-MX')}
+                  </span>
+                  <span className="text-xs text-zinc-400 font-bold tracking-wider">MXN Comisiones Totales</span>
+                </div>
+              </div>
+
+              {/* Mini desglose por canal */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                  <span className="text-zinc-300 font-medium">Airbnb:</span>
+                  <strong className="text-white font-black">${Math.round(otaAnalytics.airbnb.totalComision).toLocaleString('es-MX')}</strong>
+                </div>
+                <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-400" />
+                  <span className="text-zinc-300 font-medium">Booking:</span>
+                  <strong className="text-white font-black">${Math.round(otaAnalytics.booking.totalComision).toLocaleString('es-MX')}</strong>
+                </div>
+                <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span className="text-zinc-300 font-medium">Expedia:</span>
+                  <strong className="text-white font-black">${Math.round(otaAnalytics.expedia.totalComision).toLocaleString('es-MX')}</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* TARJETAS EJECUTIVAS DE LA OTA SELECCIONADA */}
+          {(() => {
+            const currentOtaData = otaAnalytics[selectedOta];
+            const otaBrandColor = selectedOta === 'airbnb' ? 'rose' : selectedOta === 'booking' ? 'blue' : 'amber';
+            const otaTitle = selectedOta === 'airbnb' ? 'Airbnb' : selectedOta === 'booking' ? 'Booking.com' : 'Expedia';
+            const matchedAccount = accounts.find(a => a.name.toUpperCase().includes(selectedOta.toUpperCase()));
+
+            return (
+              <div className="space-y-4">
+                {/* 4 KPI CARDS */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {/* Card 1: Total Bruto */}
+                  <div className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm space-y-1">
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider">Total Reservado (Bruto)</span>
+                      <Building2 size={16} className="text-zinc-400" />
+                    </div>
+                    <p className="text-2xl font-black text-zinc-900 tracking-tight">
+                      ${Math.round(currentOtaData.totalBruto).toLocaleString('es-MX')}
+                      <span className="text-[10px] text-zinc-400 ml-1 font-bold">MXN</span>
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-medium">
+                      {currentOtaData.filteredCount} reservas • {currentOtaData.totalNoches} noches
+                    </p>
+                  </div>
+
+                  {/* Card 2: Comisión a Pagar a la OTA */}
+                  <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-1 ${
+                    selectedOta === 'airbnb' ? 'border-rose-200/80 bg-rose-50/10' : selectedOta === 'booking' ? 'border-blue-200/80 bg-blue-50/10' : 'border-amber-200/80 bg-amber-50/10'
+                  }`}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700">Comisión a Pagar ({otaTitle})</span>
+                      <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border uppercase ${
+                        selectedOta === 'airbnb' ? 'bg-rose-50 text-rose-700 border-rose-200' : selectedOta === 'booking' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {currentOtaData.avgCommissionPct}%
+                      </span>
+                    </div>
+                    <p className="text-2xl font-black text-rose-600 tracking-tight">
+                      -${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')}
+                      <span className="text-[10px] text-rose-400 ml-1 font-bold">MXN</span>
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-medium">
+                      Host Service Fee / Retención OTA
+                    </p>
+                  </div>
+
+                  {/* Card 3: Ingreso Neto Hotel */}
+                  <div className="bg-white border border-emerald-200/80 rounded-2xl p-4 shadow-sm space-y-1 bg-emerald-50/10">
+                    <div className="flex items-center justify-between text-emerald-700">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider">Ingreso Neto Hotel</span>
+                      <Wallet size={16} className="text-emerald-600" />
+                    </div>
+                    <p className="text-2xl font-black text-emerald-600 tracking-tight">
+                      +${Math.round(currentOtaData.totalNeto).toLocaleString('es-MX')}
+                      <span className="text-[10px] text-emerald-400 ml-1 font-bold">MXN</span>
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-medium">
+                      Payout líquido recibido en banco
+                    </p>
+                  </div>
+
+                  {/* Card 4: Saldo en Cuenta Contable */}
+                  <div className="bg-white border border-zinc-200/80 rounded-2xl p-4 shadow-sm space-y-1">
+                    <div className="flex items-center justify-between text-zinc-400">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider">Saldo Cuenta Libro</span>
+                      <Landmark size={16} className="text-zinc-400" />
+                    </div>
+                    <p className="text-2xl font-black text-zinc-900 tracking-tight">
+                      ${Math.round(matchedAccount ? matchedAccount.balance : 0).toLocaleString('es-MX')}
+                      <span className="text-[10px] text-zinc-400 ml-1 font-bold">MXN</span>
+                    </p>
+                    <p className="text-[11px] text-zinc-500 font-medium truncate">
+                      {matchedAccount ? matchedAccount.name : `Cuenta COMISIÓN ${otaTitle}`}
+                    </p>
+                  </div>
+                </div>
+
+                {/* BARRA DE HERRAMIENTAS Y FILTROS */}
+                <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-3">
+                  {/* Selector de periodo rápido */}
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex bg-zinc-100 p-1 rounded-xl gap-1 flex-wrap">
+                      {[
+                        { id: 'mes_actual', label: 'Este Mes' },
+                        { id: 'mes_anterior', label: 'Mes Anterior' },
+                        { id: 'este_ano', label: 'Este Año' },
+                        { id: 'historico', label: 'Todo' },
+                        { id: 'custom', label: 'Personalizado' },
+                      ].map(f => (
+                        <button
+                          key={f.id}
+                          onClick={() => setOtaPeriodFilter(f.id as any)}
+                          className={`px-3 py-1.5 text-[11.5px] font-bold rounded-lg transition-all cursor-pointer ${
+                            otaPeriodFilter === f.id
+                              ? 'bg-zinc-900 text-white shadow-sm'
+                              : 'text-zinc-600 hover:text-zinc-900 hover:bg-zinc-200/60'
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Botón Exportar CSV */}
+                    <button
+                      onClick={() => exportOtaToCSV(otaTitle, currentOtaData.items)}
+                      className="px-3.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold text-xs rounded-xl flex items-center gap-1.5 border border-zinc-200 transition-all cursor-pointer"
+                      title="Descargar reporte de comisiones en Excel / CSV"
+                    >
+                      <Download size={14} />
+                      <span>Exportar CSV</span>
+                    </button>
+                  </div>
+
+                  {/* Fechas personalizadas si aplica */}
+                  {otaPeriodFilter === 'custom' && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <div className="bg-zinc-50 border border-zinc-200 p-2 rounded-xl flex items-center justify-between text-xs">
+                        <span className="font-extrabold text-zinc-400 text-[10px] uppercase">Desde:</span>
+                        <input
+                          type="date"
+                          value={otaStartDate}
+                          onChange={e => setOtaStartDate(e.target.value)}
+                          className="bg-transparent font-bold text-zinc-800 outline-none text-xs"
+                        />
+                      </div>
+                      <div className="bg-zinc-50 border border-zinc-200 p-2 rounded-xl flex items-center justify-between text-xs">
+                        <span className="font-extrabold text-zinc-400 text-[10px] uppercase">Hasta:</span>
+                        <input
+                          type="date"
+                          value={otaEndDate}
+                          onChange={e => setOtaEndDate(e.target.value)}
+                          className="bg-transparent font-bold text-zinc-800 outline-none text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Buscador y filtro de estado */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                    <div className="sm:col-span-2 relative">
+                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                      <input
+                        type="text"
+                        placeholder={`Buscar por huésped, ID de reserva (#92440470) o habitación...`}
+                        value={otaSearchQuery}
+                        onChange={e => setOtaSearchQuery(e.target.value)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl pl-10 pr-4 py-2 text-xs font-bold text-zinc-800 placeholder:text-zinc-400 outline-none focus:bg-white focus:ring-2 focus:ring-zinc-900/10"
+                      />
+                    </div>
+
+                    <div>
+                      <select
+                        value={otaStatusFilter}
+                        onChange={e => setOtaStatusFilter(e.target.value as any)}
+                        className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs font-bold text-zinc-800 outline-none focus:bg-white cursor-pointer"
+                      >
+                        <option value="activos">Activas y Finalizadas</option>
+                        <option value="todos">Todas (Incluye canceladas)</option>
+                        <option value="finalizadas">Solo Finalizadas</option>
+                        <option value="canceladas">Solo Canceladas</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* LISTADO DE RESERVAS DETALLADAS DE LA OTA */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <h4 className="text-[13px] font-extrabold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Receipt size={16} className="text-zinc-600" />
+                      Desglose de Reservas ({currentOtaData.filteredCount})
+                    </h4>
+                    <span className="text-[11px] font-bold text-zinc-400">
+                      Total Comisión: <strong className="text-rose-600 font-extrabold">${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} MXN</strong>
+                    </span>
+                  </div>
+
+                  {currentOtaData.items.length === 0 ? (
+                    <div className="bg-white border border-zinc-200 rounded-2xl p-10 text-center space-y-2">
+                      <Building2 size={32} className="text-zinc-300 mx-auto" />
+                      <p className="font-extrabold text-zinc-800 text-sm">No se encontraron reservas para {otaTitle}</p>
+                      <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                        No hay reservaciones que coincidan con los filtros de fecha o búsqueda seleccionados.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {currentOtaData.items.map((r: any) => {
+                        const inDateStr = r.check_in ? format(new Date(r.check_in + 'T12:00:00Z'), 'dd MMM yyyy', { locale: es }) : 'N/A';
+                        const outDateStr = r.check_out ? format(new Date(r.check_out + 'T12:00:00Z'), 'dd MMM yyyy', { locale: es }) : 'N/A';
+                        const isCancelled = r.status === 'cancelled';
+
+                        return (
+                          <div
+                            key={r.id}
+                            className={`bg-white border rounded-2xl p-4 shadow-sm transition-all hover:shadow-md ${
+                              isCancelled ? 'border-zinc-200 opacity-60 bg-zinc-50/50' : 'border-zinc-200/80 hover:border-zinc-300'
+                            }`}
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-3 mb-3">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border ${
+                                    selectedOta === 'airbnb' ? 'bg-rose-50 text-rose-700 border-rose-200' : selectedOta === 'booking' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}>
+                                    {r.channel || otaTitle} #{r.id}
+                                  </span>
+                                  <span className={`text-[9px] font-extrabold px-2 py-0.5 rounded-md uppercase border ${
+                                    isCancelled 
+                                      ? 'bg-zinc-100 text-zinc-600 border-zinc-200' 
+                                      : r.is_checked_in 
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                      : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                  }`}>
+                                    {isCancelled ? 'Cancelada' : r.is_checked_in ? 'En Casa' : r.status || 'Confirmada'}
+                                  </span>
+                                </div>
+                                <h5 className="font-extrabold text-zinc-900 text-sm">{r.guest_name || 'Huésped sin nombre'}</h5>
+                                <p className="text-[11px] text-zinc-500 font-medium">
+                                  {r.room_name || 'Habitación sin asignar'} • {r.noches} {r.noches === 1 ? 'noche' : 'noches'} ({inDateStr} → {outDateStr})
+                                </p>
+                              </div>
+
+                              <Link
+                                href={`/public/reserva/${r.id}`}
+                                target="_blank"
+                                className="px-3 py-1.5 bg-zinc-50 hover:bg-zinc-100 text-zinc-700 font-bold text-xs rounded-xl border border-zinc-200 flex items-center gap-1.5 self-start sm:self-center transition-all cursor-pointer"
+                              >
+                                <span>Ver Portal</span>
+                                <ExternalLink size={12} />
+                              </Link>
+                            </div>
+
+                            {/* Desglose de 3 columnas de la reserva */}
+                            <div className="grid grid-cols-3 gap-2 text-center bg-zinc-50/70 p-2.5 rounded-xl border border-zinc-100">
+                              <div>
+                                <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider block">Total Bruto</span>
+                                <span className="font-black text-zinc-900 text-xs sm:text-sm">
+                                  ${Math.round(r.metrics.totalBruto).toLocaleString('es-MX')}
+                                </span>
+                              </div>
+                              <div className="border-x border-zinc-200/60">
+                                <span className="text-[9px] font-extrabold text-rose-600 uppercase tracking-wider block">
+                                  Comisión ({r.metrics.commissionPct}%)
+                                </span>
+                                <span className="font-black text-rose-600 text-xs sm:text-sm">
+                                  -${Math.round(r.metrics.commission).toLocaleString('es-MX')}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-extrabold text-emerald-700 uppercase tracking-wider block">Neto Hotel</span>
+                                <span className="font-black text-emerald-600 text-xs sm:text-sm">
+                                  +${Math.round(r.metrics.netRevenue).toLocaleString('es-MX')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       )}
       {/* Modal Nuevo Movimiento */}
