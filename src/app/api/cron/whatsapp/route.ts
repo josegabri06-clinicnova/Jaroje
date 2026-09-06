@@ -147,55 +147,64 @@ export async function GET(req: Request) {
 
     const allBookings = [...beds24Reservas, ...mappedLocal];
 
-    // Helper para verificar si alguna reserva del grupo tiene un pago/comprobante pendiente o aprobado
-    const isGroupPaidOrPending = (booking: any): boolean => {
-      const bookingIdStr = String(booking.id);
-      if (paidOrPendingSet.has(bookingIdStr)) return true;
-      
-      const masterId = booking.masterId ? String(booking.masterId) : null;
-      
-      for (const other of allBookings) {
-        const otherIdStr = String(other.id);
-        if (otherIdStr === bookingIdStr) continue;
-        
-        const otherMasterId = other.masterId ? String(other.masterId) : null;
-        const inSameGroup = (masterId && otherIdStr === masterId) || 
-                            (otherMasterId === bookingIdStr) || 
-                            (masterId && masterId === otherMasterId);
-                            
-        if (inSameGroup && paidOrPendingSet.has(otherIdStr)) {
+    // Helper para determinar si dos reservaciones pertenecen al mismo grupo
+    const areBookingsInSameGroup = (a: any, b: any): boolean => {
+      if (!a || !b) return false;
+      const aIdStr = String(a.id);
+      const bIdStr = String(b.id);
+      if (aIdStr === bIdStr) return true;
+
+      // 1. Verificación por masterId de Beds24 si existe
+      const aMasterId = a.masterId ? String(a.masterId) : null;
+      const bMasterId = b.masterId ? String(b.masterId) : null;
+      if (aMasterId && (bIdStr === aMasterId || aMasterId === bMasterId)) return true;
+      if (bMasterId && (aIdStr === bMasterId || aMasterId === bMasterId)) return true;
+
+      // 2. Fechas de entrada y salida deben coincidir exactamente
+      const aIn = a.check_in || a.arrival;
+      const aOut = a.check_out || a.departure;
+      const bIn = b.check_in || b.arrival;
+      const bOut = b.check_out || b.departure;
+      if (!aIn || !bIn || aIn !== bIn || aOut !== bOut) return false;
+
+      // 3. Teléfono de huésped idéntico (normalizado a dígitos)
+      const cleanPhone = (p: any) => String(p || '').replace(/\D/g, '');
+      const aPhone = cleanPhone(a.phone || a.mobile || a.guest_phone);
+      const bPhone = cleanPhone(b.phone || b.mobile || b.guest_phone);
+      if (aPhone && bPhone && aPhone.length >= 7 && bPhone.length >= 7) {
+        if (aPhone === bPhone || aPhone.endsWith(bPhone) || bPhone.endsWith(aPhone)) {
           return true;
         }
       }
+
+      // 4. Nombre de huésped idéntico o contenido
+      const cleanName = (n: any) => String(n || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const aName = cleanName(a.guest_name);
+      const bName = cleanName(b.guest_name);
+      if (aName && bName && aName.length >= 4 && bName.length >= 4) {
+        if (aName === bName || aName.includes(bName) || bName.includes(aName)) {
+          return true;
+        }
+      }
+
       return false;
+    };
+
+    // Helper para verificar si alguna reserva del grupo tiene un pago/comprobante pendiente o aprobado
+    const isGroupPaidOrPending = (booking: any): boolean => {
+      const group = allBookings.filter(b => areBookingsInSameGroup(booking, b));
+      return group.some(b => paidOrPendingSet.has(String(b.id)));
     };
 
     // Helper para obtener la fecha de último aviso de cualquier reserva del grupo
     const getGroupNoticeSentAt = (booking: any): string | undefined => {
-      const bookingIdStr = String(booking.id);
-      
-      // 1. Verificación directa
-      if (ultimoAvisoMap.has(bookingIdStr)) {
-        return ultimoAvisoMap.get(bookingIdStr);
-      }
-      
-      // 2. Verificación grupal
-      const masterId = booking.masterId ? String(booking.masterId) : null;
-      
-      for (const other of allBookings) {
-        const otherIdStr = String(other.id);
-        if (otherIdStr === bookingIdStr) continue;
-        
-        const otherMasterId = other.masterId ? String(other.masterId) : null;
-        const inSameGroup = (masterId && otherIdStr === masterId) || 
-                            (otherMasterId === bookingIdStr) || 
-                            (masterId && masterId === otherMasterId);
-                            
-        if (inSameGroup && ultimoAvisoMap.has(otherIdStr)) {
-          return ultimoAvisoMap.get(otherIdStr);
+      const group = allBookings.filter(b => areBookingsInSameGroup(booking, b));
+      for (const member of group) {
+        const memberIdStr = String(member.id);
+        if (ultimoAvisoMap.has(memberIdStr)) {
+          return ultimoAvisoMap.get(memberIdStr);
         }
       }
-      
       return undefined;
     };
 
@@ -312,27 +321,37 @@ export async function GET(req: Request) {
 
           if (now >= limitTime) {
             if (!isGroupPaidOrPending(booking)) {
-              console.log(`[Cron Expiración 3h] Reservación ${bookingIdStr} de ${booking.guest_name} no cargó comprobante tras 3 horas. Cancelando...`);
+              // Obtener TODOS los miembros del grupo
+              const groupMembers = allBookings.filter(b => areBookingsInSameGroup(booking, b));
+              const groupMemberIds = groupMembers.map(m => String(m.id));
+              const groupRoomsList = groupMembers.map(m => m.room_name || `Hab ${m.room || m.id}`).join(', ');
 
-              const isLocal = bookingIdStr.startsWith('loc_') || 
-                              bookingIdStr.startsWith('walkin_') || 
-                              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdStr) || 
-                              bookingIdStr.length < 7;
+              console.log(`[Cron Expiración 3h] Grupo de reservaciones [${groupMemberIds.join(', ')}] (${booking.guest_name} - ${groupRoomsList}) no cargó comprobante tras 3 horas. Cancelando grupo completo...`);
 
-              if (isLocal) {
-                // Cancelación local
+              // Separar locales y Beds24
+              const localMembers = groupMembers.filter(m => {
+                const mId = String(m.id);
+                return mId.startsWith('loc_') || mId.startsWith('walkin_') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mId) || mId.length < 7;
+              });
+              const beds24Members = groupMembers.filter(m => !localMembers.includes(m));
+
+              // 1. Cancelar en BD Local
+              if (localMembers.length > 0) {
+                const localIds = localMembers.map(m => Number(m.id));
                 await supabase
                   .from('local_reservas')
                   .update({ status: 'cancelled' })
-                  .eq('id', Number(bookingIdStr));
-              } else {
-                // Cancelación en Beds24
+                  .in('id', localIds);
+              }
+
+              // 2. Cancelar en Beds24 en lote (batch)
+              if (beds24Members.length > 0) {
                 const token = await getBeds24Token();
-                const cancelPayload = { id: Number(bookingIdStr), status: 'cancelled' };
+                const cancelPayloads = beds24Members.map(m => ({ id: Number(m.id), status: 'cancelled' }));
                 const cancelRes = await fetch('https://api.beds24.com/v2/bookings', {
                   method: 'POST',
                   headers: { 'token': token, 'Content-Type': 'application/json' },
-                  body: JSON.stringify([cancelPayload])
+                  body: JSON.stringify(cancelPayloads)
                 });
                 
                 let isBeds24Success = false;
@@ -340,7 +359,7 @@ export async function GET(req: Request) {
                 
                 if (cancelRes.ok) {
                   const resJson = await cancelRes.json();
-                  if (resJson.success || (Array.isArray(resJson) && resJson[0]?.id) || (Array.isArray(resJson.data) && resJson.data[0]?.id)) {
+                  if (resJson.success || (Array.isArray(resJson) && resJson.every((r: any) => r.success || r.id)) || (Array.isArray(resJson.data) && resJson.data.length > 0)) {
                     isBeds24Success = true;
                     clearBeds24Cache();
                   } else {
@@ -351,38 +370,53 @@ export async function GET(req: Request) {
                 }
 
                 if (!isBeds24Success) {
-                  throw new Error(`Beds24 rechazó la cancelación: ${beds24ErrorDetails}`);
+                  console.error(`[Cron Expiración 3h] Error al cancelar grupo en Beds24: ${beds24ErrorDetails}`);
                 }
               }
 
-              // Liberar checkin local
-              await supabase.from('checkins').delete().eq('reservation_id', bookingIdStr);
+              // 3. Liberar checkin local para todos los miembros del grupo
+              await supabase.from('checkins').delete().in('reservation_id', groupMemberIds);
 
-              // Registrar éxito de la cancelación en los logs de auditoría
+              // 4. Actualizar estado en Supabase beds24_reservations para todos los miembros
+              try {
+                await supabase
+                  .from('beds24_reservations')
+                  .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                  .in('id', groupMemberIds);
+              } catch (b24DbErr) {
+                console.error("Error updating beds24_reservations on cancel:", b24DbErr);
+              }
+
+              // 5. Registrar éxito de la cancelación grupal en los logs de auditoría
               try {
                 await supabase.from('employee_logs').insert([{
                   employee_num: '000',
                   employee_name: 'System Cron',
                   action: 'cron-cancel-success',
                   department: 'whatsapp',
-                  room: booking.room_name || `Habitación ${booking.room || ''}`,
-                  details: `Reserva ${bookingIdStr} (${booking.guest_name}) cancelada automáticamente con éxito en ${isLocal ? 'BD Local' : 'Beds24'} por inactividad de pago (3h).`
+                  room: groupRoomsList,
+                  details: `Grupo de ${groupMembers.length} reserva(s) [${groupMemberIds.join(', ')}] (${booking.guest_name}) cancelado automáticamente con éxito por inactividad de pago (3h).`
                 }]);
               } catch (e) {
                 console.error("Error al registrar cron-cancel-success:", e);
               }
 
-              // Enviar WhatsApp de disponibilidad liberada
+              // 6. Enviar WhatsApp de disponibilidad liberada una sola vez para todo el grupo
               const waRes = await sendTemplate4_DisponibilidadLiberada(booking, true);
-              if (waRes.success) {
+              
+              // 7. Registrar logs de whatsapp_logs para TODOS los miembros del grupo
+              for (const memberId of groupMemberIds) {
                 await supabase.from('whatsapp_logs').insert([{
-                  reservation_id: bookingIdStr,
+                  reservation_id: memberId,
                   template_name: 'disponibilidad_liberada',
                   phone: guestPhone
                 }]);
-                reports.push(`[Expirado 3h] Reserva ${bookingIdStr} cancelada y notificada con Mensaje 4.`);
+              }
+
+              if (waRes.success) {
+                reports.push(`[Expirado 3h] Grupo [${groupMemberIds.join(', ')}] cancelado y notificado con Mensaje 4.`);
               } else {
-                reports.push(`[Expirado 3h] Reserva ${bookingIdStr} cancelada en sistema, pero falló WhatsApp: ${waRes.error}`);
+                reports.push(`[Expirado 3h] Grupo [${groupMemberIds.join(', ')}] cancelado en sistema, pero falló WhatsApp: ${waRes.error}`);
               }
               continue; // Saltar el resto de verificaciones para esta reserva
             } else {
