@@ -954,19 +954,35 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: `Beds24 rechazó la cancelación: ${errorMsg}` }, { status: 400 });
     }
 
-    // Enviar WhatsApp de disponibilidad liberada para Beds24
-    // NOTA: Se comenta esta sección porque el webhook de Beds24 (api/webhook/beds24) ya recibe la notificación
-    // de cancelación de forma asíncrona y posee la lógica consolidada de deduplicación grupal e idiomas.
-    // Dejarlo aquí provocaba notificaciones duplicadas en cancelaciones grupales.
-    /*
-    if (bookingForWA) {
+    // Enviar WhatsApp de disponibilidad liberada al instante con deduplicación
+    if (bookingForWA && bookingForWA.phone) {
       try {
-        await sendTemplate4_DisponibilidadLiberada(bookingForWA);
+        const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+        const { data: recentCancelLog } = await supabase
+          .from('whatsapp_logs')
+          .select('id')
+          .eq('phone', bookingForWA.phone)
+          .eq('template_name', 'disponibilidad_liberada')
+          .gte('sent_at', threeMinutesAgo)
+          .limit(1);
+
+        if (!recentCancelLog || recentCancelLog.length === 0) {
+          const waRes = await sendTemplate4_DisponibilidadLiberada(bookingForWA, true);
+          if (waRes.success) {
+            await supabase.from('whatsapp_logs').insert([{
+              reservation_id: id.toString(),
+              template_name: 'disponibilidad_liberada',
+              phone: bookingForWA.phone,
+              sent_at: new Date().toISOString(),
+              status: 'sent'
+            }]);
+            console.log(`[Reservas DELETE] ✅ WhatsApp disponibilidad_liberada enviado al instante para B24:${id}`);
+          }
+        }
       } catch (waErr) {
         console.error("[Reservas DELETE] Error sending WhatsApp cancellation for Beds24 booking:", waErr);
       }
     }
-    */
 
     // Actualizar de inmediato en Supabase local (Supabase-First)
     if (bookingB24Raw) {
