@@ -1986,17 +1986,16 @@ export default function RecepcionPage() {
       const rChannel = (r.channel || '').toLowerCase();
       const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
 
-      // REGLA 1: No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
-      // (Booking.com puede usar teléfonos genéricos del hotel, causando falsos positivos)
-      if (isMainOta !== rIsOta) return false; // no mezclar OTA con directas
+      // REGLA CRÍTICA: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
+      if (mainChannel !== rChannel) return false;
       
       const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone && mainPhone.length >= 6;
       const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
 
-      // REGLA 2: Para OTAs, requerir coincidencia de nombre (el teléfono de OTA no es confiable)
+      // Para OTAs, requerir coincidencia de nombre (el teléfono de OTA puede ser genérico)
       if (isMainOta || rIsOta) return !!sameName;
 
-      // REGLA 3: Para reservas directas, aceptar mismo teléfono O mismo nombre
+      // Para reservas directas, aceptar mismo teléfono O mismo nombre
       return !!(samePhone || sameName);
     });
   }, [selectedReserva, reservas]);

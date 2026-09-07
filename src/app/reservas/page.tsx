@@ -1867,6 +1867,11 @@ function ReservasListInner() {
                          (rMasterId && rMasterId === selId);
       if (sameMaster) return true;
 
+      // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
+      const rCh = String(r.channel || '').toLowerCase().trim();
+      const selCh = String(selectedRes.channel || '').toLowerCase().trim();
+      if (rCh !== selCh) return false;
+
       if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
       
       const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
@@ -2765,6 +2770,11 @@ function ReservasListInner() {
         return;
       }
 
+      // REGLA CRÍTICA DE AISLAMIENTO: NUNCA reactivar reservas de diferentes canales
+      const rCh = String(r.channel || '').toLowerCase().trim();
+      const selCh = String(selectedRes.channel || '').toLowerCase().trim();
+      if (rCh !== selCh) return;
+
       if (r.check_in === selectedRes.check_in && r.check_out === selectedRes.check_out) {
         const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
         const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
@@ -3101,6 +3111,11 @@ function ReservasListInner() {
                            (rMasterId && rMasterId === oId) ||
                            (oMasterId && oMasterId === rId);
         if (sameMaster) return true;
+
+        // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
+        const rCh = String(r.channel || '').toLowerCase().trim();
+        const oCh = String(o.channel || '').toLowerCase().trim();
+        if (rCh !== oCh) return false;
 
         if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
         

@@ -914,6 +914,9 @@ export default function CalendarPage() {
     const mainPhone = (selectedReserva.guest_phone || '').trim();
     return reservas.filter(r => {
       if (r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) return false;
+      const rCh = (r.channel || '').toLowerCase().trim();
+      const selCh = (selectedReserva.channel || '').toLowerCase().trim();
+      if (rCh !== selCh) return false;
       const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone;
       const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
       return samePhone || sameName;

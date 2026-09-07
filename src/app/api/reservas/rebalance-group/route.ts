@@ -26,6 +26,9 @@ async function performRebalance(bookingId: string) {
 
     const group = (siblings || []).filter(s => {
       if (s.check_out !== localTarget.check_out) return false;
+      const sCh = (s.channel || '').toLowerCase().trim();
+      const targetCh = (localTarget.channel || '').toLowerCase().trim();
+      if (sCh !== targetCh) return false;
       const sName = cleanStr(s.guest_name || '');
       const sPhone = (s.phone || '').trim();
       const samePhone = mainPhone && sPhone && sPhone === mainPhone;
@@ -88,6 +91,10 @@ async function performRebalance(bookingId: string) {
   const group = allArrival.filter((b: any) => {
     if (b.departure !== targetB.departure) return false;
     if (String(b.status) === '0' || b.status === 'cancelled') return false;
+    const bCh = (b.channel || '').toLowerCase().trim();
+    const targetCh = (targetB.channel || '').toLowerCase().trim();
+    const sameMaster = targetB.masterId && b.masterId && String(targetB.masterId) === String(b.masterId);
+    if (!sameMaster && bCh !== targetCh) return false;
     const bName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
     const bPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
     const sameName = bName && targetName && (bName.includes(targetName) || targetName.includes(bName));

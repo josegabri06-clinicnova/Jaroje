@@ -995,6 +995,10 @@ export async function checkIfOtaIsAlreadyAdjusted(
         group = allBookings.filter((sib: any) => {
           if (sib.departure !== b.departure) return false;
           if (String(sib.status) === '0' || sib.status === 'cancelled') return false;
+          const sibCh = (sib.channel || '').toLowerCase().trim();
+          const bCh = (b.channel || '').toLowerCase().trim();
+          const sameMaster = b.masterId && sib.masterId && String(b.masterId) === String(sib.masterId);
+          if (!sameMaster && sibCh !== bCh) return false;
           const sibName = `${sib.firstName || ''} ${sib.lastName || ''}`.trim().toLowerCase();
           const sibPhone = (sib.phone || sib.mobile || sib.guestPhone || '').trim();
           const sameName = sibName && targetName && (sibName.includes(targetName) || targetName.includes(sibName));
@@ -1015,6 +1019,10 @@ export async function checkIfOtaIsAlreadyAdjusted(
 
           group = siblings.filter((sib: any) => {
             if (String(sib.status) === 'cancelled') return false;
+            const sibCh = (sib.channel || '').toLowerCase().trim();
+            const bCh = (b.channel || '').toLowerCase().trim();
+            const sameMaster = b.masterId && sib.master_id && String(b.masterId) === String(sib.master_id);
+            if (!sameMaster && sibCh !== bCh) return false;
             const sibName = (sib.guest_name || '').trim().toLowerCase();
             const sibPhone = (sib.phone || '').trim();
             const sameName = sibName && targetName && (sibName.includes(targetName) || targetName.includes(sibName));

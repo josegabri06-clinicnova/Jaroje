@@ -323,13 +323,14 @@ export async function GET(req: Request) {
         if (b.masterId) {
           key = `master_${b.masterId}`;
         } else if (guestKey) {
+          const chKey = (b.channel || 'directo').toLowerCase().trim();
           const isOta = ['booking.com', 'airbnb', 'expedia'].some(c => (b.channel || '').toLowerCase().includes(c));
           if (isOta) {
-            key = `name_${guestKey}_${b.check_in}_${b.check_out}`;
+            key = `ota_${chKey}_${guestKey}_${b.check_in}_${b.check_out}`;
           } else if (phoneKey) {
-            key = `phone_${phoneKey}_${b.check_in}_${b.check_out}`;
+            key = `phone_${chKey}_${phoneKey}_${b.check_in}_${b.check_out}`;
           } else {
-            key = `name_${guestKey}_${b.check_in}_${b.check_out}`;
+            key = `name_${chKey}_${guestKey}_${b.check_in}_${b.check_out}`;
           }
         }
         if (key) {
