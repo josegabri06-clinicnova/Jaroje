@@ -286,15 +286,15 @@ export default function FinanzasPage() {
   }, [pinLocked, pinInput]);
 
   const [activeTab, setActiveTab] = useState<'libro' | 'registro' | 'otas'>('libro');
-  const [selectedOta, setSelectedOta] = useState<'airbnb' | 'booking' | 'expedia'>('airbnb');
+  const [selectedOta, setSelectedOta] = useState<'booking' | 'expedia'>('booking');
   
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [records, setRecords] = useState<FinanceRecord[]>([]);
   const [reservations, setReservations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Filtros específicos para la vista de OTAs
-  const [otaPeriodFilter, setOtaPeriodFilter] = useState<'mes_actual' | 'mes_anterior' | 'este_ano' | 'historico' | 'custom'>('este_ano');
+  // Filtros específicos para la liquidación mensual de comisiones OTAs (Booking / Expedia)
+  const [otaPeriodFilter, setOtaPeriodFilter] = useState<'mes_actual' | 'mes_anterior' | 'este_ano' | 'historico' | 'custom'>('mes_actual');
   const [otaStartDate, setOtaStartDate] = useState('');
   const [otaEndDate, setOtaEndDate] = useState('');
   const [otaStatusFilter, setOtaStatusFilter] = useState<'todos' | 'activos' | 'finalizadas' | 'canceladas'>('activos');
@@ -1193,13 +1193,10 @@ export default function FinanzasPage() {
     custom: 'Rango Personalizado'
   };
 
-  const isOtaMatch = (r: any, targetOta: 'airbnb' | 'booking' | 'expedia') => {
+  const isOtaMatch = (r: any, targetOta: 'booking' | 'expedia') => {
     const ch = (r.channel || '').toLowerCase();
     const g = (r.guest_name || '').toLowerCase();
     const s = String(r.source || r.apiSource || r.referer || (r.raw_data && r.raw_data.source) || '').toLowerCase();
-    if (targetOta === 'airbnb') {
-      return ch.includes('airbnb') || g.includes('pagado a') || s.includes('airbnb');
-    }
     if (targetOta === 'booking') {
       return ch.includes('booking') || g.includes('pagado b') || s.includes('booking');
     }
@@ -1209,7 +1206,7 @@ export default function FinanzasPage() {
     return false;
   };
 
-  const getOtaReservationMetrics = (r: any, otaType: 'airbnb' | 'booking' | 'expedia') => {
+  const getOtaReservationMetrics = (r: any, otaType: 'booking' | 'expedia') => {
     const rawPrice = Number(r.price || 0);
     const rawDeposit = Number(r.deposit || 0);
     
@@ -1218,7 +1215,6 @@ export default function FinanzasPage() {
     let commission = 0;
 
     const ch = (r.channel || '').toLowerCase();
-    const isAirbnb = otaType === 'airbnb' || ch.includes('airbnb');
     const isBooking = otaType === 'booking' || ch.includes('booking');
     const isExpedia = otaType === 'expedia' || ch.includes('expedia');
 
@@ -1227,10 +1223,7 @@ export default function FinanzasPage() {
       commission = Number((rawPrice - rawDeposit).toFixed(2));
     } else if (rawPrice > 0) {
       const roomRate = Number((rawPrice / 1.16).toFixed(2));
-      if (isAirbnb) {
-        commission = Number((roomRate * 0.3056).toFixed(2));
-        netRevenue = Number((rawPrice - commission).toFixed(2));
-      } else if (isBooking) {
+      if (isBooking) {
         commission = Number((roomRate * 0.3060).toFixed(2));
         netRevenue = Number((rawPrice - commission).toFixed(2));
       } else {
@@ -1265,7 +1258,7 @@ export default function FinanzasPage() {
     const firstDayYear = `${currentYear}-01-01`;
     const lastDayYear = `${currentYear}-12-31`;
 
-    const getOtaStats = (otaKey: 'airbnb' | 'booking' | 'expedia') => {
+    const getOtaStats = (otaKey: 'booking' | 'expedia') => {
       const allForOta = reservations.filter(r => isOtaMatch(r, otaKey));
 
       const filtered = allForOta.filter(r => {
@@ -1343,12 +1336,10 @@ export default function FinanzasPage() {
       };
     };
 
-    const airbnbStats = getOtaStats('airbnb');
     const bookingStats = getOtaStats('booking');
     const expediaStats = getOtaStats('expedia');
 
     return {
-      airbnb: airbnbStats,
       booking: bookingStats,
       expedia: expediaStats
     };
@@ -1548,9 +1539,9 @@ export default function FinanzasPage() {
           onClick={() => setActiveTab('otas')}
           className={`flex-1 py-2.5 text-[13.5px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === 'otas' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
         >
-          <span>Canales OTAs</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-rose-50 text-rose-600 font-extrabold border border-rose-100">
-            3
+          <span>Liquidación OTAs</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-extrabold border border-blue-100">
+            Booking & Expedia
           </span>
         </button>
       </div>
@@ -1866,28 +1857,10 @@ export default function FinanzasPage() {
           </div>
         </div>
       ) : (
-        // VISTA CANALES OTAs (3 Pestañas: Airbnb, Booking.com, Expedia)
+        // VISTA LIQUIDACIÓN OTAs (2 Pestañas: Booking.com, Expedia)
         <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-          {/* 3 SUBTABS DE LAS OTAS */}
-          <div className="grid grid-cols-3 gap-2 bg-zinc-100/80 p-1.5 rounded-2xl border border-zinc-200/60 shadow-inner">
-            {/* Airbnb Tab */}
-            <button
-              onClick={() => setSelectedOta('airbnb')}
-              className={`py-3 px-3 rounded-xl transition-all flex flex-col items-center justify-center relative cursor-pointer ${
-                selectedOta === 'airbnb'
-                  ? 'bg-white text-zinc-950 shadow-md ring-2 ring-rose-500/20'
-                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/50'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FF385C]" />
-                <span className="font-extrabold text-[13px] tracking-tight">Airbnb</span>
-              </div>
-              <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'airbnb' ? 'text-rose-600' : 'text-zinc-400'}`}>
-                {otaAnalytics.airbnb.filteredCount} reservas
-              </span>
-            </button>
-
+          {/* 2 SUBTABS DE LAS OTAS */}
+          <div className="grid grid-cols-2 gap-2 bg-zinc-100/80 p-1.5 rounded-2xl border border-zinc-200/60 shadow-inner">
             {/* Booking.com Tab */}
             <button
               onClick={() => setSelectedOta('booking')}
@@ -1902,7 +1875,7 @@ export default function FinanzasPage() {
                 <span className="font-extrabold text-[13px] tracking-tight">Booking.com</span>
               </div>
               <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'booking' ? 'text-blue-600' : 'text-zinc-400'}`}>
-                {otaAnalytics.booking.filteredCount} reservas
+                {otaAnalytics.booking.filteredCount} reservas • ${Math.round(otaAnalytics.booking.totalComision).toLocaleString('es-MX')} com.
               </span>
             </button>
 
@@ -1920,45 +1893,39 @@ export default function FinanzasPage() {
                 <span className="font-extrabold text-[13px] tracking-tight">Expedia</span>
               </div>
               <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'expedia' ? 'text-amber-600' : 'text-zinc-400'}`}>
-                {otaAnalytics.expedia.filteredCount} reservas
+                {otaAnalytics.expedia.filteredCount} reservas • ${Math.round(otaAnalytics.expedia.totalComision).toLocaleString('es-MX')} com.
               </span>
             </button>
           </div>
 
-          {/* BANNER COMPARATIVO GLOBAL DE LAS 3 OTAs */}
+          {/* BANNER COMPARATIVO GLOBAL DE LIQUIDACIÓN DE COMISIONES */}
           <div className="bg-gradient-to-r from-zinc-900 via-zinc-850 to-zinc-900 text-white rounded-[28px] p-5 shadow-xl border border-zinc-800 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Sparkles size={16} className="text-amber-400 animate-pulse" />
                   <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
-                    Consolidado de Comisiones ({otaPeriodLabels[otaPeriodFilter] || 'Este Año'})
+                    Comisiones por Liquidar a Fin de Mes ({otaPeriodLabels[otaPeriodFilter] || 'Este Mes'})
                   </span>
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl text-zinc-400 font-bold">$</span>
                   <span className="text-3xl sm:text-4xl font-black tracking-tight text-white">
                     {Math.round(
-                      otaAnalytics.airbnb.totalComision + 
                       otaAnalytics.booking.totalComision + 
                       otaAnalytics.expedia.totalComision
                     ).toLocaleString('es-MX')}
                   </span>
-                  <span className="text-xs text-zinc-400 font-bold tracking-wider">MXN Comisiones Totales</span>
+                  <span className="text-xs text-zinc-400 font-bold tracking-wider">MXN Total por Transferir a OTAs</span>
                 </div>
               </div>
 
               {/* Mini desglose por canal */}
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-400" />
-                  <span className="text-zinc-300 font-medium">Airbnb:</span>
-                  <strong className="text-white font-black">${Math.round(otaAnalytics.airbnb.totalComision).toLocaleString('es-MX')}</strong>
-                </div>
-                <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-blue-400" />
-                  <span className="text-zinc-300 font-medium">Booking:</span>
+                  <span className="text-zinc-300 font-medium">Booking.com:</span>
                   <strong className="text-white font-black">${Math.round(otaAnalytics.booking.totalComision).toLocaleString('es-MX')}</strong>
                 </div>
                 <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
@@ -1973,8 +1940,8 @@ export default function FinanzasPage() {
           {/* TARJETAS EJECUTIVAS DE LA OTA SELECCIONADA */}
           {(() => {
             const currentOtaData = otaAnalytics[selectedOta];
-            const otaBrandColor = selectedOta === 'airbnb' ? 'rose' : selectedOta === 'booking' ? 'blue' : 'amber';
-            const otaTitle = selectedOta === 'airbnb' ? 'Airbnb' : selectedOta === 'booking' ? 'Booking.com' : 'Expedia';
+            const otaBrandColor = selectedOta === 'booking' ? 'blue' : 'amber';
+            const otaTitle = selectedOta === 'booking' ? 'Booking.com' : 'Expedia';
             const matchedAccount = accounts.find(a => a.name.toUpperCase().includes(selectedOta.toUpperCase()));
 
             return (
@@ -1998,12 +1965,12 @@ export default function FinanzasPage() {
 
                   {/* Card 2: Comisión a Pagar a la OTA */}
                   <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-1 ${
-                    selectedOta === 'airbnb' ? 'border-rose-200/80 bg-rose-50/10' : selectedOta === 'booking' ? 'border-blue-200/80 bg-blue-50/10' : 'border-amber-200/80 bg-amber-50/10'
+                    selectedOta === 'booking' ? 'border-blue-200/80 bg-blue-50/10' : 'border-amber-200/80 bg-amber-50/10'
                   }`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700">Comisión a Pagar ({otaTitle})</span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700">Comisión por Liquidar ({otaTitle})</span>
                       <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border uppercase ${
-                        selectedOta === 'airbnb' ? 'bg-rose-50 text-rose-700 border-rose-200' : selectedOta === 'booking' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                        selectedOta === 'booking' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                       }`}>
                         {currentOtaData.avgCommissionPct}%
                       </span>
@@ -2013,7 +1980,7 @@ export default function FinanzasPage() {
                       <span className="text-[10px] text-rose-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
-                      Host Service Fee / Retención OTA
+                      Total a transferir a {otaTitle}
                     </p>
                   </div>
 
@@ -2028,7 +1995,7 @@ export default function FinanzasPage() {
                       <span className="text-[10px] text-emerald-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
-                      Payout líquido recibido en banco
+                      Cobro neto que retiene el hotel
                     </p>
                   </div>
 
@@ -2142,10 +2109,10 @@ export default function FinanzasPage() {
                   <div className="flex items-center justify-between px-1">
                     <h4 className="text-[13px] font-extrabold text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
                       <Receipt size={16} className="text-zinc-600" />
-                      Desglose de Reservas ({currentOtaData.filteredCount})
+                      Desglose de Reservas {otaTitle} ({currentOtaData.filteredCount})
                     </h4>
                     <span className="text-[11px] font-bold text-zinc-400">
-                      Total Comisión: <strong className="text-rose-600 font-extrabold">${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} MXN</strong>
+                      Total Comisión por Liquidar: <strong className="text-rose-600 font-extrabold">${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} MXN</strong>
                     </span>
                   </div>
 
@@ -2175,7 +2142,7 @@ export default function FinanzasPage() {
                               <div className="space-y-1">
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase tracking-wider border ${
-                                    selectedOta === 'airbnb' ? 'bg-rose-50 text-rose-700 border-rose-200' : selectedOta === 'booking' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                                    selectedOta === 'booking' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
                                   }`}>
                                     {r.channel || otaTitle} #{r.id}
                                   </span>
@@ -2215,7 +2182,7 @@ export default function FinanzasPage() {
                               </div>
                               <div className="border-x border-zinc-200/60">
                                 <span className="text-[9px] font-extrabold text-rose-600 uppercase tracking-wider block">
-                                  Comisión ({r.metrics.commissionPct}%)
+                                  Comisión a Liquidar ({r.metrics.commissionPct}%)
                                 </span>
                                 <span className="font-black text-rose-600 text-xs sm:text-sm">
                                   -${Math.round(r.metrics.commission).toLocaleString('es-MX')}
