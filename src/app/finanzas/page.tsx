@@ -1225,7 +1225,6 @@ export default function FinanzasPage() {
     const g = String(r.guest_name || '').toLowerCase();
     const s = String(r.source || r.apiSource || r.referer || r.api_source || (r.raw_data && (r.raw_data.source || r.raw_data.channel || r.raw_data.referer)) || '').toLowerCase();
     const notes = String(r.notes || r.comments || '').toLowerCase();
-
     if (targetOta === 'booking') {
       return ch.includes('booking') || ch.includes('bdc') || g.includes('booking') || g.includes('pagado b') || s.includes('booking') || notes.includes('booking');
     }
@@ -1236,7 +1235,7 @@ export default function FinanzasPage() {
   };
 
   const getOtaReservationMetrics = (r: any, otaType: 'booking' | 'expedia') => {
-    const rawPrice = Number(r.price || r.price_estimate || r.total_amount || 0);
+    const rawPrice = Number(r.price || r.price_estimate || 0);
     const rawDeposit = Number(r.deposit || r.actualPaid || r.rawDeposit || 0);
     
     let totalBruto = rawPrice;
@@ -1248,41 +1247,68 @@ export default function FinanzasPage() {
     const isBooking = otaType === 'booking' || ch.includes('booking');
 
     // Desglose oficial de la factura de comisiones OTA:
-    // Booking: 33.1% (17.5% comisión + IVA, 3.1% tarjeta, 12.5% Genius)
-    // Expedia: 15.0% comisión base
+    // Booking.com:
+    // 1. Comisión Base de Booking: 18% sobre la tarifa base de la habitación (sin impuestos)
+    // 2. Cargo por procesamiento de tarjeta (Payment Charge): 3.1% sobre el cobro total procesado
+    // Total Factura Booking: ~18.23% del total pagado por el huésped
+    // (El descuento Genius 10% ya está aplicado en la tarifa vendida y no se paga como comisión en factura)
     if (isBooking) {
-      const baseIva = Number((totalBruto * 0.175).toFixed(2));
+      let roomBase = 0;
+      if (r.invoice_items && Array.isArray(r.invoice_items) && r.invoice_items.length > 0) {
+        const roomItems = r.invoice_items.filter((item: any) => {
+          const type = (item.type || '').toLowerCase();
+          const desc = (item.description || '').toLowerCase();
+          return type === 'charge' && !desc.includes('iva') && !desc.includes('impuesto') && !desc.includes('tax') && !desc.includes('cancel');
+        });
+        if (roomItems.length > 0) {
+          roomBase = roomItems.reduce((acc: number, it: any) => acc + (Number(it.lineTotal !== undefined ? it.lineTotal : (it.amount || 0))), 0);
+        }
+      }
+      
+      // Si no hay desglose en invoice_items, en México la tarifa base antes de IVA (16%) e ISH (3%) es Total Bruto / 1.19
+      if (roomBase <= 0 && totalBruto > 0) {
+        roomBase = Number((totalBruto / 1.19).toFixed(2));
+      }
+
+      // 1. Comisión base Booking: 18% sobre la tarifa base de la habitación
+      const bookingBaseCommission = Number((roomBase * 0.18).toFixed(2));
+
+      // 2. Cargo por procesamiento de tarjeta: 3.1% sobre el total cobrado/bruto
       const cardProcessing = Number((totalBruto * 0.031).toFixed(2));
-      const geniusDiscount = Number((totalBruto * 0.125).toFixed(2));
-      const commission = Number((baseIva + cardProcessing + geniusDiscount).toFixed(2));
+
+      // 3. Comisión total a liquidar a Booking en la factura mensual
+      const commission = Number((bookingBaseCommission + cardProcessing).toFixed(2));
       const netRevenue = Number((totalBruto - commission).toFixed(2));
+      const commissionPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(1) : '18.2';
 
       return {
         totalBruto: Math.max(0, totalBruto),
+        roomBase: Math.max(0, roomBase),
         commission: Math.max(0, commission),
         netRevenue: Math.max(0, netRevenue),
-        commissionPct: '33.1',
+        commissionPct,
         breakdown: {
-          baseIva,
+          bookingBaseCommission,
           cardProcessing,
-          geniusDiscount,
-          totalPct: 33.1
+          roomBase,
+          totalPct: Number(commissionPct)
         }
       };
     } else {
-      const baseIva = Number((totalBruto * 0.15).toFixed(2));
-      const commission = baseIva;
+      // Expedia: 15% flat de comisión
+      const commission = Number((totalBruto * 0.15).toFixed(2));
       const netRevenue = Number((totalBruto - commission).toFixed(2));
 
       return {
         totalBruto: Math.max(0, totalBruto),
+        roomBase: Math.max(0, totalBruto),
         commission: Math.max(0, commission),
         netRevenue: Math.max(0, netRevenue),
         commissionPct: '15.0',
         breakdown: {
-          baseIva,
+          bookingBaseCommission: commission,
           cardProcessing: 0,
-          geniusDiscount: 0,
+          roomBase: totalBruto,
           totalPct: 15.0
         }
       };
@@ -1300,45 +1326,44 @@ export default function FinanzasPage() {
     const firstDayPrevMonth = format(new Date(today.getFullYear(), today.getMonth() - 1, 1), 'yyyy-MM-dd');
     const lastDayPrevMonth = format(new Date(today.getFullYear(), today.getMonth(), 0), 'yyyy-MM-dd');
 
-    const firstDayYear = `${currentYear}-01-01`;
-    const lastDayYear = `${currentYear}-12-31`;
+    const firstDayCurrentYear = `${currentYear}-01-01`;
+    const lastDayCurrentYear = `${currentYear}-12-31`;
 
     const getOtaStats = (otaKey: 'booking' | 'expedia') => {
-      const allForOta = reservations.filter(r => isOtaMatch(r, otaKey));
+      const allForOta = reservations.filter(r => {
+        const ch = (r.channel || '').toLowerCase();
+        if (otaKey === 'booking') return ch.includes('booking');
+        if (otaKey === 'expedia') return ch.includes('expedia');
+        return false;
+      });
 
       const filtered = allForOta.filter(r => {
-        const dateToCheck = r.check_in || r.arrival || (r.created_at ? r.created_at.split('T')[0] : '');
+        const inDate = r.check_in || '';
+        const outDate = r.check_out || '';
+        const isCancelled = r.status === 'cancelled';
 
-        if (otaPeriodFilter === 'mes_actual') {
-          if (!dateToCheck || dateToCheck < firstDayCurrentMonth || dateToCheck > lastDayCurrentMonth) return false;
-        } else if (otaPeriodFilter === 'mes_anterior') {
-          if (!dateToCheck || dateToCheck < firstDayPrevMonth || dateToCheck > lastDayPrevMonth) return false;
-        } else if (otaPeriodFilter === 'este_ano') {
-          if (!dateToCheck || dateToCheck < firstDayYear || dateToCheck > lastDayYear) return false;
-        } else if (otaPeriodFilter === 'futuras') {
-          if (!dateToCheck || dateToCheck < todayStr) return false;
-        } else if (otaPeriodFilter === 'custom') {
-          if (otaStartDate && dateToCheck < otaStartDate) return false;
-          if (otaEndDate && dateToCheck > otaEndDate) return false;
-        }
-        // 'historico' no aplica restricciones de fecha
+        // 1. Filtro de estado
+        if (otaStatusFilter === 'activos' && isCancelled) return false;
+        if (otaStatusFilter === 'finalizadas' && (isCancelled || outDate > todayStr)) return false;
+        if (otaStatusFilter === 'canceladas' && !isCancelled) return false;
 
-        if (otaStatusFilter === 'activos') {
-          if (r.status === 'cancelled') return false;
-        } else if (otaStatusFilter === 'finalizadas') {
-          if (r.status === 'cancelled') return false;
-          const isFinished = r.is_checked_out || (r.check_out && new Date(r.check_out) < today);
-          if (!isFinished) return false;
-        } else if (otaStatusFilter === 'canceladas') {
-          if (r.status !== 'cancelled') return false;
+        // 2. Filtro de periodo
+        if (otaPeriodFilter === 'futuras' && inDate < todayStr) return false;
+        if (otaPeriodFilter === 'mes_actual' && (inDate < firstDayCurrentMonth || inDate > lastDayCurrentMonth)) return false;
+        if (otaPeriodFilter === 'mes_anterior' && (inDate < firstDayPrevMonth || inDate > lastDayPrevMonth)) return false;
+        if (otaPeriodFilter === 'este_ano' && (inDate < firstDayCurrentYear || inDate > lastDayCurrentYear)) return false;
+        if (otaPeriodFilter === 'custom') {
+          if (otaStartDate && inDate < otaStartDate) return false;
+          if (otaEndDate && inDate > otaEndDate) return false;
         }
 
+        // 3. Filtro de búsqueda (nombre, id, habitacion)
         if (otaSearchQuery.trim()) {
-          const q = normalizeText(otaSearchQuery.trim());
-          const matchGuest = normalizeText(r.guest_name || '').includes(q);
-          const matchId = String(r.id || '').includes(q);
-          const matchRoom = normalizeText(r.room_name || '').includes(q);
-          if (!matchGuest && !matchId && !matchRoom) return false;
+          const q = otaSearchQuery.toLowerCase().trim();
+          const matchName = (r.guest_name || '').toLowerCase().includes(q);
+          const matchId = String(r.id || '').toLowerCase().includes(q);
+          const matchRoom = (r.room_name || r.room || '').toLowerCase().includes(q);
+          if (!matchName && !matchId && !matchRoom) return false;
         }
 
         return true;
@@ -1348,18 +1373,18 @@ export default function FinanzasPage() {
       let totalComision = 0;
       let totalNeto = 0;
       let totalNoches = 0;
-      let totalBaseIva = 0;
+      let totalBookingBaseCommission = 0;
       let totalCardProcessing = 0;
-      let totalGeniusDiscount = 0;
+      let totalRoomBase = 0;
 
       const itemsWithMetrics = filtered.map(r => {
         const metrics = getOtaReservationMetrics(r, otaKey);
         totalBruto += metrics.totalBruto;
         totalComision += metrics.commission;
         totalNeto += metrics.netRevenue;
-        totalBaseIva += metrics.breakdown.baseIva;
+        totalBookingBaseCommission += metrics.breakdown.bookingBaseCommission;
         totalCardProcessing += metrics.breakdown.cardProcessing;
-        totalGeniusDiscount += metrics.breakdown.geniusDiscount;
+        totalRoomBase += metrics.breakdown.roomBase;
 
         let noches = 1;
         if (r.check_in && r.check_out) {
@@ -1376,7 +1401,7 @@ export default function FinanzasPage() {
         };
       });
 
-      const avgCommissionPct = totalBruto > 0 ? ((totalComision / totalBruto) * 100).toFixed(1) : (otaKey === 'booking' ? '33.1' : '15.0');
+      const avgCommissionPct = totalBruto > 0 ? ((totalComision / totalBruto) * 100).toFixed(1) : (otaKey === 'booking' ? '18.2' : '15.0');
 
       return {
         allCount: allForOta.length,
@@ -1385,9 +1410,9 @@ export default function FinanzasPage() {
         totalComision,
         totalNeto,
         totalNoches,
-        totalBaseIva,
+        totalBookingBaseCommission,
         totalCardProcessing,
-        totalGeniusDiscount,
+        totalRoomBase,
         avgCommissionPct,
         items: itemsWithMetrics
       };
@@ -1412,12 +1437,12 @@ export default function FinanzasPage() {
     const headers = isBooking
       ? [
           "ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", 
-          "Total Bruto (MXN)", "Comision Base + IVA 17.5% (MXN)", "Procesamiento Tarjeta 3.1% (MXN)", "Desc Genius 12.5% (MXN)", 
-          "Total Comision OTA (MXN)", "% Comision", "Neto Hotel (MXN)", "Estado", "Telefono"
+          "Total Bruto (MXN)", "Tarifa Base Habitación (MXN)", "Comisión Booking 18% Base (MXN)", "Procesamiento Tarjeta 3.1% (MXN)", 
+          "Total Comisión Factura Booking (MXN)", "% Comisión Efectivo", "Neto Hotel (MXN)", "Estado", "Telefono"
         ]
       : [
           "ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", 
-          "Total Bruto (MXN)", "Comision OTA 15% (MXN)", "% Comision", "Neto Hotel (MXN)", "Estado", "Telefono"
+          "Total Bruto (MXN)", "Comisión OTA 15% (MXN)", "% Comisión", "Neto Hotel (MXN)", "Estado", "Telefono"
         ];
     
     const rows = items.map(item => {
@@ -1431,11 +1456,11 @@ export default function FinanzasPage() {
           item.check_out || '',
           item.noches || 1,
           item.metrics?.totalBruto?.toFixed(2) || '0.00',
-          item.metrics?.breakdown?.baseIva?.toFixed(2) || '0.00',
+          item.metrics?.breakdown?.roomBase?.toFixed(2) || '0.00',
+          item.metrics?.breakdown?.bookingBaseCommission?.toFixed(2) || '0.00',
           item.metrics?.breakdown?.cardProcessing?.toFixed(2) || '0.00',
-          item.metrics?.breakdown?.geniusDiscount?.toFixed(2) || '0.00',
           item.metrics?.commission?.toFixed(2) || '0.00',
-          `${item.metrics?.commissionPct || '33.1'}%`,
+          `${item.metrics?.commissionPct || '18.2'}%`,
           item.metrics?.netRevenue?.toFixed(2) || '0.00',
           item.status || '',
           `"${(item.guest_phone || '').replace(/"/g, '""')}"`
@@ -2144,19 +2169,19 @@ export default function FinanzasPage() {
                   {selectedOta === 'booking' ? (
                     <div className="space-y-3">
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        {/* 1. Base + IVA */}
+                        {/* 1. Base Habitación (18%) */}
                         <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">1. Comisión + IVA</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">17.5%</span>
+                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">1. Comisión Base Booking</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">18.0%</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
-                            ${Math.round(currentOtaData.totalBaseIva).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                            ${Math.round(currentOtaData.totalBookingBaseCommission).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">15% comisión + IVA = 17.5%</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">18% sobre tarifa base (${Math.round(currentOtaData.totalRoomBase).toLocaleString('es-MX')})</p>
                         </div>
 
-                        {/* 2. Tarjeta */}
+                        {/* 2. Tarjeta (3.1%) */}
                         <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
                           <div className="flex items-center justify-between">
                             <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">2. Pago con Tarjeta</span>
@@ -2165,19 +2190,19 @@ export default function FinanzasPage() {
                           <p className="text-base font-black text-zinc-900">
                             ${Math.round(currentOtaData.totalCardProcessing).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">Procesamiento pagos Booking</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">3.1% sobre cobro total procesado</p>
                         </div>
 
-                        {/* 3. Descuento Genius */}
+                        {/* 3. Total Factura */}
                         <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">3. Descuento Genius</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">12.5%</span>
+                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">3. Factura Exigible Booking</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">~{currentOtaData.avgCommissionPct}%</span>
                           </div>
-                          <p className="text-base font-black text-zinc-900">
-                            ${Math.round(currentOtaData.totalGeniusDiscount).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                          <p className="text-base font-black text-rose-600">
+                            ${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} <span className="text-[10px] text-rose-400 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">10% sobre tarifa original</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">Total exigible por Booking al cierre de mes</p>
                         </div>
                       </div>
 
@@ -2186,7 +2211,7 @@ export default function FinanzasPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-base">🛡️</span>
                           <span className="text-zinc-700 font-medium">
-                            <strong>Margen Protegido en Beds24:</strong> El multiplicador de tarifa del <strong>+35%</strong> cubre íntegramente la deducción total del <strong>33.1%</strong> (17.5% + 3.1% + 12.5%).
+                            <strong>Margen Protegido en Beds24:</strong> El multiplicador de tarifa del <strong>+35%</strong> absorbe holgadamente la deducción de Booking (<strong>~18.2%</strong>) y el descuento Genius (<strong>10%</strong>), blindando el ingreso neto del hotel.
                           </span>
                         </div>
                         <span className="text-[10px] font-black px-2 py-1 bg-white text-blue-900 rounded-lg border border-blue-200 shrink-0">
@@ -2203,7 +2228,7 @@ export default function FinanzasPage() {
                             <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">15.0%</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
-                            ${Math.round(currentOtaData.totalBaseIva).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                            ${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
                           <p className="text-[10px] text-zinc-400 font-medium">Comisión directa por reservación</p>
                         </div>
@@ -2411,13 +2436,13 @@ export default function FinanzasPage() {
                                 <span className="font-bold text-zinc-400">Desglose Factura Booking:</span>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    17.5% Base+IVA: ${Math.round(r.metrics.breakdown.baseIva).toLocaleString('es-MX')}
+                                    18.0% Base (${Math.round(r.metrics.breakdown.roomBase).toLocaleString('es-MX')}): ${Math.round(r.metrics.breakdown.bookingBaseCommission).toLocaleString('es-MX')}
                                   </span>
                                   <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    3.1% Tarjeta: ${Math.round(r.metrics.breakdown.cardProcessing).toLocaleString('es-MX')}
+                                    3.1% Tarjeta (${Math.round(r.metrics.totalBruto).toLocaleString('es-MX')}): ${Math.round(r.metrics.breakdown.cardProcessing).toLocaleString('es-MX')}
                                   </span>
                                   <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    12.5% Genius: ${Math.round(r.metrics.breakdown.geniusDiscount).toLocaleString('es-MX')}
+                                    Total Factura: ${Math.round(r.metrics.commission).toLocaleString('es-MX')} ({r.metrics.commissionPct}%)
                                   </span>
                                 </div>
                               </div>
