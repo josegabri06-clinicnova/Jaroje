@@ -913,7 +913,7 @@ export default function CalendarPage() {
     const mainName = cleanStr(selectedReserva.guest_name || '');
     const mainPhone = (selectedReserva.guest_phone || '').trim();
     return reservas.filter(r => {
-      if (r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) return false;
+      if (r.status === 'cancelled' || String(r.status) === '0' || r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) return false;
       const rCh = (r.channel || '').toLowerCase().trim();
       const selCh = (selectedReserva.channel || '').toLowerCase().trim();
       if (rCh !== selCh) return false;

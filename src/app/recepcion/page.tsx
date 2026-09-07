@@ -1978,8 +1978,8 @@ export default function RecepcionPage() {
     const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => mainChannel.includes(c));
     
     return reservas.filter(r => {
-      // Mismo check_in, diferente reserva, no ya procesada
-      if (r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) {
+      // Mismo check_in, diferente reserva, no cancelada y no ya procesada
+      if (r.status === 'cancelled' || String(r.status) === '0' || r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) {
         return false;
       }
 

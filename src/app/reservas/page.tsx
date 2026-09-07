@@ -1860,6 +1860,11 @@ function ReservasListInner() {
     return reservas.filter(r => {
       const rId = String(r.id);
       if (rId === selId) return false;
+
+      // REGLA CRÍTICA: NUNCA mezclar reservas activas con reservas canceladas
+      const isRCancelled = r.status === 'cancelled' || String(r.status) === '0';
+      const isSelCancelled = selectedRes.status === 'cancelled' || String(selectedRes.status) === '0';
+      if (isRCancelled !== isSelCancelled) return false;
       
       const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
       const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
@@ -2760,6 +2765,10 @@ function ReservasListInner() {
     reservas.forEach((r: any) => {
       const rId = String(r.id);
       if (memberIdSet.has(rId)) return;
+
+      // Solo agrupar reservas hermanas que también estén canceladas
+      const isRCancelled = r.status === 'cancelled' || String(r.status) === '0';
+      if (!isRCancelled) return;
       
       const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
       const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
