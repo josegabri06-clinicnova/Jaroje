@@ -1240,50 +1240,53 @@ export default function FinanzasPage() {
     const rawDeposit = Number(r.deposit || r.actualPaid || r.rawDeposit || 0);
     
     let totalBruto = rawPrice;
-    let netRevenue = 0;
-    let commission = 0;
+    if (totalBruto <= 0 && rawDeposit > 0) {
+      totalBruto = rawDeposit;
+    }
 
     const ch = (r.channel || '').toLowerCase();
     const isBooking = otaType === 'booking' || ch.includes('booking');
-    const isExpedia = otaType === 'expedia' || ch.includes('expedia');
 
-    // Tasa total de comisiones y deducciones según la OTA
-    // Booking: 33.1% (17.5% comisión base + IVA, 3.1% tarjeta, 12.5% Genius)
+    // Desglose oficial de la factura de comisiones OTA:
+    // Booking: 33.1% (17.5% comisión + IVA, 3.1% tarjeta, 12.5% Genius)
     // Expedia: 15.0% comisión base
-    const defaultRate = isBooking ? 0.331 : 0.15;
+    if (isBooking) {
+      const baseIva = Number((totalBruto * 0.175).toFixed(2));
+      const cardProcessing = Number((totalBruto * 0.031).toFixed(2));
+      const geniusDiscount = Number((totalBruto * 0.125).toFixed(2));
+      const commission = Number((baseIva + cardProcessing + geniusDiscount).toFixed(2));
+      const netRevenue = Number((totalBruto - commission).toFixed(2));
 
-    if (rawDeposit > 0 && rawPrice > rawDeposit) {
-      // Si Beds24 registró un depósito neto específico transferido por la OTA
-      netRevenue = rawDeposit;
-      commission = Number((rawPrice - rawDeposit).toFixed(2));
-    } else if (rawPrice > 0) {
-      commission = Number((rawPrice * defaultRate).toFixed(2));
-      netRevenue = Number((rawPrice - commission).toFixed(2));
-    } else if (rawDeposit > 0) {
-      netRevenue = rawDeposit;
-      totalBruto = Number((rawDeposit / (1 - defaultRate)).toFixed(2));
-      commission = Number((totalBruto - rawDeposit).toFixed(2));
+      return {
+        totalBruto: Math.max(0, totalBruto),
+        commission: Math.max(0, commission),
+        netRevenue: Math.max(0, netRevenue),
+        commissionPct: '33.1',
+        breakdown: {
+          baseIva,
+          cardProcessing,
+          geniusDiscount,
+          totalPct: 33.1
+        }
+      };
+    } else {
+      const baseIva = Number((totalBruto * 0.15).toFixed(2));
+      const commission = baseIva;
+      const netRevenue = Number((totalBruto - commission).toFixed(2));
+
+      return {
+        totalBruto: Math.max(0, totalBruto),
+        commission: Math.max(0, commission),
+        netRevenue: Math.max(0, netRevenue),
+        commissionPct: '15.0',
+        breakdown: {
+          baseIva,
+          cardProcessing: 0,
+          geniusDiscount: 0,
+          totalPct: 15.0
+        }
+      };
     }
-
-    const calculatedPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(1) : (isBooking ? '33.1' : '15.0');
-
-    return {
-      totalBruto: Math.max(0, totalBruto),
-      commission: Math.max(0, commission),
-      netRevenue: Math.max(0, netRevenue),
-      commissionPct: calculatedPct,
-      breakdown: isBooking ? {
-        baseIva: Number((totalBruto * 0.175).toFixed(2)),       // 17.5% (15% Comisión + IVA)
-        cardProcessing: Number((totalBruto * 0.031).toFixed(2)),// 3.1% Procesamiento de Tarjeta
-        geniusDiscount: Number((totalBruto * 0.125).toFixed(2)),// 12.5% Descuento Genius (~10% s/tarifa base)
-        totalPct: 33.1
-      } : {
-        baseIva: Number((totalBruto * 0.15).toFixed(2)),        // 15.0% Comisión Base
-        cardProcessing: 0,
-        geniusDiscount: 0,
-        totalPct: 15.0
-      }
-    };
   };
 
   const otaAnalytics = useMemo(() => {
@@ -2144,13 +2147,13 @@ export default function FinanzasPage() {
                         {/* 1. Base + IVA */}
                         <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">1. Comisión Base + IVA</span>
+                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">1. Comisión + IVA</span>
                             <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">17.5%</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
                             ${Math.round(currentOtaData.totalBaseIva).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">15% comisión neta + 16% IVA</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">15% comisión + IVA = 17.5%</p>
                         </div>
 
                         {/* 2. Tarjeta */}
