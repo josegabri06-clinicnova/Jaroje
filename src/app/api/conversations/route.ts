@@ -692,122 +692,47 @@ export async function POST(req: Request) {
       const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
 
       if (uniqueAdminPhones.length > 0 && WHATSAPP_TOKEN && WHATSAPP_PHONE_ID && guestMsgText) {
-        // Lógica de alerta exclusiva para el primer mensaje de la conversación / sesión:
-        // Se alerta si:
-        // 1. Es el primer mensaje del huésped en la conversación (no hay mensajes de rol guest previos).
-        // 2. La conversación estaba inactiva o resuelta y han pasado más de 30 minutos desde el último mensaje (nueva consulta/sesión).
-        // 3. El huésped solicita explícitamente hablar con el administrador.
-        // Si la conversación está activa en curso (mensajes recientes dentro de los últimos 30 minutos),
-        // se omite la alerta por WhatsApp para no saturar al gerente mientras está chateando activamente con el huésped.
-        let shouldAlertOwner = false;
-        const previousGuestMsgs = existing && Array.isArray(existing.messages)
-          ? existing.messages.filter((m: any) => m.role_guest && m.timestamp)
-          : [];
+        // Lógica de alerta: Notificar SIEMPRE que el cliente responda o escriba
+        // Debounce de 60s por número de huésped para no saturar si escribe 3 mensajes seguidos
+        let shouldAlertOwner = true;
+        const lastAlertKey = `alert_${phone}`;
+        const lastAlertTime = requestCache.get(lastAlertKey) || 0;
+        const nowMs = Date.now();
 
-        if (previousGuestMsgs.length === 0) {
-          shouldAlertOwner = true;
-          console.log(`[Owner Notifier] Alertando al dueño: Primer mensaje del huésped en esta conversación.`);
-        } else {
+        if (nowMs - lastAlertTime < 60000) {
+          shouldAlertOwner = false;
+          console.log(`[Owner Notifier] Omitiendo alerta repetitiva al dueño (ya se alertó hace ${Math.round((nowMs - lastAlertTime)/1000)}s para ${phone})`);
+        } else if (forceHuman && existing && Array.isArray(existing.messages) && existing.messages.length > 0) {
+          // Si el modo humano está activo y el gerente mandó el último mensaje hace menos de 90 segundos, no duplicar alerta
           const lastMsg = existing.messages[existing.messages.length - 1];
-          const lastTimestamp = lastMsg?.timestamp ? new Date(lastMsg.timestamp).getTime() : 0;
-          const diffMs = Date.now() - lastTimestamp;
-          const INACTIVITY_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutos de inactividad
-
-          if (existing.resolved || diffMs > INACTIVITY_THRESHOLD_MS) {
-            shouldAlertOwner = true;
-            console.log(`[Owner Notifier] Alertando al dueño: Conversación reactivada tras ${Math.round(diffMs / 60000)} minutos.`);
-          } else if (guestMsgClean.includes('administrador') || guestMsgClean.includes('administracion') || guestMsgClean.includes('administración')) {
-            shouldAlertOwner = true;
-            console.log(`[Owner Notifier] Alertando al dueño: Huésped solicitó explícitamente hablar con el administrador.`);
-          } else {
-            console.log(`[Owner Notifier] Omitiendo alerta al dueño por WhatsApp: Conversación activa en curso (última actividad hace ${Math.round(diffMs / 1000)}s).`);
+          if (lastMsg && lastMsg.role_manager && lastMsg.timestamp) {
+            const managerDiff = nowMs - new Date(lastMsg.timestamp).getTime();
+            if (managerDiff < 90000) {
+              shouldAlertOwner = false;
+              console.log(`[Owner Notifier] Omitiendo alerta: El gerente está en chat activo en vivo (hace ${Math.round(managerDiff/1000)}s)`);
+            }
           }
         }
 
         if (shouldAlertOwner) {
+          requestCache.set(lastAlertKey, nowMs);
           const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
           const currentConvId = existing ? existing.id : newConvId;
           const chatUrl = `${siteUrl}/bot?chatId=${currentConvId}`;
 
           const alertText = `🌴 *Jaroje Inbox Alert* 🌴\n\n💬 *Nuevo mensaje de:* ${guestNameClean}\n📱 *Teléfono:* +${phone}\n\n📝 *Mensaje:* "${guestMsgText}"\n\n👉 *Responder aquí:* ${chatUrl}`;
-          const templateName = process.env.OWNER_NOTIFY_TEMPLATE || '';
 
           for (const targetPhone of uniqueAdminPhones) {
-            let sendSuccess = false;
-
-            if (templateName) {
-              try {
-                const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    messaging_product: 'whatsapp',
-                    to: targetPhone,
-                    type: 'template',
-                    template: {
-                      name: templateName,
-                      language: { code: 'es_MX' },
-                      components: [
-                        {
-                          type: 'body',
-                          parameters: [
-                            { type: 'text', text: String(guestNameClean).slice(0, 30) },
-                            { type: 'text', text: String(phone) },
-                            { type: 'text', text: String(guestMsgText).slice(0, 150) }
-                          ]
-                        },
-                        {
-                          type: 'button',
-                          sub_type: 'url',
-                          index: '0',
-                          parameters: [
-                            { type: 'text', text: String(currentConvId) }
-                          ]
-                        }
-                      ]
-                    }
-                  }),
-                });
-                if (waRes.ok) {
-                  sendSuccess = true;
-                  console.log(`[Owner Notifier] Alerta enviada con plantilla ${templateName} a +${targetPhone}`);
-                } else {
-                  const errText = await waRes.text();
-                  console.warn(`[Owner Notifier] Falló envío con plantilla a +${targetPhone}, intentando texto libre... Error:`, errText);
-                }
-              } catch (tErr) {
-                console.error("[Owner Notifier] Error intentando enviar plantilla:", tErr);
+            try {
+              const { sendWhatsAppTextMessage } = await import('@/lib/whatsapp');
+              const waRes = await sendWhatsAppTextMessage(targetPhone, alertText);
+              if (waRes.success) {
+                console.log(`[Owner Notifier] ✅ Alerta WhatsApp enviada a +${targetPhone}`);
+              } else {
+                console.warn(`[Owner Notifier] ⚠️ Error enviando alerta a +${targetPhone}:`, waRes.error);
               }
-            }
-
-            if (!sendSuccess) {
-              // Enviar como texto libre
-              try {
-                const waTextRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
-                  method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    messaging_product: 'whatsapp',
-                    to: targetPhone,
-                    type: 'text',
-                    text: { body: alertText },
-                  }),
-                });
-                if (waTextRes.ok) {
-                  console.log(`[Owner Notifier] Alerta enviada como texto libre a +${targetPhone}`);
-                } else {
-                  const textErrText = await waTextRes.text();
-                  console.error(`[Owner Notifier] Falló envío como texto libre a +${targetPhone}. Error:`, textErrText);
-                }
-              } catch (textFetchErr) {
-                console.error(`[Owner Notifier] Error en fetch de texto libre a +${targetPhone}:`, textFetchErr);
-              }
+            } catch (errSend) {
+              console.error(`[Owner Notifier] Excepción enviando alerta a +${targetPhone}:`, errSend);
             }
           }
         }

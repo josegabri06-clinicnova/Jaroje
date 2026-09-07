@@ -55,6 +55,7 @@ export default function AjustesPage() {
   const [savingAutoWA, setSavingAutoWA] = useState(false);
   const [adminNotificationPhone, setAdminNotificationPhone] = useState('');
   const [savingAdminNotificationPhone, setSavingAdminNotificationPhone] = useState(false);
+  const [testingAdminPhone, setTestingAdminPhone] = useState(false);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -445,6 +446,33 @@ export default function AjustesPage() {
       alert(`Error al guardar teléfono de alertas: ${err.message}`);
     } finally {
       setSavingAdminNotificationPhone(false);
+    }
+  };
+
+  const handleTestAdminNotificationPhone = async () => {
+    if (!adminNotificationPhone.trim()) {
+      alert("Por favor ingresa al menos un número de teléfono.");
+      return;
+    }
+    setTestingAdminPhone(true);
+    try {
+      const res = await fetch('/api/whatsapp/test-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: adminNotificationPhone.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage(`✅ ¡Alerta de prueba enviada con éxito! Revisa tu WhatsApp.`);
+        setTimeout(() => setToastMessage(''), 4000);
+      } else {
+        alert(`Error al enviar prueba: ${data.error || 'Fallo desconocido'}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`Error al conectar con el servidor: ${err.message}`);
+    } finally {
+      setTestingAdminPhone(false);
     }
   };
 
@@ -1130,13 +1158,13 @@ export default function AjustesPage() {
                 Número(s) donde el sistema enviará alertas cuando un cliente responda en el <b>Inbox</b> o suba un anticipo en <b>Por Aprobar</b>. Puedes ingresar uno o más números separados por comas con código de país (ej: <code>529581168698, 529511234567</code>).
               </span>
             </div>
-            <div className="flex items-center gap-2 mt-2">
+            <div className="flex items-center gap-2 mt-2 flex-wrap sm:flex-nowrap">
               <input
                 type="text"
                 value={adminNotificationPhone}
                 onChange={(e) => setAdminNotificationPhone(e.target.value)}
                 placeholder="529581168698"
-                className="flex-1 px-3 py-2 text-[13px] bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+                className="flex-1 min-w-[200px] px-3 py-2 text-[13px] bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
               />
               <button
                 type="button"
@@ -1145,6 +1173,24 @@ export default function AjustesPage() {
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
               >
                 {savingAdminNotificationPhone ? 'Guardando...' : 'Guardar'}
+              </button>
+              <button
+                type="button"
+                onClick={handleTestAdminNotificationPhone}
+                disabled={testingAdminPhone || savingAdminNotificationPhone}
+                className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 text-[12px] font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0 flex items-center gap-1.5"
+                title="Envía una alerta de prueba a este número de WhatsApp"
+              >
+                {testingAdminPhone ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-zinc-400 border-t-zinc-800 rounded-full animate-spin" />
+                    <span>Enviando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>📲 Probar Alerta</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
