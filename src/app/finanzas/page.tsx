@@ -294,7 +294,7 @@ export default function FinanzasPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Filtros específicos para la liquidación mensual de comisiones OTAs (Booking / Expedia)
-  const [otaPeriodFilter, setOtaPeriodFilter] = useState<'mes_actual' | 'mes_anterior' | 'este_ano' | 'historico' | 'custom'>('mes_actual');
+  const [otaPeriodFilter, setOtaPeriodFilter] = useState<'historico' | 'futuras' | 'mes_actual' | 'mes_anterior' | 'este_ano' | 'custom'>('historico');
   const [otaStartDate, setOtaStartDate] = useState('');
   const [otaEndDate, setOtaEndDate] = useState('');
   const [otaStatusFilter, setOtaStatusFilter] = useState<'todos' | 'activos' | 'finalizadas' | 'canceladas'>('activos');
@@ -378,17 +378,27 @@ export default function FinanzasPage() {
   const fetchData = async () => {
     setIsLoading(true);
     
-    const [accRes, recRes, resRes] = await Promise.all([
-      supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
-      supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false }),
-      supabase.from('beds24_reservations').select('*').order('check_in', { ascending: false })
-    ]);
-    
-    if (!accRes.error) setAccounts(accRes.data || []);
-    if (!recRes.error) setRecords(recRes.data || []);
-    if (!resRes.error) setReservations(resRes.data || []);
-    
-    setIsLoading(false);
+    try {
+      const [accRes, recRes, apiRes] = await Promise.all([
+        supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
+        supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false }),
+        fetch('/api/reservas?includeCancelled=true').then(r => r.json()).catch(() => null)
+      ]);
+      
+      if (!accRes.error) setAccounts(accRes.data || []);
+      if (!recRes.error) setRecords(recRes.data || []);
+      
+      if (apiRes && Array.isArray(apiRes)) {
+        setReservations(apiRes);
+      } else {
+        const { data: b24Data } = await supabase.from('beds24_reservations').select('*').order('check_in', { ascending: false });
+        if (b24Data) setReservations(b24Data);
+      }
+    } catch (err) {
+      console.error("[Finanzas] Error al cargar datos:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1186,29 +1196,32 @@ export default function FinanzasPage() {
   };
 
   const otaPeriodLabels: Record<string, string> = {
+    historico: 'Histórico Completo',
+    futuras: 'Futuras / Próximas',
     mes_actual: 'Este Mes',
     mes_anterior: 'Mes Anterior',
     este_ano: 'Este Año',
-    historico: 'Histórico Completo',
     custom: 'Rango Personalizado'
   };
 
   const isOtaMatch = (r: any, targetOta: 'booking' | 'expedia') => {
-    const ch = (r.channel || '').toLowerCase();
-    const g = (r.guest_name || '').toLowerCase();
-    const s = String(r.source || r.apiSource || r.referer || (r.raw_data && r.raw_data.source) || '').toLowerCase();
+    const ch = String(r.channel || '').toLowerCase();
+    const g = String(r.guest_name || '').toLowerCase();
+    const s = String(r.source || r.apiSource || r.referer || r.api_source || (r.raw_data && (r.raw_data.source || r.raw_data.channel || r.raw_data.referer)) || '').toLowerCase();
+    const notes = String(r.notes || r.comments || '').toLowerCase();
+
     if (targetOta === 'booking') {
-      return ch.includes('booking') || g.includes('pagado b') || s.includes('booking');
+      return ch.includes('booking') || ch.includes('bdc') || g.includes('booking') || g.includes('pagado b') || s.includes('booking') || notes.includes('booking');
     }
     if (targetOta === 'expedia') {
-      return ch.includes('expedia') || s.includes('expedia');
+      return ch.includes('expedia') || ch.includes('exp') || g.includes('expedia') || s.includes('expedia') || notes.includes('expedia');
     }
     return false;
   };
 
   const getOtaReservationMetrics = (r: any, otaType: 'booking' | 'expedia') => {
-    const rawPrice = Number(r.price || 0);
-    const rawDeposit = Number(r.deposit || 0);
+    const rawPrice = Number(r.price || r.price_estimate || r.total_amount || 0);
+    const rawDeposit = Number(r.deposit || r.actualPaid || r.rawDeposit || 0);
     
     let totalBruto = rawPrice;
     let netRevenue = 0;
@@ -1259,14 +1272,14 @@ export default function FinanzasPage() {
 
   const otaAnalytics = useMemo(() => {
     const today = new Date();
+    const todayStr = format(today, 'yyyy-MM-dd');
     const currentYear = today.getFullYear();
 
-    const now = new Date();
-    const firstDayCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const lastDayCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const firstDayCurrentMonth = format(new Date(today.getFullYear(), today.getMonth(), 1), 'yyyy-MM-dd');
+    const lastDayCurrentMonth = format(new Date(today.getFullYear(), today.getMonth() + 1, 0), 'yyyy-MM-dd');
 
-    const firstDayPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-    const lastDayPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+    const firstDayPrevMonth = format(new Date(today.getFullYear(), today.getMonth() - 1, 1), 'yyyy-MM-dd');
+    const lastDayPrevMonth = format(new Date(today.getFullYear(), today.getMonth(), 0), 'yyyy-MM-dd');
 
     const firstDayYear = `${currentYear}-01-01`;
     const lastDayYear = `${currentYear}-12-31`;
@@ -1275,7 +1288,7 @@ export default function FinanzasPage() {
       const allForOta = reservations.filter(r => isOtaMatch(r, otaKey));
 
       const filtered = allForOta.filter(r => {
-        const dateToCheck = r.check_in || (r.created_at ? r.created_at.split('T')[0] : '');
+        const dateToCheck = r.check_in || r.arrival || (r.created_at ? r.created_at.split('T')[0] : '');
 
         if (otaPeriodFilter === 'mes_actual') {
           if (!dateToCheck || dateToCheck < firstDayCurrentMonth || dateToCheck > lastDayCurrentMonth) return false;
@@ -1283,10 +1296,13 @@ export default function FinanzasPage() {
           if (!dateToCheck || dateToCheck < firstDayPrevMonth || dateToCheck > lastDayPrevMonth) return false;
         } else if (otaPeriodFilter === 'este_ano') {
           if (!dateToCheck || dateToCheck < firstDayYear || dateToCheck > lastDayYear) return false;
+        } else if (otaPeriodFilter === 'futuras') {
+          if (!dateToCheck || dateToCheck < todayStr) return false;
         } else if (otaPeriodFilter === 'custom') {
           if (otaStartDate && dateToCheck < otaStartDate) return false;
           if (otaEndDate && dateToCheck > otaEndDate) return false;
         }
+        // 'historico' no aplica restricciones de fecha
 
         if (otaStatusFilter === 'activos') {
           if (r.status === 'cancelled') return false;
@@ -2194,10 +2210,11 @@ export default function FinanzasPage() {
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex bg-zinc-100 p-1 rounded-xl gap-1 flex-wrap">
                       {[
+                        { id: 'historico', label: 'Todo' },
+                        { id: 'futuras', label: 'Futuras' },
                         { id: 'mes_actual', label: 'Este Mes' },
                         { id: 'mes_anterior', label: 'Mes Anterior' },
                         { id: 'este_ano', label: 'Este Año' },
-                        { id: 'historico', label: 'Todo' },
                         { id: 'custom', label: 'Personalizado' },
                       ].map(f => (
                         <button
