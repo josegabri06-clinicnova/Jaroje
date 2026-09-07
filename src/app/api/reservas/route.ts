@@ -1010,10 +1010,11 @@ export async function PUT(req: Request) {
         targetIds = [String(id)];
       }
 
-      // Si solo viene 1 ID, buscar automáticamente reservas hermanas del grupo en Supabase/Beds24
-      if (targetIds.length === 1) {
-        try {
-          const mainId = targetIds[0];
+      // Buscar exhaustivamente todas las reservas hermanas del grupo en Supabase/Beds24 para cualquier ID recibido
+      try {
+        const expandedIds = new Set<string>(targetIds);
+        for (const mainId of targetIds) {
+          // 1. Buscar en beds24_reservations
           const { data: mainB24 } = await supabase
             .from('beds24_reservations')
             .select('*')
@@ -1021,33 +1022,89 @@ export async function PUT(req: Request) {
             .maybeSingle();
 
           if (mainB24) {
-            const cleanPhone = (mainB24.guest_phone || mainB24.phone || '').trim();
-            const { data: siblings } = await supabase
-              .from('beds24_reservations')
-              .select('id, guest_phone, phone, guest_name')
-              .eq('check_in', mainB24.check_in)
-              .eq('check_out', mainB24.check_out)
-              .neq('id', mainId);
+            const cleanPhone = normalizePhone(mainB24.guest_phone || '');
+            const cleanName = (mainB24.guest_name || '').toLowerCase().trim();
+            const masterIdStr = mainB24.master_id ? String(mainB24.master_id) : null;
 
-            if (siblings && siblings.length > 0) {
-              const matchedSiblings = siblings.filter((s: any) => {
-                const sPhone = (s.guest_phone || s.phone || '').trim();
-                const samePhone = cleanPhone && sPhone && cleanPhone.length >= 7 && (cleanPhone === sPhone || cleanPhone.endsWith(sPhone) || sPhone.endsWith(cleanPhone));
-                const sName = (s.guest_name || '').toLowerCase().trim();
-                const mName = (mainB24.guest_name || '').toLowerCase().trim();
-                const sameName = sName && mName && (sName === mName || sName.includes(mName) || mName.includes(sName));
-                return samePhone || sameName;
-              });
-              matchedSiblings.forEach((s: any) => {
-                if (!targetIds.includes(String(s.id))) {
-                  targetIds.push(String(s.id));
-                }
-              });
+            // a) Buscar por master_id si existe
+            if (masterIdStr) {
+              const { data: masterSiblings } = await supabase
+                .from('beds24_reservations')
+                .select('id')
+                .or(`master_id.eq.${masterIdStr},id.eq.${masterIdStr}`);
+              if (masterSiblings) {
+                masterSiblings.forEach((s: any) => expandedIds.add(String(s.id)));
+              }
+            }
+
+            // b) Buscar donde esta reserva sea el master_id
+            const { data: subSiblings } = await supabase
+              .from('beds24_reservations')
+              .select('id')
+              .eq('master_id', mainId);
+            if (subSiblings) {
+              subSiblings.forEach((s: any) => expandedIds.add(String(s.id)));
+            }
+
+            // c) Buscar por fechas idénticas y coincidencia de teléfono o nombre
+            if (mainB24.check_in && mainB24.check_out) {
+              const { data: siblings } = await supabase
+                .from('beds24_reservations')
+                .select('id, guest_phone, guest_name')
+                .eq('check_in', mainB24.check_in)
+                .eq('check_out', mainB24.check_out)
+                .neq('id', mainId);
+
+              if (siblings && siblings.length > 0) {
+                siblings.forEach((s: any) => {
+                  const sPhone = normalizePhone(s.guest_phone || '');
+                  const samePhone = cleanPhone && sPhone && cleanPhone.length >= 7 && (cleanPhone === sPhone || cleanPhone.endsWith(sPhone) || sPhone.endsWith(cleanPhone));
+                  const sName = (s.guest_name || '').toLowerCase().trim();
+                  const sameName = sName && cleanName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
+                  if (samePhone || sameName) {
+                    expandedIds.add(String(s.id));
+                  }
+                });
+              }
             }
           }
-        } catch (groupSearchErr) {
-          console.error("[Reservas PUT Reactivate] Error buscando hermanos de grupo:", groupSearchErr);
+
+          // 2. Buscar también en local_reservas por si hay habitaciones locales vinculadas
+          const { data: mainLocal } = await supabase
+            .from('local_reservas')
+            .select('*')
+            .eq('id', mainId)
+            .maybeSingle();
+
+          if (mainLocal) {
+            const cleanPhone = normalizePhone(mainLocal.phone || '');
+            const cleanName = (mainLocal.guest_name || '').toLowerCase().trim();
+
+            if (mainLocal.check_in && mainLocal.check_out) {
+              const { data: localSiblings } = await supabase
+                .from('local_reservas')
+                .select('id, phone, guest_name')
+                .eq('check_in', mainLocal.check_in)
+                .eq('check_out', mainLocal.check_out)
+                .neq('id', mainId);
+
+              if (localSiblings && localSiblings.length > 0) {
+                localSiblings.forEach((s: any) => {
+                  const sPhone = normalizePhone(s.phone || '');
+                  const samePhone = cleanPhone && sPhone && cleanPhone.length >= 7 && (cleanPhone === sPhone || cleanPhone.endsWith(sPhone) || sPhone.endsWith(cleanPhone));
+                  const sName = (s.guest_name || '').toLowerCase().trim();
+                  const sameName = sName && cleanName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
+                  if (samePhone || sameName) {
+                    expandedIds.add(String(s.id));
+                  }
+                });
+              }
+            }
+          }
         }
+        targetIds = Array.from(expandedIds);
+      } catch (groupSearchErr) {
+        console.error("[Reservas PUT Reactivate] Error buscando hermanos de grupo:", groupSearchErr);
       }
 
       // Separar entre locales y Beds24
@@ -1115,7 +1172,7 @@ export async function PUT(req: Request) {
           clearBeds24Cache();
 
           for (const bId of beds24Ids) {
-            const b24ResFull = await fetch(`https://api.beds24.com/v2/bookings?id=${bId}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
+            const b24ResFull = await fetch(`https://api.beds24.com/v2/bookings?id=${bId}&arrivalFrom=2024-01-01&arrivalTo=2035-12-31&includeInvoiceItems=true&includeCancelled=true`, {
               headers: { 'token': BEDS24_TOKEN }
             });
             if (b24ResFull.ok) {

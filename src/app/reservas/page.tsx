@@ -1844,7 +1844,7 @@ function ReservasListInner() {
     }
   };
 
-  // --- Grupo de reservas para anticipo grupal ---
+  // --- Grupo de reservas para anticipo grupal y acciones consolidadas ---
   const siblingBookings = useMemo(() => {
     if (!selectedRes) return [];
     if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
@@ -1852,15 +1852,28 @@ function ReservasListInner() {
     }
     const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
     const mainName = cleanStr(selectedRes.guest_name || '');
-    const mainPhone = String(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '').trim();
+    const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
+    const mainDigits = cleanDigits(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '');
+    const selMasterId = selectedRes.master_id ? String(selectedRes.master_id) : (selectedRes.masterId ? String(selectedRes.masterId) : null);
+    const selId = String(selectedRes.id);
+
     return reservas.filter(r => {
-      if (String(r.id) === String(selectedRes.id)) return false;
-      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
-      if (r.status === 'cancelled' || r.status === '0') return false;
+      const rId = String(r.id);
+      if (rId === selId) return false;
       
-      const rPhone = String(r.guest_phone || r.phone || r.mobile || '').trim();
-      const samePhone = mainPhone && rPhone && rPhone === mainPhone && mainPhone.length >= 6;
-      return samePhone;
+      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
+      const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
+                         (selMasterId && selMasterId === rId) ||
+                         (rMasterId && rMasterId === selId);
+      if (sameMaster) return true;
+
+      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
+      
+      const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
+      const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
+      const rName = cleanStr(r.guest_name || '');
+      const sameName = mainName && rName && (rName === mainName || rName.includes(mainName) || mainName.includes(rName));
+      return samePhone || sameName;
     });
   }, [selectedRes, reservas]);
 
@@ -2721,15 +2734,59 @@ function ReservasListInner() {
       return;
     }
 
-    const confirmReactivate = window.confirm(`¿Estás seguro de que deseas reactivar la reservación de ${selectedRes.guest_name}? Esto volverá a activar la reserva en Beds24 y restaurará su estado.`);
+    // Recolectar todos los IDs del grupo exhaustivamente
+    const memberIdSet = new Set<string>();
+    if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0) {
+      selectedRes.group_members.forEach((m: any) => memberIdSet.add(String(m.id)));
+    }
+    if (groupBookings && groupBookings.length > 0) {
+      groupBookings.forEach((m: any) => memberIdSet.add(String(m.id)));
+    }
+    memberIdSet.add(String(selectedRes.id));
+
+    // Buscar también en la lista completa de reservas por si hay hermanas adicionales
+    const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const mainName = cleanStr(selectedRes.guest_name || '');
+    const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
+    const mainDigits = cleanDigits(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '');
+    const selMasterId = selectedRes.master_id ? String(selectedRes.master_id) : (selectedRes.masterId ? String(selectedRes.masterId) : null);
+    const selId = String(selectedRes.id);
+
+    reservas.forEach((r: any) => {
+      const rId = String(r.id);
+      if (memberIdSet.has(rId)) return;
+      
+      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
+      const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
+                         (selMasterId && selMasterId === rId) ||
+                         (rMasterId && rMasterId === selId);
+      if (sameMaster) {
+        memberIdSet.add(rId);
+        return;
+      }
+
+      if (r.check_in === selectedRes.check_in && r.check_out === selectedRes.check_out) {
+        const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
+        const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
+        const rName = cleanStr(r.guest_name || '');
+        const sameName = mainName && rName && (rName === mainName || rName.includes(mainName) || mainName.includes(rName));
+        if (samePhone || sameName) {
+          memberIdSet.add(rId);
+        }
+      }
+    });
+
+    const memberIds = Array.from(memberIdSet);
+    const isMultiRoom = memberIds.length > 1;
+    const confirmReactivate = window.confirm(
+      isMultiRoom
+        ? `¿Estás seguro de que deseas reactivar las ${memberIds.length} reservaciones/habitaciones del grupo de ${selectedRes.guest_name}? Esto volverá a activar todas las reservas en Beds24 y restaurará su estado activo.`
+        : `¿Estás seguro de que deseas reactivar la reservación de ${selectedRes.guest_name}? Esto volverá a activar la reserva en Beds24 y restaurará su estado.`
+    );
     if (!confirmReactivate) return;
 
     setReactivateLoading(true);
     try {
-      const memberIds = (selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0)
-        ? selectedRes.group_members.map((m: any) => m.id)
-        : [selectedRes.id];
-
       const res = await fetch(`/api/reservas`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -2757,9 +2814,10 @@ function ReservasListInner() {
             action: 'reserva_reactivada',
             room: selectedRes.room_name || selectedRes.room || 'General',
             details: JSON.stringify({
-              text: `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Reactivó la reserva cancelada.`,
+              text: `${selectedRes.guest_name} (ID: ${selectedRes.id}) - Reactivó la reserva cancelada (${memberIds.length} condominios).`,
               bookingId: selectedRes.id,
-              guestName: selectedRes.guest_name
+              guestName: selectedRes.guest_name,
+              memberIds: memberIds
             })
           })
         });
@@ -2767,7 +2825,7 @@ function ReservasListInner() {
         console.error("Error registrando log de reactivación:", logErr);
       }
 
-      alert('✅ Reserva reactivada con éxito.');
+      alert(`✅ Se reactivaron con éxito ${memberIds.length} condominio(s) de la reserva.`);
 
       // Forzar la recarga local de los datos para reflejar los cambios
       setSelectedRes(null);
@@ -2777,7 +2835,8 @@ function ReservasListInner() {
         window.location.search = params.toString();
       }
     } catch (err: any) {
-      alert(`⚠️ Error reactivando la reserva: ${err.message}`);
+      console.error("Error al reactivar:", err);
+      alert(`❌ Error al reactivar la reserva: ${err.message || 'Error desconocido'}`);
     } finally {
       setReactivateLoading(false);
     }
@@ -3027,16 +3086,29 @@ function ReservasListInner() {
 
       const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
       const mainName = cleanStr(r.guest_name);
-      const mainPhone = String(r.guest_phone || r.phone || r.mobile || '').trim();
+      const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
+      const mainDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
+      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
+      const rId = String(r.id);
 
       const siblings = reservationsList.filter(o => {
-        if (String(o.id) === String(r.id)) return false;
-        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
+        const oId = String(o.id);
+        if (oId === rId) return false;
         if (o.status !== r.status) return false;
         
-        const oPhone = String(o.guest_phone || o.phone || o.mobile || '').trim();
-        const samePhone = mainPhone && oPhone && oPhone === mainPhone && mainPhone.length >= 6;
-        return samePhone;
+        const oMasterId = o.master_id ? String(o.master_id) : (o.masterId ? String(o.masterId) : null);
+        const sameMaster = (rMasterId && oMasterId && rMasterId === oMasterId) ||
+                           (rMasterId && rMasterId === oId) ||
+                           (oMasterId && oMasterId === rId);
+        if (sameMaster) return true;
+
+        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
+        
+        const oDigits = cleanDigits(o.guest_phone || o.phone || o.mobile || '');
+        const samePhone = mainDigits && oDigits && mainDigits.length >= 7 && (mainDigits === oDigits || mainDigits.endsWith(oDigits) || oDigits.endsWith(mainDigits));
+        const oName = cleanStr(o.guest_name);
+        const sameName = mainName && oName && (mainName === oName || mainName.includes(oName) || oName.includes(mainName));
+        return samePhone || sameName;
       });
 
       if (siblings.length > 0) {
