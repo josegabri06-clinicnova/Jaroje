@@ -382,17 +382,33 @@ export default function FinanzasPage() {
       const [accRes, recRes, apiRes] = await Promise.all([
         supabase.from('accounts').select('*').order('sort_index', { ascending: true }).order('name', { ascending: true }),
         supabase.from('finances').select('*, accounts(name)').order('date', { ascending: false }).order('created_at', { ascending: false }),
-        fetch('/api/reservas?includeCancelled=true').then(r => r.json()).catch(() => null)
+        fetch('/api/reservas?includeCancelled=true&t=' + Date.now()).then(r => r.json()).catch(err => {
+          console.error("Error fetching /api/reservas in Finanzas:", err);
+          return null;
+        })
       ]);
       
       if (!accRes.error) setAccounts(accRes.data || []);
       if (!recRes.error) setRecords(recRes.data || []);
       
-      if (apiRes && Array.isArray(apiRes)) {
-        setReservations(apiRes);
+      let rawList: any[] = [];
+      if (apiRes) {
+        if (Array.isArray(apiRes)) {
+          rawList = apiRes;
+        } else if (apiRes.data && Array.isArray(apiRes.data)) {
+          rawList = apiRes.data;
+        } else if (apiRes.bookings && Array.isArray(apiRes.bookings)) {
+          rawList = apiRes.bookings;
+        }
+      }
+
+      if (rawList.length > 0) {
+        setReservations(rawList);
       } else {
         const { data: b24Data } = await supabase.from('beds24_reservations').select('*').order('check_in', { ascending: false });
-        if (b24Data) setReservations(b24Data);
+        if (b24Data && b24Data.length > 0) {
+          setReservations(b24Data);
+        }
       }
     } catch (err) {
       console.error("[Finanzas] Error al cargar datos:", err);
