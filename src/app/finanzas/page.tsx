@@ -1211,36 +1211,49 @@ export default function FinanzasPage() {
     const rawDeposit = Number(r.deposit || 0);
     
     let totalBruto = rawPrice;
-    let netRevenue = rawDeposit;
+    let netRevenue = 0;
     let commission = 0;
 
     const ch = (r.channel || '').toLowerCase();
     const isBooking = otaType === 'booking' || ch.includes('booking');
     const isExpedia = otaType === 'expedia' || ch.includes('expedia');
 
+    // Tasa total de comisiones y deducciones según la OTA
+    // Booking: 33.1% (17.5% comisión base + IVA, 3.1% tarjeta, 12.5% Genius)
+    // Expedia: 15.0% comisión base
+    const defaultRate = isBooking ? 0.331 : 0.15;
+
     if (rawDeposit > 0 && rawPrice > rawDeposit) {
+      // Si Beds24 registró un depósito neto específico transferido por la OTA
       netRevenue = rawDeposit;
       commission = Number((rawPrice - rawDeposit).toFixed(2));
     } else if (rawPrice > 0) {
-      const roomRate = Number((rawPrice / 1.16).toFixed(2));
-      if (isBooking) {
-        commission = Number((roomRate * 0.3060).toFixed(2));
-        netRevenue = Number((rawPrice - commission).toFixed(2));
-      } else {
-        commission = Number((rawPrice * 0.15).toFixed(2));
-        netRevenue = Number((rawPrice - commission).toFixed(2));
-      }
+      commission = Number((rawPrice * defaultRate).toFixed(2));
+      netRevenue = Number((rawPrice - commission).toFixed(2));
     } else if (rawDeposit > 0) {
       netRevenue = rawDeposit;
-      totalBruto = Number((rawDeposit / 0.85).toFixed(2));
+      totalBruto = Number((rawDeposit / (1 - defaultRate)).toFixed(2));
       commission = Number((totalBruto - rawDeposit).toFixed(2));
     }
+
+    const calculatedPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(1) : (isBooking ? '33.1' : '15.0');
 
     return {
       totalBruto: Math.max(0, totalBruto),
       commission: Math.max(0, commission),
       netRevenue: Math.max(0, netRevenue),
-      commissionPct: totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(1) : '15.0'
+      commissionPct: calculatedPct,
+      breakdown: isBooking ? {
+        baseIva: Number((totalBruto * 0.175).toFixed(2)),       // 17.5% (15% Comisión + IVA)
+        cardProcessing: Number((totalBruto * 0.031).toFixed(2)),// 3.1% Procesamiento de Tarjeta
+        geniusDiscount: Number((totalBruto * 0.125).toFixed(2)),// 12.5% Descuento Genius (~10% s/tarifa base)
+        totalPct: 33.1
+      } : {
+        baseIva: Number((totalBruto * 0.15).toFixed(2)),        // 15.0% Comisión Base
+        cardProcessing: 0,
+        geniusDiscount: 0,
+        totalPct: 15.0
+      }
     };
   };
 
@@ -1300,12 +1313,18 @@ export default function FinanzasPage() {
       let totalComision = 0;
       let totalNeto = 0;
       let totalNoches = 0;
+      let totalBaseIva = 0;
+      let totalCardProcessing = 0;
+      let totalGeniusDiscount = 0;
 
       const itemsWithMetrics = filtered.map(r => {
         const metrics = getOtaReservationMetrics(r, otaKey);
         totalBruto += metrics.totalBruto;
         totalComision += metrics.commission;
         totalNeto += metrics.netRevenue;
+        totalBaseIva += metrics.breakdown.baseIva;
+        totalCardProcessing += metrics.breakdown.cardProcessing;
+        totalGeniusDiscount += metrics.breakdown.geniusDiscount;
 
         let noches = 1;
         if (r.check_in && r.check_out) {
@@ -1322,7 +1341,7 @@ export default function FinanzasPage() {
         };
       });
 
-      const avgCommissionPct = totalBruto > 0 ? ((totalComision / totalBruto) * 100).toFixed(1) : '0.0';
+      const avgCommissionPct = totalBruto > 0 ? ((totalComision / totalBruto) * 100).toFixed(1) : (otaKey === 'booking' ? '33.1' : '15.0');
 
       return {
         allCount: allForOta.length,
@@ -1331,6 +1350,9 @@ export default function FinanzasPage() {
         totalComision,
         totalNeto,
         totalNoches,
+        totalBaseIva,
+        totalCardProcessing,
+        totalGeniusDiscount,
         avgCommissionPct,
         items: itemsWithMetrics
       };
@@ -1351,23 +1373,55 @@ export default function FinanzasPage() {
       return;
     }
 
-    const headers = ["ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", "Total Bruto (MXN)", "Comision OTA (MXN)", "% Comision", "Neto Hotel (MXN)", "Estado", "Telefono"];
+    const isBooking = otaName.toLowerCase().includes('booking');
+    const headers = isBooking
+      ? [
+          "ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", 
+          "Total Bruto (MXN)", "Comision Base + IVA 17.5% (MXN)", "Procesamiento Tarjeta 3.1% (MXN)", "Desc Genius 12.5% (MXN)", 
+          "Total Comision OTA (MXN)", "% Comision", "Neto Hotel (MXN)", "Estado", "Telefono"
+        ]
+      : [
+          "ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", 
+          "Total Bruto (MXN)", "Comision OTA 15% (MXN)", "% Comision", "Neto Hotel (MXN)", "Estado", "Telefono"
+        ];
     
-    const rows = items.map(item => [
-      item.id,
-      `"${(item.guest_name || '').replace(/"/g, '""')}"`,
-      item.channel || otaName,
-      `"${(item.room_name || '').replace(/"/g, '""')}"`,
-      item.check_in || '',
-      item.check_out || '',
-      item.noches || 1,
-      item.metrics?.totalBruto?.toFixed(2) || '0.00',
-      item.metrics?.commission?.toFixed(2) || '0.00',
-      `${item.metrics?.commissionPct || '0'}%`,
-      item.metrics?.netRevenue?.toFixed(2) || '0.00',
-      item.status || '',
-      `"${(item.guest_phone || '').replace(/"/g, '""')}"`
-    ]);
+    const rows = items.map(item => {
+      if (isBooking) {
+        return [
+          item.id,
+          `"${(item.guest_name || '').replace(/"/g, '""')}"`,
+          item.channel || otaName,
+          `"${(item.room_name || '').replace(/"/g, '""')}"`,
+          item.check_in || '',
+          item.check_out || '',
+          item.noches || 1,
+          item.metrics?.totalBruto?.toFixed(2) || '0.00',
+          item.metrics?.breakdown?.baseIva?.toFixed(2) || '0.00',
+          item.metrics?.breakdown?.cardProcessing?.toFixed(2) || '0.00',
+          item.metrics?.breakdown?.geniusDiscount?.toFixed(2) || '0.00',
+          item.metrics?.commission?.toFixed(2) || '0.00',
+          `${item.metrics?.commissionPct || '33.1'}%`,
+          item.metrics?.netRevenue?.toFixed(2) || '0.00',
+          item.status || '',
+          `"${(item.guest_phone || '').replace(/"/g, '""')}"`
+        ];
+      }
+      return [
+        item.id,
+        `"${(item.guest_name || '').replace(/"/g, '""')}"`,
+        item.channel || otaName,
+        `"${(item.room_name || '').replace(/"/g, '""')}"`,
+        item.check_in || '',
+        item.check_out || '',
+        item.noches || 1,
+        item.metrics?.totalBruto?.toFixed(2) || '0.00',
+        item.metrics?.commission?.toFixed(2) || '0.00',
+        `${item.metrics?.commissionPct || '15.0'}%`,
+        item.metrics?.netRevenue?.toFixed(2) || '0.00',
+        item.status || '',
+        `"${(item.guest_phone || '').replace(/"/g, '""')}"`
+      ];
+    });
 
     const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -2015,6 +2069,125 @@ export default function FinanzasPage() {
                   </div>
                 </div>
 
+                {/* DESGLOSE FACTURACIÓN OTA (CONCILIACIÓN FIN DE MES) */}
+                <div className={`p-4 sm:p-5 rounded-2xl border shadow-sm ${
+                  selectedOta === 'booking'
+                    ? 'bg-gradient-to-br from-blue-50/70 via-white to-blue-50/40 border-blue-200/80'
+                    : 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/40 border-amber-200/80'
+                }`}>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-200/70 pb-3 mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white ${
+                        selectedOta === 'booking' ? 'bg-[#003580]' : 'bg-[#FFCC00] text-zinc-900 border border-amber-400'
+                      }`}>
+                        <Receipt size={18} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-zinc-900 text-sm">
+                          Conciliación de Factura Mensual • {otaTitle}
+                        </h4>
+                        <p className="text-[11px] text-zinc-500 font-medium">
+                          Monto total exigible por la plataforma al cierre del periodo seleccionado
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-zinc-500">Total a Liquidar:</span>
+                      <span className="text-lg sm:text-xl font-black text-rose-600">
+                        ${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} <span className="text-xs font-bold text-rose-400">MXN</span>
+                      </span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase ${
+                        selectedOta === 'booking' ? 'bg-blue-100/70 text-blue-800 border-blue-300' : 'bg-amber-100/70 text-amber-800 border-amber-300'
+                      }`}>
+                        {currentOtaData.avgCommissionPct}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Desglose de componentes de la comisión */}
+                  {selectedOta === 'booking' ? (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {/* 1. Base + IVA */}
+                        <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">1. Comisión Base + IVA</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">17.5%</span>
+                          </div>
+                          <p className="text-base font-black text-zinc-900">
+                            ${Math.round(currentOtaData.totalBaseIva).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-medium">15% comisión neta + 16% IVA</p>
+                        </div>
+
+                        {/* 2. Tarjeta */}
+                        <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">2. Pago con Tarjeta</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">3.1%</span>
+                          </div>
+                          <p className="text-base font-black text-zinc-900">
+                            ${Math.round(currentOtaData.totalCardProcessing).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-medium">Procesamiento pagos Booking</p>
+                        </div>
+
+                        {/* 3. Descuento Genius */}
+                        <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">3. Descuento Genius</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">12.5%</span>
+                          </div>
+                          <p className="text-base font-black text-zinc-900">
+                            ${Math.round(currentOtaData.totalGeniusDiscount).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-medium">10% sobre tarifa original</p>
+                        </div>
+                      </div>
+
+                      {/* Margen Protegido beds24 banner */}
+                      <div className="bg-blue-900/5 border border-blue-900/10 rounded-xl p-2.5 flex items-center justify-between text-xs gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🛡️</span>
+                          <span className="text-zinc-700 font-medium">
+                            <strong>Margen Protegido en Beds24:</strong> El multiplicador de tarifa del <strong>+35%</strong> cubre íntegramente la deducción total del <strong>33.1%</strong> (17.5% + 3.1% + 12.5%).
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-black px-2 py-1 bg-white text-blue-900 rounded-lg border border-blue-200 shrink-0">
+                          Multiplicador 35% Activo
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">1. Comisión Base Expedia</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">15.0%</span>
+                          </div>
+                          <p className="text-base font-black text-zinc-900">
+                            ${Math.round(currentOtaData.totalBaseIva).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-medium">Comisión directa por reservación</p>
+                        </div>
+
+                        <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">2. Cargos Adicionales</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-600 border border-zinc-200">0.0%</span>
+                          </div>
+                          <p className="text-base font-black text-zinc-900">
+                            $0 <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                          </p>
+                          <p className="text-[10px] text-zinc-400 font-medium">Cobro directo por Expedia Partner Central</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* BARRA DE HERRAMIENTAS Y FILTROS */}
                 <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm space-y-3">
                   {/* Selector de periodo rápido */}
@@ -2195,6 +2368,24 @@ export default function FinanzasPage() {
                                 </span>
                               </div>
                             </div>
+
+                            {/* Sub-desglose detallado de la factura */}
+                            {selectedOta === 'booking' && r.metrics.breakdown && (
+                              <div className="mt-2.5 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] text-zinc-500 flex-wrap gap-1.5">
+                                <span className="font-bold text-zinc-400">Desglose Factura Booking:</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
+                                    17.5% Base+IVA: ${Math.round(r.metrics.breakdown.baseIva).toLocaleString('es-MX')}
+                                  </span>
+                                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
+                                    3.1% Tarjeta: ${Math.round(r.metrics.breakdown.cardProcessing).toLocaleString('es-MX')}
+                                  </span>
+                                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
+                                    12.5% Genius: ${Math.round(r.metrics.breakdown.geniusDiscount).toLocaleString('es-MX')}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
