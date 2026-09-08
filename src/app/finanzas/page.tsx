@@ -1248,12 +1248,14 @@ export default function FinanzasPage() {
 
     // Desglose oficial de la factura de comisiones OTA:
     // Booking.com:
-    // 1. Comisión Base de Booking: 18% sobre la tarifa base de la habitación (sin impuestos)
-    // 2. Cargo por procesamiento de tarjeta (Payment Charge): 3.1% sobre el cobro total procesado
+    // 1. Tarifa Base Habitación (sin impuestos): Monto neto gravable antes de IVA (16%) e ISH (3%) [Total / 1.19 en MX]
+    // 2. Comisión Base de Booking: 18% sobre la tarifa base de la habitación
+    // 3. Cargo por procesamiento de tarjeta (Payment Charge): 3.1% sobre el cobro total procesado
     // Total Factura Booking: ~18.23% del total pagado por el huésped
-    // (El descuento Genius 10% ya está aplicado en la tarifa vendida y no se paga como comisión en factura)
+    // NETO REAL DEL HOTEL = Tarifa Base Sin Impuestos - Comisiones OTA
     if (isBooking) {
       let roomBase = 0;
+      let totalTaxes = 0;
       if (r.invoice_items && Array.isArray(r.invoice_items) && r.invoice_items.length > 0) {
         const roomItems = r.invoice_items.filter((item: any) => {
           const type = (item.type || '').toLowerCase();
@@ -1263,11 +1265,23 @@ export default function FinanzasPage() {
         if (roomItems.length > 0) {
           roomBase = roomItems.reduce((acc: number, it: any) => acc + (Number(it.lineTotal !== undefined ? it.lineTotal : (it.amount || 0))), 0);
         }
+
+        const taxItems = r.invoice_items.filter((item: any) => {
+          const type = (item.type || '').toLowerCase();
+          const desc = (item.description || '').toLowerCase();
+          return type === 'charge' && (desc.includes('iva') || desc.includes('impuesto') || desc.includes('tax'));
+        });
+        if (taxItems.length > 0) {
+          totalTaxes = taxItems.reduce((acc: number, it: any) => acc + (Number(it.lineTotal !== undefined ? it.lineTotal : (it.amount || 0))), 0);
+        }
       }
       
       // Si no hay desglose en invoice_items, en México la tarifa base antes de IVA (16%) e ISH (3%) es Total Bruto / 1.19
       if (roomBase <= 0 && totalBruto > 0) {
         roomBase = Number((totalBruto / 1.19).toFixed(2));
+      }
+      if (totalTaxes <= 0 && totalBruto > 0) {
+        totalTaxes = Number((totalBruto - roomBase).toFixed(2));
       }
 
       // 1. Comisión base Booking: 18% sobre la tarifa base de la habitación
@@ -1279,7 +1293,7 @@ export default function FinanzasPage() {
       // 3. Comisión total a liquidar a Booking en la factura mensual
       let commission = Number((bookingBaseCommission + cardProcessing).toFixed(2));
 
-      // Priorizar el campo 'commission' directo de Beds24 si viene disponible (ej. 553.62)
+      // Priorizar el campo 'commission' directo de Beds24 si viene disponible (ej. 1328.68)
       const metaComm = (r.invoice_items || []).find((it: any) => it.metaType === 'beds24_commission_info');
       const rawComm = Number(r.commission || r.rawCommission || metaComm?.commission || 0);
       if (rawComm > 0) {
@@ -1289,12 +1303,15 @@ export default function FinanzasPage() {
         }
       }
 
-      const netRevenue = Number((totalBruto - commission).toFixed(2));
+      // NETO HOTEL REAL = Monto total base sin impuestos - comisiones
+      // (El 19% de IVA e ISH son impuestos que no le corresponden al hotel)
+      const netRevenue = Number((roomBase - commission).toFixed(2));
       const commissionPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(2) : '18.23';
 
       return {
         totalBruto: Math.max(0, totalBruto),
         roomBase: Math.max(0, roomBase),
+        totalTaxes: Math.max(0, totalTaxes),
         commission: Math.max(0, commission),
         netRevenue: Math.max(0, netRevenue),
         commissionPct,
@@ -1302,26 +1319,56 @@ export default function FinanzasPage() {
           bookingBaseCommission,
           cardProcessing,
           roomBase,
+          totalTaxes,
           totalPct: Number(commissionPct)
         }
       };
     } else {
       // Expedia: 15% flat de comisión
+      let roomBase = 0;
+      let totalTaxes = 0;
+      if (r.invoice_items && Array.isArray(r.invoice_items) && r.invoice_items.length > 0) {
+        const roomItems = r.invoice_items.filter((item: any) => {
+          const type = (item.type || '').toLowerCase();
+          const desc = (item.description || '').toLowerCase();
+          return type === 'charge' && !desc.includes('iva') && !desc.includes('impuesto') && !desc.includes('tax') && !desc.includes('cancel') && item.metaType !== 'beds24_commission_info';
+        });
+        if (roomItems.length > 0) {
+          roomBase = roomItems.reduce((acc: number, it: any) => acc + (Number(it.lineTotal !== undefined ? it.lineTotal : (it.amount || 0))), 0);
+        }
+        const taxItems = r.invoice_items.filter((item: any) => {
+          const type = (item.type || '').toLowerCase();
+          const desc = (item.description || '').toLowerCase();
+          return type === 'charge' && (desc.includes('iva') || desc.includes('impuesto') || desc.includes('tax'));
+        });
+        if (taxItems.length > 0) {
+          totalTaxes = taxItems.reduce((acc: number, it: any) => acc + (Number(it.lineTotal !== undefined ? it.lineTotal : (it.amount || 0))), 0);
+        }
+      }
+      if (roomBase <= 0 && totalBruto > 0) {
+        roomBase = Number((totalBruto / 1.19).toFixed(2));
+      }
+      if (totalTaxes <= 0 && totalBruto > 0) {
+        totalTaxes = Number((totalBruto - roomBase).toFixed(2));
+      }
+
       const rawComm = Number(r.commission || r.rawCommission || 0);
       const commission = rawComm > 0 ? Number(rawComm.toFixed(2)) : Number((totalBruto * 0.15).toFixed(2));
-      const netRevenue = Number((totalBruto - commission).toFixed(2));
+      const netRevenue = Number((roomBase - commission).toFixed(2));
       const commissionPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(2) : '15.00';
 
       return {
         totalBruto: Math.max(0, totalBruto),
-        roomBase: Math.max(0, totalBruto),
+        roomBase: Math.max(0, roomBase),
+        totalTaxes: Math.max(0, totalTaxes),
         commission: Math.max(0, commission),
         netRevenue: Math.max(0, netRevenue),
         commissionPct,
         breakdown: {
           bookingBaseCommission: commission,
           cardProcessing: 0,
-          roomBase: totalBruto,
+          roomBase,
+          totalTaxes,
           totalPct: Number(commissionPct)
         }
       };
@@ -1389,6 +1436,7 @@ export default function FinanzasPage() {
       let totalBookingBaseCommission = 0;
       let totalCardProcessing = 0;
       let totalRoomBase = 0;
+      let totalTaxes = 0;
 
       const itemsWithMetrics = filtered.map(r => {
         const metrics = getOtaReservationMetrics(r, otaKey);
@@ -1398,6 +1446,7 @@ export default function FinanzasPage() {
         totalBookingBaseCommission += metrics.breakdown.bookingBaseCommission;
         totalCardProcessing += metrics.breakdown.cardProcessing;
         totalRoomBase += metrics.breakdown.roomBase;
+        totalTaxes += metrics.totalTaxes;
 
         let noches = 1;
         if (r.check_in && r.check_out) {
@@ -1426,6 +1475,7 @@ export default function FinanzasPage() {
         totalBookingBaseCommission,
         totalCardProcessing,
         totalRoomBase,
+        totalTaxes,
         avgCommissionPct,
         items: itemsWithMetrics
       };
@@ -1450,12 +1500,14 @@ export default function FinanzasPage() {
     const headers = isBooking
       ? [
           "ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", 
-          "Total Bruto (MXN)", "Tarifa Base Habitación (MXN)", "Comisión Booking 18% Base (MXN)", "Procesamiento Tarjeta 3.1% (MXN)", 
-          "Total Comisión Factura Booking (MXN)", "% Comisión Efectivo", "Neto Hotel (MXN)", "Estado", "Telefono"
+          "Total Bruto (MXN)", "Tarifa Base Habitación (MXN)", "Impuestos 19% IVA+ISH (MXN)", 
+          "Comisión Booking 18% Base (MXN)", "Procesamiento Tarjeta 3.1% (MXN)", 
+          "Total Comisión Factura Booking (MXN)", "% Comisión Efectivo", "Neto Hotel Real (MXN)", "Estado", "Telefono"
         ]
       : [
           "ID Reserva", "Huesped", "Canal", "Habitacion", "Check-in", "Check-out", "Noches", 
-          "Total Bruto (MXN)", "Comisión OTA 15% (MXN)", "% Comisión", "Neto Hotel (MXN)", "Estado", "Telefono"
+          "Total Bruto (MXN)", "Tarifa Base Habitación (MXN)", "Impuestos (MXN)", 
+          "Comisión OTA 15% (MXN)", "% Comisión", "Neto Hotel Real (MXN)", "Estado", "Telefono"
         ];
     
     const rows = items.map(item => {
@@ -1470,6 +1522,7 @@ export default function FinanzasPage() {
           item.noches || 1,
           item.metrics?.totalBruto?.toFixed(2) || '0.00',
           item.metrics?.breakdown?.roomBase?.toFixed(2) || '0.00',
+          item.metrics?.breakdown?.totalTaxes?.toFixed(2) || '0.00',
           item.metrics?.breakdown?.bookingBaseCommission?.toFixed(2) || '0.00',
           item.metrics?.breakdown?.cardProcessing?.toFixed(2) || '0.00',
           item.metrics?.commission?.toFixed(2) || '0.00',
@@ -1488,6 +1541,8 @@ export default function FinanzasPage() {
         item.check_out || '',
         item.noches || 1,
         item.metrics?.totalBruto?.toFixed(2) || '0.00',
+        item.metrics?.breakdown?.roomBase?.toFixed(2) || '0.00',
+        item.metrics?.breakdown?.totalTaxes?.toFixed(2) || '0.00',
         item.metrics?.commission?.toFixed(2) || '0.00',
         `${item.metrics?.commissionPct || '15.0'}%`,
         item.metrics?.netRevenue?.toFixed(2) || '0.00',
@@ -2120,7 +2175,7 @@ export default function FinanzasPage() {
                   {/* Card 3: Ingreso Neto Hotel */}
                   <div className="bg-white border border-emerald-200/80 rounded-2xl p-4 shadow-sm space-y-1 bg-emerald-50/10">
                     <div className="flex items-center justify-between text-emerald-700">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider">Ingreso Neto Hotel</span>
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider">Ingreso Neto Hotel Real</span>
                       <Wallet size={16} className="text-emerald-600" />
                     </div>
                     <p className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">
@@ -2128,7 +2183,7 @@ export default function FinanzasPage() {
                       <span className="text-[10px] text-emerald-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
-                      Cobro neto que retiene el hotel
+                      Tarifa Base Sin Impuestos - Comisiones
                     </p>
                   </div>
 
@@ -2432,6 +2487,7 @@ export default function FinanzasPage() {
                                 <span className="font-black text-zinc-900 text-xs sm:text-sm">
                                   ${fmtOtaMoney(r.metrics.totalBruto)}
                                 </span>
+                                <span className="text-[9px] text-zinc-400 font-semibold block">Base: ${fmtOtaMoney(r.metrics.roomBase)}</span>
                               </div>
                               <div className="border-x border-zinc-200/60">
                                 <span className="text-[9px] font-extrabold text-rose-600 uppercase tracking-wider block">
@@ -2440,12 +2496,14 @@ export default function FinanzasPage() {
                                 <span className="font-black text-rose-600 text-xs sm:text-sm">
                                   -${fmtOtaMoney(r.metrics.commission)}
                                 </span>
+                                <span className="text-[9px] text-rose-400 font-semibold block">Factura OTA</span>
                               </div>
                               <div>
                                 <span className="text-[9px] font-extrabold text-emerald-700 uppercase tracking-wider block">Neto Hotel</span>
                                 <span className="font-black text-emerald-600 text-xs sm:text-sm">
                                   +${fmtOtaMoney(r.metrics.netRevenue)}
                                 </span>
+                                <span className="text-[9px] text-emerald-600/80 font-semibold block">Base - Comisión</span>
                               </div>
                             </div>
 
@@ -2460,8 +2518,11 @@ export default function FinanzasPage() {
                                   <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
                                     3.1% Tarjeta (${fmtOtaMoney(r.metrics.totalBruto)}): ${fmtOtaMoney(r.metrics.breakdown.cardProcessing)}
                                   </span>
-                                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
+                                  <span className="bg-rose-50 text-rose-800 px-2 py-0.5 rounded-md border border-rose-100 font-bold">
                                     Total Factura: ${fmtOtaMoney(r.metrics.commission)} ({r.metrics.commissionPct}%)
+                                  </span>
+                                  <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-100 font-bold">
+                                    Neto Real: ${fmtOtaMoney(r.metrics.netRevenue)}
                                   </span>
                                 </div>
                               </div>

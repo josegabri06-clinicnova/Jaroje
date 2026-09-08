@@ -2054,26 +2054,29 @@ export function computeOtaSplit(
     let commission = 0;
     let taxesRetained = 0;
 
-    if ((isAirbnb && deposit > 0) || (isBooking && deposit > 0)) {
+    if (isAirbnb && deposit > 0 && deposit < totalAmount) {
       netRevenue = deposit;
       commission = Number((totalAmount - deposit).toFixed(2));
       taxesRetained = 0;
-    } else {
+    } else if (isBooking) {
+      // Booking.com en México: Tarifa base sin impuestos (16% IVA + 3% ISH = 19%)
+      const roomRate = Number((totalAmount / 1.19).toFixed(2));
+      const bookingBaseComm = Number((roomRate * 0.18).toFixed(2));
+      const cardProcessing = Number((totalAmount * 0.031).toFixed(2));
+      commission = Number((bookingBaseComm + cardProcessing).toFixed(2));
+      taxesRetained = Number((totalAmount - roomRate).toFixed(2));
+      netRevenue = Number((roomRate - commission).toFixed(2));
+    } else if (isAirbnb) {
       const roomRate = Number((totalAmount / 1.16).toFixed(2));
-
-      if (isAirbnb) {
-        commission = Number((roomRate * 0.3056).toFixed(2));
-        netRevenue = Number((totalAmount - commission).toFixed(2));
-        taxesRetained = 0;
-      } else if (isBooking) {
-        commission = Number((roomRate * 0.306).toFixed(2));
-        netRevenue = Number((totalAmount - commission).toFixed(2));
-        taxesRetained = 0;
-      } else {
-        commission = Number((totalAmount * 0.15).toFixed(2));
-        netRevenue = Number((totalAmount - commission).toFixed(2));
-        taxesRetained = 0;
-      }
+      commission = Number((roomRate * 0.3056).toFixed(2));
+      taxesRetained = Number((totalAmount - roomRate).toFixed(2));
+      netRevenue = Number((totalAmount - commission).toFixed(2));
+    } else {
+      // Expedia
+      const roomRate = Number((totalAmount / 1.19).toFixed(2));
+      commission = Number((totalAmount * 0.15).toFixed(2));
+      taxesRetained = Number((totalAmount - roomRate).toFixed(2));
+      netRevenue = Number((roomRate - commission).toFixed(2));
     }
 
     return {
