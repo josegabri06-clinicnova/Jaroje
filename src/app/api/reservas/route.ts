@@ -44,9 +44,9 @@ export async function GET(req: Request) {
       });
       const fortyEightHoursAgoStr = formatter.format(new Date(Date.now() - 48 * 60 * 60 * 1000));
       const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-      // Traer las no canceladas que tengan checkout en las últimas 48 horas,
-      // y además las canceladas de las últimas 48 horas.
-      query = query.or(`and(status.neq.cancelled,check_out.gte.${fortyEightHoursAgoStr}),and(status.eq.cancelled,updated_at.gte.${fortyEightHoursAgo})`);
+      // Traer las no canceladas operativas (checkout en últimas 48h o futuro)
+      // y únicamente las canceladas recientes (< 48 horas y checkout en ventana operativa)
+      query = query.or(`and(status.neq.cancelled,check_out.gte.${fortyEightHoursAgoStr}),and(status.eq.cancelled,check_out.gte.${fortyEightHoursAgoStr},updated_at.gte.${fortyEightHoursAgo})`);
     }
     // Excluir la categoría virtual 500 (room_id 685542) para evitar duplicados, ya que se asigna localmente
     query = query.neq('room_id', '685542');
@@ -101,7 +101,6 @@ export async function GET(req: Request) {
         numChild: Number(b.num_child || 0),
         rooms: { name: b.room_name },
         invoiceItems: b.invoice_items || [],
-        invoice_items: b.invoice_items || [],
         commission: (b.commission !== undefined && Number(b.commission) > 0)
           ? Number(b.commission)
           : Number((b.invoice_items || []).find((it: any) => it.metaType === 'beds24_commission_info')?.commission || 0),
@@ -110,7 +109,9 @@ export async function GET(req: Request) {
         last_notice_sent: Boolean(b.last_notice_sent),
         is_acknowledged: Boolean(b.is_acknowledged),
         booking_time: b.created_at || b.check_in || null,
-        cancelled_at: b.status === 'cancelled' ? (b.updated_at || null) : null
+        cancelled_at: b.status === 'cancelled' 
+          ? (b.cancelled_at || (b.invoice_items || []).find((it: any) => it.metaType === 'beds24_commission_info')?.cancelTime || b.updated_at || null)
+          : null
       };
     });
     

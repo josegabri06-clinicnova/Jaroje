@@ -2497,15 +2497,28 @@ export async function syncBeds24ReservationsRange(
   if (mappedBookings.length > 0) {
     const upsertRows = mappedBookings.map((mb: any) => {
       const rawItems = Array.isArray(mb.invoiceItems) ? [...mb.invoiceItems] : [];
-      if ((mb.commission !== undefined && mb.commission > 0) || mb.rate_description) {
+      if ((mb.commission !== undefined && mb.commission > 0) || mb.rate_description || mb.cancelled_at) {
         const filtered = rawItems.filter((it: any) => it.metaType !== 'beds24_commission_info');
         filtered.push({
           metaType: 'beds24_commission_info',
           commission: Number(mb.commission || 0),
           rateDescription: mb.rate_description || '',
-          comments: mb.comments || ''
+          comments: mb.comments || '',
+          cancelTime: mb.cancelled_at || null
         });
         mb.invoiceItems = filtered;
+      }
+
+      let dbUpdatedAt = new Date().toISOString();
+      if (mb.status === 'cancelled') {
+        if (mb.cancelled_at) {
+          const parsed = Date.parse(mb.cancelled_at);
+          if (!isNaN(parsed)) {
+            dbUpdatedAt = new Date(parsed).toISOString();
+          }
+        } else if (mb.check_out && new Date(mb.check_out).getTime() < Date.now()) {
+          dbUpdatedAt = new Date(mb.check_out).toISOString();
+        }
       }
 
       return {
@@ -2531,7 +2544,7 @@ export async function syncBeds24ReservationsRange(
         invoice_items: mb.invoiceItems || [],
         actual_paid: mb.actualPaid,
         created_at: mb.booking_time || null,
-        updated_at: new Date().toISOString()
+        updated_at: dbUpdatedAt
       };
     });
 

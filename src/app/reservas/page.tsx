@@ -3071,16 +3071,18 @@ function ReservasListInner() {
   const cancelledReservas = reservas
     .filter(r => {
       if (r.status !== 'cancelled') return false;
-      if (!r.cancelled_at) return true; // Por seguridad, si no tiene fecha de cancelación, se queda visible
-      const cancelledDate = new Date(r.cancelled_at);
+      const cancelDateStr = r.cancelled_at || r.updated_at;
+      if (!cancelDateStr) return false;
+      const cancelledDate = new Date(cancelDateStr);
+      if (isNaN(cancelledDate.getTime())) return false;
       const now = new Date();
       const diffMs = now.getTime() - cancelledDate.getTime();
       const diffHours = diffMs / (1000 * 60 * 60);
-      return diffHours <= 48;
+      return diffHours >= 0 && diffHours <= 48;
     })
     .sort((a, b) => {
-      const dateA = a.cancelled_at || a.booking_time || a.check_in || '';
-      const dateB = b.cancelled_at || b.booking_time || b.check_in || '';
+      const dateA = a.cancelled_at || a.updated_at || a.booking_time || a.check_in || '';
+      const dateB = b.cancelled_at || b.updated_at || b.booking_time || b.check_in || '';
       return dateB.localeCompare(dateA);
     });
   // Reservas bloqueadas (mantenimiento): tienen estatus black
