@@ -895,7 +895,9 @@ export async function DELETE(req: Request) {
           bookingB24Raw = b;
           bookingForWA = {
             id: id.toString(),
-            guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || 'Huésped'),
+            firstName: b.firstName || '',
+            lastName: b.lastName || '',
+            guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || b.guestName || 'Huésped',
             phone: b.phone || b.mobile || b.guestPhone || '',
             arrival: b.arrival || null,
             departure: b.departure || null,

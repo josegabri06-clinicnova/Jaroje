@@ -786,10 +786,26 @@ export async function sendWhatsAppTextMessage(
 }
 
 
-// Helper para extraer el primer nombre
-export function getFirstName(fullName: string): string {
-  if (!fullName) return '';
-  return fullName.trim().split(' ')[0];
+// Helper para extraer el primer nombre de forma ultra-robusta
+export function getFirstName(fullNameOrBooking: any): string {
+  if (!fullNameOrBooking) return 'Huésped';
+  if (typeof fullNameOrBooking === 'object') {
+    const raw = `${fullNameOrBooking.firstName || ''} ${fullNameOrBooking.lastName || ''}`.trim() ||
+      fullNameOrBooking.guest_name || 
+      fullNameOrBooking.guestName || 
+      fullNameOrBooking.name || 
+      '';
+    if (!raw || raw.toLowerCase() === 'huésped' || raw.toLowerCase() === 'huesped') {
+      if (fullNameOrBooking.firstName) return fullNameOrBooking.firstName.trim().split(' ')[0];
+      return 'Huésped';
+    }
+    const first = raw.trim().split(' ')[0];
+    return first || 'Huésped';
+  }
+  const clean = String(fullNameOrBooking).trim();
+  if (!clean || clean.toLowerCase() === 'null' || clean.toLowerCase() === 'undefined') return 'Huésped';
+  const first = clean.split(' ')[0];
+  return first || 'Huésped';
 }
 
 // Retorna el enlace de la página pública de detalles de la reserva
@@ -802,8 +818,10 @@ export async function sendTemplate1_SolicitudRecibida(booking: any, bypassPause:
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
+  const name = getFirstName(booking.guest_name || booking);
+
   const params = [
-    getFirstName(booking.guest_name) // {{1}} Nombre
+    name // {{1}} Nombre
   ];
 
   return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, undefined, booking.id, 'url', bypassPause);
@@ -814,8 +832,10 @@ export async function sendTemplate2_UltimoAviso(booking: any, bypassPause: boole
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
+  const name = getFirstName(booking.guest_name || booking);
+
   const params = [
-    getFirstName(booking.guest_name) // {{1}} Nombre
+    name // {{1}} Nombre
   ];
 
   return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, undefined, booking.id, 'url', bypassPause);
@@ -827,9 +847,10 @@ export async function sendTemplate_ComprobanteRechazado(booking: any, reason?: s
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const rejectionReason = reason || booking.notes || 'El comprobante no pudo ser verificado. Por favor sube una imagen legible o contáctanos.';
+  const name = getFirstName(booking.guest_name || booking);
 
   const params = [
-    getFirstName(booking.guest_name), // {{1}} Nombre
+    name,                             // {{1}} Nombre
     String(booking.id),               // {{2}} ID Reserva
     rejectionReason                   // {{3}} Motivo del rechazo
   ];
@@ -843,8 +864,10 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPa
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
+  const name = getFirstName(booking.guest_name || booking);
+
   const params = [
-    getFirstName(booking.guest_name) // {{1}} Nombre
+    name // {{1}} Nombre
   ];
 
   return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause);
@@ -855,8 +878,13 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any, bypassP
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
+  const rawGuestName = (booking.guest_name && booking.guest_name !== 'Huésped' && booking.guest_name !== 'Huesped')
+    ? booking.guest_name
+    : (`${booking.firstName || ''} ${booking.lastName || ''}`.trim() || booking.guestName || booking.name || 'Huésped');
+  const name = getFirstName(rawGuestName);
+
   const params = [
-    getFirstName(booking.guest_name) // {{1}} Nombre en el cuerpo del mensaje
+    name // {{1}} Nombre en el cuerpo del mensaje
   ];
 
   return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, undefined, booking.id, undefined, bypassPause);

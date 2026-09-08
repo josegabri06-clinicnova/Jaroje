@@ -259,7 +259,9 @@ export async function POST(req: Request) {
 
           const bookingForWA = {
             id: bookingIdStr,
-            guest_name: b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || guestName || 'Huésped'),
+            firstName: b.firstName || '',
+            lastName: b.lastName || '',
+            guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || b.guestName || guestName || 'Huésped',
             phone: phone,
             num_adult: Number(b.numAdult || 1),
             num_child: Number(b.numChild || 0),
