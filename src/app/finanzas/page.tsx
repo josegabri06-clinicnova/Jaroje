@@ -1258,7 +1258,7 @@ export default function FinanzasPage() {
         const roomItems = r.invoice_items.filter((item: any) => {
           const type = (item.type || '').toLowerCase();
           const desc = (item.description || '').toLowerCase();
-          return type === 'charge' && !desc.includes('iva') && !desc.includes('impuesto') && !desc.includes('tax') && !desc.includes('cancel');
+          return type === 'charge' && !desc.includes('iva') && !desc.includes('impuesto') && !desc.includes('tax') && !desc.includes('cancel') && item.metaType !== 'beds24_commission_info';
         });
         if (roomItems.length > 0) {
           roomBase = roomItems.reduce((acc: number, it: any) => acc + (Number(it.lineTotal !== undefined ? it.lineTotal : (it.amount || 0))), 0);
@@ -1271,15 +1271,26 @@ export default function FinanzasPage() {
       }
 
       // 1. Comisión base Booking: 18% sobre la tarifa base de la habitación
-      const bookingBaseCommission = Number((roomBase * 0.18).toFixed(2));
+      let bookingBaseCommission = Number((roomBase * 0.18).toFixed(2));
 
       // 2. Cargo por procesamiento de tarjeta: 3.1% sobre el total cobrado/bruto
-      const cardProcessing = Number((totalBruto * 0.031).toFixed(2));
+      let cardProcessing = Number((totalBruto * 0.031).toFixed(2));
 
       // 3. Comisión total a liquidar a Booking en la factura mensual
-      const commission = Number((bookingBaseCommission + cardProcessing).toFixed(2));
+      let commission = Number((bookingBaseCommission + cardProcessing).toFixed(2));
+
+      // Priorizar el campo 'commission' directo de Beds24 si viene disponible (ej. 553.62)
+      const metaComm = (r.invoice_items || []).find((it: any) => it.metaType === 'beds24_commission_info');
+      const rawComm = Number(r.commission || r.rawCommission || metaComm?.commission || 0);
+      if (rawComm > 0) {
+        commission = Number(rawComm.toFixed(2));
+        if (cardProcessing > 0 && commission > cardProcessing) {
+          bookingBaseCommission = Number((commission - cardProcessing).toFixed(2));
+        }
+      }
+
       const netRevenue = Number((totalBruto - commission).toFixed(2));
-      const commissionPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(1) : '18.2';
+      const commissionPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(2) : '18.23';
 
       return {
         totalBruto: Math.max(0, totalBruto),
@@ -1296,20 +1307,22 @@ export default function FinanzasPage() {
       };
     } else {
       // Expedia: 15% flat de comisión
-      const commission = Number((totalBruto * 0.15).toFixed(2));
+      const rawComm = Number(r.commission || r.rawCommission || 0);
+      const commission = rawComm > 0 ? Number(rawComm.toFixed(2)) : Number((totalBruto * 0.15).toFixed(2));
       const netRevenue = Number((totalBruto - commission).toFixed(2));
+      const commissionPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(2) : '15.00';
 
       return {
         totalBruto: Math.max(0, totalBruto),
         roomBase: Math.max(0, totalBruto),
         commission: Math.max(0, commission),
         netRevenue: Math.max(0, netRevenue),
-        commissionPct: '15.0',
+        commissionPct,
         breakdown: {
           bookingBaseCommission: commission,
           cardProcessing: 0,
           roomBase: totalBruto,
-          totalPct: 15.0
+          totalPct: Number(commissionPct)
         }
       };
     }
@@ -1973,6 +1986,11 @@ export default function FinanzasPage() {
       ) : (
         // VISTA LIQUIDACIÓN OTAs (2 Pestañas: Booking.com, Expedia)
         <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {/* Helper para formatear montos exactos con 2 decimales sin descuadres */}
+          {(() => {
+            const fmtOtaMoney = (val: number) => (Number(val) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return null;
+          })()}
           {/* 2 SUBTABS DE LAS OTAS */}
           <div className="grid grid-cols-2 gap-2 bg-zinc-100/80 p-1.5 rounded-2xl border border-zinc-200/60 shadow-inner">
             {/* Booking.com Tab */}
@@ -1989,7 +2007,7 @@ export default function FinanzasPage() {
                 <span className="font-extrabold text-[13px] tracking-tight">Booking.com</span>
               </div>
               <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'booking' ? 'text-blue-600' : 'text-zinc-400'}`}>
-                {otaAnalytics.booking.filteredCount} reservas • ${Math.round(otaAnalytics.booking.totalComision).toLocaleString('es-MX')} com.
+                {otaAnalytics.booking.filteredCount} reservas • ${(otaAnalytics.booking.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} com.
               </span>
             </button>
 
@@ -2007,7 +2025,7 @@ export default function FinanzasPage() {
                 <span className="font-extrabold text-[13px] tracking-tight">Expedia</span>
               </div>
               <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'expedia' ? 'text-amber-600' : 'text-zinc-400'}`}>
-                {otaAnalytics.expedia.filteredCount} reservas • ${Math.round(otaAnalytics.expedia.totalComision).toLocaleString('es-MX')} com.
+                {otaAnalytics.expedia.filteredCount} reservas • ${(otaAnalytics.expedia.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} com.
               </span>
             </button>
           </div>
@@ -2026,10 +2044,10 @@ export default function FinanzasPage() {
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl text-zinc-400 font-bold">$</span>
                   <span className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-                    {Math.round(
+                    {(
                       otaAnalytics.booking.totalComision + 
                       otaAnalytics.expedia.totalComision
-                    ).toLocaleString('es-MX')}
+                    ).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   <span className="text-xs text-zinc-400 font-bold tracking-wider">MXN Total por Transferir a OTAs</span>
                 </div>
@@ -2040,12 +2058,12 @@ export default function FinanzasPage() {
                 <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-blue-400" />
                   <span className="text-zinc-300 font-medium">Booking.com:</span>
-                  <strong className="text-white font-black">${Math.round(otaAnalytics.booking.totalComision).toLocaleString('es-MX')}</strong>
+                  <strong className="text-white font-black">${(otaAnalytics.booking.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                 </div>
                 <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-amber-400" />
                   <span className="text-zinc-300 font-medium">Expedia:</span>
-                  <strong className="text-white font-black">${Math.round(otaAnalytics.expedia.totalComision).toLocaleString('es-MX')}</strong>
+                  <strong className="text-white font-black">${(otaAnalytics.expedia.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                 </div>
               </div>
             </div>
@@ -2057,6 +2075,7 @@ export default function FinanzasPage() {
             const otaBrandColor = selectedOta === 'booking' ? 'blue' : 'amber';
             const otaTitle = selectedOta === 'booking' ? 'Booking.com' : 'Expedia';
             const matchedAccount = accounts.find(a => a.name.toUpperCase().includes(selectedOta.toUpperCase()));
+            const fmtOtaMoney = (val: number) => (Number(val) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             return (
               <div className="space-y-4">
@@ -2068,8 +2087,8 @@ export default function FinanzasPage() {
                       <span className="text-[10px] font-extrabold uppercase tracking-wider">Total Reservado (Bruto)</span>
                       <Building2 size={16} className="text-zinc-400" />
                     </div>
-                    <p className="text-2xl font-black text-zinc-900 tracking-tight">
-                      ${Math.round(currentOtaData.totalBruto).toLocaleString('es-MX')}
+                    <p className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
+                      ${fmtOtaMoney(currentOtaData.totalBruto)}
                       <span className="text-[10px] text-zinc-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
@@ -2089,8 +2108,8 @@ export default function FinanzasPage() {
                         {currentOtaData.avgCommissionPct}%
                       </span>
                     </div>
-                    <p className="text-2xl font-black text-rose-600 tracking-tight">
-                      -${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')}
+                    <p className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight">
+                      -${fmtOtaMoney(currentOtaData.totalComision)}
                       <span className="text-[10px] text-rose-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
@@ -2104,8 +2123,8 @@ export default function FinanzasPage() {
                       <span className="text-[10px] font-extrabold uppercase tracking-wider">Ingreso Neto Hotel</span>
                       <Wallet size={16} className="text-emerald-600" />
                     </div>
-                    <p className="text-2xl font-black text-emerald-600 tracking-tight">
-                      +${Math.round(currentOtaData.totalNeto).toLocaleString('es-MX')}
+                    <p className="text-xl sm:text-2xl font-black text-emerald-600 tracking-tight">
+                      +${fmtOtaMoney(currentOtaData.totalNeto)}
                       <span className="text-[10px] text-emerald-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
@@ -2119,8 +2138,8 @@ export default function FinanzasPage() {
                       <span className="text-[10px] font-extrabold uppercase tracking-wider">Saldo Cuenta Libro</span>
                       <Landmark size={16} className="text-zinc-400" />
                     </div>
-                    <p className="text-2xl font-black text-zinc-900 tracking-tight">
-                      ${Math.round(matchedAccount ? matchedAccount.balance : 0).toLocaleString('es-MX')}
+                    <p className="text-xl sm:text-2xl font-black text-zinc-900 tracking-tight">
+                      ${fmtOtaMoney(matchedAccount ? matchedAccount.balance : 0)}
                       <span className="text-[10px] text-zinc-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium truncate">
@@ -2155,7 +2174,7 @@ export default function FinanzasPage() {
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-zinc-500">Total a Liquidar:</span>
                       <span className="text-lg sm:text-xl font-black text-rose-600">
-                        ${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} <span className="text-xs font-bold text-rose-400">MXN</span>
+                        ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-xs font-bold text-rose-400">MXN</span>
                       </span>
                       <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase ${
                         selectedOta === 'booking' ? 'bg-blue-100/70 text-blue-800 border-blue-300' : 'bg-amber-100/70 text-amber-800 border-amber-300'
@@ -2176,9 +2195,9 @@ export default function FinanzasPage() {
                             <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">18.0%</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
-                            ${Math.round(currentOtaData.totalBookingBaseCommission).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                            ${fmtOtaMoney(currentOtaData.totalBookingBaseCommission)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">18% sobre tarifa base (${Math.round(currentOtaData.totalRoomBase).toLocaleString('es-MX')})</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">18% sobre tarifa base (${fmtOtaMoney(currentOtaData.totalRoomBase)})</p>
                         </div>
 
                         {/* 2. Tarjeta (3.1%) */}
@@ -2188,9 +2207,9 @@ export default function FinanzasPage() {
                             <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">3.1%</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
-                            ${Math.round(currentOtaData.totalCardProcessing).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                            ${fmtOtaMoney(currentOtaData.totalCardProcessing)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">3.1% sobre cobro total procesado</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">3.1% sobre cobro total (${fmtOtaMoney(currentOtaData.totalBruto)})</p>
                         </div>
 
                         {/* 3. Total Factura */}
@@ -2200,7 +2219,7 @@ export default function FinanzasPage() {
                             <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">~{currentOtaData.avgCommissionPct}%</span>
                           </div>
                           <p className="text-base font-black text-rose-600">
-                            ${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} <span className="text-[10px] text-rose-400 font-bold">MXN</span>
+                            ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-[10px] text-rose-400 font-bold">MXN</span>
                           </p>
                           <p className="text-[10px] text-zinc-400 font-medium">Total exigible por Booking al cierre de mes</p>
                         </div>
@@ -2228,7 +2247,7 @@ export default function FinanzasPage() {
                             <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">15.0%</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
-                            ${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                            ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
                           <p className="text-[10px] text-zinc-400 font-medium">Comisión directa por reservación</p>
                         </div>
@@ -2239,7 +2258,7 @@ export default function FinanzasPage() {
                             <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-600 border border-zinc-200">0.0%</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
-                            $0 <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                            $0.00 <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
                           <p className="text-[10px] text-zinc-400 font-medium">Cobro directo por Expedia Partner Central</p>
                         </div>
@@ -2346,7 +2365,7 @@ export default function FinanzasPage() {
                       Desglose de Reservas {otaTitle} ({currentOtaData.filteredCount})
                     </h4>
                     <span className="text-[11px] font-bold text-zinc-400">
-                      Total Comisión por Liquidar: <strong className="text-rose-600 font-extrabold">${Math.round(currentOtaData.totalComision).toLocaleString('es-MX')} MXN</strong>
+                      Total Comisión por Liquidar: <strong className="text-rose-600 font-extrabold">${fmtOtaMoney(currentOtaData.totalComision)} MXN</strong>
                     </span>
                   </div>
 
@@ -2406,12 +2425,12 @@ export default function FinanzasPage() {
                               </Link>
                             </div>
 
-                            {/* Desglose de 3 columnas de la reserva */}
+                            {/* Desglose de 3 columnas de la reserva con 2 decimales */}
                             <div className="grid grid-cols-3 gap-2 text-center bg-zinc-50/70 p-2.5 rounded-xl border border-zinc-100">
                               <div>
                                 <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-wider block">Total Bruto</span>
                                 <span className="font-black text-zinc-900 text-xs sm:text-sm">
-                                  ${Math.round(r.metrics.totalBruto).toLocaleString('es-MX')}
+                                  ${fmtOtaMoney(r.metrics.totalBruto)}
                                 </span>
                               </div>
                               <div className="border-x border-zinc-200/60">
@@ -2419,13 +2438,13 @@ export default function FinanzasPage() {
                                   Comisión a Liquidar ({r.metrics.commissionPct}%)
                                 </span>
                                 <span className="font-black text-rose-600 text-xs sm:text-sm">
-                                  -${Math.round(r.metrics.commission).toLocaleString('es-MX')}
+                                  -${fmtOtaMoney(r.metrics.commission)}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-[9px] font-extrabold text-emerald-700 uppercase tracking-wider block">Neto Hotel</span>
                                 <span className="font-black text-emerald-600 text-xs sm:text-sm">
-                                  +${Math.round(r.metrics.netRevenue).toLocaleString('es-MX')}
+                                  +${fmtOtaMoney(r.metrics.netRevenue)}
                                 </span>
                               </div>
                             </div>
@@ -2436,13 +2455,13 @@ export default function FinanzasPage() {
                                 <span className="font-bold text-zinc-400">Desglose Factura Booking:</span>
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    18.0% Base (${Math.round(r.metrics.breakdown.roomBase).toLocaleString('es-MX')}): ${Math.round(r.metrics.breakdown.bookingBaseCommission).toLocaleString('es-MX')}
+                                    18.0% Base (${fmtOtaMoney(r.metrics.breakdown.roomBase)}): ${fmtOtaMoney(r.metrics.breakdown.bookingBaseCommission)}
                                   </span>
                                   <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    3.1% Tarjeta (${Math.round(r.metrics.totalBruto).toLocaleString('es-MX')}): ${Math.round(r.metrics.breakdown.cardProcessing).toLocaleString('es-MX')}
+                                    3.1% Tarjeta (${fmtOtaMoney(r.metrics.totalBruto)}): ${fmtOtaMoney(r.metrics.breakdown.cardProcessing)}
                                   </span>
                                   <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    Total Factura: ${Math.round(r.metrics.commission).toLocaleString('es-MX')} ({r.metrics.commissionPct}%)
+                                    Total Factura: ${fmtOtaMoney(r.metrics.commission)} ({r.metrics.commissionPct}%)
                                   </span>
                                 </div>
                               </div>

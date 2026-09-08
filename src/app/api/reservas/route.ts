@@ -101,6 +101,12 @@ export async function GET(req: Request) {
         numChild: Number(b.num_child || 0),
         rooms: { name: b.room_name },
         invoiceItems: b.invoice_items || [],
+        invoice_items: b.invoice_items || [],
+        commission: (b.commission !== undefined && Number(b.commission) > 0)
+          ? Number(b.commission)
+          : Number((b.invoice_items || []).find((it: any) => it.metaType === 'beds24_commission_info')?.commission || 0),
+        rate_description: b.rate_description || (b.invoice_items || []).find((it: any) => it.metaType === 'beds24_commission_info')?.rateDescription || '',
+        rateDescription: b.rate_description || (b.invoice_items || []).find((it: any) => it.metaType === 'beds24_commission_info')?.rateDescription || '',
         last_notice_sent: Boolean(b.last_notice_sent),
         is_acknowledged: Boolean(b.is_acknowledged),
         booking_time: b.created_at || b.check_in || null,

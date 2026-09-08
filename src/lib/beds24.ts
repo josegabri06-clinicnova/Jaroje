@@ -1444,6 +1444,9 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         taxes: taxInfo,
         expected_payout: otaDetails.expectedPayout,
         host_fee: otaDetails.hostFee,
+        commission: (b.commission !== undefined && b.commission !== null && b.commission !== '') ? Number(b.commission) : 0,
+        rate_description: b.rateDescription || '',
+        comments: b.comments || b.info || b.notes || null,
         booking_time: b.bookingTime || b.arrival || null,
         cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null,
         invoiceItems: b.invoiceItems || []
@@ -1459,6 +1462,18 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
           if (!isNaN(parsed)) {
             dbUpdatedAt = new Date(parsed).toISOString();
           }
+        }
+
+        const rawItems = Array.isArray(mb.invoiceItems) ? [...mb.invoiceItems] : [];
+        if ((mb.commission !== undefined && mb.commission > 0) || mb.rate_description) {
+          const filtered = rawItems.filter((it: any) => it.metaType !== 'beds24_commission_info');
+          filtered.push({
+            metaType: 'beds24_commission_info',
+            commission: Number(mb.commission || 0),
+            rateDescription: mb.rate_description || '',
+            comments: mb.comments || ''
+          });
+          mb.invoiceItems = filtered;
         }
 
         return {
@@ -2215,6 +2230,18 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     }
   }
 
+  const rawSingleInvoiceItems = Array.isArray(b.invoiceItems) ? [...b.invoiceItems] : [];
+  if ((b.commission !== undefined && Number(b.commission) > 0) || b.rateDescription) {
+    const filtered = rawSingleInvoiceItems.filter((it: any) => it.metaType !== 'beds24_commission_info');
+    filtered.push({
+      metaType: 'beds24_commission_info',
+      commission: Number(b.commission || 0),
+      rateDescription: b.rateDescription || '',
+      comments: b.comments || ''
+    });
+    b.invoiceItems = filtered;
+  }
+
   const { data, error } = await supabase.from('beds24_reservations').upsert({
     id: String(b.id),
     master_id: b.masterId || null,
@@ -2458,6 +2485,9 @@ export async function syncBeds24ReservationsRange(
         taxes: taxInfo,
         expected_payout: otaDetails.expectedPayout,
         host_fee: otaDetails.hostFee,
+        commission: (b.commission !== undefined && b.commission !== null && b.commission !== '') ? Number(b.commission) : 0,
+        rate_description: b.rateDescription || '',
+        comments: b.comments || b.info || b.notes || null,
         booking_time: b.bookingTime || b.arrival || null,
         cancelled_at: (b.status === '0' || b.status === 'cancelled') ? (b.cancelTime || b.modifiedTime || null) : null,
         invoiceItems: b.invoiceItems || []
@@ -2465,31 +2495,45 @@ export async function syncBeds24ReservationsRange(
     }));
 
   if (mappedBookings.length > 0) {
-    const upsertRows = mappedBookings.map((mb: any) => ({
-      id: String(mb.id),
-      master_id: mb.masterId || null,
-      check_in: mb.check_in,
-      check_out: mb.check_out,
-      guest_name: mb.guest_name,
-      guest_phone: mb.guest_phone || null,
-      guest_email: mb.guest_email || null,
-      status: mb.status,
-      channel: mb.channel,
-      room_name: mb.room_name,
-      room: mb.room,
-      room_id: String(mb.room_id || ''),
-      unit_id: String(mb.room || ''),
-      price: mb.price_estimate,
-      deposit: mb.deposit,
-      balance: mb.balance,
-      num_adult: mb.num_adult,
-      num_child: mb.num_child,
-      notes: mb.notes,
-      invoice_items: mb.invoiceItems || [],
-      actual_paid: mb.actualPaid,
-      created_at: mb.booking_time || null,
-      updated_at: new Date().toISOString()
-    }));
+    const upsertRows = mappedBookings.map((mb: any) => {
+      const rawItems = Array.isArray(mb.invoiceItems) ? [...mb.invoiceItems] : [];
+      if ((mb.commission !== undefined && mb.commission > 0) || mb.rate_description) {
+        const filtered = rawItems.filter((it: any) => it.metaType !== 'beds24_commission_info');
+        filtered.push({
+          metaType: 'beds24_commission_info',
+          commission: Number(mb.commission || 0),
+          rateDescription: mb.rate_description || '',
+          comments: mb.comments || ''
+        });
+        mb.invoiceItems = filtered;
+      }
+
+      return {
+        id: String(mb.id),
+        master_id: mb.masterId || null,
+        check_in: mb.check_in,
+        check_out: mb.check_out,
+        guest_name: mb.guest_name,
+        guest_phone: mb.guest_phone || null,
+        guest_email: mb.guest_email || null,
+        status: mb.status,
+        channel: mb.channel,
+        room_name: mb.room_name,
+        room: mb.room,
+        room_id: String(mb.room_id || ''),
+        unit_id: String(mb.room || ''),
+        price: mb.price_estimate,
+        deposit: mb.deposit,
+        balance: mb.balance,
+        num_adult: mb.num_adult,
+        num_child: mb.num_child,
+        notes: mb.notes,
+        invoice_items: mb.invoiceItems || [],
+        actual_paid: mb.actualPaid,
+        created_at: mb.booking_time || null,
+        updated_at: new Date().toISOString()
+      };
+    });
 
     for (let i = 0; i < upsertRows.length; i += 50) {
       const chunk = upsertRows.slice(i, i + 50);
