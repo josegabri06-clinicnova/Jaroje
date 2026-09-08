@@ -343,11 +343,37 @@ export default function AnalyticsPage() {
 
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
+  const [selectedChannel, setSelectedChannel] = useState<string>('all');
 
   // Selector de año para YoY
   const currentActualYear = useMemo(() => new Date().getFullYear(), []);
   const [selectedYoYYear, setSelectedYoYYear] = useState<number>(currentActualYear);
   const previousYoYYear = useMemo(() => selectedYoYYear - 1, [selectedYoYYear]);
+
+  // Lista de canales disponibles detectados dinámicamente
+  const availableChannels = useMemo(() => {
+    const set = new Set<string>();
+    reservas.forEach(r => {
+      const ch = (r.channel || 'Directo').trim();
+      if (ch) set.add(ch);
+    });
+    const priority = ['Booking.com', 'Airbnb', 'Expedia', 'WhatsApp', 'Directo', 'Google'];
+    const sorted = Array.from(set).sort((a, b) => {
+      const idxA = priority.indexOf(a);
+      const idxB = priority.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+    return ['all', ...sorted];
+  }, [reservas]);
+
+  // Reservas filtradas por el canal seleccionado
+  const channelFilteredReservas = useMemo(() => {
+    if (selectedChannel === 'all') return reservas;
+    return reservas.filter(r => (r.channel || 'Directo').trim().toLowerCase() === selectedChannel.toLowerCase());
+  }, [reservas, selectedChannel]);
 
   // Carga de datos unificada desde el endpoint de alta velocidad /api/analytics/data
   const fetchData = async () => {
@@ -513,17 +539,17 @@ export default function AnalyticsPage() {
 
   // Ingresos Devengados (Alojamiento real consumido por noche en el rango)
   const ingresosDevengados = useMemo(() => {
-    return reservas
+    return channelFilteredReservas
       .filter(r => r.status !== 'cancelled' && r.status !== '0')
       .reduce((sum, r) => sum + getStayRevenueInPeriod(r, startDate, endDate), 0);
-  }, [reservas, startDate, endDate]);
+  }, [channelFilteredReservas, startDate, endDate]);
 
   // Comisiones OTA estimadas/reales del periodo
   const comisionesOTAPeriodo = useMemo(() => {
-    return reservas
+    return channelFilteredReservas
       .filter(r => r.status !== 'cancelled' && r.status !== '0')
       .reduce((sum, r) => sum + getStayCommissionInPeriod(r, startDate, endDate), 0);
-  }, [reservas, startDate, endDate]);
+  }, [channelFilteredReservas, startDate, endDate]);
 
   // Ingresos Netos de Alojamiento (Devengados - Comisiones OTA)
   const ingresosNetos = useMemo(() => {
@@ -560,9 +586,9 @@ export default function AnalyticsPage() {
     let eDate: Date;
     
     if (!startDate || !endDate) {
-      if (reservas.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0, totalPossibleNights: 0 };
-      const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
-      const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
+      if (channelFilteredReservas.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0, totalPossibleNights: 0 };
+      const checkIns = channelFilteredReservas.map(r => r.check_in).filter(Boolean).sort();
+      const checkOuts = channelFilteredReservas.map(r => r.check_out).filter(Boolean).sort();
       if (checkIns.length === 0 || checkOuts.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0, totalPossibleNights: 0 };
       sDate = parseLocalDate(checkIns[0]);
       eDate = parseLocalDate(checkOuts[checkOuts.length - 1]);
@@ -575,7 +601,7 @@ export default function AnalyticsPage() {
     const totalPossibleRoomNights = 22 * rangeDays;
 
     let occupiedNights = 0;
-    reservas.forEach(r => {
+    channelFilteredReservas.forEach(r => {
       if (!r.check_in || !r.check_out) return;
       if (r.status === 'cancelled' || r.status === '0') return;
       const rIn = parseLocalDate(r.check_in);
@@ -598,7 +624,7 @@ export default function AnalyticsPage() {
       totalNochesPeriodo: occupiedNights,
       totalPossibleNights: totalPossibleRoomNights
     };
-  }, [reservas, startDate, endDate]);
+  }, [channelFilteredReservas, startDate, endDate]);
 
   // Cómputo de KPIs Hoteleros (ADR, RevPAR, ALOS, Cancelación)
   const hotelMetrics = useMemo(() => {
@@ -606,11 +632,11 @@ export default function AnalyticsPage() {
     let eDate: Date;
     
     if (!startDate || !endDate) {
-      if (reservas.length === 0) {
+      if (channelFilteredReservas.length === 0) {
         return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0, totalBookings: 0, activeBookings: 0, cancelledBookings: 0 };
       }
-      const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
-      const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
+      const checkIns = channelFilteredReservas.map(r => r.check_in).filter(Boolean).sort();
+      const checkOuts = channelFilteredReservas.map(r => r.check_out).filter(Boolean).sort();
       if (checkIns.length === 0 || checkOuts.length === 0) {
         return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0, totalBookings: 0, activeBookings: 0, cancelledBookings: 0 };
       }
@@ -624,7 +650,7 @@ export default function AnalyticsPage() {
     const rangeDays = Math.max(1, Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1);
     const totalPossibleRoomNights = 22 * rangeDays;
 
-    const totalBookingsInPeriod = reservas.filter(r => {
+    const totalBookingsInPeriod = channelFilteredReservas.filter(r => {
       if (!r.check_in || !r.check_out) return false;
       const rIn = parseLocalDate(r.check_in);
       const rOut = parseLocalDate(r.check_out);
@@ -654,7 +680,7 @@ export default function AnalyticsPage() {
       activeBookings: activeBookings.length,
       cancelledBookings: cancelledBookings.length
     };
-  }, [reservas, startDate, endDate, totalNochesPeriodo, ingresosDevengados]);
+  }, [channelFilteredReservas, startDate, endDate, totalNochesPeriodo, ingresosDevengados]);
 
   // Cómputo de rendimiento por habitación física (22 unidades)
   const roomPerformanceData = useMemo(() => {
@@ -662,9 +688,9 @@ export default function AnalyticsPage() {
     let eDate: Date;
     
     if (!startDate || !endDate) {
-      if (reservas.length === 0) return [];
-      const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
-      const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
+      if (channelFilteredReservas.length === 0) return [];
+      const checkIns = channelFilteredReservas.map(r => r.check_in).filter(Boolean).sort();
+      const checkOuts = channelFilteredReservas.map(r => r.check_out).filter(Boolean).sort();
       if (checkIns.length === 0 || checkOuts.length === 0) return [];
       sDate = parseLocalDate(checkIns[0]);
       eDate = parseLocalDate(checkOuts[checkOuts.length - 1]);
@@ -687,7 +713,7 @@ export default function AnalyticsPage() {
     });
     statsMap['Sin asignar'] = { roomName: 'Sin asignar', occupiedNights: 0, revenue: 0 };
 
-    reservas.forEach(r => {
+    channelFilteredReservas.forEach(r => {
       if (!r.check_in || !r.check_out) return;
       if (r.status === 'cancelled' || r.status === '0') return;
 
@@ -736,7 +762,7 @@ export default function AnalyticsPage() {
         adr
       };
     });
-  }, [reservas, startDate, endDate]);
+  }, [channelFilteredReservas, startDate, endDate]);
 
   const sortedRoomPerformance = useMemo(() => {
     return [...roomPerformanceData].sort((a, b) => {
@@ -1205,6 +1231,54 @@ export default function AnalyticsPage() {
                 </button>
               )}
             </div>
+
+            {/* Selector de Canal OTA */}
+            <div className="flex flex-col gap-2 pt-3 border-t border-zinc-100">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Filtrar por Canal de Venta:</span>
+                {selectedChannel !== 'all' && (
+                  <button 
+                    onClick={() => setSelectedChannel('all')}
+                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+                  >
+                    Ver Todos los Canales
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {availableChannels.map(ch => {
+                  const isSelected = selectedChannel.toLowerCase() === ch.toLowerCase();
+                  let colorBadge = '#18181b';
+                  if (ch === 'Airbnb') colorBadge = '#FF5A5F';
+                  else if (ch === 'Booking.com') colorBadge = '#003580';
+                  else if (ch === 'Expedia') colorBadge = '#EAA000';
+                  else if (ch === 'WhatsApp') colorBadge = '#25D366';
+                  else if (ch === 'Google') colorBadge = '#4285F4';
+
+                  return (
+                    <button
+                      key={ch}
+                      onClick={() => setSelectedChannel(ch)}
+                      className={`px-3 py-1.5 rounded-xl text-[11px] font-black flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900 ring-offset-1 scale-[1.02]'
+                          : 'bg-zinc-100 hover:bg-zinc-200/80 text-zinc-700 border border-zinc-200/60'
+                      }`}
+                    >
+                      {ch !== 'all' ? (
+                        <span 
+                          className="w-2 h-2 rounded-full shrink-0" 
+                          style={{ backgroundColor: colorBadge }} 
+                        />
+                      ) : (
+                        <span>🌐</span>
+                      )}
+                      <span>{ch === 'all' ? 'Todos los Canales' : ch}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Tarjetas Principales de Cantidades */}
@@ -1214,11 +1288,13 @@ export default function AnalyticsPage() {
             <div className="bg-gradient-to-br from-indigo-950 via-indigo-900 to-indigo-850 text-white p-6 rounded-[32px] shadow-[0_6px_20px_rgba(55,48,163,0.1)] flex flex-col justify-between relative overflow-hidden group min-h-[160px]">
               <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Utilidad Neta Periodo</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">
+                  {selectedChannel !== 'all' ? `Margen Neto (${selectedChannel})` : 'Utilidad Neta Periodo'}
+                </span>
                 <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black ${
                   utilidadNetaPeriodo >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
                 }`}>
-                  {utilidadNetaPeriodo >= 0 ? '+' : '-'} Ingresos Netos - Egresos
+                  {utilidadNetaPeriodo >= 0 ? '+' : '-'} {selectedChannel !== 'all' ? 'Ingreso Neto Canal - Gastos' : 'Ingresos Netos - Egresos'}
                 </span>
               </div>
               <div>
@@ -1228,7 +1304,9 @@ export default function AnalyticsPage() {
                   </p>
                 )}
                 <p className="text-[10px] text-indigo-300 font-bold mt-2">
-                  Ingresos Netos (Beds24 post-comisión) - Egresos Operativos
+                  {selectedChannel !== 'all'
+                    ? `Ingresos Netos (${selectedChannel}) deducidas comisiones`
+                    : 'Ingresos Netos (Beds24 post-comisión) - Egresos Operativos'}
                 </p>
               </div>
             </div>
@@ -1236,7 +1314,9 @@ export default function AnalyticsPage() {
             {/* 2. INGRESOS DEVENGADOS (ESTANCIA BEDS24) */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ingresos Devengados (Beds24)</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                  {selectedChannel !== 'all' ? `Ingresos (${selectedChannel})` : 'Ingresos Devengados (Beds24)'}
+                </span>
                 <TrendingUp size={16} className="text-emerald-500" />
               </div>
               <div>
@@ -1246,7 +1326,9 @@ export default function AnalyticsPage() {
                   </p>
                 )}
                 <p className="text-[10px] text-zinc-400 font-bold mt-2">
-                  Tarifas devengadas por noches de estancia en el periodo
+                  {selectedChannel !== 'all'
+                    ? `Tarifas brutas de ${selectedChannel} por noches de estancia`
+                    : 'Tarifas devengadas por noches de estancia en el periodo'}
                 </p>
               </div>
             </div>
@@ -1254,7 +1336,9 @@ export default function AnalyticsPage() {
             {/* 3. COMISIONES OTA DEDUCIDAS */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Comisiones Canales (OTA)</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">
+                  {selectedChannel !== 'all' ? `Comisión (${selectedChannel})` : 'Comisiones Canales (OTA)'}
+                </span>
                 <Percent size={16} className="text-amber-500" />
               </div>
               <div>
@@ -1264,7 +1348,9 @@ export default function AnalyticsPage() {
                   </p>
                 )}
                 <p className="text-[10px] text-zinc-400 font-bold mt-2">
-                  Booking (17.5%), Airbnb (3%), Expedia deducidos
+                  {selectedChannel !== 'all'
+                    ? `Total de comisión retenida por ${selectedChannel}`
+                    : 'Booking (17.5%), Airbnb (3%), Expedia deducidos'}
                 </p>
               </div>
             </div>
