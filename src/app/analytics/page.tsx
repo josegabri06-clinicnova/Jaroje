@@ -14,11 +14,15 @@ import {
   Check, 
   Calendar, 
   User, 
-  Briefcase
+  Briefcase,
+  Layers,
+  ChevronDown,
+  Info,
+  ShieldCheck,
+  Percent
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 
-// Helper: calcular ingresos prorrateados de una reserva (Beds24 o local) en un periodo (criterio de Devengo)
+// Helper: calcular ingresos prorrateados de una reserva en un periodo (Criterio de Devengo)
 function getStayRevenueInPeriod(r: any, start: string, end: string) {
   if (!r.check_in || !r.check_out) return 0;
   if (r.status === 'cancelled' || r.status === '0') return 0;
@@ -45,6 +49,44 @@ function getStayRevenueInPeriod(r: any, start: string, end: string) {
   }
   return 0;
 }
+
+// Helper: calcular comisiones prorrateadas de una reserva en un periodo
+function getStayCommissionInPeriod(r: any, start: string, end: string) {
+  if (!r.check_in || !r.check_out) return 0;
+  if (r.status === 'cancelled' || r.status === '0') return 0;
+
+  const rIn = new Date(r.check_in + 'T12:00:00');
+  const rOut = new Date(r.check_out + 'T12:00:00');
+  const sDate = start ? new Date(start + 'T12:00:00') : null;
+  const eDate = end ? new Date(end + 'T12:00:00') : null;
+
+  if (sDate && eDate) {
+    if (rIn < eDate && rOut > sDate) {
+      const overlapStart = new Date(Math.max(rIn.getTime(), sDate.getTime()));
+      const overlapEnd = new Date(Math.min(rOut.getTime(), eDate.getTime()));
+      const diff = (overlapEnd.getTime() - overlapStart.getTime()) / 86400000;
+      const overlapNights = Math.max(0, Math.round(diff));
+
+      if (overlapNights > 0) {
+        const totalNightsOfBooking = Math.max(1, Math.round((rOut.getTime() - rIn.getTime()) / 86400000));
+        const commission = Number(r.commission || 0);
+        const commissionPerNight = commission / totalNightsOfBooking;
+        return commissionPerNight * overlapNights;
+      }
+    }
+  }
+  return 0;
+}
+
+// Helper para parsear fechas de forma segura en zona horaria local
+const parseLocalDate = (dateStr: string): Date => {
+  if (!dateStr) return new Date();
+  const cleanStr = dateStr.split('T')[0];
+  const parts = cleanStr.split('-');
+  if (parts.length < 3) return new Date(dateStr);
+  const [y, m, d] = parts.map(Number);
+  return new Date(y, m - 1, d, 12, 0, 0);
+};
 
 // ── COMPONENTE: GRÁFICA COMPARATIVA DE DOBLE COLUMNA (YoY) ──────────────────
 function DoubleBarChart({
@@ -84,15 +126,12 @@ function DoubleBarChart({
     return `${v < 0 ? '-' : ''}MX$${Math.round(absV)}`;
   };
 
-  // Encontrar el valor máximo y mínimo para escalar verticalmente (soportando negativos)
   const maxVal = isPercentage ? 100 : Math.max(...data.map(d => Math.max(d.prevVal, d.currVal, 0)), 1);
   const minVal = isPercentage ? 0 : Math.min(...data.map(d => Math.min(d.prevVal, d.currVal, 0)), 0);
   const range = maxVal - minVal;
 
-  // Posición de la línea cero en porcentaje desde la parte inferior de la gráfica
   const zeroPct = range > 0 ? (Math.abs(minVal) / range) * 100 : 0;
 
-  // Calcular crecimiento/diferencia anual
   const growth = isPercentage
     ? (currTotal - prevTotal)
     : (prevTotal !== 0 ? ((currTotal - prevTotal) / Math.abs(prevTotal)) * 100 : 0);
@@ -102,7 +141,6 @@ function DoubleBarChart({
     ? `${isPositiveGrowth ? '+' : ''}${growth.toFixed(1)}%`
     : `${isPositiveGrowth ? '+' : ''}${growth.toFixed(1)}%`;
 
-  // Generar las marcas del eje Y (ticks)
   const ticks = useMemo(() => {
     if (isPercentage) {
       return [100, 80, 60, 40, 20, 0];
@@ -119,19 +157,17 @@ function DoubleBarChart({
 
   return (
     <div className="bg-white border border-zinc-200/80 rounded-[32px] p-6 shadow-[0_2px_12px_rgba(0,0,0,0.02)] space-y-6 flex flex-col">
-      {/* Cabecera del gráfico */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 select-none">
         <div>
           <h3 className="text-[15px] font-black text-zinc-950 tracking-tight uppercase">{title}</h3>
           <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">{description}</p>
         </div>
         
-        {/* Banner de resumen anual YoY */}
-        <div className="bg-[#fafafa] border border-zinc-200/50 rounded-2xl p-3.5 flex items-center justify-between gap-4 min-w-[240px]">
+        <div className="bg-[#fafafa] border border-zinc-200/60 rounded-2xl p-3 flex items-center justify-between gap-4 min-w-[240px]">
           <div className="flex-1 space-y-1">
             <div className="flex justify-between items-baseline gap-2">
               <span className="text-[9px] text-zinc-400 font-extrabold uppercase">{prevYear}:</span>
-              <span className="text-[12px] font-extrabold text-zinc-550">{formatValue(prevTotal)}</span>
+              <span className="text-[12px] font-extrabold text-zinc-500">{formatValue(prevTotal)}</span>
             </div>
             <div className="flex justify-between items-baseline gap-2">
               <span className="text-[9px] text-zinc-400 font-extrabold uppercase">{currYear}:</span>
@@ -148,12 +184,10 @@ function DoubleBarChart({
         </div>
       </div>
 
-      {/* Área de columnas */}
       <div className="w-full overflow-x-auto pb-2 -mx-2 px-2 scrollbar-thin">
         <div className="min-w-[650px] pt-6 flex flex-col relative">
           
-          <div className="flex relative h-40">
-            {/* Eje Y Izquierdo (Etiquetas) */}
+          <div className="flex relative h-44">
             <div className="w-[70px] h-full relative pr-2 select-none">
               {ticks.map((tickVal, idx) => {
                 const pct = range > 0 ? ((tickVal - minVal) / range) * 100 : 0;
@@ -169,10 +203,7 @@ function DoubleBarChart({
               })}
             </div>
 
-            {/* Área de la gráfica (Líneas y barras) */}
             <div className="flex-1 h-full relative border-l border-r border-zinc-150 px-1">
-              
-              {/* Líneas auxiliares horizontales */}
               {ticks.map((tickVal, idx) => {
                 const pct = range > 0 ? ((tickVal - minVal) / range) * 100 : 0;
                 return (
@@ -184,7 +215,6 @@ function DoubleBarChart({
                 );
               })}
               
-              {/* Línea base cero si existen valores negativos (ej. pérdida en utilidad) */}
               {zeroPct > 0 && zeroPct < 100 && (
                 <div 
                   className="absolute inset-x-0 border-t-2 border-dashed border-zinc-300 pointer-events-none z-10"
@@ -192,7 +222,6 @@ function DoubleBarChart({
                 />
               )}
 
-              {/* Columnas comparativas */}
               <div className="flex items-end justify-between h-full relative z-20">
                 {data.map((item) => {
                   const prevHeight = range > 0 ? (Math.abs(item.prevVal) / range) * 100 : 0;
@@ -211,46 +240,35 @@ function DoubleBarChart({
 
                   return (
                     <div key={item.label} className="flex-1 flex flex-col items-center group relative h-full">
-                      
-                      {/* Contenedor de barras dobles */}
                       <div className="w-full h-full relative">
-                        
-                        {/* Barra Año Anterior */}
                         <div 
                           className={`w-3.5 rounded-t-sm hover:opacity-85 transition-all cursor-pointer absolute ${bgClassPrev} ${
                             prevIsNegative ? 'rounded-b-sm rounded-t-none bg-rose-200 border border-rose-300' : ''
                           }`}
                           style={{ ...prevStyle, left: 'calc(50% - 16px)' }}
                         >
-                          {/* Tooltip flotante */}
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-zinc-950 text-white text-[9px] font-bold px-2 py-1 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
                             {prevYear} · {item.label}: {formatValue(item.prevVal)}
                           </div>
                         </div>
 
-                        {/* Barra Año Actual */}
                         <div 
                           className={`w-3.5 rounded-t-sm hover:opacity-85 transition-all cursor-pointer absolute ${bgClassCurr} ${
                             currIsNegative ? 'rounded-b-sm rounded-t-none bg-rose-500 border border-rose-600' : ''
                           }`}
                           style={{ ...currStyle, right: 'calc(50% - 16px)' }}
                         >
-                          {/* Tooltip flotante */}
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 bg-zinc-950 text-white text-[9px] font-bold px-2 py-1 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-30 pointer-events-none">
                             {currYear} · {item.label}: {formatValue(item.currVal)}
                           </div>
                         </div>
-
                       </div>
-
                     </div>
                   );
                 })}
               </div>
-
             </div>
 
-            {/* Eje Y Derecho (Etiquetas) */}
             <div className="w-[70px] h-full relative pl-2 select-none">
               {ticks.map((tickVal, idx) => {
                 const pct = range > 0 ? ((tickVal - minVal) / range) * 100 : 0;
@@ -267,7 +285,6 @@ function DoubleBarChart({
             </div>
           </div>
 
-          {/* Eje X (Meses) */}
           <div className="flex">
             <div className="w-[70px] shrink-0 pr-2" />
             <div className="flex-1 flex justify-between mt-3 pt-2 border-t border-zinc-200/80 select-none px-1">
@@ -283,13 +300,12 @@ function DoubleBarChart({
         </div>
       </div>
 
-      {/* Leyenda de la gráfica */}
       <div className="flex justify-center items-center gap-5 pt-2 select-none border-t border-zinc-150/60">
         <span className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-500">
           <span className={`w-2.5 h-2.5 rounded-md ${bgClassPrev}`} /> {prevYear} (Año Anterior)
         </span>
         <span className="flex items-center gap-1.5 text-[10px] font-bold text-zinc-800">
-          <span className={`w-2.5 h-2.5 rounded-md ${bgClassCurr}`} /> {currYear} (Año Actual)
+          <span className={`w-2.5 h-2.5 rounded-md ${bgClassCurr}`} /> {currYear} (Año Seleccionado)
         </span>
       </div>
 
@@ -297,27 +313,17 @@ function DoubleBarChart({
   );
 }
 
-// Helper para parsear fechas de forma segura en zona horaria local (evita desfases en iOS Safari y Android)
-const parseLocalDate = (dateStr: string): Date => {
-  if (!dateStr) return new Date();
-  const cleanStr = dateStr.split('T')[0];
-  const parts = cleanStr.split('-');
-  if (parts.length < 3) return new Date(dateStr);
-  const [y, m, d] = parts.map(Number);
-  return new Date(y, m - 1, d, 12, 0, 0);
-};
-
-// ── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────
+// ── COMPONENTE PRINCIPAL DE ANALYTICS ──────────────────────────────────────
 export default function AnalyticsPage() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reservas, setReservas] = useState<any[]>([]);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [finanzas, setFinanzas] = useState<any[]>([]);
+  const [summaryData, setSummaryData] = useState<{ totalReservas: number; totalFinances: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [tokenError, setTokenError] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<string | null>(null);
 
   // Estados de navegación y filtros
   const [activeTab, setActiveTab] = useState<'cantidades' | 'graficas'>('cantidades');
@@ -338,56 +344,85 @@ export default function AnalyticsPage() {
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
 
+  // Selector de año para YoY
+  const currentActualYear = useMemo(() => new Date().getFullYear(), []);
+  const [selectedYoYYear, setSelectedYoYYear] = useState<number>(currentActualYear);
+  const previousYoYYear = useMemo(() => selectedYoYYear - 1, [selectedYoYYear]);
+
+  // Carga de datos unificada desde el endpoint de alta velocidad /api/analytics/data
   const fetchData = async () => {
     setIsLoading(true);
     setTokenError(false);
     try {
-      // 1. Fetch de reservas desde Beds24 + Locales (incluyendo histórico)
-      const res = await fetch('/api/reservas?includeCancelled=true');
+      const res = await fetch('/api/analytics/data');
       const json = await res.json();
       if (json.error === 'TOKEN_EXPIRED') { 
         setTokenError(true); 
       } else if (json.success && json.data) {
-        setReservas(json.data);
-      }
-
-      // 2. Fetch de movimientos financieros desde Supabase
-      const { data: finData, error: finErr } = await supabase
-        .from('finances')
-        .select('*');
-      
-      if (!finErr && finData) {
-        setFinanzas(finData);
+        setReservas(json.data.reservas || []);
+        setFinanzas(json.data.finances || []);
+        setSummaryData(json.data.summary || null);
       }
     } catch (e) {
-      console.error("Error en analytics", e);
+      console.error("Error al cargar datos en analytics:", e);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleManualSync = async () => {
+  // Sincronización con Beds24 (Rápida o Histórica Completa)
+  const handleSync = async (mode: 'full' | 'recent' = 'full') => {
     setIsSyncing(true);
+    setSyncProgress(mode === 'full' ? 'Sincronizando histórico multianual Beds24 (2024-2027)...' : 'Sincronizando reservas recientes...');
     try {
-      const res = await fetch('/api/analytics/sync', { method: 'POST' });
+      const res = await fetch('/api/analytics/sync', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode })
+      });
       const json = await res.json();
       if (json.success) {
-        alert(`✅ Sincronización rápida con Beds24 finalizada. Se sincronizaron las reservas del periodo: ${json.from} al ${json.to}.`);
+        alert(`✅ Sincronización con Beds24 completada.\n\nPeriodo: ${json.from} al ${json.to}\nTotal reservas importadas: ${json.count}`);
         await fetchData();
       } else {
         alert(`❌ Error en la sincronización: ${json.error}`);
       }
     } catch (err: any) {
-      console.error("Error en manual sync:", err);
-      alert(`❌ Ocurrió un error inesperado al conectar con el servidor.`);
+      console.error("Error en sync:", err);
+      alert(`❌ Ocurrió un error al conectar con el servidor de sincronización.`);
     } finally {
       setIsSyncing(false);
+      setSyncProgress(null);
     }
   };
 
   useEffect(() => { 
     fetchData(); 
   }, []);
+
+  // ── PRESETS DE FECHAS RÁPIDOS ─────────────────────────────────────────────
+  const setQuickRange = (type: 'this_month' | 'last_month' | 'this_year' | 'all') => {
+    const now = new Date();
+    if (type === 'this_month') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      setStartDate(start.toISOString().split('T')[0]);
+      setEndDate(end.toISOString().split('T')[0]);
+    } else if (type === 'last_month') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      setStartDate(start.toISOString().split('T')[0]);
+      setEndDate(end.toISOString().split('T')[0]);
+    } else if (type === 'this_year') {
+      const start = new Date(now.getFullYear(), 0, 1);
+      const end = new Date(now.getFullYear(), 11, 31);
+      setStartDate(start.toISOString().split('T')[0]);
+      setEndDate(end.toISOString().split('T')[0]);
+    } else if (type === 'all') {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
 
   // ── EXPORTADORES DE ARCHIVOS ──────────────────────────────────────────────
   const exportCSV = async () => {
@@ -404,7 +439,7 @@ export default function AnalyticsPage() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error('CSV export error:', error);
-      alert('Error al exportar. Verifica que el token de Beds24 esté activo.');
+      alert('Error al exportar CSV.');
     } finally {
       setExportLoading(false);
     }
@@ -476,42 +511,59 @@ export default function AnalyticsPage() {
     });
   }, [finanzas, startDate, endDate]);
 
-  // Ingresos totales del periodo basados en estancia (Devengo)
-  const ingresosPeriodo = useMemo(() => {
+  // Ingresos Devengados (Alojamiento real consumido por noche en el rango)
+  const ingresosDevengados = useMemo(() => {
     return reservas
       .filter(r => r.status !== 'cancelled' && r.status !== '0')
       .reduce((sum, r) => sum + getStayRevenueInPeriod(r, startDate, endDate), 0);
   }, [reservas, startDate, endDate]);
 
-  // Egresos Jaroje (totales - categoría "Personal")
+  // Comisiones OTA estimadas/reales del periodo
+  const comisionesOTAPeriodo = useMemo(() => {
+    return reservas
+      .filter(r => r.status !== 'cancelled' && r.status !== '0')
+      .reduce((sum, r) => sum + getStayCommissionInPeriod(r, startDate, endDate), 0);
+  }, [reservas, startDate, endDate]);
+
+  // Ingresos Netos de Alojamiento (Devengados - Comisiones OTA)
+  const ingresosNetos = useMemo(() => {
+    return Math.max(0, ingresosDevengados - comisionesOTAPeriodo);
+  }, [ingresosDevengados, comisionesOTAPeriodo]);
+
+  // Egresos Operativos Jaroje (Caja/Banco local - categoría diferente de "Personal")
   const egresosJarojePeriodo = useMemo(() => {
     return filteredFinanzas
       .filter(f => f.type === 'gasto' && (f.category || '').trim().toLowerCase() !== 'personal')
       .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
   }, [filteredFinanzas]);
 
-  // Egresos Personales (categoría "Personal")
+  // Egresos Personales
   const egresosPersonalesPeriodo = useMemo(() => {
     return filteredFinanzas
       .filter(f => f.type === 'gasto' && (f.category || '').trim().toLowerCase() === 'personal')
       .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
   }, [filteredFinanzas]);
 
-  // Utilidad = Ingresos - Egresos Jaroje
-  const utilidadPeriodo = useMemo(() => {
-    return ingresosPeriodo - egresosJarojePeriodo;
-  }, [ingresosPeriodo, egresosJarojePeriodo]);
+  // Utilidad Bruta Operativa = Ingresos Devengados - Egresos Jaroje
+  const utilidadBrutaPeriodo = useMemo(() => {
+    return ingresosDevengados - egresosJarojePeriodo;
+  }, [ingresosDevengados, egresosJarojePeriodo]);
 
-  // Ocupación calculada de forma dinámica en el rango
-  const { ocupacionPeriodo, totalNochesPeriodo } = useMemo(() => {
+  // Utilidad Neta Real = Ingresos Netos (post-comisiones) - Egresos Jaroje
+  const utilidadNetaPeriodo = useMemo(() => {
+    return ingresosNetos - egresosJarojePeriodo;
+  }, [ingresosNetos, egresosJarojePeriodo]);
+
+  // Ocupación calculada de forma dinámica en el rango (base 22 habitaciones físicas)
+  const { ocupacionPeriodo, totalNochesPeriodo, totalPossibleNights } = useMemo(() => {
     let sDate: Date;
     let eDate: Date;
     
     if (!startDate || !endDate) {
-      if (reservas.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0 };
+      if (reservas.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0, totalPossibleNights: 0 };
       const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
       const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
-      if (checkIns.length === 0 || checkOuts.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0 };
+      if (checkIns.length === 0 || checkOuts.length === 0) return { ocupacionPeriodo: 0, totalNochesPeriodo: 0, totalPossibleNights: 0 };
       sDate = parseLocalDate(checkIns[0]);
       eDate = parseLocalDate(checkOuts[checkOuts.length - 1]);
     } else {
@@ -519,13 +571,13 @@ export default function AnalyticsPage() {
       eDate = parseLocalDate(endDate);
     }
     
-    const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
-    const totalPossibleRoomNights = 22 * rangeDays; // 22 Habitaciones físicas
+    const rangeDays = Math.max(1, Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1);
+    const totalPossibleRoomNights = 22 * rangeDays;
 
     let occupiedNights = 0;
     reservas.forEach(r => {
       if (!r.check_in || !r.check_out) return;
-      if (r.status === 'cancelled' || r.status === '0') return; // Excluir canceladas
+      if (r.status === 'cancelled' || r.status === '0') return;
       const rIn = parseLocalDate(r.check_in);
       const rOut = parseLocalDate(r.check_out);
 
@@ -543,23 +595,24 @@ export default function AnalyticsPage() {
 
     return {
       ocupacionPeriodo: rate,
-      totalNochesPeriodo: occupiedNights
+      totalNochesPeriodo: occupiedNights,
+      totalPossibleNights: totalPossibleRoomNights
     };
   }, [reservas, startDate, endDate]);
 
-  // Cómputo de métricas premium (ADR, RevPAR, ALOS, Cancelación)
-  const premiumMetrics = useMemo(() => {
+  // Cómputo de KPIs Hoteleros (ADR, RevPAR, ALOS, Cancelación)
+  const hotelMetrics = useMemo(() => {
     let sDate: Date;
     let eDate: Date;
     
     if (!startDate || !endDate) {
       if (reservas.length === 0) {
-        return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0 };
+        return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0, totalBookings: 0, activeBookings: 0, cancelledBookings: 0 };
       }
       const checkIns = reservas.map(r => r.check_in).filter(Boolean).sort();
       const checkOuts = reservas.map(r => r.check_out).filter(Boolean).sort();
       if (checkIns.length === 0 || checkOuts.length === 0) {
-        return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0 };
+        return { adr: 0, revpar: 0, alos: '0.0', cancellationRate: 0, totalBookings: 0, activeBookings: 0, cancelledBookings: 0 };
       }
       sDate = parseLocalDate(checkIns[0]);
       eDate = parseLocalDate(checkOuts[checkOuts.length - 1]);
@@ -568,10 +621,9 @@ export default function AnalyticsPage() {
       eDate = parseLocalDate(endDate);
     }
     
-    const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
+    const rangeDays = Math.max(1, Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1);
     const totalPossibleRoomNights = 22 * rangeDays;
 
-    // Reservas que tocan el periodo
     const totalBookingsInPeriod = reservas.filter(r => {
       if (!r.check_in || !r.check_out) return false;
       const rIn = parseLocalDate(r.check_in);
@@ -590,13 +642,21 @@ export default function AnalyticsPage() {
       ? Math.round((cancelledBookings.length / totalBookingsInPeriod.length) * 100)
       : 0;
 
-    const adr = totalNochesPeriodo > 0 ? Math.round(ingresosPeriodo / totalNochesPeriodo) : 0;
-    const revpar = totalPossibleRoomNights > 0 ? Math.round(ingresosPeriodo / totalPossibleRoomNights) : 0;
+    const adr = totalNochesPeriodo > 0 ? Math.round(ingresosDevengados / totalNochesPeriodo) : 0;
+    const revpar = totalPossibleRoomNights > 0 ? Math.round(ingresosDevengados / totalPossibleRoomNights) : 0;
 
-    return { adr, revpar, alos, cancellationRate };
-  }, [reservas, startDate, endDate, totalNochesPeriodo, ingresosPeriodo]);
+    return { 
+      adr, 
+      revpar, 
+      alos, 
+      cancellationRate,
+      totalBookings: totalBookingsInPeriod.length,
+      activeBookings: activeBookings.length,
+      cancelledBookings: cancelledBookings.length
+    };
+  }, [reservas, startDate, endDate, totalNochesPeriodo, ingresosDevengados]);
 
-  // Cómputo de rendimiento por habitación
+  // Cómputo de rendimiento por habitación física (22 unidades)
   const roomPerformanceData = useMemo(() => {
     let sDate: Date;
     let eDate: Date;
@@ -612,7 +672,7 @@ export default function AnalyticsPage() {
       sDate = parseLocalDate(startDate);
       eDate = parseLocalDate(endDate);
     }
-    const rangeDays = Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1;
+    const rangeDays = Math.max(1, Math.round((eDate.getTime() - sDate.getTime()) / 86400000) + 1);
 
     const coreRooms = [
       '101', '102', '103', '104', '105', '106', '107',
@@ -698,30 +758,57 @@ export default function AnalyticsPage() {
     });
   }, [roomPerformanceData, sortField, sortDirection]);
 
-  // ── CÓMPUTO DE SECCIÓN 2: GRÁFICAS HISTÓRICAS (AÑO ACTUAL VS ANTERIOR) ─────
-  const currentYear = useMemo(() => new Date().getFullYear(), []);
-  const previousYear = useMemo(() => currentYear - 1, [currentYear]);
+  // ── CÓMPUTO DE SECCIÓN 2: GRÁFICAS HISTÓRICAS (AÑO SELECCIONADO VS ANTERIOR) ──
+  const availableYears = useMemo(() => {
+    const yearsSet = new Set<number>();
+    yearsSet.add(currentActualYear);
+    yearsSet.add(currentActualYear - 1);
+    yearsSet.add(currentActualYear - 2);
+    
+    reservas.forEach(r => {
+      if (r.check_in) {
+        const y = new Date(r.check_in + 'T12:00:00').getFullYear();
+        if (!isNaN(y) && y >= 2020 && y <= 2030) yearsSet.add(y);
+      }
+    });
+
+    finanzas.forEach(f => {
+      if (f.date) {
+        const y = new Date(f.date.substring(0, 10) + 'T12:00:00').getFullYear();
+        if (!isNaN(y) && y >= 2020 && y <= 2030) yearsSet.add(y);
+      }
+    });
+
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }, [reservas, finanzas, currentActualYear]);
 
   const yearlyComparisonData = useMemo(() => {
     const monthsNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     
     const calculateDataForYear = (year: number) => {
       const months = Array.from({ length: 12 }, (_, monthIdx) => {
-        // Filtrar transacciones del mes
-        const monthFinances = finanzas.filter(f => {
-          if (!f.date) return false;
-          const datePart = (f.date || '').substring(0, 10);
-          const fDate = new Date(datePart + 'T12:00:00');
-          return fDate.getFullYear() === year && fDate.getMonth() === monthIdx;
-        });
-
         const startOfMonthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-01`;
         const endOfMonthDate = new Date(year, monthIdx + 1, 0);
         const endOfMonthStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-${String(endOfMonthDate.getDate()).padStart(2, '0')}`;
 
+        // Filtrar transacciones del mes
+        const monthFinances = finanzas.filter(f => {
+          if (!f.date) return false;
+          const datePart = (f.date || '').substring(0, 10);
+          return datePart >= startOfMonthStr && datePart <= endOfMonthStr;
+        });
+
+        // Ingresos Devengados del mes
         const ingresos = reservas
           .filter(r => r.status !== 'cancelled' && r.status !== '0')
           .reduce((sum, r) => sum + getStayRevenueInPeriod(r, startOfMonthStr, endOfMonthStr), 0);
+
+        // Comisiones del mes
+        const comisiones = reservas
+          .filter(r => r.status !== 'cancelled' && r.status !== '0')
+          .reduce((sum, r) => sum + getStayCommissionInPeriod(r, startOfMonthStr, endOfMonthStr), 0);
+
+        const ingresosNetosMes = Math.max(0, ingresos - comisiones);
 
         const egresosJaroje = monthFinances
           .filter(f => f.type === 'gasto' && (f.category || '').trim().toLowerCase() !== 'personal')
@@ -732,23 +819,25 @@ export default function AnalyticsPage() {
           .reduce((sum, f) => sum + (Number(f.amount) || 0), 0);
 
         const utilidad = ingresos - egresosJaroje;
+        const utilidadNeta = ingresosNetosMes - egresosJaroje;
 
         // Ocupación del mes
-        const startOfMonth = new Date(year, monthIdx, 1);
-        const endOfMonth = new Date(year, monthIdx + 1, 0);
-        const daysInMonth = endOfMonth.getDate();
+        const daysInMonth = endOfMonthDate.getDate();
         const possibleRoomNights = 22 * daysInMonth;
 
         let occupiedNights = 0;
         reservas.forEach(r => {
           if (!r.check_in || !r.check_out) return;
-          if (r.status === 'cancelled' || r.status === '0') return; // Excluir canceladas
+          if (r.status === 'cancelled' || r.status === '0') return;
           const rIn = new Date(r.check_in + 'T12:00:00');
           const rOut = new Date(r.check_out + 'T12:00:00');
 
-          if (rIn < endOfMonth && rOut > startOfMonth) {
-            const overlapStart = new Date(Math.max(rIn.getTime(), startOfMonth.getTime()));
-            const overlapEnd = new Date(Math.min(rOut.getTime(), endOfMonth.getTime()));
+          const sDateM = new Date(startOfMonthStr + 'T12:00:00');
+          const eDateM = new Date(endOfMonthStr + 'T12:00:00');
+
+          if (rIn <= eDateM && rOut >= sDateM) {
+            const overlapStart = new Date(Math.max(rIn.getTime(), sDateM.getTime()));
+            const overlapEnd = new Date(Math.min(rOut.getTime(), eDateM.getTime()));
             const diff = (overlapEnd.getTime() - overlapStart.getTime()) / 86400000;
             occupiedNights += Math.max(0, Math.round(diff));
           }
@@ -760,33 +849,41 @@ export default function AnalyticsPage() {
 
         return {
           ingresos,
+          ingresosNetos: ingresosNetosMes,
+          comisiones,
           egresosJaroje,
           egresosPersonales,
           utilidad,
+          utilidadNeta,
           ocupacion
         };
       });
 
       // Calcular totales anuales consolidados
       const ingresosTotal = months.reduce((s, m) => s + m.ingresos, 0);
+      const ingresosNetosTotal = months.reduce((s, m) => s + m.ingresosNetos, 0);
+      const comisionesTotal = months.reduce((s, m) => s + m.comisiones, 0);
       const egresosJarojeTotal = months.reduce((s, m) => s + m.egresosJaroje, 0);
       const egresosPersonalesTotal = months.reduce((s, m) => s + m.egresosPersonales, 0);
       const utilidadTotal = ingresosTotal - egresosJarojeTotal;
+      const utilidadNetaTotal = ingresosNetosTotal - egresosJarojeTotal;
 
-      // Ocupación promedio del año completo
-      const startOfYear = new Date(year, 0, 1);
-      const endOfYear = new Date(year, 12, 0);
-      const daysInYear = Math.round((endOfYear.getTime() - startOfYear.getTime()) / 86400000) + 1;
+      // Ocupación promedio anual
+      const isLeap = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+      const daysInYear = isLeap ? 366 : 365;
       const possibleNightsYear = 22 * daysInYear;
+
+      const startOfYear = new Date(`${year}-01-01T12:00:00`);
+      const endOfYear = new Date(`${year}-12-31T12:00:00`);
 
       let occupiedYear = 0;
       reservas.forEach(r => {
         if (!r.check_in || !r.check_out) return;
-        if (r.status === 'cancelled' || r.status === '0') return; // Excluir canceladas
+        if (r.status === 'cancelled' || r.status === '0') return;
         const rIn = new Date(r.check_in + 'T12:00:00');
         const rOut = new Date(r.check_out + 'T12:00:00');
 
-        if (rIn < endOfYear && rOut > startOfYear) {
+        if (rIn <= endOfYear && rOut >= startOfYear) {
           const overlapStart = new Date(Math.max(rIn.getTime(), startOfYear.getTime()));
           const overlapEnd = new Date(Math.min(rOut.getTime(), endOfYear.getTime()));
           const diff = (overlapEnd.getTime() - overlapStart.getTime()) / 86400000;
@@ -802,19 +899,21 @@ export default function AnalyticsPage() {
         months,
         totals: {
           ingresos: ingresosTotal,
+          ingresosNetos: ingresosNetosTotal,
+          comisiones: comisionesTotal,
           egresosJaroje: egresosJarojeTotal,
           egresosPersonales: egresosPersonalesTotal,
           utilidad: utilidadTotal,
+          utilidadNeta: utilidadNetaTotal,
           ocupacion: ocupacionTotal
         }
       };
     };
 
-    const prevData = calculateDataForYear(previousYear);
-    const currData = calculateDataForYear(currentYear);
+    const prevData = calculateDataForYear(previousYoYYear);
+    const currData = calculateDataForYear(selectedYoYYear);
 
-    // Formatear arreglos para gráficas
-    const generateChartData = (key: 'ingresos' | 'egresosJaroje' | 'egresosPersonales' | 'utilidad' | 'ocupacion') => {
+    const generateChartData = (key: 'ingresos' | 'egresosJaroje' | 'egresosPersonales' | 'utilidad' | 'utilidadNeta' | 'ocupacion') => {
       return monthsNames.map((name, idx) => ({
         label: name,
         prevVal: prevData.months[idx][key],
@@ -827,13 +926,14 @@ export default function AnalyticsPage() {
       currData,
       charts: {
         utilidad: generateChartData('utilidad'),
+        utilidadNeta: generateChartData('utilidadNeta'),
         ingresos: generateChartData('ingresos'),
         egresosJaroje: generateChartData('egresosJaroje'),
         egresosPersonales: generateChartData('egresosPersonales'),
         ocupacion: generateChartData('ocupacion')
       }
     };
-  }, [finanzas, reservas, currentYear, previousYear]);
+  }, [finanzas, reservas, selectedYoYYear, previousYoYYear]);
 
   // ── SECCIÓN AUXILIAR: BREAKDOWN DE CANALES BEDS24 (FILTRADO POR RANGO) ────
   const { channelData, totalNochesCanales, reservasRevenuePeriodo } = useMemo(() => {
@@ -850,7 +950,7 @@ export default function AnalyticsPage() {
 
     let totalN = 0;
     let totalRev = 0;
-    const channelMap: Record<string, { nights: number; revenue: number }> = {};
+    const channelMap: Record<string, { nights: number; grossRevenue: number; commission: number; netRevenue: number; bookingsCount: number }> = {};
 
     reservas.forEach(r => {
       if (!r.check_in || !r.check_out) return;
@@ -859,7 +959,6 @@ export default function AnalyticsPage() {
       const rIn = new Date(r.check_in + 'T12:00:00');
       const rOut = new Date(r.check_out + 'T12:00:00');
 
-      // Calcular solapamiento
       if (rIn < eDate! && rOut > sDate!) {
         const overlapStart = new Date(Math.max(rIn.getTime(), sDate!.getTime()));
         const overlapEnd = new Date(Math.min(rOut.getTime(), eDate!.getTime()));
@@ -869,18 +968,28 @@ export default function AnalyticsPage() {
         if (overlapNights > 0) {
           totalN += overlapNights;
 
-          // Prorrateo de ingresos diario (Devengo)
           const totalNightsOfBooking = Math.max(1, Math.round((rOut.getTime() - rIn.getTime()) / 86400000));
           const price = Number(r.price_estimate || r.price || 0);
+          const commission = Number(r.commission || 0);
+          
           const pricePerNight = price / totalNightsOfBooking;
-          const proportionalRevenue = pricePerNight * overlapNights;
+          const commissionPerNight = commission / totalNightsOfBooking;
 
-          totalRev += proportionalRevenue;
+          const proportionalGross = pricePerNight * overlapNights;
+          const proportionalCommission = commissionPerNight * overlapNights;
+          const proportionalNet = Math.max(0, proportionalGross - proportionalCommission);
+
+          totalRev += proportionalGross;
 
           const ch = r.channel || 'Directo';
-          if (!channelMap[ch]) channelMap[ch] = { nights: 0, revenue: 0 };
+          if (!channelMap[ch]) {
+            channelMap[ch] = { nights: 0, grossRevenue: 0, commission: 0, netRevenue: 0, bookingsCount: 0 };
+          }
           channelMap[ch].nights += overlapNights;
-          channelMap[ch].revenue += proportionalRevenue;
+          channelMap[ch].grossRevenue += proportionalGross;
+          channelMap[ch].commission += proportionalCommission;
+          channelMap[ch].netRevenue += proportionalNet;
+          channelMap[ch].bookingsCount += 1;
         }
       }
     });
@@ -889,11 +998,14 @@ export default function AnalyticsPage() {
       .map(([name, d]) => ({
         name,
         nights: d.nights,
-        revenue: Math.round(d.revenue),
+        grossRevenue: Math.round(d.grossRevenue),
+        commission: Math.round(d.commission),
+        netRevenue: Math.round(d.netRevenue),
+        bookingsCount: d.bookingsCount,
         pct: totalN > 0 ? Math.round((d.nights / totalN) * 100) : 0,
         color: name.includes('Airbnb') ? '#FF5A5F' : name.includes('Booking') ? '#003580' : name.includes('Expedia') ? '#FFC000' : name.includes('WhatsApp') ? '#25D366' : '#111827'
       }))
-      .sort((a, b) => b.revenue - a.revenue);
+      .sort((a, b) => b.grossRevenue - a.grossRevenue);
 
     return { 
       channelData: data, 
@@ -907,28 +1019,48 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6 pb-24 bg-[#fafafa]">
       
-      {/* Cabecera del Módulo */}
-      <div className="flex items-center justify-between select-none">
+      {/* ── CABECERA DEL MÓDULO ────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 select-none">
         <div>
-          <h2 className="text-[22px] font-black text-zinc-950 tracking-tight uppercase">Analytics</h2>
-          <p className="text-[12px] font-semibold text-zinc-400 mt-0.5">Módulos de Auditoría Contable y Ocupación</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[22px] font-black text-zinc-950 tracking-tight uppercase">Analytics & Reportes</h2>
+            <span className="bg-blue-50 text-blue-700 border border-blue-200/80 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase">
+              Beds24 BI
+            </span>
+          </div>
+          <p className="text-[12px] font-semibold text-zinc-400 mt-0.5">
+            Auditoría Contable, Ocupación y Análisis Histórico Multianual
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Acciones de Sincronización y Recarga */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
           <button
-            onClick={handleManualSync}
+            onClick={() => handleSync('full')}
             disabled={isSyncing || isLoading}
-            className={`px-3 py-2 flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl shadow-sm transition-all ${
+            className={`px-3.5 py-2.5 flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-white bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-200 disabled:text-zinc-400 rounded-xl shadow-sm transition-all ${
               isSyncing ? 'animate-pulse' : 'active:scale-95'
             } cursor-pointer`}
-            title="Sincronizar rango reciente desde Beds24"
+            title="Sincronizar todo el historial de Beds24 (2024-2027)"
           >
-            <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
-            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Beds24'}</span>
+            <RefreshCw size={13} className={isSyncing ? 'animate-spin' : ''} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Histórico Beds24'}</span>
           </button>
+
+          <button
+            onClick={() => handleSync('recent')}
+            disabled={isSyncing || isLoading}
+            className={`px-3 py-2.5 flex items-center gap-1.5 text-[11px] font-bold text-zinc-700 bg-white hover:bg-zinc-50 border border-zinc-200/80 disabled:opacity-50 rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer`}
+            title="Sincronización rápida de los últimos 60 días"
+          >
+            <RefreshCw size={12} />
+            <span className="hidden md:inline">Sync Rápido</span>
+          </button>
+
           <button
             onClick={fetchData}
             disabled={isLoading || isSyncing}
-            className={`w-9 h-9 flex items-center justify-center text-zinc-500 bg-white hover:bg-zinc-50 border border-zinc-200 rounded-xl shadow-sm transition-all ${
+            className={`w-10 h-10 flex items-center justify-center text-zinc-500 bg-white hover:bg-zinc-50 border border-zinc-200/80 rounded-xl shadow-sm transition-all ${
               isLoading ? 'opacity-50' : 'active:scale-95'
             } cursor-pointer`}
             title="Recargar vista local"
@@ -938,15 +1070,32 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
+      {/* Banner de progreso de sincronización */}
+      {syncProgress && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3 animate-in fade-in duration-200 text-blue-900">
+          <RefreshCw size={16} className="animate-spin text-blue-600 shrink-0" />
+          <p className="text-[12px] font-bold">{syncProgress}</p>
+        </div>
+      )}
+
       {/* Error de token Beds24 */}
       {tokenError && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex items-start gap-3 animate-in fade-in duration-200">
           <AlertCircle size={16} className="text-amber-600 shrink-0 mt-0.5" />
-          <p className="text-[13px] font-semibold text-amber-800">Token Beds24 vencido. Actualiza las variables de entorno.</p>
+          <p className="text-[13px] font-semibold text-amber-800">Token Beds24 vencido o no configurado. Revisa tus credenciales en el archivo de entorno.</p>
         </div>
       )}
 
-      {/* Navegador de Pestañas (Tabs) Premium */}
+      {/* Resumen de Base de Datos */}
+      {summaryData && (
+        <div className="flex items-center gap-4 text-[11px] font-bold text-zinc-400 bg-white border border-zinc-200/60 px-4 py-2 rounded-2xl select-none">
+          <span>Total Reservas en BI: <strong className="text-zinc-800">{summaryData.totalReservas.toLocaleString('es-MX')}</strong></span>
+          <span>•</span>
+          <span>Movimientos Financieros: <strong className="text-zinc-800">{summaryData.totalFinances.toLocaleString('es-MX')}</strong></span>
+        </div>
+      )}
+
+      {/* ── NAVEGADOR DE PESTAÑAS (TABS) ──────────────────────────────────── */}
       <div className="flex bg-zinc-100 p-1 border border-zinc-200/50 rounded-2xl shadow-sm select-none">
         <button
           onClick={() => setActiveTab('cantidades')}
@@ -957,7 +1106,7 @@ export default function AnalyticsPage() {
           }`}
         >
           <DollarSign size={15} />
-          Cantidades
+          Cantidades & KPIs
         </button>
         <button
           onClick={() => setActiveTab('graficas')}
@@ -976,20 +1125,52 @@ export default function AnalyticsPage() {
       {activeTab === 'cantidades' && (
         <div className="space-y-6 animate-in fade-in duration-300">
           
-          {/* Selector de Rango de Fechas */}
-          <div className="bg-white border border-zinc-200/80 p-5 rounded-[28px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col md:flex-row md:items-center md:justify-between gap-4 select-none">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-center text-zinc-700">
-                <Calendar size={18} />
+          {/* Selector de Rango de Fechas & Presets */}
+          <div className="bg-white border border-zinc-200/80 p-5 rounded-[28px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col gap-4 select-none">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-zinc-50 rounded-xl border border-zinc-200 flex items-center justify-center text-zinc-700">
+                  <Calendar size={18} />
+                </div>
+                <div>
+                  <h3 className="text-[13px] font-extrabold text-zinc-900 tracking-tight uppercase">Rango de Fechas</h3>
+                  <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Filtrado interactivo de métricas y contabilidad</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-[13px] font-extrabold text-zinc-900 tracking-tight uppercase">Rango de Fechas</h3>
-                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Filtrado interactivo de cantidades</p>
+
+              {/* Presets Rápidos */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={() => setQuickRange('this_month')}
+                  className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-[10px] font-extrabold uppercase transition-all"
+                >
+                  Este Mes
+                </button>
+                <button
+                  onClick={() => setQuickRange('last_month')}
+                  className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-[10px] font-extrabold uppercase transition-all"
+                >
+                  Mes Anterior
+                </button>
+                <button
+                  onClick={() => setQuickRange('this_year')}
+                  className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-[10px] font-extrabold uppercase transition-all"
+                >
+                  Año Actual
+                </button>
+                <button
+                  onClick={() => setQuickRange('all')}
+                  className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-[10px] font-extrabold uppercase transition-all"
+                >
+                  Todo
+                </button>
               </div>
             </div>
-            <div className="flex flex-row items-center gap-3 flex-wrap md:flex-nowrap">
+
+            {/* Inputs de Fechas */}
+            <div className="flex flex-row items-center gap-3 flex-wrap md:flex-nowrap pt-2 border-t border-zinc-100">
               <div className="relative flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px] cursor-pointer hover:bg-zinc-50 transition-colors">
-                <span className="text-[9px] font-extrabold text-zinc-450 uppercase tracking-widest">Desde</span>
+                <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">Desde</span>
                 <span className="text-[12px] font-black text-zinc-800 pr-0.5">
                   {startDate ? startDate : 'Seleccionar'}
                 </span>
@@ -1001,7 +1182,7 @@ export default function AnalyticsPage() {
                 />
               </div>
               <div className="relative flex-1 bg-[#fafafa] border border-zinc-200/80 p-2 rounded-2xl shadow-sm flex items-center justify-between gap-2 px-3.5 min-w-[140px] cursor-pointer hover:bg-zinc-50 transition-colors">
-                <span className="text-[9px] font-extrabold text-zinc-450 uppercase tracking-widest">Hasta</span>
+                <span className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest">Hasta</span>
                 <span className="text-[12px] font-black text-zinc-800 pr-0.5">
                   {endDate ? endDate : 'Seleccionar'}
                 </span>
@@ -1026,79 +1207,85 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {/* Tarjetas de Cantidades */}
+          {/* Tarjetas Principales de Cantidades */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             
-            {/* 1. UTILIDAD */}
+            {/* 1. UTILIDAD NETA OPERATIVA */}
             <div className="bg-gradient-to-br from-indigo-950 via-indigo-900 to-indigo-850 text-white p-6 rounded-[32px] shadow-[0_6px_20px_rgba(55,48,163,0.1)] flex flex-col justify-between relative overflow-hidden group min-h-[160px]">
               <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Utilidad Periodo</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-200">Utilidad Neta Periodo</span>
                 <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black ${
-                  utilidadPeriodo >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                  utilidadNetaPeriodo >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
                 }`}>
-                  {utilidadPeriodo >= 0 ? '+' : '-'} Ingresos - Egresos Jaroje
+                  {utilidadNetaPeriodo >= 0 ? '+' : '-'} Ingresos Netos - Egresos
                 </span>
               </div>
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black tracking-tight">
-                    MX${utilidadPeriodo.toLocaleString('es-MX')}
+                    MX${utilidadNetaPeriodo.toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-indigo-300 font-bold mt-2">Ingresos (Beds24) - Egresos (Caja local)</p>
+                <p className="text-[10px] text-indigo-300 font-bold mt-2">
+                  Ingresos Netos (Beds24 post-comisión) - Egresos Operativos
+                </p>
               </div>
             </div>
 
-            {/* 2. INGRESOS */}
+            {/* 2. INGRESOS DEVENGADOS (ESTANCIA BEDS24) */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ingresos Totales (Beds24)</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ingresos Devengados (Beds24)</span>
                 <TrendingUp size={16} className="text-emerald-500" />
               </div>
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    MX${ingresosPeriodo.toLocaleString('es-MX')}
+                    MX${Math.round(ingresosDevengados).toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Cobros y abonos reales liquidados en Beds24 y locales</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">
+                  Tarifas devengadas por noches de estancia en el periodo
+                </p>
               </div>
             </div>
 
-            {/* 2.5 VENTAS RESERVACIONES */}
+            {/* 3. COMISIONES OTA DEDUCIDAS */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Ventas Reservaciones (Beds24)</span>
-                <TrendingUp size={16} className="text-blue-500" />
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Comisiones Canales (OTA)</span>
+                <Percent size={16} className="text-amber-500" />
               </div>
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    MX${reservasRevenuePeriodo.toLocaleString('es-MX')}
+                    MX${Math.round(comisionesOTAPeriodo).toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Suma de reservas efectivas (Beds24 + Locales)</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">
+                  Booking (17.5%), Airbnb (3%), Expedia deducidos
+                </p>
               </div>
             </div>
 
-            {/* 3. EGRESOS JAROJE */}
+            {/* 4. EGRESOS JAROJE (OPERATIVOS) */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Egresos Jaroje</span>
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Egresos Operativos Jaroje</span>
                 <Briefcase size={16} className="text-rose-500" />
               </div>
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    MX${egresosJarojePeriodo.toLocaleString('es-MX')}
+                    MX${Math.round(egresosJarojePeriodo).toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Egresos operativos (Excluye personal)</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Gastos operativos (Excluye retiros personales)</p>
               </div>
             </div>
 
-            {/* 4. EGRESOS PERSONALES */}
+            {/* 5. EGRESOS PERSONALES */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Egresos Personales</span>
@@ -1107,14 +1294,14 @@ export default function AnalyticsPage() {
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    MX${egresosPersonalesPeriodo.toLocaleString('es-MX')}
+                    MX${Math.round(egresosPersonalesPeriodo).toLocaleString('es-MX')}
                   </p>
                 )}
                 <p className="text-[10px] text-zinc-400 font-bold mt-2">Retiros privados (Categoría: &quot;Personal&quot;)</p>
               </div>
             </div>
 
-            {/* 5. OCUPACIÓN */}
+            {/* 6. OCUPACIÓN HOTELERA */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Porcentaje Ocupación</span>
@@ -1131,83 +1318,71 @@ export default function AnalyticsPage() {
                 <div className="mt-2.5 w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
                   <div className="h-full bg-zinc-900 rounded-full transition-all duration-700" style={{ width: `${ocupacionPeriodo}%` }} />
                 </div>
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Basado en 22 habitaciones físicas</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Basado en 22 habitaciones físicas ({totalPossibleNights} noches disp.)</p>
               </div>
             </div>
 
-            {/* 6. ADR */}
+            {/* 7. ADR (TARIFA PROMEDIO DIARIA) */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">ADR (Tarifa Promedio)</span>
-                <DollarSign size={16} className="text-zinc-650" />
+                <DollarSign size={16} className="text-zinc-600" />
               </div>
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    MX${premiumMetrics.adr.toLocaleString('es-MX')}
+                    MX${hotelMetrics.adr.toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Tarifa promedio diaria cobrada por noche ocupada</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Tarifa promedio diaria generada por noche ocupada</p>
               </div>
             </div>
 
-            {/* 7. RevPAR */}
+            {/* 8. RevPAR (REVENUE POR HABITACIÓN DISPONIBLE) */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">RevPAR (Hab. Disponible)</span>
-                <BarChart3 size={16} className="text-zinc-650" />
+                <BarChart3 size={16} className="text-zinc-600" />
               </div>
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    MX${premiumMetrics.revpar.toLocaleString('es-MX')}
+                    MX${hotelMetrics.revpar.toLocaleString('es-MX')}
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Ingreso promedio por cada habitación física disponible</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">Ingreso promedio sobre las 22 habitaciones totales</p>
               </div>
             </div>
 
-            {/* 8. ALOS */}
+            {/* 9. ESTANCIA PROMEDIO (ALOS) & CANCELACIONES */}
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Estancia Promedio (ALOS)</span>
-                <span className="text-[11px] font-bold text-zinc-500 flex items-center gap-1">
-                  <Calendar size={11} /> Noches
+                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Estancia Media (ALOS)</span>
+                <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
+                  Cancelación: {hotelMetrics.cancellationRate}%
                 </span>
               </div>
               <div>
                 {isLoading ? <Skeleton /> : (
                   <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    {premiumMetrics.alos} noches
+                    {hotelMetrics.alos} <span className="text-lg font-bold text-zinc-400">noches</span>
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Duración promedio de las reservas del periodo</p>
-              </div>
-            </div>
-
-            {/* 9. Tasa de Cancelación */}
-            <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between min-h-[160px] hover:border-zinc-300 hover:shadow-sm transition-all duration-300">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Tasa de Cancelación</span>
-                <TrendingDown size={16} className="text-rose-500" />
-              </div>
-              <div>
-                {isLoading ? <Skeleton /> : (
-                  <p className="text-3xl font-black text-zinc-950 tracking-tight">
-                    {premiumMetrics.cancellationRate}%
-                  </p>
-                )}
-                <p className="text-[10px] text-zinc-400 font-bold mt-2">Porcentaje de reservas que fueron canceladas</p>
+                <p className="text-[10px] text-zinc-400 font-bold mt-2">
+                  {hotelMetrics.activeBookings} activas de {hotelMetrics.totalBookings} reservas totales
+                </p>
               </div>
             </div>
 
           </div>
+
+          {/* Desglose por Canal de Venta (Beds24 Reports) */}
           {channelData.length > 0 ? (
             <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)]">
               <div className="flex items-center justify-between mb-5 select-none">
                 <div>
-                  <h3 className="text-[14px] font-extrabold text-zinc-950 uppercase tracking-wider">Por Canal (Beds24)</h3>
-                  <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Reservas filtradas por fecha</p>
+                  <h3 className="text-[14px] font-extrabold text-zinc-950 uppercase tracking-wider">Desglose por Canal de Venta (Beds24)</h3>
+                  <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Ingresos brutos, comisiones deducidas y cuota de mercado</p>
                 </div>
                 <span className="text-[10px] font-extrabold text-zinc-500 flex items-center gap-1">
                   <Moon size={11} /> {totalNochesCanales} noches totales
@@ -1219,8 +1394,16 @@ export default function AnalyticsPage() {
                     <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: ch.color }} />
                     <div className="flex-1">
                       <div className="flex justify-between mb-1.5 select-none">
-                        <span className="text-[13px] font-bold text-zinc-800">{ch.name}</span>
-                        <span className="text-[13px] font-black text-zinc-950">MX${ch.revenue.toLocaleString('es-MX')}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-bold text-zinc-800">{ch.name}</span>
+                          <span className="text-[11px] text-zinc-400 font-semibold">({ch.nights} noches)</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[13px] font-black text-zinc-950">MX${ch.grossRevenue.toLocaleString('es-MX')}</span>
+                          {ch.commission > 0 && (
+                            <span className="text-[10px] text-rose-500 font-bold ml-2">(-MX${ch.commission.toLocaleString('es-MX')})</span>
+                          )}
+                        </div>
                       </div>
                       <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
                         <div
@@ -1241,12 +1424,12 @@ export default function AnalyticsPage() {
             </div>
           )}
 
-          {/* Rendimiento por Habitación Física (BI) */}
+          {/* Rendimiento por Habitación Física (BI Hotelero) */}
           <div className="bg-white border border-zinc-200/80 p-6 rounded-[32px] shadow-[0_2px_12px_rgba(0,0,0,0.02)] space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 select-none">
               <div>
-                <h3 className="text-[14px] font-extrabold text-zinc-950 uppercase tracking-wider">Rendimiento por Habitación (BI)</h3>
-                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Métricas de eficiencia y ventas por unidad física</p>
+                <h3 className="text-[14px] font-extrabold text-zinc-950 uppercase tracking-wider">Rendimiento por Habitación (22 Unidades)</h3>
+                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Métricas de ocupación, ingresos devengados y ADR por unidad física</p>
               </div>
               <button
                 onClick={exportRoomPerformanceCSV}
@@ -1311,7 +1494,7 @@ export default function AnalyticsPage() {
                       }}
                       className="p-4 text-[10px] font-black uppercase text-zinc-400 tracking-wider cursor-pointer hover:bg-zinc-100/80 transition-colors"
                     >
-                      Revenue Estimado {sortField === 'revenue' && (sortDirection === 'asc' ? '↑' : '↓')}
+                      Ingreso Devengado {sortField === 'revenue' && (sortDirection === 'asc' ? '↑' : '↓')}
                     </th>
                     <th 
                       onClick={() => {
@@ -1376,18 +1559,40 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* ────────────────── CONTENIDO: PESTAÑA GRÁFICAS ────────────────── */}
+      {/* ────────────────── CONTENIDO: PESTAÑA GRÁFICAS (YoY) ─────────────── */}
       {activeTab === 'graficas' && (
         <div className="space-y-6 animate-in fade-in duration-300">
           
-          <div className="bg-zinc-900 border border-zinc-950 p-5 rounded-[28px] shadow-sm select-none text-white">
+          {/* Barra de Control de Años YoY */}
+          <div className="bg-zinc-900 border border-zinc-950 p-5 rounded-[28px] shadow-sm select-none text-white flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-white/10 rounded-xl border border-white/10 flex items-center justify-center text-zinc-200">
                 <BarChart3 size={18} />
               </div>
               <div>
                 <h3 className="text-[13px] font-black tracking-wider uppercase text-zinc-100">Gráficas Comparativas Históricas</h3>
-                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">Comparativa del Año Actual ({currentYear}) contra el Año Anterior ({previousYear})</p>
+                <p className="text-[11px] text-zinc-400 font-semibold mt-0.5">
+                  Comparativa de 12 meses: Año {selectedYoYYear} vs Año Anterior {previousYoYYear}
+                </p>
+              </div>
+            </div>
+
+            {/* Selector de Año */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Año a Comparar:</span>
+              <div className="relative">
+                <select
+                  value={selectedYoYYear}
+                  onChange={e => setSelectedYoYYear(Number(e.target.value))}
+                  className="bg-zinc-800 text-white border border-zinc-700 font-black text-[13px] rounded-xl px-4 py-2 pr-8 appearance-none cursor-pointer focus:outline-none focus:border-blue-500"
+                >
+                  {availableYears.map(year => (
+                    <option key={year} value={year}>
+                      {year} (vs {year - 1})
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" />
               </div>
             </div>
           </div>
@@ -1399,38 +1604,39 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <div className="space-y-6">
-              {/* 1. UTILIDAD */}
+              
+              {/* 1. UTILIDAD NETA */}
               <DoubleBarChart
-                title="UTILIDAD NETAS"
-                description="Ingresos consolidados - egresos de Jaroje (excluye gastos personales)"
-                prevYear={previousYear}
-                currYear={currentYear}
-                prevTotal={yearlyComparisonData.prevData.totals.utilidad}
-                currTotal={yearlyComparisonData.currData.totals.utilidad}
-                data={yearlyComparisonData.charts.utilidad}
-                bgClassPrev="bg-emerald-250 border border-emerald-350"
+                title="UTILIDAD NETA ANUAL"
+                description={`Ingresos Netos (post-comisiones Beds24) - Egresos Operativos (${selectedYoYYear} vs ${previousYoYYear})`}
+                prevYear={previousYoYYear}
+                currYear={selectedYoYYear}
+                prevTotal={yearlyComparisonData.prevData.totals.utilidadNeta}
+                currTotal={yearlyComparisonData.currData.totals.utilidadNeta}
+                data={yearlyComparisonData.charts.utilidadNeta}
+                bgClassPrev="bg-emerald-300 border border-emerald-400"
                 bgClassCurr="bg-emerald-600 border border-emerald-700"
               />
 
-              {/* 2. INGRESOS */}
+              {/* 2. INGRESOS DEVENGADOS */}
               <DoubleBarChart
-                title="INGRESOS TOTALES"
-                description="Total de entradas de dinero contables en Supabase"
-                prevYear={previousYear}
-                currYear={currentYear}
+                title="INGRESOS DEVENGADOS (ESTANCIAS BEDS24)"
+                description={`Total de valor de alojamiento devengado por mes (${selectedYoYYear} vs ${previousYoYYear})`}
+                prevYear={previousYoYYear}
+                currYear={selectedYoYYear}
                 prevTotal={yearlyComparisonData.prevData.totals.ingresos}
                 currTotal={yearlyComparisonData.currData.totals.ingresos}
                 data={yearlyComparisonData.charts.ingresos}
-                bgClassPrev="bg-zinc-200 border border-zinc-300"
+                bgClassPrev="bg-zinc-300 border border-zinc-400"
                 bgClassCurr="bg-zinc-900 border border-zinc-950"
               />
 
-              {/* 3. EGRESOS JAROJE */}
+              {/* 3. EGRESOS OPERATIVOS JAROJE */}
               <DoubleBarChart
-                title="EGRESOS JAROJE"
-                description="Gastos operativos del negocio (no incluye retiros de categoría 'Personal')"
-                prevYear={previousYear}
-                currYear={currentYear}
+                title="EGRESOS OPERATIVOS JAROJE"
+                description={`Gastos del negocio en Supabase (excluye retiros personales) (${selectedYoYYear} vs ${previousYoYYear})`}
+                prevYear={previousYoYYear}
+                currYear={selectedYoYYear}
                 prevTotal={yearlyComparisonData.prevData.totals.egresosJaroje}
                 currTotal={yearlyComparisonData.currData.totals.egresosJaroje}
                 data={yearlyComparisonData.charts.egresosJaroje}
@@ -1441,9 +1647,9 @@ export default function AnalyticsPage() {
               {/* 4. EGRESOS PERSONALES */}
               <DoubleBarChart
                 title="EGRESOS PERSONALES"
-                description="Retiros y gastos privados exclusivamente etiquetados como 'Personal'"
-                prevYear={previousYear}
-                currYear={currentYear}
+                description={`Retiros y gastos de categoría "Personal" (${selectedYoYYear} vs ${previousYoYYear})`}
+                prevYear={previousYoYYear}
+                currYear={selectedYoYYear}
                 prevTotal={yearlyComparisonData.prevData.totals.egresosPersonales}
                 currTotal={yearlyComparisonData.currData.totals.egresosPersonales}
                 data={yearlyComparisonData.charts.egresosPersonales}
@@ -1454,9 +1660,9 @@ export default function AnalyticsPage() {
               {/* 5. % OCUPACIÓN */}
               <DoubleBarChart
                 title="% OCUPACIÓN DE HABITACIONES"
-                description="Ocupación promedio de habitaciones (22 unidades físicas)"
-                prevYear={previousYear}
-                currYear={currentYear}
+                description={`Tasa de ocupación mensual (sobre 22 unidades físicas) (${selectedYoYYear} vs ${previousYoYYear})`}
+                prevYear={previousYoYYear}
+                currYear={selectedYoYYear}
                 prevTotal={yearlyComparisonData.prevData.totals.ocupacion}
                 currTotal={yearlyComparisonData.currData.totals.ocupacion}
                 data={yearlyComparisonData.charts.ocupacion}
@@ -1470,7 +1676,7 @@ export default function AnalyticsPage() {
         </div>
       )}
 
-      {/* ────────────────── PANEL DE EXPORTACIÓN (CONSERVADO) ────────────────── */}
+      {/* ────────────────── PANEL DE EXPORTACIÓN & POWER QUERY ─────────────── */}
       <div className="bg-zinc-900 rounded-[32px] p-6 space-y-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)] select-none">
         <div className="flex items-start justify-between">
           <div>

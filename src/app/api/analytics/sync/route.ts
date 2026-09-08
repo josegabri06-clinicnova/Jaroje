@@ -3,48 +3,77 @@ import { syncBeds24ReservationsRange } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60; // Allow up to 60s for full sync
 
 export async function POST(req: Request) {
   try {
-    // 1. Calcular rango rápido (60 días atrás hasta 120 días adelante)
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Body is optional
+    }
+
+    const { mode = 'full', from, to } = body;
+
     const today = new Date();
-    
-    const fromDate = new Date(today);
-    fromDate.setDate(today.getDate() - 60);
-    const fromDateStr = fromDate.toISOString().split('T')[0];
+    const currentYear = today.getFullYear();
 
-    const toDate = new Date(today);
-    toDate.setDate(today.getDate() + 120);
-    const toDateStr = toDate.toISOString().split('T')[0];
+    let fromDateStr: string;
+    let toDateStr: string;
 
-    console.log(`[Manual Analytics Sync] Sincronizando rango rápido: ${fromDateStr} - ${toDateStr}`);
+    if (mode === 'custom' && from && to) {
+      fromDateStr = from;
+      toDateStr = to;
+    } else if (mode === 'recent') {
+      // Rango reciente (60 días atrás a 120 días adelante)
+      const fromDate = new Date(today);
+      fromDate.setDate(today.getDate() - 60);
+      fromDateStr = fromDate.toISOString().split('T')[0];
 
-    // 2. Ejecutar sincronización
+      const toDate = new Date(today);
+      toDate.setDate(today.getDate() + 120);
+      toDateStr = toDate.toISOString().split('T')[0];
+    } else {
+      // Modo 'full' (Histórico Completo para BI & YoY: 2024-01-01 a 2027-12-31)
+      fromDateStr = '2024-01-01';
+      toDateStr = `${currentYear + 1}-12-31`;
+    }
+
+    console.log(`[Analytics Sync] Iniciando sincronización (${mode}): ${fromDateStr} - ${toDateStr}`);
+
+    // Ejecutar sincronización en Beds24 y Supabase
     const result = await syncBeds24ReservationsRange(fromDateStr, toDateStr);
 
-    // 3. Registrar log de auditoría
+    // Registrar log de auditoría
     try {
       await supabase.from('employee_logs').insert([{
-        employee_num: '001', // General Admin/Manual
-        employee_name: 'Administrador (Manual)',
+        employee_num: '001',
+        employee_name: 'Administrador (Analytics)',
         department: 'administracion',
         module: 'analytics',
-        action: 'manual_analytics_sync_success',
+        action: mode === 'full' ? 'full_historical_analytics_sync_success' : 'manual_analytics_sync_success',
         room: 'Beds24 Sync',
         details: JSON.stringify({
-          text: `Sincronización manual rápida completada. Total importado: ${result.count} reservas.`,
+          text: `Sincronización de Analytics (${mode}) completada. Total importado: ${result.count} reservas.`,
           rango: `${fromDateStr} a ${toDateStr}`,
           success: true
         }),
         created_at: new Date().toISOString()
       }]);
     } catch (logErr) {
-      console.error("[Manual Analytics Sync] Error al registrar log de auditoría:", logErr);
+      console.error("[Analytics Sync] Error al registrar log de auditoría:", logErr);
     }
 
-    return NextResponse.json({ success: true, count: result.count, from: fromDateStr, to: toDateStr });
+    return NextResponse.json({ 
+      success: true, 
+      count: result.count, 
+      from: fromDateStr, 
+      to: toDateStr,
+      mode 
+    });
   } catch (err: any) {
-    console.error("[Manual Analytics Sync] Error:", err);
+    console.error("[Analytics Sync] Error:", err);
     return NextResponse.json({ success: false, error: err.message || String(err) }, { status: 500 });
   }
 }
