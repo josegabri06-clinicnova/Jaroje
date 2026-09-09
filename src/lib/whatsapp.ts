@@ -375,207 +375,362 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
 
-    const components: any[] = [
-      {
-        type: 'body',
-        parameters: parameters.map(p => ({
-          type: 'text',
-          text: p || '—'
-        }))
-      }
-    ];
+    let response: Response;
+    let status: number;
+    let resBody: any;
 
-    if (finalButtonParams && finalButtonParams.length > 0) {
-      const isQuickReply = resolvedButtonType === 'quick_reply' || finalButtonParams[0].startsWith('VIEW_BOOKING_');
+    if (provider === 'ycloud') {
+      const ycloudApiKey = process.env.YCLOUD_API_KEY;
+      const ycloudFrom = process.env.YCLOUD_FROM_PHONE || '+529581168698';
       
-      if (isQuickReply) {
-        components.push({
-          type: 'button',
-          sub_type: 'quick_reply',
-          index: '0',
-          parameters: [
-            {
-              type: 'payload',
-              payload: finalButtonParams[0]
-            }
-          ]
-        });
-      } else {
-        if ((templateName === 'bienvenida_checkin' || templateName === 'seguimiento_satisfaccion') && bookingId) {
-          components.push({
+      if (!ycloudApiKey) {
+        return { success: false, error: 'Credenciales de YCloud (YCLOUD_API_KEY) no configuradas en el servidor' };
+      }
+
+      const ycloudUrl = 'https://api.ycloud.com/v2/whatsapp/messages';
+      const toPhone = cleanedPhone.startsWith('+') ? cleanedPhone : `+${cleanedPhone}`;
+
+      const ycloudComponents: any[] = [
+        {
+          type: 'body',
+          parameters: parameters.map(p => ({
+            type: 'text',
+            text: p || '—'
+          }))
+        }
+      ];
+
+      if (finalButtonParams && finalButtonParams.length > 0) {
+        const isQuickReply = resolvedButtonType === 'quick_reply' || finalButtonParams[0].startsWith('VIEW_BOOKING_');
+        
+        if (isQuickReply) {
+          ycloudComponents.push({
             type: 'button',
-            sub_type: 'url',
-            index: '0',
+            sub_type: 'quick_reply',
+            index: 0,
             parameters: [
               {
-                type: 'text',
-                text: `${bookingId}?lang=${detectedLang}`
-              }
-            ]
-          });
-          components.push({
-            type: 'button',
-            sub_type: 'url',
-            index: '1',
-            parameters: [
-              {
-                type: 'text',
-                text: `${bookingId}?action=maintenance&lang=${detectedLang}`
+                type: 'payload',
+                payload: finalButtonParams[0]
               }
             ]
           });
         } else {
-          components.push({
-            type: 'button',
-            sub_type: 'url',
-            index: '0',
-            parameters: finalButtonParams.map(p => ({
-              type: 'text',
-              text: p || ''
-            }))
-          });
-        }
-      }
-    }
-
-    const payload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: cleanPhoneForMeta(cleanedPhone),
-      type: 'template',
-      template: {
-        name: templateName,
-        language: { code: languageCode },
-        components
-      }
-    };
-
-    let response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    let status = response.status;
-    let resBody = await response.json();
-
-    // Auto-retry with alternative Spanish code if language is 'es_MX' or 'es' and it fails
-    if (status !== 200 && (languageCode === 'es_MX' || languageCode === 'es')) {
-      const altLang = languageCode === 'es_MX' ? 'es' : 'es_MX';
-      console.warn(`Meta API failed with ${status} for template ${templateName} (lang: ${languageCode}). Retrying with alternative Spanish: ${altLang}...`);
-      
-      const retryPayload = {
-        ...payload,
-        template: {
-          ...payload.template,
-          language: { code: altLang }
-        }
-      };
-
-      try {
-        const retryRes = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(retryPayload)
-        });
-
-        if (retryRes.ok) {
-          response = retryRes;
-          status = retryRes.status;
-          resBody = await retryRes.json();
-          console.log(`✅ Success retrying template ${templateName} with language: ${altLang}`);
-        } else {
-          console.warn(`Retry failed with alternative Spanish ${altLang}:`, await retryRes.clone().json());
-        }
-      } catch (retryErr) {
-        console.error(`Error during language retry for template ${templateName}:`, retryErr);
-      }
-    }
-
-    // Auto-retry without button parameters if it still fails (in case the template in Meta has static buttons or no buttons at all)
-    if (status !== 200 && finalButtonParams && finalButtonParams.length > 0) {
-      console.warn(`Meta API failed with ${status} for template ${templateName} (with buttons). Retrying without button parameters...`);
-      
-      const bodyOnlyComponent = components.filter(c => c.type === 'body');
-      const retryNoButtonsPayload = {
-        ...payload,
-        template: {
-          ...payload.template,
-          components: bodyOnlyComponent
-        }
-      };
-
-      try {
-        const retryRes = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(retryNoButtonsPayload)
-        });
-
-        if (retryRes.ok) {
-          response = retryRes;
-          status = retryRes.status;
-          resBody = await retryRes.json();
-          console.log(`✅ Success retrying template ${templateName} without button parameters.`);
-        } else {
-          console.warn(`Retry without buttons failed:`, await retryRes.clone().json());
-          // Si falló el reintento sin botones, ver si podemos probar también con el idioma alternativo sin botones
-          if (languageCode === 'es_MX' || languageCode === 'es') {
-            const altLang = languageCode === 'es_MX' ? 'es' : 'es_MX';
-            const retryNoButtonsAltLangPayload = {
-              ...retryNoButtonsPayload,
-              template: {
-                ...retryNoButtonsPayload.template,
-                language: { code: altLang }
-              }
-            };
-            const retryAltRes = await fetch(url, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(retryNoButtonsAltLangPayload)
+          if ((templateName === 'bienvenida_checkin' || templateName === 'seguimiento_satisfaccion') && bookingId) {
+            ycloudComponents.push({
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [
+                {
+                  type: 'text',
+                  text: `${bookingId}?lang=${detectedLang}`
+                }
+              ]
             });
-            if (retryAltRes.ok) {
-              response = retryAltRes;
-              status = retryAltRes.status;
-              resBody = await retryAltRes.json();
-              console.log(`✅ Success retrying template ${templateName} without button parameters in alternative language: ${altLang}`);
-            }
+            ycloudComponents.push({
+              type: 'button',
+              sub_type: 'url',
+              index: 1,
+              parameters: [
+                {
+                  type: 'text',
+                  text: `${bookingId}?action=maintenance&lang=${detectedLang}`
+                }
+              ]
+            });
+          } else {
+            ycloudComponents.push({
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [
+                {
+                  type: 'text',
+                  text: finalButtonParams[0] || ''
+                }
+              ]
+            });
           }
         }
-      } catch (retryErr) {
-        console.error(`Error during no-button retry for template ${templateName}:`, retryErr);
+      }
+
+      const ycloudLang = detectedLang === 'en' ? 'en' : 'es';
+      const ycloudPayload = {
+        from: ycloudFrom,
+        to: toPhone,
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: ycloudLang },
+          components: ycloudComponents
+        }
+      };
+
+      response = await fetch(ycloudUrl, {
+        method: 'POST',
+        headers: {
+          'X-API-Key': ycloudApiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(ycloudPayload)
+      });
+
+      status = response.status;
+      resBody = await response.json();
+
+      // Retry without buttons for YCloud if it fails due to button structure mismatch
+      if (!response.ok && finalButtonParams && finalButtonParams.length > 0) {
+        console.warn(`YCloud API failed with ${status} for template ${templateName} (with buttons). Retrying without button parameters...`);
+        const ycloudNoButtonsPayload = {
+          ...ycloudPayload,
+          template: {
+            ...ycloudPayload.template,
+            components: ycloudComponents.filter(c => c.type === 'body')
+          }
+        };
+
+        try {
+          const retryRes = await fetch(ycloudUrl, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': ycloudApiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(ycloudNoButtonsPayload)
+          });
+
+          if (retryRes.ok) {
+            response = retryRes;
+            status = retryRes.status;
+            resBody = await retryRes.json();
+            console.log(`✅ Success retrying YCloud template ${templateName} without buttons.`);
+          }
+        } catch (retryErr) {
+          console.error(`Error retrying YCloud template ${templateName}:`, retryErr);
+        }
+      }
+
+      if (!response.ok) {
+        console.error(`YCloud API error template ${templateName}:`, resBody);
+        try {
+          await supabase.from('employee_logs').insert([{
+            employee_num: '000',
+            action: 'whatsapp-error',
+            department: 'whatsapp',
+            room: 'YCloud API',
+            details: `Error al enviar plantilla '${templateName}' a ${cleanedPhone} (YCloud): Status ${status} - Response: ${JSON.stringify(resBody)}`
+          }]);
+        } catch (logErr) {
+          console.error("Error al registrar error de WhatsApp en employee_logs:", logErr);
+        }
+        return { success: false, error: resBody.error?.message || resBody.message || 'Error de la API de YCloud' };
+      }
+    } else {
+      // ── DRIVER META CLOUD API (100% ORIGINAL E INTACTO) ──────────────────────
+      const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+
+      const components: any[] = [
+        {
+          type: 'body',
+          parameters: parameters.map(p => ({
+            type: 'text',
+            text: p || '—'
+          }))
+        }
+      ];
+
+      if (finalButtonParams && finalButtonParams.length > 0) {
+        const isQuickReply = resolvedButtonType === 'quick_reply' || finalButtonParams[0].startsWith('VIEW_BOOKING_');
+        
+        if (isQuickReply) {
+          components.push({
+            type: 'button',
+            sub_type: 'quick_reply',
+            index: '0',
+            parameters: [
+              {
+                type: 'payload',
+                payload: finalButtonParams[0]
+              }
+            ]
+          });
+        } else {
+          if ((templateName === 'bienvenida_checkin' || templateName === 'seguimiento_satisfaccion') && bookingId) {
+            components.push({
+              type: 'button',
+              sub_type: 'url',
+              index: '0',
+              parameters: [
+                {
+                  type: 'text',
+                  text: `${bookingId}?lang=${detectedLang}`
+                }
+              ]
+            });
+            components.push({
+              type: 'button',
+              sub_type: 'url',
+              index: '1',
+              parameters: [
+                {
+                  type: 'text',
+                  text: `${bookingId}?action=maintenance&lang=${detectedLang}`
+                }
+              ]
+            });
+          } else {
+            components.push({
+              type: 'button',
+              sub_type: 'url',
+              index: '0',
+              parameters: finalButtonParams.map(p => ({
+                type: 'text',
+                text: p || ''
+              }))
+            });
+          }
+        }
+      }
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: cleanPhoneForMeta(cleanedPhone),
+        type: 'template',
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          components
+        }
+      };
+
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      status = response.status;
+      resBody = await response.json();
+
+      // Auto-retry with alternative Spanish code if language is 'es_MX' or 'es' and it fails
+      if (status !== 200 && (languageCode === 'es_MX' || languageCode === 'es')) {
+        const altLang = languageCode === 'es_MX' ? 'es' : 'es_MX';
+        console.warn(`Meta API failed with ${status} for template ${templateName} (lang: ${languageCode}). Retrying with alternative Spanish: ${altLang}...`);
+        
+        const retryPayload = {
+          ...payload,
+          template: {
+            ...payload.template,
+            language: { code: altLang }
+          }
+        };
+
+        try {
+          const retryRes = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(retryPayload)
+          });
+
+          if (retryRes.ok) {
+            response = retryRes;
+            status = retryRes.status;
+            resBody = await retryRes.json();
+            console.log(`✅ Success retrying template ${templateName} with language: ${altLang}`);
+          } else {
+            console.warn(`Retry failed with alternative Spanish ${altLang}:`, await retryRes.clone().json());
+          }
+        } catch (retryErr) {
+          console.error(`Error during language retry for template ${templateName}:`, retryErr);
+        }
+      }
+
+      // Auto-retry without button parameters if it still fails (in case the template in Meta has static buttons or no buttons at all)
+      if (status !== 200 && finalButtonParams && finalButtonParams.length > 0) {
+        console.warn(`Meta API failed with ${status} for template ${templateName} (with buttons). Retrying without button parameters...`);
+        
+        const bodyOnlyComponent = components.filter(c => c.type === 'body');
+        const retryNoButtonsPayload = {
+          ...payload,
+          template: {
+            ...payload.template,
+            components: bodyOnlyComponent
+          }
+        };
+
+        try {
+          const retryRes = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(retryNoButtonsPayload)
+          });
+
+          if (retryRes.ok) {
+            response = retryRes;
+            status = retryRes.status;
+            resBody = await retryRes.json();
+            console.log(`✅ Success retrying template ${templateName} without button parameters.`);
+          } else {
+            console.warn(`Retry without buttons failed:`, await retryRes.clone().json());
+            if (languageCode === 'es_MX' || languageCode === 'es') {
+              const altLang = languageCode === 'es_MX' ? 'es' : 'es_MX';
+              const retryNoButtonsAltLangPayload = {
+                ...retryNoButtonsPayload,
+                template: {
+                  ...retryNoButtonsPayload.template,
+                  language: { code: altLang }
+                }
+              };
+              const retryAltRes = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(retryNoButtonsAltLangPayload)
+              });
+              if (retryAltRes.ok) {
+                response = retryAltRes;
+                status = retryAltRes.status;
+                resBody = await retryAltRes.json();
+                console.log(`✅ Success retrying template ${templateName} without button parameters in alternative language: ${altLang}`);
+              }
+            }
+          }
+        } catch (retryErr) {
+          console.error(`Error during no-button retry for template ${templateName}:`, retryErr);
+        }
+      }
+
+      if (status !== 200) {
+        console.error(`Meta API error template ${templateName}:`, resBody);
+        try {
+          await supabase.from('employee_logs').insert([{
+            employee_num: '000',
+            action: 'whatsapp-error',
+            department: 'whatsapp',
+            room: 'Meta API',
+            details: `Error al enviar plantilla '${templateName}' a ${cleanedPhone}: Status ${status} - Response: ${JSON.stringify(resBody)}`
+          }]);
+        } catch (logErr) {
+          console.error("Error al registrar error de WhatsApp en employee_logs:", logErr);
+        }
+        return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
       }
     }
-
-     if (status !== 200) {
-       console.error(`Meta API error template ${templateName}:`, resBody);
-       try {
-         await supabase.from('employee_logs').insert([{
-           employee_num: '000',
-           action: 'whatsapp-error',
-           department: 'whatsapp',
-           room: 'Meta API',
-           details: `Error al enviar plantilla '${templateName}' a ${cleanedPhone}: Status ${status} - Response: ${JSON.stringify(resBody)}`
-         }]);
-       } catch (logErr) {
-         console.error("Error al registrar error de WhatsApp en employee_logs:", logErr);
-       }
-       return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
-     }
 
     // Registrar el envío de plantilla en la tabla 'conversations'
     try {
@@ -732,22 +887,65 @@ export async function sendWhatsAppTemplate(
   }
 }
 
-// Envía un mensaje de texto libre por WhatsApp llamando a Meta Cloud API
+// Envía un mensaje de texto libre por WhatsApp (soporta YCloud y Meta)
 export async function sendWhatsAppTextMessage(
   phone: string,
   body: string
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   try {
+    const cleanedPhone = normalizePhone(phone);
+    if (!cleanedPhone) {
+      return { success: false, error: 'Formato de teléfono no válido' };
+    }
+
+    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
+
+    if (provider === 'ycloud') {
+      const ycloudApiKey = process.env.YCLOUD_API_KEY;
+      const ycloudFrom = process.env.YCLOUD_FROM_PHONE || '+529581168698';
+
+      if (!ycloudApiKey) {
+        return { success: false, error: 'Credenciales de YCloud (YCLOUD_API_KEY) no configuradas en el servidor' };
+      }
+
+      const ycloudUrl = 'https://api.ycloud.com/v2/whatsapp/messages';
+      const toPhone = cleanedPhone.startsWith('+') ? cleanedPhone : `+${cleanedPhone}`;
+
+      const payload = {
+        from: ycloudFrom,
+        to: toPhone,
+        type: 'text',
+        text: {
+          body: body
+        }
+      };
+
+      const response = await fetch(ycloudUrl, {
+        method: 'POST',
+        headers: {
+          'X-API-Key': ycloudApiKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const status = response.status;
+      const resBody = await response.json();
+
+      if (!response.ok) {
+        console.error(`YCloud API error text message to ${toPhone}:`, resBody);
+        return { success: false, error: resBody.error?.message || resBody.message || 'Error de la API de YCloud' };
+      }
+
+      return { success: true, data: resBody };
+    }
+
+    // ── DRIVER META CLOUD API (100% ORIGINAL E INTACTO) ──────────────────────
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
 
     if (!token || !phoneId) {
-      return { success: false, error: 'Credenciales de WhatsApp no configuradas en el servidor' };
-    }
-
-    const cleanedPhone = normalizePhone(phone);
-    if (!cleanedPhone) {
-      return { success: false, error: 'Formato de teléfono no válido' };
+      return { success: false, error: 'Credenciales de WhatsApp (Meta) no configuradas en el servidor' };
     }
 
     const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;

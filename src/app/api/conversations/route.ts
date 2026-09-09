@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendWhatsAppTextMessage, sendWhatsAppTemplate } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,59 +89,18 @@ export async function POST(req: Request) {
     // ── MODO: Iniciar nuevo chat con plantilla ──────────────────────────────────
     if (body.action === 'start_new_chat') {
       const { guestName, guestPhone } = body;
-      const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
-      const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
-
-      if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-        return NextResponse.json({
-          success: false,
-          error: 'Faltan WHATSAPP_TOKEN y WHATSAPP_PHONE_ID en las variables de entorno.'
-        }, { status: 500 });
-      }
-
       const cleanPhone = normalizePhone(guestPhone);
 
-      // Enviar plantilla de WhatsApp
-      const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to: cleanPhone,
-          type: 'template',
-          template: {
-            name: 'presentacion_cliente_jaroje_2',
-            language: { code: 'es_MX' },
-            components: [
-              {
-                type: 'body',
-                parameters: [
-                  {
-                    type: 'text',
-                    text: guestName || 'Cliente'
-                  }
-                ]
-              }
-            ]
-          }
-        }),
-      });
+      // Enviar plantilla de WhatsApp mediante el driver unificado (YCloud o Meta)
+      const waRes = await sendWhatsAppTemplate(
+        cleanPhone,
+        'presentacion_cliente_jaroje_2',
+        [guestName || 'Cliente']
+      );
 
-      if (!waRes.ok) {
-        const errBody = await waRes.json();
-        console.error("=== ERROR EN WHATSAPP CLOUD API ===");
-        console.error("Status:", waRes.status);
-        console.error("Payload enviado:", JSON.stringify({
-          to: cleanPhone,
-          phoneId: WHATSAPP_PHONE_ID
-        }));
-        console.error("Token utilizado (primeros 15 chars):", WHATSAPP_TOKEN.substring(0, 15));
-        console.error("Respuesta de Meta:", JSON.stringify(errBody, null, 2));
-        return NextResponse.json({ success: false, error: errBody }, { status: 502 });
+      if (!waRes.success) {
+        console.error("=== ERROR ENVIANDO PLANTILLA INICIAL WHATSAPP ===", waRes.error);
+        return NextResponse.json({ success: false, error: waRes.error }, { status: 502 });
       }
 
       // Redactar el texto del mensaje enviado para guardarlo localmente
@@ -197,38 +157,13 @@ export async function POST(req: Request) {
     // ── MODO: Respuesta manual del gerente ────────────────────────────────────
     if (body.action === 'send_manual_reply') {
       const { conversationId, message, guestPhone } = body;
-      const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
-      const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
 
-      if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-        return NextResponse.json({
-          success: false,
-          error: 'Faltan WHATSAPP_TOKEN y WHATSAPP_PHONE_ID en las variables de entorno.'
-        }, { status: 500 });
-      }
+      // Enviar mensaje real por WhatsApp mediante el driver unificado (YCloud o Meta)
+      const waRes = await sendWhatsAppTextMessage(guestPhone, message);
 
-      // Enviar mensaje real por WhatsApp Cloud API
-      const waRes = await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: normalizePhone(guestPhone),
-          type: 'text',
-          text: { body: message },
-        }),
-      });
-
-      if (!waRes.ok) {
-        const errBody = await waRes.json();
-        console.error("=== ERROR EN MANUAL REPLY WHATSAPP CLOUD API ===");
-        console.error("Status:", waRes.status);
-        console.error("Token utilizado (primeros 15 chars):", WHATSAPP_TOKEN.substring(0, 15));
-        console.error("Respuesta de Meta:", JSON.stringify(errBody, null, 2));
-        return NextResponse.json({ success: false, error: errBody }, { status: 502 });
+      if (!waRes.success) {
+        console.error("=== ERROR EN MANUAL REPLY WHATSAPP ===", waRes.error);
+        return NextResponse.json({ success: false, error: waRes.error }, { status: 502 });
       }
 
       // Añadir el mensaje del gerente al array de mensajes en Supabase
@@ -569,26 +504,10 @@ export async function POST(req: Request) {
     // Enviar respuesta automática por WhatsApp si se activó algún disparador
     // Solo enviar texto si finalBotResponse no es null (el template CTA lo envía directamente)
     if (isAutoReplyTriggered && finalBotResponse) {
-      const WHATSAPP_TOKEN    = process.env.WHATSAPP_TOKEN;
-      const WHATSAPP_PHONE_ID = process.env.WHATSAPP_PHONE_ID;
-      if (WHATSAPP_TOKEN && WHATSAPP_PHONE_ID) {
-        try {
-          await fetch(`https://graph.facebook.com/v18.0/${WHATSAPP_PHONE_ID}/messages`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              messaging_product: 'whatsapp',
-              to: cleanPhoneForMeta(phone),
-              type: 'text',
-              text: { body: finalBotResponse },
-            }),
-          });
-        } catch (e) {
-          console.error("Error sending automatic response to WhatsApp:", e);
-        }
+      try {
+        await sendWhatsAppTextMessage(phone, finalBotResponse);
+      } catch (e) {
+        console.error("Error sending automatic response to WhatsApp:", e);
       }
     }
 
