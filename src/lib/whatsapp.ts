@@ -481,6 +481,39 @@ export async function sendWhatsAppTemplate(
       status = response.status;
       resBody = await response.json();
 
+      // Si falla por plantilla no disponible (ej: 'disponibilidad_liberada' vs 'disponibilidad_liberada_'), reintentar con el nombre alternativo
+      if (!response.ok && (resBody.error?.code === 'WHATSAPP_TEMPLATE_UNAVAILABLE' || String(resBody.error?.message || '').includes('PENDING'))) {
+        const altName = templateName.endsWith('_') ? templateName.slice(0, -1) : `${templateName}_`;
+        console.warn(`[YCloud] Plantilla '${templateName}' no disponible. Reintentando con alias '${altName}'...`);
+        const ycloudAltNamePayload = {
+          ...ycloudPayload,
+          template: {
+            ...ycloudPayload.template,
+            name: altName
+          }
+        };
+
+        try {
+          const retryNameRes = await fetch(ycloudUrl, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': ycloudApiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(ycloudAltNamePayload)
+          });
+
+          if (retryNameRes.ok) {
+            response = retryNameRes;
+            status = retryNameRes.status;
+            resBody = await retryNameRes.json();
+            console.log(`✅ [YCloud] Éxito enviando con plantilla alternativa: ${altName}`);
+          }
+        } catch (retryNameErr) {
+          console.error(`[YCloud] Error reintentando plantilla alternativa:`, retryNameErr);
+        }
+      }
+
       // Retry without buttons for YCloud if it fails due to button structure mismatch
       if (!response.ok && finalButtonParams && finalButtonParams.length > 0) {
         console.warn(`YCloud API failed with ${status} for template ${templateName} (with buttons). Retrying without button parameters...`);
