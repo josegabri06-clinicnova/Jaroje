@@ -380,6 +380,7 @@ export async function sendWhatsAppTemplate(
     let response: Response;
     let status: number;
     let resBody: any;
+    let executeMeta = provider === 'meta';
 
     if (provider === 'ycloud') {
       const ycloudApiKey = process.env.YCLOUD_API_KEY;
@@ -547,22 +548,32 @@ export async function sendWhatsAppTemplate(
       }
 
       if (!response.ok) {
-        console.error(`YCloud API error template ${templateName}:`, resBody);
+        console.warn(`[WhatsApp Hybrid Router] YCloud no pudo procesar la plantilla '${templateName}' (${resBody.error?.message || status}). Ejecutando fallback automático a Meta Cloud API...`);
         try {
           await supabase.from('employee_logs').insert([{
             employee_num: '000',
-            action: 'whatsapp-error',
+            action: 'whatsapp-hybrid-fallback',
             department: 'whatsapp',
-            room: 'YCloud API',
-            details: `Error al enviar plantilla '${templateName}' a ${cleanedPhone} (YCloud): Status ${status} - Response: ${JSON.stringify(resBody)}`
+            room: 'Meta Fallback',
+            details: `YCloud error en plantilla '${templateName}' (${resBody.error?.message || status}). Reenviado automáticamente por Meta Cloud API a ${cleanedPhone}.`
           }]);
         } catch (logErr) {
-          console.error("Error al registrar error de WhatsApp en employee_logs:", logErr);
+          console.error("Error al registrar log de fallback:", logErr);
         }
-        return { success: false, error: resBody.error?.message || resBody.message || 'Error de la API de YCloud' };
+        // Activar el bloque de Meta como respaldo
+        executeMeta = true;
       }
-    } else {
-      // ── DRIVER META CLOUD API (100% ORIGINAL E INTACTO) ──────────────────────
+    }
+
+    if (executeMeta) {
+      // ── DRIVER META CLOUD API (RESPALDO AUTOMÁTICO O PROVEEDOR PRINCIPAL) ──
+      const token = process.env.WHATSAPP_TOKEN;
+      const phoneId = process.env.WHATSAPP_PHONE_ID;
+
+      if (!token || !phoneId) {
+        return { success: false, error: 'Credenciales de Meta no configuradas para fallback' };
+      }
+
       const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
 
       const components: any[] = [
@@ -965,15 +976,14 @@ export async function sendWhatsAppTextMessage(
       const status = response.status;
       const resBody = await response.json();
 
-      if (!response.ok) {
-        console.error(`YCloud API error text message to ${toPhone}:`, resBody);
-        return { success: false, error: resBody.error?.message || resBody.message || 'Error de la API de YCloud' };
+      if (response.ok) {
+        return { success: true, data: resBody };
       }
 
-      return { success: true, data: resBody };
+      console.warn(`[WhatsApp Hybrid Router] YCloud falló enviando texto a ${toPhone} (${resBody.error?.message || status}). Ejecutando fallback a Meta...`);
     }
 
-    // ── DRIVER META CLOUD API (100% ORIGINAL E INTACTO) ──────────────────────
+    // ── DRIVER META CLOUD API (RESPALDO AUTOMÁTICO O PROVEEDOR PRINCIPAL) ──
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
 
