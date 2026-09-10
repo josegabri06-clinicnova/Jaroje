@@ -802,19 +802,20 @@ function ReservasListInner() {
         if (oId === rId) return false;
         if (o.status !== r.status) return false;
         
-        const oMasterId = o.master_id ? String(o.master_id) : (o.masterId ? String(o.masterId) : null);
-        const sameMaster = (rMasterId && oMasterId && rMasterId === oMasterId) ||
-                           (rMasterId && rMasterId === oId) ||
-                           (oMasterId && oMasterId === rId);
-        if (sameMaster) return true;
+        // REGLA CRÍTICA DE FECHAS: Las reservas con fechas de entrada o salida distintas NUNCA se agrupan, son independientes
+        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
 
         // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
         const rCh = String(r.channel || '').toLowerCase().trim();
         const oCh = String(o.channel || '').toLowerCase().trim();
         if (rCh !== oCh) return false;
 
-        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
-        
+        const oMasterId = o.master_id ? String(o.master_id) : (o.masterId ? String(o.masterId) : null);
+        const sameMaster = (rMasterId && oMasterId && rMasterId === oMasterId) ||
+                           (rMasterId && rMasterId === oId) ||
+                           (oMasterId && oMasterId === rId);
+        if (sameMaster) return true;
+
         const oDigits = cleanDigits(o.guest_phone || o.phone || o.mobile || '');
         const samePhone = mainDigits && oDigits && mainDigits.length >= 7 && (mainDigits === oDigits || mainDigits.endsWith(oDigits) || oDigits.endsWith(mainDigits));
         const oName = cleanStr(o.guest_name);
@@ -1971,19 +1972,20 @@ function ReservasListInner() {
       const isSelCancelled = selectedRes.status === 'cancelled' || String(selectedRes.status) === '0';
       if (isRCancelled !== isSelCancelled) return false;
       
-      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
-      const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
-                         (selMasterId && selMasterId === rId) ||
-                         (rMasterId && rMasterId === selId);
-      if (sameMaster) return true;
+      // REGLA CRÍTICA DE FECHAS: Las reservas con fechas de entrada o salida distintas NUNCA se agrupan, son independientes
+      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
 
       // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
       const rCh = String(r.channel || '').toLowerCase().trim();
       const selCh = String(selectedRes.channel || '').toLowerCase().trim();
       if (rCh !== selCh) return false;
 
-      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
-      
+      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
+      const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
+                         (selMasterId && selMasterId === rId) ||
+                         (rMasterId && rMasterId === selId);
+      if (sameMaster) return true;
+
       const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
       const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
       const rName = cleanStr(r.guest_name || '');
@@ -2875,6 +2877,9 @@ function ReservasListInner() {
       const isRCancelled = r.status === 'cancelled' || String(r.status) === '0';
       if (!isRCancelled) return;
       
+      // REGLA CRÍTICA DE FECHAS: Reservas con fechas distintas NUNCA son hermanas ni grupo
+      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return;
+
       const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
       const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
                          (selMasterId && selMasterId === rId) ||
@@ -2889,14 +2894,12 @@ function ReservasListInner() {
       const selCh = String(selectedRes.channel || '').toLowerCase().trim();
       if (rCh !== selCh) return;
 
-      if (r.check_in === selectedRes.check_in && r.check_out === selectedRes.check_out) {
-        const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
-        const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
-        const rName = cleanStr(r.guest_name || '');
-        const sameName = mainName && rName && (rName === mainName || rName.includes(mainName) || mainName.includes(rName));
-        if (samePhone || sameName) {
-          memberIdSet.add(rId);
-        }
+      const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
+      const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
+      const rName = cleanStr(r.guest_name || '');
+      const sameName = mainName && rName && (rName === mainName || rName.includes(mainName) || mainName.includes(rName));
+      if (samePhone || sameName) {
+        memberIdSet.add(rId);
       }
     });
 

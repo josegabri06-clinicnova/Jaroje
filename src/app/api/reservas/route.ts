@@ -1269,6 +1269,164 @@ export async function PUT(req: Request) {
       }
     }
 
+    // 0. Si viene groupBookings (modificación de grupo consolidado), actualizar todos los miembros
+    if (Array.isArray(body.groupBookings) && body.groupBookings.length > 0) {
+      console.log(`[Reservas PUT Group] Modificando grupo de ${body.groupBookings.length} habitaciones...`);
+      const BEDS24_TOKEN = await getBeds24Token();
+      const beds24BatchPayload: any[] = [];
+      const updatedBeds24Ids: string[] = [];
+
+      for (const m of body.groupBookings) {
+        const mIdStr = String(m.id);
+        const mIdNum = Number(m.id);
+
+        // A. Verificar si es reserva local
+        const { data: localMem } = await supabase
+          .from('local_reservas')
+          .select('*')
+          .eq('id', mIdNum)
+          .maybeSingle();
+
+        if (localMem) {
+          const localUpdate: any = {};
+          if (guestName) localUpdate.guest_name = guestName;
+          if (phone !== undefined) localUpdate.phone = phone;
+          if (m.numAdult !== undefined) localUpdate.num_adult = Number(m.numAdult);
+          if (m.numChild !== undefined) localUpdate.num_child = Number(m.numChild);
+          if (m.price !== undefined) localUpdate.price = Number(m.price);
+          if (m.deposit !== undefined) localUpdate.deposit = Number(m.deposit);
+          if (notes !== undefined) localUpdate.notes = notes;
+          if (checkIn) localUpdate.check_in = checkIn;
+          if (checkOut) localUpdate.check_out = checkOut;
+
+          await supabase.from('local_reservas').update(localUpdate).eq('id', mIdNum);
+
+          const dbUpdate: any = {};
+          if (guestName) dbUpdate.guest_name = guestName;
+          if (checkIn) dbUpdate.check_in_date = checkIn;
+          if (checkOut) dbUpdate.check_out_date = checkOut;
+          if (Object.keys(dbUpdate).length > 0) {
+            await supabase.from('checkins').update(dbUpdate).eq('reservation_id', mIdStr);
+          }
+        } else {
+          // B. Es reserva Beds24
+          const b24Item: any = {
+            id: mIdNum,
+            bookId: mIdNum
+          };
+          if (checkIn) b24Item.arrival = checkIn;
+          if (checkOut) b24Item.departure = checkOut;
+
+          if (guestName) {
+            const nameParts = guestName.trim().split(/\s+/);
+            if (nameParts.length > 1) {
+              b24Item.firstName = nameParts[0];
+              b24Item.lastName = nameParts.slice(1).join(' ');
+            } else {
+              b24Item.firstName = guestName.trim();
+              b24Item.lastName = '';
+            }
+          }
+          if (phone !== undefined) {
+            b24Item.phone = phone;
+            b24Item.mobile = phone;
+          }
+          if (m.numAdult !== undefined) b24Item.numAdult = Number(m.numAdult);
+          if (m.numChild !== undefined) b24Item.numChild = Number(m.numChild);
+          if (notes !== undefined) b24Item.notes = notes;
+          if (m.deposit !== undefined) b24Item.deposit = Number(m.deposit);
+
+          if (m.price !== undefined) {
+            b24Item.price = Number(m.price);
+            b24Item.invoiceItems = [
+              {
+                description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
+                qty: 1,
+                amount: Number(m.price),
+                vatRate: 19
+              },
+              {
+                description: 'IVA 16% (Incluido en el precio)',
+                qty: 1,
+                amount: 0,
+                vatRate: 0
+              },
+              {
+                description: 'Tax Hospedaje 3% (Incluido en el precio)',
+                qty: 1,
+                amount: 0,
+                vatRate: 0
+              }
+            ];
+          }
+
+          beds24BatchPayload.push(b24Item);
+          updatedBeds24Ids.push(mIdStr);
+        }
+      }
+
+      // Enviar a Beds24 en lote
+      if (beds24BatchPayload.length > 0) {
+        let b24Res = await fetch('https://api.beds24.com/v2/bookings', {
+          method: 'POST',
+          headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+          body: JSON.stringify(beds24BatchPayload)
+        });
+
+        if (b24Res.status === 429) {
+          await new Promise(res => setTimeout(res, 2500));
+          b24Res = await fetch('https://api.beds24.com/v2/bookings', {
+            method: 'POST',
+            headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+            body: JSON.stringify(beds24BatchPayload)
+          });
+        }
+
+        if (!b24Res.ok) {
+          const errText = await b24Res.text();
+          console.error("[Reservas PUT Group] Error en respuesta Beds24:", errText);
+          throw new Error(`Beds24 rechazó la modificación del grupo: ${errText}`);
+        }
+
+        // Actualizar Supabase y checkins para cada miembro de Beds24
+        for (const bId of updatedBeds24Ids) {
+          try {
+            const dbUpdate: any = {};
+            if (guestName) dbUpdate.guest_name = guestName;
+            if (checkIn) dbUpdate.check_in_date = checkIn;
+            if (checkOut) dbUpdate.check_out_date = checkOut;
+            if (Object.keys(dbUpdate).length > 0) {
+              await supabase.from('checkins').update(dbUpdate).eq('reservation_id', bId);
+            }
+
+            const b24FetchRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bId}&includeInvoiceItems=true`, {
+              method: 'GET',
+              headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+              cache: 'no-store'
+            });
+            if (b24FetchRes.ok) {
+              const fetchJson = await b24FetchRes.json();
+              const freshBooking = fetchJson.data?.[0];
+              if (freshBooking) {
+                const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+                await syncBeds24BookingLocal(freshBooking);
+              }
+            }
+          } catch (syncErr) {
+            console.error(`[Reservas PUT Group] Error sincronizando miembro ${bId}:`, syncErr);
+          }
+        }
+      }
+
+      clearBeds24Cache();
+
+      return NextResponse.json({
+        success: true,
+        message: `Grupo de ${body.groupBookings.length} habitaciones actualizado exitosamente.`,
+        count: body.groupBookings.length
+      });
+    }
+
     // 1. Intentamos buscar si la reserva es local en Supabase
     const { data: localRes } = await supabase
       .from('local_reservas')
