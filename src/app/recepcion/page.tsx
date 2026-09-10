@@ -902,6 +902,7 @@ export default function RecepcionPage() {
   const [targetRoomName, setTargetRoomName] = useState('');
   const [reassignLoading, setReassignLoading] = useState(false);
   const [reassignedPrice, setReassignedPrice] = useState<string>('');
+  const [reassignedDailyRate, setReassignedDailyRate] = useState<string>('');
   const [previewBreakdown, setPreviewBreakdown] = useState<any>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [isCategoryChanged, setIsCategoryChanged] = useState(false);
@@ -1270,6 +1271,8 @@ export default function RecepcionPage() {
     if (isReassigning && selectedReserva && targetRoomName) {
       const changed = !isSameRoomCategory(`${selectedReserva.room || ''} ${selectedReserva.room_name || ''}`, targetRoomName);
       setIsCategoryChanged(changed);
+      const resNights = Math.max(1, selectedReserva.nights || (selectedReserva.check_in && selectedReserva.check_out ? Math.round((new Date(selectedReserva.check_out + 'T12:00:00').getTime() - new Date(selectedReserva.check_in + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24)) : 1));
+
       if (changed) {
         const fetchPreview = async () => {
           setPreviewLoading(true);
@@ -1285,15 +1288,21 @@ export default function RecepcionPage() {
             });
             const data = await res.json();
             if (data.success && data.recalculated_price !== undefined) {
+              const daily = data.breakdown?.totalPerNight || Math.round(data.recalculated_price / resNights);
+              setReassignedDailyRate(String(daily));
               setReassignedPrice(String(data.recalculated_price));
               setPreviewBreakdown(data.breakdown || null);
             } else {
-              setReassignedPrice(String(selectedReserva.price_estimate || selectedReserva.price || 0));
+              const currentTotal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
+              setReassignedDailyRate(String(Math.round(currentTotal / resNights)));
+              setReassignedPrice(String(currentTotal));
               setPreviewBreakdown(null);
             }
           } catch (err) {
             console.error("Error al obtener preview de precio:", err);
-            setReassignedPrice(String(selectedReserva.price_estimate || selectedReserva.price || 0));
+            const currentTotal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
+            setReassignedDailyRate(String(Math.round(currentTotal / resNights)));
+            setReassignedPrice(String(currentTotal));
             setPreviewBreakdown(null);
           } finally {
             setPreviewLoading(false);
@@ -1301,11 +1310,13 @@ export default function RecepcionPage() {
         };
         fetchPreview();
       } else {
+        setReassignedDailyRate('');
         setReassignedPrice('');
         setPreviewBreakdown(null);
       }
     } else {
       setIsCategoryChanged(false);
+      setReassignedDailyRate('');
       setReassignedPrice('');
       setPreviewBreakdown(null);
     }
@@ -1824,7 +1835,10 @@ export default function RecepcionPage() {
     const oldPVal = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
     const oldP = oldPVal.toLocaleString('es-MX');
 
-    const finalPrice = isCategoryChanged && reassignedPrice !== '' ? Number(reassignedPrice) : oldPVal;
+    const resNights = Math.max(1, selectedReserva.nights || (selectedReserva.check_in && selectedReserva.check_out ? Math.round((new Date(selectedReserva.check_out + 'T12:00:00').getTime() - new Date(selectedReserva.check_in + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24)) : 1));
+    const finalPrice = isCategoryChanged && reassignedPrice !== '' 
+      ? Number(reassignedPrice) 
+      : (isCategoryChanged && reassignedDailyRate !== '' ? Math.round(Number(reassignedDailyRate) * resNights) : oldPVal);
 
     if (!confirm(`¿Confirmas reasignar la reserva de ${selectedReserva.guest_name || ''} a la Habitación ${targetRoomName}?`)) {
       return;
@@ -6312,110 +6326,84 @@ export default function RecepcionPage() {
                         })()}
 
                         {isCategoryChanged && (
-                          <div className="bg-amber-50 border border-amber-250 p-4 rounded-xl space-y-2.5 animate-in fade-in duration-200">
+                          <div className="mt-3.5 bg-amber-50 border border-amber-250 p-4 rounded-2xl space-y-3 animate-in fade-in duration-200 text-left">
                             <div className="flex gap-2 text-amber-800">
                               <AlertTriangle className="shrink-0 mt-0.5" size={16} />
                               <div className="text-[12px] font-semibold leading-normal">
-                                La habitación seleccionada es de un <strong>tipo o categoría diferente</strong>. 
-                                Se recomienda actualizar la tarifa de la reserva.
+                                La habitación seleccionada es de un <strong>tipo o categoría diferente</strong>. Se recomienda actualizar la tarifa.
                               </div>
                             </div>
-                            <div className="mt-2 text-left">
-                              <label className="block text-[10px] font-extrabold text-amber-800 uppercase tracking-widest mb-1.5 pl-0.5">
-                                Nueva Tarifa de la Reserva (Editable):
-                              </label>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5 pl-0.5">
+                                <label className="text-[10.5px] font-extrabold text-amber-900 uppercase tracking-wider">
+                                  Tarifa por Noche (Editable):
+                                </label>
+                                {previewBreakdown?.rateName && (
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${
+                                    previewBreakdown.isDiscount 
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300' 
+                                      : 'bg-blue-100 text-blue-800 border-blue-300'
+                                  }`}>
+                                    {previewBreakdown.isDiscount ? '🏷️ ' : '📅 '}
+                                    {previewBreakdown.rateName}
+                                  </span>
+                                )}
+                              </div>
+
                               <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[13px] font-bold text-zinc-500">$</span>
+                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[14px] font-bold text-zinc-500">$</span>
                                 <input
                                   type="number"
                                   disabled={previewLoading}
-                                  value={reassignedPrice}
-                                  onChange={e => setReassignedPrice(e.target.value)}
-                                  className="w-full bg-white border border-zinc-200 rounded-xl py-2 pl-6 pr-3 font-bold text-[13.5px] text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 shadow-sm"
-                                  placeholder={previewLoading ? 'Calculando tarifa recomendada...' : 'Ingresa la tarifa...'}
+                                  value={reassignedDailyRate}
+                                  onChange={e => {
+                                    const val = e.target.value;
+                                    setReassignedDailyRate(val);
+                                    const resNights = Math.max(1, selectedReserva?.nights || (selectedReserva?.check_in && selectedReserva?.check_out ? Math.round((new Date(selectedReserva.check_out + 'T12:00:00').getTime() - new Date(selectedReserva.check_in + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24)) : 1));
+                                    if (val !== '' && !isNaN(Number(val))) {
+                                      setReassignedPrice(String(Math.round(Number(val) * resNights)));
+                                    } else {
+                                      setReassignedPrice('');
+                                    }
+                                  }}
+                                  className="w-full bg-white border border-zinc-200 rounded-xl py-2.5 pl-7 pr-24 font-extrabold text-[15px] text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/30 shadow-xs"
+                                  placeholder={previewLoading ? 'Calculando tarifa...' : 'Tarifa diaria...'}
                                 />
+                                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-bold text-zinc-400">
+                                  MXN / noche
+                                </span>
                               </div>
                               {previewLoading && (
                                 <span className="text-[10px] text-amber-700 font-medium block mt-1 animate-pulse">
-                                  ⏳ Obteniendo tarifa recomendada desde Beds24...
+                                  ⏳ Obteniendo tarifa recomendada...
                                 </span>
                               )}
                             </div>
 
-                            {/* Desglose visual y elegante de la tarifa calculada */}
-                            {previewBreakdown && !previewLoading && (
-                              <div className="mt-3 bg-white border border-amber-200/90 rounded-2xl p-4 shadow-[0_4px_20px_rgba(217,119,6,0.06)] space-y-3 animate-in fade-in slide-in-from-top-1 duration-200 text-left">
-                                <div className="flex items-center justify-between gap-2 border-b border-zinc-100 pb-2.5">
-                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400">
-                                    Detalle del Cálculo
-                                  </span>
-                                  {previewBreakdown.isDiscount ? (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      🏷️ {previewBreakdown.rateName}
+                            {/* Resumen conciso del Total */}
+                            {reassignedDailyRate !== '' && !previewLoading && (() => {
+                              const resNights = Math.max(1, selectedReserva?.nights || (selectedReserva?.check_in && selectedReserva?.check_out ? Math.round((new Date(selectedReserva.check_out + 'T12:00:00').getTime() - new Date(selectedReserva.check_in + 'T12:00:00').getTime()) / (1000 * 60 * 60 * 24)) : 1));
+                              const computedTotal = Math.round(Number(reassignedDailyRate || 0) * resNights);
+                              return (
+                                <div className="bg-white border border-amber-200 rounded-xl p-3 flex items-center justify-between shadow-xs">
+                                  <div>
+                                    <span className="text-[9.5px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                      Total de la Reserva ({resNights} {resNights === 1 ? 'noche' : 'noches'})
                                     </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200">
-                                      📅 {previewBreakdown.rateName}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Métricas clave */}
-                                <div className="grid grid-cols-2 gap-2 text-[11.5px]">
-                                  <div className="bg-zinc-50 border border-zinc-150 p-2.5 rounded-xl">
-                                    <span className="text-[9.5px] font-bold text-zinc-400 block uppercase tracking-wider">
-                                      🌙 Estancia ({previewBreakdown.nights} {previewBreakdown.nights === 1 ? 'noche' : 'noches'})
-                                    </span>
-                                    <span className="font-extrabold text-zinc-800">
-                                      {previewBreakdown.checkIn} → {previewBreakdown.checkOut}
-                                    </span>
-                                  </div>
-                                  <div className="bg-zinc-50 border border-zinc-150 p-2.5 rounded-xl">
-                                    <span className="text-[9.5px] font-bold text-zinc-400 block uppercase tracking-wider">
-                                      💵 Tarifa / Noche (c/ IVA)
-                                    </span>
-                                    <span className="font-extrabold text-zinc-800">
-                                      ${previewBreakdown.totalPerNight?.toLocaleString('es-MX')} MXN
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {/* Desglose detallado por noche */}
-                                <div className="bg-zinc-50/70 border border-zinc-200/70 rounded-xl p-2.5 text-[11px] space-y-1.5 font-medium text-zinc-600">
-                                  <div className="flex justify-between items-center">
-                                    <span>Precio base por noche:</span>
-                                    <span className="font-bold text-zinc-800">${previewBreakdown.basePricePerNight?.toLocaleString('es-MX')}</span>
-                                  </div>
-                                  <div className="flex justify-between items-center">
-                                    <span>Impuestos (16% IVA + 3% ISH):</span>
-                                    <span className="font-bold text-zinc-800">+${previewBreakdown.taxPerNight?.toLocaleString('es-MX')}</span>
-                                  </div>
-
-                                  {previewBreakdown.extraGuests > 0 && (
-                                    <div className="flex justify-between items-center text-amber-700 bg-amber-50/80 px-1.5 py-0.5 rounded">
-                                      <span>👤 Persona(s) extra (+{previewBreakdown.extraGuests} pax):</span>
-                                      <span className="font-bold">+${(previewBreakdown.extraGuestsSurchargePerNight * 1.19).toFixed(0)}/noche</span>
+                                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                                      <span className="text-[16px] font-black text-blue-900">
+                                        ${computedTotal.toLocaleString('es-MX')}
+                                      </span>
+                                      <span className="text-[11px] font-bold text-zinc-400">MXN</span>
                                     </div>
-                                  )}
-
-                                  {previewBreakdown.channelMultiplier !== 1.0 && (
-                                    <div className="flex justify-between items-center text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded">
-                                      <span>🌐 Recargo de canal ({previewBreakdown.channelLabel}):</span>
-                                      <span className="font-bold">+{Math.round((previewBreakdown.channelMultiplier - 1) * 100)}%</span>
-                                    </div>
-                                  )}
-
-                                  <div className="pt-1.5 border-t border-zinc-200 flex justify-between items-center text-[12px] font-black text-zinc-900">
-                                    <span>Total Calculado ({previewBreakdown.nights} {previewBreakdown.nights === 1 ? 'noche' : 'noches'}):</span>
-                                    <span className="text-blue-700 font-extrabold">${previewBreakdown.finalTotal?.toLocaleString('es-MX')} MXN</span>
+                                  </div>
+                                  <div className="text-right text-[10.5px] font-semibold text-zinc-500">
+                                    <span>${Number(reassignedDailyRate).toLocaleString('es-MX')} × {resNights} {resNights === 1 ? 'noche' : 'noches'}</span>
                                   </div>
                                 </div>
-
-                                <p className="text-[10px] text-zinc-500 font-medium italic text-center">
-                                  💡 Si deseas ajustar el monto final, edítalo en la casilla superior antes de confirmar.
-                                </p>
-                              </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         )}
 
