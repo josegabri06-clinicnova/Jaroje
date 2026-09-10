@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, LogOut } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
@@ -198,6 +198,7 @@ function ReservasListInner() {
   const [reservas, setReservas] = useState<any[]>([]);
   const [billingRequests, setBillingRequests] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
+  const [separatedGroupIds, setSeparatedGroupIds] = useState<string[]>([]);
   const isOtaRes = useMemo(() => {
     if (!selectedRes) return false;
     const channels = [
@@ -730,16 +731,142 @@ function ReservasListInner() {
     }
   };
 
-  // 1. Sincronizar ID de la URL -> Estado local (La URL manda siempre)
+  const buildGroupCard = useCallback((allMembers: any[]) => {
+    if (!allMembers || allMembers.length === 0) return null;
+    if (allMembers.length === 1) return allMembers[0];
+
+    const r = allMembers[0];
+    const consolidatedId = r.id;
+    const consolidatedGuestName = r.guest_name;
+    
+    const consolidatedRoomNames = allMembers
+      .map(m => m.room_name || m.room)
+      .filter(Boolean)
+      .join(', ');
+
+    const consolidatedPrice = allMembers.reduce((sum, m) => sum + Number(m.price_estimate || m.price || 0), 0);
+    const consolidatedDeposit = allMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
+    const consolidatedBalance = allMembers.reduce((sum, m) => {
+      const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
+      const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
+      return sum + bBal;
+    }, 0);
+
+    const adjResult = detectAndAdjustGroupGuests(allMembers, capacitySettings || undefined);
+    const consolidatedAdults = adjResult.groupTotalAdults;
+    const consolidatedChildren = adjResult.groupTotalChildren;
+    const isAnyNew = allMembers.some(m => isReservationNew(m));
+
+    const consolidatedReceipts = allMembers.reduce((arr, m) => {
+      if (Array.isArray(m.transfer_receipts)) {
+        return [...arr, ...m.transfer_receipts];
+      }
+      return arr;
+    }, [] as any[]);
+
+    return {
+      ...r,
+      id: consolidatedId,
+      guest_name: consolidatedGuestName,
+      room_name: consolidatedRoomNames,
+      price_estimate: consolidatedPrice,
+      price: consolidatedPrice,
+      price_per_night: undefined,
+      deposit: consolidatedDeposit,
+      balance: consolidatedBalance,
+      num_adult: consolidatedAdults,
+      num_child: consolidatedChildren,
+      is_group_card: true,
+      group_members: adjResult.members,
+      is_new_override: isAnyNew,
+      transfer_receipts: consolidatedReceipts
+    };
+  }, [capacitySettings]);
+
+  const groupReservations = useCallback((reservationsList: any[]) => {
+    const grouped: any[] = [];
+    const processedIds = new Set<string>();
+
+    reservationsList.forEach(r => {
+      if (processedIds.has(String(r.id))) return;
+
+      const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const mainName = cleanStr(r.guest_name);
+      const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
+      const mainDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
+      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
+      const rId = String(r.id);
+
+      const siblings = reservationsList.filter(o => {
+        const oId = String(o.id);
+        if (oId === rId) return false;
+        if (o.status !== r.status) return false;
+        
+        const oMasterId = o.master_id ? String(o.master_id) : (o.masterId ? String(o.masterId) : null);
+        const sameMaster = (rMasterId && oMasterId && rMasterId === oMasterId) ||
+                           (rMasterId && rMasterId === oId) ||
+                           (oMasterId && oMasterId === rId);
+        if (sameMaster) return true;
+
+        // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
+        const rCh = String(r.channel || '').toLowerCase().trim();
+        const oCh = String(o.channel || '').toLowerCase().trim();
+        if (rCh !== oCh) return false;
+
+        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
+        
+        const oDigits = cleanDigits(o.guest_phone || o.phone || o.mobile || '');
+        const samePhone = mainDigits && oDigits && mainDigits.length >= 7 && (mainDigits === oDigits || mainDigits.endsWith(oDigits) || oDigits.endsWith(mainDigits));
+        const oName = cleanStr(o.guest_name);
+        const sameName = mainName && oName && (mainName === oName || mainName.includes(oName) || oName.includes(mainName));
+        return samePhone || sameName;
+      });
+
+      if (siblings.length > 0) {
+        const allMembers = [r, ...siblings];
+        allMembers.forEach(m => processedIds.add(String(m.id)));
+
+        const isGroupSeparated = allMembers.some(m => separatedGroupIds.includes(String(m.id)));
+        if (isGroupSeparated) {
+          allMembers.forEach((m, idx) => {
+            grouped.push({
+              ...m,
+              is_separated_group_member: true,
+              group_sibling_ids: allMembers.map(x => String(x.id)),
+              group_total_rooms: allMembers.length,
+              group_room_index: idx + 1,
+              display_num_adult: Number(m.num_adult || 1),
+              display_num_child: Number(m.num_child || 0)
+            });
+          });
+        } else {
+          grouped.push(buildGroupCard(allMembers));
+        }
+      } else {
+        processedIds.add(String(r.id));
+        grouped.push({
+          ...r,
+          display_num_adult: Number(r.num_adult || 1),
+          display_num_child: Number(r.num_child || 0)
+        });
+      }
+    });
+
+    return grouped;
+  }, [buildGroupCard, separatedGroupIds]);
+
+  // 1. Sincronizar ID de la URL -> Estado local (La URL manda siempre, grupos consolidados por defecto)
   useEffect(() => {
     const searchId = searchParams.get('id');
 
     if (searchId) {
       if (reservas.length > 0) {
-        // Buscar por ID principal O dentro de los miembros de un grupo consolidado
-        const found = reservas.find(r => 
+        // Buscar en la lista agrupada para abrir la tarjeta consolidada por defecto
+        const grouped = groupReservations(reservas);
+        const found = grouped.find((r: any) => 
           String(r.id) === searchId || 
-          (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === searchId))
+          (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === searchId)) ||
+          (r.group_sibling_ids && r.group_sibling_ids.includes(searchId))
         );
 
         if (found) {
@@ -754,15 +881,18 @@ function ReservasListInner() {
             setActiveTab(isCompleted ? 'Completadas' : 'Todas');
           }
         } else {
-          // Si el ID de la URL no existe en las reservas cargadas, cerrar para evitar stale data
-          setSelectedRes(null);
+          const rawFound = reservas.find(r => String(r.id) === searchId);
+          if (rawFound) {
+            setSelectedRes(rawFound);
+          } else {
+            setSelectedRes(null);
+          }
         }
       }
     } else {
-      // Si la URL no contiene ?id=, cerrar cualquier reserva abierta
       setSelectedRes(null);
     }
-  }, [reservas, searchParams]);
+  }, [reservas, searchParams, groupReservations]);
 
   // 2. Limpieza preventiva al desmontar el componente (al volver a Calendario u otra vista)
   useEffect(() => {
@@ -3073,111 +3203,9 @@ function ReservasListInner() {
     ? cancelledReservas
     : (activeTab === 'Completadas' ? completedReservas : (activeTab === 'Bloqueos' ? blockedReservas : activeReservas));
 
-  const groupReservations = (reservationsList: any[]) => {
-    const grouped: any[] = [];
-    const processedIds = new Set<string>();
-
-    reservationsList.forEach(r => {
-      if (processedIds.has(String(r.id))) return;
-
-      const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
-      const mainName = cleanStr(r.guest_name);
-      const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
-      const mainDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
-      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
-      const rId = String(r.id);
-
-      const siblings = reservationsList.filter(o => {
-        const oId = String(o.id);
-        if (oId === rId) return false;
-        if (o.status !== r.status) return false;
-        
-        const oMasterId = o.master_id ? String(o.master_id) : (o.masterId ? String(o.masterId) : null);
-        const sameMaster = (rMasterId && oMasterId && rMasterId === oMasterId) ||
-                           (rMasterId && rMasterId === oId) ||
-                           (oMasterId && oMasterId === rId);
-        if (sameMaster) return true;
-
-        // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
-        const rCh = String(r.channel || '').toLowerCase().trim();
-        const oCh = String(o.channel || '').toLowerCase().trim();
-        if (rCh !== oCh) return false;
-
-        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
-        
-        const oDigits = cleanDigits(o.guest_phone || o.phone || o.mobile || '');
-        const samePhone = mainDigits && oDigits && mainDigits.length >= 7 && (mainDigits === oDigits || mainDigits.endsWith(oDigits) || oDigits.endsWith(mainDigits));
-        const oName = cleanStr(o.guest_name);
-        const sameName = mainName && oName && (mainName === oName || mainName.includes(oName) || oName.includes(mainName));
-        return samePhone || sameName;
-      });
-
-      if (siblings.length > 0) {
-        const allMembers = [r, ...siblings];
-        allMembers.forEach(m => processedIds.add(String(m.id)));
-
-        const consolidatedId = r.id;
-        const consolidatedGuestName = r.guest_name;
-        
-        const consolidatedRoomNames = allMembers
-          .map(m => m.room_name || m.room)
-          .filter(Boolean)
-          .join(', ');
-
-        const consolidatedPrice = allMembers.reduce((sum, m) => sum + Number(m.price_estimate || m.price || 0), 0);
-        const consolidatedDeposit = allMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
-        const consolidatedBalance = allMembers.reduce((sum, m) => {
-          const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
-          const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
-          return sum + bBal;
-        }, 0);
-
-        // Ajustar el conteo de adultos y niños si vienen duplicados/consolidados de Beds24
-        const adjResult = detectAndAdjustGroupGuests(allMembers, capacitySettings || undefined);
-        const consolidatedAdults = adjResult.groupTotalAdults;
-        const consolidatedChildren = adjResult.groupTotalChildren;
-        const isAnyNew = allMembers.some(m => isReservationNew(m));
-
-        const consolidatedReceipts = allMembers.reduce((arr, m) => {
-          if (Array.isArray(m.transfer_receipts)) {
-            return [...arr, ...m.transfer_receipts];
-          }
-          return arr;
-        }, [] as any[]);
-
-        grouped.push({
-          ...r,
-          id: consolidatedId,
-          guest_name: consolidatedGuestName,
-          room_name: consolidatedRoomNames,
-          price_estimate: consolidatedPrice,
-          price: consolidatedPrice,
-          price_per_night: undefined,
-          deposit: consolidatedDeposit,
-          balance: consolidatedBalance,
-          num_adult: consolidatedAdults,
-          num_child: consolidatedChildren,
-          is_group_card: true,
-          group_members: adjResult.members,
-          is_new_override: isAnyNew,
-          transfer_receipts: consolidatedReceipts
-        });
-      } else {
-        processedIds.add(String(r.id));
-        grouped.push({
-          ...r,
-          display_num_adult: Number(r.num_adult || 1),
-          display_num_child: Number(r.num_child || 0)
-        });
-      }
-    });
-
-    return grouped;
-  };
-
   const groupedBase = groupReservations(baseList);
 
-  const groupedFiltered = groupedBase.filter(r => {
+  const groupedFiltered = groupedBase.filter((r: any) => {
     const matchSearch = !search || 
       normalizeText(r.guest_name).includes(normalizeText(search)) ||
       (r.is_group_card 
@@ -3513,7 +3541,7 @@ function ReservasListInner() {
         </div>
       ) : (
         <div className="space-y-3">
-          {groupedFiltered.map(r => {
+          {groupedFiltered.map((r: any) => {
             const isArrival = r.check_in === todayStr;
             const isDeparture = r.check_out === todayStr;
             return (
@@ -3551,20 +3579,16 @@ function ReservasListInner() {
                         )}
                         {isArrival && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">HOY LLEGA</span>}
                         {isDeparture && <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">HOY SALE</span>}
-                        {(() => {
-                          const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
-                          const mainName = cleanStr(r.guest_name || '');
-                          const mainPhone = (r.guest_phone || '').trim();
-                          const siblings = reservas.filter(o => {
-                            if (o.check_in !== r.check_in || o.id === r.id || o.is_checked_out || o.status === 'cancelled' || o.status === '0') return false;
-                            const samePhone = mainPhone && o.guest_phone && o.guest_phone.trim() === mainPhone;
-                            return samePhone;
-                          });
-                          if (siblings.length > 0) {
-                            return <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-150">GRUPO 🏨 {siblings.length + 1}</span>;
-                          }
-                          return null;
-                        })()}
+                        {r.is_group_card && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-extrabold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-200">
+                            GRUPO CONSOLIDADO 🏨 ({r.group_members?.length || 2} habs)
+                          </span>
+                        )}
+                        {r.is_separated_group_member && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200">
+                            PARTE DE GRUPO 🏨 ({r.group_room_index} de {r.group_total_rooms})
+                          </span>
+                        )}
                       </div>
                       <p className="text-[12.5px] font-bold text-zinc-700 mt-1 flex items-center gap-1.5">
                         <BedDouble size={13} className="text-zinc-400" />
@@ -3572,9 +3596,39 @@ function ReservasListInner() {
                       </p>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded text-[9.5px] uppercase tracking-wide">
-                    {r.channel}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {r.is_group_card && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const memberIds = (r.group_members || []).map((m: any) => String(m.id));
+                          setSeparatedGroupIds(prev => Array.from(new Set([...prev, ...memberIds])));
+                        }}
+                        className="px-2 py-0.5 text-[9.5px] font-extrabold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
+                        title="Desglosar este grupo en habitaciones individuales"
+                      >
+                        🔓 Separar
+                      </button>
+                    )}
+                    {r.is_separated_group_member && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const siblingIds = r.group_sibling_ids || [String(r.id)];
+                          setSeparatedGroupIds(prev => prev.filter(id => !siblingIds.includes(id)));
+                        }}
+                        className="px-2 py-0.5 text-[9.5px] font-extrabold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-md transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
+                        title="Unir estas habitaciones en una sola reserva consolidada"
+                      >
+                        🔗 Consolidar
+                      </button>
+                    )}
+                    <span className="px-2 py-0.5 bg-blue-50 border border-blue-100 text-blue-700 font-bold rounded text-[9.5px] uppercase tracking-wide">
+                      {r.channel}
+                    </span>
+                  </div>
                 </div>
 
                 {/* Desglose Financiero */}
@@ -5050,53 +5104,78 @@ function ReservasListInner() {
                           <div className="w-9 h-9 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
                             <Users size={16} className="text-blue-600" />
                           </div>
-                          <div className="flex-1 flex justify-between items-center min-w-0">
+                          <div className="flex-1 flex justify-between items-center min-w-0 flex-wrap gap-2">
                             <div>
-                              <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">Grupo Detectado</span>
+                              <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">
+                                {selectedRes.is_group_card ? 'Grupo Consolidado' : 'Habitación de Grupo'}
+                              </span>
                               <div className="flex items-center gap-2 mt-0.5">
                                 <p className="text-[13px] font-bold text-blue-900 leading-tight">
                                   {groupBookings.length} habitaciones
                                 </p>
-                                {!selectedRes.is_group_card && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const groupCard = groupedBase.find(g => g.is_group_card && g.group_members.some((m: any) => String(m.id) === String(selectedRes.id)));
-                                      if (groupCard) {
-                                        setSelectedRes(groupCard);
-                                        if (typeof window !== 'undefined') {
-                                          window.history.replaceState(null, '', `/reservas?id=${groupCard.id}`);
-                                        }
-                                      }
-                                    }}
-                                    className="px-2 py-0.5 text-[9px] font-extrabold text-blue-700 bg-blue-100 border border-blue-200 hover:bg-blue-200 rounded transition-all cursor-pointer uppercase select-none active:scale-[0.97]"
-                                  >
-                                    🔍 Ver Consolidado
-                                  </button>
-                                )}
                               </div>
                             </div>
-                            {totalGroupBalance > 0 && (
-                              <div className="text-right shrink-0">
-                                <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Adeudo Total</span>
-                                <span className="text-[13px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg">
-                                  {fmtCurrency(totalGroupBalance, selectedRes.guest_name)}
-                                </span>
-                              </div>
-                            )}
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {selectedRes.is_group_card ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const targetMember = (selectedRes.group_members && selectedRes.group_members[0]) || selectedRes;
+                                    const memberIds = (selectedRes.group_members || []).map((m: any) => String(m.id));
+                                    setSeparatedGroupIds(prev => Array.from(new Set([...prev, ...memberIds])));
+                                    setSelectedRes(targetMember);
+                                    if (typeof window !== 'undefined') {
+                                      window.history.replaceState(null, '', `/reservas?id=${targetMember.id}`);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
+                                >
+                                  🔓 Separar Grupo
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const allMembers = groupBookings;
+                                    const groupCard = buildGroupCard(allMembers);
+                                    if (groupCard) {
+                                      const memberIds = allMembers.map((m: any) => String(m.id));
+                                      setSeparatedGroupIds(prev => prev.filter(id => !memberIds.includes(id)));
+                                      setSelectedRes(groupCard);
+                                      if (typeof window !== 'undefined') {
+                                        window.history.replaceState(null, '', `/reservas?id=${groupCard.id}`);
+                                      }
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-extrabold text-blue-800 bg-blue-100 hover:bg-blue-200 border border-blue-300 rounded-lg transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
+                                >
+                                  🔗 Consolidar Grupo
+                                </button>
+                              )}
+
+                              {totalGroupBalance > 0 && (
+                                <div className="text-right shrink-0">
+                                  <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Adeudo Total</span>
+                                  <span className="text-[13px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg">
+                                    {fmtCurrency(totalGroupBalance, selectedRes.guest_name)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
 
                         {selectedRes.is_group_card ? (
-                          <div className="bg-blue-50 border border-blue-200 p-3 rounded-2xl text-left shadow-sm">
-                            <p className="text-[11px] text-blue-900 font-bold leading-relaxed">
-                              👥 <b>Estás viendo el grupo consolidado.</b> Al hacer clic en <b>"Editar 📝"</b> arriba, podrás editar el nombre del huésped, teléfono, fechas y distribuir las tarifas, pax y anticipos de cada condominio en una sola pantalla.
+                          <div className="bg-blue-50/80 border border-blue-200/80 p-3 rounded-2xl text-left shadow-2xs">
+                            <p className="text-[11px] text-blue-950 font-bold leading-relaxed">
+                              👥 <b>Estás viendo el grupo consolidado.</b> Al hacer clic en <b>"Editar 📝"</b> arriba podrás modificar huéspedes, fechas, anticipos y balance de todo el grupo a la vez. O usa el botón <b>"🔓 Separar Grupo"</b> para desglosar y gestionar cada habitación individualmente.
                             </p>
                           </div>
                         ) : (
-                          <div className="bg-zinc-50 border border-zinc-200 p-3 rounded-2xl text-left shadow-sm">
-                            <p className="text-[11px] text-zinc-900 font-bold leading-relaxed">
-                              🏢 <b>Estás editando esta habitación individualmente.</b> Los cambios de tarifa, anticipo o pax se aplicarán solo a esta habitación. Para editar todo el grupo a la vez, haz clic en <b>"Ver Consolidado"</b> arriba.
+                          <div className="bg-amber-50/80 border border-amber-200/80 p-3 rounded-2xl text-left shadow-2xs">
+                            <p className="text-[11px] text-amber-950 font-bold leading-relaxed">
+                              🏢 <b>Estás viendo esta habitación individualmente.</b> Los cambios de tarifa, anticipo o pax se aplicarán únicamente a esta habitación. Para volver a unirlas en una sola pantalla consolidada, haz clic en <b>"🔗 Consolidar Grupo"</b>.
                             </p>
                           </div>
                         )}
