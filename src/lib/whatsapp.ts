@@ -375,7 +375,7 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
+    const provider = process.env.WHATSAPP_PROVIDER || 'ycloud';
 
     let response: Response;
     let status: number;
@@ -942,7 +942,7 @@ export async function sendWhatsAppTextMessage(
       return { success: false, error: 'Formato de teléfono no válido' };
     }
 
-    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
+    const provider = process.env.WHATSAPP_PROVIDER || 'ycloud';
 
     if (provider === 'ycloud') {
       const ycloudApiKey = process.env.YCLOUD_API_KEY;
