@@ -51,6 +51,8 @@ interface Reserva {
   daily_rate?: string;
   guest_name?: string;
   guest_phone?: string;
+  phone?: string;
+  mobile?: string;
   guest_email?: string;
   check_in: string;
   check_out: string;
@@ -3311,6 +3313,25 @@ export default function RecepcionPage() {
             dni_image: finalDniUrl || undefined
           });
 
+          // Enviar plantilla de bienvenida de WhatsApp en segundo plano
+          const walkinPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone;
+          if (walkinPhone) {
+            fetch('/api/whatsapp/send-template', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                template: 'bienvenida_checkin',
+                booking: {
+                  ...selectedReserva,
+                  id: beds24AssignedId,
+                  guest_name: selectedReserva.guest_name,
+                  phone: walkinPhone,
+                  is_checked_in: true
+                }
+              })
+            }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin walk-in:", err));
+          }
+
           if (emp) {
             await fetch('/api/employee-logs', {
               method: 'POST',
@@ -3623,6 +3644,25 @@ export default function RecepcionPage() {
             console.error(`Supabase Checkin Error para Habitación ${r.room}:`, upsertErr);
             alert(`Error al registrar check-in local para Habitación ${r.room}: ` + upsertErr.message);
             continue;
+          }
+
+          // Enviar plantilla de bienvenida WhatsApp en segundo plano
+          const groupMemberPhone = r.phone || r.mobile || r.guest_phone;
+          if (groupMemberPhone) {
+            fetch('/api/whatsapp/send-template', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                template: 'bienvenida_checkin',
+                booking: {
+                  ...r,
+                  id: r.id,
+                  guest_name: r.guest_name,
+                  phone: groupMemberPhone,
+                  is_checked_in: true
+                }
+              })
+            }).catch(err => console.error(`Error al enviar WhatsApp bienvenida_checkin a ${r.guest_name}:`, err));
           }
 
           // B. Sincronizar notas y huéspedes si cambiaron
@@ -4190,6 +4230,25 @@ export default function RecepcionPage() {
           alert("Fallo al guardar el Check-In en la base de datos: " + upsertErr.message);
           setSubmitting(false);
           return;
+        }
+
+        // Enviar plantilla de bienvenida WhatsApp en segundo plano
+        const indPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone;
+        if (indPhone) {
+          fetch('/api/whatsapp/send-template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              template: 'bienvenida_checkin',
+              booking: {
+                ...selectedReserva,
+                id: selectedReserva.id,
+                guest_name: selectedReserva.guest_name,
+                phone: indPhone,
+                is_checked_in: true
+              }
+            })
+          }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin:", err));
         }
 
         const guestsChanged = editedAdults !== Number(selectedReserva.num_adult) || editedChildren !== Number(selectedReserva.num_child);

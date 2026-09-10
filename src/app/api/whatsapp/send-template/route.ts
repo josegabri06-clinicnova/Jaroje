@@ -24,14 +24,26 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    const token = process.env.WHATSAPP_TOKEN;
-    const phoneId = process.env.WHATSAPP_PHONE_ID;
+    const provider = process.env.WHATSAPP_PROVIDER || 'ycloud';
 
-    if (!token || !phoneId) {
-      return NextResponse.json({
-        success: false,
-        error: 'Credenciales de WhatsApp no configuradas en el servidor'
-      }, { status: 500 });
+    if (provider === 'ycloud') {
+      const ycloudApiKey = process.env.YCLOUD_API_KEY;
+      if (!ycloudApiKey) {
+        return NextResponse.json({
+          success: false,
+          error: 'Credenciales de YCloud (YCLOUD_API_KEY) no configuradas en el servidor'
+        }, { status: 500 });
+      }
+    } else {
+      const token = process.env.WHATSAPP_TOKEN;
+      const phoneId = process.env.WHATSAPP_PHONE_ID;
+
+      if (!token || !phoneId) {
+        return NextResponse.json({
+          success: false,
+          error: 'Credenciales de WhatsApp Meta no configuradas en el servidor'
+        }, { status: 500 });
+      }
     }
 
     let res: { success: boolean; error?: string; data?: any };

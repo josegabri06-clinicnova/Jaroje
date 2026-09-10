@@ -1255,26 +1255,26 @@ function ReservasListInner() {
               balance: Math.max(0, (r.price_estimate || 0) - newDeposit),
               checked_in: true
             } : r));
-
-            // Enviar confirmación por WhatsApp en segundo plano
-            const phoneNumForWA = room.phone || room.mobile || room.guest_phone || '';
-            if (phoneNumForWA) {
-              const total = (room.price_estimate || room.price || 0);
-              fetch('/api/whatsapp/send-template', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  template: 'reservacion_confirmada',
-                  booking: {
-                    ...room,
-                    deposit: newDeposit,
-                    balance: Math.max(0, total - newDeposit),
-                    last_payment_amount: roomPaymentAmount
-                  }
-                })
-              }).catch(err => console.error("Error al enviar WhatsApp de confirmación:", err));
-            }
           }
+        }
+
+        // Enviar plantilla de bienvenida WhatsApp en segundo plano
+        const phoneNumForWA = room.phone || room.mobile || room.guest_phone || '';
+        if (phoneNumForWA) {
+          fetch('/api/whatsapp/send-template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              template: 'bienvenida_checkin',
+              booking: {
+                ...room,
+                id: room.id,
+                guest_name: room.guest_name,
+                phone: phoneNumForWA,
+                is_checked_in: true
+              }
+            })
+          }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin:", err));
         }
 
         // Registrar log de Check-In

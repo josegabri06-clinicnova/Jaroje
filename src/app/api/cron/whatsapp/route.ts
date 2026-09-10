@@ -147,6 +147,34 @@ export async function GET(req: Request) {
 
     const allBookings = [...beds24Reservas, ...mappedLocal];
 
+    // Enriquecer allBookings con el estado real de la tabla 'checkins' de Supabase
+    try {
+      const { data: checkinRows } = await supabase
+        .from('checkins')
+        .select('reservation_id, status');
+
+      const checkinMap = new Map<string, string>();
+      (checkinRows || []).forEach((c: any) => {
+        if (c.reservation_id) {
+          checkinMap.set(String(c.reservation_id).toLowerCase().trim(), c.status);
+        }
+      });
+
+      for (const b of allBookings) {
+        const bId = String(b.id).toLowerCase().trim();
+        const cStatus = checkinMap.get(bId);
+        if (cStatus === 'checked_in') {
+          b.checked_in = true;
+          b.status = 'checked_in';
+        } else if (cStatus === 'checked_out') {
+          b.checked_out = true;
+          b.status = 'checked_out';
+        }
+      }
+    } catch (checkinErr) {
+      console.error("[Cron WhatsApp] Error cargando checkins de Supabase:", checkinErr);
+    }
+
     // Helper para determinar si dos reservaciones pertenecen al mismo grupo
     const areBookingsInSameGroup = (a: any, b: any): boolean => {
       if (!a || !b) return false;
