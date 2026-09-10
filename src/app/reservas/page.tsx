@@ -3037,19 +3037,19 @@ function ReservasListInner() {
               if (prev.is_group_card) {
                 const consolidatedRoomNames = remainingMembers.map((m: any) => m.room_name || m.room).filter(Boolean).join(', ');
                 const consolidatedPrice = remainingMembers.reduce((sum: number, m: any) => sum + Number(m.price_estimate || m.price || 0), 0);
-                const consolidatedDeposit = remainingMembers.reduce((sum: number, m: any) => sum + Number(m.deposit || 0), 0);
+                const totalGroupDeposit = Number(prev.deposit || 0);
+                const consolidatedDeposit = totalGroupDeposit;
                 const consolidatedBalance = remainingMembers.reduce((sum: number, m: any) => {
                   const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
-                  const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
-                  return sum + bBal;
-                }, 0);
+                  return isOta ? sum : sum + Number(m.price_estimate || m.price || 0);
+                }, 0) - consolidatedDeposit;
                 return {
                   ...prev,
                   room_name: consolidatedRoomNames,
                   price_estimate: consolidatedPrice,
                   price: consolidatedPrice,
                   deposit: consolidatedDeposit,
-                  balance: consolidatedBalance,
+                  balance: Math.max(0, consolidatedBalance),
                   group_members: remainingMembers
                 };
               } else {
@@ -3063,7 +3063,7 @@ function ReservasListInner() {
 
         setShowCancelModal(false);
         setTimeout(() => {
-          fetchReservas(); // Refrescar base de datos
+          fetchReservas(true); // Refrescar base de datos inmediatamente
         }, 1500);
       }
 

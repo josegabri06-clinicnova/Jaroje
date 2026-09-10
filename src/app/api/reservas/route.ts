@@ -824,10 +824,36 @@ export async function DELETE(req: Request) {
         }, { status: 403 });
       }
 
+      // Si es parte de una reserva grupal y tiene depósito, transferir el depósito a la habitación hermana activa
+      const currentLocalDeposit = Number(localRes.deposit || 0);
+      if (currentLocalDeposit > 0) {
+        const { data: siblings } = await supabase
+          .from('local_reservas')
+          .select('*')
+          .eq('check_in', localRes.check_in)
+          .neq('id', Number(id))
+          .neq('status', 'cancelled');
+
+        const activeSiblings = (siblings || []).filter(s => areBookingsInSameGroup(localRes, s));
+        if (activeSiblings.length > 0) {
+          const targetSibling = activeSiblings[0];
+          const newSiblingDeposit = Number(targetSibling.deposit || 0) + currentLocalDeposit;
+          await supabase
+            .from('local_reservas')
+            .update({ deposit: newSiblingDeposit })
+            .eq('id', targetSibling.id);
+
+          await supabase
+            .from('transfer_receipts')
+            .update({ reservation_id: String(targetSibling.id) })
+            .eq('reservation_id', String(id));
+        }
+      }
+
       // Es local! Cancelar localmente en Supabase
       const { error: cancelErr } = await supabase
         .from('local_reservas')
-        .update({ status: 'cancelled' })
+        .update({ status: 'cancelled', deposit: 0 })
         .eq('id', Number(id));
 
       if (cancelErr) {
@@ -915,16 +941,59 @@ export async function DELETE(req: Request) {
       }
     }
 
-    // 1. Cancelar en Beds24
-    const cancelPayload = {
-      id: Number(id),
-      status: 'cancelled'
-    };
+    // Verificar si es parte de una reserva grupal en Beds24 y tiene depósito acumulado
+    const currentDeposit = Number(bookingB24Raw?.deposit || 0);
+    let targetActiveSibling: any = null;
+    let newSiblingDeposit = 0;
+
+    if (bookingB24Raw && currentDeposit > 0) {
+      try {
+        const resSiblings = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${bookingB24Raw.arrival}&arrivalTo=${bookingB24Raw.arrival}&includeCancelled=false`, {
+          headers: { 'token': BEDS24_TOKEN },
+          cache: 'no-store'
+        });
+        if (resSiblings.ok) {
+          const jsonSiblings = await resSiblings.json();
+          const allArrival = jsonSiblings.data || [];
+          const activeSiblings = allArrival.filter((b: any) => {
+            if (String(b.id) === String(id)) return false;
+            if (String(b.status) === '0' || b.status === 'cancelled') return false;
+            return areBookingsInSameGroup(bookingB24Raw, b);
+          });
+          if (activeSiblings.length > 0) {
+            targetActiveSibling = activeSiblings[0];
+            newSiblingDeposit = Number(targetActiveSibling.deposit || 0) + currentDeposit;
+          }
+        }
+      } catch (sibErr) {
+        console.error("[Reservas DELETE] Error searching for active siblings in Beds24:", sibErr);
+      }
+    }
+
+    // 1. Cancelar en Beds24 (y transferir depósito a la habitación activa si aplica)
+    const updatePayloads: any[] = [];
+    if (targetActiveSibling && newSiblingDeposit > 0) {
+      updatePayloads.push({
+        id: Number(targetActiveSibling.id),
+        deposit: newSiblingDeposit
+      });
+      updatePayloads.push({
+        id: Number(id),
+        status: 'cancelled',
+        deposit: 0
+      });
+    } else {
+      updatePayloads.push({
+        id: Number(id),
+        status: 'cancelled',
+        deposit: 0
+      });
+    }
 
     let beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-      body: JSON.stringify([cancelPayload])
+      body: JSON.stringify(updatePayloads)
     });
 
     if (beds24Response.status === 429) {
@@ -933,7 +1002,7 @@ export async function DELETE(req: Request) {
       beds24Response = await fetch('https://api.beds24.com/v2/bookings', {
         method: 'POST',
         headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-        body: JSON.stringify([cancelPayload])
+        body: JSON.stringify(updatePayloads)
       });
     }
 
@@ -949,6 +1018,35 @@ export async function DELETE(req: Request) {
 
     // 2. Liberar registro de checkin local en Supabase si existía
     await supabase.from('checkins').delete().eq('reservation_id', id.toString());
+
+    // 3. Si se transfirió depósito a una habitación activa, actualizar en Supabase y reasignar transfer_receipts
+    if (targetActiveSibling && newSiblingDeposit > 0) {
+      const siblingPrice = Number(targetActiveSibling.price || 0);
+      const siblingBalance = Math.max(0, siblingPrice - newSiblingDeposit);
+      await supabase
+        .from('beds24_reservations')
+        .update({
+          deposit: newSiblingDeposit,
+          balance: siblingBalance
+        })
+        .eq('id', String(targetActiveSibling.id));
+
+      await supabase
+        .from('transfer_receipts')
+        .update({ reservation_id: String(targetActiveSibling.id) })
+        .eq('reservation_id', String(id));
+
+      try {
+        const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+        const updatedSiblingObj = {
+          ...targetActiveSibling,
+          deposit: newSiblingDeposit
+        };
+        await syncBeds24BookingLocal(updatedSiblingObj);
+      } catch (sibSyncErr) {
+        console.error("[Reservas DELETE] Error al sincronizar reserva hermana localmente:", sibSyncErr);
+      }
+    }
 
     const dataB24 = await beds24Response.json();
 
@@ -998,7 +1096,8 @@ export async function DELETE(req: Request) {
         const { syncBeds24BookingLocal } = await import('@/lib/beds24');
         const b24CancelledObj = {
           ...bookingB24Raw,
-          status: '0' // cancelado en Beds24
+          status: '0', // cancelado en Beds24
+          deposit: 0
         };
         await syncBeds24BookingLocal(b24CancelledObj);
         console.log(`[Reservas DELETE] ✅ Estado cancelado sincronizado síncronamente en Supabase para B24:${id}`);
