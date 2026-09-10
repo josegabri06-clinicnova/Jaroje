@@ -836,6 +836,14 @@ export async function DELETE(req: Request) {
       .maybeSingle();
 
     if (localRes) {
+      const localChannel = String(localRes.channel || '').toLowerCase();
+      const isLocalOTA = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => localChannel.includes(ota));
+      if (isLocalOTA) {
+        return NextResponse.json({ 
+          error: `No está permitido cancelar reservaciones de canales OTA (${localRes.channel}) desde la app. La cancelación debe gestionarse directamente desde el portal del canal para evitar penalizaciones.` 
+        }, { status: 403 });
+      }
+
       // Es local! Cancelar localmente en Supabase
       const { error: cancelErr } = await supabase
         .from('local_reservas')
@@ -914,6 +922,17 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ 
         error: "Beds24 no devolvió los detalles de la reserva. Verifique que el ID de reserva sea correcto." 
       }, { status: 400 });
+    }
+
+    // Validar si la reserva proviene de un canal OTA (Airbnb, Booking.com, Expedia)
+    if (bookingB24Raw) {
+      const rawChannel = String(bookingB24Raw.channel || bookingB24Raw.referer || '').toLowerCase();
+      const isOTA = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => rawChannel.includes(ota));
+      if (isOTA) {
+        return NextResponse.json({ 
+          error: `No está permitido cancelar reservaciones de canales OTA (${bookingB24Raw.channel || 'OTA'}) desde la app. La cancelación debe gestionarse directamente desde el portal del canal para evitar penalizaciones y desincronización de inventario.` 
+        }, { status: 403 });
+      }
     }
 
     // 1. Cancelar en Beds24

@@ -199,9 +199,13 @@ function ReservasListInner() {
   const [billingRequests, setBillingRequests] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
   const isOtaRes = useMemo(() => {
-    if (!selectedRes || !selectedRes.channel) return false;
-    const ch = String(selectedRes.channel).toLowerCase();
-    return ['airbnb', 'booking', 'expedia'].some(c => ch.includes(c));
+    if (!selectedRes) return false;
+    const channels = [
+      selectedRes.channel,
+      selectedRes.referer,
+      ...(Array.isArray(selectedRes.group_members) ? selectedRes.group_members.map((m: any) => m.channel || m.referer) : [])
+    ].filter(Boolean).map(c => String(c).toLowerCase());
+    return channels.some(ch => ['airbnb', 'booking', 'expedia', 'vrbo'].some(c => ch.includes(c)));
   }, [selectedRes]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Todas');
@@ -726,75 +730,46 @@ function ReservasListInner() {
     }
   };
 
-  const lastSearchId = useRef<string | null>(null);
-
-  // 1. Limpieza preventiva en el montaje para evitar el flash de la reserva anterior
+  // 1. Sincronizar ID de la URL -> Estado local (La URL manda siempre)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const searchId = params.get('id');
-      if (searchId) {
-        if (!selectedRes || String(selectedRes.id) !== searchId) {
-          setSelectedRes(null);
-        }
-      } else {
-        setSelectedRes(null);
-      }
-    }
-  }, []);
+    const searchId = searchParams.get('id');
 
-  // 2. Sincronizar ID de la URL -> Estado local (con ref para evitar race conditions)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && reservas.length > 0) {
-      const params = new URLSearchParams(window.location.search);
-      const searchId = params.get('id');
-      if (searchId) {
-        if (searchId !== lastSearchId.current) {
-          const found = reservas.find(r => String(r.id) === searchId);
-          if (found) {
-            setSelectedRes(found);
-            setSearch(searchId);
-            const today = getLocalDateStr();
-            const isCompleted = found.is_checked_out || found.check_out < today;
-            const isCancelled = found.status === 'cancelled' || found.status === '0';
-            if (isCancelled) {
-              setActiveTab('Canceladas');
-            } else {
-              setActiveTab(isCompleted ? 'Completadas' : 'Todas');
-            }
+    if (searchId) {
+      if (reservas.length > 0) {
+        // Buscar por ID principal O dentro de los miembros de un grupo consolidado
+        const found = reservas.find(r => 
+          String(r.id) === searchId || 
+          (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === searchId))
+        );
+
+        if (found) {
+          setSelectedRes(found);
+          setSearch(searchId);
+          const today = getLocalDateStr();
+          const isCompleted = found.is_checked_out || found.check_out < today;
+          const isCancelled = found.status === 'cancelled' || found.status === '0';
+          if (isCancelled) {
+            setActiveTab('Canceladas');
+          } else {
+            setActiveTab(isCompleted ? 'Completadas' : 'Todas');
           }
-          lastSearchId.current = searchId;
-        }
-      } else {
-        if (lastSearchId.current !== null) {
+        } else {
+          // Si el ID de la URL no existe en las reservas cargadas, cerrar para evitar stale data
           setSelectedRes(null);
-          lastSearchId.current = null;
         }
       }
+    } else {
+      // Si la URL no contiene ?id=, cerrar cualquier reserva abierta
+      setSelectedRes(null);
     }
   }, [reservas, searchParams]);
 
-  // 3. Sincronizar Estado local -> URL
+  // 2. Limpieza preventiva al desmontar el componente (al volver a Calendario u otra vista)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      if (selectedRes) {
-        const currentUrlId = new URLSearchParams(window.location.search).get('id');
-        if (currentUrlId !== String(selectedRes.id)) {
-          window.history.replaceState(null, '', `/reservas?id=${selectedRes.id}`);
-          lastSearchId.current = String(selectedRes.id);
-        }
-      } else {
-        // Solo limpiar el parámetro si ya se cargaron las reservas y antes hubo una activa
-        if (reservas.length > 0) {
-          const params = new URLSearchParams(window.location.search);
-          if (params.has('id') && lastSearchId.current !== null) {
-            window.history.replaceState(null, '', '/reservas');
-            lastSearchId.current = null;
-          }
-        }
-      }
-    }
-  }, [selectedRes, reservas.length]);
+    return () => {
+      setSelectedRes(null);
+    };
+  }, []);
 
   const handleConfirmCheckIn = async () => {
     if (checkInSelectedIds.length === 0) {
@@ -3544,7 +3519,12 @@ function ReservasListInner() {
             return (
               <div 
                 key={r.id}
-                onClick={() => setSelectedRes(r)}
+                onClick={() => {
+                  setSelectedRes(r);
+                  if (typeof window !== 'undefined') {
+                    window.history.replaceState(null, '', `/reservas?id=${r.id}`);
+                  }
+                }}
                 className="bg-white border border-zinc-200/80 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.03)] p-4 flex flex-col gap-3 hover:border-zinc-300 transition-colors active:scale-[0.99] cursor-pointer animate-in fade-in duration-200"
               >
                 {/* Header */}
@@ -5084,6 +5064,9 @@ function ReservasListInner() {
                                       const groupCard = groupedBase.find(g => g.is_group_card && g.group_members.some((m: any) => String(m.id) === String(selectedRes.id)));
                                       if (groupCard) {
                                         setSelectedRes(groupCard);
+                                        if (typeof window !== 'undefined') {
+                                          window.history.replaceState(null, '', `/reservas?id=${groupCard.id}`);
+                                        }
                                       }
                                     }}
                                     className="px-2 py-0.5 text-[9px] font-extrabold text-blue-700 bg-blue-100 border border-blue-200 hover:bg-blue-200 rounded transition-all cursor-pointer uppercase select-none active:scale-[0.97]"
@@ -5155,6 +5138,9 @@ function ReservasListInner() {
                                               setSelectedRes(found);
                                             } else {
                                               setSelectedRes(b);
+                                            }
+                                            if (typeof window !== 'undefined') {
+                                              window.history.replaceState(null, '', `/reservas?id=${b.id}`);
                                             }
                                           }}
                                           className="text-[9.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-all cursor-pointer active:scale-95"
@@ -6213,27 +6199,39 @@ function ReservasListInner() {
 
                   {/* Cancelar Reserva Button (Solo Admin) */}
                   {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && userRole === 'admin' && (
-                    <button 
-                      onClick={() => {
-                        if (userRole !== 'admin') {
-                          alert('❌ Error: Solo los administradores pueden cancelar reservas o eliminar bloqueos.');
-                          return;
-                        }
-                        setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
-                        setShowCancelModal(true);
-                      }}
-                      disabled={cancelLoading}
-                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1 shadow-sm disabled:opacity-50 cursor-pointer animate-in fade-in"
-                    >
-                      {cancelLoading ? (
-                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      ) : (
-                        <>
-                          <AlertCircle size={14} />
-                          {selectedRes.status === 'black' ? 'Eliminar Bloqueo 🔓' : 'Cancelar Reserva'}
-                        </>
-                      )}
-                    </button>
+                    !isOtaRes ? (
+                      <button 
+                        onClick={() => {
+                          if (userRole !== 'admin') {
+                            alert('❌ Error: Solo los administradores pueden cancelar reservas o eliminar bloqueos.');
+                            return;
+                          }
+                          setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
+                          setShowCancelModal(true);
+                        }}
+                        disabled={cancelLoading}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-[12px] py-2.5 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1 shadow-sm disabled:opacity-50 cursor-pointer animate-in fade-in"
+                      >
+                        {cancelLoading ? (
+                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <>
+                            <AlertCircle size={14} />
+                            {selectedRes.status === 'black' ? 'Eliminar Bloqueo 🔓' : 'Cancelar Reserva'}
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-center flex flex-col items-center gap-1 animate-in fade-in">
+                        <div className="flex items-center gap-1.5 text-[11.5px] font-bold text-amber-900">
+                          <Lock size={13} className="text-amber-700 shrink-0" />
+                          <span>Cancelación restringida ({selectedRes.channel || 'Canal OTA'})</span>
+                        </div>
+                        <p className="text-[10.5px] text-amber-700/90 font-medium leading-tight max-w-xs">
+                          Las reservas de Airbnb, Booking.com y Expedia deben cancelarse directamente desde el portal del canal para evitar penalizaciones.
+                        </p>
+                      </div>
+                    )
                   )}
 
                   {/* Reactivar Reserva Button (Solo Admin) */}
