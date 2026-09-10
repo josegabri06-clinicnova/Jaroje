@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Bookings, getBeds24Token, clearBeds24Cache } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import {
   sendTemplate1_SolicitudRecibida,
@@ -175,48 +175,7 @@ export async function GET(req: Request) {
       console.error("[Cron WhatsApp] Error cargando checkins de Supabase:", checkinErr);
     }
 
-    // Helper para determinar si dos reservaciones pertenecen al mismo grupo
-    const areBookingsInSameGroup = (a: any, b: any): boolean => {
-      if (!a || !b) return false;
-      const aIdStr = String(a.id);
-      const bIdStr = String(b.id);
-      if (aIdStr === bIdStr) return true;
 
-      // 1. Verificación por masterId de Beds24 si existe
-      const aMasterId = a.masterId ? String(a.masterId) : null;
-      const bMasterId = b.masterId ? String(b.masterId) : null;
-      if (aMasterId && (bIdStr === aMasterId || aMasterId === bMasterId)) return true;
-      if (bMasterId && (aIdStr === bMasterId || aMasterId === bMasterId)) return true;
-
-      // 2. Fechas de entrada y salida deben coincidir exactamente
-      const aIn = a.check_in || a.arrival;
-      const aOut = a.check_out || a.departure;
-      const bIn = b.check_in || b.arrival;
-      const bOut = b.check_out || b.departure;
-      if (!aIn || !bIn || aIn !== bIn || aOut !== bOut) return false;
-
-      // 3. Teléfono de huésped idéntico (normalizado a dígitos)
-      const cleanPhone = (p: any) => String(p || '').replace(/\D/g, '');
-      const aPhone = cleanPhone(a.phone || a.mobile || a.guest_phone);
-      const bPhone = cleanPhone(b.phone || b.mobile || b.guest_phone);
-      if (aPhone && bPhone && aPhone.length >= 7 && bPhone.length >= 7) {
-        if (aPhone === bPhone || aPhone.endsWith(bPhone) || bPhone.endsWith(aPhone)) {
-          return true;
-        }
-      }
-
-      // 4. Nombre de huésped idéntico o contenido
-      const cleanName = (n: any) => String(n || '').toLowerCase().trim().replace(/\s+/g, ' ');
-      const aName = cleanName(a.guest_name);
-      const bName = cleanName(b.guest_name);
-      if (aName && bName && aName.length >= 4 && bName.length >= 4) {
-        if (aName === bName || aName.includes(bName) || bName.includes(aName)) {
-          return true;
-        }
-      }
-
-      return false;
-    };
 
     // Helper para verificar si alguna reserva del grupo tiene un pago/comprobante pendiente o aprobado
     const isGroupPaidOrPending = (booking: any): boolean => {

@@ -993,17 +993,7 @@ export async function checkIfOtaIsAlreadyAdjusted(
         const targetPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
 
         group = allBookings.filter((sib: any) => {
-          if (sib.departure !== b.departure) return false;
-          if (String(sib.status) === '0' || sib.status === 'cancelled') return false;
-          const sibCh = (sib.channel || '').toLowerCase().trim();
-          const bCh = (b.channel || '').toLowerCase().trim();
-          const sameMaster = b.masterId && sib.masterId && String(b.masterId) === String(sib.masterId);
-          if (!sameMaster && sibCh !== bCh) return false;
-          const sibName = `${sib.firstName || ''} ${sib.lastName || ''}`.trim().toLowerCase();
-          const sibPhone = (sib.phone || sib.mobile || sib.guestPhone || '').trim();
-          const sameName = sibName && targetName && (sibName.includes(targetName) || targetName.includes(sibName));
-          const samePhone = sibPhone && targetPhone && (sibPhone.includes(targetPhone) || targetPhone.includes(sibPhone));
-          return sameName || samePhone;
+          return areBookingsInSameGroup(b, sib);
         });
       } else {
         // Consultar hermanos de Supabase de forma rápida
@@ -1014,20 +1004,8 @@ export async function checkIfOtaIsAlreadyAdjusted(
           .eq('check_out', b.departure);
 
         if (siblings && siblings.length > 0) {
-          const targetName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
-          const targetPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
-
           group = siblings.filter((sib: any) => {
-            if (String(sib.status) === 'cancelled') return false;
-            const sibCh = (sib.channel || '').toLowerCase().trim();
-            const bCh = (b.channel || '').toLowerCase().trim();
-            const sameMaster = b.masterId && sib.master_id && String(b.masterId) === String(sib.master_id);
-            if (!sameMaster && sibCh !== bCh) return false;
-            const sibName = (sib.guest_name || '').trim().toLowerCase();
-            const sibPhone = (sib.phone || '').trim();
-            const sameName = sibName && targetName && (sibName.includes(targetName) || targetName.includes(sibName));
-            const samePhone = sibPhone && targetPhone && (sibPhone.includes(targetPhone) || targetPhone.includes(sibPhone));
-            return sameName || samePhone;
+            return areBookingsInSameGroup(b, sib);
           }).map(sib => ({
             id: sib.id,
             numAdult: sib.num_adult,
@@ -2741,6 +2719,135 @@ export async function syncBeds24ReservationsRange(
   }
 
   return { success: true, count: mappedBookings.length };
+}
+
+/**
+ * Extrae y normaliza las habitaciones listadas en la etiqueta de grupo de las notas:
+ * Ej: "(Grupo: Habs 105, 204, 304)" -> ["105", "204", "304"]
+ */
+export function extractGroupRoomsFromNotes(notes: string | null | undefined): string[] | null {
+  if (!notes) return null;
+  const match = notes.match(/\(Grupo:\s*(?:Habs?\s*)?([^\)]+)\)/i);
+  if (match && match[1]) {
+    const rooms = match[1]
+      .split(/[\s,]+/)
+      .map(r => r.replace(/[^0-9a-zA-Z]/g, '').trim())
+      .filter(Boolean);
+    return rooms.length > 0 ? rooms : null;
+  }
+  return null;
+}
+
+/**
+ * Determina con alta precisión y de forma infalible si dos reservaciones pertenecen al MISMO grupo.
+ * Evita mezclar reservas independientes de las mismas fechas creadas por el mismo titular o teléfono.
+ */
+export function areBookingsInSameGroup(a: any, b: any): boolean {
+  if (!a || !b) return false;
+  const aIdStr = String(a.id || '');
+  const bIdStr = String(b.id || '');
+  if (aIdStr && bIdStr && aIdStr === bIdStr) return false;
+
+  // 1. REGLA DE CANCELACIÓN: Nunca mezclar reservas activas con canceladas
+  const aCancelled = a.status === 'cancelled' || String(a.status) === '0';
+  const bCancelled = b.status === 'cancelled' || String(b.status) === '0';
+  if (aCancelled !== bCancelled) return false;
+
+  // 2. REGLA DE FECHAS: Check-in y check-out deben coincidir exactamente
+  const aIn = a.check_in || a.arrival;
+  const aOut = a.check_out || a.departure;
+  const bIn = b.check_in || b.arrival;
+  const bOut = b.check_out || b.departure;
+  if (!aIn || !bIn || aIn !== bIn || aOut !== bOut) return false;
+
+  // 3. REGLA DE CANAL: Mismo canal (Directo no se mezcla con Booking/Airbnb)
+  const aCh = String(a.channel || '').toLowerCase().trim();
+  const bCh = String(b.channel || '').toLowerCase().trim();
+  if (aCh !== bCh) return false;
+
+  // 4. MASTER ID (Beds24 / Supabase)
+  const aMasterId = a.master_id ? String(a.master_id) : (a.masterId ? String(a.masterId) : null);
+  const bMasterId = b.master_id ? String(b.master_id) : (b.masterId ? String(b.masterId) : null);
+  if (aMasterId && bMasterId) {
+    return aMasterId === bMasterId;
+  }
+  if (aMasterId && (bIdStr === aMasterId)) return true;
+  if (bMasterId && (aIdStr === bMasterId)) return true;
+
+  // 5. ETIQUETA EXPLÍCITA DE GRUPO EN NOTAS / OBSERVACIONES: (Grupo: Habs ...)
+  const aNotes = a.notes || a.comments || a.info || '';
+  const bNotes = b.notes || b.comments || b.info || '';
+  const aRooms = extractGroupRoomsFromNotes(aNotes);
+  const bRooms = extractGroupRoomsFromNotes(bNotes);
+
+  const cleanRoomNumber = (r: any) => {
+    const raw = String(r?.room || r?.room_name || r?.roomName || '');
+    const numMatch = raw.match(/\b\d{3}\b/);
+    return numMatch ? numMatch[0] : raw.toLowerCase().trim();
+  };
+  const aRoomNum = cleanRoomNumber(a);
+  const bRoomNum = cleanRoomNumber(b);
+
+  if (aRooms && bRooms) {
+    const aRoomsSorted = [...aRooms].sort().join(',');
+    const bRoomsSorted = [...bRooms].sort().join(',');
+    if (aRoomsSorted === bRoomsSorted) return true;
+    return false;
+  }
+
+  if (aRooms && !bRooms) {
+    if (bRoomNum && aRooms.includes(bRoomNum)) {
+      const cleanName = (n: any) => String(n || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const aName = cleanName(a.guest_name || `${a.firstName || ''} ${a.lastName || ''}`);
+      const bName = cleanName(b.guest_name || `${b.firstName || ''} ${b.lastName || ''}`);
+      return aName === bName;
+    }
+    return false;
+  }
+
+  if (!aRooms && bRooms) {
+    if (aRoomNum && bRooms.includes(aRoomNum)) {
+      const cleanName = (n: any) => String(n || '').toLowerCase().trim().replace(/\s+/g, ' ');
+      const aName = cleanName(a.guest_name || `${a.firstName || ''} ${a.lastName || ''}`);
+      const bName = cleanName(b.guest_name || `${b.firstName || ''} ${b.lastName || ''}`);
+      return aName === bName;
+    }
+    return false;
+  }
+
+  // 6. SIN MASTER ID Y SIN ETIQUETAS DE GRUPO:
+  // No pueden ser la misma habitación física
+  if (aRoomNum && bRoomNum && aRoomNum === bRoomNum) return false;
+
+  // Nombre exacto normalizado
+  const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const aName = cleanStr(a.guest_name || `${a.firstName || ''} ${a.lastName || ''}`);
+  const bName = cleanStr(b.guest_name || `${b.firstName || ''} ${b.lastName || ''}`);
+  if (!aName || !bName || aName.length < 3 || aName !== bName) return false;
+
+  // Teléfono exacto normalizado (si ambos tienen)
+  const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
+  const aDigits = cleanDigits(a.guest_phone || a.phone || a.mobile || '');
+  const bDigits = cleanDigits(b.guest_phone || b.phone || b.mobile || '');
+  if (aDigits && bDigits && aDigits.length >= 7 && bDigits.length >= 7) {
+    if (aDigits !== bDigits && !aDigits.endsWith(bDigits) && !bDigits.endsWith(aDigits)) {
+      return false;
+    }
+  }
+
+  // Hora de creación similar (si está disponible, < 4 horas de diferencia para reservas hechas en el mismo bloque)
+  const aCreated = a.created_at || a.booking_time;
+  const bCreated = b.created_at || b.booking_time;
+  if (aCreated && bCreated) {
+    const tA = new Date(aCreated).getTime();
+    const tB = new Date(bCreated).getTime();
+    if (!isNaN(tA) && !isNaN(tB)) {
+      const diffHours = Math.abs(tA - tB) / (1000 * 60 * 60);
+      if (diffHours > 4) return false;
+    }
+  }
+
+  return true;
 }
 
 /**

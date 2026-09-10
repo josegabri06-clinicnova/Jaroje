@@ -16,7 +16,7 @@ import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole,
 import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
-import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit } from '@/lib/beds24';
+import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -1989,36 +1989,12 @@ export default function RecepcionPage() {
     }
   }, [selectedReserva?.check_in, selectedReserva?.check_out]);
 
-  // Buscar reservas del mismo grupo (mismo check_in, no checked_in, mismo nombre o teléfono)
+  // Buscar reservas del mismo grupo
   const siblingBookings = useMemo(() => {
     if (!selectedReserva || selectedReserva.id === 'walkin') return [];
-    
-    const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
-    const mainName = cleanStr(selectedReserva.guest_name || '');
-    const mainPhone = (selectedReserva.guest_phone || '').trim();
-    const mainChannel = (selectedReserva.channel || '').toLowerCase();
-    const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => mainChannel.includes(c));
-    
     return reservas.filter(r => {
-      // Mismo check_in, diferente reserva, no cancelada y no ya procesada
-      if (r.status === 'cancelled' || String(r.status) === '0' || r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) {
-        return false;
-      }
-
-      const rChannel = (r.channel || '').toLowerCase();
-      const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
-
-      // REGLA CRÍTICA: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
-      if (mainChannel !== rChannel) return false;
-      
-      const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone && mainPhone.length >= 6;
-      const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
-
-      // Para OTAs, requerir coincidencia de nombre (el teléfono de OTA puede ser genérico)
-      if (isMainOta || rIsOta) return !!sameName;
-
-      // Para reservas directas, aceptar mismo teléfono O mismo nombre
-      return !!(samePhone || sameName);
+      if (r.checked_in || r.checked_out) return false;
+      return areBookingsInSameGroup(selectedReserva, r);
     });
   }, [selectedReserva, reservas]);
 

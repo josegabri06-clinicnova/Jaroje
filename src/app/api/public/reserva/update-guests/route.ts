@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,12 +69,7 @@ export async function POST(req: Request) {
           .neq('id', localRes.id);
 
         if (siblings) {
-          siblingLocal = siblings.filter(r => {
-            const rPhone = (r.phone || '').trim();
-            const samePhone = mainPhone && rPhone && normalizePhoneStr(rPhone) === normalizePhoneStr(mainPhone);
-            const sameName = mainName && r.guest_name && cleanStr(r.guest_name).includes(mainName);
-            return samePhone || sameName;
-          });
+          siblingLocal = siblings.filter(r => areBookingsInSameGroup(localRes, r));
         }
       } catch (err) {
         console.error("Error al buscar hermanos locales en update-guests:", err);
@@ -302,22 +297,7 @@ export async function POST(req: Request) {
         channel: currentBooking.channel || 'direct'
       };
 
-      const siblingBeds24 = allB24.filter(r => {
-        if (String(r.id) === String(id)) return false; // Excluir la principal de los hermanos para evitar duplicación
-        if (r.check_in !== currentBooking.arrival) return false;
-        if (r.check_out !== currentBooking.departure) return false;
-
-        const rChannel = (r.channel || '').toLowerCase();
-        const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
-
-        if (isMainOta !== rIsOta) return false;
-
-        const rPhone = r.guest_phone || r.phone || r.mobile || '';
-        const samePhone = phoneNum && rPhone && normalizePhoneStr(rPhone) === phoneNum && phoneNum.length >= 6;
-        const sameName = mainName && r.guest_name && (r.guest_name.toLowerCase().includes(mainName) || mainName.includes(r.guest_name.toLowerCase()));
-
-        return (isMainOta || rIsOta) ? !!sameName : !!(samePhone || sameName);
-      });
+      const siblingBeds24 = allB24.filter(r => areBookingsInSameGroup(currentBooking, r));
 
       const groupList = [mainBookingMapped, ...siblingBeds24];
 

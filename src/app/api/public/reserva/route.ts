@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -104,21 +104,7 @@ export async function GET(req: Request) {
         const isLocalOta = ['booking.com', 'airbnb', 'expedia'].some(c => localChannel.includes(c));
 
         if (siblings && siblings.length > 0) {
-          siblingLocal = siblings.filter(s => {
-            if (s.status === 'cancelled' || s.status === 'cancelado' || s.status === 'black') return false;
-            
-            const sChannel = (s.channel || '').toLowerCase();
-            const sIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => sChannel.includes(c));
-
-            // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
-            if (isLocalOta !== sIsOta) return false;
-
-            const samePhone = mainPhone && s.phone && s.phone.trim() === mainPhone && mainPhone.length >= 6;
-            const sameName = mainName && s.guest_name && (cleanStr(s.guest_name).includes(mainName) || mainName.includes(cleanStr(s.guest_name)));
-            
-            // Para OTAs agrupamos por nombre (mismo titular). Para reservas directas, agrupamos ESTRICTAMENTE por teléfono.
-            return (isLocalOta || sIsOta) ? !!sameName : !!samePhone;
-          });
+          siblingLocal = siblings.filter(s => areBookingsInSameGroup(localRes, s));
         }
       } catch (err) {
         console.error("Error al agrupar localRes:", err);
@@ -379,25 +365,7 @@ export async function GET(req: Request) {
         const mainChannel = (booking.channel || '').toLowerCase();
         const isMainOta = ['booking.com', 'airbnb', 'expedia'].some(c => mainChannel.includes(c));
 
-        siblingBeds24 = allBeds24.filter(r => {
-          if (r.status === 'cancelled' || r.status === 'cancelado' || r.status === '0') return false;
-          if (r.check_in !== booking.check_in) return false;
-          if (r.check_out !== booking.check_out) return false;
-          if (String(r.id) === String(booking.id)) return false;
-
-          const rChannel = (r.channel || '').toLowerCase();
-          const rIsOta = ['booking.com', 'airbnb', 'expedia'].some(c => rChannel.includes(c));
-
-          // No agrupar reservas de OTA con reservas directas ni entre sí de distinto nombre
-          if (isMainOta !== rIsOta) return false;
-
-          const rPhone = r.guest_phone || r.phone || r.mobile || '';
-          const samePhone = phoneNum && rPhone && normalizePhone(rPhone) === phoneNum && phoneNum.length >= 6;
-          const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
-
-          // Para OTAs agrupamos por nombre (mismo titular). Para reservas directas, agrupamos ESTRICTAMENTE por teléfono.
-          return (isMainOta || rIsOta) ? !!sameName : !!samePhone;
-        });
+        siblingBeds24 = allBeds24.filter(r => areBookingsInSameGroup(booking, r));
       } catch (err) {
         console.error("Error al buscar hermanos Beds24 en ruta GET:", err);
       }

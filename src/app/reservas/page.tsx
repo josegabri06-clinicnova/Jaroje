@@ -7,7 +7,7 @@ import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
-import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests } from '@/lib/beds24';
+import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -810,38 +810,7 @@ function ReservasListInner() {
     reservationsList.forEach(r => {
       if (processedIds.has(String(r.id))) return;
 
-      const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
-      const mainName = cleanStr(r.guest_name);
-      const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
-      const mainDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
-      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
-      const rId = String(r.id);
-
-      const siblings = reservationsList.filter(o => {
-        const oId = String(o.id);
-        if (oId === rId) return false;
-        if (o.status !== r.status) return false;
-        
-        // REGLA CRÍTICA DE FECHAS: Las reservas con fechas de entrada o salida distintas NUNCA se agrupan, son independientes
-        if (o.check_in !== r.check_in || o.check_out !== r.check_out) return false;
-
-        // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
-        const rCh = String(r.channel || '').toLowerCase().trim();
-        const oCh = String(o.channel || '').toLowerCase().trim();
-        if (rCh !== oCh) return false;
-
-        const oMasterId = o.master_id ? String(o.master_id) : (o.masterId ? String(o.masterId) : null);
-        const sameMaster = (rMasterId && oMasterId && rMasterId === oMasterId) ||
-                           (rMasterId && rMasterId === oId) ||
-                           (oMasterId && oMasterId === rId);
-        if (sameMaster) return true;
-
-        const oDigits = cleanDigits(o.guest_phone || o.phone || o.mobile || '');
-        const samePhone = mainDigits && oDigits && mainDigits.length >= 7 && (mainDigits === oDigits || mainDigits.endsWith(oDigits) || oDigits.endsWith(mainDigits));
-        const oName = cleanStr(o.guest_name);
-        const sameName = mainName && oName && (mainName === oName || mainName.includes(oName) || oName.includes(mainName));
-        return samePhone || sameName;
-      });
+      const siblings = reservationsList.filter(o => areBookingsInSameGroup(r, o));
 
       if (siblings.length > 0) {
         const allMembers = [r, ...siblings];
@@ -1998,42 +1967,7 @@ function ReservasListInner() {
     if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
       return selectedRes.group_members.filter((m: any) => String(m.id) !== String(selectedRes.id));
     }
-    const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
-    const mainName = cleanStr(selectedRes.guest_name || '');
-    const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
-    const mainDigits = cleanDigits(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '');
-    const selMasterId = selectedRes.master_id ? String(selectedRes.master_id) : (selectedRes.masterId ? String(selectedRes.masterId) : null);
-    const selId = String(selectedRes.id);
-
-    return reservas.filter(r => {
-      const rId = String(r.id);
-      if (rId === selId) return false;
-
-      // REGLA CRÍTICA: NUNCA mezclar reservas activas con reservas canceladas
-      const isRCancelled = r.status === 'cancelled' || String(r.status) === '0';
-      const isSelCancelled = selectedRes.status === 'cancelled' || String(selectedRes.status) === '0';
-      if (isRCancelled !== isSelCancelled) return false;
-      
-      // REGLA CRÍTICA DE FECHAS: Las reservas con fechas de entrada o salida distintas NUNCA se agrupan, son independientes
-      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return false;
-
-      // REGLA CRÍTICA DE AISLAMIENTO: NUNCA agrupar reservas de diferentes canales (ej. Booking.com con Google o Directo)
-      const rCh = String(r.channel || '').toLowerCase().trim();
-      const selCh = String(selectedRes.channel || '').toLowerCase().trim();
-      if (rCh !== selCh) return false;
-
-      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
-      const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
-                         (selMasterId && selMasterId === rId) ||
-                         (rMasterId && rMasterId === selId);
-      if (sameMaster) return true;
-
-      const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
-      const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
-      const rName = cleanStr(r.guest_name || '');
-      const sameName = mainName && rName && (rName === mainName || rName.includes(mainName) || mainName.includes(rName));
-      return samePhone || sameName;
-    });
+    return reservas.filter(r => areBookingsInSameGroup(selectedRes, r));
   }, [selectedRes, reservas]);
 
   const groupBookings = useMemo(() => {
@@ -2510,21 +2444,33 @@ function ReservasListInner() {
         }
       }
 
-      const mainBooking = directGroupBookings.find((b: any) => String(b.id) === String(selectedRes.id));
-      if (mainBooking) {
-        const mainBalance = mainBooking.balance !== undefined ? mainBooking.balance : Math.max(0, (mainBooking.price_estimate || 0) - (mainBooking.deposit || 0));
-        const mainProportion = totalBalance > 0 ? mainBalance / totalBalance : 1 / directGroupBookings.length;
-        const mainAmount = Math.round(totalAmount * mainProportion * 100) / 100;
-        const newMainDeposit = (selectedRes.deposit || 0) + mainAmount;
+      if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
+        const newGroupDeposit = (selectedRes.deposit || 0) + totalAmount;
+        const newGroupBalance = Math.max(0, (Number(selectedRes.price_estimate || selectedRes.price || 0)) - newGroupDeposit);
+        const updatedMembers = selectedRes.group_members.map((m: any) => {
+          const bookingBalance = m.balance !== undefined
+            ? m.balance
+            : Math.max(0, (m.price_estimate || m.price || 0) - (m.deposit || 0));
+          const prop = totalBalance > 0 ? bookingBalance / totalBalance : 1 / directGroupBookings.length;
+          const amt = Math.round(totalAmount * prop * 100) / 100;
+          const newDep = (m.deposit || 0) + amt;
+          return {
+            ...m,
+            deposit: newDep,
+            balance: Math.max(0, (m.price_estimate || m.price || 0) - newDep)
+          };
+        });
+
         setSelectedRes((prev: any) => ({
           ...prev,
-          deposit: newMainDeposit,
-          balance: Math.max(0, (prev.price_estimate || 0) - newMainDeposit)
+          deposit: newGroupDeposit,
+          balance: newGroupBalance,
+          group_members: updatedMembers
         }));
-        // Enviar confirmación por WhatsApp (Mensaje 3) al registrar anticipo grupal
+
+        // Enviar confirmación por WhatsApp al titular del grupo
         const mainPhoneNum = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
         if (mainPhoneNum) {
-          const total = (selectedRes.price_estimate || selectedRes.price || 0);
           fetch('/api/whatsapp/send-template', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2532,12 +2478,43 @@ function ReservasListInner() {
               template: 'reservacion_confirmada',
               booking: {
                 ...selectedRes,
-                deposit: newMainDeposit,
-                balance: Math.max(0, total - newMainDeposit),
-                last_payment_amount: mainAmount
+                deposit: newGroupDeposit,
+                balance: newGroupBalance,
+                last_payment_amount: totalAmount
               }
             })
           }).catch(err => console.error("Error al enviar WhatsApp de anticipo grupal:", err));
+        }
+      } else {
+        const mainBooking = directGroupBookings.find((b: any) => String(b.id) === String(selectedRes.id));
+        if (mainBooking) {
+          const mainBalance = mainBooking.balance !== undefined ? mainBooking.balance : Math.max(0, (mainBooking.price_estimate || 0) - (mainBooking.deposit || 0));
+          const mainProportion = totalBalance > 0 ? mainBalance / totalBalance : 1 / directGroupBookings.length;
+          const mainAmount = Math.round(totalAmount * mainProportion * 100) / 100;
+          const newMainDeposit = (selectedRes.deposit || 0) + mainAmount;
+          setSelectedRes((prev: any) => ({
+            ...prev,
+            deposit: newMainDeposit,
+            balance: Math.max(0, (prev.price_estimate || 0) - newMainDeposit)
+          }));
+          // Enviar confirmación por WhatsApp (Mensaje 3) al registrar anticipo individual en grupo
+          const mainPhoneNum = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
+          if (mainPhoneNum) {
+            const total = (selectedRes.price_estimate || selectedRes.price || 0);
+            fetch('/api/whatsapp/send-template', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                template: 'reservacion_confirmada',
+                booking: {
+                  ...selectedRes,
+                  deposit: newMainDeposit,
+                  balance: Math.max(0, total - newMainDeposit),
+                  last_payment_amount: mainAmount
+                }
+              })
+            }).catch(err => console.error("Error al enviar WhatsApp de anticipo grupal:", err));
+          }
         }
       }
 
@@ -2903,44 +2880,10 @@ function ReservasListInner() {
     }
     memberIdSet.add(String(selectedRes.id));
 
-    // Buscar también en la lista completa de reservas por si hay hermanas adicionales
-    const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
-    const mainName = cleanStr(selectedRes.guest_name || '');
-    const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
-    const mainDigits = cleanDigits(selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || '');
-    const selMasterId = selectedRes.master_id ? String(selectedRes.master_id) : (selectedRes.masterId ? String(selectedRes.masterId) : null);
-    const selId = String(selectedRes.id);
-
     reservas.forEach((r: any) => {
       const rId = String(r.id);
       if (memberIdSet.has(rId)) return;
-
-      // Solo agrupar reservas hermanas que también estén canceladas
-      const isRCancelled = r.status === 'cancelled' || String(r.status) === '0';
-      if (!isRCancelled) return;
-      
-      // REGLA CRÍTICA DE FECHAS: Reservas con fechas distintas NUNCA son hermanas ni grupo
-      if (r.check_in !== selectedRes.check_in || r.check_out !== selectedRes.check_out) return;
-
-      const rMasterId = r.master_id ? String(r.master_id) : (r.masterId ? String(r.masterId) : null);
-      const sameMaster = (selMasterId && rMasterId && selMasterId === rMasterId) ||
-                         (selMasterId && selMasterId === rId) ||
-                         (rMasterId && rMasterId === selId);
-      if (sameMaster) {
-        memberIdSet.add(rId);
-        return;
-      }
-
-      // REGLA CRÍTICA DE AISLAMIENTO: NUNCA reactivar reservas de diferentes canales
-      const rCh = String(r.channel || '').toLowerCase().trim();
-      const selCh = String(selectedRes.channel || '').toLowerCase().trim();
-      if (rCh !== selCh) return;
-
-      const rDigits = cleanDigits(r.guest_phone || r.phone || r.mobile || '');
-      const samePhone = mainDigits && rDigits && mainDigits.length >= 7 && (mainDigits === rDigits || mainDigits.endsWith(rDigits) || rDigits.endsWith(mainDigits));
-      const rName = cleanStr(r.guest_name || '');
-      const sameName = mainName && rName && (rName === mainName || rName.includes(mainName) || mainName.includes(rName));
-      if (samePhone || sameName) {
+      if (areBookingsInSameGroup(selectedRes, r)) {
         memberIdSet.add(rId);
       }
     });
@@ -5401,7 +5344,9 @@ function ReservasListInner() {
                           <p className="text-[15px] font-black text-zinc-950 mt-0.5">
                             {fmtCurrency(groupBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0), selectedRes.guest_name)}
                           </p>
-                          <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)})</span>
+                          {!selectedRes.is_group_card && (
+                            <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)})</span>
+                          )}
                         </>
                       ) : (
                         <>
@@ -5460,7 +5405,9 @@ function ReservasListInner() {
                           <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
                             {fmtCurrency(groupBookings.reduce((sum: number, b: any) => sum + Number(b.deposit || 0), 0), selectedRes.guest_name)}
                           </p>
-                          <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)})</span>
+                          {!selectedRes.is_group_card && (
+                            <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)})</span>
+                          )}
                         </>
                       ) : (
                         <>

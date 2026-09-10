@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
-import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules } from '@/lib/beds24';
+import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -923,21 +923,10 @@ export default function CalendarPage() {
     }
   };
 
-  // Detectar reservas hermanas del mismo grupo (mismo nombre/teléfono + check-in)
+  // Detectar reservas hermanas del mismo grupo
   const siblingBookings = useMemo(() => {
     if (!selectedReserva) return [];
-    const cleanStr = (s: string) => s.toLowerCase().trim().replace(/\s+/g, ' ');
-    const mainName = cleanStr(selectedReserva.guest_name || '');
-    const mainPhone = (selectedReserva.guest_phone || '').trim();
-    return reservas.filter(r => {
-      if (r.status === 'cancelled' || String(r.status) === '0' || r.check_in !== selectedReserva.check_in || r.id === selectedReserva.id || r.checked_in || r.checked_out) return false;
-      const rCh = (r.channel || '').toLowerCase().trim();
-      const selCh = (selectedReserva.channel || '').toLowerCase().trim();
-      if (rCh !== selCh) return false;
-      const samePhone = mainPhone && r.guest_phone && r.guest_phone.trim() === mainPhone;
-      const sameName = mainName && r.guest_name && (cleanStr(r.guest_name).includes(mainName) || mainName.includes(cleanStr(r.guest_name)));
-      return samePhone || sameName;
-    });
+    return reservas.filter(r => areBookingsInSameGroup(selectedReserva, r));
   }, [selectedReserva, reservas]);
 
   const groupBookings = useMemo(() => {

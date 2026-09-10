@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import { 
   sendTemplate1_SolicitudRecibida, 
@@ -1071,22 +1071,18 @@ export async function PUT(req: Request) {
               subSiblings.forEach((s: any) => expandedIds.add(String(s.id)));
             }
 
-            // c) Buscar por fechas idénticas y coincidencia de teléfono o nombre
+            // c) Buscar por fechas idénticas y pertenencia al mismo grupo
             if (mainB24.check_in && mainB24.check_out) {
               const { data: siblings } = await supabase
                 .from('beds24_reservations')
-                .select('id, guest_phone, guest_name')
+                .select('*')
                 .eq('check_in', mainB24.check_in)
                 .eq('check_out', mainB24.check_out)
                 .neq('id', mainId);
 
               if (siblings && siblings.length > 0) {
                 siblings.forEach((s: any) => {
-                  const sPhone = normalizePhone(s.guest_phone || '');
-                  const samePhone = cleanPhone && sPhone && cleanPhone.length >= 7 && (cleanPhone === sPhone || cleanPhone.endsWith(sPhone) || sPhone.endsWith(cleanPhone));
-                  const sName = (s.guest_name || '').toLowerCase().trim();
-                  const sameName = sName && cleanName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
-                  if (samePhone || sameName) {
+                  if (areBookingsInSameGroup(mainB24, s)) {
                     expandedIds.add(String(s.id));
                   }
                 });
@@ -1102,24 +1098,17 @@ export async function PUT(req: Request) {
             .maybeSingle();
 
           if (mainLocal) {
-            const cleanPhone = normalizePhone(mainLocal.phone || '');
-            const cleanName = (mainLocal.guest_name || '').toLowerCase().trim();
-
             if (mainLocal.check_in && mainLocal.check_out) {
               const { data: localSiblings } = await supabase
                 .from('local_reservas')
-                .select('id, phone, guest_name')
+                .select('*')
                 .eq('check_in', mainLocal.check_in)
                 .eq('check_out', mainLocal.check_out)
                 .neq('id', mainId);
 
               if (localSiblings && localSiblings.length > 0) {
                 localSiblings.forEach((s: any) => {
-                  const sPhone = normalizePhone(s.phone || '');
-                  const samePhone = cleanPhone && sPhone && cleanPhone.length >= 7 && (cleanPhone === sPhone || cleanPhone.endsWith(sPhone) || sPhone.endsWith(cleanPhone));
-                  const sName = (s.guest_name || '').toLowerCase().trim();
-                  const sameName = sName && cleanName && (sName === cleanName || sName.includes(cleanName) || cleanName.includes(sName));
-                  if (samePhone || sameName) {
+                  if (areBookingsInSameGroup(mainLocal, s)) {
                     expandedIds.add(String(s.id));
                   }
                 });

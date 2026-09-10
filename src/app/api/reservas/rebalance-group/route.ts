@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token, clearBeds24Cache } from '@/lib/beds24';
+import { getBeds24Token, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -15,25 +15,13 @@ async function performRebalance(bookingId: string) {
     .maybeSingle();
 
   if (localTarget) {
-    const cleanStr = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
-    const mainName = cleanStr(localTarget.guest_name || '');
-    const mainPhone = (localTarget.phone || '').trim();
-
     const { data: siblings } = await supabase
       .from('local_reservas')
       .select('*')
       .eq('check_in', localTarget.check_in);
 
     const group = (siblings || []).filter(s => {
-      if (s.check_out !== localTarget.check_out) return false;
-      const sCh = (s.channel || '').toLowerCase().trim();
-      const targetCh = (localTarget.channel || '').toLowerCase().trim();
-      if (sCh !== targetCh) return false;
-      const sName = cleanStr(s.guest_name || '');
-      const sPhone = (s.phone || '').trim();
-      const samePhone = mainPhone && sPhone && sPhone === mainPhone;
-      const sameName = mainName && sName && (sName.includes(mainName) || mainName.includes(sName));
-      return samePhone || sameName;
+      return areBookingsInSameGroup(localTarget, s);
     });
 
     if (group.length > 1) {
@@ -78,8 +66,6 @@ async function performRebalance(bookingId: string) {
   }
 
   const targetB = jsonTarget.data[0];
-  const targetName = `${targetB.firstName || ''} ${targetB.lastName || ''}`.trim().toLowerCase();
-  const targetPhone = (targetB.phone || targetB.mobile || targetB.guestPhone || '').trim();
 
   const resSiblings = await fetch(`https://api.beds24.com/v2/bookings?arrivalFrom=${targetB.arrival}&arrivalTo=${targetB.arrival}&includeInvoice=true`, {
     headers: { 'token': token },
@@ -89,17 +75,7 @@ async function performRebalance(bookingId: string) {
   const allArrival = jsonSiblings.data || [];
 
   const group = allArrival.filter((b: any) => {
-    if (b.departure !== targetB.departure) return false;
-    if (String(b.status) === '0' || b.status === 'cancelled') return false;
-    const bCh = (b.channel || '').toLowerCase().trim();
-    const targetCh = (targetB.channel || '').toLowerCase().trim();
-    const sameMaster = targetB.masterId && b.masterId && String(targetB.masterId) === String(b.masterId);
-    if (!sameMaster && bCh !== targetCh) return false;
-    const bName = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
-    const bPhone = (b.phone || b.mobile || b.guestPhone || '').trim();
-    const sameName = bName && targetName && (bName.includes(targetName) || targetName.includes(bName));
-    const samePhone = bPhone && targetPhone && (bPhone.includes(targetPhone) || targetPhone.includes(bPhone));
-    return sameName || samePhone;
+    return areBookingsInSameGroup(targetB, b);
   });
 
   if (group.length <= 1) {
@@ -159,19 +135,19 @@ async function performRebalance(bookingId: string) {
     const prop = totalPriceInGroup > 0 ? (bPrice / totalPriceInGroup) : (1 / group.length);
     const targetDeposit = Math.round(totalDepositInGroup * prop * 100) / 100;
 
-    const updatePayload = [
-      {
-        id: Number(b.id),
-        bookId: Number(b.id),
-        status: 'confirmed',
-        deposit: targetDeposit
-      }
-    ];
+    const updatePayload: any = {
+      id: Number(b.id),
+      bookId: Number(b.id),
+      deposit: targetDeposit
+    };
+    if (b.status) {
+      updatePayload.status = b.status;
+    }
 
     const postRes = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: { 'token': token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(updatePayload),
+      body: JSON.stringify([updatePayload]),
       cache: 'no-store'
     });
     const postJson = await postRes.json();
