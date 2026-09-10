@@ -3887,6 +3887,14 @@ function ReservasListInner() {
                               if (editDailyRate !== '') {
                                 setEditPrice(String(Math.round(Number(editDailyRate) * nights)));
                               }
+                              setEditGroupMembers(prev => prev.map(m => {
+                                const mDaily = Number(m.daily_rate) || 0;
+                                return {
+                                  ...m,
+                                  nights,
+                                  price: mDaily > 0 ? String(Math.round(mDaily * nights)) : m.price
+                                };
+                              }));
                             }
                           }}
                           className={`w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm ${isCheckedIn ? 'opacity-60 cursor-not-allowed' : ''}`}
@@ -3906,6 +3914,14 @@ function ReservasListInner() {
                               if (editDailyRate !== '') {
                                 setEditPrice(String(Math.round(Number(editDailyRate) * nights)));
                               }
+                              setEditGroupMembers(prev => prev.map(m => {
+                                const mDaily = Number(m.daily_rate) || 0;
+                                return {
+                                  ...m,
+                                  nights,
+                                  price: mDaily > 0 ? String(Math.round(mDaily * nights)) : m.price
+                                };
+                              }));
                             }
                           }}
                           className={`w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[13px] font-semibold text-zinc-900 focus:border-zinc-400 shadow-sm ${isCheckedIn ? 'opacity-60 cursor-not-allowed' : ''}`}
