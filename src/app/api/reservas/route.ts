@@ -1429,6 +1429,7 @@ export async function PUT(req: Request) {
         // Actualizar Supabase y checkins para cada miembro de Beds24
         for (const bId of updatedBeds24Ids) {
           try {
+            const memberObj = body.groupBookings.find((m: any) => String(m.id) === String(bId));
             const dbUpdate: any = {};
             if (guestName) dbUpdate.guest_name = guestName;
             if (checkIn) dbUpdate.check_in_date = checkIn;
@@ -1436,6 +1437,24 @@ export async function PUT(req: Request) {
             if (Object.keys(dbUpdate).length > 0) {
               await supabase.from('checkins').update(dbUpdate).eq('reservation_id', bId);
             }
+
+            // Actualización inmediata y directa en beds24_reservations
+            const b24DirectUpdate: any = { updated_at: new Date().toISOString() };
+            if (memberObj?.deposit !== undefined) b24DirectUpdate.deposit = Number(memberObj.deposit);
+            if (memberObj?.price !== undefined) b24DirectUpdate.price = Number(memberObj.price);
+            if (memberObj?.deposit !== undefined || memberObj?.price !== undefined) {
+              const memP = memberObj?.price !== undefined ? Number(memberObj.price) : undefined;
+              const memD = memberObj?.deposit !== undefined ? Number(memberObj.deposit) : undefined;
+              if (memP !== undefined && memD !== undefined) {
+                b24DirectUpdate.balance = Math.max(0, memP - memD);
+              }
+            }
+            if (notes !== undefined) b24DirectUpdate.notes = notes;
+            if (guestName) b24DirectUpdate.guest_name = guestName;
+            if (phone !== undefined) b24DirectUpdate.guest_phone = phone;
+            if (checkIn) b24DirectUpdate.check_in = checkIn;
+            if (checkOut) b24DirectUpdate.check_out = checkOut;
+            await supabase.from('beds24_reservations').update(b24DirectUpdate).eq('id', bId);
 
             const b24FetchRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bId}&includeInvoiceItems=true`, {
               method: 'GET',
@@ -2079,6 +2098,28 @@ export async function PUT(req: Request) {
         .from('checkins')
         .update(dbUpdate)
         .eq('reservation_id', id.toString());
+    }
+
+    // 3. Actualización directa e inmediata en beds24_reservations (anti-desfase de caché)
+    try {
+      const b24DirectUpdate: any = { updated_at: new Date().toISOString() };
+      if (deposit !== undefined) b24DirectUpdate.deposit = Number(deposit);
+      if (updatePayload.price !== undefined) b24DirectUpdate.price = Number(updatePayload.price);
+      if (deposit !== undefined || updatePayload.price !== undefined) {
+        const p = updatePayload.price !== undefined ? Number(updatePayload.price) : Number(currentBooking?.price || 0);
+        const d = deposit !== undefined ? Number(deposit) : Number(currentBooking?.deposit || 0);
+        b24DirectUpdate.balance = Math.max(0, p - d);
+      }
+      if (notes !== undefined) b24DirectUpdate.notes = notes;
+      if (guestName) b24DirectUpdate.guest_name = guestName;
+      if (phone !== undefined) b24DirectUpdate.guest_phone = phone;
+      if (checkIn) b24DirectUpdate.check_in = checkIn;
+      if (checkOut) b24DirectUpdate.check_out = checkOut;
+      if (displayRoomName) b24DirectUpdate.room_name = displayRoomName;
+
+      await supabase.from('beds24_reservations').update(b24DirectUpdate).eq('id', String(id));
+    } catch (directUpErr) {
+      console.error("[Reservas PUT] Error actualizando directamente beds24_reservations en Supabase:", directUpErr);
     }
 
     const dataB24 = await beds24Response.json();

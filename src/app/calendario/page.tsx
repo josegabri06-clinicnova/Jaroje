@@ -1038,7 +1038,7 @@ export default function CalendarPage() {
         balance: (prev.price_estimate || 0) - newDeposit
       }));
 
-      setTimeout(() => { fetchData(); }, 3000);
+      setTimeout(() => { fetchData(true); }, 1500);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al registrar anticipo:\n\n${err.message}`);
@@ -1134,7 +1134,7 @@ export default function CalendarPage() {
       setAbonoFlowPaymentMethod(null);
       setAbonoFlowAccountId('');
       alert(`✅ Anticipo grupal distribuido en ${directGroupBookings.length} habitaciones.`);
-      setTimeout(() => { fetchData(); }, 3000);
+      setTimeout(() => { fetchData(true); }, 1500);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al registrar anticipo grupal:\n\n${err.message}`);

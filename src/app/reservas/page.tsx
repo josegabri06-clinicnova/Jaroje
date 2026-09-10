@@ -765,12 +765,11 @@ function ReservasListInner() {
       .join(', ');
 
     const consolidatedPrice = allMembers.reduce((sum, m) => sum + Number(m.price_estimate || m.price || 0), 0);
-    const consolidatedDeposit = allMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
-    const consolidatedBalance = allMembers.reduce((sum, m) => {
-      const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
-      const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
-      return sum + bBal;
-    }, 0);
+    const rawConsolidatedDeposit = allMembers.reduce((sum, m) => sum + Number(m.deposit || 0), 0);
+    const consolidatedDeposit = Math.min(consolidatedPrice, rawConsolidatedDeposit);
+    const isAllOta = allMembers.every(m => m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c)));
+    const isAllSettled = allMembers.every(m => m.is_checked_in || m.checked_in === true || m.is_checked_out || m.checked_out === true);
+    const consolidatedBalance = (isAllOta || isAllSettled) ? 0 : Math.max(0, consolidatedPrice - consolidatedDeposit);
 
     const adjResult = detectAndAdjustGroupGuests(allMembers, capacitySettings || undefined);
     const consolidatedAdults = adjResult.groupTotalAdults;
@@ -2026,7 +2025,9 @@ function ReservasListInner() {
 
   const directGroupTotalBalance = useMemo(() => {
     return directGroupBookings.reduce((sum: number, r: any) => {
-      const bal = Math.max(0, (r.price_estimate || r.price || 0) - (r.deposit || 0));
+      const isOta = r.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => r.channel.toLowerCase().includes(c));
+      if (isOta || r.is_checked_in || r.checked_in === true) return sum;
+      const bal = Math.max(0, Number(r.price_estimate || r.price || 0) - Number(r.deposit || 0));
       return sum + bal;
     }, 0);
   }, [directGroupBookings]);
@@ -2149,22 +2150,20 @@ function ReservasListInner() {
         setSelectedRes((prev: any) => ({
           ...prev,
           deposit: newDeposit,
-          balance: (prev.price_estimate || 0) - newDeposit
+          balance: Math.max(0, (prev.price_estimate || prev.price || 0) - newDeposit)
         }));
       } else if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
         setSelectedRes((prev: any) => {
           if (!prev) return null;
           const updatedMembers = prev.group_members.map((m: any) => 
             String(m.id) === String(targetBooking.id) 
-              ? { ...m, deposit: newDeposit, balance: (m.price_estimate || 0) - newDeposit } 
+              ? { ...m, deposit: newDeposit, balance: Math.max(0, (m.price_estimate || m.price || 0) - newDeposit) } 
               : m
           );
-          const consolidatedDeposit = updatedMembers.reduce((sum: number, m: any) => sum + Number(m.deposit || 0), 0);
-          const consolidatedBalance = updatedMembers.reduce((sum: number, m: any) => {
-            const isOta = m.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => m.channel.toLowerCase().includes(c));
-            const bBal = isOta ? 0 : (m.balance !== undefined && m.balance !== null ? Number(m.balance) : Math.max(0, Number(m.price_estimate || m.price || 0) - Number(m.deposit || 0)));
-            return sum + bBal;
-          }, 0);
+          const consolidatedPrice = updatedMembers.reduce((sum: number, m: any) => sum + Number(m.price_estimate || m.price || 0), 0);
+          const rawConsolidatedDeposit = updatedMembers.reduce((sum: number, m: any) => sum + Number(m.deposit || 0), 0);
+          const consolidatedDeposit = Math.min(consolidatedPrice, rawConsolidatedDeposit);
+          const consolidatedBalance = Math.max(0, consolidatedPrice - consolidatedDeposit);
           return {
             ...prev,
             deposit: consolidatedDeposit,
@@ -2174,18 +2173,18 @@ function ReservasListInner() {
         });
       }
 
-      setReservas(prev => prev.map(r => r.id === targetBooking.id ? {
+      setReservas(prev => prev.map(r => String(r.id) === String(targetBooking.id) ? {
         ...r,
         deposit: newDeposit,
-        balance: (r.price_estimate || 0) - newDeposit
+        balance: Math.max(0, (r.price_estimate || r.price || 0) - newDeposit)
       } : r));
 
       setShowAbonoFlow(false);
       alert('✅ Anticipo registrado exitosamente.');
 
       setTimeout(() => {
-        fetchReservas();
-      }, 3000);
+        fetchReservas(true);
+      }, 1500);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al registrar anticipo:\n\n${err.message}`);
@@ -2427,10 +2426,10 @@ function ReservasListInner() {
           });
         } catch (e) { console.error('Error log abono grupal:', e); }
 
-        setReservas(prev => prev.map(r => r.id === booking.id ? {
+        setReservas(prev => prev.map(r => String(r.id) === String(booking.id) ? {
           ...r,
           deposit: newDeposit,
-          balance: Math.max(0, (r.price_estimate || 0) - newDeposit)
+          balance: Math.max(0, (Number(r.price_estimate || r.price || 0)) - newDeposit)
         } : r));
       }
 
@@ -2445,8 +2444,7 @@ function ReservasListInner() {
       }
 
       if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members)) {
-        const newGroupDeposit = (selectedRes.deposit || 0) + totalAmount;
-        const newGroupBalance = Math.max(0, (Number(selectedRes.price_estimate || selectedRes.price || 0)) - newGroupDeposit);
+        const consolidatedPrice = selectedRes.group_members.reduce((sum: number, m: any) => sum + Number(m.price_estimate || m.price || 0), 0);
         const updatedMembers = selectedRes.group_members.map((m: any) => {
           const bookingBalance = m.balance !== undefined
             ? m.balance
@@ -2460,6 +2458,9 @@ function ReservasListInner() {
             balance: Math.max(0, (m.price_estimate || m.price || 0) - newDep)
           };
         });
+        const rawNewGroupDeposit = updatedMembers.reduce((sum: number, m: any) => sum + Number(m.deposit || 0), 0);
+        const newGroupDeposit = Math.min(consolidatedPrice, rawNewGroupDeposit);
+        const newGroupBalance = Math.max(0, consolidatedPrice - newGroupDeposit);
 
         setSelectedRes((prev: any) => ({
           ...prev,
@@ -2495,7 +2496,7 @@ function ReservasListInner() {
           setSelectedRes((prev: any) => ({
             ...prev,
             deposit: newMainDeposit,
-            balance: Math.max(0, (prev.price_estimate || 0) - newMainDeposit)
+            balance: Math.max(0, (Number(prev.price_estimate || prev.price || 0)) - newMainDeposit)
           }));
           // Enviar confirmación por WhatsApp (Mensaje 3) al registrar anticipo individual en grupo
           const mainPhoneNum = selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '';
@@ -2525,7 +2526,7 @@ function ReservasListInner() {
       setAbonoAccountId('');
       alert(`✅ Anticipo grupal de ${fmtCurrency(totalAmount, selectedRes.guest_name)} distribuido en ${directGroupBookings.length} habitaciones.`);
 
-      setTimeout(() => { fetchReservas(); }, 3000);
+      setTimeout(() => { fetchReservas(true); }, 1500);
     } catch (err: any) {
       console.error(err);
       alert(`❌ Error al registrar anticipo grupal:\n\n${err.message}`);
@@ -5403,7 +5404,14 @@ function ReservasListInner() {
                         <>
                           <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo Total del Grupo</span>
                           <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                            {fmtCurrency(groupBookings.reduce((sum: number, b: any) => sum + Number(b.deposit || 0), 0), selectedRes.guest_name)}
+                            {fmtCurrency(
+                              (() => {
+                                const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0);
+                                const rawDeps = groupBookings.reduce((sum: number, b: any) => sum + Number(b.deposit || 0), 0);
+                                return Math.min(totalGroupPrice, rawDeps);
+                              })(),
+                              selectedRes.guest_name
+                            )}
                           </p>
                           {!selectedRes.is_group_card && (
                             <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)})</span>
@@ -5426,13 +5434,13 @@ function ReservasListInner() {
                       {(() => {
                         const isGroup = siblingBookings.length > 0;
                         const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                        const isCheckedIn = selectedRes.checked_in === true;
+                        const isCheckedIn = selectedRes.checked_in === true || selectedRes.is_checked_in === true;
                         let balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, Number(selectedRes.price_estimate || selectedRes.price || 0) - Number(selectedRes.deposit || 0));
 
                         if (isGroup) {
                           const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + (Number(b.price_estimate) || Number(b.price) || 0), 0);
-                          const totalGroupDeposit = groupBookings.reduce((sum: number, b: any) => sum + (Number(b.deposit) || 0), 0);
-                          balanceVal = Math.max(0, totalGroupPrice - totalGroupDeposit);
+                          const totalGroupDeposit = Math.min(totalGroupPrice, groupBookings.reduce((sum: number, b: any) => sum + (Number(b.deposit) || 0), 0));
+                          balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, totalGroupPrice - totalGroupDeposit);
                         }
 
                         return (
