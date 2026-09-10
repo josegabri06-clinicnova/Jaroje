@@ -1336,28 +1336,97 @@ export async function PUT(req: Request) {
           if (notes !== undefined) b24Item.notes = notes;
           if (m.deposit !== undefined) b24Item.deposit = Number(m.deposit);
 
+          let currentMemBooking: any = null;
+          try {
+            const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${mIdStr}&includeInvoiceItems=true`, {
+              headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+              cache: 'no-store'
+            });
+            const getJson = await getRes.json().catch(() => null);
+            if (getJson && getJson.data && getJson.data.length > 0) {
+              currentMemBooking = getJson.data[0];
+            }
+          } catch (e) {
+            console.error(`[Reservas PUT Group] Error fetching member ${mIdStr}:`, e);
+          }
+
           if (m.price !== undefined) {
-            b24Item.price = Number(m.price);
-            b24Item.invoiceItems = [
-              {
+            const finalPrice = Number(m.price);
+            b24Item.price = finalPrice;
+            
+            const currentItems = (currentMemBooking && Array.isArray(currentMemBooking.invoiceItems))
+              ? currentMemBooking.invoiceItems.filter((item: any) => {
+                  const itemBookingId = String(item.bookingId || item.bookId || '');
+                  return !itemBookingId || itemBookingId === mIdStr;
+                })
+              : [];
+            const charges = currentItems.filter((item: any) => item.type === 'charge' || !item.type);
+            const invoiceItemsUpdate: any[] = [];
+
+            let mainRoomCharge = charges.find((c: any) => 
+              (c.description || '').includes('[ROOMNAME1]') || 
+              (c.description || '').toLowerCase().includes('room charge')
+            );
+            const ivaCharge = charges.find((c: any) => 
+              (c.description || '').toLowerCase().includes('iva')
+            );
+            const lodgingTaxCharge = charges.find((c: any) => 
+              (c.description || '').toLowerCase().includes('hospedaje') || 
+              (c.description || '').toLowerCase().includes('tax')
+            );
+
+            if (!mainRoomCharge) {
+              mainRoomCharge = charges.find((c: any) => c !== ivaCharge && c !== lodgingTaxCharge);
+            }
+
+            if (mainRoomCharge && mainRoomCharge.id) {
+              invoiceItemsUpdate.push({
+                id: mainRoomCharge.id,
                 description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
                 qty: 1,
-                amount: Number(m.price),
+                amount: finalPrice,
                 vatRate: 19
-              },
-              {
+              });
+            } else {
+              invoiceItemsUpdate.push({
+                description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
+                qty: 1,
+                amount: finalPrice,
+                vatRate: 19
+              });
+            }
+
+            if (ivaCharge && ivaCharge.id) {
+              invoiceItemsUpdate.push({
+                id: ivaCharge.id,
                 description: 'IVA 16% (Incluido en el precio)',
                 qty: 1,
                 amount: 0,
                 vatRate: 0
-              },
-              {
+              });
+            }
+
+            if (lodgingTaxCharge && lodgingTaxCharge.id) {
+              invoiceItemsUpdate.push({
+                id: lodgingTaxCharge.id,
                 description: 'Tax Hospedaje 3% (Incluido en el precio)',
                 qty: 1,
                 amount: 0,
                 vatRate: 0
+              });
+            }
+
+            // Poner en 0 cualquier cargo duplicado previo para limpiar el folio de Beds24
+            charges.forEach((c: any) => {
+              if (c.id && c !== mainRoomCharge && c !== ivaCharge && c !== lodgingTaxCharge) {
+                invoiceItemsUpdate.push({
+                  id: c.id,
+                  amount: 0
+                });
               }
-            ];
+            });
+
+            b24Item.invoiceItems = invoiceItemsUpdate;
           }
 
           beds24BatchPayload.push(b24Item);
