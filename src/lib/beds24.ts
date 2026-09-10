@@ -1869,7 +1869,38 @@ export function getCapacityRules(
  * Calcula el monto total sugerido de una renta directa basándose en fechas, habitación
  * y reglas/temporadas (incluyendo impuesto 19% e huéspedes adicionales).
  */
-export function getDirectTotalForStay(
+export interface DirectStayBreakdown {
+  roomName: string;
+  roomType: string;
+  checkIn: string;
+  checkOut: string;
+  nights: number;
+  rateName: string;
+  isDiscount: boolean;
+  basePricePerNight: number;
+  taxPerNight: number;
+  totalPerNight: number;
+  totalGuests: number;
+  baseCapacity: number;
+  extraGuests: number;
+  extraGuestPricePerNight: number;
+  extraGuestsSurchargePerNight: number;
+  longStayDiscountPercent: number;
+  subtotalBaseStay: number;
+  subtotalTaxStay: number;
+  totalDirect: number;
+  channel: string;
+  channelMultiplier: number;
+  channelLabel: string;
+  finalTotal: number;
+  summaryFormula: string;
+}
+
+/**
+ * Obtiene el desglose detallado del cálculo de tarifa para una estancia
+ * incluyendo el nombre de la tarifa/temporada aplicada, impuestos, noches y personas extras.
+ */
+export function getDirectStayBreakdown(
   roomName: string, // ej. '102'
   checkIn: string,
   checkOut: string,
@@ -1879,19 +1910,22 @@ export function getDirectTotalForStay(
   capacitySettings?: Record<string, any>,
   tempDiscounts?: any[],
   seasonBasePrices?: Record<string, any>,
-  seasonRanges?: any[]
-): number {
+  seasonRanges?: any[],
+  channel: string = 'Directo',
+  otaMultipliers: { airbnb?: number; booking?: number } = { airbnb: 1.20, booking: 1.35 }
+): DirectStayBreakdown | null {
   const roomB24 = getBeds24RoomIdAndUnit(roomName);
-  if (!roomB24) return 0;
+  if (!roomB24) return null;
 
   const checkInDate = new Date(checkIn + 'T12:00:00');
   const checkOutDate = new Date(checkOut + 'T12:00:00');
   const nights = Math.max(1, Math.round((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24)));
 
   let discountMult = 1.0;
-  if (nights >= 30) discountMult = 0.60;
-  else if (nights >= 15) discountMult = 0.75;
-  else if (nights >= 7) discountMult = 0.85;
+  let longStayDiscountPercent = 0;
+  if (nights >= 30) { discountMult = 0.60; longStayDiscountPercent = 40; }
+  else if (nights >= 15) { discountMult = 0.75; longStayDiscountPercent = 25; }
+  else if (nights >= 7) { discountMult = 0.85; longStayDiscountPercent = 15; }
 
   const capRules = getCapacityRules(roomName, capacitySettings);
   const totalGuests = numAdults + numChildren;
@@ -1900,14 +1934,25 @@ export function getDirectTotalForStay(
   const surchargePerNight = extraGuests * extraGuestPrice;
 
   const parentRoom = getParentMapping(roomB24.roomId, roomB24.unitId);
+  const roomMeta = getRoomMetadata(parentRoom.roomId || roomB24.roomId, null);
 
   let totalDirect = 0;
+  let subtotalBaseStay = 0;
+  let subtotalTaxStay = 0;
+  let appliedRateName = '';
+  let isDiscount = false;
+  let sampleBasePricePerNight = 0;
+  let sampleTaxPerNight = 0;
+  let sampleTotalPerNight = 0;
+
   for (let i = 0; i < nights; i++) {
     const curr = new Date(checkInDate);
     curr.setDate(curr.getDate() + i);
     const dateStr = curr.toISOString().split('T')[0];
 
     let priceUsed = 0;
+    let currentRateName = '';
+    let currentIsDiscount = false;
 
     // 1. Verificar si hay un descuento temporal / tarifa especial activa para este cuarto y fecha
     if (tempDiscounts && Array.isArray(tempDiscounts) && tempDiscounts.length > 0) {
@@ -1925,6 +1970,8 @@ export function getDirectTotalForStay(
           activeDiscount.priceBase !== undefined ? activeDiscount.priceBase :
           activeDiscount.priceHuesped !== undefined ? activeDiscount.priceHuesped : 0
         );
+        currentRateName = activeDiscount.label || activeDiscount.name || 'Tarifa Especial (Descuento)';
+        currentIsDiscount = true;
       }
     }
 
@@ -1946,7 +1993,6 @@ export function getDirectTotalForStay(
         rule.end_date >= dateStr
       );
 
-      // Si no hay rango de fecha específico, buscar la regla estacional base por nombre de temporada
       if (!seasonalRule) {
         const season = getSeason(dateStr, seasonRanges);
         let targetRuleName = 'Temporada Baja';
@@ -1969,29 +2015,131 @@ export function getDirectTotalForStay(
 
       if (specialRule) {
         priceUsed = Number(specialRule.price);
+        currentRateName = specialRule.name || 'Tarifa Especial';
+        currentIsDiscount = true;
       } else if (seasonalRule) {
         priceUsed = Number(seasonalRule.price);
+        currentRateName = seasonalRule.name || 'Temporada Estacional';
       } else if (baseRule) {
         priceUsed = Number(baseRule.price);
+        currentRateName = baseRule.name || 'Tarifa Base';
       }
     }
 
     // 3. Fallback a temporada configurada en seasonBasePrices o JAROJE_PRICES
     if (priceUsed <= 0) {
       const season = getSeason(dateStr, seasonRanges);
+      let seasonTitle = 'Temporada Baja';
+      if (season === 'media') seasonTitle = 'Temporada Media';
+      else if (season === 'media_alta') seasonTitle = 'Temporada Media-Alta';
+      else if (season === 'alta') seasonTitle = 'Temporada Alta';
+
       priceUsed = seasonBasePrices?.[parentRoom.roomId]?.[season] || 
                   seasonBasePrices?.[roomB24.roomId]?.[season] || 
                   JAROJE_PRICES[parentRoom.roomId]?.[season] || 
                   JAROJE_PRICES[roomB24.roomId]?.[season] || 
                   2000;
+      currentRateName = seasonTitle;
+    }
+
+    if (!appliedRateName) {
+      appliedRateName = currentRateName;
+      isDiscount = currentIsDiscount;
     }
 
     const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
     const nightTax = Math.round(nightBase * 0.19);
-    totalDirect += nightBase + nightTax;
+    const nightTotal = nightBase + nightTax;
+
+    subtotalBaseStay += nightBase;
+    subtotalTaxStay += nightTax;
+    totalDirect += nightTotal;
+
+    if (i === 0) {
+      sampleBasePricePerNight = nightBase;
+      sampleTaxPerNight = nightTax;
+      sampleTotalPerNight = nightTotal;
+    }
   }
 
-  return totalDirect;
+  // Multiplicadores de canal
+  let channelMultiplier = 1.0;
+  let channelLabel = 'Directo (1.0x)';
+  const channelLower = String(channel || '').toLowerCase();
+  if (channelLower.includes('airbnb')) {
+    channelMultiplier = otaMultipliers.airbnb || 1.20;
+    channelLabel = `Airbnb (+${Math.round((channelMultiplier - 1) * 100)}%)`;
+  } else if (channelLower.includes('booking')) {
+    channelMultiplier = otaMultipliers.booking || 1.35;
+    channelLabel = `Booking.com (+${Math.round((channelMultiplier - 1) * 100)}%)`;
+  }
+
+  const finalTotal = channelMultiplier !== 1.0 ? Math.round(totalDirect * channelMultiplier) : totalDirect;
+
+  let summaryFormula = `${nights} ${nights === 1 ? 'noche' : 'noches'} × $${sampleTotalPerNight.toLocaleString('es-MX')} MXN`;
+  if (channelMultiplier !== 1.0) {
+    summaryFormula += ` × ${channelMultiplier} (${channelLabel}) = $${finalTotal.toLocaleString('es-MX')} MXN`;
+  } else {
+    summaryFormula += ` = $${finalTotal.toLocaleString('es-MX')} MXN`;
+  }
+
+  return {
+    roomName,
+    roomType: roomMeta?.nombre || `Habitación ${roomName}`,
+    checkIn,
+    checkOut,
+    nights,
+    rateName: appliedRateName || 'Tarifa Estándar',
+    isDiscount,
+    basePricePerNight: sampleBasePricePerNight,
+    taxPerNight: sampleTaxPerNight,
+    totalPerNight: sampleTotalPerNight,
+    totalGuests,
+    baseCapacity: capRules.base,
+    extraGuests,
+    extraGuestPricePerNight: extraGuestPrice,
+    extraGuestsSurchargePerNight: surchargePerNight,
+    longStayDiscountPercent,
+    subtotalBaseStay,
+    subtotalTaxStay,
+    totalDirect,
+    channel: channel || 'Directo',
+    channelMultiplier,
+    channelLabel,
+    finalTotal,
+    summaryFormula
+  };
+}
+
+/**
+ * Calcula el costo total de una estancia basado en la habitación física, fechas,
+ * y reglas/temporadas (incluyendo impuesto 19% e huéspedes adicionales).
+ */
+export function getDirectTotalForStay(
+  roomName: string, // ej. '102'
+  checkIn: string,
+  checkOut: string,
+  rulesList?: any[],
+  numAdults: number = 1,
+  numChildren: number = 0,
+  capacitySettings?: Record<string, any>,
+  tempDiscounts?: any[],
+  seasonBasePrices?: Record<string, any>,
+  seasonRanges?: any[]
+): number {
+  const breakdown = getDirectStayBreakdown(
+    roomName,
+    checkIn,
+    checkOut,
+    rulesList,
+    numAdults,
+    numChildren,
+    capacitySettings,
+    tempDiscounts,
+    seasonBasePrices,
+    seasonRanges
+  );
+  return breakdown ? breakdown.totalDirect : 0;
 }
 
 /**

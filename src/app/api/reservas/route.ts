@@ -1505,13 +1505,78 @@ export async function PUT(req: Request) {
 
     if (localRes) {
       if (preview) {
+        let localBreakdown: any = null;
+        let recalculatedLocalPrice = localRes.price || 0;
+        let isSameRoom = true;
+
+        if (roomName) {
+          const { getBeds24RoomIdAndUnit, getParentMapping, getDirectStayBreakdown } = await import('@/lib/beds24');
+          const currentParent = getParentMapping(localRes.room_id, localRes.unit_id);
+          const targetMapping = getBeds24RoomIdAndUnit(roomName);
+          if (targetMapping) {
+            const targetParent = getParentMapping(targetMapping.roomId, targetMapping.unitId);
+            isSameRoom = currentParent.roomId === targetParent.roomId;
+
+            if (!isSameRoom) {
+              let rulesList: any[] = [];
+              let tempDiscounts: any[] = [];
+              let seasonBasePrices: Record<string, any> = {};
+              let seasonRanges: any[] = [];
+              let capacitySettings: any = null;
+              let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+
+              try {
+                const [{ data: rulesData }, { data: discountRow }, { data: basePricesRow }, { data: seasonRow }, { data: capRow }, { data: otaRow }] = await Promise.all([
+                  supabase.from('pricing_rules').select('*'),
+                  supabase.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle(),
+                  supabase.from('settings').select('value').eq('key', 'season_base_prices').maybeSingle(),
+                  supabase.from('settings').select('value').eq('key', 'season_ranges').maybeSingle(),
+                  supabase.from('settings').select('value').eq('key', 'capacity_settings').maybeSingle(),
+                  supabase.from('settings').select('value').eq('key', 'ota_multipliers').maybeSingle(),
+                ]);
+                if (rulesData) rulesList = rulesData;
+                if (discountRow?.value) tempDiscounts = typeof discountRow.value === 'string' ? JSON.parse(discountRow.value) : discountRow.value;
+                if (basePricesRow?.value) seasonBasePrices = typeof basePricesRow.value === 'string' ? JSON.parse(basePricesRow.value) : basePricesRow.value;
+                if (seasonRow?.value) seasonRanges = typeof seasonRow.value === 'string' ? JSON.parse(seasonRow.value) : seasonRow.value;
+                if (capRow?.value) capacitySettings = typeof capRow.value === 'string' ? JSON.parse(capRow.value) : capRow.value;
+                if (otaRow?.value) {
+                  const parsedOta = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
+                  if (parsedOta.airbnb) otaMultipliers.airbnb = Number(parsedOta.airbnb);
+                  if (parsedOta.booking) otaMultipliers.booking = Number(parsedOta.booking);
+                }
+              } catch (e) {}
+
+              const cleanRoomNum = roomName.replace(/[^0-9]/g, '');
+              localBreakdown = getDirectStayBreakdown(
+                cleanRoomNum,
+                localRes.check_in,
+                localRes.check_out,
+                rulesList,
+                Number(localRes.num_adult || 1),
+                Number(localRes.num_child || 0),
+                capacitySettings,
+                tempDiscounts,
+                seasonBasePrices,
+                seasonRanges,
+                localRes.channel || 'Directo',
+                otaMultipliers
+              );
+
+              if (localBreakdown && localBreakdown.finalTotal > 0) {
+                recalculatedLocalPrice = localBreakdown.finalTotal;
+              }
+            }
+          }
+        }
+
         return NextResponse.json({
           success: true,
           preview: true,
           old_price: localRes.price || 0,
-          recalculated_price: localRes.price || 0,
-          price_changed: false,
-          same_room_type: true
+          recalculated_price: recalculatedLocalPrice,
+          price_changed: recalculatedLocalPrice !== (localRes.price || 0),
+          same_room_type: isSameRoom,
+          breakdown: localBreakdown || null
         });
       }
       // Es local! Modificar localmente
@@ -1637,6 +1702,7 @@ export async function PUT(req: Request) {
     // Si solo viene roomName (reasignación pura, sin price explícito), obtenemos la reserva,
     // consultamos las tarifas de la nueva habitación y recalculamos el total.
     let recalculatedPrice: number | undefined = undefined;
+    let calculatedBreakdown: any = null;
     let currentBooking: any = null;
 
     // Siempre obtener la reserva actual si es reasignación O si se está cambiando el precio manualmente
@@ -1803,20 +1869,7 @@ export async function PUT(req: Request) {
               console.error("[Reservas PUT] Error resolviendo huéspedes grupales:", groupErr);
             }
 
-            const calculatedTotal = getDirectTotalForStay(
-              cleanRoomNum,
-              arrival,
-              departure,
-              rulesList,
-              numAdults,
-              numChildren,
-              capacitySettings,
-              tempDiscounts,
-              seasonBasePrices,
-              seasonRanges
-            );
-
-            // Cargar multiplicadores de OTA de la base de datos
+            calculatedBreakdown = null;
             let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
             try {
               const { data: otaRow } = await supabase
@@ -1833,19 +1886,28 @@ export async function PUT(req: Request) {
               console.warn("[Reservas PUT] No se pudieron cargar ota_multipliers:", otaErr);
             }
 
-            let finalCalculated = calculatedTotal;
-            const channelLower = String(currentBooking.channel || currentBooking.referer || '').toLowerCase();
-            if (channelLower.includes('airbnb')) {
-              finalCalculated = Math.round(calculatedTotal * otaMultipliers.airbnb);
-              console.log(`[Reservas PUT] Aplicando recargo Airbnb (${otaMultipliers.airbnb}): ${calculatedTotal} → ${finalCalculated}`);
-            } else if (channelLower.includes('booking')) {
-              finalCalculated = Math.round(calculatedTotal * otaMultipliers.booking);
-              console.log(`[Reservas PUT] Aplicando recargo Booking (${otaMultipliers.booking}): ${calculatedTotal} → ${finalCalculated}`);
-            }
+            const { getDirectStayBreakdown } = await import('@/lib/beds24');
+            calculatedBreakdown = getDirectStayBreakdown(
+              cleanRoomNum,
+              arrival,
+              departure,
+              rulesList,
+              numAdults,
+              numChildren,
+              capacitySettings,
+              tempDiscounts,
+              seasonBasePrices,
+              seasonRanges,
+              currentBooking.channel || currentBooking.referer || 'Directo',
+              otaMultipliers
+            );
+
+            const calculatedTotal = calculatedBreakdown ? calculatedBreakdown.totalDirect : 0;
+            let finalCalculated = calculatedBreakdown ? calculatedBreakdown.finalTotal : calculatedTotal;
 
             if (finalCalculated > 0 && finalCalculated !== oldPrice) {
               recalculatedPrice = finalCalculated;
-              console.log(`[Reservas PUT] Tarifa recalculada por cambio de categoría usando getDirectTotalForStay con recargos de canal: $${oldPrice} → $${finalCalculated}`);
+              console.log(`[Reservas PUT] Tarifa recalculada por cambio de categoría usando getDirectStayBreakdown con recargos de canal: $${oldPrice} → $${finalCalculated}`);
             }
           }
         } else {
@@ -1872,7 +1934,8 @@ export async function PUT(req: Request) {
         old_price: currentBooking?.price || 0,
         recalculated_price: recalculatedPrice !== undefined ? recalculatedPrice : (currentBooking?.price || 0),
         price_changed: recalculatedPrice !== undefined && recalculatedPrice !== currentBooking?.price,
-        same_room_type: !roomTypeChanged
+        same_room_type: !roomTypeChanged,
+        breakdown: calculatedBreakdown || null
       });
     }
 
