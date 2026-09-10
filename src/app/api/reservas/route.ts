@@ -512,18 +512,8 @@ export async function POST(req: Request) {
               num_child: Number(data.num_child || 0)
             };
 
-            // Verificar que no se haya enviado ya este mensaje a esta reserva
+            // Verificar que no se haya enviado ya este mensaje de confirmación de reserva
             const templateName = bookingForWA.deposit > 0 ? 'reservacion_confirmada' : 'solicitud_recibida';
-            const { data: dbCheckin } = await supabase
-              .from('checkins')
-              .select('status')
-              .eq('reservation_id', bookingIdStr.toLowerCase().trim())
-              .maybeSingle();
-
-            if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
-              console.log(`[WA reservas local] Huésped ya hizo check-in, omitiendo confirmación.`);
-              return;
-            }
 
             const { data: existingLog } = await supabase
               .from('whatsapp_logs')
@@ -532,8 +522,8 @@ export async function POST(req: Request) {
               .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'pago_anticipo_recibido'])
               .limit(1);
 
-            if (existingLog && existingLog.length > 0) {
-              console.log(`[WA reservas local] Omitiendo, ya se envió mensaje inicial a reserva ${bookingIdStr}`);
+            if (existingLog && existingLog.length > 0 && bookingForWA.deposit === 0) {
+              console.log(`[WA reservas local] Omitiendo solicitud_recibida, ya se envió mensaje inicial a reserva ${bookingIdStr}`);
               return;
             }
 
@@ -732,18 +722,8 @@ export async function POST(req: Request) {
             num_child: numChild ? Number(numChild) : 0
           };
 
-          // Verificar que no se haya enviado ya este mensaje a esta reserva
+          // Verificar que no se haya enviado ya este mensaje de confirmación de reserva
           const templateName = bookingForWA.deposit > 0 ? 'reservacion_confirmada' : 'solicitud_recibida';
-          const { data: dbCheckin } = await supabase
-            .from('checkins')
-            .select('status')
-            .eq('reservation_id', bookingIdStr.toLowerCase().trim())
-            .maybeSingle();
-
-          if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
-            console.log(`[WA reservas B24] Huésped ya hizo check-in, omitiendo confirmación.`);
-            return;
-          }
 
           const { data: existingLog } = await supabase
             .from('whatsapp_logs')
@@ -752,8 +732,8 @@ export async function POST(req: Request) {
             .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'pago_anticipo_recibido'])
             .limit(1);
 
-          if (existingLog && existingLog.length > 0) {
-            console.log(`[WA reservas B24] Omitiendo, ya se envió mensaje inicial a reserva ${bookingIdStr}`);
+          if (existingLog && existingLog.length > 0 && bookingForWA.deposit === 0) {
+            console.log(`[WA reservas B24] Omitiendo solicitud_recibida, ya se envió mensaje inicial a reserva ${bookingIdStr}`);
             return;
           }
 
