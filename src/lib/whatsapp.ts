@@ -314,11 +314,39 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    // Candado anti-duplicados para reservaciones de grupo y envíos masivos simultáneos (15 segundos)
+    // Candado anti-duplicados en memoria para reservaciones de grupo y envíos masivos simultáneos (15 segundos)
     const lockKey = `${cleanedPhone}_${templateName}`;
     if (isGroupMessageLocked(lockKey)) {
-      console.log(`[WhatsApp Deduplicador] Omitiendo mensaje duplicado para ${cleanedPhone} (plantilla: ${templateName})`);
-      return { success: true, data: { deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador de grupo.' } };
+      console.log(`[WhatsApp Deduplicador Memoria] Omitiendo mensaje duplicado para ${cleanedPhone} (plantilla: ${templateName})`);
+      return { success: true, data: { deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador en memoria.' } };
+    }
+
+    // Candado anti-duplicados a nivel base de datos para plantillas de un solo disparo por reserva
+    const singleSendPerReservationTemplates = [
+      'bienvenida_checkin',
+      'preparacion_llegada',
+      'seguimiento_satisfaccion',
+      'salida_checkout',
+      'comparte_experiencia',
+      'recibimiento_nuevamente'
+    ];
+
+    if (bookingId && singleSendPerReservationTemplates.includes(templateName) && !bypassPause) {
+      try {
+        const { data: existingLog } = await supabase
+          .from('whatsapp_logs')
+          .select('id')
+          .eq('reservation_id', String(bookingId))
+          .eq('template_name', templateName)
+          .limit(1);
+
+        if (existingLog && existingLog.length > 0) {
+          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bookingId}`);
+          return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada previamente a esta reserva.` } };
+        }
+      } catch (dbDedupErr) {
+        console.error("[WhatsApp Deduplicador DB] Error al verificar logs existentes:", dbDedupErr);
+      }
     }
 
     // Resolve language preference

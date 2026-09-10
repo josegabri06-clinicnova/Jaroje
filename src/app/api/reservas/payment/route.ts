@@ -66,11 +66,6 @@ export async function POST(req: Request) {
 
             // Al registrar un cobro, siempre enviar confirmación de reservación y pago
             await sendTemplate3_ReservacionConfirmada(bookingForWA);
-
-            // Si además la reserva ya tiene check-in activo, enviar también la bienvenida
-            if (dbCheckin?.status === 'checked_in') {
-              await sendTemplate6_BienvenidaCheckin(bookingForWA);
-            }
           } catch (waErr) {
             console.error("Error enviando WhatsApp en payment local:", waErr);
           }
@@ -139,11 +134,6 @@ export async function POST(req: Request) {
 
           // Al registrar un cobro, siempre enviar confirmación de reservación y pago
           await sendTemplate3_ReservacionConfirmada(booking);
-
-          // Si además la reserva ya tiene check-in activo, enviar también la bienvenida
-          if (dbCheckin?.status === 'checked_in') {
-            await sendTemplate6_BienvenidaCheckin(booking);
-          }
         }
       } catch (waErr) {
         console.error("Error enviando WhatsApp en payment Beds24:", waErr);
