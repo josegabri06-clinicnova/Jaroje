@@ -1721,17 +1721,32 @@ export async function PUT(req: Request) {
               console.warn("[Reservas PUT] No se pudieron cargar capacitySettings:", csErr);
             }
 
-            // Cargar pricing rules de la base de datos
+            // Cargar pricing_rules, temp_discounts, season_base_prices y season_ranges de la base de datos
             let rulesList: any[] = [];
+            let tempDiscounts: any[] = [];
+            let seasonBasePrices: Record<string, any> = {};
+            let seasonRanges: any[] = [];
+
             try {
-              const { data: rulesData } = await supabase
-                .from('pricing_rules')
-                .select('*');
-              if (rulesData) {
-                rulesList = rulesData;
+              const [{ data: rulesData }, { data: discountRow }, { data: basePricesRow }, { data: seasonRow }] = await Promise.all([
+                supabase.from('pricing_rules').select('*'),
+                supabase.from('settings').select('value').eq('key', 'temp_discounts').maybeSingle(),
+                supabase.from('settings').select('value').eq('key', 'season_base_prices').maybeSingle(),
+                supabase.from('settings').select('value').eq('key', 'season_ranges').maybeSingle()
+              ]);
+
+              if (rulesData) rulesList = rulesData;
+              if (discountRow?.value) {
+                tempDiscounts = typeof discountRow.value === 'string' ? JSON.parse(discountRow.value) : discountRow.value;
               }
-            } catch (rulesErr) {
-              console.warn("[Reservas PUT] No se pudieron cargar pricing_rules:", rulesErr);
+              if (basePricesRow?.value) {
+                seasonBasePrices = typeof basePricesRow.value === 'string' ? JSON.parse(basePricesRow.value) : basePricesRow.value;
+              }
+              if (seasonRow?.value) {
+                seasonRanges = typeof seasonRow.value === 'string' ? JSON.parse(seasonRow.value) : seasonRow.value;
+              }
+            } catch (pricingLoadErr) {
+              console.warn("[Reservas PUT] Error cargando reglas o descuentos:", pricingLoadErr);
             }
 
             const { getDirectTotalForStay } = await import('@/lib/beds24');
@@ -1795,7 +1810,10 @@ export async function PUT(req: Request) {
               rulesList,
               numAdults,
               numChildren,
-              capacitySettings
+              capacitySettings,
+              tempDiscounts,
+              seasonBasePrices,
+              seasonRanges
             );
 
             // Cargar multiplicadores de OTA de la base de datos

@@ -1876,7 +1876,10 @@ export function getDirectTotalForStay(
   rulesList?: any[],
   numAdults: number = 1,
   numChildren: number = 0,
-  capacitySettings?: Record<string, any>
+  capacitySettings?: Record<string, any>,
+  tempDiscounts?: any[],
+  seasonBasePrices?: Record<string, any>,
+  seasonRanges?: any[]
 ): number {
   const roomB24 = getBeds24RoomIdAndUnit(roomName);
   if (!roomB24) return 0;
@@ -1896,6 +1899,8 @@ export function getDirectTotalForStay(
   const extraGuestPrice = capacitySettings?.extra_guest_price !== undefined ? Number(capacitySettings.extra_guest_price) : 500;
   const surchargePerNight = extraGuests * extraGuestPrice;
 
+  const parentRoom = getParentMapping(roomB24.roomId, roomB24.unitId);
+
   let totalDirect = 0;
   for (let i = 0; i < nights; i++) {
     const curr = new Date(checkInDate);
@@ -1904,20 +1909,36 @@ export function getDirectTotalForStay(
 
     let priceUsed = 0;
 
-    // 1. Buscar en reglas de Supabase si se proveen
-    if (rulesList && rulesList.length > 0) {
-      const season = getSeason(dateStr);
+    // 1. Verificar si hay un descuento temporal / tarifa especial activa para este cuarto y fecha
+    if (tempDiscounts && Array.isArray(tempDiscounts) && tempDiscounts.length > 0) {
+      const activeDiscount = tempDiscounts.find((d: any) => {
+        const roomList = Array.isArray(d.rooms) ? d.rooms : (Array.isArray(d.room_ids) ? d.room_ids : []);
+        const matchRoom = roomList.includes(roomB24.roomId) || roomList.includes(parentRoom.roomId);
+        return matchRoom && dateStr >= d.from && dateStr <= d.to;
+      });
 
+      if (activeDiscount) {
+        priceUsed = Number(
+          activeDiscount.priceRaw !== undefined ? activeDiscount.priceRaw :
+          activeDiscount.price !== undefined ? activeDiscount.price :
+          activeDiscount.price_base !== undefined ? activeDiscount.price_base :
+          activeDiscount.priceBase !== undefined ? activeDiscount.priceBase :
+          activeDiscount.priceHuesped !== undefined ? activeDiscount.priceHuesped : 0
+        );
+      }
+    }
+
+    // 2. Buscar en reglas de Supabase si no hubo descuento temporal
+    if (priceUsed <= 0 && rulesList && Array.isArray(rulesList) && rulesList.length > 0) {
       const specialRule = rulesList.find(rule => 
-        rule.room_type_id === roomB24.roomId && 
+        (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
         rule.rule_type === 'special' && 
         rule.start_date <= dateStr && 
         rule.end_date >= dateStr
       );
 
-      // Intentar buscar regla estacional por rango de fechas específico
       let seasonalRule = rulesList.find(rule => 
-        rule.room_type_id === roomB24.roomId && 
+        (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
         rule.rule_type === 'seasonal' && 
         rule.start_date && 
         rule.end_date &&
@@ -1925,15 +1946,16 @@ export function getDirectTotalForStay(
         rule.end_date >= dateStr
       );
 
-      // Si no hay rango de fecha específico, buscar la regla estacional base por nombre de temporada (donde start_date/end_date son null)
+      // Si no hay rango de fecha específico, buscar la regla estacional base por nombre de temporada
       if (!seasonalRule) {
+        const season = getSeason(dateStr, seasonRanges);
         let targetRuleName = 'Temporada Baja';
         if (season === 'media') targetRuleName = 'Temporada Media';
         else if (season === 'media_alta') targetRuleName = 'Temporada Media-Alta';
         else if (season === 'alta') targetRuleName = 'Temporada Alta';
 
         seasonalRule = rulesList.find(rule => 
-          rule.room_type_id === roomB24.roomId && 
+          (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
           rule.rule_type === 'seasonal' && 
           (!rule.start_date || !rule.end_date) &&
           rule.name === targetRuleName
@@ -1941,7 +1963,7 @@ export function getDirectTotalForStay(
       }
 
       const baseRule = rulesList.find(rule => 
-        rule.room_type_id === roomB24.roomId && 
+        (rule.room_type_id === roomB24.roomId || rule.room_type_id === parentRoom.roomId) && 
         rule.rule_type === 'base'
       );
 
@@ -1954,11 +1976,14 @@ export function getDirectTotalForStay(
       }
     }
 
-    // 2. Fallback a tarifas fijas estacionales de JAROJE_PRICES
+    // 3. Fallback a temporada configurada en seasonBasePrices o JAROJE_PRICES
     if (priceUsed <= 0) {
-      const parentRoom = getParentMapping(roomB24.roomId, roomB24.unitId);
-      const season = getSeason(dateStr);
-      priceUsed = JAROJE_PRICES[parentRoom.roomId]?.[season] || 2000;
+      const season = getSeason(dateStr, seasonRanges);
+      priceUsed = seasonBasePrices?.[parentRoom.roomId]?.[season] || 
+                  seasonBasePrices?.[roomB24.roomId]?.[season] || 
+                  JAROJE_PRICES[parentRoom.roomId]?.[season] || 
+                  JAROJE_PRICES[roomB24.roomId]?.[season] || 
+                  2000;
     }
 
     const nightBase = Math.round(priceUsed * discountMult) + surchargePerNight;
@@ -1982,7 +2007,10 @@ export function calculateGroupPriceEstimate(
     checkOut: string;
   }>,
   rulesList?: any[],
-  capacitySettings?: any
+  capacitySettings?: any,
+  tempDiscounts?: any[],
+  seasonBasePrices?: Record<string, any>,
+  seasonRanges?: any[]
 ): number {
   if (!groupRooms || groupRooms.length === 0) return 0;
 
@@ -2014,7 +2042,10 @@ export function calculateGroupPriceEstimate(
       rulesList,
       capRules.base + roomExtraGuests,
       0,
-      capacitySettings
+      capacitySettings,
+      tempDiscounts,
+      seasonBasePrices,
+      seasonRanges
     );
     totalGroupPrice += roomPrice;
   }
