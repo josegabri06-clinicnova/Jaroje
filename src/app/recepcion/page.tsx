@@ -3627,6 +3627,7 @@ export default function RecepcionPage() {
         });
         paymentSplits[selectedReserva.id] = Math.max(0, totalPayment - allocatedSum);
 
+        const sentGroupWelcomePhones = new Set<string>();
         for (const r of groupBookings) {
           // A. Guardar check-in local en Supabase
           const { error: upsertErr } = await supabase.from('checkins').upsert({
@@ -3646,9 +3647,11 @@ export default function RecepcionPage() {
             continue;
           }
 
-          // Enviar plantilla de bienvenida WhatsApp en segundo plano
-          const groupMemberPhone = r.phone || r.mobile || r.guest_phone;
-          if (groupMemberPhone) {
+          // Enviar plantilla de bienvenida WhatsApp en segundo plano (1 sola vez por teléfono)
+          const rawMemberPhone = r.phone || r.mobile || r.guest_phone || '';
+          const cleanPhoneKey = rawMemberPhone.replace(/\D/g, '');
+          if (cleanPhoneKey && !sentGroupWelcomePhones.has(cleanPhoneKey)) {
+            sentGroupWelcomePhones.add(cleanPhoneKey);
             fetch('/api/whatsapp/send-template', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -3658,7 +3661,7 @@ export default function RecepcionPage() {
                   ...r,
                   id: r.id,
                   guest_name: r.guest_name,
-                  phone: groupMemberPhone,
+                  phone: rawMemberPhone,
                   is_checked_in: true
                 }
               })

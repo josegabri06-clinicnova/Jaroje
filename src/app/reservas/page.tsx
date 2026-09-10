@@ -958,6 +958,7 @@ function ReservasListInner() {
       const emp = getOperatorForLog();
       const employeeNum = emp.employee_num;
       const employeeName = emp.full_name;
+      const sentWelcomePhones = new Set<string>();
 
       // Realizar check-in y registrar pagos para cada habitación seleccionada
       for (const room of selectedCheckInBookings) {
@@ -1277,9 +1278,11 @@ function ReservasListInner() {
           }
         }
 
-        // Enviar plantilla de bienvenida WhatsApp en segundo plano
-        const phoneNumForWA = room.phone || room.mobile || room.guest_phone || '';
-        if (phoneNumForWA) {
+        // Enviar plantilla de bienvenida WhatsApp en segundo plano (1 sola vez por teléfono de huésped)
+        const rawPhone = room.phone || room.mobile || room.guest_phone || '';
+        const cleanPhoneKey = rawPhone.replace(/\D/g, '');
+        if (cleanPhoneKey && !sentWelcomePhones.has(cleanPhoneKey)) {
+          sentWelcomePhones.add(cleanPhoneKey);
           fetch('/api/whatsapp/send-template', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1289,7 +1292,7 @@ function ReservasListInner() {
                 ...room,
                 id: room.id,
                 guest_name: room.guest_name,
-                phone: phoneNumForWA,
+                phone: rawPhone,
                 is_checked_in: true
               }
             })

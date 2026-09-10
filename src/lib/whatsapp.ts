@@ -321,7 +321,7 @@ export async function sendWhatsAppTemplate(
       return { success: true, data: { deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador en memoria.' } };
     }
 
-    // Candado anti-duplicados a nivel base de datos para plantillas de un solo disparo por reserva
+    // Candado anti-duplicados a nivel base de datos para plantillas de un solo disparo
     const singleSendPerReservationTemplates = [
       'bienvenida_checkin',
       'preparacion_llegada',
@@ -331,18 +331,37 @@ export async function sendWhatsAppTemplate(
       'recibimiento_nuevamente'
     ];
 
-    if (bookingId && singleSendPerReservationTemplates.includes(templateName) && !bypassPause) {
+    if (singleSendPerReservationTemplates.includes(templateName)) {
       try {
-        const { data: existingLog } = await supabase
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+        // 1. Candado estricto por número de teléfono en los últimos 5 minutos
+        const { data: recentPhoneLog } = await supabase
           .from('whatsapp_logs')
           .select('id')
-          .eq('reservation_id', String(bookingId))
+          .eq('phone', cleanedPhone)
           .eq('template_name', templateName)
+          .gte('sent_at', fiveMinutesAgo)
           .limit(1);
 
-        if (existingLog && existingLog.length > 0) {
-          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bookingId}`);
-          return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada previamente a esta reserva.` } };
+        if (recentPhoneLog && recentPhoneLog.length > 0) {
+          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió hace menos de 5 min al teléfono ${cleanedPhone}`);
+          return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada recientemente a este número.` } };
+        }
+
+        // 2. Candado por ID de reservación
+        if (bookingId) {
+          const { data: existingBookingLog } = await supabase
+            .from('whatsapp_logs')
+            .select('id')
+            .eq('reservation_id', String(bookingId))
+            .eq('template_name', templateName)
+            .limit(1);
+
+          if (existingBookingLog && existingBookingLog.length > 0) {
+            console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bookingId}`);
+            return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada previamente a esta reserva.` } };
+          }
         }
       } catch (dbDedupErr) {
         console.error("[WhatsApp Deduplicador DB] Error al verificar logs existentes:", dbDedupErr);
