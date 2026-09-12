@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Bookings, getBeds24Token, getOtaRoom500Bookings, fetchBeds24RatesMap, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
+import { deleteCancelledReservationFinances } from '@/lib/finances';
 import { 
   sendTemplate1_SolicitudRecibida, 
   sendTemplate3_ReservacionConfirmada,
@@ -861,6 +862,13 @@ export async function DELETE(req: Request) {
         return NextResponse.json({ error: cancelErr.message }, { status: 500 });
       }
 
+      // Revertir y eliminar transacciones en Finanzas de la reserva cancelada
+      try {
+        await deleteCancelledReservationFinances(id, 'Cancelación manual de reserva local');
+      } catch (finErr) {
+        console.error("[Reservas DELETE] Error limpiando finanzas de reserva local cancelada:", finErr);
+      }
+
       // Liberar registro de checkin local en Supabase si existía
       await supabase.from('checkins').delete().eq('reservation_id', id.toString());
 
@@ -1104,6 +1112,13 @@ export async function DELETE(req: Request) {
       } catch (syncErr) {
         console.error("[Reservas DELETE] Error al sincronizar cancelación local:", syncErr);
       }
+    }
+
+    // Revertir y eliminar transacciones en Finanzas de la reserva cancelada en Beds24
+    try {
+      await deleteCancelledReservationFinances(id, 'Cancelación manual de reserva Beds24');
+    } catch (finErr) {
+      console.error("[Reservas DELETE] Error limpiando finanzas de reserva Beds24 cancelada:", finErr);
     }
 
     // Invalidar caché de Beds24 ya que acabamos de cancelar una reserva

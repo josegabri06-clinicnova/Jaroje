@@ -1513,6 +1513,16 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
 
           if (updateErr) {
             console.error(`[Beds24 Sync Lote] Error al actualizar estado de reservas canceladas/eliminadas:`, updateErr);
+          } else {
+            // Limpiar y revertir transacciones en Finanzas para cada reserva detectada como cancelada
+            for (const goneId of goneIds) {
+              try {
+                const { deleteCancelledReservationFinances } = await import('@/lib/finances');
+                await deleteCancelledReservationFinances(goneId, 'Reserva no encontrada en Beds24 (marcada como cancelada)');
+              } catch (finErr) {
+                console.error(`[Beds24 Sync Lote] Error limpiando finanzas para reserva ${goneId}:`, finErr);
+              }
+            }
           }
         }
       }
@@ -2430,6 +2440,14 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
 
   if (error) {
     console.error(`[Supabase Sync] Error al hacer upsert de B24:${b.id}:`, error);
+  } else if (dbStatus === 'cancelled') {
+    // Si la reserva está cancelada, limpiar y revertir automáticamente sus transacciones en Finanzas
+    try {
+      const { deleteCancelledReservationFinances } = await import('@/lib/finances');
+      await deleteCancelledReservationFinances(String(b.id), 'Sincronización de reserva cancelada desde Beds24');
+    } catch (finErr) {
+      console.error(`[Supabase Sync] Error limpiando finanzas para reserva cancelada ${b.id}:`, finErr);
+    }
   }
   return { data, error };
 }

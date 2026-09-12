@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
+import { deleteCancelledReservationFinances } from '@/lib/finances';
 import {
   sendTemplate1_SolicitudRecibida,
   sendTemplate2_UltimoAviso,
@@ -366,7 +367,16 @@ export async function GET(req: Request) {
               // 3. Liberar checkin local para todos los miembros del grupo
               await supabase.from('checkins').delete().in('reservation_id', groupMemberIds);
 
-              // 4. Actualizar estado en Supabase beds24_reservations para todos los miembros
+              // 4. Limpiar y revertir transacciones en Finanzas para todos los miembros cancelados
+              for (const memberId of groupMemberIds) {
+                try {
+                  await deleteCancelledReservationFinances(memberId, 'Cancelación automática por inactividad de pago (3h)');
+                } catch (finErr) {
+                  console.error(`[Cron Expiración 3h] Error limpiando finanzas para reserva ${memberId}:`, finErr);
+                }
+              }
+
+              // 5. Actualizar estado en Supabase beds24_reservations para todos los miembros
               try {
                 await supabase
                   .from('beds24_reservations')

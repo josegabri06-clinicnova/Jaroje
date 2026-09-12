@@ -8,6 +8,7 @@ import {
   detectLanguageFromPhone 
 } from '@/lib/whatsapp';
 import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal } from '@/lib/beds24';
+import { deleteCancelledReservationFinances } from '@/lib/finances';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
 export async function POST(req: Request) {
@@ -120,6 +121,13 @@ export async function POST(req: Request) {
         if (isCancelled) {
           console.log(`[Webhook Beds24] Reservación cancelada detectada para ID ${bookingIdStr}`);
           await supabase.from('checkins').delete().eq('reservation_id', bookingIdStr.toLowerCase().trim());
+
+          // Revertir y eliminar transacciones en Finanzas de la reserva cancelada
+          try {
+            await deleteCancelledReservationFinances(bookingIdStr, 'Cancelación recibida por Webhook Beds24');
+          } catch (finErr) {
+            console.error("[Webhook Beds24] Error limpiando finanzas de reserva cancelada:", finErr);
+          }
 
           if (phone) {
             try {
