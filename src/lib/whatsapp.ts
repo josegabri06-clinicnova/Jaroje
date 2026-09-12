@@ -45,6 +45,18 @@ const COUNTRY_TO_PREFIX: Record<string, string> = {
   AT: '43',
   BE: '32',
   PT: '351',
+  CZ: '420',
+  PL: '48',
+  SE: '46',
+  NO: '47',
+  DK: '45',
+  IL: '972',
+  AU: '61',
+  NZ: '64',
+  IN: '91',
+  CN: '86',
+  JP: '81',
+  KR: '82',
 };
 
 function countryNameToCode(name: string): string {
@@ -178,6 +190,16 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
     return cleaned; // España (34 + 9 dígitos)
   }
 
+  // Si el número ya empieza con algún prefijo internacional conocido de COUNTRY_TO_PREFIX y tiene longitud válida
+  for (const p of Object.values(COUNTRY_TO_PREFIX)) {
+    if (p !== '52' && p !== '1' && p !== '34' && cleaned.startsWith(p)) {
+      const restLen = cleaned.length - p.length;
+      if (restLen >= 7 && restLen <= 11) {
+        return cleaned;
+      }
+    }
+  }
+
   // Si no tenemos código de país, aplicamos la lógica clásica basada en la longitud
   if (!cc) {
     if (cleaned.length === 10) {
@@ -201,7 +223,7 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
     if (cleaned.startsWith('52') && cleaned.length === 12) {
       return '521' + cleaned.substring(2);
     }
-    if (!cleaned.startsWith('52')) {
+    if (!cleaned.startsWith('52') && cleaned.length === 10) {
       return '521' + cleaned;
     }
     return cleaned;

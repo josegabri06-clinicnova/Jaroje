@@ -281,12 +281,14 @@ export async function GET(req: Request) {
         const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
         if (!guestPhone) continue;
 
-        // --- REGLA: Cancelación Automática 3h tras Último Aviso ---
+        // --- REGLA: Cancelación Automática 3h tras Último Aviso (Solo Reservas Directas/Locales, NUNCA OTAs) ---
         const isCancelled = booking.status === 'cancelled' || String(booking.status) === '0';
         const hasDeposit = Number(booking.deposit || 0) > 0;
         const sentAtStr = getGroupNoticeSentAt(booking);
+        const channelLower = String(booking.channel || '').toLowerCase();
+        const isOtaBooking = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => channelLower.includes(ota));
 
-        if (!isCancelled && !hasDeposit && sentAtStr) {
+        if (!isCancelled && !hasDeposit && sentAtStr && !isOtaBooking) {
           const sentAt = new Date(sentAtStr);
           // Margen de 3 horas (usando 2 horas y 50 minutos para tolerar la frecuencia del cron de 10 min)
           const limitTime = new Date(sentAt.getTime() + 170 * 60 * 1000); 

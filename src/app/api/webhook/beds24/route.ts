@@ -252,9 +252,9 @@ export async function POST(req: Request) {
           }
 
           // 5. Enviar plantilla correspondiente
-          const rawSource = String(`${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+          const rawSource = String(`${b.channel || ''} ${source || ''} ${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
           const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
-          const isOTA = rawSource.includes('airbnb') || rawSource.includes('booking') || rawSource.includes('expedia')
+          const isOTA = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => rawSource.includes(ota))
             || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
 
           const bookingForWA = {
@@ -263,6 +263,7 @@ export async function POST(req: Request) {
             lastName: b.lastName || '',
             guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || b.guestName || guestName || 'Huésped',
             phone: phone,
+            channel: b.channel || source || 'OTA',
             num_adult: Number(b.numAdult || 1),
             num_child: Number(b.numChild || 0),
             deposit: Number(b.deposit || 0)
