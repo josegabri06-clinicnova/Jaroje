@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/whatsapp",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/analytics-sync",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-files",
+      "schedule": "0 5 * * 0"
+    }
+  ]
+}

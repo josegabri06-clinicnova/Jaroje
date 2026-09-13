@@ -178,16 +178,22 @@ export async function GET(req: Request) {
 
 
 
-    // Helper para verificar si alguna reserva del grupo tiene un pago/comprobante pendiente o aprobado
+    // Helper para verificar si la reserva o alguna reserva del grupo tiene un pago/comprobante pendiente o aprobado
     const isGroupPaidOrPending = (booking: any): boolean => {
-      const group = allBookings.filter(b => areBookingsInSameGroup(booking, b));
-      return group.some(b => paidOrPendingSet.has(String(b.id)));
+      const bIdStr = String(booking.id);
+      if (paidOrPendingSet.has(bIdStr)) return true;
+      const siblings = allBookings.filter(b => areBookingsInSameGroup(booking, b));
+      return siblings.some(b => paidOrPendingSet.has(String(b.id)));
     };
 
-    // Helper para obtener la fecha de último aviso de cualquier reserva del grupo
+    // Helper para obtener la fecha de último aviso de la reserva o de cualquier miembro del grupo
     const getGroupNoticeSentAt = (booking: any): string | undefined => {
-      const group = allBookings.filter(b => areBookingsInSameGroup(booking, b));
-      for (const member of group) {
+      const bIdStr = String(booking.id);
+      if (ultimoAvisoMap.has(bIdStr)) {
+        return ultimoAvisoMap.get(bIdStr);
+      }
+      const siblings = allBookings.filter(b => areBookingsInSameGroup(booking, b));
+      for (const member of siblings) {
         const memberIdStr = String(member.id);
         if (ultimoAvisoMap.has(memberIdStr)) {
           return ultimoAvisoMap.get(memberIdStr);
@@ -206,28 +212,30 @@ export async function GET(req: Request) {
     const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
 
     // --- PRECARGA PARA CANCELACIÓN DE 3 HORAS ---
-    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-
-    // Obtener logs de 'ultimo_aviso' enviados en las últimas 48 horas
+    // Obtener logs de 'ultimo_aviso' enviados en los últimos 7 días ordenados por fecha descendente
     const { data: ultimoAvisoLogs } = await supabase
       .from('whatsapp_logs')
       .select('reservation_id, sent_at')
       .eq('template_name', 'ultimo_aviso')
-      .gte('sent_at', fortyEightHoursAgo);
+      .gte('sent_at', sevenDaysAgo)
+      .order('sent_at', { ascending: false });
 
     const ultimoAvisoMap = new Map<string, string>();
     if (ultimoAvisoLogs) {
       for (const log of ultimoAvisoLogs) {
-        ultimoAvisoMap.set(String(log.reservation_id), log.sent_at);
+        const rId = String(log.reservation_id);
+        if (!ultimoAvisoMap.has(rId)) {
+          ultimoAvisoMap.set(rId, log.sent_at);
+        }
       }
     }
 
-    // Obtener comprobantes de las últimas 48 horas en estado 'pending' o 'approved'
+    // Obtener comprobantes de los últimos 7 días en estado 'pending' o 'approved'
     const { data: receipts } = await supabase
       .from('transfer_receipts')
       .select('booking_id, status')
       .in('status', ['pending', 'approved'])
-      .gte('created_at', fortyEightHoursAgo);
+      .gte('created_at', sevenDaysAgo);
 
     const paidOrPendingSet = new Set<string>();
     if (receipts) {
@@ -284,7 +292,7 @@ export async function GET(req: Request) {
 
         // --- REGLA: Cancelación Automática 3h tras Último Aviso (Solo Reservas Directas/Locales, NUNCA OTAs) ---
         const isCancelled = booking.status === 'cancelled' || String(booking.status) === '0';
-        const hasDeposit = Number(booking.deposit || 0) > 0;
+        const hasDeposit = Number(booking.deposit || 0) > 0 || Number(booking.actualPaid || 0) > 0;
         const sentAtStr = getGroupNoticeSentAt(booking);
         const channelLower = String(booking.channel || '').toLowerCase();
         const isOtaBooking = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => channelLower.includes(ota));
@@ -311,18 +319,16 @@ export async function GET(req: Request) {
 
           if (now >= limitTime) {
             if (!isGroupPaidOrPending(booking)) {
-              // Obtener TODOS los miembros del grupo
-              const groupMembers = allBookings.filter(b => areBookingsInSameGroup(booking, b));
-              const groupMemberIds = groupMembers.map(m => String(m.id));
+              // Obtener TODOS los miembros del grupo (incluyendo la reserva actual)
+              const siblings = allBookings.filter(b => areBookingsInSameGroup(booking, b));
+              const groupMembers = [booking, ...siblings];
+              const groupMemberIds = Array.from(new Set(groupMembers.map(m => String(m.id))));
               const groupRoomsList = groupMembers.map(m => m.room_name || `Hab ${m.room || m.id}`).join(', ');
 
               console.log(`[Cron Expiración 3h] Grupo de reservaciones [${groupMemberIds.join(', ')}] (${booking.guest_name} - ${groupRoomsList}) no cargó comprobante tras 3 horas. Cancelando grupo completo...`);
 
               // Separar locales y Beds24
-              const localMembers = groupMembers.filter(m => {
-                const mId = String(m.id);
-                return mId.startsWith('loc_') || mId.startsWith('walkin_') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mId) || mId.length < 7;
-              });
+              const localMembers = groupMembers.filter(m => Boolean(m.isLocal) || String(m.id).startsWith('loc_') || String(m.id).startsWith('walkin_') || String(m.id).length < 7);
               const beds24Members = groupMembers.filter(m => !localMembers.includes(m));
 
               // 1. Cancelar en BD Local
@@ -330,14 +336,14 @@ export async function GET(req: Request) {
                 const localIds = localMembers.map(m => Number(m.id));
                 await supabase
                   .from('local_reservas')
-                  .update({ status: 'cancelled' })
+                  .update({ status: 'cancelled', deposit: 0 })
                   .in('id', localIds);
               }
 
               // 2. Cancelar en Beds24 en lote (batch)
               if (beds24Members.length > 0) {
                 const token = await getBeds24Token();
-                const cancelPayloads = beds24Members.map(m => ({ id: Number(m.id), status: 'cancelled' }));
+                const cancelPayloads = beds24Members.map(m => ({ id: Number(m.id), status: 'cancelled', deposit: 0 }));
                 const cancelRes = await fetch('https://api.beds24.com/v2/bookings', {
                   method: 'POST',
                   headers: { 'token': token, 'Content-Type': 'application/json' },
@@ -380,7 +386,7 @@ export async function GET(req: Request) {
               try {
                 await supabase
                   .from('beds24_reservations')
-                  .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+                  .update({ status: 'cancelled', deposit: 0, updated_at: new Date().toISOString() })
                   .in('id', groupMemberIds);
               } catch (b24DbErr) {
                 console.error("Error updating beds24_reservations on cancel:", b24DbErr);
