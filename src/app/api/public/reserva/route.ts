@@ -19,10 +19,11 @@ export async function GET(req: Request) {
     } catch (e) {}
 
     // Limpiar residuos de query string (?action=maintenance, &lang=es), placeholders {{1}}, etc.
-    rawId = rawId.split('?')[0].split('&')[0].replace(/^(\{\{1\}\}|%7B%7B1%7D%7D)/, '').trim();
+    rawId = rawId.replace(/(\{\{1\}\}|%7B%7B1%7D%7D)/gi, '').trim();
+    const digitMatch = rawId.match(/\d{4,12}/);
+    const bookingId = digitMatch ? Number(digitMatch[0]) : Number(rawId);
 
-    const bookingId = Number(rawId);
-    if (isNaN(bookingId) || !Number.isInteger(bookingId) || rawId.includes('{{')) {
+    if (isNaN(bookingId) || !Number.isInteger(bookingId)) {
       return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
     }
 

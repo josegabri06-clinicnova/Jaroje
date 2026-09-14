@@ -507,7 +507,7 @@ export async function sendWhatsAppTemplate(
               parameters: [
                 {
                   type: 'text',
-                  text: `${bookingId}?action=maintenance&lang=${detectedLang}`
+                  text: `&id=${bookingId}&lang=${detectedLang}`
                 }
               ]
             });
@@ -690,7 +690,7 @@ export async function sendWhatsAppTemplate(
               parameters: [
                 {
                   type: 'text',
-                  text: `${bookingId}?action=maintenance&lang=${detectedLang}`
+                  text: `&id=${bookingId}&lang=${detectedLang}`
                 }
               ]
             });

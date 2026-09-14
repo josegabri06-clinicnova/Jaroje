@@ -797,30 +797,79 @@ function getCapacityRulesForSingle(roomNameOrId: string) {
 }
 
 function extractCleanBookingId(raw: any): string {
-  let val = '';
+  // 1. Probar primero con el parámetro directo raw
+  let str = '';
   if (raw) {
-    val = Array.isArray(raw) ? raw[0] : String(raw);
-  } else if (typeof window !== 'undefined') {
-    const pathname = window.location.pathname;
-    const parts = pathname.split('/').filter(Boolean);
-    val = parts[parts.length - 1] || '';
+    str = Array.isArray(raw) ? raw[0] : String(raw);
   }
+  
   try {
-    val = decodeURIComponent(val);
+    str = decodeURIComponent(str);
   } catch (e) {}
-  val = val.replace(/^(\{\{1\}\}|%7B%7B1%7D%7D)/, '');
-  val = val.split('?')[0].split('&')[0].split('#')[0].trim();
-  return val;
+
+  // Quitar placeholders de plantilla {{1}} o %7B%7B1%7D%7D
+  let cleaned = str.replace(/(\{\{1\}\}|%7B%7B1%7D%7D)/gi, '').trim();
+  cleaned = cleaned.split('?')[0].split('&')[0].split('#')[0].trim();
+
+  // Si encontramos dígitos directos (número de reservación)
+  const directMatch = cleaned.match(/\d{4,12}/);
+  if (directMatch) {
+    return directMatch[0];
+  }
+
+  // 2. Fallback exhaustivo a window.location (pathname, searchParams, full href)
+  if (typeof window !== 'undefined') {
+    const fullHref = window.location.href;
+    const search = window.location.search;
+    const pathname = window.location.pathname;
+
+    // Buscar en search params estándar: ?id=..., ?bookingId=..., ?reservation_id=...
+    try {
+      const urlParams = new URLSearchParams(search);
+      const searchId = urlParams.get('id') || urlParams.get('bookingId') || urlParams.get('booking_id') || urlParams.get('reservation_id');
+      if (searchId) {
+        const m = searchId.match(/\d{4,12}/);
+        if (m) return m[0];
+      }
+
+      // Buscar si el parámetro action o cualquier otro parámetro contiene el ID (ej: ?action=maintenance93052195)
+      for (const [key, value] of urlParams.entries()) {
+        const m = value.match(/\d{4,12}/);
+        if (m) return m[0];
+      }
+    } catch (e) {}
+
+    // Buscar en los segmentos del pathname
+    const pathParts = pathname.split('/').filter(Boolean);
+    for (let i = pathParts.length - 1; i >= 0; i--) {
+      let part = pathParts[i];
+      try { part = decodeURIComponent(part); } catch (e) {}
+      part = part.replace(/(\{\{1\}\}|%7B%7B1%7D%7D)/gi, '');
+      const m = part.match(/\d{4,12}/);
+      if (m) return m[0];
+    }
+
+    // Como último recurso, escanear toda la URL completa por cualquier número de 5 a 10 dígitos
+    try {
+      const decodedHref = decodeURIComponent(fullHref);
+      const allNumbers = decodedHref.match(/\d{5,10}/g);
+      if (allNumbers && allNumbers.length > 0) {
+        return allNumbers[0];
+      }
+    } catch (e) {}
+  }
+
+  return '';
 }
 
 function checkIsMaintenanceAction(queryAction: string | null | undefined, rawId: any): boolean {
-  if (queryAction === 'maintenance') return true;
+  if (queryAction && queryAction.toLowerCase().includes('maintenance')) return true;
   if (typeof window !== 'undefined') {
-    const href = window.location.href;
-    if (href.includes('action=maintenance') || href.includes('action%3Dmaintenance')) return true;
+    const href = window.location.href.toLowerCase();
+    if (href.includes('action=maintenance') || href.includes('action%3dmaintenance') || href.includes('maintenance')) return true;
   }
-  const rawStr = String(rawId || '');
-  if (rawStr.includes('action=maintenance') || rawStr.includes('action%3Dmaintenance')) return true;
+  const rawStr = String(rawId || '').toLowerCase();
+  if (rawStr.includes('action=maintenance') || rawStr.includes('action%3dmaintenance') || rawStr.includes('maintenance')) return true;
   return false;
 }
 
