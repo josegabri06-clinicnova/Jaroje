@@ -796,10 +796,50 @@ function getCapacityRulesForSingle(roomNameOrId: string) {
   return { base: 6, max: 8 };
 }
 
+function extractCleanBookingId(raw: any): string {
+  let val = '';
+  if (raw) {
+    val = Array.isArray(raw) ? raw[0] : String(raw);
+  } else if (typeof window !== 'undefined') {
+    const pathname = window.location.pathname;
+    const parts = pathname.split('/').filter(Boolean);
+    val = parts[parts.length - 1] || '';
+  }
+  try {
+    val = decodeURIComponent(val);
+  } catch (e) {}
+  val = val.replace(/^(\{\{1\}\}|%7B%7B1%7D%7D)/, '');
+  val = val.split('?')[0].split('&')[0].split('#')[0].trim();
+  return val;
+}
+
+function checkIsMaintenanceAction(queryAction: string | null | undefined, rawId: any): boolean {
+  if (queryAction === 'maintenance') return true;
+  if (typeof window !== 'undefined') {
+    const href = window.location.href;
+    if (href.includes('action=maintenance') || href.includes('action%3Dmaintenance')) return true;
+  }
+  const rawStr = String(rawId || '');
+  if (rawStr.includes('action=maintenance') || rawStr.includes('action%3Dmaintenance')) return true;
+  return false;
+}
+
+function checkInitialLanguage(queryLang: string | null | undefined, rawId: any): 'es' | 'en' {
+  if (queryLang === 'en' || queryLang === 'es') return queryLang as 'es' | 'en';
+  if (typeof window !== 'undefined') {
+    const href = window.location.href;
+    if (href.includes('lang=en') || href.includes('lang%3Den')) return 'en';
+    if (href.includes('lang=es') || href.includes('lang%3Des')) return 'es';
+  }
+  const rawStr = String(rawId || '');
+  if (rawStr.includes('lang=en') || rawStr.includes('lang%3Den')) return 'en';
+  return 'es';
+}
+
 export default function PublicReservaPage() {
   const params = useParams();
   const rawId = params?.id;
-  const id = rawId ? String(rawId).replace(/^(\{\{1\}\}|%7B%7B1%7D%7D)/, '') : '';
+  const id = extractCleanBookingId(rawId);
   const searchParams = useSearchParams();
   const queryLang = searchParams?.get('lang');
   const queryAction = searchParams?.get('action');
@@ -810,12 +850,7 @@ export default function PublicReservaPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentSplit, setPaymentSplit] = useState<'50' | '100'>('50');
-  const [lang, setLang] = useState<'es' | 'en'>(() => {
-    if (queryLang === 'en' || queryLang === 'es') {
-      return queryLang as 'es' | 'en';
-    }
-    return 'es';
-  });
+  const [lang, setLang] = useState<'es' | 'en'>(() => checkInitialLanguage(queryLang, rawId));
 
   const rawT = TRANSLATIONS[lang];
   const t = React.useMemo(() => {
@@ -1077,12 +1112,23 @@ export default function PublicReservaPage() {
   };
 
   useEffect(() => {
-    if (!id) return;
+    const cleanId = id || extractCleanBookingId(rawId);
+    if (!cleanId) {
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+        setError('No se pudo encontrar el ID de la reservación.');
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+
+    let isMounted = true;
 
     const fetchBooking = async () => {
       try {
-        const res = await fetch(`/api/public/reserva?id=${id}`, { cache: 'no-store' });
+        const res = await fetch(`/api/public/reserva?id=${cleanId}`, { cache: 'no-store' });
         const json = await res.json();
+        if (!isMounted) return;
+
         if (res.ok && json.success) {
           setBooking(json.data);
           if (json.data.portal_settings?.language) {
@@ -1099,20 +1145,29 @@ export default function PublicReservaPage() {
           setError(json.error || 'No se pudo cargar la información de la reservación.');
         }
       } catch (e) {
-        setError('Error de conexión al cargar la reservación.');
+        if (isMounted) {
+          setError('Error de conexión al cargar la reservación.');
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
     fetchBooking();
-  }, [id]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, rawId]);
 
   // Auto-abrir modal de mantenimiento si viene con ?action=maintenance
   useEffect(() => {
-    const isMaintenanceAction = queryAction === 'maintenance' || 
-      (typeof window !== 'undefined' && window.location.href.includes('action=maintenance'));
+    if (!booking || booking.status === 'cancelled') return;
 
-    if (isMaintenanceAction && booking && booking.status !== 'cancelled') {
+    const isMaintenanceAction = checkIsMaintenanceAction(queryAction, rawId);
+
+    if (isMaintenanceAction) {
       const roomNum = booking.room_name?.match(/\((\d+)\)/)?.[1] || booking.room_name?.replace(/\D/g, '') || '';
       setMaintenanceType(lang === 'en' ? `My Room (${roomNum})` : `Mi Habitación (${roomNum})`);
       setMaintenanceDesc('');
@@ -1120,7 +1175,7 @@ export default function PublicReservaPage() {
       setMaintenanceSuccess(false);
       setShowMaintenanceModal(true);
     }
-  }, [queryAction, booking]);
+  }, [queryAction, rawId, booking, lang]);
 
   const copyToClipboard = (text: string, setCopied: (v: boolean) => void) => {
     navigator.clipboard.writeText(text);
@@ -3091,7 +3146,7 @@ export default function PublicReservaPage() {
                       {t.maintenanceTypeLabel}
                     </label>
                     {(() => {
-                      const roomNum = booking.room_name.match(/\((\d+)\)/)?.[1] || booking.room_name.replace(/\D/g, '') || '';
+                      const roomNum = booking?.room_name?.match(/\((\d+)\)/)?.[1] || booking?.room_name?.replace(/\D/g, '') || '';
                       const roomOptionVal = lang === 'en' ? `My Room (${roomNum})` : `Mi Habitación (${roomNum})`;
                       return (
                         <select
