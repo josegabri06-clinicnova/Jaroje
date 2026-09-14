@@ -343,7 +343,7 @@ export async function sendWhatsAppTemplate(
       return { success: true, data: { deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador en memoria.' } };
     }
 
-    // Candado anti-duplicados a nivel base de datos para plantillas de un solo disparo
+    // Candado anti-duplicados a nivel base de datos para plantillas de un solo disparo (solo en cron automático)
     const singleSendPerReservationTemplates = [
       'bienvenida_checkin',
       'preparacion_llegada',
@@ -353,7 +353,7 @@ export async function sendWhatsAppTemplate(
       'recibimiento_nuevamente'
     ];
 
-    if (singleSendPerReservationTemplates.includes(templateName)) {
+    if (!bypassPause && singleSendPerReservationTemplates.includes(templateName)) {
       try {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
