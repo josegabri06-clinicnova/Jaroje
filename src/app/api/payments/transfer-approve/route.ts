@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    const { receiptId, bookingId, amount, action, notes } = await req.json();
+    const { receiptId, bookingId, amount, action, notes, accountId: explicitAccountId } = await req.json();
 
     if (!receiptId || !bookingId || !action) {
       return NextResponse.json({ error: 'Faltan datos obligatorios (receiptId, bookingId, action)' }, { status: 400 });
@@ -170,48 +170,91 @@ export async function POST(req: Request) {
         
         const receiptNotes = String(receipt?.notes || '').toUpperCase();
         const isMercadoPago = receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA');
+        const isWise = receiptNotes.includes('WISE');
+        const isPaypal = receiptNotes.includes('PAYPAL');
+        const isBanamex = receiptNotes.includes('BANAMEX');
+        const isHsbc = receiptNotes.includes('HSBC');
+        const isSantander = receiptNotes.includes('SANTANDER');
 
-        let accountId = null;
-        if (accounts && accounts.length > 0) {
-          if (isMercadoPago) {
-            const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO'));
-            if (mpAcc) {
-              accountId = mpAcc.id;
-            }
+        // Consultar configuración del portal si existe para esta reserva
+        let portalTransferAcc = '';
+        try {
+          const { data: portalSettings } = await supabase
+            .from('booking_portal_settings')
+            .select('transfer_account')
+            .eq('booking_id', String(bookingId))
+            .maybeSingle();
+          if (portalSettings?.transfer_account) {
+            portalTransferAcc = String(portalSettings.transfer_account).toUpperCase();
           }
-          if (!accountId) {
+        } catch (pErr) {
+          console.error("[Approve Transfer] Error leyendo booking_portal_settings:", pErr);
+        }
+
+        let accountId: string | null = explicitAccountId || null;
+
+        if (!accountId && accounts && accounts.length > 0) {
+          if (isBanamex || portalTransferAcc.includes('BANAMEX')) {
+            const banamexAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
+            if (banamexAcc) accountId = banamexAcc.id;
+          } else if (isSantander || portalTransferAcc.includes('SANTANDER')) {
             const santanderAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
-            if (santanderAcc) {
-              accountId = santanderAcc.id;
+            if (santanderAcc) accountId = santanderAcc.id;
+          } else if (isHsbc || portalTransferAcc.includes('HSBC')) {
+            const hsbcAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
+            if (hsbcAcc) accountId = hsbcAcc.id;
+          } else if (isMercadoPago || portalTransferAcc.includes('MERCADOPAGO') || portalTransferAcc.includes('TARJETA')) {
+            const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
+            if (mpAcc) accountId = mpAcc.id;
+          } else if (isWise || portalTransferAcc.includes('WISE')) {
+            const wiseAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+            if (wiseAcc) accountId = wiseAcc.id;
+          } else if (isPaypal || portalTransferAcc.includes('PAYPAL')) {
+            const ppAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
+            if (ppAcc) accountId = ppAcc.id;
+          }
+
+          // Fallback inteligente si aún no hay cuenta
+          if (!accountId) {
+            const bancoAcc = accounts.find(a => a.group_type === 'BANCOS');
+            if (bancoAcc) {
+              accountId = bancoAcc.id;
             } else {
-              const bancoAcc = accounts.find(a => a.group_type === 'BANCOS');
-              if (bancoAcc) {
-                accountId = bancoAcc.id;
-              } else {
-                accountId = accounts[0].id;
-              }
+              accountId = accounts[0].id;
             }
           }
         }
 
         if (accountId) {
+          const matchedAcc = accounts?.find(a => a.id === accountId);
+          const accountName = matchedAcc?.name || 'BANCOS';
           const todayStr = new Date().toISOString().split('T')[0];
-          const desc = isMercadoPago 
-            ? `${guestName} (ID: ${bookingId}) - Abono con Tarjeta / Mercado Pago (Ref: ${receiptId.substring(0, 8)})`
-            : `${guestName} (ID: ${bookingId}) - Abono por transferencia Santander (Ref: ${receiptId.substring(0, 8)})`;
+          
+          let paymentMethodType = 'transferencia';
+          let desc = `${guestName} (ID: ${bookingId}) - Abono por transferencia ${accountName} (Ref: ${receiptId.substring(0, 8)})`;
+
+          if (isMercadoPago || accountName.toUpperCase().includes('MERCADO PAGO') || accountName.toUpperCase().includes('STRIPE')) {
+            paymentMethodType = 'tarjeta';
+            desc = `${guestName} (ID: ${bookingId}) - Abono con Tarjeta / Mercado Pago (Ref: ${receiptId.substring(0, 8)})`;
+          } else if (isWise || accountName.toUpperCase().includes('WISE')) {
+            paymentMethodType = 'transferencia';
+            desc = `${guestName} (ID: ${bookingId}) - Abono vía Wise USD (Ref: ${receiptId.substring(0, 8)})`;
+          } else if (isPaypal || accountName.toUpperCase().includes('PAYPAL')) {
+            paymentMethodType = 'tarjeta';
+            desc = `${guestName} (ID: ${bookingId}) - Abono vía PayPal (Ref: ${receiptId.substring(0, 8)})`;
+          }
 
           const { error: finErr } = await supabase.from('finances').insert({
             type: 'ingreso',
             amount: Number(amount),
             category: 'Alojamiento',
             description: desc,
-            payment_method: isMercadoPago ? 'tarjeta' : 'transferencia',
+            payment_method: paymentMethodType,
             account_id: accountId,
             date: todayStr
           });
           if (finErr) console.error("[Approve Transfer] Error inserting finance log:", finErr);
 
-          const matchedAcc = accounts?.find(a => a.id === accountId);
           if (matchedAcc) {
             const newBalance = Number(matchedAcc.balance || 0) + Number(amount);
             const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId);

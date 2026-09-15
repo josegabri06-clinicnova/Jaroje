@@ -1601,7 +1601,40 @@ function ReservasListInner() {
     }
 
     let finalAmount = amount;
+    let targetAccountId: string | undefined = undefined;
+    let targetAccountName = '';
+
     if (action === 'approve') {
+      // Identificar la cuenta bancaria destino desde las notas del comprobante o configuración del portal
+      const targetReceipt = billingRequests.find((r: any) => String(r.id) === String(receiptId));
+      const receiptNotes = String(targetReceipt?.notes || '').toUpperCase();
+
+      if (accounts && accounts.length > 0) {
+        let matchedAcc = null;
+        if (receiptNotes.includes('BANAMEX') || portalTransferAccount === 'banamex') {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
+        } else if (receiptNotes.includes('SANTANDER') || portalTransferAccount === 'santander') {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
+        } else if (receiptNotes.includes('HSBC') || portalTransferAccount === 'hsbc') {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
+        } else if (receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA') || portalTransferAccount === 'mercadopago') {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
+        } else if (receiptNotes.includes('WISE') || portalTransferAccount === 'wise') {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+        } else if (receiptNotes.includes('PAYPAL') || portalTransferAccount === 'paypal') {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
+        }
+
+        if (!matchedAcc) {
+          matchedAcc = accounts.find(a => a.group_type === 'BANCOS') || accounts[0];
+        }
+
+        if (matchedAcc) {
+          targetAccountId = matchedAcc.id;
+          targetAccountName = matchedAcc.name;
+        }
+      }
+
       const userInput = prompt(`Confirmar o editar el monto depositado para este comprobante ($ MXN):`, String(amount));
       if (userInput === null) return; // Cancelado por usuario
       const parsed = parseFloat(userInput);
@@ -1612,7 +1645,11 @@ function ReservasListInner() {
       finalAmount = parsed;
     }
 
-    if (!confirm(`¿Estás seguro de que deseas ${action === 'approve' ? `APROBAR la transferencia bancaria por $${finalAmount.toLocaleString('es-MX')} MXN` : 'RECHAZAR esta transferencia'}?`)) {
+    const confirmMsg = action === 'approve'
+      ? `¿Estás seguro de que deseas APROBAR la transferencia por $${finalAmount.toLocaleString('es-MX')} MXN${targetAccountName ? ` en la cuenta "${targetAccountName}"` : ''}?`
+      : '¿Estás seguro de que deseas RECHAZAR esta transferencia?';
+
+    if (!confirm(confirmMsg)) {
       return;
     }
 
@@ -1627,7 +1664,8 @@ function ReservasListInner() {
           bookingId,
           amount: finalAmount,
           action,
-          notes
+          notes,
+          accountId: targetAccountId
         })
       });
 
@@ -5599,9 +5637,19 @@ function ReservasListInner() {
                               </div>
 
                               {receipt.notes && (
-                                <div className="bg-zinc-50 border border-zinc-150 p-2.5 rounded-lg text-[11.5px] text-zinc-650 italic">
-                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider not-italic mb-0.5">Comentarios de recepción</span>
-                                  "{receipt.notes}"
+                                <div className="bg-blue-50/70 border border-blue-200/80 p-2.5 rounded-xl text-[11px] text-blue-950 font-medium space-y-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[9px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1">
+                                      🏦 Cuenta / Método Destino:
+                                    </span>
+                                    <span className="font-black text-blue-900 bg-white px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs">
+                                      {receipt.notes.includes('[Banco Destino:')
+                                        ? receipt.notes.replace('[Banco Destino: ', '').replace(']', '')
+                                        : (receipt.notes.includes('[Plataforma:')
+                                          ? receipt.notes.replace('[Plataforma: ', '').replace(']', '')
+                                          : receipt.notes)}
+                                    </span>
+                                  </div>
                                 </div>
                               )}
 
