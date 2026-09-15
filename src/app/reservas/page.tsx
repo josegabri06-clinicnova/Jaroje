@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, LogOut } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
@@ -195,6 +195,8 @@ export default function ReservasList() {
 
 function ReservasListInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const searchId = searchParams.get('id');
   const [reservas, setReservas] = useState<any[]>([]);
   const [billingRequests, setBillingRequests] = useState<any[]>([]);
   const [selectedRes, setSelectedRes] = useState<any | null>(null);
@@ -437,6 +439,24 @@ function ReservasListInner() {
       setPortalMuteNotifications(false);
     }
   }, [selectedRes]);
+
+  const handleCloseModal = () => {
+    setSelectedRes(null);
+    setDniPreview(null);
+    setDocumentFile(null);
+    setShowPaymentFlow(false);
+    setShowAbonoFlow(false);
+    setShowExtensionFlow(false);
+    setShowGuestPortalIframe(null);
+    setPaymentMethod('efectivo');
+    setPaymentReference('');
+    setPaymentAmount('');
+    setPaymentDescription('');
+    setIsEditingRes(false);
+    if (searchParams.get('id')) {
+      router.replace('/reservas', { scroll: false });
+    }
+  };
 
   const handleUpdatePortalSettings = async (showCard: boolean, account: string, languageCode: string, mute: boolean) => {
     if (!selectedRes) return;
@@ -846,8 +866,6 @@ function ReservasListInner() {
 
   // 1. Sincronizar ID de la URL -> Estado local (La URL manda siempre, grupos consolidados por defecto)
   useEffect(() => {
-    const searchId = searchParams.get('id');
-
     if (searchId) {
       if (reservas.length > 0) {
         // Buscar en la lista agrupada para abrir la tarjeta consolidada por defecto
@@ -880,7 +898,7 @@ function ReservasListInner() {
     } else {
       setSelectedRes(null);
     }
-  }, [reservas, searchParams, groupReservations]);
+  }, [reservas, searchId, groupReservations]);
 
   // 2. Limpieza preventiva al desmontar el componente (al volver a Calendario u otra vista)
   useEffect(() => {
@@ -1720,11 +1738,18 @@ function ReservasListInner() {
         );
         setReservas(sorted);
 
-        // Si hay una reserva seleccionada activa, refrescar su información local
-        if (selectedRes) {
-          const updatedSelected = sorted.find((r: any) => String(r.id) === String(selectedRes.id));
-          if (updatedSelected) {
-            setSelectedRes(updatedSelected);
+        // Si hay una reserva en la URL o seleccionada activa, refrescar acorde a searchId o selectedRes
+        const targetId = searchId || (selectedRes ? String(selectedRes.id) : null);
+        if (targetId) {
+          const grouped = groupReservations(sorted);
+          const found = grouped.find((r: any) => 
+            String(r.id) === targetId || 
+            (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === targetId)) ||
+            (r.group_sibling_ids && r.group_sibling_ids.includes(targetId))
+          ) || sorted.find((r: any) => String(r.id) === targetId);
+
+          if (found) {
+            setSelectedRes(found);
           }
         }
       }
@@ -3706,8 +3731,12 @@ function ReservasListInner() {
 
       {/* Modal de Detalles de Reserva */}
       {selectedRes && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4 transition-all duration-300">
+        <div 
+          onClick={handleCloseModal}
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4 transition-all duration-300"
+        >
           <div 
+            onClick={e => e.stopPropagation()}
             className="bg-white w-full sm:w-[400px] h-[85vh] sm:h-auto sm:max-h-[85vh] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom"
           >
             {/* Cabecera Modal */}
@@ -3744,21 +3773,8 @@ function ReservasListInner() {
                   </button>
                 )}
                 <button 
-                  onClick={() => {
-                    setSelectedRes(null);
-                    setDniPreview(null);
-                    setDocumentFile(null);
-                    setShowPaymentFlow(false);
-                    setPaymentMethod('efectivo');
-                    setPaymentReference('');
-                    setPaymentAmount('');
-                    setPaymentDescription('');
-                    // Asegurarse de que la URL no tenga ?id= para no reabrir el modal
-                    if (window.location.search.includes('id=')) {
-                      window.history.replaceState(null, '', '/reservas');
-                    }
-                  }}
-                  className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95 animate-in fade-in duration-200"
+                  onClick={handleCloseModal}
+                  className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95 animate-in fade-in duration-200 cursor-pointer"
                 >
                   <X size={15} strokeWidth={2.5} />
                 </button>
