@@ -616,20 +616,19 @@ export async function sendWhatsAppTemplate(
       }
 
       if (!response.ok) {
-        console.warn(`[WhatsApp Hybrid Router] YCloud no pudo procesar la plantilla '${templateName}' (${resBody.error?.message || status}). Ejecutando fallback automático a Meta Cloud API...`);
+        console.error(`[YCloud] Error al enviar plantilla '${templateName}' (${status}):`, resBody);
         try {
           await supabase.from('employee_logs').insert([{
             employee_num: '000',
-            action: 'whatsapp-hybrid-fallback',
+            action: 'whatsapp-error',
             department: 'whatsapp',
-            room: 'Meta Fallback',
-            details: `YCloud error en plantilla '${templateName}' (${resBody.error?.message || status}). Reenviado automáticamente por Meta Cloud API a ${cleanedPhone}.`
+            room: 'YCloud API',
+            details: `Error al procesar plantilla '${templateName}' para ${cleanedPhone}: ${resBody.error?.message || JSON.stringify(resBody)}`
           }]);
         } catch (logErr) {
-          console.error("Error al registrar log de fallback:", logErr);
+          console.error("Error al registrar log de YCloud:", logErr);
         }
-        // Activar el bloque de Meta como respaldo
-        executeMeta = true;
+        return { success: false, error: resBody.error?.message || `Error de la API de YCloud (${status})` };
       }
     }
 
@@ -1048,7 +1047,19 @@ export async function sendWhatsAppTextMessage(
         return { success: true, data: resBody };
       }
 
-      console.warn(`[WhatsApp Hybrid Router] YCloud falló enviando texto a ${toPhone} (${resBody.error?.message || status}). Ejecutando fallback a Meta...`);
+      console.error(`[YCloud] Error enviando mensaje de texto a ${toPhone} (${status}):`, resBody);
+      try {
+        await supabase.from('employee_logs').insert([{
+          employee_num: '000',
+          action: 'whatsapp-text-error',
+          department: 'whatsapp',
+          room: 'YCloud API',
+          details: `Error enviando texto a ${toPhone}: ${resBody.error?.message || JSON.stringify(resBody)}`
+        }]);
+      } catch (logErr) {
+        console.error("Error al registrar error de texto en employee_logs:", logErr);
+      }
+      return { success: false, error: resBody.error?.message || 'Error al enviar por YCloud' };
     }
 
     // ── DRIVER META CLOUD API (RESPALDO AUTOMÁTICO O PROVEEDOR PRINCIPAL) ──
