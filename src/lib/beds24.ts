@@ -818,7 +818,8 @@ export function getAverageRatesForDates(
   referer: string,
   beds24RatesMap: Record<string, Record<string, number>>,
   unitId?: string | null | undefined,
-  dynamicSettings?: any
+  dynamicSettings?: any,
+  applyStayDiscount: boolean = false
 ): number {
   if (!arrival || !departure) {
     return getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
@@ -845,11 +846,16 @@ export function getAverageRatesForDates(
   }
 
   const averageBase = daysCount > 0 ? Math.ceil((totalSum / daysCount) * 100) / 100 : getRealPrice(roomId, arrival, referer, beds24RatesMap, unitId, dynamicSettings);
-  const parentMapping = getParentMapping(id, unitId);
-  const parentId = parentMapping.roomId;
-  const customDiscounts = dynamicSettings?.[parentId]?.discounts || dynamicSettings?.[id]?.discounts;
-  const discountMultiplier = getLengthOfStayMultiplier(daysCount, customDiscounts);
-  return Math.ceil(averageBase * discountMultiplier * 100) / 100;
+  
+  if (applyStayDiscount) {
+    const parentMapping = getParentMapping(id, unitId);
+    const parentId = parentMapping.roomId;
+    const customDiscounts = dynamicSettings?.[parentId]?.discounts || dynamicSettings?.[id]?.discounts;
+    const discountMultiplier = getLengthOfStayMultiplier(daysCount, customDiscounts);
+    return Math.ceil(averageBase * discountMultiplier * 100) / 100;
+  }
+
+  return averageBase;
 }
 
 export interface TaxInfo {
@@ -1325,7 +1331,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       let pricePerNight = (b.price !== undefined && b.price !== null && b.price !== '') ? (Number(b.price) / nights) : null;
       const hasInvoiceItems = Array.isArray(b.invoiceItems) && b.invoiceItems.length > 0;
       if (!isOTA && pricePerNight === null) {
-        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap, String(b.unitId || ''), dynamicSettings);
+        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, beds24RatesMap, String(b.unitId || ''), dynamicSettings, true);
       } else if (isOTA && pricePerNight === null) {
         pricePerNight = 0;
       }
@@ -2565,7 +2571,7 @@ export async function syncBeds24ReservationsRange(
       const roomData = getRoomMetadata(b.roomId, b.roomName);
       let pricePerNight = (b.price !== undefined && b.price !== null && b.price !== '') ? (Number(b.price) / nights) : null;
       if (!isOTA && pricePerNight === null) {
-        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, {}, String(b.unitId || ''), dynamicSettings);
+        pricePerNight = getAverageRatesForDates(String(b.roomId), b.arrival, b.departure, rawSource, {}, String(b.unitId || ''), dynamicSettings, true);
       } else if (isOTA && pricePerNight === null) {
         pricePerNight = 0;
       }
