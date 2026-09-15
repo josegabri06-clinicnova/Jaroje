@@ -430,8 +430,7 @@ export async function sendWhatsAppTemplate(
       'portal_huesped_link',
       'portal_huesped_link_en',
       'rechazo_solicitud',
-      'alojamiento_listo',
-      'salida_checkout'
+      'alojamiento_listo'
     ];
 
     let resolvedButtonType = buttonType;
