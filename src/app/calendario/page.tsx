@@ -2167,7 +2167,10 @@ export default function CalendarPage() {
                       return (
                         <div
                           key={ds}
-                          onClick={() => { router.push(`/reservas?id=${booking.id}`); }}
+                          onClick={() => {
+                            setSelectedReserva(booking);
+                            setShowCheckInModal(true);
+                          }}
                           className="border-r border-zinc-100 last:border-r-0 h-9 px-0.5 py-1 cursor-pointer relative"
                           style={{ backgroundColor: todayCol ? '#eff6ff' : undefined }}
                         >
@@ -3714,7 +3717,8 @@ export default function CalendarPage() {
                         key={r.id} 
                         onClick={() => {
                           setKpiModalType(null);
-                          router.push(`/reservas?id=${r.id}`);
+                          setSelectedReserva(r);
+                          setShowCheckInModal(true);
                         }}
                         className="p-4 border border-zinc-150 rounded-2xl bg-zinc-50/20 space-y-2.5 cursor-pointer hover:bg-zinc-100/50 hover:border-zinc-300 transition-all active:scale-[0.98] select-none"
                       >

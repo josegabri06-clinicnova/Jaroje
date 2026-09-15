@@ -860,7 +860,6 @@ function ReservasListInner() {
 
         if (found) {
           setSelectedRes(found);
-          setSearch(searchId);
           const today = getLocalDateStr();
           const isCompleted = found.is_checked_out || found.check_out < today;
           const isCancelled = found.status === 'cancelled' || found.status === '0';
