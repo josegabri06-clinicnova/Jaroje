@@ -90,7 +90,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   if (!checked) return <div className="fixed inset-0 bg-[#fafafa]" />;
 
-  if (pathname?.startsWith('/public') || pathname === '/bot') {
+  if (pathname?.startsWith('/public')) {
     return <>{children}</>;
   }
 

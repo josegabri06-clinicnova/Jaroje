@@ -103,7 +103,6 @@ export function BottomNav() {
           { href: '/panel', icon: <Home size={22} />, label: 'Panel' },
           { href: '/calendario', icon: <CalendarIcon size={22} />, label: 'Calendario' },
           { href: '/reservas',  icon: <ListIcon size={22} />, label: 'Reservas' },
-          { href: '/bot',       icon: <MessageCircle size={22} />, label: 'Chats' },
         ].map(item => (
           <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1 p-1">
             <div className={`p-1.5 rounded-xl transition-all ${pathname === item.href ? 'bg-zinc-105 text-zinc-950 bg-zinc-100/80' : 'text-zinc-400 hover:text-zinc-650'}`}>

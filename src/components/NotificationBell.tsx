@@ -354,7 +354,7 @@ const resolveDeepLink = (log: any) => {
     return '/equipo';
   }
   if (moduleLower === 'bot' || actionLower.includes('bot') || actionLower.includes('whatsapp')) {
-    return '/bot';
+    return '/reservas';
   }
   
   // checkin/checkout/reserva general

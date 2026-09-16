@@ -144,7 +144,7 @@ export default function RealtimeLogNotifier() {
           if (newLog.action === 'transfer_receipt_submitted') {
             destinationUrl = '/reservas?tab=Por+Aprobar';
           } else if (newLog.action === 'guest_message_received' || newLog.action === 'human_mode_activated') {
-            destinationUrl = '/bot';
+            destinationUrl = '/reservas';
           }
 
           // Activar notificación toast
@@ -193,7 +193,7 @@ export default function RealtimeLogNotifier() {
                   ? lastMsg.role_guest.slice(0, 60) + '...' 
                   : lastMsg.role_guest,
                 module: 'whatsapp',
-                destinationUrl: '/bot'
+                destinationUrl: '/reservas'
               });
             }
           }
