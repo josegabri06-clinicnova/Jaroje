@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { handleInboundMessage } from '@/lib/inbound-handler';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,22 +81,18 @@ export async function POST(req: Request) {
         guestText = `[Mensaje ${msg.type}]`;
       }
 
-      // Reenviar internamente al procesador unificado de conversaciones
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+      // Procesar el mensaje entrante directamente de forma síncrona
       try {
-        await fetch(`${siteUrl}/api/conversations`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            guest_phone: cleanPhone,
-            guest_name: senderName,
-            message_from_guest: guestText,
-            button_payload: buttonPayload,
-            timestamp: msg.sendTime || new Date().toISOString()
-          })
+        const result = await handleInboundMessage({
+          guest_phone: cleanPhone,
+          guest_name: senderName,
+          message_from_guest: guestText,
+          button_payload: buttonPayload,
+          timestamp: msg.sendTime || new Date().toISOString()
         });
+        console.log(`[YCloud Webhook] ✅ Mensaje procesado para ${cleanPhone}:`, result);
       } catch (convErr) {
-        console.error("[YCloud Webhook] Error reenviando a /api/conversations:", convErr);
+        console.error("[YCloud Webhook] Error procesando mensaje entrante:", convErr);
       }
 
       return NextResponse.json({ success: true, event: 'inbound_message_processed' });
