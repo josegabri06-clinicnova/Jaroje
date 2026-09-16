@@ -365,26 +365,34 @@ export async function POST(req: Request) {
         // 2. Si no se encontró en logs (o falló), buscar en las reservas por número de teléfono
         if (!bookingId) {
           try {
-            const { getBeds24Bookings } = await import('@/lib/beds24');
-            const [mappedBookings, localRes] = await Promise.all([
-              getBeds24Bookings(true, true).catch(() => []),
+            const [b24Res, localRes] = await Promise.all([
+              supabase.from('beds24_reservations').select('*'),
               supabase.from('local_reservas').select('*')
             ]);
 
-            const localBookings = localRes.data || [];
-            const allBookings = [
-              ...mappedBookings,
-              ...localBookings.map((b: any) => ({
-                id: b.id,
-                phone: b.phone || '',
-                guest_phone: b.phone || '',
-                mobile: b.phone || '',
-                status: b.status || 'confirmed',
-                check_in: b.check_in || b.arrival,
-                check_out: b.check_out || b.departure || '',
-                guest_name: b.guest_name || ''
-              }))
-            ];
+            const mappedBookings = (b24Res.data || []).map((b: any) => ({
+              id: b.id,
+              phone: b.guest_phone || b.phone || '',
+              guest_phone: b.guest_phone || b.phone || '',
+              mobile: b.guest_phone || b.phone || '',
+              status: b.status || 'confirmed',
+              check_in: b.check_in,
+              check_out: b.check_out || '',
+              guest_name: b.guest_name || ''
+            }));
+
+            const localBookings = (localRes.data || []).map((b: any) => ({
+              id: b.id,
+              phone: b.phone || '',
+              guest_phone: b.phone || '',
+              mobile: b.phone || '',
+              status: b.status || 'confirmed',
+              check_in: b.check_in,
+              check_out: b.check_out || '',
+              guest_name: b.guest_name || ''
+            }));
+
+            const allBookings = [...mappedBookings, ...localBookings];
 
             const matchingBookings = allBookings.filter((b: any) => {
               const bPhone = b.phone || b.mobile || b.guest_phone || '';
@@ -401,10 +409,10 @@ export async function POST(req: Request) {
                 if (!aCancelled && bCancelled) return -1;
                 if (aCancelled && !bCancelled) return 1;
 
-                const aIn = new Date(a.check_in || a.arrival || 0).getTime();
-                const aOut = new Date(a.check_out || a.departure || 0).getTime();
-                const bIn = new Date(b.check_in || b.arrival || 0).getTime();
-                const bOut = new Date(b.check_out || b.departure || 0).getTime();
+                const aIn = new Date(a.check_in || 0).getTime();
+                const aOut = new Date(a.check_out || 0).getTime();
+                const bIn = new Date(b.check_in || 0).getTime();
+                const bOut = new Date(b.check_out || 0).getTime();
 
                 const aIsCurrent = aIn <= todayTime && aOut >= todayTime;
                 const bIsCurrent = bIn <= todayTime && bOut >= todayTime;
@@ -449,11 +457,14 @@ export async function POST(req: Request) {
             if (localB && localB.guest_name) {
               guestNameFromSearch = localB.guest_name;
             } else {
-              const { getBeds24Bookings } = await import('@/lib/beds24');
-              const bookings = await getBeds24Bookings().catch(() => []);
-              const found = bookings.find((b: any) => String(b.id) === String(bookingId));
-              if (found && found.guest_name) {
-                guestNameFromSearch = found.guest_name;
+              const { data: b24B } = await supabase
+                .from('beds24_reservations')
+                .select('guest_name')
+                .eq('id', bookingId)
+                .maybeSingle();
+
+              if (b24B && b24B.guest_name) {
+                guestNameFromSearch = b24B.guest_name;
               }
             }
           } catch (err) {

@@ -11,6 +11,11 @@ const supabase = createClient(
 
 const TAX_FACTOR = 1.19;
 
+// Cache en memoria para evitar saturar el rate limit de Beds24 en peticiones recurrentes
+let _cachedPricesResponse: any = null;
+let _cachedPricesTimestamp: number = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60 segundos de caché
+
 const ROOMS: { id: string; name: string; icon: string }[] = [
   { id: '679077', name: 'Habitación Doble', icon: '🛏️' },
   { id: '679087', name: 'Apartamento 1 dorm.', icon: '🏠' },
@@ -117,6 +122,11 @@ function buildTiers(
  */
 export async function GET() {
   try {
+    // Si la respuesta en memoria sigue vigente (< 60s), devolverla inmediatamente sin gastar créditos Beds24
+    if (_cachedPricesResponse && Date.now() - _cachedPricesTimestamp < CACHE_TTL_MS) {
+      return NextResponse.json(_cachedPricesResponse);
+    }
+
     const token = await getBeds24Token();
 
     // 1. Multiplicadores OTA y Rangos de Temporadas desde Supabase
@@ -270,14 +280,19 @@ export async function GET() {
       };
     });
 
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       rooms,
       multipliers,
       capacitySettings,
       startDate,
       endDate,
-    });
+    };
+
+    _cachedPricesResponse = responsePayload;
+    _cachedPricesTimestamp = Date.now();
+
+    return NextResponse.json(responsePayload);
 
   } catch (err: any) {
     if (err.message === 'TOKEN_EXPIRED' || err.message === 'REFRESH_TOKEN_EXPIRED') {
@@ -297,6 +312,10 @@ export async function GET() {
  */
 export async function PUT(req: Request) {
   try {
+    // Invalidar caché tras modificación
+    _cachedPricesResponse = null;
+    _cachedPricesTimestamp = 0;
+
     const body = await req.json();
     const { roomId, priceRaw } = body;
 
@@ -368,6 +387,10 @@ export async function PUT(req: Request) {
  */
 export async function POST(req: Request) {
   try {
+    // Invalidar caché tras modificación
+    _cachedPricesResponse = null;
+    _cachedPricesTimestamp = 0;
+
     const body = await req.json();
     const { airbnb, booking, capacitySettings, temp_discounts, season_base_prices } = body;
 
