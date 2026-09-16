@@ -240,6 +240,16 @@ function ReservasListInner() {
     }
   }, [showPaymentFlow, selectedRes]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [transferApprovalModal, setTransferApprovalModal] = useState<{
+    receiptId: string;
+    bookingId: string;
+    guestName: string;
+    amount: number;
+    notes?: string;
+    accountId: string;
+    detectedAccountName: string;
+  } | null>(null);
+  const [approvalAmountInput, setApprovalAmountInput] = useState<string>('');
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const docInputCameraRef = useRef<HTMLInputElement>(null);
   const docInputGalleryRef = useRef<HTMLInputElement>(null);
@@ -1600,13 +1610,10 @@ function ReservasListInner() {
       return;
     }
 
-    let finalAmount = amount;
-    let targetAccountId: string | undefined = undefined;
-    let targetAccountName = '';
-
     if (action === 'approve') {
-      // Identificar la cuenta bancaria destino desde las notas del comprobante o configuración del portal
-      const targetReceipt = billingRequests.find((r: any) => String(r.id) === String(receiptId));
+      // Buscar recibo para identificar cuenta y notas
+      const targetReceipt = (selectedRes?.transfer_receipts || []).find((r: any) => String(r.id) === String(receiptId)) ||
+                            (billingRequests || []).find((r: any) => String(r.id) === String(receiptId));
       const receiptNotes = String(targetReceipt?.notes || '').toUpperCase();
 
       const isMercadoPago = receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA') || receiptNotes.includes('MERPAGO');
@@ -1616,10 +1623,8 @@ function ReservasListInner() {
       const isSantander = receiptNotes.includes('SANTANDER');
       const isHsbc = receiptNotes.includes('HSBC');
 
+      let matchedAcc: any = null;
       if (accounts && accounts.length > 0) {
-        let matchedAcc = null;
-
-        // 1. Prioridad Máxima: Por el tipo exacto de comprobante
         if (isMercadoPago) {
           matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
         } else if (isWise) {
@@ -1634,7 +1639,6 @@ function ReservasListInner() {
           matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
         }
 
-        // 2. Segunda Prioridad: Si no tiene nota específica, por configuración del portal
         if (!matchedAcc) {
           if (portalTransferAccount === 'mercadopago') {
             matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
@@ -1654,27 +1658,23 @@ function ReservasListInner() {
         if (!matchedAcc) {
           matchedAcc = accounts.find(a => a.group_type === 'BANCOS') || accounts[0];
         }
-
-        if (matchedAcc) {
-          targetAccountId = matchedAcc.id;
-          targetAccountName = matchedAcc.name;
-        }
       }
 
-      const userInput = prompt(`Confirmar o editar el monto depositado para este comprobante ($ MXN):`, String(amount));
-      if (userInput === null) return; // Cancelado por usuario
-      const parsed = parseFloat(userInput);
-      if (isNaN(parsed) || parsed < 0) {
-        alert('Por favor ingresa un monto válido.');
-        return;
-      }
-      finalAmount = parsed;
+      setApprovalAmountInput(String(amount || 0));
+      setTransferApprovalModal({
+        receiptId,
+        bookingId,
+        guestName: targetReceipt?.guest_name || selectedRes?.guest_name || 'Huésped',
+        amount: Number(amount || 0),
+        notes: targetReceipt?.notes || undefined,
+        accountId: matchedAcc?.id || (accounts[0]?.id || ''),
+        detectedAccountName: matchedAcc?.name || 'General'
+      });
+      return;
     }
 
-    const confirmMsg = action === 'approve'
-      ? `¿Estás seguro de que deseas APROBAR la transferencia por $${finalAmount.toLocaleString('es-MX')} MXN${targetAccountName ? ` en la cuenta "${targetAccountName}"` : ''}?`
-      : '¿Estás seguro de que deseas RECHAZAR esta transferencia?';
-
+    // Acción: Rechazar comprobante
+    const confirmMsg = '¿Estás seguro de que deseas RECHAZAR esta transferencia?';
     if (!confirm(confirmMsg)) {
       return;
     }
@@ -1688,22 +1688,71 @@ function ReservasListInner() {
         body: JSON.stringify({
           receiptId,
           bookingId,
-          amount: finalAmount,
-          action,
-          notes,
-          accountId: targetAccountId
+          amount,
+          action: 'reject',
+          notes
         })
       });
 
       const json = await res.json();
       if (res.ok && json.success) {
-        alert(`✓ Transferencia bancaria ${action === 'approve' ? 'aprobada' : 'rechazada'} con éxito.`);
-        // Limpiar nota
+        alert('✓ Transferencia bancaria rechazada con éxito.');
         setRejectionNotes(prev => {
           const next = { ...prev };
           delete next[receiptId];
           return next;
         });
+        await fetchReservas();
+      } else {
+        alert(`❌ Error al procesar: ${json.error || 'Ocurrió un error inesperado.'}`);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('❌ Error de red al procesar la transferencia.');
+    } finally {
+      setApprovingReceiptId(null);
+    }
+  };
+
+  const handleConfirmApprovalModal = async () => {
+    if (!transferApprovalModal) return;
+    const { receiptId, bookingId, accountId } = transferApprovalModal;
+    const parsedAmount = parseFloat(approvalAmountInput);
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      alert('Por favor ingresa un monto válido.');
+      return;
+    }
+
+    if (!accountId) {
+      alert('Por favor selecciona una cuenta bancaria de destino para Finanzas.');
+      return;
+    }
+
+    setApprovingReceiptId(receiptId);
+    try {
+      const notes = rejectionNotes[receiptId] || '';
+      const res = await fetch('/api/payments/transfer-approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receiptId,
+          bookingId,
+          amount: parsedAmount,
+          action: 'approve',
+          notes,
+          accountId
+        })
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        alert('✓ Transferencia bancaria aprobada con éxito.');
+        setRejectionNotes(prev => {
+          const next = { ...prev };
+          delete next[receiptId];
+          return next;
+        });
+        setTransferApprovalModal(null);
         await fetchReservas();
       } else {
         alert(`❌ Error al procesar: ${json.error || 'Ocurrió un error inesperado.'}`);
@@ -7106,6 +7155,116 @@ function ReservasListInner() {
                 className="w-full py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
               >
                 Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Aprobación de Transferencia con Selector de Cuenta */}
+      {transferApprovalModal && (
+        <div className="fixed inset-0 z-[270] bg-zinc-950/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col border border-zinc-150">
+            {/* Header */}
+            <div className="p-6 pb-4 border-b border-zinc-100 flex items-center gap-3">
+              <div className="w-11 h-11 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0 shadow-2xs">
+                <CheckCircle2 size={22} strokeWidth={2.5} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[17px] font-extrabold text-zinc-900 leading-tight">Aprobar Transferencia</h3>
+                <p className="text-[12px] font-semibold text-zinc-500 truncate">
+                  {transferApprovalModal.guestName} · Reserva #{transferApprovalModal.bookingId}
+                </p>
+              </div>
+              <button
+                onClick={() => setTransferApprovalModal(null)}
+                disabled={Boolean(approvingReceiptId)}
+                className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-full transition-colors active:scale-95 cursor-pointer border-none"
+              >
+                <X size={15} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-6 space-y-4 font-sans text-left">
+              {/* Monto depositado */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-extrabold text-zinc-700 uppercase tracking-wider block">
+                  Monto a Aprobar ($ MXN)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-bold text-[14px]">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={approvalAmountInput}
+                    onChange={(e) => setApprovalAmountInput(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-zinc-50 border border-zinc-300 focus:border-emerald-600 focus:bg-white rounded-2xl pl-8 pr-4 py-3 text-zinc-900 font-extrabold text-[16px] outline-none transition-all shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              {/* Selector de Cuenta Destino */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-extrabold text-zinc-700 uppercase tracking-wider block">
+                    Cuenta / Método Destino en Finanzas
+                  </label>
+                  {transferApprovalModal.notes && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                      Detectado: {transferApprovalModal.detectedAccountName}
+                    </span>
+                  )}
+                </div>
+
+                <select
+                  value={transferApprovalModal.accountId}
+                  onChange={(e) => setTransferApprovalModal(prev => prev ? { ...prev, accountId: e.target.value } : null)}
+                  className="w-full bg-zinc-50 border border-zinc-300 focus:border-emerald-600 focus:bg-white rounded-2xl px-3.5 py-3 text-zinc-900 font-bold text-[13px] outline-none transition-all cursor-pointer shadow-2xs"
+                >
+                  {accounts.map((acc: any) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} {acc.group_type ? `(${acc.group_type})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] font-medium text-zinc-500">
+                  Selecciona la cuenta bancaria donde ingresó el pago para evitar errores en el balance contable de Finanzas.
+                </p>
+              </div>
+
+              {transferApprovalModal.notes && (
+                <div className="bg-blue-50/70 border border-blue-200/80 p-3 rounded-2xl text-[11.5px] text-blue-950 font-medium space-y-1">
+                  <span className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider block">
+                    Información declarada por el huésped:
+                  </span>
+                  <p className="font-semibold text-blue-900">
+                    {transferApprovalModal.notes}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Footer buttons */}
+            <div className="p-6 border-t border-zinc-100 bg-zinc-50/80 flex gap-2.5">
+              <button
+                onClick={() => setTransferApprovalModal(null)}
+                disabled={Boolean(approvingReceiptId)}
+                className="flex-1 py-3 bg-white hover:bg-zinc-100 text-zinc-700 font-bold border border-zinc-200 rounded-2xl text-[13px] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmApprovalModal}
+                disabled={Boolean(approvingReceiptId)}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl text-[13px] shadow-md shadow-emerald-600/10 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 cursor-pointer border-none"
+              >
+                {approvingReceiptId ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <span>✓ Confirmar Aprobación</span>
+                )}
               </button>
             </div>
           </div>
