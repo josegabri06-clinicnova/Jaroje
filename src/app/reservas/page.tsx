@@ -1609,20 +1609,46 @@ function ReservasListInner() {
       const targetReceipt = billingRequests.find((r: any) => String(r.id) === String(receiptId));
       const receiptNotes = String(targetReceipt?.notes || '').toUpperCase();
 
+      const isMercadoPago = receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA') || receiptNotes.includes('MERPAGO');
+      const isWise = receiptNotes.includes('WISE');
+      const isPaypal = receiptNotes.includes('PAYPAL');
+      const isBanamex = receiptNotes.includes('BANAMEX');
+      const isSantander = receiptNotes.includes('SANTANDER');
+      const isHsbc = receiptNotes.includes('HSBC');
+
       if (accounts && accounts.length > 0) {
         let matchedAcc = null;
-        if (receiptNotes.includes('BANAMEX') || portalTransferAccount === 'banamex') {
-          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
-        } else if (receiptNotes.includes('SANTANDER') || portalTransferAccount === 'santander') {
-          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
-        } else if (receiptNotes.includes('HSBC') || portalTransferAccount === 'hsbc') {
-          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
-        } else if (receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA') || portalTransferAccount === 'mercadopago') {
+
+        // 1. Prioridad Máxima: Por el tipo exacto de comprobante
+        if (isMercadoPago) {
           matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
-        } else if (receiptNotes.includes('WISE') || portalTransferAccount === 'wise') {
+        } else if (isWise) {
           matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
-        } else if (receiptNotes.includes('PAYPAL') || portalTransferAccount === 'paypal') {
+        } else if (isPaypal) {
           matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
+        } else if (isBanamex) {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
+        } else if (isSantander) {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
+        } else if (isHsbc) {
+          matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
+        }
+
+        // 2. Segunda Prioridad: Si no tiene nota específica, por configuración del portal
+        if (!matchedAcc) {
+          if (portalTransferAccount === 'mercadopago') {
+            matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
+          } else if (portalTransferAccount === 'wise') {
+            matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+          } else if (portalTransferAccount === 'paypal') {
+            matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
+          } else if (portalTransferAccount === 'banamex') {
+            matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
+          } else if (portalTransferAccount === 'santander') {
+            matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
+          } else if (portalTransferAccount === 'hsbc') {
+            matchedAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
+          }
         }
 
         if (!matchedAcc) {

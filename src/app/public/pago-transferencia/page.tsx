@@ -257,10 +257,12 @@ export default function PagoTransferenciaPage() {
         formData.append(
           'notes',
           method === 'mercadopago'
-            ? '[Plataforma: Tarjeta]'
+            ? '[Plataforma: Mercado Pago]'
             : (method === 'wise'
               ? '[Plataforma: Wise]'
-              : `[Banco Destino: ${activeAccount.banco}]`)
+              : (method === 'paypal'
+                ? '[Plataforma: PayPal]'
+                : `[Banco Destino: ${activeAccount.banco}]`))
         );
         formData.append('file', fileToUpload);
 

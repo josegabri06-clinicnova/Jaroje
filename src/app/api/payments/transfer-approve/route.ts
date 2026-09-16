@@ -169,52 +169,75 @@ export async function POST(req: Request) {
         const { data: accounts } = await supabase.from('accounts').select('*');
         
         const receiptNotes = String(receipt?.notes || '').toUpperCase();
-        const isMercadoPago = receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA');
+        const isMercadoPago = receiptNotes.includes('MERCADO PAGO') || receiptNotes.includes('TARJETA') || receiptNotes.includes('MERPAGO');
         const isWise = receiptNotes.includes('WISE');
         const isPaypal = receiptNotes.includes('PAYPAL');
         const isBanamex = receiptNotes.includes('BANAMEX');
         const isHsbc = receiptNotes.includes('HSBC');
         const isSantander = receiptNotes.includes('SANTANDER');
 
-        // Consultar configuración del portal si existe para esta reserva
-        let portalTransferAcc = '';
-        try {
-          const { data: portalSettings } = await supabase
-            .from('booking_portal_settings')
-            .select('transfer_account')
-            .eq('booking_id', String(bookingId))
-            .maybeSingle();
-          if (portalSettings?.transfer_account) {
-            portalTransferAcc = String(portalSettings.transfer_account).toUpperCase();
-          }
-        } catch (pErr) {
-          console.error("[Approve Transfer] Error leyendo booking_portal_settings:", pErr);
-        }
-
         let accountId: string | null = explicitAccountId || null;
 
         if (!accountId && accounts && accounts.length > 0) {
-          if (isBanamex || portalTransferAcc.includes('BANAMEX')) {
-            const banamexAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
-            if (banamexAcc) accountId = banamexAcc.id;
-          } else if (isSantander || portalTransferAcc.includes('SANTANDER')) {
-            const santanderAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
-            if (santanderAcc) accountId = santanderAcc.id;
-          } else if (isHsbc || portalTransferAcc.includes('HSBC')) {
-            const hsbcAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
-            if (hsbcAcc) accountId = hsbcAcc.id;
-          } else if (isMercadoPago || portalTransferAcc.includes('MERCADOPAGO') || portalTransferAcc.includes('TARJETA')) {
+          // 1. PRIORIDAD MÁXIMA: Detección por el tipo exacto del comprobante subido
+          if (isMercadoPago) {
             const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
             if (mpAcc) accountId = mpAcc.id;
-          } else if (isWise || portalTransferAcc.includes('WISE')) {
+          } else if (isWise) {
             const wiseAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
             if (wiseAcc) accountId = wiseAcc.id;
-          } else if (isPaypal || portalTransferAcc.includes('PAYPAL')) {
+          } else if (isPaypal) {
             const ppAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
             if (ppAcc) accountId = ppAcc.id;
+          } else if (isBanamex) {
+            const banamexAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
+            if (banamexAcc) accountId = banamexAcc.id;
+          } else if (isSantander) {
+            const santanderAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
+            if (santanderAcc) accountId = santanderAcc.id;
+          } else if (isHsbc) {
+            const hsbcAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
+            if (hsbcAcc) accountId = hsbcAcc.id;
           }
 
-          // Fallback inteligente si aún no hay cuenta
+          // 2. SEGUNDA PRIORIDAD: Si el comprobante no especificó método, consultar configuración asignada al portal
+          if (!accountId) {
+            let portalTransferAcc = '';
+            try {
+              const { data: portalSettings } = await supabase
+                .from('booking_portal_settings')
+                .select('transfer_account')
+                .eq('booking_id', String(bookingId))
+                .maybeSingle();
+              if (portalSettings?.transfer_account) {
+                portalTransferAcc = String(portalSettings.transfer_account).toUpperCase();
+              }
+            } catch (pErr) {
+              console.error("[Approve Transfer] Error leyendo booking_portal_settings:", pErr);
+            }
+
+            if (portalTransferAcc.includes('MERCADOPAGO') || portalTransferAcc.includes('TARJETA')) {
+              const mpAcc = accounts.find(a => (a.name || '').toUpperCase().includes('MERCADO PAGO') || (a.name || '').toUpperCase().includes('STRIPE'));
+              if (mpAcc) accountId = mpAcc.id;
+            } else if (portalTransferAcc.includes('WISE')) {
+              const wiseAcc = accounts.find(a => (a.name || '').toUpperCase().includes('WISE'));
+              if (wiseAcc) accountId = wiseAcc.id;
+            } else if (portalTransferAcc.includes('PAYPAL')) {
+              const ppAcc = accounts.find(a => (a.name || '').toUpperCase().includes('PAYPAL'));
+              if (ppAcc) accountId = ppAcc.id;
+            } else if (portalTransferAcc.includes('BANAMEX')) {
+              const banamexAcc = accounts.find(a => (a.name || '').toUpperCase().includes('BANAMEX'));
+              if (banamexAcc) accountId = banamexAcc.id;
+            } else if (portalTransferAcc.includes('SANTANDER')) {
+              const santanderAcc = accounts.find(a => (a.name || '').toUpperCase().includes('SANTANDER'));
+              if (santanderAcc) accountId = santanderAcc.id;
+            } else if (portalTransferAcc.includes('HSBC')) {
+              const hsbcAcc = accounts.find(a => (a.name || '').toUpperCase().includes('HSBC'));
+              if (hsbcAcc) accountId = hsbcAcc.id;
+            }
+          }
+
+          // 3. FALLBACK: Primera cuenta en BANCOS o primera cuenta disponible
           if (!accountId) {
             const bancoAcc = accounts.find(a => a.group_type === 'BANCOS');
             if (bancoAcc) {
