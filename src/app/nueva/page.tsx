@@ -371,7 +371,8 @@ export default function VercelActionForm() {
       }
 
       const priceWithChannel = basePrice * discountMult * multiplier;
-      const tax = priceWithChannel * 0.19; // 16% IVA + 3% ISH
+      const taxRate = form.channel === 'Airbnb' ? 0.21 : 0.19; // 21% IVA Airbnb vs 19% estándar
+      const tax = priceWithChannel * taxRate;
       const suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
 
       sumSuggestedRates += suggestedDailyRate;

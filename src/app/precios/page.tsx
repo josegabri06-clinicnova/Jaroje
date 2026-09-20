@@ -198,7 +198,7 @@ export default function PreciosPage() {
     }
 
     const precioDirecto = Math.round(newPriceRaw * 1.19).toLocaleString('es-MX');
-    const precioAirbnb  = Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.19).toLocaleString('es-MX');
+    const precioAirbnb  = Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21).toLocaleString('es-MX');
     const precioBooking = Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19).toLocaleString('es-MX');
     const precioGoogle  = Math.round(newPriceRaw * (beds24Multipliers.google || 1.40) * 1.19).toLocaleString('es-MX');
     const precioExpedia = Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59) * 1.19).toLocaleString('es-MX');
@@ -211,7 +211,7 @@ export default function PreciosPage() {
       `Nuevo precio base para toda la temporada: $${newPriceRaw.toLocaleString('es-MX')} (sin impuestos)\n\n` +
       `Los huéspedes verán (1-6 noches):\n` +
       `  · Directo:    $${precioDirecto} (con impuestos)\n` +
-      `  · Airbnb:     $${precioAirbnb} (con impuestos)\n` +
+      `  · Airbnb:     $${precioAirbnb} (con IVA 21%)\n` +
       `  · Booking:    $${precioBooking} (con impuestos)\n` +
       `  · Google Ads: $${precioGoogle} (con impuestos)\n` +
       `  · Expedia:    $${precioExpedia} (con impuestos)\n\n` +
@@ -262,7 +262,7 @@ export default function PreciosPage() {
               ...b,
               priceRaw: newPriceRaw,
               priceDirecto: Math.round(newPriceRaw * 1.19),
-              priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.19),
+              priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
               priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19),
               priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.40) * 1.19),
               priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59) * 1.19),
@@ -350,7 +350,7 @@ export default function PreciosPage() {
                 ...b,
                 priceRaw: newPriceRaw,
                 priceDirecto: Math.round(newPriceRaw * 1.19),
-                priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.19),
+                priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
                 priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19),
                 priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.40) * 1.19),
                 priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59) * 1.19),
@@ -785,7 +785,7 @@ export default function PreciosPage() {
                     </div>
                   </div>
                   <p className="text-[9.5px] text-zinc-500 italic">
-                    Airbnb ×{beds24Multipliers.airbnb || 1.20} · Booking ×{beds24Multipliers.booking || 1.35} · Google ×{beds24Multipliers.google || 1.40} · Expedia ×{beds24Multipliers.expedia || 1.59} · todos incluyen IVA 19%
+                    Airbnb ×{beds24Multipliers.airbnb || 1.20} (IVA 21%) · Booking ×{beds24Multipliers.booking || 1.35} · Google ×{beds24Multipliers.google || 1.40} · Expedia ×{beds24Multipliers.expedia || 1.59} · impuestos incluidos
                   </p>
                 </div>
               )}
@@ -1171,7 +1171,7 @@ export default function PreciosPage() {
 
                               // Previews de precios calculados
                               const pDirecto = currentPriceNum > 0 ? Math.round(currentPriceNum * 1.19) : 0;
-                              const pAirbnb  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.airbnb || 1.20) * 1.19) : 0;
+                              const pAirbnb  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.airbnb || 1.20) * 1.21) : 0;
                               const pBooking = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.booking || 1.35) * 1.19) : 0;
                               const pGoogle  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.google || 1.40) * 1.19) : 0;
                               const pExpedia = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.expedia || 1.59) * 1.19) : 0;

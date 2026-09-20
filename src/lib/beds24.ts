@@ -1061,7 +1061,7 @@ export async function checkIfOtaIsAlreadyAdjusted(
     let expectedPrice = calculatedTotal;
     const channelLower = channel.toLowerCase();
     if (channelLower.includes('airbnb')) {
-      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.airbnb || 1.20));
+      expectedPrice = Math.round((calculatedTotal / 1.19) * 1.21 * (otaMultipliers.airbnb || 1.20));
     } else if (channelLower.includes('booking')) {
       expectedPrice = Math.round(calculatedTotal * (otaMultipliers.booking || 1.35));
     } else if (channelLower.includes('google')) {
@@ -2087,10 +2087,15 @@ export function getDirectStayBreakdown(
     channelLabel = `Expedia (+${Math.round((channelMultiplier - 1) * 100)}%)`;
   }
 
-  const finalTotal = channelMultiplier !== 1.0 ? Math.round(totalDirect * channelMultiplier) : totalDirect;
+  const isAirbnbChannel = channelLower.includes('airbnb');
+  const finalTotal = isAirbnbChannel
+    ? Math.round(subtotalBaseStay * (otaMultipliers.airbnb || 1.20) * 1.21)
+    : (channelMultiplier !== 1.0 ? Math.round(totalDirect * channelMultiplier) : totalDirect);
 
   let summaryFormula = `${nights} ${nights === 1 ? 'noche' : 'noches'} × $${sampleTotalPerNight.toLocaleString('es-MX')} MXN`;
-  if (channelMultiplier !== 1.0) {
+  if (isAirbnbChannel) {
+    summaryFormula += ` × ${channelMultiplier} (Airbnb 21% IVA) = $${finalTotal.toLocaleString('es-MX')} MXN`;
+  } else if (channelMultiplier !== 1.0) {
     summaryFormula += ` × ${channelMultiplier} (${channelLabel}) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else {
     summaryFormula += ` = $${finalTotal.toLocaleString('es-MX')} MXN`;
