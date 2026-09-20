@@ -459,7 +459,8 @@ export async function sendWhatsAppTemplate(
       }
 
       const ycloudUrl = 'https://api.ycloud.com/v2/whatsapp/messages';
-      const toPhone = cleanedPhone.startsWith('+') ? cleanedPhone : `+${cleanedPhone}`;
+      const standardPhone = cleanPhoneForMeta(cleanedPhone);
+      const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
 
       const ycloudComponents: any[] = [
         {
@@ -616,19 +617,19 @@ export async function sendWhatsAppTemplate(
       }
 
       if (!response.ok) {
-        console.error(`[YCloud] Error al enviar plantilla '${templateName}' (${status}):`, resBody);
+        console.warn(`[YCloud] Error al enviar plantilla '${templateName}' (${status}):`, resBody);
         try {
           await supabase.from('employee_logs').insert([{
             employee_num: '000',
-            action: 'whatsapp-error',
+            action: 'whatsapp-warning',
             department: 'whatsapp',
             room: 'YCloud API',
-            details: `Error al procesar plantilla '${templateName}' para ${cleanedPhone}: ${resBody.error?.message || JSON.stringify(resBody)}`
+            details: `YCloud falló para plantilla '${templateName}' (${status}). Activando fallback a Meta. Detalle: ${resBody.error?.message || JSON.stringify(resBody)}`
           }]);
         } catch (logErr) {
           console.error("Error al registrar log de YCloud:", logErr);
         }
-        return { success: false, error: resBody.error?.message || `Error de la API de YCloud (${status})` };
+        executeMeta = true;
       }
     }
 
@@ -1009,96 +1010,105 @@ export async function sendWhatsAppTextMessage(
       return { success: false, error: 'Formato de teléfono no válido' };
     }
 
+    const standardPhone = cleanPhoneForMeta(cleanedPhone);
+    const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
     const provider = process.env.WHATSAPP_PROVIDER || 'ycloud';
 
+    // 1. Intentar con YCloud si es el proveedor seleccionado
     if (provider === 'ycloud') {
       const ycloudApiKey = process.env.YCLOUD_API_KEY;
       const ycloudFrom = process.env.YCLOUD_FROM_PHONE || '+529581168698';
 
-      if (!ycloudApiKey) {
-        return { success: false, error: 'Credenciales de YCloud (YCLOUD_API_KEY) no configuradas en el servidor' };
-      }
+      if (ycloudApiKey) {
+        try {
+          const ycloudUrl = 'https://api.ycloud.com/v2/whatsapp/messages';
+          const payload = {
+            from: ycloudFrom,
+            to: toPhone,
+            type: 'text',
+            text: {
+              body: body
+            }
+          };
 
-      const ycloudUrl = 'https://api.ycloud.com/v2/whatsapp/messages';
-      const toPhone = cleanedPhone.startsWith('+') ? cleanedPhone : `+${cleanedPhone}`;
+          const response = await fetch(ycloudUrl, {
+            method: 'POST',
+            headers: {
+              'X-API-Key': ycloudApiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          });
 
-      const payload = {
-        from: ycloudFrom,
-        to: toPhone,
-        type: 'text',
-        text: {
-          body: body
+          const status = response.status;
+          const resBody = await response.json();
+
+          if (response.ok) {
+            console.log(`[WhatsApp Text] ✅ Mensaje entregado vía YCloud a ${toPhone}`);
+            return { success: true, data: resBody };
+          }
+
+          console.warn(`[YCloud Text] Error enviando a ${toPhone} (${status}). Activando fallback a Meta:`, resBody);
+          try {
+            await supabase.from('employee_logs').insert([{
+              employee_num: '000',
+              action: 'whatsapp-text-warning',
+              department: 'whatsapp',
+              room: 'YCloud API',
+              details: `YCloud falló para texto a ${toPhone} (${status}). Fallback a Meta. Detalle: ${resBody.error?.message || JSON.stringify(resBody)}`
+            }]);
+          } catch (logErr) {
+            console.error("Error al registrar warning de texto en employee_logs:", logErr);
+          }
+        } catch (ycloudErr) {
+          console.error(`[YCloud Text] Excepción conectando con YCloud para ${toPhone}:`, ycloudErr);
         }
-      };
-
-      const response = await fetch(ycloudUrl, {
-        method: 'POST',
-        headers: {
-          'X-API-Key': ycloudApiKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const status = response.status;
-      const resBody = await response.json();
-
-      if (response.ok) {
-        return { success: true, data: resBody };
       }
-
-      console.error(`[YCloud] Error enviando mensaje de texto a ${toPhone} (${status}):`, resBody);
-      try {
-        await supabase.from('employee_logs').insert([{
-          employee_num: '000',
-          action: 'whatsapp-text-error',
-          department: 'whatsapp',
-          room: 'YCloud API',
-          details: `Error enviando texto a ${toPhone}: ${resBody.error?.message || JSON.stringify(resBody)}`
-        }]);
-      } catch (logErr) {
-        console.error("Error al registrar error de texto en employee_logs:", logErr);
-      }
-      return { success: false, error: resBody.error?.message || 'Error al enviar por YCloud' };
     }
 
-    // ── DRIVER META CLOUD API (RESPALDO AUTOMÁTICO O PROVEEDOR PRINCIPAL) ──
+    // 2. Fallback automático a Meta Cloud API (o si provider === 'meta')
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
 
-    if (!token || !phoneId) {
-      return { success: false, error: 'Credenciales de WhatsApp (Meta) no configuradas en el servidor' };
-    }
+    if (token && phoneId) {
+      try {
+        const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+        const payload = {
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to: standardPhone,
+          type: 'text',
+          text: {
+            body: body
+          }
+        };
 
-    const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
-    const payload = {
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: cleanPhoneForMeta(cleanedPhone),
-      type: 'text',
-      text: {
-        body: body
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const status = response.status;
+        const resBody = await response.json();
+
+        if (status === 200) {
+          console.log(`[WhatsApp Text] ✅ Mensaje entregado vía Meta Cloud API a ${standardPhone}`);
+          return { success: true, data: resBody };
+        }
+
+        console.error(`Meta API error text message to ${standardPhone}:`, resBody);
+        return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
+      } catch (metaErr: any) {
+        console.error(`Excepción enviando texto por Meta a ${standardPhone}:`, metaErr);
+        return { success: false, error: metaErr.message || 'Error de conexión con Meta' };
       }
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const status = response.status;
-    const resBody = await response.json();
-
-    if (status !== 200) {
-      console.error(`Meta API error text message to ${cleanedPhone}:`, resBody);
-      return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
     }
 
-    return { success: true, data: resBody };
+    return { success: false, error: 'No se pudo enviar el mensaje por YCloud ni por Meta (verificar credenciales)' };
   } catch (err: any) {
     console.error(`Exception sending WhatsApp text message to ${phone}:`, err);
     return { success: false, error: err.message || 'Error de red' };
