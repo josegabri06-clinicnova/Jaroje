@@ -48,14 +48,20 @@ export async function POST(req: Request) {
       console.error("[YCloud Webhook] Error guardando log en employee_logs:", logErr);
     }
 
-    const eventType = payload.type;
+    const eventType = String(payload.type || '');
 
-    // ── 1. MENSAJE ENTRANTE DEL HUÉSPED ────────────────────────────────────────
-    if (eventType === 'whatsapp.inbound_message' && payload.whatsappInboundMessage) {
-      const msg = payload.whatsappInboundMessage;
-      const rawPhone = msg.from;
+    // ── 1. MENSAJE ENTRANTE DEL HUÉSPED (whatsapp.inbound_message.received / whatsapp.inbound_message) ─
+    const isInbound = 
+      eventType === 'whatsapp.inbound_message.received' ||
+      eventType === 'whatsapp.inbound_message' ||
+      eventType.includes('inbound_message') ||
+      Boolean(payload.whatsappInboundMessage);
+
+    if (isInbound && (payload.whatsappInboundMessage || payload.whatsapp_inbound_message || payload.message || payload.data)) {
+      const msg = payload.whatsappInboundMessage || payload.whatsapp_inbound_message || payload.message || payload.data;
+      const rawPhone = msg.from || msg.senderPhone || payload.from;
       const cleanPhone = normalizePhone(rawPhone);
-      const senderName = msg.senderName || cleanPhone;
+      const senderName = msg.senderName || msg.fromName || cleanPhone;
 
       let guestText = '';
       let buttonPayload = '';
@@ -77,8 +83,10 @@ export async function POST(req: Request) {
         guestText = '[Imagen recibida]';
       } else if (msg.type === 'document') {
         guestText = '[Documento recibido]';
+      } else if (typeof msg.text === 'string') {
+        guestText = msg.text;
       } else {
-        guestText = `[Mensaje ${msg.type}]`;
+        guestText = msg.body || msg.text?.body || `[Mensaje ${msg.type || 'recibido'}]`;
       }
 
       // Procesar el mensaje entrante directamente de forma síncrona
@@ -88,7 +96,7 @@ export async function POST(req: Request) {
           guest_name: senderName,
           message_from_guest: guestText,
           button_payload: buttonPayload,
-          timestamp: msg.sendTime || new Date().toISOString()
+          timestamp: msg.sendTime || msg.createTime || new Date().toISOString()
         });
         console.log(`[YCloud Webhook] ✅ Mensaje procesado para ${cleanPhone}:`, result);
       } catch (convErr) {
@@ -99,10 +107,15 @@ export async function POST(req: Request) {
     }
 
     // ── 2. ACTUALIZACIÓN DE ESTADO DE ENTREGA (delivered, read, failed) ───────
-    if (eventType === 'whatsapp.message.updated' && payload.whatsappMessage) {
-      const waMsg = payload.whatsappMessage;
+    const isStatusUpdate = 
+      eventType === 'whatsapp.message.updated' ||
+      eventType.includes('message.updated') ||
+      Boolean(payload.whatsappMessage);
+
+    if (isStatusUpdate && (payload.whatsappMessage || payload.message)) {
+      const waMsg = payload.whatsappMessage || payload.message;
       const status = waMsg.status; // 'sent' | 'delivered' | 'read' | 'failed'
-      const recipientPhone = normalizePhone(waMsg.to);
+      const recipientPhone = normalizePhone(waMsg.to || waMsg.recipientPhone);
 
       if (recipientPhone && status) {
         try {
