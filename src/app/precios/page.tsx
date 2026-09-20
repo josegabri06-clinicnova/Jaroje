@@ -1218,7 +1218,7 @@ export default function PreciosPage() {
 
                                     {/* Airbnb */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb ({Math.round(((beds24Multipliers.airbnb || 1.20) - 1) * 100)}%)</span>
+                                      <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb (+20% · 1.21)</span>
                                       <span className="text-[12px] font-black text-rose-600 mt-1">${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
