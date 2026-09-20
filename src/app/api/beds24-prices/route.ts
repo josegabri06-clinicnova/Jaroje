@@ -108,8 +108,8 @@ function buildTiers(
       priceDirecto: tierRaw > 0 ? Math.round(tierRaw * TAX_FACTOR) : 0,
       priceAirbnb:  tierRaw > 0 ? Math.round(tierRaw * (multipliers.airbnb || 1.20) * AIRBNB_TAX_FACTOR) : 0,
       priceBooking: tierRaw > 0 ? Math.round(tierRaw * (multipliers.booking || 1.35) * TAX_FACTOR) : 0,
-      priceGoogle:  tierRaw > 0 ? Math.round(tierRaw * multGoogle * TAX_FACTOR) : 0,
-      priceExpedia: tierRaw > 0 ? Math.round(tierRaw * multExpedia * TAX_FACTOR) : 0,
+      priceGoogle:  tierRaw > 0 ? Math.round(tierRaw * multGoogle) : 0,
+      priceExpedia: tierRaw > 0 ? Math.round(tierRaw * multExpedia) : 0,
     };
   });
 }
@@ -270,8 +270,8 @@ export async function GET() {
             priceDirecto: Math.round(priceRaw * TAX_FACTOR),
             priceAirbnb:  Math.round(priceRaw * (multipliers.airbnb || 1.20) * AIRBNB_TAX_FACTOR),
             priceBooking: Math.round(priceRaw * (multipliers.booking || 1.35) * TAX_FACTOR),
-            priceGoogle:  Math.round(priceRaw * (multipliers.google || 1.40) * TAX_FACTOR),
-            priceExpedia: Math.round(priceRaw * (multipliers.expedia || 1.59) * TAX_FACTOR),
+            priceGoogle:  Math.round(priceRaw * (multipliers.google || 1.40)),
+            priceExpedia: Math.round(priceRaw * (multipliers.expedia || 1.59)),
           };
         });
 

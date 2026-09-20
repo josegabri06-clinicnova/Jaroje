@@ -200,8 +200,8 @@ export default function PreciosPage() {
     const precioDirecto = Math.round(newPriceRaw * 1.19).toLocaleString('es-MX');
     const precioAirbnb  = Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21).toLocaleString('es-MX');
     const precioBooking = Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19).toLocaleString('es-MX');
-    const precioGoogle  = Math.round(newPriceRaw * (beds24Multipliers.google || 1.40) * 1.19).toLocaleString('es-MX');
-    const precioExpedia = Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59) * 1.19).toLocaleString('es-MX');
+    const precioGoogle  = Math.round(newPriceRaw * (beds24Multipliers.google || 1.40)).toLocaleString('es-MX');
+    const precioExpedia = Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59)).toLocaleString('es-MX');
 
     const confirmed = window.confirm(
       `⚠️ CONFIRMAR CAMBIO MASIVO EN BEDS24\n\n` +
@@ -210,11 +210,11 @@ export default function PreciosPage() {
       `Total de periodos a actualizar: ${params.ranges.length}\n` +
       `Nuevo precio base para toda la temporada: $${newPriceRaw.toLocaleString('es-MX')} (sin impuestos)\n\n` +
       `Los huéspedes verán (1-6 noches):\n` +
-      `  · Directo:    $${precioDirecto} (con impuestos)\n` +
-      `  · Airbnb:     $${precioAirbnb} (con IVA 21%)\n` +
-      `  · Booking:    $${precioBooking} (con impuestos)\n` +
-      `  · Google Ads: $${precioGoogle} (con impuestos)\n` +
-      `  · Expedia:    $${precioExpedia} (con impuestos)\n\n` +
+      `  · Directo:    $${precioDirecto} (* 1.19 TAX)\n` +
+      `  · Airbnb:     $${precioAirbnb} (* 1.20 MUL * 1.21 TAX)\n` +
+      `  · Booking:    $${precioBooking} (* 1.35 MUL * 1.19 TAX)\n` +
+      `  · Google Ads: $${precioGoogle} (* 1.40 MUL)\n` +
+      `  · Expedia:    $${precioExpedia} (* 1.59 MUL)\n\n` +
       `Se modificarán los periodos no descontados de esta temporada en Beds24.\n` +
       `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
       `¿Continuar?`
@@ -264,8 +264,8 @@ export default function PreciosPage() {
               priceDirecto: Math.round(newPriceRaw * 1.19),
               priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
               priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19),
-              priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.40) * 1.19),
-              priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59) * 1.19),
+              priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.40)),
+              priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59)),
             };
           })
         };
@@ -352,8 +352,8 @@ export default function PreciosPage() {
                 priceDirecto: Math.round(newPriceRaw * 1.19),
                 priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
                 priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19),
-                priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.40) * 1.19),
-                priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59) * 1.19),
+                priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.40)),
+                priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.59)),
               };
             })
           };
@@ -517,10 +517,10 @@ export default function PreciosPage() {
 
   // El input ahora es Precio Base (sin impuestos)
   const tdPriceRaw = evaluatedPrice ? Math.round(evaluatedPrice * 100) / 100 : 0;
-  const tdPriceAirbnb = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.19) : 0;
+  const tdPriceAirbnb = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21) : 0;
   const tdPriceBooking = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19) : 0;
-  const tdPriceGoogle = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.google || 1.40) * 1.19) : 0;
-  const tdPriceExpedia = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.expedia || 1.59) * 1.19) : 0;
+  const tdPriceGoogle = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.google || 1.40)) : 0;
+  const tdPriceExpedia = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.expedia || 1.59)) : 0;
 
   const loadTempDiscounts = async () => {
     try {
@@ -1023,16 +1023,14 @@ export default function PreciosPage() {
           </div>
 
           {/* Fórmula visual */}
-          <div className="bg-zinc-900 rounded-2xl px-5 py-4 flex items-center gap-3 flex-wrap">
-            <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest">Fórmula:</span>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="px-2.5 py-1.5 bg-zinc-800 rounded-lg text-[11px] font-extrabold text-white">Precio Beds24</span>
-              <span className="text-zinc-500 font-black text-sm">×</span>
-              <span className="px-2.5 py-1.5 bg-indigo-900/60 rounded-lg text-[11px] font-extrabold text-indigo-300">Multiplicador OTA</span>
-              <span className="text-zinc-500 font-black text-sm">×</span>
-              <span className="px-2.5 py-1.5 bg-amber-900/60 rounded-lg text-[11px] font-extrabold text-amber-300">1.19 impuestos</span>
-              <span className="text-zinc-500 font-black text-sm">=</span>
-              <span className="px-2.5 py-1.5 bg-emerald-900/60 rounded-lg text-[11px] font-extrabold text-emerald-300">Precio al huésped</span>
+          <div className="bg-zinc-900 rounded-2xl px-5 py-4 flex flex-col gap-2.5">
+            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Fórmulas de Cálculo:</span>
+            <div className="flex items-center gap-2 flex-wrap text-[11px] font-bold">
+              <span className="px-2.5 py-1.5 bg-blue-950/80 border border-blue-800/40 text-blue-300 rounded-lg">Directo: Base × 1.19 TAX</span>
+              <span className="px-2.5 py-1.5 bg-rose-950/80 border border-rose-800/40 text-rose-300 rounded-lg">Airbnb: Base × 1.20 MUL × 1.21 TAX</span>
+              <span className="px-2.5 py-1.5 bg-sky-950/80 border border-sky-800/40 text-sky-300 rounded-lg">Booking: Base × 1.35 MUL × 1.19 TAX</span>
+              <span className="px-2.5 py-1.5 bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 rounded-lg">Google Ads: Base × 1.40 MUL</span>
+              <span className="px-2.5 py-1.5 bg-amber-950/80 border border-amber-800/40 text-amber-300 rounded-lg">Expedia: Base × 1.59 MUL</span>
             </div>
           </div>
 
@@ -1173,8 +1171,8 @@ export default function PreciosPage() {
                               const pDirecto = currentPriceNum > 0 ? Math.round(currentPriceNum * 1.19) : 0;
                               const pAirbnb  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.airbnb || 1.20) * 1.21) : 0;
                               const pBooking = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.booking || 1.35) * 1.19) : 0;
-                              const pGoogle  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.google || 1.40) * 1.19) : 0;
-                              const pExpedia = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.expedia || 1.59) * 1.19) : 0;
+                              const pGoogle  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.google || 1.40)) : 0;
+                              const pExpedia = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.expedia || 1.59)) : 0;
 
                               return (
                                 <div key={room.id} className={`pt-4 ${rIdx === 0 ? 'pt-0' : ''} flex flex-col xl:flex-row xl:items-center justify-between gap-4`}>
@@ -1212,31 +1210,31 @@ export default function PreciosPage() {
 
                                     {/* Directo */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Directo (1.19)</span>
+                                      <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Directo (* 1.19 TAX)</span>
                                       <span className="text-[12px] font-black text-zinc-700 mt-1">${pDirecto > 0 ? pDirecto.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
                                     {/* Airbnb */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb (+20% · 1.21)</span>
+                                      <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider">Airbnb (* 1.20 MUL * 1.21 TAX)</span>
                                       <span className="text-[12px] font-black text-rose-600 mt-1">${pAirbnb > 0 ? pAirbnb.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
                                     {/* Booking */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking ({Math.round(((beds24Multipliers.booking || 1.35) - 1) * 100)}%)</span>
+                                      <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking (* 1.35 MUL * 1.19 TAX)</span>
                                       <span className="text-[12px] font-black text-sky-600 mt-1">${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
                                     {/* Google Ads */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Google ({Math.round(((beds24Multipliers.google || 1.40) - 1) * 100)}%)</span>
+                                      <span className="text-[9px] font-bold text-emerald-600 uppercase tracking-wider">Google (* 1.40 MUL)</span>
                                       <span className="text-[12px] font-black text-emerald-600 mt-1">${pGoogle > 0 ? pGoogle.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
                                     {/* Expedia */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Expedia ({Math.round(((beds24Multipliers.expedia || 1.59) - 1) * 100)}%)</span>
+                                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Expedia (* 1.59 MUL)</span>
                                       <span className="text-[12px] font-black text-amber-600 mt-1">${pExpedia > 0 ? pExpedia.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 

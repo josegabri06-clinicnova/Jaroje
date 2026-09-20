@@ -370,10 +370,21 @@ export default function VercelActionForm() {
         surchargePerNight = activeSurchargeTotal / group.length;
       }
 
-      const priceWithChannel = basePrice * discountMult * multiplier;
-      const taxRate = form.channel === 'Airbnb' ? 0.21 : 0.19; // 21% IVA Airbnb vs 19% estándar
-      const tax = priceWithChannel * taxRate;
-      const suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
+      let suggestedDailyRate = 0;
+      if (form.channel === 'Google Ads' || form.channel === 'Google') {
+        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.google || 1.40) + surchargePerNight);
+      } else if (form.channel === 'Expedia') {
+        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.59) + surchargePerNight);
+      } else if (form.channel === 'Airbnb') {
+        const priceWithChannel = basePrice * discountMult * (otaMultipliers.airbnb || 1.20);
+        const tax = priceWithChannel * 0.21; // 21% IVA Airbnb
+        suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
+      } else {
+        // Directo (* 1.19 TAX) o Booking (* 1.35 MUL * 1.19 TAX)
+        const priceWithChannel = basePrice * discountMult * multiplier;
+        const tax = priceWithChannel * 0.19; // 16% IVA + 3% ISH
+        suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
+      }
 
       sumSuggestedRates += suggestedDailyRate;
 

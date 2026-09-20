@@ -1065,9 +1065,9 @@ export async function checkIfOtaIsAlreadyAdjusted(
     } else if (channelLower.includes('booking')) {
       expectedPrice = Math.round(calculatedTotal * (otaMultipliers.booking || 1.35));
     } else if (channelLower.includes('google')) {
-      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.google || 1.40));
+      expectedPrice = Math.round((calculatedTotal / 1.19) * (otaMultipliers.google || 1.40));
     } else if (channelLower.includes('expedia')) {
-      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.expedia || 1.59));
+      expectedPrice = Math.round((calculatedTotal / 1.19) * (otaMultipliers.expedia || 1.59));
     }
 
     const diff = Math.abs(priceVal - expectedPrice);
@@ -2088,13 +2088,30 @@ export function getDirectStayBreakdown(
   }
 
   const isAirbnbChannel = channelLower.includes('airbnb');
-  const finalTotal = isAirbnbChannel
-    ? Math.round(subtotalBaseStay * (otaMultipliers.airbnb || 1.20) * 1.21)
-    : (channelMultiplier !== 1.0 ? Math.round(totalDirect * channelMultiplier) : totalDirect);
+  const isBookingChannel = channelLower.includes('booking');
+  const isGoogleChannel = channelLower.includes('google');
+  const isExpediaChannel = channelLower.includes('expedia');
+
+  let finalTotal = totalDirect;
+  if (isAirbnbChannel) {
+    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.airbnb || 1.20) * 1.21);
+  } else if (isBookingChannel) {
+    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.booking || 1.35) * 1.19);
+  } else if (isGoogleChannel) {
+    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.google || 1.40));
+  } else if (isExpediaChannel) {
+    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.expedia || 1.59));
+  } else if (channelMultiplier !== 1.0) {
+    finalTotal = Math.round(totalDirect * channelMultiplier);
+  }
 
   let summaryFormula = `${nights} ${nights === 1 ? 'noche' : 'noches'} × $${sampleTotalPerNight.toLocaleString('es-MX')} MXN`;
   if (isAirbnbChannel) {
-    summaryFormula += ` × ${channelMultiplier} (Airbnb 21% IVA) = $${finalTotal.toLocaleString('es-MX')} MXN`;
+    summaryFormula += ` × ${channelMultiplier} (Airbnb * 1.20 MUL * 1.21 TAX) = $${finalTotal.toLocaleString('es-MX')} MXN`;
+  } else if (isGoogleChannel) {
+    summaryFormula += ` × ${channelMultiplier} (Google * 1.40 MUL) = $${finalTotal.toLocaleString('es-MX')} MXN`;
+  } else if (isExpediaChannel) {
+    summaryFormula += ` × ${channelMultiplier} (Expedia * 1.59 MUL) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else if (channelMultiplier !== 1.0) {
     summaryFormula += ` × ${channelMultiplier} (${channelLabel}) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else {
