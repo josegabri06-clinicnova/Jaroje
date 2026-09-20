@@ -1625,7 +1625,7 @@ export async function PUT(req: Request) {
               let seasonBasePrices: Record<string, any> = {};
               let seasonRanges: any[] = [];
               let capacitySettings: any = null;
-              let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+              let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
 
               try {
                 const [{ data: rulesData }, { data: discountRow }, { data: basePricesRow }, { data: seasonRow }, { data: capRow }, { data: otaRow }] = await Promise.all([
@@ -1645,6 +1645,8 @@ export async function PUT(req: Request) {
                   const parsedOta = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
                   if (parsedOta.airbnb) otaMultipliers.airbnb = Number(parsedOta.airbnb);
                   if (parsedOta.booking) otaMultipliers.booking = Number(parsedOta.booking);
+                  if (parsedOta.google) otaMultipliers.google = Number(parsedOta.google);
+                  if (parsedOta.expedia) otaMultipliers.expedia = Number(parsedOta.expedia);
                 }
               } catch (e) {}
 
@@ -1972,7 +1974,7 @@ export async function PUT(req: Request) {
             }
 
             calculatedBreakdown = null;
-            let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+            let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
             try {
               const { data: otaRow } = await supabase
                 .from('settings')
@@ -1983,6 +1985,8 @@ export async function PUT(req: Request) {
                 const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
                 if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
                 if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+                if (parsed.google) otaMultipliers.google = Number(parsed.google);
+                if (parsed.expedia) otaMultipliers.expedia = Number(parsed.expedia);
               }
             } catch (otaErr) {
               console.warn("[Reservas PUT] No se pudieron cargar ota_multipliers:", otaErr);

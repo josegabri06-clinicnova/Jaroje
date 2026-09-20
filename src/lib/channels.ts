@@ -37,10 +37,11 @@ export function getChannelBadge(channel: string | null | undefined): {
         emoji: '✈️',
         className: 'bg-yellow-50 border border-yellow-200 text-yellow-800',
       };
+    case 'Google Ads':
     case 'Google':
       return {
-        label: 'Google',
-        emoji: '🔍',
+        label: 'Google Ads',
+        emoji: '🎯',
         className: 'bg-green-50 border border-green-200 text-green-800',
       };
     case 'WhatsApp':

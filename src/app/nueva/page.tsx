@@ -150,8 +150,8 @@ export default function VercelActionForm() {
   const [pinInput, setPinInput] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
-  const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
-  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35 });
+  const [capacitySettings, setCapacitySettings] = useState<any>(null);
+  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 });
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
@@ -305,6 +305,8 @@ export default function VercelActionForm() {
     let multiplier = 1;
     if (form.channel === 'Airbnb') multiplier = otaMultipliers.airbnb;
     if (form.channel === 'Booking.com') multiplier = otaMultipliers.booking;
+    if (form.channel === 'Google Ads' || form.channel === 'Google') multiplier = otaMultipliers.google || 1.40;
+    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.59;
 
     let totalStay = 0;
     let sumSuggestedRates = 0;
@@ -519,7 +521,9 @@ export default function VercelActionForm() {
           const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
           setOtaMultipliers({
             airbnb: parsed.airbnb ?? 1.20,
-            booking: parsed.booking ?? 1.35
+            booking: parsed.booking ?? 1.35,
+            google: parsed.google ?? 1.40,
+            expedia: parsed.expedia ?? 1.59
           });
         }
       } catch (err) {
@@ -1372,6 +1376,8 @@ export default function VercelActionForm() {
                         <option value="Recepción">Walk-in Recepción</option>
                         <option value="Airbnb">Airbnb</option>
                         <option value="Booking.com">Booking.com</option>
+                        <option value="Google Ads">Google Ads</option>
+                        <option value="Expedia">Expedia</option>
                       </select>
                     </div>
                   </div>

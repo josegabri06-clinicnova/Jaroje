@@ -92,8 +92,10 @@ function fmtDate(iso: string) {
 function buildTiers(
   baseRaw: number,
   fallbackTiers: { minStay: number; maxStay: number; offsetPct: number; name: string }[],
-  multipliers: { airbnb: number; booking: number }
+  multipliers: { airbnb: number; booking: number; google?: number; expedia?: number }
 ) {
+  const multGoogle = multipliers.google !== undefined ? multipliers.google : 1.40;
+  const multExpedia = multipliers.expedia !== undefined ? multipliers.expedia : 1.59;
   return fallbackTiers.map(ft => {
     const tierRaw = baseRaw > 0 ? baseRaw * (1 + ft.offsetPct / 100) : 0;
     return {
@@ -105,6 +107,8 @@ function buildTiers(
       priceDirecto: tierRaw > 0 ? Math.round(tierRaw * TAX_FACTOR) : 0,
       priceAirbnb:  tierRaw > 0 ? Math.round(tierRaw * multipliers.airbnb * TAX_FACTOR) : 0,
       priceBooking: tierRaw > 0 ? Math.round(tierRaw * multipliers.booking * TAX_FACTOR) : 0,
+      priceGoogle:  tierRaw > 0 ? Math.round(tierRaw * multGoogle * TAX_FACTOR) : 0,
+      priceExpedia: tierRaw > 0 ? Math.round(tierRaw * multExpedia * TAX_FACTOR) : 0,
     };
   });
 }
@@ -143,11 +147,14 @@ export async function GET() {
         .maybeSingle()
     ]);
 
-    const multipliers: { airbnb: number; booking: number } = settingsRow?.value
+    const multipliers: { airbnb: number; booking: number; google: number; expedia: number } = settingsRow?.value
       ? (typeof settingsRow.value === 'string'
           ? JSON.parse(settingsRow.value)
           : settingsRow.value)
-      : { airbnb: 1.20, booking: 1.35 };
+      : { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
+
+    if (!multipliers.google) multipliers.google = 1.40;
+    if (!multipliers.expedia) multipliers.expedia = 1.59;
 
     const seasonRanges = seasonRow?.value
       ? (typeof seasonRow.value === 'string'
@@ -262,6 +269,8 @@ export async function GET() {
             priceDirecto: Math.round(priceRaw * TAX_FACTOR),
             priceAirbnb:  Math.round(priceRaw * multipliers.airbnb * TAX_FACTOR),
             priceBooking: Math.round(priceRaw * multipliers.booking * TAX_FACTOR),
+            priceGoogle:  Math.round(priceRaw * (multipliers.google || 1.40) * TAX_FACTOR),
+            priceExpedia: Math.round(priceRaw * (multipliers.expedia || 1.59) * TAX_FACTOR),
           };
         });
 
@@ -392,7 +401,7 @@ export async function POST(req: Request) {
     _cachedPricesTimestamp = 0;
 
     const body = await req.json();
-    const { airbnb, booking, capacitySettings, temp_discounts, season_base_prices } = body;
+    const { airbnb, booking, google, expedia, capacitySettings, temp_discounts, season_base_prices } = body;
 
     if (capacitySettings) {
       const { error } = await supabase
@@ -404,11 +413,19 @@ export async function POST(req: Request) {
       if (error) throw error;
     }
 
-    if (typeof airbnb === 'number' && typeof booking === 'number') {
+    if (typeof airbnb === 'number' || typeof booking === 'number' || typeof google === 'number' || typeof expedia === 'number') {
+      const { data: currentOta } = await supabase.from('settings').select('value').eq('key', 'ota_multipliers').maybeSingle();
+      const current = currentOta?.value ? (typeof currentOta.value === 'string' ? JSON.parse(currentOta.value) : currentOta.value) : { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
+      const updatedOta = {
+        airbnb: typeof airbnb === 'number' ? airbnb : (current.airbnb || 1.20),
+        booking: typeof booking === 'number' ? booking : (current.booking || 1.35),
+        google: typeof google === 'number' ? google : (current.google || 1.40),
+        expedia: typeof expedia === 'number' ? expedia : (current.expedia || 1.59),
+      };
       const { error } = await supabase
         .from('settings')
         .upsert(
-          { key: 'ota_multipliers', value: JSON.stringify({ airbnb, booking }) },
+          { key: 'ota_multipliers', value: JSON.stringify(updatedOta) },
           { onConflict: 'key' }
         );
       if (error) throw error;

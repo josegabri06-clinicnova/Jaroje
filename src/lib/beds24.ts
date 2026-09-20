@@ -357,14 +357,21 @@ export function getLengthOfStayMultiplier(nights: number, customDiscounts?: { ni
 }
 
 // Modificador por canal
-export function getChannelMultiplier(referer: string, customMultipliers?: { airbnb?: number; booking?: number; directo?: number }): number {
+export function getChannelMultiplier(
+  referer: string, 
+  customMultipliers?: { airbnb?: number; booking?: number; google?: number; expedia?: number; directo?: number }
+): number {
   const r = String(referer || '').toLowerCase();
   const multAirbnb = customMultipliers?.airbnb !== undefined ? customMultipliers.airbnb : 1.20;
   const multBooking = customMultipliers?.booking !== undefined ? customMultipliers.booking : 1.35;
+  const multGoogle = customMultipliers?.google !== undefined ? customMultipliers.google : 1.40;
+  const multExpedia = customMultipliers?.expedia !== undefined ? customMultipliers.expedia : 1.59;
   const multDirecto = customMultipliers?.directo !== undefined ? customMultipliers.directo : 1.00;
 
   if (r.includes('airbnb')) return multAirbnb;
   if (r.includes('booking')) return multBooking;
+  if (r.includes('google')) return multGoogle;
+  if (r.includes('expedia')) return multExpedia;
   return multDirecto; // Directo / WhatsApp / API
 }
 
@@ -978,10 +985,10 @@ export async function checkIfOtaIsAlreadyAdjusted(
   channel: string,
   rulesList: any[],
   capacitySettings: any,
-  otaMultipliers: { airbnb: number; booking: number },
+  otaMultipliers: { airbnb: number; booking: number; google?: number; expedia?: number },
   allBookings?: any[]
 ): Promise<boolean> {
-  const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
+  const isOTA = ['Airbnb', 'Booking.com', 'Expedia', 'Google Ads', 'Google'].includes(channel);
   if (!isOTA) return false;
 
   try {
@@ -1054,9 +1061,13 @@ export async function checkIfOtaIsAlreadyAdjusted(
     let expectedPrice = calculatedTotal;
     const channelLower = channel.toLowerCase();
     if (channelLower.includes('airbnb')) {
-      expectedPrice = Math.round(calculatedTotal * otaMultipliers.airbnb);
+      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.airbnb || 1.20));
     } else if (channelLower.includes('booking')) {
-      expectedPrice = Math.round(calculatedTotal * otaMultipliers.booking);
+      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.booking || 1.35));
+    } else if (channelLower.includes('google')) {
+      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.google || 1.40));
+    } else if (channelLower.includes('expedia')) {
+      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.expedia || 1.59));
     }
 
     const diff = Math.abs(priceVal - expectedPrice);
@@ -1249,7 +1260,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
   // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
   let rulesList: any[] = [];
   let capacitySettings: any = null;
-  let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
 
   try {
     const { data: rulesData } = await supabase.from('pricing_rules').select('*');
@@ -1281,6 +1292,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
       const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
       if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
       if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+      if (parsed.google) otaMultipliers.google = Number(parsed.google);
+      if (parsed.expedia) otaMultipliers.expedia = Number(parsed.expedia);
     }
   } catch (err) {
     console.error("Error al obtener ota_multipliers:", err);
@@ -1906,7 +1919,7 @@ export function getDirectStayBreakdown(
   seasonBasePrices?: Record<string, any>,
   seasonRanges?: any[],
   channel: string = 'Directo',
-  otaMultipliers: { airbnb?: number; booking?: number } = { airbnb: 1.20, booking: 1.35 }
+  otaMultipliers: { airbnb?: number; booking?: number; google?: number; expedia?: number } = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 }
 ): DirectStayBreakdown | null {
   const roomB24 = getBeds24RoomIdAndUnit(roomName);
   if (!roomB24) return null;
@@ -2066,6 +2079,12 @@ export function getDirectStayBreakdown(
   } else if (channelLower.includes('booking')) {
     channelMultiplier = otaMultipliers.booking || 1.35;
     channelLabel = `Booking.com (+${Math.round((channelMultiplier - 1) * 100)}%)`;
+  } else if (channelLower.includes('google')) {
+    channelMultiplier = otaMultipliers.google || 1.40;
+    channelLabel = `Google Ads (+${Math.round((channelMultiplier - 1) * 100)}%)`;
+  } else if (channelLower.includes('expedia')) {
+    channelMultiplier = otaMultipliers.expedia || 1.59;
+    channelLabel = `Expedia (+${Math.round((channelMultiplier - 1) * 100)}%)`;
   }
 
   const finalTotal = channelMultiplier !== 1.0 ? Math.round(totalDirect * channelMultiplier) : totalDirect;
@@ -2324,7 +2343,7 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
   // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
   let rulesList: any[] = [];
   let capacitySettings: any = null;
-  let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
 
   try {
     const { data: rulesData } = await supabase.from('pricing_rules').select('*');
@@ -2356,12 +2375,14 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
       const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
       if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
       if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+      if (parsed.google) otaMultipliers.google = Number(parsed.google);
+      if (parsed.expedia) otaMultipliers.expedia = Number(parsed.expedia);
     }
   } catch (err) {
     console.error("Error al obtener ota_multipliers:", err);
   }
 
-  const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
+  const isOTA = ['Airbnb', 'Booking.com', 'Expedia', 'Google Ads', 'Google'].includes(channel);
 
   const otaIsAlreadyAdjusted = await checkIfOtaIsAlreadyAdjusted(
     b,
@@ -2502,7 +2523,7 @@ export async function syncBeds24ReservationsRange(
   // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
   let rulesList: any[] = [];
   let capacitySettings: any = null;
-  let otaMultipliers = { airbnb: 1.20, booking: 1.35 };
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
 
   try {
     const { data: rulesData } = await supabase.from('pricing_rules').select('*');
@@ -2534,6 +2555,8 @@ export async function syncBeds24ReservationsRange(
       const parsed = typeof otaRow.value === 'string' ? JSON.parse(otaRow.value) : otaRow.value;
       if (parsed.airbnb) otaMultipliers.airbnb = Number(parsed.airbnb);
       if (parsed.booking) otaMultipliers.booking = Number(parsed.booking);
+      if (parsed.google) otaMultipliers.google = Number(parsed.google);
+      if (parsed.expedia) otaMultipliers.expedia = Number(parsed.expedia);
     }
   } catch (err) {
     console.error("Error al obtener ota_multipliers en syncBeds24ReservationsRange:", err);
