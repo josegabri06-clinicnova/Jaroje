@@ -966,6 +966,25 @@ export function extractOtaDetails(invoiceItems: any[], bookingId?: string | numb
   };
 }
 
+/**
+ * Determina si un ítem de la factura de Beds24 representa un PAGO real del huésped
+ * vs un cargo, impuesto, descuento, cupón o voucher.
+ */
+export function isInvoicePayment(item: any): boolean {
+  if (!item) return false;
+  const type = String(item.type || '').toLowerCase().trim();
+  const desc = String(item.description || '').toLowerCase().trim();
+  
+  // Si la descripción o el tipo explícitamente indican descuento/cupón/voucher/promoción/código
+  const isDiscount = type === 'discount' || 
+    ['descuento', 'cupon', 'cupón', 'voucher', 'discount', 'promo', 'promocion', 'promoción', 'codigo', 'código', 'rebate', 'bono', 'oferta'].some(w => desc.includes(w));
+  
+  if (isDiscount) return false;
+  
+  // En Beds24, solo type === 'payment' representa dinero real recibido
+  return type === 'payment';
+}
+
 // Variables globales de caché para evitar cuellos de botella bajo concurrencia multi-usuario
 let cachedBookingsPromise: Promise<any[]> | null = null;
 let cachedAllBookingsPromise: Promise<any[]> | null = null;
@@ -1376,9 +1395,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
           if (itemBookingId && itemBookingId !== String(b.id)) {
             return;
           }
-          const type = item.type || '';
           const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-          if (type === 'payment' || lineTotal < 0) {
+          if (isInvoicePayment(item)) {
             actualPaid += Math.abs(lineTotal);
           } else {
             totalInvoiceCharges += lineTotal;
@@ -2340,11 +2358,10 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
       if (itemBookingId && itemBookingId !== String(b.id)) {
         return;
       }
-      const type = item.type || '';
       const qty = Number(item.qty || 0);
       const price = Number(item.price || 0);
       const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (qty * price);
-      if (type === 'payment' || lineTotal < 0) {
+      if (isInvoicePayment(item)) {
         actualPaid += Math.abs(lineTotal);
       } else {
         totalInvoiceCharges += lineTotal;
@@ -2404,7 +2421,7 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     console.error("Error al obtener ota_multipliers:", err);
   }
 
-  const isOTA = ['Airbnb', 'Booking.com', 'Expedia', 'Google Ads', 'Google'].includes(channel);
+  const isOTA = ['Airbnb', 'Booking.com', 'Expedia'].includes(channel);
 
   const otaIsAlreadyAdjusted = await checkIfOtaIsAlreadyAdjusted(
     b,
@@ -2647,9 +2664,8 @@ export async function syncBeds24ReservationsRange(
           if (itemBookingId && itemBookingId !== String(b.id)) {
             return;
           }
-          const type = item.type || '';
           const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-          if (type === 'payment' || lineTotal < 0) {
+          if (isInvoicePayment(item)) {
             actualPaid += Math.abs(lineTotal);
           } else {
             totalInvoiceCharges += lineTotal;

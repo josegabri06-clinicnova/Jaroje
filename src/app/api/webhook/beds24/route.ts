@@ -7,7 +7,7 @@ import {
   sendTemplate4_DisponibilidadLiberada, 
   detectLanguageFromPhone 
 } from '@/lib/whatsapp';
-import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal } from '@/lib/beds24';
+import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal, isInvoicePayment } from '@/lib/beds24';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
@@ -284,9 +284,8 @@ export async function POST(req: Request) {
               if (itemBookingId && itemBookingId !== String(b.id)) {
                 return;
               }
-              const type = item.type || '';
               const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-              if (type === 'payment' || lineTotal < 0) {
+              if (isInvoicePayment(item)) {
                 actualPaid += Math.abs(lineTotal);
               }
             });

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -273,9 +273,8 @@ export async function GET(req: Request) {
                 if (itemBookingId && itemBookingId !== String(rawB.id)) {
                   return;
                 }
-                const type = item.type || '';
                 const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-                if (type === 'payment' || lineTotal < 0) {
+                if (isInvoicePayment(item)) {
                   actualPaid += Math.abs(lineTotal);
                 } else {
                   totalInvoiceCharges += lineTotal;

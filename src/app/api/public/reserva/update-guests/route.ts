@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, getCapacityRules, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -274,9 +274,8 @@ export async function POST(req: Request) {
           if (itemBookingId && itemBookingId !== String(currentBooking.id)) {
             return;
           }
-          const type = item.type || '';
           const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-          if (type === 'payment' || lineTotal < 0) {
+          if (isInvoicePayment(item)) {
             mainActualPaid += Math.abs(lineTotal);
           } else {
             mainTotalInvoiceCharges += lineTotal;
@@ -412,9 +411,8 @@ export async function POST(req: Request) {
         if (itemBookingId && itemBookingId !== String(currentBooking.id)) {
           return;
         }
-        const type = item.type || '';
         const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-        if (type === 'payment' || lineTotal < 0) {
+        if (isInvoicePayment(item)) {
           mainActualPaid += Math.abs(lineTotal);
         } else {
           mainTotalInvoiceCharges += lineTotal;

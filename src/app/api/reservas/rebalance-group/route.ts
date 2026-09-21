@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Token, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
+import { getBeds24Token, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -98,9 +98,8 @@ async function performRebalance(bookingId: string) {
 
   let totalPaidFromInvoice = 0;
   allInvoiceItems.forEach((item: any) => {
-    const type = item.type || '';
     const lineTotal = item.lineTotal !== undefined ? Number(item.lineTotal) : (Number(item.qty || 0) * Number(item.price || 0));
-    if (type === 'payment' || lineTotal < 0) {
+    if (isInvoicePayment(item)) {
       totalPaidFromInvoice += Math.abs(lineTotal);
     }
   });
