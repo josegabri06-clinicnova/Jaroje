@@ -949,6 +949,7 @@ export default function PublicReservaPage() {
   const [isSubmittingMaintenance, setIsSubmittingMaintenance] = useState(false);
   const [maintenanceError, setMaintenanceError] = useState('');
   const [showWiseGuide, setShowWiseGuide] = useState(false);
+  const [usdPaymentMethod, setUsdPaymentMethod] = useState<'wise' | 'paypal'>('wise');
   const [maintenanceSuccess, setMaintenanceSuccess] = useState(false);
   const [showWifiInfo, setShowWifiInfo] = useState(false);
   const [showCancellationPolicies, setShowCancellationPolicies] = useState(false);
@@ -1953,129 +1954,278 @@ export default function PublicReservaPage() {
 
               {/* Métodos de Pago */}
               {isUSD ? (
-                <div className="space-y-2">
-                  <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">
-                    {lang === 'en' ? 'Option: Wise Payment (Only USD)' : 'Opción: Pago vía Wise (Solo USD)'}
-                  </span>
-                  <a
-                    href="https://wise.com/pay/me/rolandod148"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <Check size={18} />
-                    {lang === 'en' ? 'Pay via Wise (USD) ↗' : 'Pagar vía Wise (USD) ↗'}
-                  </a>
-                  <a
-                    href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=wise`}
-                    className="w-full mt-2 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                  >
-                    <Upload size={14} className="text-zinc-200" />
-                    {lang === 'en' ? 'Upload Wise Receipt' : 'Subir Comprobante de Wise'}
-                  </a>
-                  <p className="text-[10px] text-zinc-500 italic text-center mt-1">
-                    {lang === 'en'
-                      ? 'Please complete your payment on Wise using the green button above, then upload your transaction screenshot or receipt.'
-                      : 'Por favor realiza tu pago en Wise usando el botón verde de arriba, y luego sube tu comprobante o captura de pantalla.'}
-                  </p>
+                (() => {
+                  const paypalFee = Math.round(targetAmount * 0.05 * 100) / 100;
+                  const paypalTotal = Math.round((targetAmount + paypalFee) * 100) / 100;
 
-                  {/* Wise Step-by-Step Guide Accordion */}
-                  <div className="mt-4 border border-emerald-200 bg-emerald-50/20 rounded-xl overflow-hidden transition-all shadow-sm">
-                    <button
-                      onClick={() => setShowWiseGuide(!showWiseGuide)}
-                      type="button"
-                      className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-emerald-50/40 transition-colors cursor-pointer"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Info size={15} className="text-emerald-600" />
-                        <span className="text-[11px] font-black text-emerald-950 uppercase tracking-wider">
-                          {lang === 'en' ? 'Wise Payment Guide' : 'Guía de Pago por Wise'}
+                  return (
+                    <div className="space-y-3.5">
+                      {/* Selector de Método USD (Wise vs PayPal) */}
+                      <div className="space-y-1.5">
+                        <span className="text-[10px] font-extrabold uppercase text-indigo-600 tracking-wider block">
+                          {lang === 'en' ? 'Select Payment Method (USD)' : 'Selecciona Método de Pago (USD)'}
                         </span>
-                      </div>
-                      <span className="text-emerald-700 text-xs font-bold">
-                        {showWiseGuide ? '▲' : '▼'}
-                      </span>
-                    </button>
+                        <div className="grid grid-cols-2 gap-2 bg-zinc-100/80 p-1 rounded-xl border border-zinc-200/60 shadow-inner">
+                          <button
+                            type="button"
+                            onClick={() => setUsdPaymentMethod('wise')}
+                            className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center cursor-pointer ${
+                              usdPaymentMethod === 'wise'
+                                ? 'bg-[#00A650] text-white shadow-md'
+                                : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1">
+                              <span>WISE</span>
+                              <span className={`text-[8.5px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                                usdPaymentMethod === 'wise' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                0% FEE
+                              </span>
+                            </span>
+                            <span className={`text-[10px] opacity-90 mt-0.5 ${usdPaymentMethod === 'wise' ? 'text-emerald-100' : 'text-zinc-500'}`}>
+                              ${targetAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD
+                            </span>
+                          </button>
 
-                    {showWiseGuide && (
-                      <div className="px-4 pb-4 pt-1 text-xs text-zinc-700 space-y-3.5 border-t border-emerald-100 bg-white">
+                          <button
+                            type="button"
+                            onClick={() => setUsdPaymentMethod('paypal')}
+                            className={`py-2 px-3 rounded-lg text-xs font-black transition-all flex flex-col items-center justify-center cursor-pointer ${
+                              usdPaymentMethod === 'paypal'
+                                ? 'bg-[#0070BA] text-white shadow-md'
+                                : 'text-zinc-600 hover:text-zinc-950 bg-transparent'
+                            }`}
+                          >
+                            <span className="flex items-center gap-1">
+                              <span>PAYPAL</span>
+                              <span className={`text-[8.5px] font-extrabold px-1.5 py-0.2 rounded-full ${
+                                usdPaymentMethod === 'paypal' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-900'
+                              }`}>
+                                +5% FEE
+                              </span>
+                            </span>
+                            <span className={`text-[10px] opacity-90 mt-0.5 ${usdPaymentMethod === 'paypal' ? 'text-blue-100' : 'text-zinc-500'}`}>
+                              ${paypalTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {usdPaymentMethod === 'wise' ? (
                         <div className="space-y-2">
-                          <p className="font-extrabold text-zinc-900 mt-1">
-                            {lang === 'en' ? 'How to open a Wise account and make the transfer:' : 'Cómo abrir una cuenta de Wise y hacer la transferencia:'}
+                          <span className="text-[10px] font-extrabold uppercase text-[#00A650] tracking-wider block">
+                            {lang === 'en' ? 'Option 1: Wise Payment (No Extra Fee)' : 'Opción 1: Pago vía Wise (Sin Comisión Extra)'}
+                          </span>
+                          <a
+                            href="https://wise.com/pay/me/rolandod148"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Check size={18} />
+                            {lang === 'en' ? 'Pay via Wise (USD) ↗' : 'Pagar vía Wise (USD) ↗'}
+                          </a>
+                          <a
+                            href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=wise`}
+                            className="w-full mt-2 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <Upload size={14} className="text-zinc-200" />
+                            {lang === 'en' ? 'Upload Wise Receipt' : 'Subir Comprobante de Wise'}
+                          </a>
+                          <p className="text-[10px] text-zinc-500 italic text-center mt-1">
+                            {lang === 'en'
+                              ? 'Please complete your payment on Wise using the green button above, then upload your transaction screenshot or receipt.'
+                              : 'Por favor realiza tu pago en Wise usando el botón verde de arriba, y luego sube tu comprobante o captura de pantalla.'}
                           </p>
-                          <ol className="list-decimal pl-4 space-y-2 text-[11px] text-zinc-600">
-                            <li>
-                              {lang === 'en' ? (
-                                <>Go to <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a> or download the Wise app.</>
-                              ) : (
-                                <>Ve a <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a> o descarga la app de Wise.</>
-                              )}
-                            </li>
-                            <li>
-                              {lang === 'en' 
-                                ? 'Create a free account and complete the identity verification.' 
-                                : 'Crea una cuenta gratuita y completa la verificación de identidad.'}
-                            </li>
-                            <li>
-                              {lang === 'en' 
-                                ? 'Add funds to Wise using either a credit/debit card, or a bank account (lower fees).' 
-                                : 'Agrega fondos a Wise usando una tarjeta de crédito/débito o cuenta bancaria (menor comisión).'}
-                            </li>
-                            <li>
-                              {lang === 'en' 
-                                ? 'Once your account is ready, select Send money.' 
-                                : 'Cuando tu cuenta esté lista, selecciona Enviar dinero.'}
-                            </li>
-                            <li>
-                              {lang === 'en' 
-                                ? 'Choose to send the payment in USD (our prices are in USD).' 
-                                : 'Elige enviar el pago en USD (nuestras tarifas están en USD).'}
-                            </li>
-                            <li>
-                              {lang === 'en' ? (
-                                <>Enter my Wise bank details: <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a></>
-                              ) : (
-                                <>Ingresa mis datos bancarios de Wise: <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a></>
-                              )}
-                            </li>
-                            <li>
-                              {lang === 'en' 
-                                ? 'Confirm the transfer.' 
-                                : 'Confirma la transferencia.'}
-                            </li>
-                          </ol>
-                        </div>
 
-                        <div className="bg-emerald-50/30 rounded-lg p-3 border border-emerald-100/50 space-y-1.5">
-                          <p className="font-extrabold text-emerald-950 flex items-center gap-1">
-                            <span>✨</span>
-                            <span>{lang === 'en' ? 'Why Wise?' : '¿Por qué Wise?'}</span>
+                          {/* Wise Step-by-Step Guide Accordion */}
+                          <div className="mt-4 border border-emerald-200 bg-emerald-50/20 rounded-xl overflow-hidden transition-all shadow-sm">
+                            <button
+                              onClick={() => setShowWiseGuide(!showWiseGuide)}
+                              type="button"
+                              className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-emerald-50/40 transition-colors cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Info size={15} className="text-emerald-600" />
+                                <span className="text-[11px] font-black text-emerald-950 uppercase tracking-wider">
+                                  {lang === 'en' ? 'Wise Payment Guide' : 'Guía de Pago por Wise'}
+                                </span>
+                              </div>
+                              <span className="text-emerald-700 text-xs font-bold">
+                                {showWiseGuide ? '▲' : '▼'}
+                              </span>
+                            </button>
+
+                            {showWiseGuide && (
+                              <div className="px-4 pb-4 pt-1 text-xs text-zinc-700 space-y-3.5 border-t border-emerald-100 bg-white">
+                                <div className="space-y-2">
+                                  <p className="font-extrabold text-zinc-900 mt-1">
+                                    {lang === 'en' ? 'How to open a Wise account and make the transfer:' : 'Cómo abrir una cuenta de Wise y hacer la transferencia:'}
+                                  </p>
+                                  <ol className="list-decimal pl-4 space-y-2 text-[11px] text-zinc-600">
+                                    <li>
+                                      {lang === 'en' ? (
+                                        <>Go to <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a> or download the Wise app.</>
+                                      ) : (
+                                        <>Ve a <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a> o descarga la app de Wise.</>
+                                      )}
+                                    </li>
+                                    <li>
+                                      {lang === 'en' 
+                                        ? 'Create a free account and complete the identity verification.' 
+                                        : 'Crea una cuenta gratuita y completa la verificación de identidad.'}
+                                    </li>
+                                    <li>
+                                      {lang === 'en' 
+                                        ? 'Add funds to Wise using either a credit/debit card, or a bank account (lower fees).' 
+                                        : 'Agrega fondos a Wise usando una tarjeta de crédito/débito o cuenta bancaria (menor comisión).'}
+                                    </li>
+                                    <li>
+                                      {lang === 'en' 
+                                        ? 'Once your account is ready, select Send money.' 
+                                        : 'Cuando tu cuenta esté lista, selecciona Enviar dinero.'}
+                                    </li>
+                                    <li>
+                                      {lang === 'en' 
+                                        ? 'Choose to send the payment in USD (our prices are in USD).' 
+                                        : 'Elige enviar el pago en USD (nuestras tarifas están en USD).'}
+                                    </li>
+                                    <li>
+                                      {lang === 'en' ? (
+                                        <>Enter my Wise bank details: <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a></>
+                                      ) : (
+                                        <>Ingresa mis datos bancarios de Wise: <a href="https://wise.com/pay/me/rolandod148" target="_blank" rel="noopener noreferrer" className="text-emerald-600 hover:text-emerald-700 underline font-black">wise.com/pay/me/rolandod148</a></>
+                                      )}
+                                    </li>
+                                    <li>
+                                      {lang === 'en' 
+                                        ? 'Confirm the transfer.' 
+                                        : 'Confirma la transferencia.'}
+                                    </li>
+                                  </ol>
+                                </div>
+
+                                <div className="bg-emerald-50/30 rounded-lg p-3 border border-emerald-100/50 space-y-1.5">
+                                  <p className="font-extrabold text-emerald-950 flex items-center gap-1">
+                                    <span>✨</span>
+                                    <span>{lang === 'en' ? 'Why Wise?' : '¿Por qué Wise?'}</span>
+                                  </p>
+                                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-emerald-900/90">
+                                    <li>
+                                      <strong>{lang === 'en' ? 'Very low and transparent fees:' : 'Comisiones muy bajas y transparentes:'}</strong> {lang === 'en' ? 'No hidden markups.' : 'Sin comisiones ocultas.'}
+                                    </li>
+                                    <li>
+                                      <strong>{lang === 'en' ? 'Real exchange rate:' : 'Tipo de cambio real:'}</strong> {lang === 'en' ? 'Mid-market rate.' : 'El tipo de cambio real del mercado.'}
+                                    </li>
+                                    <li>
+                                      <strong>{lang === 'en' ? 'Fast transfers:' : 'Transferencias rápidas:'}</strong> {lang === 'en' ? 'Often completed on the same day.' : 'A menudo completadas el mismo día.'}
+                                    </li>
+                                    <li>
+                                      <strong>{lang === 'en' ? 'Convenient funding:' : 'Fácil de fondear:'}</strong> {lang === 'en' ? 'You can pay using a card or bank account.' : 'Puedes pagar usando una tarjeta o cuenta bancaria.'}
+                                    </li>
+                                  </ul>
+                                </div>
+
+                                <p className="text-[10px] text-zinc-500 italic mt-2 text-center">
+                                  {lang === 'en'
+                                    ? 'If you have any questions during the process, feel free to let me know — I will be happy to assist.'
+                                    : 'Si tienes alguna duda durante el proceso, no dudes en contactarme; con gusto te ayudaré.'}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <span className="text-[10px] font-extrabold uppercase text-[#0070BA] tracking-wider block">
+                            {lang === 'en' ? 'Option 2: PayPal Payment (+5% Fee)' : 'Opción 2: Pago vía PayPal (+5% Comisión)'}
+                          </span>
+
+                          {/* Breakdown de Comisión de PayPal */}
+                          <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-3.5 space-y-2 text-left shadow-2xs">
+                            <div className="flex justify-between items-center text-xs text-zinc-600">
+                              <span>{lang === 'en' ? 'Reservation payment:' : 'Abono a reservación:'}</span>
+                              <span className="font-bold text-zinc-900">${targetAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                            <div className="flex justify-between items-center text-xs text-amber-800">
+                              <span className="flex items-center gap-1">
+                                <span>{lang === 'en' ? 'Processing fee (5%):' : 'Cargo por procesamiento (5%):'}</span>
+                              </span>
+                              <span className="font-bold">+${paypalFee.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                            <div className="border-t border-blue-200/70 pt-2 flex justify-between items-center text-sm font-black text-zinc-900">
+                              <span>{lang === 'en' ? 'Total to pay in PayPal:' : 'Total a pagar en PayPal:'}</span>
+                              <span className="text-[#0070BA] font-extrabold text-base">${paypalTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                            </div>
+                          </div>
+
+                          {/* Botón de Pago PayPal */}
+                          <a
+                            href="https://www.paypal.me/livehuatulco"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full bg-[#0070BA] hover:bg-[#005ea6] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <CreditCard size={18} />
+                            {lang === 'en' 
+                              ? `Pay via PayPal ($${paypalTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD) ↗` 
+                              : `Pagar vía PayPal ($${paypalTotal.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD) ↗`}
+                          </a>
+
+                          {/* Botón de Subir Comprobante PayPal */}
+                          <a
+                            href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&fee=${paypalFee}&name=${encodeURIComponent(booking.guest_name || '')}&lang=${lang}&method=paypal`}
+                            className="w-full mt-2 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                          >
+                            <Upload size={14} className="text-zinc-200" />
+                            {lang === 'en' ? 'Upload PayPal Receipt' : 'Subir Comprobante de PayPal'}
+                          </a>
+
+                          <p className="text-[10px] text-zinc-500 italic text-center mt-1">
+                            {lang === 'en'
+                              ? 'Please complete your payment on PayPal using the blue button above, then upload your transaction screenshot or receipt.'
+                              : 'Por favor realiza tu pago en PayPal usando el botón azul de arriba, y luego sube tu comprobante o captura de pantalla.'}
                           </p>
-                          <ul className="list-disc pl-4 space-y-1 text-[11px] text-emerald-900/90">
-                            <li>
-                              <strong>{lang === 'en' ? 'Very low and transparent fees:' : 'Comisiones muy bajas y transparentes:'}</strong> {lang === 'en' ? 'No hidden markups.' : 'Sin comisiones ocultas.'}
-                            </li>
-                            <li>
-                              <strong>{lang === 'en' ? 'Real exchange rate:' : 'Tipo de cambio real:'}</strong> {lang === 'en' ? 'Mid-market rate.' : 'El tipo de cambio real del mercado.'}
-                            </li>
-                            <li>
-                              <strong>{lang === 'en' ? 'Fast transfers:' : 'Transferencias rápidas:'}</strong> {lang === 'en' ? 'Often completed on the same day.' : 'A menudo completadas el mismo día.'}
-                            </li>
-                            <li>
-                              <strong>{lang === 'en' ? 'Convenient funding:' : 'Fácil de fondear:'}</strong> {lang === 'en' ? 'You can pay using a card or bank account.' : 'Puedes pagar usando una tarjeta o cuenta bancaria.'}
-                            </li>
-                          </ul>
-                        </div>
 
-                        <p className="text-[10px] text-zinc-500 italic mt-2 text-center">
-                          {lang === 'en'
-                            ? 'If you have any questions during the process, feel free to let me know — I will be happy to assist.'
-                            : 'Si tienes alguna duda durante el proceso, no dudes en contactarme; con gusto te ayudaré.'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                          {/* Mandatory Notice Banner */}
+                          <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3.5 text-left text-xs text-amber-950 space-y-2 shadow-2xs mt-3">
+                            <div className="flex items-start gap-2.5">
+                              <Info size={17} className="text-amber-600 shrink-0 mt-0.5" />
+                              <div className="space-y-1.5 leading-relaxed text-[11.5px]">
+                                {lang === 'en' ? (
+                                  <>
+                                    <p className="font-semibold text-amber-950">
+                                      Please note that payments made via PayPal or in cash in U.S. dollars (USD) are subject to an additional 5% processing fee.
+                                    </p>
+                                    <p className="text-amber-900">
+                                      This fee does not apply to payments made through WISE.
+                                    </p>
+                                    <p className="text-amber-800 font-medium">
+                                      Thank you for your understanding.
+                                    </p>
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="font-semibold text-amber-950">
+                                      Ten en cuenta que los pagos realizados a través de PayPal o en efectivo en dólares estadounidenses (USD) están sujetos a un cargo adicional del 5% por procesamiento.
+                                    </p>
+                                    <p className="text-amber-900">
+                                      Este cargo no aplica a los pagos realizados a través de WISE.
+                                    </p>
+                                    <p className="text-amber-800 font-medium">
+                                      Gracias por tu comprensión.
+                                    </p>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
               ) : (
                 <>
                   {/* Método 1: Tarjeta */}

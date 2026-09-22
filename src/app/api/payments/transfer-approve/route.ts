@@ -267,6 +267,10 @@ export async function POST(req: Request) {
             desc = `${guestName} (ID: ${bookingId}) - Abono vía PayPal (Ref: ${receiptId.substring(0, 8)})`;
           }
 
+          const isPayPalDetected = isPaypal || accountName.toUpperCase().includes('PAYPAL');
+          const paypalFee = isPayPalDetected ? Math.round(Number(amount) * 0.05 * 100) / 100 : 0;
+
+          // 1. Registrar el abono neto a la reserva en Finanzas
           const { error: finErr } = await supabase.from('finances').insert({
             type: 'ingreso',
             amount: Number(amount),
@@ -278,8 +282,24 @@ export async function POST(req: Request) {
           });
           if (finErr) console.error("[Approve Transfer] Error inserting finance log:", finErr);
 
+          // 2. Si es PayPal, registrar por separado el cargo de procesamiento del 5% en la misma cuenta de PayPal
+          if (isPayPalDetected && paypalFee > 0) {
+            const feeDesc = `${guestName} (ID: ${bookingId}) - Cargo por procesamiento PayPal 5% (Ref: ${receiptId.substring(0, 8)})`;
+            const { error: feeFinErr } = await supabase.from('finances').insert({
+              type: 'ingreso',
+              amount: paypalFee,
+              category: 'Comisión de Procesamiento',
+              description: feeDesc,
+              payment_method: 'tarjeta',
+              account_id: accountId,
+              date: todayStr
+            });
+            if (feeFinErr) console.error("[Approve Transfer] Error inserting PayPal fee finance log:", feeFinErr);
+          }
+
           if (matchedAcc) {
-            const newBalance = Number(matchedAcc.balance || 0) + Number(amount);
+            const totalToAccount = Number(amount) + paypalFee;
+            const newBalance = Number(matchedAcc.balance || 0) + totalToAccount;
             const { error: accErr } = await supabase.from('accounts').update({ balance: newBalance }).eq('id', accountId);
             if (accErr) console.error("[Approve Transfer] Error updating account balance:", accErr);
           }

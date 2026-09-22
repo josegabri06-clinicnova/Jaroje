@@ -162,7 +162,8 @@ export async function POST(req: Request) {
         ? 'pago con tarjeta / Mercado Pago' 
         : (isWise ? 'pago vía Wise' : (isPayPal ? 'pago vía PayPal' : 'transferencia'));
 
-      const guestNotificationBody = `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN para la reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado. ¡Muchas gracias!`;
+      const currLabel = (isWise || isPayPal) ? 'USD' : 'MXN';
+      const guestNotificationBody = `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para la reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado. ¡Muchas gracias!`;
       console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone}`);
       await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
     }

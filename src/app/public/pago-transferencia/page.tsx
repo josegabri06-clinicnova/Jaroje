@@ -103,6 +103,9 @@ export default function PagoTransferenciaPage() {
   const method = searchParams.get('method') || '';
   const t = TRANSLATIONS[lang] || TRANSLATIONS.es;
 
+  const isPaypalMethod = method === 'paypal' || searchParams.get('method') === 'paypal';
+  const isWiseMethod = method === 'wise' || searchParams.get('method') === 'wise';
+
   const [amount, setAmount] = useState<number>(0);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -111,9 +114,13 @@ export default function PagoTransferenciaPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
-  const [transferAccount, setTransferAccount] = useState<string>(method === 'wise' ? 'wise' : 'santander');
+  const [transferAccount, setTransferAccount] = useState<string>(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : 'santander'));
   const [loadingAccount, setLoadingAccount] = useState<boolean>(true);
-  const curr = transferAccount === 'wise' ? 'USD' : 'MXN';
+  const curr = (transferAccount === 'wise' || transferAccount === 'paypal' || isWiseMethod || isPaypalMethod) ? 'USD' : 'MXN';
+
+  const isPaypalActive = transferAccount === 'paypal' || isPaypalMethod;
+  const paypalFee = isPaypalActive ? Math.round(amount * 0.05 * 100) / 100 : 0;
+  const totalWithFee = isPaypalActive ? Math.round((amount + paypalFee) * 100) / 100 : amount;
 
   useEffect(() => {
     if (rawAmount) {
@@ -137,7 +144,7 @@ export default function PagoTransferenciaPage() {
           .eq('booking_id', String(bookingId))
           .maybeSingle();
         if (!error && data) {
-          setTransferAccount(method === 'wise' ? 'wise' : (data.transfer_account || 'santander'));
+          setTransferAccount(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : (data.transfer_account || 'santander')));
         }
       } catch (err) {
         console.error("Error loading transfer settings:", err);
@@ -145,7 +152,7 @@ export default function PagoTransferenciaPage() {
         setLoadingAccount(false);
       }
     })();
-  }, [bookingId, method]);
+  }, [bookingId, method, isWiseMethod, isPaypalMethod]);
 
   const copyToClipboard = (text: string, field: string) => {
     navigator.clipboard.writeText(text);
@@ -232,8 +239,8 @@ export default function PagoTransferenciaPage() {
       url: 'https://www.paypal.me/livehuatulco',
       isLink: true,
       description: lang === 'en'
-        ? 'Please make your payment in US Dollars (USD) via the PayPal secure platform.'
-        : 'Por favor, realiza tu pago en dólares americanos (USD) a través de la plataforma segura de PayPal.'
+        ? 'Please make your payment in US Dollars (USD) via the PayPal secure platform (+5% processing fee).'
+        : 'Por favor, realiza tu pago en dólares americanos (USD) a través de PayPal (+5% cargo por procesamiento).'
     }
   };
 
@@ -258,10 +265,10 @@ export default function PagoTransferenciaPage() {
           'notes',
           method === 'mercadopago'
             ? '[Plataforma: Mercado Pago]'
-            : (method === 'wise'
+            : (isWiseMethod
               ? '[Plataforma: Wise]'
-              : (method === 'paypal'
-                ? '[Plataforma: PayPal]'
+              : (isPaypalActive
+                ? `[Plataforma: PayPal] [Abono Reserva: $${amount.toFixed(2)} USD] [Comisión 5%: $${paypalFee.toFixed(2)} USD] [Total Pagado: $${totalWithFee.toFixed(2)} USD]`
                 : `[Banco Destino: ${activeAccount.banco}]`))
         );
         formData.append('file', fileToUpload);
@@ -297,9 +304,11 @@ export default function PagoTransferenciaPage() {
             <h2 className="text-lg font-bold">
               {method === 'mercadopago' 
                 ? (lang === 'en' ? 'Card Receipt' : 'Comprobante de Tarjeta') 
-                : (method === 'wise' 
+                : (isWiseMethod 
                   ? (lang === 'en' ? 'Wise Receipt' : 'Comprobante de Wise') 
-                  : t.pageTitle)}
+                  : (isPaypalActive
+                    ? (lang === 'en' ? 'PayPal Receipt' : 'Comprobante de PayPal')
+                    : t.pageTitle))}
             </h2>
           </div>
           <div className="bg-[#25D366] text-[10px] font-black px-2.5 py-1 rounded-full uppercase text-zinc-950 flex items-center gap-1">
@@ -314,9 +323,11 @@ export default function PagoTransferenciaPage() {
             <span className="text-blue-600">
               {method === 'mercadopago' 
                 ? (lang === 'en' ? '1. Card Payment' : '1. Pago Tarjeta') 
-                : (method === 'wise' 
+                : (isWiseMethod 
                   ? (lang === 'en' ? '1. Wise Payment' : '1. Pago Wise') 
-                  : t.step1)}
+                  : (isPaypalActive
+                    ? (lang === 'en' ? '1. PayPal Payment' : '1. Pago PayPal')
+                    : t.step1))}
             </span>
             <ArrowRight size={12} className="text-zinc-300" />
             <span className={success ? "text-blue-600" : ""}>{t.step2}</span>
@@ -330,7 +341,7 @@ export default function PagoTransferenciaPage() {
               <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-5 flex items-center justify-between gap-4">
                 <div className="flex-1 text-left">
                   <label htmlFor="amount-input" className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block mb-1">
-                    {lang === 'en' ? `Declared Amount (${curr})` : `Monto Declarado a Pagar (${curr})`}
+                    {lang === 'en' ? `Booking Declared Amount (${curr})` : `Monto Declarado a la Reserva (${curr})`}
                   </label>
                   <div className="relative flex items-center">
                     <span className="text-base font-black text-zinc-550 absolute left-2 select-none">$</span>
@@ -410,6 +421,24 @@ export default function PagoTransferenciaPage() {
                       </div>
                     </div>
 
+                    {/* Breakdown de Comisión de PayPal en caso de ser PayPal */}
+                    {isPaypalActive && (
+                      <div className="bg-blue-50/70 border border-blue-100 rounded-xl p-3 space-y-1.5 text-left text-xs">
+                        <div className="flex justify-between text-zinc-600">
+                          <span>{lang === 'en' ? 'Reservation payment:' : 'Abono a reservación:'}</span>
+                          <span className="font-semibold">${amount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                        <div className="flex justify-between text-amber-700">
+                          <span>{lang === 'en' ? 'Processing fee (5%):' : 'Cargo por procesamiento (5%):'}</span>
+                          <span className="font-semibold">+${paypalFee.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                        <div className="border-t border-blue-200/60 pt-1.5 flex justify-between font-black text-zinc-900 text-sm">
+                          <span>{lang === 'en' ? 'Total to transfer via PayPal:' : 'Total a pagar en PayPal:'}</span>
+                          <span className="text-[#0070BA] font-extrabold text-base">${totalWithFee.toLocaleString('es-MX', { minimumFractionDigits: 2 })} USD</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Enlace de Pago Seguro (Wise/PayPal) */}
                     {activeAccount.isLink && (
                       <div className="flex flex-col gap-2 border-b border-zinc-100 pb-3">
@@ -419,10 +448,52 @@ export default function PagoTransferenciaPage() {
                           href={activeAccount.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="w-full bg-[#00A650] hover:bg-[#008f43] text-white font-bold text-xs py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1 animate-pulse"
+                          className={`w-full text-white font-bold text-xs py-2.5 rounded-xl shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1 ${
+                            isPaypalActive ? 'bg-[#0070BA] hover:bg-[#005ea6]' : 'bg-[#00A650] hover:bg-[#008f43]'
+                          }`}
                         >
-                          <span>{lang === 'en' ? `Pay with ${activeAccount.banco} ↗` : `Pagar en ${activeAccount.banco} ↗`}</span>
+                          <span>
+                            {lang === 'en' 
+                              ? `Pay with ${activeAccount.banco} ${isPaypalActive ? `($${totalWithFee.toFixed(2)} USD)` : ''} ↗` 
+                              : `Pagar en ${activeAccount.banco} ${isPaypalActive ? `($${totalWithFee.toFixed(2)} USD)` : ''} ↗`}
+                          </span>
                         </a>
+                      </div>
+                    )}
+
+                    {/* Mandatory Notice Banner for PayPal */}
+                    {isPaypalActive && (
+                      <div className="bg-amber-50/90 border border-amber-200 rounded-xl p-3 text-left text-[11px] text-amber-950 space-y-1.5">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                          <div className="space-y-1 leading-snug">
+                            {lang === 'en' ? (
+                              <>
+                                <p className="font-semibold text-amber-950">
+                                  Please note that payments made via PayPal or in cash in U.S. dollars (USD) are subject to an additional 5% processing fee.
+                                </p>
+                                <p className="text-amber-900">
+                                  This fee does not apply to payments made through WISE.
+                                </p>
+                                <p className="text-amber-800 font-medium">
+                                  Thank you for your understanding.
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="font-semibold text-amber-950">
+                                  Ten en cuenta que los pagos realizados a través de PayPal o en efectivo en dólares estadounidenses (USD) están sujetos a un cargo adicional del 5% por procesamiento.
+                                </p>
+                                <p className="text-amber-900">
+                                  Este cargo no aplica a los pagos realizados a través de WISE.
+                                </p>
+                                <p className="text-amber-800 font-medium">
+                                  Gracias por tu comprensión.
+                                </p>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )}
 
