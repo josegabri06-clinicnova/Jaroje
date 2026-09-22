@@ -107,6 +107,7 @@ const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
 };
 
 const COLS = 10; // days to show
+const ENVELOPES = Array.from({ length: 99 }, (_, i) => `S${String(i + 1).padStart(2, '0')}`);
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 function roomGroupOf(room: string) {
@@ -286,6 +287,7 @@ export default function CalendarPage() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
+  const [selectedEnvelope, setSelectedEnvelope] = useState<string>('');
   const [isSplitPayment, setIsSplitPayment] = useState(false);
   const [paymentMode2, setPaymentMode2] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount2, setPaymentAmount2] = useState('');
@@ -676,8 +678,8 @@ export default function CalendarPage() {
       setSelectedAccountId('');
       return;
     }
+    const isUSD = (selectedReserva?.guest_name || '').toUpperCase().includes('(US DOLLARS)');
     const compatible = accounts.filter(acc => {
-      const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
       if (isUSD) {
         const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
         if (!isUSDAcc) return false;
@@ -703,9 +705,19 @@ export default function CalendarPage() {
     });
 
     if (compatible.length > 0) {
-      setSelectedAccountId(compatible[0].id);
+      if (isUSD && paymentMode === 'efectivo') {
+        const efeUsd = compatible.find(a => a.name.trim().toUpperCase() === 'EFE USD') || compatible[0];
+        setSelectedAccountId(efeUsd.id);
+      } else {
+        setSelectedAccountId(compatible[0].id);
+      }
     } else {
-      setSelectedAccountId('');
+      if (isUSD && paymentMode === 'efectivo') {
+        const fallbackEfe = accounts.find(a => a.name.trim().toUpperCase() === 'EFE USD' || a.name.trim().toUpperCase() === 'EFECTIVO');
+        setSelectedAccountId(fallbackEfe?.id || '');
+      } else {
+        setSelectedAccountId('');
+      }
     }
   }, [paymentMode, accounts, selectedReserva]);
 
@@ -714,8 +726,8 @@ export default function CalendarPage() {
       setSelectedAccountId2('');
       return;
     }
+    const isUSD = (selectedReserva?.guest_name || '').toUpperCase().includes('(US DOLLARS)');
     const compatible = accounts.filter(acc => {
-      const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
       if (isUSD) {
         const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
         if (!isUSDAcc) return false;
@@ -749,6 +761,11 @@ export default function CalendarPage() {
 
   useEffect(() => {
     if (showCheckInModal && selectedReserva && selectedReserva.id !== 'walkin') {
+      const isUSD = (selectedReserva.guest_name || '').toUpperCase().includes('(US DOLLARS)');
+      if (isUSD) {
+        setPaymentMode('efectivo');
+        setIsSplitPayment(false);
+      }
       const balanceVal = selectedReserva.balance !== undefined
         ? selectedReserva.balance
         : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0);
@@ -1261,16 +1278,29 @@ export default function CalendarPage() {
       const cleanAmountNum = Number(amount) || 0;
       if (cleanAmountNum <= 0) return null;
 
+      const isUSD = (selectedReserva?.guest_name || '').toUpperCase().includes('(US DOLLARS)') || (typeof baseDesc === 'string' && baseDesc.toUpperCase().includes('(US DOLLARS)'));
+      const usdProcessFee = (isUSD && mode === 'efectivo') ? Math.round(cleanAmountNum * 0.05 * 100) / 100 : 0;
+      const totalReceived = cleanAmountNum + usdProcessFee;
+
+      let targetAccountId = accountId;
+      if (isUSD && mode === 'efectivo') {
+        const efeUsd = accounts.find(a => a.name.trim().toUpperCase() === 'EFE USD') || accounts.find(a => a.currency?.toUpperCase() === 'USD' && (a.name.includes('EFE') || a.name.includes('CASH')));
+        if (efeUsd) targetAccountId = efeUsd.id;
+      }
+
       const safeDateStr = todayStr || new Date().toLocaleDateString('sv-SE');
-      const matchedAccName = accounts.find(a => a.id === accountId)?.name || 'Desconocido';
+      const matchedAccName = accounts.find(a => a.id === targetAccountId)?.name || 'Desconocido';
+      const effectivePaymentDesc = (mode === 'efectivo' && selectedEnvelope)
+        ? [selectedEnvelope, paymentDesc].filter(Boolean).join(' - ')
+        : paymentDesc;
       
       const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
         type: 'ingreso',
         amount: cleanAmountNum,
         category: 'Check In',
-        description: paymentDesc ? `${paymentDesc} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+        description: effectivePaymentDesc ? `${effectivePaymentDesc} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
         payment_method: mode,
-        account_id: accountId || null,
+        account_id: targetAccountId || null,
         date: safeDateStr
       }).select();
 
@@ -1282,10 +1312,27 @@ export default function CalendarPage() {
 
       const insertedRecordId = insertedRows?.[0]?.id;
 
-      if (accountId) {
-        const matchedAcc = accounts.find(a => a.id === accountId);
+      if (usdProcessFee > 0) {
+        const feeDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${resId}) - Hab ${roomName} - Process Fee 5% Efectivo USD (Sobre: ${selectedEnvelope || 'Efectivo USD'}) (Operado por: ${operatorName})`;
+        const { error: feeErr } = await supabase.from('finances').insert({
+          type: 'ingreso',
+          amount: usdProcessFee,
+          category: 'Comisión de Procesamiento',
+          description: feeDesc,
+          payment_method: 'efectivo',
+          account_id: targetAccountId || null,
+          date: safeDateStr
+        });
+        if (feeErr) {
+          console.error("Error al registrar Process Fee USD en Finanzas (calendario):", feeErr);
+        }
+      }
+
+      if (targetAccountId) {
+        const matchedAcc = accounts.find(a => a.id === targetAccountId);
         if (matchedAcc) {
-          await supabase.from('accounts').update({ balance: matchedAcc.balance + cleanAmountNum }).eq('id', accountId);
+          const newBalance = matchedAcc.balance + totalReceived;
+          await supabase.from('accounts').update({ balance: newBalance }).eq('id', targetAccountId);
         }
       }
 
@@ -1316,11 +1363,15 @@ export default function CalendarPage() {
 
       if (syncedSuccess && insertedRecordId) {
         await supabase.from('finances').update({
-          description: paymentDesc ? `${paymentDesc} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+          description: effectivePaymentDesc ? `${effectivePaymentDesc} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
         }).eq('id', insertedRecordId);
       }
 
       if (emp) {
+        const logDetails = usdProcessFee > 0
+          ? `${selectedReserva.guest_name || 'Huésped'} (ID: ${resId}) de la Habitación ${roomName} - Recibió cobro Check-in USD en efectivo: $${cleanAmountNum} USD + $${usdProcessFee} USD (Process Fee 5%) = Total $${totalReceived} USD (Depositado en sobre: ${selectedEnvelope || matchedAccName}).`
+          : `${selectedReserva.guest_name || 'Huésped'} (ID: ${resId}) de la Habitación ${roomName} - Recibió pago de $${cleanAmountNum} vía ${mode} (Depositado en sobre: ${matchedAccName}).`;
+
         await fetch('/api/employee-logs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1331,7 +1382,7 @@ export default function CalendarPage() {
             module: 'recepcion',
             action: 'payment_received',
             room: roomName,
-            details: `${selectedReserva.guest_name || 'Huésped'} (ID: ${resId}) de la Habitación ${roomName} - Recibió pago de $${cleanAmountNum} vía ${mode} (Depositado en sobre: ${matchedAccName}).`
+            details: logDetails
           })
         });
       }
@@ -1773,13 +1824,28 @@ export default function CalendarPage() {
       } else {
         // ── Reserva DIRECTA (sin OTA) ─────────────────────────────────────
         const safeDateStr = todayStr || new Date().toLocaleDateString('sv-SE');
+        const cleanAmountNum = Number(amountNum) || 0;
+        const isUSD = (selectedReserva?.guest_name || '').toUpperCase().includes('(US DOLLARS)');
+        const usdProcessFee = (isUSD && paymentMode === 'efectivo') ? Math.round(cleanAmountNum * 0.05 * 100) / 100 : 0;
+        const totalReceived = cleanAmountNum + usdProcessFee;
+
+        let targetAccountId = selectedAccountId;
+        if (isUSD && paymentMode === 'efectivo') {
+          const efeUsd = accounts.find(a => a.name.trim().toUpperCase() === 'EFE USD') || accounts.find(a => a.currency?.toUpperCase() === 'USD' && (a.name.includes('EFE') || a.name.includes('CASH')));
+          if (efeUsd) targetAccountId = efeUsd.id;
+        }
+
+        const effectivePaymentDesc = (paymentMode === 'efectivo' && selectedEnvelope)
+          ? [selectedEnvelope, paymentDescription].filter(Boolean).join(' - ')
+          : paymentDescription;
+
         const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
           type: 'ingreso',
-          amount: amountNum,
+          amount: isNaN(cleanAmountNum) ? 0 : cleanAmountNum,
           category: 'Check In',
-          description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+          description: effectivePaymentDesc ? `${effectivePaymentDesc} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
           payment_method: paymentMode,
-          account_id: selectedAccountId || null,
+          account_id: targetAccountId || null,
           date: safeDateStr
         }).select();
 
@@ -1789,11 +1855,28 @@ export default function CalendarPage() {
         } else {
           const insertedRecordId = insertedRows?.[0]?.id;
 
-          if (selectedAccountId) {
-            const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+          if (usdProcessFee > 0) {
+            const feeDesc = `${selectedReserva.guest_name || 'Huésped'} (ID: ${selectedReserva.id}) - Hab ${selectedReserva.room} - Process Fee 5% Efectivo USD (Sobre: ${selectedEnvelope || 'Efectivo USD'}) (Operado por: ${operatorName})`;
+            const { error: feeErr } = await supabase.from('finances').insert({
+              type: 'ingreso',
+              amount: usdProcessFee,
+              category: 'Comisión de Procesamiento',
+              description: feeDesc,
+              payment_method: 'efectivo',
+              account_id: targetAccountId || null,
+              date: safeDateStr
+            });
+            if (feeErr) {
+              console.error("Error al registrar Process Fee USD en Finanzas (calendario):", feeErr);
+            }
+          }
+
+          if (targetAccountId) {
+            const matchedAcc = accounts.find(a => a.id === targetAccountId);
             if (matchedAcc) {
-              const newBalance = matchedAcc.balance + amountNum;
-              await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+              const newBalance = matchedAcc.balance + totalReceived;
+              await supabase.from('accounts').update({ balance: newBalance }).eq('id', targetAccountId);
+              setAccounts(prev => prev.map(a => a.id === targetAccountId ? { ...a, balance: newBalance } : a));
             }
           }
 
@@ -1824,13 +1907,17 @@ export default function CalendarPage() {
 
           if (syncedSuccess && insertedRecordId) {
             await supabase.from('finances').update({
-              description: paymentDescription ? `${paymentDescription} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+              description: effectivePaymentDesc ? `${effectivePaymentDesc} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
             }).eq('id', insertedRecordId);
           }
         }
 
         if (emp) {
-          const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+          const matchedAccName = accounts.find(a => a.id === targetAccountId)?.name || 'Desconocido';
+          const logDetails = usdProcessFee > 0
+            ? `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió cobro Check-in USD en efectivo: $${cleanAmountNum} USD + $${usdProcessFee} USD (Process Fee 5%) = Total $${totalReceived} USD (Depositado en sobre: ${selectedEnvelope || matchedAccName}).`
+            : `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago de $${paymentAmount} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`;
+
           await fetch('/api/employee-logs', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1841,7 +1928,7 @@ export default function CalendarPage() {
               module: 'recepcion',
               action: 'payment_received',
               room: selectedReserva.room,
-              details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (ID: ${selectedReserva.id}) de la Habitación ${selectedReserva.room} - Recibió pago de $${paymentAmount} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`
+              details: logDetails
             })
           });
         }
@@ -2254,6 +2341,7 @@ export default function CalendarPage() {
               setPaymentMode(null);
               setPaymentAmount('');
               setSelectedAccountId('');
+              setSelectedEnvelope('');
               setShowPaymentFlow(false);
               setShowAbonoFlow(false);
               setAbonoAmount('');
@@ -2294,6 +2382,7 @@ export default function CalendarPage() {
                     setPaymentMode(null);
                     setPaymentAmount('');
                     setSelectedAccountId('');
+                    setSelectedEnvelope('');
                     setShowPaymentFlow(false);
                     setShowAbonoFlow(false);
                     setAbonoAmount('');
@@ -3147,309 +3236,429 @@ export default function CalendarPage() {
                               ? selectedReserva.balance
                               : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
                             const totalDebt = pendingBalance;
+                            const isUSD = (selectedReserva?.guest_name || '').toUpperCase().includes('(US DOLLARS)');
 
                             return (
                               <div className="space-y-3 pt-1">
                                 <p className="text-[12px] font-bold text-zinc-500 uppercase tracking-widest mb-1 pt-3 border-t border-zinc-100 text-left">Registrar Pago</p>
                                 
-                                {!isOta && (
-                                  <div className="flex items-center gap-2 mb-3 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/60 text-left">
-                                    <input
-                                      type="checkbox"
-                                      id="isSplitPayment"
-                                      checked={isSplitPayment}
-                                      onChange={e => {
-                                        const checked = e.target.checked;
-                                        setIsSplitPayment(checked);
-                                        if (checked) {
-                                          setPaymentAmount(String(Math.ceil(totalDebt / 2)));
-                                          setPaymentAmount2(String(Math.floor(totalDebt / 2)));
-                                          setPaymentMode('efectivo');
-                                          setPaymentMode2('tarjeta');
-                                        } else {
-                                          setPaymentAmount(totalDebt > 0 ? String(totalDebt) : '');
-                                          setPaymentAmount2('');
-                                          setPaymentMode(null);
-                                          setPaymentMode2(null);
-                                          setSelectedAccountId2('');
-                                        }
-                                      }}
-                                      className="w-4 h-4 text-zinc-950 border-zinc-300 rounded focus:ring-zinc-955 cursor-pointer"
-                                    />
-                                    <label htmlFor="isSplitPayment" className="text-[11px] font-extrabold text-zinc-700 cursor-pointer select-none uppercase tracking-wider">
-                                      Dividir pago (Pago Mixto)
-                                    </label>
-                                  </div>
-                                )}
-
-                                {isSplitPayment ? (
-                                  <div className="space-y-4">
-                                    {/* Pago #1 */}
-                                    <div className="p-3.5 bg-zinc-50/50 border border-zinc-200/80 rounded-2xl space-y-3">
-                                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block text-left">
-                                        Pago #1
-                                      </span>
-                                      <div className="flex gap-1.5">
-                                        {[
-                                          { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                                          { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                                          { id: 'transferencia', label: 'Transf.', icon: Send }
-                                        ].map(m => (
-                                          <button
-                                            key={m.id}
-                                            type="button"
-                                            onClick={() => setPaymentMode(m.id as any)}
-                                            className={`flex-1 py-2 border rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                                              paymentMode === m.id
-                                                ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                                                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
-                                            }`}
-                                          >
-                                            <m.icon size={13} />
-                                            <span className="text-[10px] font-bold">{m.label}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-
-                                      <div className="relative text-left">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                                        <input
-                                          type="number"
-                                          value={paymentAmount}
-                                          onChange={e => {
-                                            const val = e.target.value;
-                                            setPaymentAmount(val);
-                                            const valNum = Number(val) || 0;
-                                            setPaymentAmount2(Math.max(0, totalDebt - valNum).toString());
-                                          }}
-                                          placeholder="Monto 1"
-                                          className="w-full bg-white border border-zinc-200/80 rounded-xl p-2.5 pl-7 text-[14px] font-semibold transition-all outline-none focus:border-zinc-400 text-zinc-900"
-                                        />
-                                      </div>
-
-                                      {paymentMode && (
-                                        <div className="space-y-1 text-left">
-                                          <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
-                                            Sobre Pago #1
-                                          </label>
-                                          <select
-                                            value={selectedAccountId}
-                                            onChange={e => setSelectedAccountId(e.target.value)}
-                                            required
-                                            className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
-                                          >
-                                            <option value="" disabled>Seleccionar...</option>
-                                            {accounts
-                                              .filter(acc => {
-                                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                                if (isUSD) {
-                                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                                  if (!isUSDAcc) return false;
-                                                  const name = acc.name.trim().toUpperCase();
-                                                  if (paymentMode === 'efectivo') {
-                                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                                  }
-                                                  return !name.includes('EFE') && !name.includes('CASH');
-                                                } else {
-                                                  const name = acc.name.trim().toUpperCase();
-                                                  if (paymentMode === 'efectivo') return name === 'EFECTIVO';
-                                                  if (paymentMode === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                                  if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                                  return false;
-                                                }
-                                              })
-                                              .map(acc => (
-                                                <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                              ))}
-                                          </select>
+                                {isUSD ? (
+                                  <div className="space-y-3">
+                                    {/* Banner Informativo Exclusivo USD */}
+                                    <div className="p-3 bg-emerald-50/90 border border-emerald-200/90 rounded-xl flex items-center justify-between">
+                                      <div className="flex items-center gap-2.5">
+                                        <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold shadow-sm">
+                                          <Wallet size={16} />
                                         </div>
-                                      )}
-                                    </div>
-
-                                    {/* Pago #2 */}
-                                    <div className="p-3.5 bg-zinc-50/50 border border-zinc-200/80 rounded-2xl space-y-3">
-                                      <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block text-left">
-                                        Pago #2
-                                      </span>
-                                      <div className="flex gap-1.5">
-                                        {[
-                                          { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                                          { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                                          { id: 'transferencia', label: 'Transf.', icon: Send }
-                                        ].map(m => (
-                                          <button
-                                            key={m.id}
-                                            type="button"
-                                            onClick={() => setPaymentMode2(m.id as any)}
-                                            className={`flex-1 py-2 border rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                                              paymentMode2 === m.id
-                                                ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                                                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
-                                            }`}
-                                          >
-                                            <m.icon size={13} />
-                                            <span className="text-[10px] font-bold">{m.label}</span>
-                                          </button>
-                                        ))}
-                                      </div>
-
-                                      <div className="relative text-left">
-                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
-                                        <input
-                                          type="number"
-                                          value={paymentAmount2}
-                                          onChange={e => {
-                                            const val = e.target.value;
-                                            setPaymentAmount2(val);
-                                            const valNum = Number(val) || 0;
-                                            setPaymentAmount(Math.max(0, totalDebt - valNum).toString());
-                                          }}
-                                          placeholder="Monto 2"
-                                          className="w-full bg-white border border-zinc-200/80 rounded-xl p-2.5 pl-7 text-[14px] font-semibold transition-all outline-none focus:border-zinc-400 text-zinc-900"
-                                        />
-                                      </div>
-
-                                      {paymentMode2 && (
-                                        <div className="space-y-1 text-left">
-                                          <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
-                                            Sobre Pago #2
-                                          </label>
-                                          <select
-                                            value={selectedAccountId2}
-                                            onChange={e => setSelectedAccountId2(e.target.value)}
-                                            required
-                                            className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
-                                          >
-                                            <option value="" disabled>Seleccionar...</option>
-                                            {accounts
-                                              .filter(acc => {
-                                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                                if (isUSD) {
-                                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                                  if (!isUSDAcc) return false;
-                                                  const name = acc.name.trim().toUpperCase();
-                                                  if (paymentMode2 === 'efectivo') {
-                                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                                  }
-                                                  return !name.includes('EFE') && !name.includes('CASH');
-                                                } else {
-                                                  const name = acc.name.trim().toUpperCase();
-                                                  if (paymentMode2 === 'efectivo') return name === 'EFECTIVO';
-                                                  if (paymentMode2 === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                                  if (paymentMode2 === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                                  return false;
-                                                }
-                                              })
-                                              .map(acc => (
-                                                <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                              ))}
-                                          </select>
+                                        <div className="text-left">
+                                          <p className="text-[12px] font-bold text-emerald-950 uppercase tracking-wide">Efectivo en Dólares (USD)</p>
+                                          <p className="text-[10px] text-emerald-700 font-medium">Único método de cobro presencial en recepción para reservaciones en USD</p>
                                         </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <div className="flex gap-2">
-                                      {[
-                                        { id: 'efectivo', label: 'Efectivo', icon: Wallet },
-                                        { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
-                                        { id: 'transferencia', label: 'Transf.', icon: Send }
-                                      ].map(m => (
-                                        <button
-                                          key={m.id}
-                                          type="button"
-                                          onClick={() => setPaymentMode(m.id as any)}
-                                          className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
-                                            paymentMode === m.id
-                                              ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
-                                              : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100'
-                                          }`}
-                                        >
-                                          <m.icon size={15} />
-                                          <span className="text-[11px] font-bold">{m.label}</span>
-                                        </button>
-                                      ))}
+                                      </div>
+                                      <span className="px-2 py-0.5 bg-emerald-200/80 text-emerald-900 text-[10px] font-black rounded-full uppercase tracking-wider">
+                                        USD CASH ONLY
+                                      </span>
                                     </div>
 
-                                    {paymentMode && (
-                                      <div className="space-y-2.5 p-3.5 bg-white border border-zinc-200 rounded-2xl animate-in fade-in duration-200">
-                                        <div>
-                                          <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 text-left">
-                                            Monto a Cobrar
-                                          </label>
-                                          <div className="relative">
-                                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                    {/* Desglose de Cobro con 5% Process Fee */}
+                                    {(() => {
+                                      const cleanAmountNum = Number(paymentAmount) || 0;
+                                      const usdProcessFee = Math.round(cleanAmountNum * 0.05 * 100) / 100;
+                                      const totalToCollect = Math.round((cleanAmountNum + usdProcessFee) * 100) / 100;
+
+                                      return (
+                                        <div className="space-y-3 p-3.5 bg-zinc-50 border border-zinc-200/80 rounded-2xl animate-in fade-in duration-200">
+                                          <div className="flex justify-between items-center">
+                                            <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider">
+                                              Monto Base de Estancia a Abonar (USD)
+                                            </span>
+                                          </div>
+                                          
+                                          <div className="relative text-left">
+                                            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-zinc-400">$</span>
                                             <input
                                               type="number"
                                               value={paymentAmount}
-                                              onChange={e => setPaymentAmount(e.target.value)}
+                                              onChange={e => {
+                                                if (selectedReserva.id !== 'walkin') {
+                                                  setPaymentAmount(e.target.value);
+                                                }
+                                              }}
                                               placeholder="0.00"
-                                              className="w-full bg-[#fafafa] border border-zinc-200 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                                              className="w-full bg-[#fafafa] border border-zinc-200/80 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 font-bold text-[16px] shadow-sm rounded-xl p-3.5 pl-8 pr-14 transition-all outline-none"
+                                            />
+                                            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 font-extrabold text-xs text-zinc-400">USD</span>
+                                          </div>
+
+                                          {/* Tarjeta de desglose Process Fee */}
+                                          <div className="bg-amber-50/90 border border-amber-200/90 rounded-xl p-3.5 text-left space-y-2.5">
+                                            <div className="flex items-center gap-1.5 text-amber-800 font-bold text-[11px] uppercase tracking-wider">
+                                              <AlertTriangle size={14} className="text-amber-600 shrink-0" />
+                                              <span>Desglose de Cobro Check-In (Process Fee 5%)</span>
+                                            </div>
+                                            
+                                            <div className="space-y-1.5 text-xs divide-y divide-amber-200/60 font-medium">
+                                              <div className="flex justify-between py-1 text-zinc-600">
+                                                <span>Abono neto a estancia (Beds24):</span>
+                                                <span className="font-bold text-zinc-900">${cleanAmountNum.toFixed(2)} USD</span>
+                                              </div>
+                                              <div className="flex justify-between py-1 text-amber-800">
+                                                <span>Process Fee (+5% Efectivo USD):</span>
+                                                <span className="font-bold text-amber-800">+${usdProcessFee.toFixed(2)} USD</span>
+                                              </div>
+                                              <div className="flex justify-between pt-1.5 font-extrabold text-[13px] text-zinc-950">
+                                                <span>TOTAL EN EFECTIVO A COBRAR:</span>
+                                                <span className="text-emerald-700 text-sm font-black">${totalToCollect.toFixed(2)} USD</span>
+                                              </div>
+                                            </div>
+
+                                            <p className="text-[10px] text-amber-900/80 pt-1 leading-normal border-t border-amber-200/60">
+                                              * Cobrar <strong>${totalToCollect.toFixed(2)} USD</strong> en efectivo. A la reservación se abonará el saldo neto (<strong>${cleanAmountNum.toFixed(2)} USD</strong>) y el 5% de comisión (<strong>${usdProcessFee.toFixed(2)} USD</strong>) se registrará en Finanzas.
+                                            </p>
+                                          </div>
+
+                                          {/* Selector de Sobre */}
+                                          <div className="space-y-1.5 pt-1 text-left">
+                                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block flex items-center gap-1">
+                                              ¿En qué sobre va a colocarse el efectivo?
+                                              <span className="text-red-500 font-bold text-[11px] ml-1">* OBLIGATORIO</span>
+                                            </label>
+                                            <select
+                                              value={selectedEnvelope}
+                                              onChange={e => setSelectedEnvelope(e.target.value)}
+                                              required
+                                              className={`w-full border rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer ${
+                                                !selectedEnvelope
+                                                  ? 'bg-red-50 border-red-400'
+                                                  : 'bg-[#fafafa] border-zinc-200/80'
+                                              }`}
+                                            >
+                                              <option value="" disabled>Selecciona el número de sobre (S01 - S99)...</option>
+                                              {ENVELOPES.map(env => (
+                                                <option key={env} value={env}>{env}</option>
+                                              ))}
+                                            </select>
+                                          </div>
+
+                                          {/* Descripción opcional */}
+                                          <div className="space-y-1.5 pt-1 text-left">
+                                            <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                              Descripción (opcional)
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={paymentDescription}
+                                              onChange={e => setPaymentDescription(e.target.value)}
+                                              placeholder="Ej. S07 -EP, billetes en USD..."
+                                              className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
                                             />
                                           </div>
                                         </div>
+                                      );
+                                    })()}
+                                  </div>
+                                ) : (
+                                  <>
+                                    {!isOta && (
+                                      <div className="flex items-center gap-2 mb-3 bg-zinc-50 p-2.5 rounded-xl border border-zinc-200/60 text-left">
+                                        <input
+                                          type="checkbox"
+                                          id="isSplitPayment"
+                                          checked={isSplitPayment}
+                                          onChange={e => {
+                                            const checked = e.target.checked;
+                                            setIsSplitPayment(checked);
+                                            if (checked) {
+                                              setPaymentAmount(String(Math.ceil(totalDebt / 2)));
+                                              setPaymentAmount2(String(Math.floor(totalDebt / 2)));
+                                              setPaymentMode('efectivo');
+                                              setPaymentMode2('tarjeta');
+                                            } else {
+                                              setPaymentAmount(totalDebt > 0 ? String(totalDebt) : '');
+                                              setPaymentAmount2('');
+                                              setPaymentMode(null);
+                                              setPaymentMode2(null);
+                                              setSelectedAccountId2('');
+                                            }
+                                          }}
+                                          className="w-4 h-4 text-zinc-950 border-zinc-300 rounded focus:ring-zinc-955 cursor-pointer"
+                                        />
+                                        <label htmlFor="isSplitPayment" className="text-[11px] font-extrabold text-zinc-700 cursor-pointer select-none uppercase tracking-wider">
+                                          Dividir pago (Pago Mixto)
+                                        </label>
+                                      </div>
+                                    )}
 
-                                        {/* Selector de cuenta/sobre */}
-                                        <div className="space-y-1.5 pt-1 text-left">
-                                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                                            ¿A qué sobre va el dinero?
-                                          </label>
-                                          <select
-                                            value={selectedAccountId}
-                                            onChange={e => setSelectedAccountId(e.target.value)}
-                                            required
-                                            className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
-                                          >
-                                            <option value="" disabled>Selecciona un sobre...</option>
-                                            {accounts
-                                              .filter(acc => {
-                                                const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
-                                                if (isUSD) {
-                                                  const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
-                                                  if (!isUSDAcc) return false;
+                                    {isSplitPayment ? (
+                                      <div className="space-y-4">
+                                        {/* Pago #1 */}
+                                        <div className="p-3.5 bg-zinc-50/50 border border-zinc-200/80 rounded-2xl space-y-3">
+                                          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block text-left">
+                                            Pago #1
+                                          </span>
+                                          <div className="flex gap-1.5">
+                                            {[
+                                              { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                              { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                              { id: 'transferencia', label: 'Transf.', icon: Send }
+                                            ].map(m => (
+                                              <button
+                                                key={m.id}
+                                                type="button"
+                                                onClick={() => setPaymentMode(m.id as any)}
+                                                className={`flex-1 py-2 border rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                                  paymentMode === m.id
+                                                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                                    : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
+                                                }`}
+                                              >
+                                                <m.icon size={13} />
+                                                <span className="text-[10px] font-bold">{m.label}</span>
+                                              </button>
+                                            ))}
+                                          </div>
 
-                                                  const name = acc.name.trim().toUpperCase();
-                                                  if (paymentMode === 'efectivo') {
-                                                    return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
-                                                  }
-                                                  return !name.includes('EFE') && !name.includes('CASH');
-                                                } else {
-                                                  const name = acc.name.trim().toUpperCase();
-                                                  if (paymentMode === 'efectivo') {
-                                                    return name === 'EFECTIVO';
-                                                  }
-                                                  if (paymentMode === 'tarjeta') {
-                                                    return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
-                                                  }
-                                                  if (paymentMode === 'transferencia') {
-                                                    return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
-                                                  }
-                                                  return false;
-                                                }
-                                              })
-                                              .map(acc => (
-                                                <option key={acc.id} value={acc.id}>
-                                                  {acc.name}
-                                                </option>
-                                              ))}
-                                          </select>
+                                          <div className="relative text-left">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                            <input
+                                              type="number"
+                                              value={paymentAmount}
+                                              onChange={e => {
+                                                const val = e.target.value;
+                                                setPaymentAmount(val);
+                                                const valNum = Number(val) || 0;
+                                                setPaymentAmount2(Math.max(0, totalDebt - valNum).toString());
+                                              }}
+                                              placeholder="Monto 1"
+                                              className="w-full bg-white border border-zinc-200/80 rounded-xl p-2.5 pl-7 text-[14px] font-semibold transition-all outline-none focus:border-zinc-400 text-zinc-900"
+                                            />
+                                          </div>
+
+                                          {paymentMode && (
+                                            <div className="space-y-1 text-left">
+                                              <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
+                                                Sobre Pago #1
+                                              </label>
+                                              <select
+                                                value={selectedAccountId}
+                                                onChange={e => setSelectedAccountId(e.target.value)}
+                                                required
+                                                className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                              >
+                                                <option value="" disabled>Seleccionar...</option>
+                                                {accounts
+                                                  .filter(acc => {
+                                                    const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                                    if (isUSD) {
+                                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                      if (!isUSDAcc) return false;
+                                                      const name = acc.name.trim().toUpperCase();
+                                                      if (paymentMode === 'efectivo') {
+                                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                                      }
+                                                      return !name.includes('EFE') && !name.includes('CASH');
+                                                    } else {
+                                                      const name = acc.name.trim().toUpperCase();
+                                                      if (paymentMode === 'efectivo') return name === 'EFECTIVO';
+                                                      if (paymentMode === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                      if (paymentMode === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                      return false;
+                                                    }
+                                                  })
+                                                  .map(acc => (
+                                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                                  ))}
+                                              </select>
+                                            </div>
+                                          )}
                                         </div>
 
-                                        {/* Descripción opcional */}
-                                        <div className="space-y-1.5 pt-1 text-left">
-                                          <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
-                                            Descripción (opcional)
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={paymentDescription}
-                                            onChange={e => setPaymentDescription(e.target.value)}
-                                            placeholder="Ej. S07 -EP, referencia de transferencia..."
-                                            className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
-                                          />
+                                        {/* Pago #2 */}
+                                        <div className="p-3.5 bg-zinc-50/50 border border-zinc-200/80 rounded-2xl space-y-3">
+                                          <span className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-wider block text-left">
+                                            Pago #2
+                                          </span>
+                                          <div className="flex gap-1.5">
+                                            {[
+                                              { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                              { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                              { id: 'transferencia', label: 'Transf.', icon: Send }
+                                            ].map(m => (
+                                              <button
+                                                key={m.id}
+                                                type="button"
+                                                onClick={() => setPaymentMode2(m.id as any)}
+                                                className={`flex-1 py-2 border rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                                  paymentMode2 === m.id
+                                                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                                    : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50'
+                                                }`}
+                                              >
+                                                <m.icon size={13} />
+                                                <span className="text-[10px] font-bold">{m.label}</span>
+                                              </button>
+                                            ))}
+                                          </div>
+
+                                          <div className="relative text-left">
+                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                            <input
+                                              type="number"
+                                              value={paymentAmount2}
+                                              onChange={e => {
+                                                const val = e.target.value;
+                                                setPaymentAmount2(val);
+                                                const valNum = Number(val) || 0;
+                                                setPaymentAmount(Math.max(0, totalDebt - valNum).toString());
+                                              }}
+                                              placeholder="Monto 2"
+                                              className="w-full bg-white border border-zinc-200/80 rounded-xl p-2.5 pl-7 text-[14px] font-semibold transition-all outline-none focus:border-zinc-400 text-zinc-900"
+                                            />
+                                          </div>
+
+                                          {paymentMode2 && (
+                                            <div className="space-y-1 text-left">
+                                              <label className="text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest block pl-0.5">
+                                                Sobre Pago #2
+                                              </label>
+                                              <select
+                                                value={selectedAccountId2}
+                                                onChange={e => setSelectedAccountId2(e.target.value)}
+                                                required
+                                                className="w-full bg-white border border-zinc-200/80 rounded-xl p-2 text-zinc-900 font-semibold text-[13px] outline-none cursor-pointer"
+                                              >
+                                                <option value="" disabled>Seleccionar...</option>
+                                                {accounts
+                                                  .filter(acc => {
+                                                    const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                                    if (isUSD) {
+                                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                      if (!isUSDAcc) return false;
+                                                      const name = acc.name.trim().toUpperCase();
+                                                      if (paymentMode2 === 'efectivo') {
+                                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                                      }
+                                                      return !name.includes('EFE') && !name.includes('CASH');
+                                                    } else {
+                                                      const name = acc.name.trim().toUpperCase();
+                                                      if (paymentMode2 === 'efectivo') return name === 'EFECTIVO';
+                                                      if (paymentMode2 === 'tarjeta') return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                      if (paymentMode2 === 'transferencia') return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                      return false;
+                                                    }
+                                                  })
+                                                  .map(acc => (
+                                                    <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                                  ))}
+                                              </select>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
+                                    ) : (
+                                      <>
+                                        <div className="flex gap-2">
+                                          {[
+                                            { id: 'efectivo', label: 'Efectivo', icon: Wallet },
+                                            { id: 'tarjeta', label: 'Tarjeta', icon: BedDouble },
+                                            { id: 'transferencia', label: 'Transf.', icon: Send }
+                                          ].map(m => (
+                                            <button
+                                              key={m.id}
+                                              type="button"
+                                              onClick={() => setPaymentMode(m.id as any)}
+                                              className={`flex-1 py-3 border-[2px] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer ${
+                                                paymentMode === m.id
+                                                  ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm'
+                                                  : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-100'
+                                              }`}
+                                            >
+                                              <m.icon size={15} />
+                                              <span className="text-[11px] font-bold">{m.label}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+
+                                        {paymentMode && (
+                                          <div className="space-y-2.5 p-3.5 bg-white border border-zinc-200 rounded-2xl animate-in fade-in duration-200">
+                                            <div>
+                                              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 text-left">
+                                                Monto a Cobrar
+                                              </label>
+                                              <div className="relative">
+                                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-semibold text-zinc-400">$</span>
+                                                <input
+                                                  type="number"
+                                                  value={paymentAmount}
+                                                  onChange={e => setPaymentAmount(e.target.value)}
+                                                  placeholder="0.00"
+                                                  className="w-full bg-[#fafafa] border border-zinc-200 focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 text-zinc-900 shadow-sm rounded-xl p-3.5 pl-8 text-[16px] font-semibold transition-all outline-none"
+                                                />
+                                              </div>
+                                            </div>
+
+                                            {/* Selector de cuenta/sobre */}
+                                            <div className="space-y-1.5 pt-1 text-left">
+                                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                                ¿A qué sobre va el dinero?
+                                              </label>
+                                              <select
+                                                value={selectedAccountId}
+                                                onChange={e => setSelectedAccountId(e.target.value)}
+                                                required
+                                                className="w-full bg-[#fafafa] border border-zinc-200 rounded-xl p-3.5 text-zinc-900 font-semibold text-[16px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none cursor-pointer"
+                                              >
+                                                <option value="" disabled>Selecciona un sobre...</option>
+                                                {accounts
+                                                  .filter(acc => {
+                                                    const isUSD = selectedReserva?.guest_name?.toUpperCase().includes('(US DOLLARS)');
+                                                    if (isUSD) {
+                                                      const isUSDAcc = acc.currency?.toUpperCase() === 'USD';
+                                                      if (!isUSDAcc) return false;
+
+                                                      const name = acc.name.trim().toUpperCase();
+                                                      if (paymentMode === 'efectivo') {
+                                                        return name.includes('EFE') || name.includes('CASH') || name.includes('DLL');
+                                                      }
+                                                      return !name.includes('EFE') && !name.includes('CASH');
+                                                    } else {
+                                                      const name = acc.name.trim().toUpperCase();
+                                                      if (paymentMode === 'efectivo') {
+                                                        return name === 'EFECTIVO';
+                                                      }
+                                                      if (paymentMode === 'tarjeta') {
+                                                        return name === 'HSBC FISCAL' || name === 'MERCADO PAGO';
+                                                      }
+                                                      if (paymentMode === 'transferencia') {
+                                                        return acc.group_type === 'BANCOS' || acc.group_type === 'EXTRANJERO';
+                                                      }
+                                                      return false;
+                                                    }
+                                                  })
+                                                  .map(acc => (
+                                                    <option key={acc.id} value={acc.id}>
+                                                      {acc.name}
+                                                    </option>
+                                                  ))}
+                                              </select>
+                                            </div>
+
+                                            {/* Descripción opcional */}
+                                            <div className="space-y-1.5 pt-1 text-left">
+                                              <label className="text-[11px] font-semibold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">
+                                                Descripción (opcional)
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={paymentDescription}
+                                                onChange={e => setPaymentDescription(e.target.value)}
+                                                placeholder="Ej. S07 -EP, referencia de transferencia..."
+                                                className="w-full bg-[#fafafa] border border-zinc-200/80 rounded-xl p-3.5 text-zinc-900 font-semibold text-[15px] focus:bg-white focus:border-zinc-400 focus:ring-4 focus:ring-zinc-900/5 transition-all outline-none"
+                                              />
+                                            </div>
+                                          </div>
+                                        )}
+                                      </>
                                     )}
                                   </>
                                 )}
@@ -3466,6 +3675,7 @@ export default function CalendarPage() {
                             setPaymentMode(null);
                             setPaymentAmount('');
                             setSelectedAccountId('');
+                            setSelectedEnvelope('');
                             setPaymentMode2(null);
                             setPaymentAmount2('');
                             setSelectedAccountId2('');
@@ -3488,8 +3698,14 @@ export default function CalendarPage() {
                               ? selectedReserva.balance
                               : (selectedReserva.price_estimate || 0) - (selectedReserva.deposit || 0));
 
+                            const isUSD = (selectedReserva?.guest_name || '').toUpperCase().includes('(US DOLLARS)');
+
                             if (!isOta && pendingBalance > 0) {
-                              if (isSplitPayment) {
+                              if (isUSD) {
+                                const currentPayment = Number(paymentAmount || 0);
+                                if (!selectedEnvelope) return true;
+                                if (currentPayment < pendingBalance) return true;
+                              } else if (isSplitPayment) {
                                 const totalPaid = (Number(paymentAmount) || 0) + (Number(paymentAmount2) || 0);
                                 if (!paymentMode || !selectedAccountId) return true;
                                 if (!paymentMode2 || !selectedAccountId2) return true;
