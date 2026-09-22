@@ -20,7 +20,7 @@ export async function GET(req: Request) {
 
     // Limpiar residuos de query string (?action=maintenance, &lang=es), placeholders {{1}}, etc.
     rawId = rawId.replace(/(\{\{1\}\}|%7B%7B1%7D%7D)/gi, '').trim();
-    const digitMatch = rawId.match(/\d{4,12}/);
+    const digitMatch = rawId.match(/\d+/);
     const bookingId = digitMatch ? Number(digitMatch[0]) : Number(rawId);
 
     if (isNaN(bookingId) || !Number.isInteger(bookingId)) {

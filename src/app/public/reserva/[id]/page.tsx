@@ -811,8 +811,8 @@ function extractCleanBookingId(raw: any): string {
   let cleaned = str.replace(/(\{\{1\}\}|%7B%7B1%7D%7D)/gi, '').trim();
   cleaned = cleaned.split('?')[0].split('&')[0].split('#')[0].trim();
 
-  // Si encontramos dígitos directos (número de reservación)
-  const directMatch = cleaned.match(/\d{4,12}/);
+  // Si encontramos dígitos directos (número de reservación, ya sea local 1-999 o Beds24 8 dígitos)
+  const directMatch = cleaned.match(/^\d+$/) || cleaned.match(/\d+/);
   if (directMatch) {
     return directMatch[0];
   }
@@ -823,36 +823,42 @@ function extractCleanBookingId(raw: any): string {
     const search = window.location.search;
     const pathname = window.location.pathname;
 
-    // Buscar en search params estándar: ?id=..., ?bookingId=..., ?reservation_id=...
+    // Buscar en search params estándar: ?id=..., ?bookingId=..., ?booking_id=..., ?reservation_id=...
     try {
       const urlParams = new URLSearchParams(search);
       const searchId = urlParams.get('id') || urlParams.get('bookingId') || urlParams.get('booking_id') || urlParams.get('reservation_id');
       if (searchId) {
-        const m = searchId.match(/\d{4,12}/);
+        const m = searchId.match(/\d+/);
         if (m) return m[0];
       }
 
       // Buscar si el parámetro action o cualquier otro parámetro contiene el ID (ej: ?action=maintenance93052195)
       for (const [key, value] of urlParams.entries()) {
-        const m = value.match(/\d{4,12}/);
+        if (key === 'lang') continue;
+        const m = value.match(/\d+/);
         if (m) return m[0];
       }
     } catch (e) {}
 
-    // Buscar en los segmentos del pathname
+    // Buscar en los segmentos del pathname (ej: /public/reserva/94)
     const pathParts = pathname.split('/').filter(Boolean);
     for (let i = pathParts.length - 1; i >= 0; i--) {
       let part = pathParts[i];
       try { part = decodeURIComponent(part); } catch (e) {}
       part = part.replace(/(\{\{1\}\}|%7B%7B1%7D%7D)/gi, '');
-      const m = part.match(/\d{4,12}/);
-      if (m) return m[0];
+      const m = part.match(/\d+/);
+      if (m && part !== 'public' && part !== 'reserva') return m[0];
     }
 
-    // Como último recurso, escanear toda la URL completa por cualquier número de 5 a 10 dígitos
+    // Como último recurso, escanear la URL completa buscando después de /reserva/
     try {
       const decodedHref = decodeURIComponent(fullHref);
-      const allNumbers = decodedHref.match(/\d{5,10}/g);
+      const reservaPart = decodedHref.split(/\/reserva\//i)[1];
+      if (reservaPart) {
+        const m = reservaPart.split('?')[0].match(/\d+/);
+        if (m) return m[0];
+      }
+      const allNumbers = decodedHref.match(/\d+/g);
       if (allNumbers && allNumbers.length > 0) {
         return allNumbers[0];
       }
