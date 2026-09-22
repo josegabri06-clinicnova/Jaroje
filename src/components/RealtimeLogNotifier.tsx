@@ -71,7 +71,19 @@ export default function RealtimeLogNotifier() {
           console.log('Nuevo log de empleado detectado en tiempo real:', payload.new);
           
           const newLog = payload.new;
-          if (newLog.action === 'inicio_sesion_turno') return;
+          if (
+            !newLog ||
+            newLog.action === 'inicio_sesion_turno' ||
+            newLog.action === 'webhook_received' ||
+            newLog.action === 'whatsapp-warning' ||
+            newLog.action === 'whatsapp-error' ||
+            newLog.action === 'whatsapp-text-warning' ||
+            newLog.employee_num === 'ycloud-webhook' ||
+            newLog.employee_num === 'webhook-debug' ||
+            newLog.employee_num === 'wa-guest' ||
+            String(newLog.employee_name || '').toLowerCase().includes('ycloud') ||
+            String(newLog.department || '').toLowerCase() === 'whatsapp'
+          ) return;
           
           const logKey = `log_${newLog.id}`;
 

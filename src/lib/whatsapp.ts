@@ -618,17 +618,6 @@ export async function sendWhatsAppTemplate(
 
       if (!response.ok) {
         console.warn(`[YCloud] Error al enviar plantilla '${templateName}' (${status}):`, resBody);
-        try {
-          await supabase.from('employee_logs').insert([{
-            employee_num: '000',
-            action: 'whatsapp-warning',
-            department: 'whatsapp',
-            room: 'YCloud API',
-            details: `YCloud falló para plantilla '${templateName}' (${status}). Activando fallback a Meta. Detalle: ${resBody.error?.message || JSON.stringify(resBody)}`
-          }]);
-        } catch (logErr) {
-          console.error("Error al registrar log de YCloud:", logErr);
-        }
         executeMeta = true;
       }
     }
@@ -829,17 +818,6 @@ export async function sendWhatsAppTemplate(
 
       if (status !== 200) {
         console.error(`Meta API error template ${templateName}:`, resBody);
-        try {
-          await supabase.from('employee_logs').insert([{
-            employee_num: '000',
-            action: 'whatsapp-error',
-            department: 'whatsapp',
-            room: 'Meta API',
-            details: `Error al enviar plantilla '${templateName}' a ${cleanedPhone}: Status ${status} - Response: ${JSON.stringify(resBody)}`
-          }]);
-        } catch (logErr) {
-          console.error("Error al registrar error de WhatsApp en employee_logs:", logErr);
-        }
         return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
       }
     }
@@ -1049,17 +1027,6 @@ export async function sendWhatsAppTextMessage(
           }
 
           console.warn(`[YCloud Text] Error enviando a ${toPhone} (${status}). Activando fallback a Meta:`, resBody);
-          try {
-            await supabase.from('employee_logs').insert([{
-              employee_num: '000',
-              action: 'whatsapp-text-warning',
-              department: 'whatsapp',
-              room: 'YCloud API',
-              details: `YCloud falló para texto a ${toPhone} (${status}). Fallback a Meta. Detalle: ${resBody.error?.message || JSON.stringify(resBody)}`
-            }]);
-          } catch (logErr) {
-            console.error("Error al registrar warning de texto en employee_logs:", logErr);
-          }
         } catch (ycloudErr) {
           console.error(`[YCloud Text] Excepción conectando con YCloud para ${toPhone}:`, ycloudErr);
         }

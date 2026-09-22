@@ -281,21 +281,5 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       });
   }
 
-  // 4. Registrar en employee_logs para auditoría y alertas en el panel
-  try {
-    const guestNameClean = params.guest_name || (existing ? existing.guest_name : '') || phone;
-    await supabase.from('employee_logs').insert([{
-      employee_num: 'wa-guest',
-      employee_name: String(guestNameClean).slice(0, 50),
-      department: 'recepcion',
-      module: 'whatsapp',
-      action: 'guest_message_received',
-      details: `Mensaje de huésped: "${String(guestMsgText).slice(0, 200)}" (Tel: ${phone})`,
-      created_at: new Date().toISOString()
-    }]);
-  } catch (logErr) {
-    console.error("[Inbound Handler] Error registrando en employee_logs:", logErr);
-  }
-
   return { success: true, isAutoReplyTriggered, finalBotResponse };
 }

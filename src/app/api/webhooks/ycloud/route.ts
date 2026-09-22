@@ -32,22 +32,6 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const payload = await req.json();
-
-    // Log de auditoría en employee_logs para depuración en tiempo real
-    try {
-      await supabase.from('employee_logs').insert([{
-        employee_num: 'ycloud-webhook',
-        employee_name: 'YCloud Event',
-        department: 'whatsapp',
-        module: 'recepcion',
-        action: payload.type || 'webhook_received',
-        details: JSON.stringify(payload).slice(0, 800),
-        created_at: new Date().toISOString()
-      }]);
-    } catch (logErr) {
-      console.error("[YCloud Webhook] Error guardando log en employee_logs:", logErr);
-    }
-
     const eventType = String(payload.type || '');
 
     // ── 1. MENSAJE ENTRANTE DEL HUÉSPED (whatsapp.inbound_message.received / whatsapp.inbound_message) ─

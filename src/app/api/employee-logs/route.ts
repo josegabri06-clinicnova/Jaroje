@@ -76,7 +76,13 @@ export async function GET(req: Request) {
     let query = supabase
       .from('employee_logs')
       .select('*')
-      .neq('action', 'inicio_sesion_turno');
+      .neq('action', 'inicio_sesion_turno')
+      .neq('action', 'webhook_received')
+      .neq('action', 'whatsapp-warning')
+      .neq('action', 'whatsapp-error')
+      .neq('action', 'whatsapp-text-warning')
+      .neq('employee_num', 'ycloud-webhook')
+      .neq('employee_num', 'webhook-debug');
 
     if (moduleParam) {
       query = query.eq('module', moduleParam);

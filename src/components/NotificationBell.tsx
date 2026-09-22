@@ -449,11 +449,26 @@ export function NotificationBell() {
 
   const fetchLogs = useCallback(async () => {
     try {
-      const res = await fetch('/api/employee-logs?limit=1000');
+      const res = await fetch('/api/employee-logs?limit=100');
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
-        setLogs(json.data);
-        setEvents(mapLogsToEvents(json.data));
+        const filtered = json.data.filter((log: any) => {
+          return (
+            log &&
+            log.action !== 'inicio_sesion_turno' &&
+            log.action !== 'webhook_received' &&
+            log.action !== 'whatsapp-warning' &&
+            log.action !== 'whatsapp-error' &&
+            log.action !== 'whatsapp-text-warning' &&
+            log.employee_num !== 'ycloud-webhook' &&
+            log.employee_num !== 'webhook-debug' &&
+            log.employee_num !== 'wa-guest' &&
+            !String(log.employee_name || '').toLowerCase().includes('ycloud') &&
+            String(log.department || '').toLowerCase() !== 'whatsapp'
+          );
+        });
+        setLogs(filtered);
+        setEvents(mapLogsToEvents(filtered));
       }
     } catch {}
   }, []);
@@ -480,7 +495,19 @@ export function NotificationBell() {
         { event: 'INSERT', schema: 'public', table: 'employee_logs' },
         (payload: any) => {
           const newLog = payload.new;
-          if (newLog.action === 'inicio_sesion_turno') return;
+          if (
+            !newLog ||
+            newLog.action === 'inicio_sesion_turno' ||
+            newLog.action === 'webhook_received' ||
+            newLog.action === 'whatsapp-warning' ||
+            newLog.action === 'whatsapp-error' ||
+            newLog.action === 'whatsapp-text-warning' ||
+            newLog.employee_num === 'ycloud-webhook' ||
+            newLog.employee_num === 'webhook-debug' ||
+            newLog.employee_num === 'wa-guest' ||
+            String(newLog.employee_name || '').toLowerCase().includes('ycloud') ||
+            String(newLog.department || '').toLowerCase() === 'whatsapp'
+          ) return;
           
           setLogs(prev => {
             if (prev.some(item => String(item.id) === String(newLog.id))) return prev;
