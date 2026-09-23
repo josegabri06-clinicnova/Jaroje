@@ -528,6 +528,21 @@ export async function POST(req: Request) {
               return;
             }
 
+            // Verificar ventana de 7 días previos al Check-In
+            const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+            const arrivalClean = (data.check_in || '').split('T')[0].split(' ')[0];
+            let daysUntilArrival = 0;
+            if (arrivalClean) {
+              const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+              const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+              daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+            }
+
+            if (daysUntilArrival > 7) {
+              console.log(`[WA reservas local] Reserva ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Envío de WhatsApp pospuesto a los 7 días previos vía Cron.`);
+              return;
+            }
+
             let waRes;
             if (bookingForWA.deposit > 0) {
               waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
@@ -735,6 +750,21 @@ export async function POST(req: Request) {
 
           if (existingLog && existingLog.length > 0 && bookingForWA.deposit === 0) {
             console.log(`[WA reservas B24] Omitiendo solicitud_recibida, ya se envió mensaje inicial a reserva ${bookingIdStr}`);
+            return;
+          }
+
+          // Verificar ventana de 7 días previos al Check-In
+          const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+          const arrivalClean = (checkIn || '').split('T')[0].split(' ')[0];
+          let daysUntilArrival = 0;
+          if (arrivalClean) {
+            const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+            const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+            daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+          }
+
+          if (daysUntilArrival > 7) {
+            console.log(`[WA reservas B24] Reserva ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Envío de WhatsApp pospuesto a los 7 días previos vía Cron.`);
             return;
           }
 
@@ -1625,7 +1655,7 @@ export async function PUT(req: Request) {
               let seasonBasePrices: Record<string, any> = {};
               let seasonRanges: any[] = [];
               let capacitySettings: any = null;
-              let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
+              let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.15 };
 
               try {
                 const [{ data: rulesData }, { data: discountRow }, { data: basePricesRow }, { data: seasonRow }, { data: capRow }, { data: otaRow }] = await Promise.all([
@@ -1974,7 +2004,7 @@ export async function PUT(req: Request) {
             }
 
             calculatedBreakdown = null;
-            let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 };
+            let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.15 };
             try {
               const { data: otaRow } = await supabase
                 .from('settings')

@@ -259,7 +259,28 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: true, message: 'Notificación ya enviada al teléfono en este grupo de habitaciones.' });
           }
 
-          // 5. Enviar plantilla correspondiente
+          // 4.1 Verificar ventana de 7 días previos al Check-In:
+          // Si la reserva entra en más de 7 días (ej: reserva hoy para el próximo mes), NO se envía la plantilla de inmediato.
+          // El flujo de WhatsApp se activará automáticamente a los 7 días previos a la llegada mediante el cron.
+          const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+          const arrivalClean = (b.arrival || '').split('T')[0].split(' ')[0];
+          
+          let daysUntilArrival = 0;
+          if (arrivalClean) {
+            const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+            const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+            daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+          }
+
+          if (daysUntilArrival > 7) {
+            console.log(`[Webhook Beds24] Reserva ${bookingIdStr} (${b.firstName || ''} ${b.lastName || ''}) con llegada ${arrivalClean} (${daysUntilArrival} días en el futuro > 7 días). Notificación WhatsApp pospuesta para 7 días previos al check-in vía Cron.`);
+            return NextResponse.json({ 
+              success: true, 
+              message: `Reserva procesada. Notificación WhatsApp programada para 7 días antes de la llegada (${arrivalClean}).` 
+            });
+          }
+
+          // 5. Enviar plantilla correspondiente (dentro de los 7 días previos a la llegada)
           const rawSource = String(`${b.channel || ''} ${source || ''} ${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
           const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
           const isPrepaidOTA = ['airbnb', 'booking', 'vrbo'].some(ota => rawSource.includes(ota))

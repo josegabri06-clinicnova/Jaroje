@@ -219,17 +219,18 @@ export async function GET(req: Request) {
       return undefined;
     };
 
-    // 4. Obtener mensajes ya enviados en los últimos 7 días para evitar duplicados
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // 4. Obtener mensajes ya enviados para evitar duplicados (últimos 60 días para cubrir reservas con anticipación)
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     const { data: sentLogs } = await supabase
       .from('whatsapp_logs')
-      .select('reservation_id, template_name')
-      .gte('sent_at', sevenDaysAgo);
+      .select('reservation_id, template_name, phone, sent_at')
+      .gte('sent_at', sixtyDaysAgo);
 
     const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
 
     // --- PRECARGA PARA CANCELACIÓN DE 3 HORAS ---
     // Obtener logs de 'ultimo_aviso' enviados en los últimos 7 días ordenados por fecha descendente
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { data: ultimoAvisoLogs } = await supabase
       .from('whatsapp_logs')
       .select('reservation_id, sent_at')
@@ -475,6 +476,82 @@ export async function GET(req: Request) {
         const cleanCheckIn = (booking.check_in || '').split('T')[0].split(' ')[0];
         const cleanCheckOut = (booking.check_out || '').split('T')[0].split(' ')[0];
         const bookingNights = Number(booking.nights || 1);
+
+        // Calcular días restantes para la fecha de entrada
+        let daysUntilCheckIn = -999;
+        if (cleanCheckIn && todayStr) {
+          const arrDate = new Date(`${cleanCheckIn}T00:00:00Z`);
+          const curDate = new Date(`${todayStr}T00:00:00Z`);
+          daysUntilCheckIn = Math.round((arrDate.getTime() - curDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        // --- DISPARO DE PLANTILLA INICIAL A LOS 7 DÍAS PREVIOS AL CHECK-IN ---
+        // Se ejecuta para reservas activas que entren dentro de la ventana de 7 días (0 <= daysUntilCheckIn <= 7).
+        // Si aún no han recibido el mensaje inicial, se envía la plantilla correspondiente:
+        // - Directa / Expedia sin anticipo: Mensaje 1 (solicitud_recibida con solicitud de anticipo del 50% en 24h)
+        // - OTA prepagada (Airbnb/Booking) o con anticipo pagado: Mensaje 3 (reservacion_confirmada)
+        if (!isCancelled && daysUntilCheckIn >= 0 && daysUntilCheckIn <= 7) {
+          const hasInitialMessage = sentSet.has(`${bookingIdStr}_solicitud_recibida`) || 
+                                    sentSet.has(`${bookingIdStr}_reservacion_confirmada`) ||
+                                    sentSet.has(`${bookingIdStr}_omitido_multi_habitacion`);
+
+          if (!hasInitialMessage) {
+            // Deduplicación por teléfono en ventana de 5 minutos (para grupos multi-habitación)
+            const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            const recentGroupPhoneLog = (sentLogs || []).some(l => 
+              l.phone === guestPhone && 
+              ['solicitud_recibida', 'reservacion_confirmada'].includes(l.template_name) &&
+              l.sent_at >= fiveMinutesAgo
+            );
+
+            if (recentGroupPhoneLog) {
+              await supabase.from('whatsapp_logs').insert([{
+                reservation_id: bookingIdStr,
+                template_name: 'omitido_multi_habitacion',
+                phone: guestPhone,
+                sent_at: new Date().toISOString(),
+                status: 'sent'
+              }]);
+              sentSet.add(`${bookingIdStr}_omitido_multi_habitacion`);
+              reports.push(`Omitida plantilla inicial multi-habitación para ${booking.guest_name} (ID: ${bookingIdStr})`);
+            } else {
+              const actualPaid = Number(booking.actualPaid || 0);
+              const depositVal = Number(booking.deposit || 0);
+
+              if (!isPrepaidOtaBooking && actualPaid === 0 && depositVal === 0) {
+                const waRes = await sendTemplate1_SolicitudRecibida(booking, true);
+                if (waRes.success) {
+                  await supabase.from('whatsapp_logs').insert([{
+                    reservation_id: bookingIdStr,
+                    template_name: 'solicitud_recibida',
+                    phone: guestPhone,
+                    sent_at: new Date().toISOString(),
+                    status: 'sent'
+                  }]);
+                  sentSet.add(`${bookingIdStr}_solicitud_recibida`);
+                  reports.push(`Enviado Mensaje 1 (Solicitud Recibida - Ventana 7 días) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+                } else {
+                  console.error(`[Cron WhatsApp] Error enviando Mensaje 1 a ${booking.guest_name}:`, waRes.error);
+                }
+              } else {
+                const waRes = await sendTemplate3_ReservacionConfirmada(booking, true);
+                if (waRes.success) {
+                  await supabase.from('whatsapp_logs').insert([{
+                    reservation_id: bookingIdStr,
+                    template_name: 'reservacion_confirmada',
+                    phone: guestPhone,
+                    sent_at: new Date().toISOString(),
+                    status: 'sent'
+                  }]);
+                  sentSet.add(`${bookingIdStr}_reservacion_confirmada`);
+                  reports.push(`Enviado Mensaje 3 (Confirmada - Ventana 7 días) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+                } else {
+                  console.error(`[Cron WhatsApp] Error enviando Mensaje 3 a ${booking.guest_name}:`, waRes.error);
+                }
+              }
+            }
+          }
+        }
 
         // --- MENSAJE 5: Todo listo para su llegada (6:00 PM del día anterior) ---
         if (cleanCheckIn === tomorrowStr && (currentHour === 18 || (currentHour >= 18 && currentHour < 21))) {
