@@ -1325,7 +1325,7 @@ export default function PublicReservaPage() {
   const rawName = (booking.guest_name || '').toLowerCase();
   const rawNotes = (booking.notes || '').toLowerCase();
   const rawSource = ((booking as any).source || (booking as any).apiSource || (booking as any).referer || '').toLowerCase();
-  const isOta = ['airbnb', 'booking', 'expedia', 'vrbo'].some(c => 
+  const isOta = ['airbnb', 'booking', 'vrbo'].some(c => 
     rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c) || rawSource.includes(c)
   ) || rawName.includes('pagado a') || rawName.includes('pagado b');
   const isConfirmed = hasPaid || isOta;

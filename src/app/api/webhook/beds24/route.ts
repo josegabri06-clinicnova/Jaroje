@@ -262,7 +262,7 @@ export async function POST(req: Request) {
           // 5. Enviar plantilla correspondiente
           const rawSource = String(`${b.channel || ''} ${source || ''} ${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
           const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
-          const isOTA = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => rawSource.includes(ota))
+          const isPrepaidOTA = ['airbnb', 'booking', 'vrbo'].some(ota => rawSource.includes(ota))
             || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
 
           const bookingForWA = {
@@ -291,7 +291,7 @@ export async function POST(req: Request) {
             });
           }
 
-          if (!isOTA && actualPaid === 0 && Number(b.deposit || 0) === 0) {
+          if (!isPrepaidOTA && actualPaid === 0 && Number(b.deposit || 0) === 0) {
             const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA, true);
             if (waRes.success) {
               await supabase.from('whatsapp_logs').insert([{
