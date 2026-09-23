@@ -151,7 +151,7 @@ export default function VercelActionForm() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [capacitySettings, setCapacitySettings] = useState<any>(null);
-  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.15 });
+  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.40, expedia: 1.59 });
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
@@ -306,7 +306,7 @@ export default function VercelActionForm() {
     if (form.channel === 'Airbnb') multiplier = otaMultipliers.airbnb;
     if (form.channel === 'Booking.com') multiplier = otaMultipliers.booking;
     if (form.channel === 'Google Ads' || form.channel === 'Google') multiplier = otaMultipliers.google || 1.40;
-    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.15;
+    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.59;
 
     let totalStay = 0;
     let sumSuggestedRates = 0;
@@ -374,7 +374,7 @@ export default function VercelActionForm() {
       if (form.channel === 'Google Ads' || form.channel === 'Google') {
         suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.google || 1.40) + surchargePerNight);
       } else if (form.channel === 'Expedia') {
-        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.15) + surchargePerNight);
+        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.59) + surchargePerNight);
       } else if (form.channel === 'Airbnb') {
         const priceWithChannel = basePrice * discountMult * (otaMultipliers.airbnb || 1.20);
         const tax = priceWithChannel * 0.21; // 21% IVA Airbnb
@@ -535,7 +535,7 @@ export default function VercelActionForm() {
             airbnb: parsed.airbnb ?? 1.20,
             booking: parsed.booking ?? 1.35,
             google: parsed.google ?? 1.40,
-            expedia: parsed.expedia ?? 1.15
+            expedia: parsed.expedia ?? 1.59
           });
         }
       } catch (err) {
