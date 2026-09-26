@@ -134,57 +134,43 @@ export async function POST(req: Request) {
             console.error("[Webhook Beds24] Error limpiando finanzas de reserva cancelada:", finErr);
           }
 
-          if (phone && !isPrepaidOTA) {
+          if (phone) {
             try {
-              // Solo enviar disponibilidad_liberada si la reserva fue previamente notificada de solicitud de anticipo / último aviso
-              const { data: wasNotifiedUnpaid } = await supabase
+              // Deduplicación para cancelaciones grupales: verificar si en los últimos 3 minutos ya se envió disponibilidad_liberada a este teléfono
+              const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+              const { data: recentCancelLog } = await supabase
                 .from('whatsapp_logs')
                 .select('id')
-                .eq('reservation_id', bookingIdStr)
-                .in('template_name', ['solicitud_recibida', 'ultimo_aviso'])
+                .eq('phone', phone)
+                .eq('template_name', 'disponibilidad_liberada')
+                .gte('sent_at', threeMinutesAgo)
                 .limit(1);
 
-              if (wasNotifiedUnpaid && wasNotifiedUnpaid.length > 0) {
-                // Deduplicación para cancelaciones grupales: verificar si en los últimos 3 minutos ya se envió disponibilidad_liberada a este teléfono
-                const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-                const { data: recentCancelLog } = await supabase
-                  .from('whatsapp_logs')
-                  .select('id')
-                  .eq('phone', phone)
-                  .eq('template_name', 'disponibilidad_liberada')
-                  .gte('sent_at', threeMinutesAgo)
-                  .limit(1);
-
-                if (!recentCancelLog || recentCancelLog.length === 0) {
-                  const normalizedBooking = {
-                    id: b.id,
-                    guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped'),
-                    phone: phone
-                  };
-                  const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
-                  if (waRes.success) {
-                    await supabase.from('whatsapp_logs').insert([{
-                      reservation_id: bookingIdStr,
-                      template_name: 'disponibilidad_liberada',
-                      phone: phone,
-                      sent_at: new Date().toISOString(),
-                      status: 'sent'
-                    }]);
-                    console.log(`[Webhook Beds24] ✅ WhatsApp disponibilidad_liberada enviado AL INSTANTE a ${normalizedBooking.guest_name} (ID: ${bookingIdStr}).`);
-                  } else {
-                    console.error(`[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada:`, waRes.error);
-                  }
+              if (!recentCancelLog || recentCancelLog.length === 0) {
+                const normalizedBooking = {
+                  id: b.id,
+                  guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped'),
+                  phone: phone
+                };
+                const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
+                if (waRes.success) {
+                  await supabase.from('whatsapp_logs').insert([{
+                    reservation_id: bookingIdStr,
+                    template_name: 'disponibilidad_liberada',
+                    phone: phone,
+                    sent_at: new Date().toISOString(),
+                    status: 'sent'
+                  }]);
+                  console.log(`[Webhook Beds24] ✅ WhatsApp disponibilidad_liberada enviado AL INSTANTE a ${normalizedBooking.guest_name} (ID: ${bookingIdStr}).`);
                 } else {
-                  console.log(`[Webhook Beds24] Omitiendo notificación duplicada de disponibilidad liberada para ${phone} (grupo/multi-habitación cancelado recientemente).`);
+                  console.error(`[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada:`, waRes.error);
                 }
               } else {
-                console.log(`[Webhook Beds24] Cancelación omitida de WhatsApp para reserva ${bookingIdStr} (no tenía solicitud de anticipo pendiente).`);
+                console.log(`[Webhook Beds24] Omitiendo notificación duplicada de disponibilidad liberada para ${phone} (grupo/multi-habitación cancelado recientemente).`);
               }
             } catch (waErr) {
               console.error("[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada en webhook:", waErr);
             }
-          } else if (isPrepaidOTA) {
-            console.log(`[Webhook Beds24] Cancelación de OTA prepagada/confirmada (${b.channel || source}) para reserva ${bookingIdStr}: no se envía plantilla de disponibilidad liberada.`);
           }
 
           return NextResponse.json({ success: true, message: 'Reservación cancelada procesada.' });
