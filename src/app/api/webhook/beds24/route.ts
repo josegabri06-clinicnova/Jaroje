@@ -115,6 +115,11 @@ export async function POST(req: Request) {
         const bStatus = String(b.status || '').toLowerCase().trim();
         const isCancelled = bStatus === '0' || bStatus === 'cancelled';
 
+        const rawSource = String(`${b.channel || ''} ${source || ''} ${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
+        const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
+        const isPrepaidOTA = ['airbnb', 'booking', 'vrbo'].some(ota => rawSource.includes(ota))
+          || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
+
         // ═══════════════════════════════════════════════════════════════════════
         // CASO 1: RESERVACIÓN CANCELADA
         // ═══════════════════════════════════════════════════════════════════════
@@ -129,43 +134,57 @@ export async function POST(req: Request) {
             console.error("[Webhook Beds24] Error limpiando finanzas de reserva cancelada:", finErr);
           }
 
-          if (phone) {
+          if (phone && !isPrepaidOTA) {
             try {
-              // Deduplicación para cancelaciones grupales: verificar si en los últimos 3 minutos ya se envió disponibilidad_liberada a este teléfono
-              const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-              const { data: recentCancelLog } = await supabase
+              // Solo enviar disponibilidad_liberada si la reserva fue previamente notificada de solicitud de anticipo / último aviso
+              const { data: wasNotifiedUnpaid } = await supabase
                 .from('whatsapp_logs')
                 .select('id')
-                .eq('phone', phone)
-                .eq('template_name', 'disponibilidad_liberada')
-                .gte('sent_at', threeMinutesAgo)
+                .eq('reservation_id', bookingIdStr)
+                .in('template_name', ['solicitud_recibida', 'ultimo_aviso'])
                 .limit(1);
 
-              if (!recentCancelLog || recentCancelLog.length === 0) {
-                const normalizedBooking = {
-                  id: b.id,
-                  guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped'),
-                  phone: phone
-                };
-                const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
-                if (waRes.success) {
-                  await supabase.from('whatsapp_logs').insert([{
-                    reservation_id: bookingIdStr,
-                    template_name: 'disponibilidad_liberada',
-                    phone: phone,
-                    sent_at: new Date().toISOString(),
-                    status: 'sent'
-                  }]);
-                  console.log(`[Webhook Beds24] ✅ WhatsApp disponibilidad_liberada enviado AL INSTANTE a ${normalizedBooking.guest_name} (ID: ${bookingIdStr}).`);
+              if (wasNotifiedUnpaid && wasNotifiedUnpaid.length > 0) {
+                // Deduplicación para cancelaciones grupales: verificar si en los últimos 3 minutos ya se envió disponibilidad_liberada a este teléfono
+                const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+                const { data: recentCancelLog } = await supabase
+                  .from('whatsapp_logs')
+                  .select('id')
+                  .eq('phone', phone)
+                  .eq('template_name', 'disponibilidad_liberada')
+                  .gte('sent_at', threeMinutesAgo)
+                  .limit(1);
+
+                if (!recentCancelLog || recentCancelLog.length === 0) {
+                  const normalizedBooking = {
+                    id: b.id,
+                    guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped'),
+                    phone: phone
+                  };
+                  const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
+                  if (waRes.success) {
+                    await supabase.from('whatsapp_logs').insert([{
+                      reservation_id: bookingIdStr,
+                      template_name: 'disponibilidad_liberada',
+                      phone: phone,
+                      sent_at: new Date().toISOString(),
+                      status: 'sent'
+                    }]);
+                    console.log(`[Webhook Beds24] ✅ WhatsApp disponibilidad_liberada enviado AL INSTANTE a ${normalizedBooking.guest_name} (ID: ${bookingIdStr}).`);
+                  } else {
+                    console.error(`[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada:`, waRes.error);
+                  }
                 } else {
-                  console.error(`[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada:`, waRes.error);
+                  console.log(`[Webhook Beds24] Omitiendo notificación duplicada de disponibilidad liberada para ${phone} (grupo/multi-habitación cancelado recientemente).`);
                 }
               } else {
-                console.log(`[Webhook Beds24] Omitiendo notificación duplicada de disponibilidad liberada para ${phone} (grupo/multi-habitación cancelado recientemente).`);
+                console.log(`[Webhook Beds24] Cancelación omitida de WhatsApp para reserva ${bookingIdStr} (no tenía solicitud de anticipo pendiente).`);
               }
             } catch (waErr) {
               console.error("[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada en webhook:", waErr);
             }
+          } else if (isPrepaidOTA) {
+            console.log(`[Webhook Beds24] Cancelación de OTA prepagada/confirmada (${b.channel || source}) para reserva ${bookingIdStr}: no se envía plantilla de disponibilidad liberada.`);
           }
 
           return NextResponse.json({ success: true, message: 'Reservación cancelada procesada.' });
@@ -259,33 +278,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: true, message: 'Notificación ya enviada al teléfono en este grupo de habitaciones.' });
           }
 
-          // 4.1 Verificar ventana de 7 días previos al Check-In:
-          // Si la reserva entra en más de 7 días (ej: reserva hoy para el próximo mes), NO se envía la plantilla de inmediato.
-          // El flujo de WhatsApp se activará automáticamente a los 7 días previos a la llegada mediante el cron.
-          const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
-          const arrivalClean = (b.arrival || '').split('T')[0].split(' ')[0];
-          
-          let daysUntilArrival = 0;
-          if (arrivalClean) {
-            const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
-            const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
-            daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-          }
-
-          if (daysUntilArrival > 7) {
-            console.log(`[Webhook Beds24] Reserva ${bookingIdStr} (${b.firstName || ''} ${b.lastName || ''}) con llegada ${arrivalClean} (${daysUntilArrival} días en el futuro > 7 días). Notificación WhatsApp pospuesta para 7 días previos al check-in vía Cron.`);
-            return NextResponse.json({ 
-              success: true, 
-              message: `Reserva procesada. Notificación WhatsApp programada para 7 días antes de la llegada (${arrivalClean}).` 
-            });
-          }
-
-          // 5. Enviar plantilla correspondiente (dentro de los 7 días previos a la llegada)
-          const rawSource = String(`${b.channel || ''} ${source || ''} ${b.referer || ''} ${b.source || ''} ${b.apiSource || ''} ${b.apiReference || ''}`).toLowerCase();
-          const guestNameUpper = `${b.firstName || ''} ${b.lastName || ''}`.toUpperCase();
-          const isPrepaidOTA = ['airbnb', 'booking', 'vrbo'].some(ota => rawSource.includes(ota))
-            || guestNameUpper.includes('PAGADO A') || guestNameUpper.includes('PAGADO B');
-
+          // 5. Preparar datos de la reserva para WhatsApp y calcular si está confirmada
           const bookingForWA = {
             id: bookingIdStr,
             firstName: b.firstName || '',
@@ -312,21 +305,11 @@ export async function POST(req: Request) {
             });
           }
 
-          if (!isPrepaidOTA && actualPaid === 0 && Number(b.deposit || 0) === 0) {
-            const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA, true);
-            if (waRes.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: bookingIdStr,
-                template_name: 'solicitud_recibida',
-                phone: phone,
-                sent_at: new Date().toISOString(),
-                status: 'sent'
-              }]);
-              console.log(`[Webhook Beds24] ✅ WhatsApp solicitud_recibida enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
-            } else {
-              console.error(`[Webhook Beds24] Error al enviar WhatsApp de solicitud_recibida:`, waRes.error);
-            }
-          } else {
+          const isConfirmedBooking = isPrepaidOTA || actualPaid > 0 || Number(b.deposit || 0) > 0;
+
+          if (isConfirmedBooking) {
+            // RESERVACIÓN CONFIRMADA (Booking.com, Airbnb, con anticipo pagado, etc.):
+            // Se envía Mensaje 3 (reservacion_confirmada) INMEDIATAMENTE sin importar la anticipación de la fecha de entrada
             const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
             if (waRes.success) {
               await supabase.from('whatsapp_logs').insert([{
@@ -339,6 +322,40 @@ export async function POST(req: Request) {
               console.log(`[Webhook Beds24] ✅ WhatsApp reservacion_confirmada enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
             } else {
               console.error(`[Webhook Beds24] Error al enviar WhatsApp de reservacion_confirmada:`, waRes.error);
+            }
+          } else {
+            // RESERVACIÓN NO CONFIRMADA / SOLICITUD DE ANTICIPO (Directo / Expedia sin pago):
+            // Si la llegada es en más de 7 días, se pospone la solicitud de anticipo (24h) a los 7 días previos vía Cron
+            const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+            const arrivalClean = (b.arrival || '').split('T')[0].split(' ')[0];
+            
+            let daysUntilArrival = 0;
+            if (arrivalClean) {
+              const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+              const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+              daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+            }
+
+            if (daysUntilArrival > 7) {
+              console.log(`[Webhook Beds24] Reserva no confirmada ${bookingIdStr} (${b.firstName || ''} ${b.lastName || ''}) con llegada ${arrivalClean} (${daysUntilArrival} días en el futuro > 7 días). Solicitud de anticipo 24h pospuesta para 7 días previos al check-in vía Cron.`);
+              return NextResponse.json({ 
+                success: true, 
+                message: `Reserva procesada. Solicitud de anticipo programada para 7 días antes de la llegada (${arrivalClean}).` 
+              });
+            }
+
+            const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA, true);
+            if (waRes.success) {
+              await supabase.from('whatsapp_logs').insert([{
+                reservation_id: bookingIdStr,
+                template_name: 'solicitud_recibida',
+                phone: phone,
+                sent_at: new Date().toISOString(),
+                status: 'sent'
+              }]);
+              console.log(`[Webhook Beds24] ✅ WhatsApp solicitud_recibida enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
+            } else {
+              console.error(`[Webhook Beds24] Error al enviar WhatsApp de solicitud_recibida:`, waRes.error);
             }
           }
         }

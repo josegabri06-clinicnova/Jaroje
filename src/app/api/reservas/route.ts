@@ -528,21 +528,6 @@ export async function POST(req: Request) {
               return;
             }
 
-            // Verificar ventana de 7 días previos al Check-In
-            const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
-            const arrivalClean = (data.check_in || '').split('T')[0].split(' ')[0];
-            let daysUntilArrival = 0;
-            if (arrivalClean) {
-              const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
-              const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
-              daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-            }
-
-            if (daysUntilArrival > 7) {
-              console.log(`[WA reservas local] Reserva ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Envío de WhatsApp pospuesto a los 7 días previos vía Cron.`);
-              return;
-            }
-
             let waRes;
             if (bookingForWA.deposit > 0) {
               waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
@@ -555,6 +540,21 @@ export async function POST(req: Request) {
                 console.log(`[WA reservas local] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
               }
             } else {
+              // Verificar ventana de 7 días previos al Check-In para solicitud de anticipo (24h)
+              const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+              const arrivalClean = (data.check_in || '').split('T')[0].split(' ')[0];
+              let daysUntilArrival = 0;
+              if (arrivalClean) {
+                const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+                const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+                daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+              }
+
+              if (daysUntilArrival > 7) {
+                console.log(`[WA reservas local] Reserva no confirmada ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Solicitud de anticipo 24h pospuesta a los 7 días previos vía Cron.`);
+                return;
+              }
+
               waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
               if (waRes?.success) {
                 await supabase.from('whatsapp_logs').insert([{
@@ -753,21 +753,6 @@ export async function POST(req: Request) {
             return;
           }
 
-          // Verificar ventana de 7 días previos al Check-In
-          const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
-          const arrivalClean = (checkIn || '').split('T')[0].split(' ')[0];
-          let daysUntilArrival = 0;
-          if (arrivalClean) {
-            const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
-            const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
-            daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-          }
-
-          if (daysUntilArrival > 7) {
-            console.log(`[WA reservas B24] Reserva ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Envío de WhatsApp pospuesto a los 7 días previos vía Cron.`);
-            return;
-          }
-
           let waRes;
           if (bookingForWA.deposit > 0) {
             waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
@@ -780,6 +765,21 @@ export async function POST(req: Request) {
               console.log(`[WA reservas B24] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
             }
           } else {
+            // Verificar ventana de 7 días previos al Check-In para solicitud de anticipo (24h)
+            const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+            const arrivalClean = (checkIn || '').split('T')[0].split(' ')[0];
+            let daysUntilArrival = 0;
+            if (arrivalClean) {
+              const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+              const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+              daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+            }
+
+            if (daysUntilArrival > 7) {
+              console.log(`[WA reservas B24] Reserva no confirmada ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Solicitud de anticipo 24h pospuesta a los 7 días previos vía Cron.`);
+              return;
+            }
+
             waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
             if (waRes?.success) {
               await supabase.from('whatsapp_logs').insert([{

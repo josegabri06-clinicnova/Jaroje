@@ -460,16 +460,8 @@ export async function GET(req: Request) {
           }
         }
 
-        // --- MENSAJE 4: Disponibilidad Liberada (Automático en Cancelaciones) ---
+        // --- RESERVACIONES CANCELADAS: Omitir envíos posteriores ---
         if (booking.status === 'cancelled' || String(booking.status) === '0') {
-          const logKey = `${bookingIdStr}_disponibilidad_liberada`;
-          if (!sentSet.has(logKey)) {
-            const res = await sendTemplate4_DisponibilidadLiberada(booking, true);
-            if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'disponibilidad_liberada', phone: guestPhone }]);
-              reports.push(`Enviado Mensaje 4 (Disponibilidad Liberada) a ${booking.guest_name} (ID: ${bookingIdStr})`);
-            }
-          }
           continue;
         }
 
