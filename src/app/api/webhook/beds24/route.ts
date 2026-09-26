@@ -310,24 +310,29 @@ export async function POST(req: Request) {
               console.error(`[Webhook Beds24] Error al enviar WhatsApp de reservacion_confirmada:`, waRes.error);
             }
           } else {
-            // RESERVACIÓN NO CONFIRMADA / SOLICITUD DE ANTICIPO (Directo / Expedia sin pago):
-            // Si la llegada es en más de 7 días, se pospone la solicitud de anticipo (24h) a los 7 días previos vía Cron
-            const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
-            const arrivalClean = (b.arrival || '').split('T')[0].split(' ')[0];
-            
-            let daysUntilArrival = 0;
-            if (arrivalClean) {
-              const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
-              const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
-              daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-            }
+            // RESERVACIÓN NO CONFIRMADA / SOLICITUD DE ANTICIPO:
+            // La ventana de 7 días previos aplica EXCLUSIVAMENTE para Expedia (sin pago).
+            // Para reservas directas y demás canales, se envía la solicitud de anticipo (24h) de inmediato.
+            const isExpediaBooking = rawSource.includes('expedia');
 
-            if (daysUntilArrival > 7) {
-              console.log(`[Webhook Beds24] Reserva no confirmada ${bookingIdStr} (${b.firstName || ''} ${b.lastName || ''}) con llegada ${arrivalClean} (${daysUntilArrival} días en el futuro > 7 días). Solicitud de anticipo 24h pospuesta para 7 días previos al check-in vía Cron.`);
-              return NextResponse.json({ 
-                success: true, 
-                message: `Reserva procesada. Solicitud de anticipo programada para 7 días antes de la llegada (${arrivalClean}).` 
-              });
+            if (isExpediaBooking) {
+              const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+              const arrivalClean = (b.arrival || '').split('T')[0].split(' ')[0];
+              
+              let daysUntilArrival = 0;
+              if (arrivalClean) {
+                const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+                const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+                daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+              }
+
+              if (daysUntilArrival > 7) {
+                console.log(`[Webhook Beds24] Reserva Expedia no confirmada ${bookingIdStr} (${b.firstName || ''} ${b.lastName || ''}) con llegada ${arrivalClean} (${daysUntilArrival} días en el futuro > 7 días). Solicitud de anticipo 24h pospuesta para 7 días previos al check-in vía Cron.`);
+                return NextResponse.json({ 
+                  success: true, 
+                  message: `Reserva Expedia procesada. Solicitud de anticipo programada para 7 días antes de la llegada (${arrivalClean}).` 
+                });
+              }
             }
 
             const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA, true);

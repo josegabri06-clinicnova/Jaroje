@@ -540,19 +540,22 @@ export async function POST(req: Request) {
                 console.log(`[WA reservas local] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
               }
             } else {
-              // Verificar ventana de 7 días previos al Check-In para solicitud de anticipo (24h)
-              const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
-              const arrivalClean = (data.check_in || '').split('T')[0].split(' ')[0];
-              let daysUntilArrival = 0;
-              if (arrivalClean) {
-                const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
-                const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
-                daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-              }
+              // Si la reserva proviene de Expedia y faltan más de 7 días, posponer la solicitud de anticipo a T-7 vía Cron
+              const isExpedia = String(data.channel || '').toLowerCase().includes('expedia');
+              if (isExpedia) {
+                const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+                const arrivalClean = (data.check_in || '').split('T')[0].split(' ')[0];
+                let daysUntilArrival = 0;
+                if (arrivalClean) {
+                  const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+                  const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+                  daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+                }
 
-              if (daysUntilArrival > 7) {
-                console.log(`[WA reservas local] Reserva no confirmada ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Solicitud de anticipo 24h pospuesta a los 7 días previos vía Cron.`);
-                return;
+                if (daysUntilArrival > 7) {
+                  console.log(`[WA reservas local] Reserva Expedia no confirmada ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Solicitud de anticipo 24h pospuesta a los 7 días previos vía Cron.`);
+                  return;
+                }
               }
 
               waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
@@ -765,19 +768,22 @@ export async function POST(req: Request) {
               console.log(`[WA reservas B24] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
             }
           } else {
-            // Verificar ventana de 7 días previos al Check-In para solicitud de anticipo (24h)
-            const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
-            const arrivalClean = (checkIn || '').split('T')[0].split(' ')[0];
-            let daysUntilArrival = 0;
-            if (arrivalClean) {
-              const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
-              const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
-              daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
-            }
+            // Si la reserva proviene de Expedia y faltan más de 7 días, posponer la solicitud de anticipo a T-7 vía Cron
+            const isExpedia = String(body.channel || '').toLowerCase().includes('expedia');
+            if (isExpedia) {
+              const todayMexicoStr = new Intl.DateTimeFormat('fr-CA', { timeZone: 'America/Mexico_City' }).format(new Date());
+              const arrivalClean = (checkIn || '').split('T')[0].split(' ')[0];
+              let daysUntilArrival = 0;
+              if (arrivalClean) {
+                const arrDate = new Date(`${arrivalClean}T00:00:00Z`);
+                const todayDate = new Date(`${todayMexicoStr}T00:00:00Z`);
+                daysUntilArrival = Math.round((arrDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+              }
 
-            if (daysUntilArrival > 7) {
-              console.log(`[WA reservas B24] Reserva no confirmada ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Solicitud de anticipo 24h pospuesta a los 7 días previos vía Cron.`);
-              return;
+              if (daysUntilArrival > 7) {
+                console.log(`[WA reservas B24] Reserva Expedia no confirmada ${bookingIdStr} con llegada ${arrivalClean} (${daysUntilArrival} días > 7). Solicitud de anticipo 24h pospuesta a los 7 días previos vía Cron.`);
+                return;
+              }
             }
 
             waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
