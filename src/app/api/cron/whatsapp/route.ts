@@ -553,13 +553,22 @@ export async function GET(req: Request) {
           }
         }
 
+        // Helper para comprobar si una plantilla ya se envió HOY a esta reserva
+        const isTemplateSentToday = (templateName: string): boolean => {
+          return (sentLogs || []).some(l => 
+            String(l.reservation_id) === bookingIdStr && 
+            l.template_name === templateName && 
+            (l.sent_at || '').startsWith(todayStr)
+          );
+        };
+
         // --- MENSAJE 5: Todo listo para su llegada (6:00 PM del día anterior) ---
         if (cleanCheckIn === tomorrowStr && (currentHour === 18 || (currentHour >= 18 && currentHour < 21))) {
-          const logKey = `${bookingIdStr}_preparacion_llegada`;
-          if (!sentSet.has(logKey)) {
+          const logKey = `${bookingIdStr}_preparacion_llegada_${todayStr}`;
+          if (!sentSet.has(logKey) && !isTemplateSentToday('preparacion_llegada')) {
             const res = await sendTemplate5_PreparacionLlegada(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone }]);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone, sent_at: new Date().toISOString() }]);
               sentSet.add(logKey);
               reports.push(`Enviado Mensaje 5 (Prep llegada 6PM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
@@ -568,8 +577,8 @@ export async function GET(req: Request) {
 
         // --- MENSAJE EXTRA: Alojamiento Listo para habitaciones vacías el día anterior (12:00 PM de hoy) ---
         if (cleanCheckIn === todayStr && (currentHour === 12 || (currentHour >= 12 && currentHour < 15))) {
-          const logKey = `${bookingIdStr}_alojamiento_listo`;
-          if (!sentSet.has(logKey)) {
+          const logKey = `${bookingIdStr}_alojamiento_listo_${todayStr}`;
+          if (!sentSet.has(logKey) && !isTemplateSentToday('alojamiento_listo')) {
             const rRoom = getCleanRoom(booking.room_name, booking.room);
             if (rRoom) {
               // Verificar si alguna reserva ocupaba la habitación ayer por la noche
@@ -594,7 +603,8 @@ export async function GET(req: Request) {
                   await supabase.from('whatsapp_logs').insert([{
                     reservation_id: bookingIdStr,
                     template_name: 'alojamiento_listo',
-                    phone: guestPhone
+                    phone: guestPhone,
+                    sent_at: new Date().toISOString()
                   }]);
                   sentSet.add(logKey);
                   reports.push(`Enviado Mensaje Alojamiento Listo (Vacante ayer) a ${booking.guest_name} para Habitación ${rRoom} (ID: ${bookingIdStr})`);
@@ -610,7 +620,7 @@ export async function GET(req: Request) {
           if (!sentSet.has(logKey)) {
             const res = await sendTemplate6_BienvenidaCheckin(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'bienvenida_checkin', phone: guestPhone }]);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'bienvenida_checkin', phone: guestPhone, sent_at: new Date().toISOString() }]);
               sentSet.add(logKey);
               reports.push(`Enviado Mensaje 6 (Bienvenida Check-In) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
@@ -627,7 +637,7 @@ export async function GET(req: Request) {
           if (!sentSet.has(logKey)) {
             const res = await sendTemplate7_SeguimientoSatisfaccion(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone }]);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone, sent_at: new Date().toISOString() }]);
               sentSet.add(logKey);
               reports.push(`Enviado Mensaje 7 (Satisfacción 9AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             } else {
@@ -637,12 +647,13 @@ export async function GET(req: Request) {
         }
 
         // --- MENSAJE 8: Check-out 12:00 p.m. (7:00 AM del día del Check-Out) ---
+        // Soporta extensiones de estancia: Se enviará a las 7 AM de la nueva fecha de salida si la estancia fue extendida
         if (cleanCheckOut === todayStr && currentHour >= 7 && currentHour < 12) {
-          const logKey = `${bookingIdStr}_salida_checkout`;
-          if (!sentSet.has(logKey)) {
+          const logKey = `${bookingIdStr}_salida_checkout_${todayStr}`;
+          if (!sentSet.has(logKey) && !isTemplateSentToday('salida_checkout')) {
             const res = await sendTemplate8_SalidaCheckout(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'salida_checkout', phone: guestPhone }]);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'salida_checkout', phone: guestPhone, sent_at: new Date().toISOString() }]);
               sentSet.add(logKey);
               reports.push(`Enviado Mensaje 8 (Salida Checkout 7AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
@@ -651,9 +662,10 @@ export async function GET(req: Request) {
 
         // --- MENSAJE 9: ¿Cómo estuvo tu experiencia? (10:00 AM del día siguiente al Check-Out) ---
         // Condición de exclusión: OMITIR si existió un reporte en mantenimiento con urgencia alta durante la estancia
+        // Soporta extensiones de estancia: Se envía el día después de la fecha real de salida
         if (cleanCheckOut === yesterdayStr && currentHour >= 10 && currentHour < 14) {
-          const logKey = `${bookingIdStr}_comparte_experiencia`;
-          if (!sentSet.has(logKey)) {
+          const logKey = `${bookingIdStr}_comparte_experiencia_${todayStr}`;
+          if (!sentSet.has(logKey) && !isTemplateSentToday('comparte_experiencia')) {
             const roomStr = booking.room_name || booking.room || '';
             const hasIncident = await hasHighUrgencyIncident(roomStr, cleanCheckIn, cleanCheckOut);
             if (hasIncident) {
@@ -661,7 +673,7 @@ export async function GET(req: Request) {
             } else {
               const res = await sendTemplate9_ComparteExperiencia(booking);
               if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone }]);
+                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone, sent_at: new Date().toISOString() }]);
                 sentSet.add(logKey);
                 reports.push(`Enviado Mensaje 9 (Encuesta Experiencia 10AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
               }
