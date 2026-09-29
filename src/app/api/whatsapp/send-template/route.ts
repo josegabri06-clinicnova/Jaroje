@@ -55,9 +55,32 @@ export async function POST(req: Request) {
       case 'ultimo_aviso':
         res = await sendTemplate2_UltimoAviso(booking, true);
         break;
-      case 'reservacion_confirmada':
+      case 'reservacion_confirmada': {
+        const bookingIdStr = String(booking.id || '').toLowerCase().trim();
+        if (booking.is_checked_in || booking.checked_in) {
+          console.log(`[send-template] Omitiendo reservacion_confirmada porque la reserva ${bookingIdStr} ya tiene check-in.`);
+          return NextResponse.json({ success: true, message: 'Omitido: La reservación ya cuenta con Check-In realizado.' });
+        }
+        if (bookingIdStr) {
+          try {
+            const { supabase } = require('@/lib/supabase');
+            const { data: dbCheckin } = await supabase
+              .from('checkins')
+              .select('status')
+              .eq('reservation_id', bookingIdStr)
+              .maybeSingle();
+
+            if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
+              console.log(`[send-template] Omitiendo reservacion_confirmada porque la reserva ${bookingIdStr} ya cuenta con check-in en BD.`);
+              return NextResponse.json({ success: true, message: 'Omitido: La reservación ya cuenta con Check-In realizado en BD.' });
+            }
+          } catch (chkErr) {
+            console.warn("[send-template] Error verificando check-in en BD:", chkErr);
+          }
+        }
         res = await sendTemplate3_ReservacionConfirmada(booking, true);
         break;
+      }
       case 'disponibilidad_liberada':
         res = await sendTemplate4_DisponibilidadLiberada(booking, true);
         break;

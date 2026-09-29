@@ -482,7 +482,7 @@ export async function GET(req: Request) {
         // Si aún no han recibido el mensaje inicial, se envía la plantilla correspondiente:
         // - Directa / Expedia sin anticipo: Mensaje 1 (solicitud_recibida con solicitud de anticipo del 50% en 24h)
         // - OTA prepagada (Airbnb/Booking) o con anticipo pagado: Mensaje 3 (reservacion_confirmada)
-        if (!isCancelled && daysUntilCheckIn >= 0 && daysUntilCheckIn <= 7) {
+        if (!isCancelled && !booking.checked_in && !booking.checked_out && booking.status !== 'checked_in' && booking.status !== 'checked_out' && daysUntilCheckIn >= 0 && daysUntilCheckIn <= 7) {
           const hasInitialMessage = sentSet.has(`${bookingIdStr}_solicitud_recibida`) || 
                                     sentSet.has(`${bookingIdStr}_reservacion_confirmada`) ||
                                     sentSet.has(`${bookingIdStr}_omitido_multi_habitacion`);

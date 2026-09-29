@@ -36,10 +36,38 @@ export async function POST(req: Request) {
         throw new Error(`Error en base de datos local: ${updateErr.message}`);
       }
 
-      // Enviar confirmación por WhatsApp en segundo plano
-      if (localRes.phone) {
+      // Enviar confirmación por WhatsApp en segundo plano sólo si NO es cobro de check-in y la reserva no ha hecho check-in
+      const isCheckInPaymentLocal = (customDescription || '').toLowerCase().includes('check-in') || 
+                                    (customDescription || '').toLowerCase().includes('checkin') || 
+                                    (customDescription || '').toLowerCase().includes('walk-in') || 
+                                    (customDescription || '').toLowerCase().includes('walkin');
+
+      if (localRes.phone && !isCheckInPaymentLocal) {
         (async () => {
           try {
+            const { data: dbCheckin } = await supabase
+              .from('checkins')
+              .select('status')
+              .eq('reservation_id', String(localRes.id).toLowerCase().trim())
+              .maybeSingle();
+
+            if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
+              console.log(`[Payment local] Reserva ${localRes.id} ya tiene check-in (status: ${dbCheckin?.status}), se omite reservacion_confirmada.`);
+              return;
+            }
+
+            const { data: existingLogs } = await supabase
+              .from('whatsapp_logs')
+              .select('id')
+              .eq('reservation_id', String(localRes.id))
+              .eq('template_name', 'reservacion_confirmada')
+              .limit(1);
+
+            if (existingLogs && existingLogs.length > 0) {
+              console.log(`[Payment local] reservacion_confirmada ya enviada previamente a ${localRes.id}, omitiendo.`);
+              return;
+            }
+
             const UNIT_TO_ROOM: Record<string, string> = {
               '1': '500', '2': '501', '3': '502', '4': '503',
               '5': '504', '6': '505', '7': '506', '8': '507'
@@ -58,14 +86,17 @@ export async function POST(req: Request) {
               num_adult: Number(localRes.num_adult || 1),
               num_child: Number(localRes.num_child || 0)
             };
-            const { data: dbCheckin } = await supabase
-              .from('checkins')
-              .select('status')
-              .eq('reservation_id', String(localRes.id).toLowerCase().trim())
-              .maybeSingle();
 
-            // Al registrar un cobro, siempre enviar confirmación de reservación y pago
-            await sendTemplate3_ReservacionConfirmada(bookingForWA);
+            const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+            if (waRes?.success) {
+              await supabase.from('whatsapp_logs').insert([{
+                reservation_id: String(localRes.id),
+                template_name: 'reservacion_confirmada',
+                phone: localRes.phone,
+                sent_at: new Date().toISOString(),
+                status: 'sent'
+              }]);
+            }
           } catch (waErr) {
             console.error("Error enviando WhatsApp en payment local:", waErr);
           }
@@ -119,26 +150,58 @@ export async function POST(req: Request) {
     const dataB24 = await beds24Response.json();
     clearBeds24Cache();
 
-    // Enviar confirmación por WhatsApp en segundo plano para Beds24
-    (async () => {
-      try {
-        const allBookings = await getBeds24Bookings(true);
-        const booking = allBookings.find(r => r.id === Number(bookId));
-        if (booking && (booking.phone || booking.mobile || booking.guest_phone)) {
-          const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
+    // Enviar confirmación por WhatsApp en segundo plano para Beds24 sólo si NO es cobro de check-in y la reserva no ha hecho check-in
+    const isCheckInPaymentB24 = (description || '').toLowerCase().includes('check-in') || 
+                                (description || '').toLowerCase().includes('checkin') || 
+                                (description || '').toLowerCase().includes('walk-in') || 
+                                (description || '').toLowerCase().includes('walkin');
+
+    if (!isCheckInPaymentB24) {
+      (async () => {
+        try {
           const { data: dbCheckin } = await supabase
             .from('checkins')
             .select('status')
             .eq('reservation_id', String(bookId).toLowerCase().trim())
             .maybeSingle();
 
-          // Al registrar un cobro, siempre enviar confirmación de reservación y pago
-          await sendTemplate3_ReservacionConfirmada(booking);
+          if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
+            console.log(`[Payment Beds24] Reserva ${bookId} ya tiene check-in (status: ${dbCheckin?.status}), se omite reservacion_confirmada.`);
+            return;
+          }
+
+          const { data: existingLogs } = await supabase
+            .from('whatsapp_logs')
+            .select('id')
+            .eq('reservation_id', String(bookId))
+            .eq('template_name', 'reservacion_confirmada')
+            .limit(1);
+
+          if (existingLogs && existingLogs.length > 0) {
+            console.log(`[Payment Beds24] reservacion_confirmada ya enviada previamente a ${bookId}, omitiendo.`);
+            return;
+          }
+
+          const allBookings = await getBeds24Bookings(true);
+          const booking = allBookings.find(r => r.id === Number(bookId));
+          if (booking && (booking.phone || booking.mobile || booking.guest_phone)) {
+            const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
+            const waRes = await sendTemplate3_ReservacionConfirmada(booking);
+            if (waRes?.success) {
+              await supabase.from('whatsapp_logs').insert([{
+                reservation_id: String(bookId),
+                template_name: 'reservacion_confirmada',
+                phone: guestPhone,
+                sent_at: new Date().toISOString(),
+                status: 'sent'
+              }]);
+            }
+          }
+        } catch (waErr) {
+          console.error("Error enviando WhatsApp en payment Beds24:", waErr);
         }
-      } catch (waErr) {
-        console.error("Error enviando WhatsApp en payment Beds24:", waErr);
-      }
-    })();
+      })();
+    }
 
     return NextResponse.json({ 
       success: true, 
