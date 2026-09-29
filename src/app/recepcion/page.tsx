@@ -7,7 +7,7 @@ import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
   ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw, Trash2, Video, LogOut,
-  MessageCircle
+  MessageCircle, CreditCard, Copy, ExternalLink
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
@@ -18,6 +18,7 @@ import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
 import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
+import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL } from '@/lib/checkin-summary';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -1948,6 +1949,10 @@ export default function RecepcionPage() {
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
   const [dniUploadLoading, setDniUploadLoading] = useState<boolean>(false);
+  const [voucherPreview, setVoucherPreview] = useState<string | null>(null);
+  const [voucherFile, setVoucherFile] = useState<File | null>(null);
+  const [voucherUploadLoading, setVoucherUploadLoading] = useState<boolean>(false);
+  const [checkInSummaryModal, setCheckInSummaryModal] = useState<{ show: boolean; text: string; reservationTitle: string; copied: boolean } | null>(null);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -2077,6 +2082,8 @@ export default function RecepcionPage() {
 
   const fileCameraRef = useRef<HTMLInputElement>(null);
   const fileGalleryRef = useRef<HTMLInputElement>(null);
+  const fileVoucherCameraRef = useRef<HTMLInputElement>(null);
+  const fileVoucherGalleryRef = useRef<HTMLInputElement>(null);
   const [showCameraModal, setShowCameraModal] = useState(false);
   const mttoPhotoRef = useRef<HTMLInputElement>(null);
 
@@ -3028,6 +3035,26 @@ export default function RecepcionPage() {
     }
   };
 
+  const handleVoucherUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVoucherUploadLoading(true);
+    try {
+      const b64 = await compressImage(file);
+      setVoucherPreview(b64);
+      setVoucherFile(file);
+    } catch (err) {
+      console.error("Error al procesar voucher:", err);
+    } finally {
+      setVoucherUploadLoading(false);
+    }
+  };
+
+  const processCapturedVoucher = (file: File, b64: string) => {
+    setVoucherPreview(b64);
+    setVoucherFile(file);
+  };
+
   const processCapturedDni = async (file: File, b64: string) => {
     setDniPreview(b64);
     setDniFile(file);
@@ -3086,6 +3113,9 @@ export default function RecepcionPage() {
   const processCheckIn = async () => {
     if (!selectedReserva) return;
     setSubmitting(true);
+
+    let finalDniUrl: string | null = null;
+    let finalVoucherUrl: string | null = null;
 
     const emp = getOperatorForLog();
     const operatorName = emp ? `${emp.full_name} (${emp.employee_num})` : 'Recepcion';
@@ -3259,7 +3289,6 @@ export default function RecepcionPage() {
 
         const roomNamesList = roomDetails.map(r => r.name).join(', ');
 
-        let finalDniUrl = null;
         if (dniFile) {
           const fileExt = dniFile.name.split('.').pop() || 'jpg';
           const fileName = `dni_walkin_group_${Date.now()}.${fileExt}`;
@@ -3267,6 +3296,20 @@ export default function RecepcionPage() {
           if (!error && data) {
             const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
             finalDniUrl = publicUrlData.publicUrl;
+          }
+        }
+
+        if (voucherFile) {
+          try {
+            const fileExt = voucherFile.name.split('.').pop() || 'jpg';
+            const fileName = `voucher_walkin_group_${Date.now()}.${fileExt}`;
+            const { data, error: vErr } = await supabase.storage.from('dni_images').upload(fileName, voucherFile);
+            if (!vErr && data) {
+              const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
+              finalVoucherUrl = publicUrlData.publicUrl;
+            }
+          } catch (vErr) {
+            console.error('Error al subir voucher walk-in:', vErr);
           }
         }
 
@@ -3624,7 +3667,6 @@ export default function RecepcionPage() {
         return;
       }
 
-      let finalDniUrl = null;
       if (dniFile) {
         const fileExt = dniFile.name.split('.').pop() || 'jpg';
         const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
@@ -3632,6 +3674,20 @@ export default function RecepcionPage() {
         if (!error && data) {
           const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
           finalDniUrl = publicUrlData.publicUrl;
+        }
+      }
+
+      if (voucherFile) {
+        try {
+          const fileExt = voucherFile.name.split('.').pop() || 'jpg';
+          const fileName = `voucher_${selectedReserva.id}_${Date.now()}.${fileExt}`;
+          const { data, error: vErr } = await supabase.storage.from('dni_images').upload(fileName, voucherFile);
+          if (!vErr && data) {
+            const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
+            finalVoucherUrl = publicUrlData.publicUrl;
+          }
+        } catch (vErr) {
+          console.error('Error al subir voucher reservación:', vErr);
         }
       }
 
@@ -4865,10 +4921,111 @@ export default function RecepcionPage() {
     }
   }
 
+    // --- CONSTRUCCIÓN Y COPIADO AUTOMÁTICO DE RESUMEN DE CHECK-IN ---
+    try {
+      const isGroup = payGroupConsolidated && groupBookings.length > 1;
+      const summaryRooms = selectedReserva.id === 'walkin'
+        ? ((selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0)
+            ? selectedReserva.groupRooms.map((rm: any) => getFriendlyRoomName(rm.roomId, rm.unitId, roomInventory)).join(', ')
+            : getFriendlyRoomName(selectedReserva.room, selectedReserva.unit_id || '', roomInventory))
+        : (isGroup
+            ? groupBookings.map(r => getUnitDisplay(r.room_name || r.room)).join(', ')
+            : getUnitDisplay(selectedReserva.room_name || selectedReserva.room));
+
+      let summaryAdults = Number(selectedReserva.num_adult || 1);
+      let summaryChildren = Number(selectedReserva.num_child || 0);
+      if (isGroup) {
+        summaryAdults = groupBookings.reduce((sum, r) => {
+          const g = groupGuestsMap[String(r.id)];
+          return sum + (g?.adults ?? Number(r.num_adult || 1));
+        }, 0);
+        summaryChildren = groupBookings.reduce((sum, r) => {
+          const g = groupGuestsMap[String(r.id)];
+          return sum + (g?.children ?? Number(r.num_child || 0));
+        }, 0);
+      } else if (selectedReserva.id !== 'walkin') {
+        if (editedAdults) summaryAdults = editedAdults;
+        if (editedChildren !== undefined) summaryChildren = editedChildren;
+      }
+
+      const summaryNights = getNightsBetweenDates(selectedReserva.check_in || todayStr, selectedReserva.check_out || todayStr);
+
+      let summaryTotalStay = 0;
+      let summaryDailyRate: number | undefined = undefined;
+
+      if (selectedReserva.id === 'walkin') {
+        const { totalStay } = calculateWalkinPrices(selectedReserva);
+        summaryTotalStay = totalStay;
+        const numRooms = (selectedReserva.groupRooms && selectedReserva.groupRooms.length > 0) ? selectedReserva.groupRooms.length : 1;
+        summaryDailyRate = (summaryNights > 0 && numRooms > 0) ? (totalStay / numRooms / summaryNights) : undefined;
+      } else if (isGroup) {
+        summaryTotalStay = groupBookings.reduce((sum, r) => sum + Number(r.price_estimate || r.price || 0), 0);
+        const numRooms = groupBookings.length;
+        summaryDailyRate = (summaryNights > 0 && numRooms > 0) ? (summaryTotalStay / numRooms / summaryNights) : undefined;
+      } else {
+        summaryTotalStay = Number(selectedReserva.price_estimate || selectedReserva.price || 0);
+        summaryDailyRate = Number(selectedReserva.daily_rate || selectedReserva.price_per_night || (summaryNights > 0 ? (summaryTotalStay / summaryNights) : 0));
+      }
+
+      const summaryText = buildCheckInSummaryMessage({
+        guestName: selectedReserva.guest_name || 'Huésped',
+        rooms: summaryRooms,
+        phone: selectedReserva.guest_phone || selectedReserva.phone || selectedReserva.mobile || '',
+        adults: summaryAdults,
+        children: summaryChildren,
+        checkIn: selectedReserva.check_in || todayStr,
+        checkOut: selectedReserva.check_out || todayStr,
+        nights: summaryNights,
+        dailyRate: summaryDailyRate && summaryDailyRate > 0 ? summaryDailyRate : undefined,
+        totalStay: summaryTotalStay,
+        channel: selectedReserva.channel || (selectedReserva.id === 'walkin' ? 'Directo (Walk-In)' : 'Directo'),
+        paymentDetails: {
+          method: isSplitPayment ? 'mixto' : (paymentMode || (isOtaRes ? 'prepagado' : 'efectivo')),
+          amountPaid: Number(paymentAmount || 0),
+          accountOrEnvelope: paymentMode === 'efectivo' ? selectedEnvelope : (accounts.find(a => a.id === selectedAccountId)?.name || selectedAccountId || ''),
+          method2: isSplitPayment ? (paymentMode2 || undefined) : undefined,
+          amountPaid2: isSplitPayment ? Number(paymentAmount2 || 0) : undefined,
+          accountOrEnvelope2: isSplitPayment ? (paymentMode2 === 'efectivo' ? selectedEnvelope2 : (accounts.find(a => a.id === selectedAccountId2)?.name || selectedAccountId2 || '')) : undefined
+        },
+        notes: [checkInNotes, selectedReserva.notes].filter(Boolean).join(' | '),
+        dniUrl: finalDniUrl || selectedReserva.dni_image || null,
+        voucherUrl: finalVoucherUrl,
+        operatorName: operatorName
+      });
+
+      // 1. Copiar al portapapeles
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(summaryText);
+        }
+      } catch (clipErr) {
+        console.warn('Fallo al copiar resumen al portapapeles:', clipErr);
+      }
+
+      // 2. Abrir grupo de WhatsApp en nueva pestaña
+      try {
+        window.open(RECEPTION_WA_GROUP_URL, '_blank');
+      } catch (winErr) {
+        console.warn('Fallo al abrir grupo de WhatsApp automáticamente:', winErr);
+      }
+
+      // 3. Mostrar modal con resumen y botón directo
+      setCheckInSummaryModal({
+        show: true,
+        text: summaryText,
+        reservationTitle: `${selectedReserva.guest_name || 'Huésped'} - Hab ${summaryRooms}`,
+        copied: true
+      });
+    } catch (sumErr) {
+      console.error('Error al generar resumen de check-in:', sumErr);
+    }
+
     setShowCheckInModal(false);
     setSelectedReserva(null);
     setDniPreview(null);
     setDniFile(null);
+    setVoucherPreview(null);
+    setVoucherFile(null);
     setPaymentMode(null);
     setPaymentAmount('');
     setPaymentDescription('');
@@ -5671,6 +5828,8 @@ export default function RecepcionPage() {
                     setShowCheckInModal(false);
                     setDniPreview(null);
                     setDniFile(null);
+                    setVoucherPreview(null);
+                    setVoucherFile(null);
                   }}
                   className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-colors active:scale-95 cursor-pointer"
                 >
@@ -8150,6 +8309,108 @@ export default function RecepcionPage() {
                                   )}
                                 </>
                               )}
+
+                              {/* Sección Voucher / Comprobante Obligatorio para Tarjeta o Transferencia */}
+                              {(paymentMode === 'tarjeta' || paymentMode === 'transferencia' || (isSplitPayment && (paymentMode2 === 'tarjeta' || paymentMode2 === 'transferencia'))) && (
+                                <div className="space-y-2.5 p-4 bg-amber-50/80 border-2 border-amber-300 rounded-2xl animate-in fade-in duration-200 text-left mt-3">
+                                  <div className="flex items-center justify-between">
+                                    <h4 className="text-[12px] font-extrabold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                                      <CreditCard size={15} className="text-amber-600" />
+                                      <span>Voucher TPV / Comprobante de Pago</span>
+                                    </h4>
+                                    <span className="text-[10px] font-extrabold text-red-600 bg-red-100 border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                      * OBLIGATORIO
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-amber-900 font-medium leading-relaxed">
+                                    Has seleccionado pago con <strong>{paymentMode === 'tarjeta' || paymentMode2 === 'tarjeta' ? 'Tarjeta (TPV)' : 'Transferencia'}</strong>. Es obligatorio adjuntar la foto del comprobante / voucher para documentar la reservación.
+                                  </p>
+
+                                  {voucherUploadLoading ? (
+                                    <div className="border border-amber-200 bg-white/80 rounded-2xl h-24 flex flex-col items-center justify-center gap-2">
+                                      <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+                                      <span className="text-[12px] font-bold text-amber-800">Procesando voucher...</span>
+                                    </div>
+                                  ) : !voucherPreview ? (
+                                    <div className="border-2 border-dashed border-amber-300 bg-white/70 rounded-2xl p-4 flex flex-col items-center gap-3">
+                                      <span className="text-[11px] font-bold text-amber-800 uppercase tracking-widest text-center">
+                                        Subir Voucher TPV / Comprobante
+                                      </span>
+                                      <div className="flex gap-2 w-full">
+                                        <button
+                                          type="button"
+                                          onClick={() => fileVoucherCameraRef.current?.click()}
+                                          className="flex-1 py-3 bg-amber-900 hover:bg-amber-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                                        >
+                                          <Camera size={15} /> Cámara 📸
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => fileVoucherGalleryRef.current?.click()}
+                                          className="flex-1 py-3 bg-white border border-amber-300 text-amber-950 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-amber-50"
+                                        >
+                                          <Upload size={14} className="text-amber-700" /> Cargar Galería / Archivo 📁
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="file" accept="image/*" capture="environment"
+                                        ref={fileVoucherCameraRef} onChange={handleVoucherUpload} className="hidden"
+                                      />
+                                      <input
+                                        type="file" accept="image/*,application/pdf"
+                                        ref={fileVoucherGalleryRef} onChange={handleVoucherUpload} className="hidden"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-2 animate-in fade-in duration-200">
+                                      <div 
+                                        onClick={() => setZoomImage(voucherPreview)}
+                                        className="relative rounded-2xl overflow-hidden border border-amber-300 shadow-sm bg-white cursor-zoom-in hover:brightness-95 transition-all"
+                                      >
+                                        <img src={voucherPreview} alt="Voucher Preview" className="w-full h-36 object-cover" />
+                                        <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                          <CheckCircle2 size={12} className="text-emerald-400" /> Voucher Cargado
+                                        </div>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => fileVoucherCameraRef.current?.click()}
+                                          className="flex-1 py-2 bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                                        >
+                                          <Camera size={13} /> Cambiar Foto 📸
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => fileVoucherGalleryRef.current?.click()}
+                                          className="flex-1 py-2 bg-white border border-amber-300 text-amber-950 text-[11px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-amber-50"
+                                        >
+                                          <Upload size={13} className="text-amber-700" /> Galería 📁
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setVoucherPreview(null);
+                                            setVoucherFile(null);
+                                          }}
+                                          className="px-3 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
+                                          title="Eliminar voucher"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                      <input
+                                        type="file" accept="image/*" capture="environment"
+                                        ref={fileVoucherCameraRef} onChange={handleVoucherUpload} className="hidden"
+                                      />
+                                      <input
+                                        type="file" accept="image/*,application/pdf"
+                                        ref={fileVoucherGalleryRef} onChange={handleVoucherUpload} className="hidden"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </>
                           );
                         })()}
@@ -8164,6 +8425,19 @@ export default function RecepcionPage() {
             {/* Acción de Envío */}
             {!selectedReserva.checked_in && (
               <div className="p-5 border-t border-zinc-100 bg-zinc-50 flex flex-col gap-2">
+                {(() => {
+                  const requiresVoucher = paymentMode === 'tarjeta' || paymentMode === 'transferencia' || (isSplitPayment && (paymentMode2 === 'tarjeta' || paymentMode2 === 'transferencia'));
+                  if (requiresVoucher && !voucherPreview) {
+                    return (
+                      <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-1.5 animate-in fade-in duration-200">
+                        <CreditCard size={13} className="text-amber-600 shrink-0" />
+                        <span>Obligatorio adjuntar foto del Voucher TPV / Comprobante para continuar</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <button
                   onClick={() => runWithSignature('checkin', () => processCheckIn())}
                   disabled={(() => {
@@ -8175,6 +8449,10 @@ export default function RecepcionPage() {
 
                     // Validación DNI obligatoria para todas las reservas y walk-ins
                     if (!dniPreview) return true;
+
+                    // Validación Voucher obligatoria si se paga con Tarjeta o Transferencia
+                    const requiresVoucher = paymentMode === 'tarjeta' || paymentMode === 'transferencia' || (isSplitPayment && (paymentMode2 === 'tarjeta' || paymentMode2 === 'transferencia'));
+                    if (requiresVoucher && !voucherPreview) return true;
 
                     // Validación campos Walk-in obligatorios
                     if (selectedReserva.id === 'walkin') {
@@ -9031,6 +9309,88 @@ export default function RecepcionPage() {
             setShowCameraModal(false);
           }}
         />
+      )}
+
+      {/* Modal de Resumen y Acceso a Grupo de WhatsApp Recepción */}
+      {checkInSummaryModal?.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-zinc-200 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                  <CheckCircle2 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[15px] leading-tight">Check-In Completado 🎉</h3>
+                  <p className="text-[11.5px] text-emerald-100 font-medium">Resumen listo para enviar al grupo de Recepción</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCheckInSummaryModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 text-left">
+              <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-2xl flex items-start gap-2.5">
+                <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-emerald-900 leading-snug">
+                  <strong>¡Resumen copiado al portapapeles!</strong><br />
+                  Se ha intentado abrir el grupo de WhatsApp de Recepción. Si no se abrió automáticamente, pulsa el botón verde para abrirlo y pega el mensaje.
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                  Vista Previa del Mensaje ({checkInSummaryModal.reservationTitle})
+                </span>
+                <pre className="bg-zinc-950 text-zinc-100 p-4 rounded-2xl text-[11.5px] font-mono leading-relaxed whitespace-pre-wrap select-all max-h-60 overflow-y-auto border border-zinc-800 shadow-inner">
+                  {checkInSummaryModal.text}
+                </pre>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-5 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-2.5">
+              <a
+                href={RECEPTION_WA_GROUP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13.5px] rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <MessageCircle size={18} />
+                <span>Abrir Grupo de Recepción (WhatsApp) 💬</span>
+              </a>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(checkInSummaryModal.text);
+                      setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
+                    }
+                  }}
+                  className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold text-[12.5px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Copy size={15} className="text-zinc-500" />
+                  <span>{checkInSummaryModal.copied ? '✓ ¡Resumen Copiado!' : 'Copiar Resumen'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckInSummaryModal(null)}
+                  className="px-6 py-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 font-bold text-[12.5px] rounded-xl transition-colors cursor-pointer"
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

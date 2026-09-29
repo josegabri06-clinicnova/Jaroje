@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, LogOut } from 'lucide-react';
+import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, LogOut, CreditCard, Sparkles, MessageCircle, Copy } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
 import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
+import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL } from '@/lib/checkin-summary';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -225,6 +226,10 @@ function ReservasListInner() {
   const [paymentDescription, setPaymentDescription] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [dniPreview, setDniPreview] = useState<string | null>(null);
+  const [voucherPreview, setVoucherPreview] = useState<string | null>(null);
+  const [voucherFile, setVoucherFile] = useState<File | null>(null);
+  const [voucherUploadLoading, setVoucherUploadLoading] = useState<boolean>(false);
+  const [checkInSummaryModal, setCheckInSummaryModal] = useState<{ show: boolean; text: string; reservationTitle: string; copied: boolean } | null>(null);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
 
   const [showAcknowledgeGroupModal, setShowAcknowledgeGroupModal] = useState(false);
@@ -253,6 +258,23 @@ function ReservasListInner() {
   const [capacitySettings, setCapacitySettings] = useState<Record<string, { base: number; max: number }> | null>(null);
   const docInputCameraRef = useRef<HTMLInputElement>(null);
   const docInputGalleryRef = useRef<HTMLInputElement>(null);
+  const fileVoucherCameraRef = useRef<HTMLInputElement>(null);
+  const fileVoucherGalleryRef = useRef<HTMLInputElement>(null);
+
+  const handleVoucherUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVoucherUploadLoading(true);
+    try {
+      const b64 = await compressImage(file);
+      setVoucherPreview(b64);
+      setVoucherFile(file);
+    } catch (err) {
+      console.error("Error al procesar voucher:", err);
+    } finally {
+      setVoucherUploadLoading(false);
+    }
+  };
 
   const [reassigningRes, setReassigningRes] = useState<any | null>(null);
   const [showReassignModal, setShowReassignModal] = useState(false);
@@ -926,6 +948,7 @@ function ReservasListInner() {
     setCheckInLoading(true);
     try {
       let document_url = null;
+      let voucher_url: string | null = null;
 
       // 0. Subir DNI/Pasaporte si existe
       if (documentFile) {
@@ -944,6 +967,21 @@ function ReservasListInner() {
             .from('dni_images')
             .getPublicUrl(fileName);
           document_url = publicUrlData.publicUrl;
+        }
+      }
+
+      // 0.1 Subir Voucher TPV / Comprobante si existe
+      if (voucherFile) {
+        try {
+          const fileExt = voucherFile.name.split('.').pop() || 'jpg';
+          const fileName = `voucher_${selectedRes.id}_${Date.now()}.${fileExt}`;
+          const { data, error: vErr } = await supabase.storage.from('dni_images').upload(fileName, voucherFile);
+          if (!vErr && data) {
+            const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
+            voucher_url = publicUrlData.publicUrl;
+          }
+        } catch (vErr) {
+          console.error('Error al subir voucher en reservas:', vErr);
         }
       }
 
@@ -1360,10 +1398,73 @@ function ReservasListInner() {
       setShowPaymentFlow(false);
       setDniPreview(null);
       setDocumentFile(null);
+      setVoucherPreview(null);
+      setVoucherFile(null);
       setPaymentMethod('efectivo');
       setPaymentReference('');
       setPaymentAmount('');
       setPaymentDescription('');
+
+      // Construir resumen de check-in y enviar a grupo de WhatsApp
+      try {
+        const isGroup = selectedCheckInBookings.length > 1;
+        const summaryRooms = selectedCheckInBookings.map((b: any) => b.room_name || b.room || 'General').join(', ');
+        const summaryAdults = selectedCheckInBookings.reduce((sum: number, b: any) => sum + Number(b.num_adult || 1), 0);
+        const summaryChildren = selectedCheckInBookings.reduce((sum: number, b: any) => sum + Number(b.num_child || 0), 0);
+        const summaryCheckIn = selectedRes.check_in || todayStr;
+        const summaryCheckOut = selectedRes.check_out || todayStr;
+        const summaryNights = getNightsBetweenDates(summaryCheckIn, summaryCheckOut);
+        const summaryTotalStay = selectedCheckInBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0);
+        const summaryDailyRate = (summaryNights > 0 && selectedCheckInBookings.length > 0)
+          ? (summaryTotalStay / selectedCheckInBookings.length / summaryNights)
+          : undefined;
+
+        const isOtaRes = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => selectedRes.channel.toLowerCase().includes(c));
+        const matchedAcc = accounts.find((a: any) => a.id === paymentReference);
+        const accountOrEnv = paymentMethod === 'efectivo' ? paymentReference : (matchedAcc?.name || paymentReference || '');
+
+        const summaryText = buildCheckInSummaryMessage({
+          guestName: selectedRes.guest_name || 'Huésped',
+          rooms: summaryRooms,
+          phone: selectedRes.phone || selectedRes.mobile || selectedRes.guest_phone || '',
+          adults: summaryAdults,
+          children: summaryChildren,
+          checkIn: summaryCheckIn,
+          checkOut: summaryCheckOut,
+          nights: summaryNights,
+          dailyRate: summaryDailyRate && summaryDailyRate > 0 ? summaryDailyRate : undefined,
+          totalStay: summaryTotalStay,
+          channel: selectedRes.channel || 'Directo',
+          paymentDetails: {
+            method: paymentMethod || (isOtaRes ? 'prepagado' : 'efectivo'),
+            amountPaid: paymentAmountNum,
+            accountOrEnvelope: accountOrEnv
+          },
+          notes: [paymentDescription, selectedRes.notes].filter(Boolean).join(' | '),
+          dniUrl: document_url || selectedRes.document_url || null,
+          voucherUrl: voucher_url,
+          operatorName: employeeName
+        });
+
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(summaryText);
+        }
+
+        try {
+          window.open(RECEPTION_WA_GROUP_URL, '_blank');
+        } catch (openErr) {
+          console.warn('Bloqueo de ventana emergente al abrir grupo WhatsApp:', openErr);
+        }
+
+        setCheckInSummaryModal({
+          show: true,
+          text: summaryText,
+          reservationTitle: `${selectedRes.guest_name || 'Huésped'} - Hab ${summaryRooms}`,
+          copied: true
+        });
+      } catch (sumErr) {
+        console.error('Error al generar resumen de WhatsApp:', sumErr);
+      }
       
       alert('✅ Check-In completado exitosamente.');
 
@@ -4686,6 +4787,108 @@ function ReservasListInner() {
                             className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-[13px] focus:ring-2 focus:ring-zinc-900/10 font-medium text-zinc-900"
                           />
                         </div>
+
+                        {/* ADJUNTAR VOUCHER DE PAGO TPV / COMPROBANTE DE TRANSFERENCIA (OBLIGATORIO) */}
+                        {(paymentMethod === 'tarjeta' || paymentMethod === 'transferencia') && (
+                          <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl space-y-3 mb-2 animate-in fade-in duration-200">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-[12px] font-extrabold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                                <CreditCard size={15} className="text-amber-600" />
+                                <span>Voucher TPV / Comprobante de Pago</span>
+                              </h4>
+                              <span className="text-[10px] font-extrabold text-red-600 bg-red-100 border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                * OBLIGATORIO
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-amber-900 font-medium leading-relaxed">
+                              Has seleccionado pago con <strong>{paymentMethod === 'tarjeta' ? 'Tarjeta (TPV)' : 'Transferencia'}</strong>. Es obligatorio adjuntar la foto del comprobante / voucher para documentar la reservación.
+                            </p>
+
+                            {voucherUploadLoading ? (
+                              <div className="border border-amber-200 bg-white/80 rounded-2xl h-24 flex flex-col items-center justify-center gap-2">
+                                <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+                                <span className="text-[12px] font-bold text-amber-800">Procesando voucher...</span>
+                              </div>
+                            ) : !voucherPreview ? (
+                              <div className="border-2 border-dashed border-amber-300 bg-white/70 rounded-2xl p-4 flex flex-col items-center gap-3">
+                                <span className="text-[11px] font-bold text-amber-800 uppercase tracking-widest text-center">
+                                  Subir Voucher TPV / Comprobante
+                                </span>
+                                <div className="flex gap-2 w-full">
+                                  <button
+                                    type="button"
+                                    onClick={() => fileVoucherCameraRef.current?.click()}
+                                    className="flex-1 py-3 bg-amber-900 hover:bg-amber-950 text-white text-[12px] font-extrabold rounded-xl transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                                  >
+                                    <Camera size={15} /> Cámara 📸
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => fileVoucherGalleryRef.current?.click()}
+                                    className="flex-1 py-3 bg-white border border-amber-300 text-amber-950 text-[12px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-amber-50"
+                                  >
+                                    <Upload size={14} className="text-amber-700" /> Cargar Archivo 📁
+                                  </button>
+                                </div>
+                                <input
+                                  type="file" accept="image/*" capture="environment"
+                                  ref={fileVoucherCameraRef} onChange={handleVoucherUpload} className="hidden"
+                                />
+                                <input
+                                  type="file" accept="image/*,application/pdf"
+                                  ref={fileVoucherGalleryRef} onChange={handleVoucherUpload} className="hidden"
+                                />
+                              </div>
+                            ) : (
+                              <div className="space-y-2 animate-in fade-in duration-200">
+                                <div 
+                                  onClick={() => setZoomImage(voucherPreview)}
+                                  className="relative rounded-2xl border border-amber-300 shadow-sm bg-white cursor-zoom-in hover:brightness-95 transition-all overflow-hidden"
+                                >
+                                  <img src={voucherPreview} alt="Voucher Preview" className="w-full h-36 object-cover" />
+                                  <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                                    <CheckCircle2 size={12} className="text-emerald-400" /> Voucher Cargado
+                                  </div>
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => fileVoucherCameraRef.current?.click()}
+                                    className="flex-1 py-2 bg-amber-900 hover:bg-amber-950 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                                  >
+                                    <Camera size={13} /> Cambiar Foto 📸
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => fileVoucherGalleryRef.current?.click()}
+                                    className="flex-1 py-2 bg-white border border-amber-300 text-amber-950 text-[11px] font-extrabold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-98 hover:bg-amber-50"
+                                  >
+                                    <Upload size={13} className="text-amber-700" /> Galería 📁
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setVoucherPreview(null);
+                                      setVoucherFile(null);
+                                    }}
+                                    className="px-3 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
+                                    title="Eliminar voucher"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                                <input
+                                  type="file" accept="image/*" capture="environment"
+                                  ref={fileVoucherCameraRef} onChange={handleVoucherUpload} className="hidden"
+                                />
+                                <input
+                                  type="file" accept="image/*,application/pdf"
+                                  ref={fileVoucherGalleryRef} onChange={handleVoucherUpload} className="hidden"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
@@ -6284,45 +6487,64 @@ function ReservasListInner() {
                       )}
                     </>
                   ) : showPaymentFlow ? (
-                    <div className="col-span-2 flex gap-2 w-full animate-in fade-in duration-200">
-                      <button 
-                        onClick={() => {
-                          setShowPaymentFlow(false);
-                          setDniPreview(null);
-                          setDocumentFile(null);
-                          setPaymentMethod('efectivo');
-                          setPaymentReference('');
-                          setPaymentAmount('');
-                          setPaymentDescription('');
-                        }} 
-                        className="flex-1 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[12.5px] transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button 
-                        onClick={handleConfirmCheckIn} 
-                        disabled={(() => {
-                          if (checkInLoading) return true;
-                          if (!dniPreview) return true;
-                          if (checkInSelectedIds.length === 0) return true;
-                          
-                          const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                          const pendingBalance = isOta ? 0 : selectedCheckInTotalBalance;
+                    <div className="col-span-2 flex flex-col gap-2 w-full animate-in fade-in duration-200">
+                      {(() => {
+                        const requiresVoucher = (paymentMethod === 'tarjeta' || paymentMethod === 'transferencia') && Number(paymentAmount || 0) > 0;
+                        if (requiresVoucher && !voucherPreview) {
+                          return (
+                            <div className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-1.5">
+                              <CreditCard size={13} className="text-amber-600 shrink-0" />
+                              <span>Obligatorio adjuntar foto del Voucher TPV / Comprobante para continuar</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                      <div className="flex gap-2 w-full">
+                        <button 
+                          onClick={() => {
+                            setShowPaymentFlow(false);
+                            setDniPreview(null);
+                            setDocumentFile(null);
+                            setVoucherPreview(null);
+                            setVoucherFile(null);
+                            setPaymentMethod('efectivo');
+                            setPaymentReference('');
+                            setPaymentAmount('');
+                            setPaymentDescription('');
+                          }} 
+                          className="flex-1 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl text-[12.5px] transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          onClick={handleConfirmCheckIn} 
+                          disabled={(() => {
+                            if (checkInLoading) return true;
+                            if (!dniPreview) return true;
+                            if (checkInSelectedIds.length === 0) return true;
+                            
+                            const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                            const pendingBalance = isOta ? 0 : selectedCheckInTotalBalance;
 
-                          const currentPayment = Number(paymentAmount || 0);
-                          if (currentPayment > 0 && !paymentReference.trim()) return true;
-                          if (pendingBalance > 0) {
-                            if (!paymentReference.trim()) return true;
-                            if (currentPayment < pendingBalance) return true;
-                          }
+                            const currentPayment = Number(paymentAmount || 0);
+                            const requiresVoucher = (paymentMethod === 'tarjeta' || paymentMethod === 'transferencia') && currentPayment > 0;
+                            if (requiresVoucher && !voucherPreview) return true;
 
-                          return false;
-                        })()}
-                        className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[12.5px] shadow-sm disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-1.5 cursor-pointer"
-                      >
-                        {checkInLoading ? <RefreshCw size={15} className="animate-spin" /> : <LogIn size={15} />}
-                        {checkInLoading ? 'Procesando...' : 'Completar Check-In'}
-                      </button>
+                            if (currentPayment > 0 && !paymentReference.trim()) return true;
+                            if (pendingBalance > 0) {
+                              if (!paymentReference.trim()) return true;
+                              if (currentPayment < pendingBalance) return true;
+                            }
+
+                            return false;
+                          })()}
+                          className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-[12.5px] shadow-sm disabled:opacity-50 transition-all active:scale-[0.98] flex justify-center items-center gap-1.5 cursor-pointer"
+                        >
+                          {checkInLoading ? <RefreshCw size={15} className="animate-spin" /> : <LogIn size={15} />}
+                          {checkInLoading ? 'Procesando...' : 'Completar Check-In'}
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="col-span-2 w-full">
@@ -7247,6 +7469,88 @@ function ReservasListInner() {
                   <span>✓ Confirmar Aprobación</span>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Resumen y Acceso a Grupo de WhatsApp Recepción */}
+      {checkInSummaryModal?.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-zinc-200 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                  <CheckCircle2 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[15px] leading-tight">Check-In Completado 🎉</h3>
+                  <p className="text-[11.5px] text-emerald-100 font-medium">Resumen listo para enviar al grupo de Recepción</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCheckInSummaryModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 text-left">
+              <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-2xl flex items-start gap-2.5">
+                <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-emerald-900 leading-snug">
+                  <strong>¡Resumen copiado al portapapeles!</strong><br />
+                  Se ha intentado abrir el grupo de WhatsApp de Recepción. Si no se abrió automáticamente, pulsa el botón verde para abrirlo y pega el mensaje.
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                  Vista Previa del Mensaje ({checkInSummaryModal.reservationTitle})
+                </span>
+                <pre className="bg-zinc-950 text-zinc-100 p-4 rounded-2xl text-[11.5px] font-mono leading-relaxed whitespace-pre-wrap select-all max-h-60 overflow-y-auto border border-zinc-800 shadow-inner">
+                  {checkInSummaryModal.text}
+                </pre>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-5 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-2.5">
+              <a
+                href={RECEPTION_WA_GROUP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13.5px] rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <MessageCircle size={18} />
+                <span>Abrir Grupo de Recepción (WhatsApp) 💬</span>
+              </a>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      navigator.clipboard.writeText(checkInSummaryModal.text);
+                      setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
+                    }
+                  }}
+                  className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold text-[12.5px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Copy size={15} className="text-zinc-500" />
+                  <span>{checkInSummaryModal.copied ? '✓ ¡Resumen Copiado!' : 'Copiar Resumen'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckInSummaryModal(null)}
+                  className="px-6 py-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 font-bold text-[12.5px] rounded-xl transition-colors cursor-pointer"
+                >
+                  Listo
+                </button>
+              </div>
             </div>
           </div>
         </div>
