@@ -15,7 +15,7 @@ const AIRBNB_TAX_FACTOR = 1.21; // 21% IVA para Airbnb
 // Cache en memoria para evitar saturar el rate limit de Beds24 en peticiones recurrentes
 let _cachedPricesResponse: any = null;
 let _cachedPricesTimestamp: number = 0;
-const CACHE_TTL_MS = 60 * 1000; // 60 segundos de caché
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de caché en memoria para máxima velocidad
 
 const ROOMS: { id: string; name: string; icon: string }[] = [
   { id: '679077', name: 'Habitación Doble', icon: '🛏️' },

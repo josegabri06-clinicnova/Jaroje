@@ -26,6 +26,52 @@ export interface CheckInSummaryParams {
   operatorName: string;
 }
 
+/**
+ * Copia texto al portapapeles de forma ultra robusta.
+ * Utiliza navigator.clipboard.writeText si está disponible y con foco,
+ * y fallback síncrono mediante textarea temporal en el DOM para evitar bloqueos tras operaciones asíncronas.
+ */
+export async function copyToClipboard(text: string): Promise<boolean> {
+  // 1. Intento con API nativa asíncrona
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      console.warn('navigator.clipboard.writeText falló, intentando fallback execCommand:', e);
+    }
+  }
+
+  // 2. Fallback síncrono con textarea en DOM (indispensable en iOS/Safari tras llamadas de red)
+  if (typeof document !== 'undefined') {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      textArea.style.width = '2em';
+      textArea.style.height = '2em';
+      textArea.style.padding = '0';
+      textArea.style.border = 'none';
+      textArea.style.outline = 'none';
+      textArea.style.boxShadow = 'none';
+      textArea.style.background = 'transparent';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      textArea.setSelectionRange(0, text.length);
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    } catch (err) {
+      console.error('Fallback execCommand falló:', err);
+    }
+  }
+  return false;
+}
+
 export function buildCheckInSummaryMessage(p: CheckInSummaryParams): string {
   const isOta = p.channel && ['airbnb', 'booking', 'expedia', 'vrbo'].some(c => p.channel?.toLowerCase().includes(c));
 
@@ -70,6 +116,7 @@ export function buildCheckInSummaryMessage(p: CheckInSummaryParams): string {
              `🚪 *Habitación(es):* ${p.rooms}\n` +
              `📱 *Teléfono:* ${p.phone || 'No registrado'}\n` +
              `👥 *# Personas:* ${guestsText}\n` +
+             (p.channel ? `📍 *Canal:* ${p.channel}\n` : '') +
              (p.dailyRate && p.dailyRate > 0 ? `💵 *Tarifa:* $${Math.round(p.dailyRate).toLocaleString('es-MX')} MXN / noche\n` : '') +
              `📅 *# Noches:* ${datesText}\n` +
              `💰 *Total Estancia:* $${Math.round(p.totalStay).toLocaleString('es-MX')} MXN\n` +

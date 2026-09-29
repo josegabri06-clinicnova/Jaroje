@@ -9,7 +9,7 @@ import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
 import { computeOtaSplit, getCapacityRules, detectAndAdjustGroupGuests, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
-import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL } from '@/lib/checkin-summary';
+import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard } from '@/lib/checkin-summary';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -945,6 +945,9 @@ function ReservasListInner() {
       return;
     }
 
+    // 1. Pre-abrir ventana para WhatsApp antes de llamadas async para evitar bloqueo de popups
+    const waWindow = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+
     setCheckInLoading(true);
     try {
       let document_url = null;
@@ -1446,24 +1449,18 @@ function ReservasListInner() {
           operatorName: employeeName
         });
 
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-          navigator.clipboard.writeText(summaryText);
-        }
+        // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
+        await copyToClipboard(summaryText);
 
-        try {
+        // 2. Redirigir la ventana pre-abierta al grupo de WhatsApp (evita bloqueo del navegador)
+        if (waWindow && !waWindow.closed) {
+          waWindow.location.href = RECEPTION_WA_GROUP_URL;
+        } else {
           window.open(RECEPTION_WA_GROUP_URL, '_blank');
-        } catch (openErr) {
-          console.warn('Bloqueo de ventana emergente al abrir grupo WhatsApp:', openErr);
         }
-
-        setCheckInSummaryModal({
-          show: true,
-          text: summaryText,
-          reservationTitle: `${selectedRes.guest_name || 'Huésped'} - Hab ${summaryRooms}`,
-          copied: true
-        });
       } catch (sumErr) {
         console.error('Error al generar resumen de WhatsApp:', sumErr);
+        if (waWindow && !waWindow.closed) waWindow.close();
       }
       
       alert('✅ Check-In completado exitosamente.');
@@ -1473,6 +1470,7 @@ function ReservasListInner() {
       }, 3000);
 
     } catch (err: any) {
+      if (waWindow && !waWindow.closed) waWindow.close();
       console.error(err);
       alert(`❌ Error al completar Check-In:\n\n${err.message}`);
     } finally {

@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
-import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL } from '@/lib/checkin-summary';
+import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard } from '@/lib/checkin-summary';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -1284,6 +1284,10 @@ export default function CalendarPage() {
 
   const processCheckIn = async () => {
     if (!selectedReserva) return;
+
+    // 1. Pre-abrir ventana para WhatsApp antes de llamadas async para evitar bloqueo de popups
+    const waWindow = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
+
     setSubmitting(true);
 
     const emp = getOperatorForLog();
@@ -1451,6 +1455,7 @@ export default function CalendarPage() {
     }, { onConflict: 'reservation_id' });
 
     if (upsertErr) {
+      if (waWindow && !waWindow.closed) waWindow.close();
       console.error("Supabase Checkin Error:", upsertErr);
       alert("Fallo al guardar el Check-In en la base de datos: " + upsertErr.message);
       setSubmitting(false);
@@ -2006,31 +2011,18 @@ export default function CalendarPage() {
         operatorName: operatorName
       });
 
-      // 1. Copiar al portapapeles
-      try {
-        if (typeof navigator !== 'undefined' && navigator.clipboard) {
-          navigator.clipboard.writeText(summaryText);
-        }
-      } catch (clipErr) {
-        console.warn('Fallo al copiar resumen al portapapeles:', clipErr);
-      }
+      // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
+      await copyToClipboard(summaryText);
 
-      // 2. Abrir grupo de WhatsApp en nueva pestaña
-      try {
+      // 2. Redirigir la ventana pre-abierta al grupo de WhatsApp (evita bloqueo del navegador)
+      if (waWindow && !waWindow.closed) {
+        waWindow.location.href = RECEPTION_WA_GROUP_URL;
+      } else {
         window.open(RECEPTION_WA_GROUP_URL, '_blank');
-      } catch (winErr) {
-        console.warn('Fallo al abrir grupo de WhatsApp automáticamente:', winErr);
       }
-
-      // 3. Mostrar modal con resumen y botón directo
-      setCheckInSummaryModal({
-        show: true,
-        text: summaryText,
-        reservationTitle: `${selectedReserva.guest_name || 'Huésped'} - Hab ${selectedReserva.room}`,
-        copied: true
-      });
     } catch (sumErr) {
       console.error('Error al generar resumen de check-in en calendario:', sumErr);
+      if (waWindow && !waWindow.closed) waWindow.close();
     }
 
     setShowCheckInModal(false);
