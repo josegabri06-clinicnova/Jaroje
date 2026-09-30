@@ -834,11 +834,7 @@ export default function RecepcionPage() {
       alert(`No se pudo generar el reporte: ${err.message || err}`);
     }
 
-    try {
-      window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
-    } catch (e) {
-      console.warn("No se pudo abrir WhatsApp:", e);
-    }
+    openWhatsAppUrl(RECEPTION_WA_GROUP_URL);
   };
 
   // Inicializar Empleado Activo
@@ -8726,8 +8722,8 @@ export default function RecepcionPage() {
                       (createdTaskId ? `🔗 *Ver/Gestionar Reporte:* https://jaroje-app.vercel.app/mantenimiento?taskId=${createdTaskId}\n\n` : '') +
                       `_Generado automáticamente desde Jaroje OS_`;
 
-                    navigator.clipboard.writeText(waText).catch(() => {});
-                    window.open('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', '_blank');
+                    await copyToClipboard(waText);
+                    openWhatsAppUrl('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq');
                   });
                 }}
                 disabled={!form.description.trim() || submitting}

@@ -1,4 +1,4 @@
-export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?mode=gi_t';
+export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma';
 
 export interface CheckInSummaryParams {
   guestName: string;
