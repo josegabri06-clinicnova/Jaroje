@@ -13,6 +13,7 @@ import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
 import { getSeason } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
+import { copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 
 // Inicializar Supabase cliente
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -491,7 +492,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCopyDailyReport = () => {
+  const handleCopyDailyReport = async () => {
     if (reservas.length === 0) {
       alert("No hay datos de reservaciones cargados para generar el reporte.");
       return;
@@ -645,42 +646,10 @@ export default function AdminDashboard() {
 
     text += `_Generado automáticamente desde Jaroje OS para contingencia offline_`;
 
-    let copiado = false;
-    try {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.top = "0";
-      textArea.style.left = "0";
-      textArea.style.position = "fixed";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      copiado = document.execCommand('copy');
-      document.body.removeChild(textArea);
-    } catch (err) {
-      console.warn("document.execCommand falló, intentando alternativa:", err);
-    }
-
-    if (copiado) {
-      setToastMsg('📋 ¡Reporte copiado! Pegar en WhatsApp');
-      setTimeout(() => setToastMsg(''), 4000);
-    } else if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        setToastMsg('📋 ¡Reporte copiado! Pegar en WhatsApp');
-        setTimeout(() => setToastMsg(''), 4000);
-      }).catch(err => {
-        console.error("Error al copiar al portapapeles:", err);
-        alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
-      });
-    } else {
-      alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
-    }
-
-    try {
-      window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
-    } catch (e) {
-      console.warn("No se pudo abrir WhatsApp:", e);
-    }
+    await copyToClipboard(text);
+    setToastMsg('📋 ¡Reporte copiado! Abriendo WhatsApp...');
+    setTimeout(() => setToastMsg(''), 4000);
+    openWhatsAppUrl({ text });
   };
 
   const fetchAllRef = useRef(fetchAll);

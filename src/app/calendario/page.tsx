@@ -2010,8 +2010,8 @@ export default function CalendarPage() {
       // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
       await copyToClipboard(summaryText);
 
-      // 2. Redirigir limpiamente al grupo de WhatsApp (Universal Link en móvil sin pestañas en blanco)
-      openWhatsAppUrl(RECEPTION_WA_GROUP_URL);
+      // 2. Redirigir limpiamente a WhatsApp con el texto ya pre-cargado listo para enviar
+      openWhatsAppUrl({ text: summaryText });
     } catch (sumErr) {
       console.error('Error al generar resumen de check-in en calendario:', sumErr);
     }

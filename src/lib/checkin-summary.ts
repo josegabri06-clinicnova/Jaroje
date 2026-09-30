@@ -72,21 +72,71 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   return false;
 }
 
+export interface OpenWhatsAppOptions {
+  text?: string;
+  url?: string;
+  phone?: string;
+}
+
 /**
- * Abre el enlace de WhatsApp de manera directa e instantánea sin dejar pestañas huérfanas en 'about:blank'.
- * En iOS y Android navega directamente activando el Universal Link hacia la App nativa de WhatsApp.
- * En computadoras de escritorio abre una nueva pestaña limpia.
+ * Abre WhatsApp con el mensaje pre-cargado o redirige a la URL/grupo de WhatsApp.
+ * Si se pasa texto, utiliza el endpoint universal de WhatsApp (https://api.whatsapp.com/send?text=...)
+ * para que el mensaje aparezca automáticamente escrito en la caja de texto y el usuario solo deba pulsar Enviar.
+ * Además, garantiza una copia en el portapapeles como respaldo.
+ * En iOS y Android realiza la navegación directa (Universal Link) para no dejar pestañas vacías.
  */
-export function openWhatsAppUrl(url: string = RECEPTION_WA_GROUP_URL): void {
+export function openWhatsAppUrl(
+  target?: string | OpenWhatsAppOptions,
+  legacyText?: string
+): void {
   if (typeof window === 'undefined') return;
+
+  let finalUrl = '';
+  let textToPreload = '';
+
+  if (typeof target === 'object' && target !== null) {
+    textToPreload = target.text || '';
+    if (target.url) {
+      finalUrl = target.url;
+    } else if (target.phone) {
+      const cleanPhone = target.phone.replace(/\D/g, '');
+      finalUrl = textToPreload
+        ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(textToPreload)}`
+        : `https://api.whatsapp.com/send?phone=${cleanPhone}`;
+    } else if (textToPreload) {
+      finalUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToPreload)}`;
+    } else {
+      finalUrl = RECEPTION_WA_GROUP_URL;
+    }
+  } else if (typeof target === 'string') {
+    if (target.startsWith('http://') || target.startsWith('https://') || target.startsWith('whatsapp://')) {
+      finalUrl = target;
+      textToPreload = legacyText || '';
+      // Si recibimos URL de grupo pero también texto, preferimos abrir con texto pre-cargado
+      if (textToPreload && !finalUrl.includes('?text=')) {
+        finalUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToPreload)}`;
+      }
+    } else {
+      // Es el texto directo del mensaje
+      textToPreload = target;
+      finalUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToPreload)}`;
+    }
+  } else {
+    finalUrl = RECEPTION_WA_GROUP_URL;
+  }
+
+  // Respaldo de seguridad en portapapeles
+  if (textToPreload) {
+    copyToClipboard(textToPreload).catch(() => {});
+  }
 
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
 
   if (isMobile) {
-    window.location.href = url;
+    window.location.href = finalUrl;
   } else {
     const link = document.createElement('a');
-    link.href = url;
+    link.href = finalUrl;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     document.body.appendChild(link);

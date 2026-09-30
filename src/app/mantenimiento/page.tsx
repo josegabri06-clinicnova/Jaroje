@@ -752,7 +752,7 @@ export default function MantenimientoPage() {
         `_Generado automáticamente desde Jaroje OS_`;
 
       await copyToClipboard(waText);
-      openWhatsAppUrl('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq');
+      openWhatsAppUrl({ text: waText });
     }
 
     setShowModal(false);

@@ -954,7 +954,7 @@ export default function RecepcionPage() {
           `⏰ _Registrado el ${dateFormatted}_`;
 
         await copyToClipboard(waText);
-        openWhatsAppUrl(RECEPTION_WA_GROUP_URL);
+        openWhatsAppUrl({ text: waText });
         alert('✅ Observación guardada con éxito.\n📋 ¡Reporte copiado! Abriendo grupo de WhatsApp Recepción...');
       } else {
         alert('✅ Observación borrada con éxito.');
@@ -4984,8 +4984,8 @@ export default function RecepcionPage() {
       // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
       await copyToClipboard(summaryText);
 
-      // 2. Abrir grupo de WhatsApp directamente (Universal Link en móvil, nueva pestaña limpia en PC)
-      openWhatsAppUrl(RECEPTION_WA_GROUP_URL);
+      // 2. Abrir WhatsApp con el texto ya pre-cargado listo para enviar (Universal Link en móvil, pestaña limpia en PC)
+      openWhatsAppUrl({ text: summaryText });
     } catch (sumErr) {
       console.error('Error al generar resumen de check-in:', sumErr);
     }
