@@ -78,6 +78,10 @@ export default function RealtimeLogNotifier() {
             newLog.action === 'whatsapp-warning' ||
             newLog.action === 'whatsapp-error' ||
             newLog.action === 'whatsapp-text-warning' ||
+            newLog.action === 'guest_message_received' ||
+            newLog.action === 'human_mode_activated' ||
+            newLog.action === 'start_new_chat' ||
+            newLog.module === 'whatsapp' ||
             newLog.employee_num === 'ycloud-webhook' ||
             newLog.employee_num === 'webhook-debug' ||
             newLog.employee_num === 'wa-guest' ||
@@ -100,7 +104,6 @@ export default function RealtimeLogNotifier() {
             // Sesiones y Turnos
             'inicio_sesion_turno': 'Inicio de Turno',
             'inicio_sesion': 'Inicio de Sesión',
-            'start_new_chat': 'Chat Iniciado 💬',
             // Reservas
             'check_in': 'Check-In Procesado 🔑',
             'check_in_procesado': 'Check-In Guardado 🔑',
@@ -138,14 +141,11 @@ export default function RealtimeLogNotifier() {
             'nuevo_articulo': 'Artículo Creado 📦',
             'actualizacion_articulo': 'Parámetros Actualizados 📦',
             'eliminar_articulo': 'Artículo Eliminado ✕',
-            // Otros / Bot
-            'human_mode_activated': 'Ayuda Requerida (Bot Off) ⚠️',
+            // Otros
             'toggle_archive': 'Chat Archivado/Desarchivado 📁',
             'toggle_mode': 'Modo Bot Alternado 🤖',
-            'webhook_received': 'Notificación Recibida 📥',
             'change_room_status': 'Estado de Habitación Cambiado 🧹',
             'transfer_receipt_submitted': 'Anticipo por Aprobar 💳',
-            'guest_message_received': 'Mensaje de Huésped 💬',
           };
           const friendlyTitle = friendlyActions[actionText] || actionText.replace(/_/g, ' ');
 
@@ -155,8 +155,6 @@ export default function RealtimeLogNotifier() {
           let destinationUrl = `/historial?id=${newLog.id}`;
           if (newLog.action === 'transfer_receipt_submitted') {
             destinationUrl = '/reservas?tab=Por+Aprobar';
-          } else if (newLog.action === 'guest_message_received' || newLog.action === 'human_mode_activated') {
-            destinationUrl = '/reservas';
           }
 
           // Activar notificación toast
@@ -173,49 +171,8 @@ export default function RealtimeLogNotifier() {
       )
       .subscribe();
 
-    // 2. Suscribirse a actualizaciones en la tabla conversations en tiempo real (WhatsApp de huéspedes)
-    const channelConversations = supabase
-      .channel('realtime-conversations')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'conversations' },
-        (payload) => {
-          console.log('Cambio detectado en conversaciones en tiempo real:', payload);
-          const newConv = payload.new as any;
-          if (!newConv || !newConv.messages) return;
-
-          const lastMsg = newConv.messages[newConv.messages.length - 1];
-          if (lastMsg && lastMsg.role_guest) {
-            const msgTime = new Date(lastMsg.timestamp).getTime();
-            const messageKey = `wa_${newConv.id}_${msgTime}`;
-
-            // Evitar duplicados y verificar que sea reciente (últimos 5 minutos para tolerar descalibración horaria)
-            if (!notifiedKeys.current.has(messageKey) && Math.abs(Date.now() - msgTime) < 5 * 60 * 1000) {
-              notifiedKeys.current.add(messageKey);
-              console.log('¡Nuevo mensaje de WhatsApp de huésped detectado!', lastMsg);
-              
-              // Reproducir el sonido sintético premium
-              playPremiumChime();
-
-              // Activar notificación toast
-              setNotification({
-                id: messageKey,
-                title: `Mensaje de ${newConv.guest_name || 'Huésped'} 💬`,
-                desc: lastMsg.role_guest.length > 60 
-                  ? lastMsg.role_guest.slice(0, 60) + '...' 
-                  : lastMsg.role_guest,
-                module: 'whatsapp',
-                destinationUrl: '/reservas'
-              });
-            }
-          }
-        }
-      )
-      .subscribe();
-
     return () => {
       supabase.removeChannel(channelLogs);
-      supabase.removeChannel(channelConversations);
     };
   }, []);
 

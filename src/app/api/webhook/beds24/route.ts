@@ -242,14 +242,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ success: true, message: 'Reserva sibling explícita, se omite notificación.' });
           }
 
-          // 4. Deduplicación por teléfono (para reservas multi-habitación y reintentos de webhook)
-          const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+          // 4. Deduplicación por teléfono exclusiva para reservas multi-habitación simultáneas (ventana de 15 minutos)
+          const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
           const cleanPhoneDigits = phone.replace(/\D/g, '');
           const { data: recentPhoneLog } = await supabase
             .from('whatsapp_logs')
             .select('id, reservation_id')
             .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'omitido_multi_habitacion'])
-            .gte('sent_at', thirtyDaysAgo)
+            .gte('sent_at', fifteenMinutesAgo)
             .limit(50);
 
           const phoneAlreadyNotified = (recentPhoneLog || []).some((l: any) => {
@@ -265,8 +265,8 @@ export async function POST(req: Request) {
               sent_at: new Date().toISOString(),
               status: 'sent'
             }]);
-            console.log(`[Webhook Beds24] Omitiendo duplicado para teléfono ${phone} (reserva ${bookingIdStr}, ya enviado mensaje previo)`);
-            return NextResponse.json({ success: true, message: 'Notificación inicial ya enviada previamente al teléfono para esta estancia.' });
+            console.log(`[Webhook Beds24] Omitiendo duplicado simultáneo multi-habitación para teléfono ${phone} (reserva ${bookingIdStr})`);
+            return NextResponse.json({ success: true, message: 'Notificación inicial ya enviada a la habitación principal del grupo.' });
           }
 
           // 5. Preparar datos de la reserva para WhatsApp y calcular si está confirmada

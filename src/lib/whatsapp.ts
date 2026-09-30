@@ -375,8 +375,22 @@ export async function sendWhatsAppTemplate(
       const bIdStr = bookingId ? String(bookingId) : '';
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      // 1. Regla de Oro: Mensaje inicial (solicitud_recibida o reservacion_confirmada) se envía MÁXIMO UNA VEZ por reserva
-      if (templateName === 'solicitud_recibida' || templateName === 'reservacion_confirmada') {
+      // 1. Regla: reservacion_confirmada y solicitud_recibida
+      if (templateName === 'reservacion_confirmada') {
+        if (bIdStr) {
+          const { data: existingConfirmLog } = await supabase
+            .from('whatsapp_logs')
+            .select('id')
+            .eq('reservation_id', bIdStr)
+            .eq('template_name', 'reservacion_confirmada')
+            .limit(1);
+
+          if (existingConfirmLog && existingConfirmLog.length > 0) {
+            console.log(`[WhatsApp Deduplicador DB] Omitiendo reservacion_confirmada, la reserva ${bIdStr} ya tiene registrada confirmación previa.`);
+            return { success: true, data: { deduplicated: true, message: `reservacion_confirmada ya enviada previamente a esta reserva.` } };
+          }
+        }
+      } else if (templateName === 'solicitud_recibida') {
         if (bIdStr) {
           const { data: initialLogs } = await supabase
             .from('whatsapp_logs')
@@ -386,24 +400,9 @@ export async function sendWhatsAppTemplate(
             .limit(1);
 
           if (initialLogs && initialLogs.length > 0) {
-            console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, la reserva ${bIdStr} ya tiene registrado envío inicial (${initialLogs[0].template_name})`);
+            console.log(`[WhatsApp Deduplicador DB] Omitiendo solicitud_recibida, la reserva ${bIdStr} ya tiene registrado mensaje inicial (${initialLogs[0].template_name})`);
             return { success: true, data: { deduplicated: true, message: `Mensaje inicial ya enviado previamente a esta reserva.` } };
           }
-        }
-
-        // Deduplicación por teléfono en ventana de 24 horas para evitar ráfagas por webhook + cron + reservas
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const { data: phoneInitialLogs } = await supabase
-          .from('whatsapp_logs')
-          .select('id')
-          .eq('phone', cleanedPhone)
-          .in('template_name', ['solicitud_recibida', 'reservacion_confirmada'])
-          .gte('sent_at', twentyFourHoursAgo)
-          .limit(1);
-
-        if (phoneInitialLogs && phoneInitialLogs.length > 0) {
-          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, el teléfono ${cleanedPhone} ya recibió confirmación inicial en las últimas 24h.`);
-          return { success: true, data: { deduplicated: true, message: `Mensaje inicial ya enviado recientemente a este número.` } };
         }
       }
 
