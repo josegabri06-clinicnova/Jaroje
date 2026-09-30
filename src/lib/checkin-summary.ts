@@ -79,8 +79,8 @@ export interface OpenWhatsAppOptions {
 }
 
 /**
- * Normaliza y formatea un teléfono para que se muestre de forma limpia (ej: 871 217 0118)
- * y genere un enlace directo accesible a WhatsApp (https://wa.me/528712170118).
+ * Normaliza y formatea un teléfono para que se muestre de forma limpia (ej: 871 217 0118 o 958 116 8698)
+ * sin añadir ligas URLs adicionales, permitiendo que WhatsApp lo reconozca nativamente como número interactivo.
  */
 export function formatPhoneForDisplay(rawPhone?: string | null): string {
   if (!rawPhone) return 'No registrado';
@@ -92,25 +92,20 @@ export function formatPhoneForDisplay(rawPhone?: string | null): string {
 
   // Manejo especial para México (10 dígitos locales, o con prefijo 521 / 52)
   let local10 = '';
-  let fullWaDigits = '';
 
   if (digits.length === 10) {
     local10 = digits;
-    fullWaDigits = `52${local10}`;
   } else if (digits.length === 13 && digits.startsWith('521')) {
     local10 = digits.substring(3);
-    fullWaDigits = `52${local10}`;
   } else if (digits.length === 12 && digits.startsWith('52')) {
     local10 = digits.substring(2);
-    fullWaDigits = `52${local10}`;
   }
 
   if (local10.length === 10) {
-    const formatted = `${local10.slice(0, 3)} ${local10.slice(3, 6)} ${local10.slice(6)}`;
-    return `${formatted} · https://wa.me/${fullWaDigits}`;
+    return `${local10.slice(0, 3)} ${local10.slice(3, 6)} ${local10.slice(6)}`;
   }
 
-  return `${trimmed} · https://wa.me/${digits}`;
+  return trimmed;
 }
 
 /**
