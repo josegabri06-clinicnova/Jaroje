@@ -72,6 +72,29 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   return false;
 }
 
+/**
+ * Abre el enlace de WhatsApp de manera directa e instantánea sin dejar pestañas huérfanas en 'about:blank'.
+ * En iOS y Android navega directamente activando el Universal Link hacia la App nativa de WhatsApp.
+ * En computadoras de escritorio abre una nueva pestaña limpia.
+ */
+export function openWhatsAppUrl(url: string = RECEPTION_WA_GROUP_URL): void {
+  if (typeof window === 'undefined') return;
+
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+
+  if (isMobile) {
+    window.location.href = url;
+  } else {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
 export function buildCheckInSummaryMessage(p: CheckInSummaryParams): string {
   const isOta = p.channel && ['airbnb', 'booking', 'expedia', 'vrbo'].some(c => p.channel?.toLowerCase().includes(c));
 

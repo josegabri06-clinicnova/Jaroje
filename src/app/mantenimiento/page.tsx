@@ -13,6 +13,7 @@ const supabase = createClient(
 
 import { getActiveEmployee } from '@/lib/auth';
 import CameraModal from '@/components/CameraModal';
+import { copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 
 const safeFormatDate = (dateVal: any, formatStr: string, options?: any) => {
   if (!dateVal) return '—';
@@ -663,11 +664,6 @@ export default function MantenimientoPage() {
     if (!formDesc) return;
     setIsSaving(true);
 
-    // Abrir ventana ANTES de los awaits (el navegador bloquea window.open después de async)
-    // Solo para nuevas tareas de mantenimiento
-    const isNewMtto = !editingTask && formType === 'mantenimiento';
-    const waWindow = isNewMtto ? window.open('about:blank', '_blank') : null;
-
     let finalPhotoUrl = editingTask?.photo_url;
     let finalResPhotoUrl = editingTask?.resolution_photo_url;
 
@@ -755,11 +751,8 @@ export default function MantenimientoPage() {
         (insertedId ? `🔗 *Ver/Gestionar Reporte:* https://jaroje-app.vercel.app/mantenimiento?taskId=${insertedId}\n\n` : '') +
         `_Generado automáticamente desde Jaroje OS_`;
 
-      navigator.clipboard.writeText(waText).catch(() => {});
-      // Redirigir la ventana ya abierta (evita bloqueo del navegador)
-      if (waWindow) {
-        waWindow.location.href = 'https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq';
-      }
+      await copyToClipboard(waText);
+      openWhatsAppUrl('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq');
     }
 
     setShowModal(false);

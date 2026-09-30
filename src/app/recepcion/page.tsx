@@ -18,7 +18,7 @@ import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
 import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
-import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard } from '@/lib/checkin-summary';
+import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -920,10 +920,6 @@ export default function RecepcionPage() {
   const handleSaveNotesOnly = async () => {
     if (!selectedReserva) return;
     
-    // Abrir la pestaña de inmediato para evitar el bloqueo del navegador al redirigir después de llamadas asíncronas
-    const newNoteText = (editedNotes || '').trim();
-    const waWindow = newNoteText && typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
-
     setSavingNotesOnly(true);
     try {
       const res = await fetch('/api/reservas', {
@@ -957,22 +953,13 @@ export default function RecepcionPage() {
           `📝 *Observación:*\n"${newNote}"\n\n` +
           `⏰ _Registrado el ${dateFormatted}_`;
 
-        try {
-          await navigator.clipboard.writeText(waText);
-        } catch (e) {}
-
-        if (waWindow) {
-          waWindow.location.href = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0';
-        } else {
-          window.open('https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma?s=hd&p=i&ilr=0', '_blank');
-        }
+        await copyToClipboard(waText);
+        openWhatsAppUrl(RECEPTION_WA_GROUP_URL);
         alert('✅ Observación guardada con éxito.\n📋 ¡Reporte copiado! Abriendo grupo de WhatsApp Recepción...');
       } else {
-        if (waWindow) waWindow.close();
         alert('✅ Observación borrada con éxito.');
       }
     } catch (err: any) {
-      if (waWindow) waWindow.close();
       alert(`⚠️ ${err.message || 'Error al guardar observación'}`);
     } finally {
       setSavingNotesOnly(false);
@@ -3113,9 +3100,6 @@ export default function RecepcionPage() {
   const processCheckIn = async () => {
     if (!selectedReserva) return;
 
-    // 1. Abrir ventana ANTES de los awaits para evitar bloqueo de popup en navegadores
-    const waWindow = typeof window !== 'undefined' ? window.open('about:blank', '_blank') : null;
-
     setSubmitting(true);
 
     let finalDniUrl: string | null = null;
@@ -3257,13 +3241,11 @@ export default function RecepcionPage() {
 
     if (selectedReserva.id === 'walkin') {
       if (paymentMode === 'efectivo' && !selectedEnvelope) {
-        if (waWindow && !waWindow.closed) waWindow.close();
         alert('⚠️ Por favor selecciona el número de sobre (S01 - S99) donde guardarás el efectivo.');
         setSubmitting(false);
         return;
       }
       if (isSplitPayment && paymentMode2 === 'efectivo' && !selectedEnvelope2) {
-        if (waWindow && !waWindow.closed) waWindow.close();
         alert('⚠️ Por favor selecciona el número de sobre (S01 - S99) para el pago 2 en efectivo.');
         setSubmitting(false);
         return;
@@ -3283,7 +3265,6 @@ export default function RecepcionPage() {
 
         const totalGuests = Number(selectedReserva.num_adult || 1) + Number(selectedReserva.num_child || 0);
         if (totalGuests > totalMaxCapacity) {
-          if (waWindow && !waWindow.closed) waWindow.close();
           alert(`⚠️ No se puede registrar la reserva porque la capacidad máxima total de las habitaciones seleccionadas es de ${totalMaxCapacity} personas. Has ingresado ${totalGuests} personas.`);
           setSubmitting(false);
           return;
@@ -5003,15 +4984,10 @@ export default function RecepcionPage() {
       // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
       await copyToClipboard(summaryText);
 
-      // 2. Redirigir la ventana pre-abierta al grupo de WhatsApp (evita bloqueo del navegador)
-      if (waWindow && !waWindow.closed) {
-        waWindow.location.href = RECEPTION_WA_GROUP_URL;
-      } else {
-        window.open(RECEPTION_WA_GROUP_URL, '_blank');
-      }
+      // 2. Abrir grupo de WhatsApp directamente (Universal Link en móvil, nueva pestaña limpia en PC)
+      openWhatsAppUrl(RECEPTION_WA_GROUP_URL);
     } catch (sumErr) {
       console.error('Error al generar resumen de check-in:', sumErr);
-      if (waWindow && !waWindow.closed) waWindow.close();
     }
 
     setShowCheckInModal(false);
