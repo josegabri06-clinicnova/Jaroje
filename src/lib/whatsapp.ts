@@ -336,58 +336,106 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    // Candado anti-duplicados en memoria para reservaciones de grupo y envíos masivos simultáneos (15 segundos)
+    // Candado anti-duplicados en memoria para reservaciones de grupo y envíos masivos simultáneos (30 segundos)
     const lockKey = `${cleanedPhone}_${templateName}`;
     if (isGroupMessageLocked(lockKey)) {
       console.log(`[WhatsApp Deduplicador Memoria] Omitiendo mensaje duplicado para ${cleanedPhone} (plantilla: ${templateName})`);
       return { success: true, data: { deduplicated: true, message: 'Mensaje duplicado omitido por deduplicador en memoria.' } };
     }
 
-    // Candado anti-duplicados a nivel base de datos para plantillas de un solo disparo (solo en cron automático)
-    const singleSendPerReservationTemplates = [
-      'bienvenida_checkin',
+    // ── GUARDIA DE CICLO DE VIDA: No enviar plantillas previas al Check-in si el huésped ya está en el hotel ──
+    const preCheckInTemplates = [
+      'solicitud_recibida',
+      'reservacion_confirmada',
+      'ultimo_aviso',
       'preparacion_llegada',
-      'seguimiento_satisfaccion',
-      'salida_checkout',
-      'comparte_experiencia',
-      'recibimiento_nuevamente'
+      'disponibilidad_liberada'
     ];
 
-    if (!bypassPause && singleSendPerReservationTemplates.includes(templateName)) {
+    if (bookingId && preCheckInTemplates.includes(templateName)) {
       try {
-        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        const cleanBookingIdStr = String(bookingId).toLowerCase().trim();
+        const { data: dbCheckin } = await supabase
+          .from('checkins')
+          .select('status')
+          .eq('reservation_id', cleanBookingIdStr)
+          .maybeSingle();
 
-        // 1. Candado estricto por número de teléfono en los últimos 5 minutos
-        const { data: recentPhoneLog } = await supabase
+        if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
+          console.log(`[WhatsApp Lifecycle Guard] Omitiendo ${templateName} porque la reserva ${bookingId} ya cuenta con Check-In / Check-Out realizado.`);
+          return { success: true, data: { deduplicated: true, message: 'Omitido: La reservación ya cuenta con Check-In realizado.' } };
+        }
+      } catch (chkErr) {
+        console.warn("[WhatsApp Lifecycle Guard] Error al consultar checkins en BD:", chkErr);
+      }
+    }
+
+    // ── CANDADO ANTI-DUPLICADOS A NIVEL BASE DE DATOS (Aplica siempre para garantizar idempotencia) ──
+    try {
+      const bIdStr = bookingId ? String(bookingId) : '';
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      // 1. Regla de Oro: Mensaje inicial (solicitud_recibida o reservacion_confirmada) se envía MÁXIMO UNA VEZ por reserva
+      if (templateName === 'solicitud_recibida' || templateName === 'reservacion_confirmada') {
+        if (bIdStr) {
+          const { data: initialLogs } = await supabase
+            .from('whatsapp_logs')
+            .select('id, template_name')
+            .eq('reservation_id', bIdStr)
+            .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'omitido_multi_habitacion'])
+            .limit(1);
+
+          if (initialLogs && initialLogs.length > 0) {
+            console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, la reserva ${bIdStr} ya tiene registrado envío inicial (${initialLogs[0].template_name})`);
+            return { success: true, data: { deduplicated: true, message: `Mensaje inicial ya enviado previamente a esta reserva.` } };
+          }
+        }
+
+        // Deduplicación por teléfono en ventana de 24 horas para evitar ráfagas por webhook + cron + reservas
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: phoneInitialLogs } = await supabase
           .from('whatsapp_logs')
           .select('id')
           .eq('phone', cleanedPhone)
-          .eq('template_name', templateName)
-          .gte('sent_at', fiveMinutesAgo)
+          .in('template_name', ['solicitud_recibida', 'reservacion_confirmada'])
+          .gte('sent_at', twentyFourHoursAgo)
           .limit(1);
 
-        if (recentPhoneLog && recentPhoneLog.length > 0) {
-          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió hace menos de 5 min al teléfono ${cleanedPhone}`);
-          return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada recientemente a este número.` } };
+        if (phoneInitialLogs && phoneInitialLogs.length > 0) {
+          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, el teléfono ${cleanedPhone} ya recibió confirmación inicial en las últimas 24h.`);
+          return { success: true, data: { deduplicated: true, message: `Mensaje inicial ya enviado recientemente a este número.` } };
         }
-
-        // 2. Candado por ID de reservación
-        if (bookingId) {
-          const { data: existingBookingLog } = await supabase
-            .from('whatsapp_logs')
-            .select('id')
-            .eq('reservation_id', String(bookingId))
-            .eq('template_name', templateName)
-            .limit(1);
-
-          if (existingBookingLog && existingBookingLog.length > 0) {
-            console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bookingId}`);
-            return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada previamente a esta reserva.` } };
-          }
-        }
-      } catch (dbDedupErr) {
-        console.error("[WhatsApp Deduplicador DB] Error al verificar logs existentes:", dbDedupErr);
       }
+
+      // 2. Candado estricto de una sola vez por reserva para el resto de plantillas de ciclo de vida
+      const singleSendPerReservationTemplates = [
+        'bienvenida_checkin',
+        'preparacion_llegada',
+        'seguimiento_satisfaccion',
+        'salida_checkout',
+        'comparte_experiencia',
+        'recibimiento_nuevamente_5m',
+        'recibimiento_nuevamente_10m',
+        'ultimo_aviso',
+        'disponibilidad_liberada',
+        'alojamiento_listo'
+      ];
+
+      if (bIdStr && singleSendPerReservationTemplates.includes(templateName)) {
+        const { data: existingBookingLog } = await supabase
+          .from('whatsapp_logs')
+          .select('id')
+          .eq('reservation_id', bIdStr)
+          .eq('template_name', templateName)
+          .limit(1);
+
+        if (existingBookingLog && existingBookingLog.length > 0) {
+          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bIdStr}`);
+          return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada previamente a esta reserva.` } };
+        }
+      }
+    } catch (dbDedupErr) {
+      console.error("[WhatsApp Deduplicador DB] Error al verificar logs existentes:", dbDedupErr);
     }
 
     // Resolve language preference
