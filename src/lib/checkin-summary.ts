@@ -79,11 +79,45 @@ export interface OpenWhatsAppOptions {
 }
 
 /**
- * Abre WhatsApp con el mensaje pre-cargado o redirige a la URL/grupo de WhatsApp.
- * Si se pasa texto, utiliza el endpoint universal de WhatsApp (https://api.whatsapp.com/send?text=...)
- * para que el mensaje aparezca automáticamente escrito en la caja de texto y el usuario solo deba pulsar Enviar.
- * Además, garantiza una copia en el portapapeles como respaldo.
- * En iOS y Android realiza la navegación directa (Universal Link) para no dejar pestañas vacías.
+ * Normaliza y formatea un teléfono para que se muestre de forma limpia (ej: 871 217 0118)
+ * y genere un enlace directo accesible a WhatsApp (https://wa.me/528712170118).
+ */
+export function formatPhoneForDisplay(rawPhone?: string | null): string {
+  if (!rawPhone) return 'No registrado';
+  const trimmed = rawPhone.trim();
+  if (!trimmed) return 'No registrado';
+
+  const digits = trimmed.replace(/\D/g, '');
+  if (!digits) return trimmed;
+
+  // Manejo especial para México (10 dígitos locales, o con prefijo 521 / 52)
+  let local10 = '';
+  let fullWaDigits = '';
+
+  if (digits.length === 10) {
+    local10 = digits;
+    fullWaDigits = `52${local10}`;
+  } else if (digits.length === 13 && digits.startsWith('521')) {
+    local10 = digits.substring(3);
+    fullWaDigits = `52${local10}`;
+  } else if (digits.length === 12 && digits.startsWith('52')) {
+    local10 = digits.substring(2);
+    fullWaDigits = `52${local10}`;
+  }
+
+  if (local10.length === 10) {
+    const formatted = `${local10.slice(0, 3)} ${local10.slice(3, 6)} ${local10.slice(6)}`;
+    return `${formatted} · https://wa.me/${fullWaDigits}`;
+  }
+
+  return `${trimmed} · https://wa.me/${digits}`;
+}
+
+/**
+ * Abre el grupo o chat de WhatsApp de manera directa e instantánea sin dejar pestañas huérfanas en 'about:blank'.
+ * Copia automáticamente el texto proporcionado al portapapeles con fallback robusto.
+ * En iOS y Android navega directamente activando el Universal Link hacia la App nativa de WhatsApp.
+ * En computadoras de escritorio abre una nueva pestaña limpia.
  */
 export function openWhatsAppUrl(
   target?: string | OpenWhatsAppOptions,
@@ -91,7 +125,7 @@ export function openWhatsAppUrl(
 ): void {
   if (typeof window === 'undefined') return;
 
-  let finalUrl = '';
+  let finalUrl = RECEPTION_WA_GROUP_URL;
   let textToPreload = '';
 
   if (typeof target === 'object' && target !== null) {
@@ -103,8 +137,6 @@ export function openWhatsAppUrl(
       finalUrl = textToPreload
         ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(textToPreload)}`
         : `https://api.whatsapp.com/send?phone=${cleanPhone}`;
-    } else if (textToPreload) {
-      finalUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToPreload)}`;
     } else {
       finalUrl = RECEPTION_WA_GROUP_URL;
     }
@@ -112,20 +144,14 @@ export function openWhatsAppUrl(
     if (target.startsWith('http://') || target.startsWith('https://') || target.startsWith('whatsapp://')) {
       finalUrl = target;
       textToPreload = legacyText || '';
-      // Si recibimos URL de grupo pero también texto, preferimos abrir con texto pre-cargado
-      if (textToPreload && !finalUrl.includes('?text=')) {
-        finalUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToPreload)}`;
-      }
     } else {
       // Es el texto directo del mensaje
       textToPreload = target;
-      finalUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToPreload)}`;
+      finalUrl = RECEPTION_WA_GROUP_URL;
     }
-  } else {
-    finalUrl = RECEPTION_WA_GROUP_URL;
   }
 
-  // Respaldo de seguridad en portapapeles
+  // Copia automática en portapapeles
   if (textToPreload) {
     copyToClipboard(textToPreload).catch(() => {});
   }
@@ -187,7 +213,7 @@ export function buildCheckInSummaryMessage(p: CheckInSummaryParams): string {
              `✨ *Condominios Jaroje*\n\n` +
              `👤 *Nombre de huésped:* ${p.guestName || 'Huésped'}\n` +
              `🚪 *Habitación(es):* ${p.rooms}\n` +
-             `📱 *Teléfono:* ${p.phone || 'No registrado'}\n` +
+             `📱 *Teléfono:* ${formatPhoneForDisplay(p.phone)}\n` +
              `👥 *# Personas:* ${guestsText}\n` +
              (p.channel ? `📍 *Canal:* ${p.channel}\n` : '') +
              (p.dailyRate && p.dailyRate > 0 ? `💵 *Tarifa:* $${Math.round(p.dailyRate).toLocaleString('es-MX')} MXN / noche\n` : '') +

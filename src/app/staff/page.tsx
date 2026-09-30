@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServer, getOfficialEmployees } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import { getSeason } from '@/lib/beds24';
+import { copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -1312,16 +1313,10 @@ export default function StaffPage() {
         (createdTaskId ? `🔗 *Ver/Gestionar Reporte:* https://jaroje-app.vercel.app/mantenimiento?taskId=${createdTaskId}\n\n` : '') +
         `_Generado automáticamente desde Jaroje OS_`;
 
-      navigator.clipboard.writeText(waText).then(() => {
-        setSuccessMsg('🔧 ¡Reporte copiado! Abriendo grupo de Mantenimiento...');
-        setTimeout(() => setSuccessMsg(''), 5000);
-      }).catch(() => {
-        setSuccessMsg('¡Reporte enviado con éxito!');
-        setTimeout(() => setSuccessMsg(''), 3000);
-      });
-
-      // Abrir grupo de WhatsApp de Mantenimiento
-      window.open('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', '_blank');
+      await copyToClipboard(waText);
+      setSuccessMsg('🔧 ¡Reporte copiado! Abriendo grupo de Mantenimiento...');
+      setTimeout(() => setSuccessMsg(''), 5000);
+      openWhatsAppUrl({ url: 'https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', text: waText });
     } else if (isEditing) {
       setSuccessMsg('✅ ¡Reporte actualizado con éxito!');
       setTimeout(() => setSuccessMsg(''), 3000);
@@ -1578,7 +1573,7 @@ export default function StaffPage() {
     }
   };
 
-  const handleCopyReport = () => {
+  const handleCopyReport = async () => {
     const allRooms = getScheduledCleanings();
     const bpAssignment = assignments['Baños Públicos'] || { employeeNum: '', notes: '' };
     const hasBP = bpAssignment.employeeNum !== '';
@@ -1641,43 +1636,10 @@ export default function StaffPage() {
 
     text += `_Generado automáticamente desde Jaroje OS_`;
 
-    let copiado = false;
-    try {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.top = "0";
-      textArea.style.left = "0";
-      textArea.style.position = "fixed";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      copiado = document.execCommand('copy');
-      document.body.removeChild(textArea);
-    } catch (err) {
-      console.warn("document.execCommand falló, intentando alternativa:", err);
-    }
-
-    if (copiado) {
-      setSuccessMsg('📋 ¡Reporte copiado! Abriendo WhatsApp...');
-      setTimeout(() => setSuccessMsg(''), 4000);
-    } else if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        setSuccessMsg('📋 ¡Reporte copiado! Abriendo WhatsApp...');
-        setTimeout(() => setSuccessMsg(''), 4000);
-      }).catch(err => {
-        console.error("Error al copiar al portapapeles:", err);
-        alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
-      });
-    } else {
-      alert("No se pudo copiar el reporte automáticamente. Por favor copia el texto manualmente.");
-    }
-
-    // Abrir de inmediato el enlace de invitación al grupo de WhatsApp
-    try {
-      window.open('https://chat.whatsapp.com/GB3Mz5s1unl6wZhp5kzv4X', '_blank');
-    } catch (e) {
-      console.warn("No se pudo abrir WhatsApp:", e);
-    }
+    await copyToClipboard(text);
+    setSuccessMsg('📋 ¡Reporte copiado! Abriendo WhatsApp...');
+    setTimeout(() => setSuccessMsg(''), 4000);
+    openWhatsAppUrl({ url: 'https://chat.whatsapp.com/GB3Mz5s1unl6wZhp5kzv4X', text });
   };
 
   // Obtener estado de una habitación
