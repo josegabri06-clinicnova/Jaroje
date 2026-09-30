@@ -346,10 +346,7 @@ export async function sendWhatsAppTemplate(
     // ── GUARDIA DE CICLO DE VIDA: No enviar plantillas previas al Check-in si el huésped ya está en el hotel ──
     const preCheckInTemplates = [
       'solicitud_recibida',
-      'reservacion_confirmada',
-      'ultimo_aviso',
-      'preparacion_llegada',
-      'disponibilidad_liberada'
+      'preparacion_llegada'
     ];
 
     if (bookingId && preCheckInTemplates.includes(templateName)) {
@@ -363,7 +360,7 @@ export async function sendWhatsAppTemplate(
 
         if (dbCheckin?.status === 'checked_in' || dbCheckin?.status === 'checked_out') {
           console.log(`[WhatsApp Lifecycle Guard] Omitiendo ${templateName} porque la reserva ${bookingId} ya cuenta con Check-In / Check-Out realizado.`);
-          return { success: true, data: { deduplicated: true, message: 'Omitido: La reservación ya cuenta con Check-In realizado.' } };
+          return { success: false, data: { deduplicated: true }, error: 'Omitido: La reservación ya cuenta con Check-In realizado.' };
         }
       } catch (chkErr) {
         console.warn("[WhatsApp Lifecycle Guard] Error al consultar checkins en BD:", chkErr);
@@ -373,7 +370,6 @@ export async function sendWhatsAppTemplate(
     // ── CANDADO ANTI-DUPLICADOS A NIVEL BASE DE DATOS (Aplica siempre para garantizar idempotencia) ──
     try {
       const bIdStr = bookingId ? String(bookingId) : '';
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
       // 1. Regla: reservacion_confirmada y solicitud_recibida
       if (templateName === 'reservacion_confirmada') {
@@ -387,7 +383,7 @@ export async function sendWhatsAppTemplate(
 
           if (existingConfirmLog && existingConfirmLog.length > 0) {
             console.log(`[WhatsApp Deduplicador DB] Omitiendo reservacion_confirmada, la reserva ${bIdStr} ya tiene registrada confirmación previa.`);
-            return { success: true, data: { deduplicated: true, message: `reservacion_confirmada ya enviada previamente a esta reserva.` } };
+            return { success: false, data: { deduplicated: true }, error: `reservacion_confirmada ya enviada previamente a esta reserva.` };
           }
         }
       } else if (templateName === 'solicitud_recibida') {
@@ -401,7 +397,7 @@ export async function sendWhatsAppTemplate(
 
           if (initialLogs && initialLogs.length > 0) {
             console.log(`[WhatsApp Deduplicador DB] Omitiendo solicitud_recibida, la reserva ${bIdStr} ya tiene registrado mensaje inicial (${initialLogs[0].template_name})`);
-            return { success: true, data: { deduplicated: true, message: `Mensaje inicial ya enviado previamente a esta reserva.` } };
+            return { success: false, data: { deduplicated: true }, error: `Mensaje inicial ya enviado previamente a esta reserva.` };
           }
         }
       }
@@ -416,7 +412,6 @@ export async function sendWhatsAppTemplate(
         'recibimiento_nuevamente_5m',
         'recibimiento_nuevamente_10m',
         'ultimo_aviso',
-        'disponibilidad_liberada',
         'alojamiento_listo'
       ];
 
@@ -430,7 +425,7 @@ export async function sendWhatsAppTemplate(
 
         if (existingBookingLog && existingBookingLog.length > 0) {
           console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bIdStr}`);
-          return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada previamente a esta reserva.` } };
+          return { success: false, data: { deduplicated: true }, error: `Plantilla ${templateName} ya enviada previamente a esta reserva.` };
         }
       }
     } catch (dbDedupErr) {

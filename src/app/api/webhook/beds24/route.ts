@@ -136,37 +136,16 @@ export async function POST(req: Request) {
 
           if (phone) {
             try {
-              // Deduplicación para cancelaciones grupales: verificar si en los últimos 3 minutos ya se envió disponibilidad_liberada a este teléfono
-              const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-              const { data: recentCancelLog } = await supabase
-                .from('whatsapp_logs')
-                .select('id')
-                .eq('phone', phone)
-                .eq('template_name', 'disponibilidad_liberada')
-                .gte('sent_at', threeMinutesAgo)
-                .limit(1);
-
-              if (!recentCancelLog || recentCancelLog.length === 0) {
-                const normalizedBooking = {
-                  id: b.id,
-                  guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped'),
-                  phone: phone
-                };
-                const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
-                if (waRes.success) {
-                  await supabase.from('whatsapp_logs').insert([{
-                    reservation_id: bookingIdStr,
-                    template_name: 'disponibilidad_liberada',
-                    phone: phone,
-                    sent_at: new Date().toISOString(),
-                    status: 'sent'
-                  }]);
-                  console.log(`[Webhook Beds24] ✅ WhatsApp disponibilidad_liberada enviado AL INSTANTE a ${normalizedBooking.guest_name} (ID: ${bookingIdStr}).`);
-                } else {
-                  console.error(`[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada:`, waRes.error);
-                }
+              const normalizedBooking = {
+                id: b.id,
+                guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped'),
+                phone: phone
+              };
+              const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
+              if (waRes.success) {
+                console.log(`[Webhook Beds24] ✅ WhatsApp disponibilidad_liberada enviado AL INSTANTE a ${normalizedBooking.guest_name} (ID: ${bookingIdStr}).`);
               } else {
-                console.log(`[Webhook Beds24] Omitiendo notificación duplicada de disponibilidad liberada para ${phone} (grupo/multi-habitación cancelado recientemente).`);
+                console.error(`[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada:`, waRes.error);
               }
             } catch (waErr) {
               console.error("[Webhook Beds24] Error al enviar WhatsApp de disponibilidad liberada en webhook:", waErr);
