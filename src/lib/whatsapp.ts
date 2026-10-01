@@ -543,6 +543,24 @@ export async function sendWhatsAppTemplate(
       const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
 
       const ycloudComponents: any[] = [];
+
+      if (templateName === 'bienvenido_cliente_final_v2') {
+        ycloudComponents.push({
+          type: 'header',
+          parameters: [
+            {
+              type: 'location',
+              location: {
+                latitude: '15.7633',
+                longitude: '-96.1428',
+                name: 'Condominios Jaroje',
+                address: 'Manzana 3 Lote 4, Santa Cruz, Huatulco, Oaxaca'
+              }
+            }
+          ]
+        });
+      }
+
       if (parameters && parameters.length > 0) {
         ycloudComponents.push({
           type: 'body',
