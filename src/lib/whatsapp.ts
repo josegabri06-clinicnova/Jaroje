@@ -545,16 +545,17 @@ export async function sendWhatsAppTemplate(
       const ycloudComponents: any[] = [];
 
       if (templateName === 'bienvenido_cliente_final_v2') {
+        const imageUrl = detectedLang === 'en'
+          ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/09/29/423d7a83-1e4f-47de-ad3b-aebcc59016ed.jpg'
+          : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/633b619b-41d4-4c6f-ad76-4ac0ba3bb924.jpg';
+
         ycloudComponents.push({
           type: 'header',
           parameters: [
             {
-              type: 'location',
-              location: {
-                latitude: '15.7633',
-                longitude: '-96.1428',
-                name: 'Condominios Jaroje',
-                address: 'Manzana 3 Lote 4, Santa Cruz, Huatulco, Oaxaca'
+              type: 'image',
+              image: {
+                link: imageUrl
               }
             }
           ]
