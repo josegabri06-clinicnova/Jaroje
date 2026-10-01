@@ -2825,7 +2825,8 @@ export function extractGroupRoomsFromNotes(notes: string | null | undefined): st
 
 /**
  * Determina con alta precisión y de forma infalible si dos reservaciones pertenecen al MISMO grupo.
- * Evita mezclar reservas independientes de las mismas fechas creadas por el mismo titular o teléfono.
+ * Evita mezclar reservas independientes mientras garantiza que las reservas grupales permanezcan
+ * consolidadas incluso tras cancelaciones, reasignaciones o actualizaciones parciales.
  */
 export function areBookingsInSameGroup(a: any, b: any): boolean {
   if (!a || !b) return false;
@@ -2850,89 +2851,60 @@ export function areBookingsInSameGroup(a: any, b: any): boolean {
   const bCh = String(b.channel || '').toLowerCase().trim();
   if (aCh !== bCh) return false;
 
-  // 4. MASTER ID (Beds24 / Supabase)
+  // 4. REGLA DE HABITACIÓN DISTINTA: No pueden ser la misma habitación física
+  const cleanRoomNumber = (r: any) => {
+    const raw = String(r?.room || r?.room_name || r?.roomName || '');
+    const numMatch = raw.match(/\(([^)]+)\)/) || raw.match(/\b([1-5]\d{2}|\d{3})\b/);
+    return numMatch ? (numMatch[1] || numMatch[0]).toLowerCase().trim() : raw.toLowerCase().trim();
+  };
+  const aRoomNum = cleanRoomNumber(a);
+  const bRoomNum = cleanRoomNumber(b);
+  if (aRoomNum && bRoomNum && aRoomNum === bRoomNum) return false;
+
+  // 5. MASTER ID (Beds24 / Supabase)
   const aMasterId = a.master_id ? String(a.master_id) : (a.masterId ? String(a.masterId) : null);
   const bMasterId = b.master_id ? String(b.master_id) : (b.masterId ? String(b.masterId) : null);
-  if (aMasterId && bMasterId) {
-    return aMasterId === bMasterId;
+  if (aMasterId && bMasterId && aMasterId === bMasterId) {
+    return true;
   }
   if (aMasterId && (bIdStr === aMasterId)) return true;
   if (bMasterId && (aIdStr === bMasterId)) return true;
 
-  // 5. ETIQUETA EXPLÍCITA DE GRUPO EN NOTAS / OBSERVACIONES: (Grupo: Habs ...)
+  // 6. ETIQUETA EXPLÍCITA DE GRUPO EN NOTAS / OBSERVACIONES
   const aNotes = a.notes || a.comments || a.info || '';
   const bNotes = b.notes || b.comments || b.info || '';
   const aRooms = extractGroupRoomsFromNotes(aNotes);
   const bRooms = extractGroupRoomsFromNotes(bNotes);
 
-  const cleanRoomNumber = (r: any) => {
-    const raw = String(r?.room || r?.room_name || r?.roomName || '');
-    const numMatch = raw.match(/\b\d{3}\b/);
-    return numMatch ? numMatch[0] : raw.toLowerCase().trim();
-  };
-  const aRoomNum = cleanRoomNumber(a);
-  const bRoomNum = cleanRoomNumber(b);
-
   if (aRooms && bRooms) {
     const aRoomsSorted = [...aRooms].sort().join(',');
     const bRoomsSorted = [...bRooms].sort().join(',');
     if (aRoomsSorted === bRoomsSorted) return true;
-    return false;
+    if (aRooms.some(r => bRooms.includes(r))) return true;
   }
+  if (aRooms && bRoomNum && aRooms.includes(bRoomNum)) return true;
+  if (bRooms && aRoomNum && bRooms.includes(aRoomNum)) return true;
 
-  if (aRooms && !bRooms) {
-    if (bRoomNum && aRooms.includes(bRoomNum)) {
-      const cleanName = (n: any) => String(n || '').toLowerCase().trim().replace(/\s+/g, ' ');
-      const aName = cleanName(a.guest_name || `${a.firstName || ''} ${a.lastName || ''}`);
-      const bName = cleanName(b.guest_name || `${b.firstName || ''} ${b.lastName || ''}`);
-      return aName === bName;
-    }
-    return false;
-  }
-
-  if (!aRooms && bRooms) {
-    if (aRoomNum && bRooms.includes(aRoomNum)) {
-      const cleanName = (n: any) => String(n || '').toLowerCase().trim().replace(/\s+/g, ' ');
-      const aName = cleanName(a.guest_name || `${a.firstName || ''} ${a.lastName || ''}`);
-      const bName = cleanName(b.guest_name || `${b.firstName || ''} ${b.lastName || ''}`);
-      return aName === bName;
-    }
-    return false;
-  }
-
-  // 6. SIN MASTER ID Y SIN ETIQUETAS DE GRUPO:
-  // No pueden ser la misma habitación física
-  if (aRoomNum && bRoomNum && aRoomNum === bRoomNum) return false;
-
-  // Nombre exacto normalizado
+  // 7. CRITERIO PRINCIPAL DE GRUPO: Mismo titular y mismo teléfono
   const cleanStr = (s: any) => String(s || '').toLowerCase().trim().replace(/\s+/g, ' ');
   const aName = cleanStr(a.guest_name || `${a.firstName || ''} ${a.lastName || ''}`);
   const bName = cleanStr(b.guest_name || `${b.firstName || ''} ${b.lastName || ''}`);
-  if (!aName || !bName || aName.length < 3 || aName !== bName) return false;
 
-  // Teléfono exacto normalizado (si ambos tienen)
-  const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
-  const aDigits = cleanDigits(a.guest_phone || a.phone || a.mobile || '');
-  const bDigits = cleanDigits(b.guest_phone || b.phone || b.mobile || '');
-  if (aDigits && bDigits && aDigits.length >= 7 && bDigits.length >= 7) {
-    if (aDigits !== bDigits && !aDigits.endsWith(bDigits) && !bDigits.endsWith(aDigits)) {
-      return false;
+  if (aName && bName && aName.length >= 3 && aName === bName) {
+    // Si ambos tienen teléfono registrado, verificar que no sean teléfonos completamente diferentes
+    const cleanDigits = (p: any) => String(p || '').replace(/\D/g, '');
+    const aDigits = cleanDigits(a.guest_phone || a.phone || a.mobile || '');
+    const bDigits = cleanDigits(b.guest_phone || b.phone || b.mobile || '');
+    
+    if (aDigits && bDigits && aDigits.length >= 7 && bDigits.length >= 7) {
+      if (aDigits !== bDigits && !aDigits.endsWith(bDigits) && !bDigits.endsWith(aDigits)) {
+        return false;
+      }
     }
+    return true;
   }
 
-  // Hora de creación similar (si está disponible, < 4 horas de diferencia para reservas hechas en el mismo bloque)
-  const aCreated = a.created_at || a.booking_time;
-  const bCreated = b.created_at || b.booking_time;
-  if (aCreated && bCreated) {
-    const tA = new Date(aCreated).getTime();
-    const tB = new Date(bCreated).getTime();
-    if (!isNaN(tA) && !isNaN(tB)) {
-      const diffHours = Math.abs(tA - tB) / (1000 * 60 * 60);
-      if (diffHours > 4) return false;
-    }
-  }
-
-  return true;
+  return false;
 }
 
 /**
