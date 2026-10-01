@@ -10,7 +10,9 @@ import {
   sendTemplate8_SalidaCheckout,
   sendTemplate9_ComparteExperiencia,
   sendTemplate10_RecibimientoNuevamente,
-  sendTemplate11_PagoAnticipoRecibido
+  sendTemplate11_PagoAnticipoRecibido,
+  sendTemplate_BienvenidoConmutador,
+  sendTemplate_BienvenidoWhatsApp
 } from '@/lib/whatsapp';
 
 export async function POST(req: Request) {
@@ -108,6 +110,16 @@ export async function POST(req: Request) {
       case 'pago_anticipo_recibido':
         res = await sendTemplate11_PagoAnticipoRecibido(booking, true);
         break;
+      case 'bienvenido_cliente_final_v2': {
+        const ph = booking.phone || booking.mobile || booking.guest_phone || '';
+        res = await sendTemplate_BienvenidoConmutador(ph, booking.guest_name);
+        break;
+      }
+      case 'bienvenido_cliente_whatsaap': {
+        const ph = booking.phone || booking.mobile || booking.guest_phone || '';
+        res = await sendTemplate_BienvenidoWhatsApp(ph, booking.guest_name);
+        break;
+      }
       default:
         return NextResponse.json({
           success: false,

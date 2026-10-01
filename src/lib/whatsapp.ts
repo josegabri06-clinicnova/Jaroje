@@ -2,15 +2,55 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 
-// Detecta si un teléfono pertenece a un país angloparlante o turístico no-hispano común para mandar en inglés
-export function detectLanguageFromPhone(phone: string): string {
-  if (!phone) return 'es';
+/**
+ * Determina con precisión si un número telefónico pertenece a Latinoamérica o España.
+ * Regla de negocio:
+ * - Si es de cualquier país de Latinoamérica o España -> español ('es').
+ * - Si es de cualquier otro país (EE.UU., Canadá, Europa no-España, etc.) -> inglés ('en').
+ */
+export function isSpanishOrLatamPhone(phone: string): boolean {
+  if (!phone) return true;
   const cleaned = phone.replace(/\D/g, '');
-  // EE.UU./Canadá (+1), Reino Unido (+44), Alemania (+49), Francia (+33), Países Bajos (+31)
-  if (cleaned.startsWith('1') || cleaned.startsWith('44') || cleaned.startsWith('49') || cleaned.startsWith('33') || cleaned.startsWith('31')) {
-    return 'en';
+
+  const latamAndSpainPrefixes = [
+    '52',   // México (+52, +521)
+    '34',   // España (+34)
+    '57',   // Colombia (+57)
+    '54',   // Argentina (+54)
+    '56',   // Chile (+56)
+    '51',   // Perú (+51)
+    '593',  // Ecuador (+593)
+    '58',   // Venezuela (+58)
+    '502',  // Guatemala (+502)
+    '503',  // El Salvador (+503)
+    '504',  // Honduras (+504)
+    '505',  // Nicaragua (+505)
+    '506',  // Costa Rica (+506)
+    '507',  // Panamá (+507)
+    '591',  // Bolivia (+591)
+    '595',  // Paraguay (+595)
+    '598',  // Uruguay (+598)
+    '53',   // Cuba (+53)
+    '1787', // Puerto Rico (+1-787)
+    '1939', // Puerto Rico (+1-939)
+    '1809', // República Dominicana (+1-809)
+    '1829', // República Dominicana (+1-829)
+    '1849', // República Dominicana (+1-849)
+  ];
+
+  for (const prefix of latamAndSpainPrefixes) {
+    if (cleaned.startsWith(prefix)) return true;
   }
-  return 'es';
+
+  // Si tiene 10 dígitos sin prefijo de país, en México se interpreta como número nacional local
+  if (cleaned.length === 10) return true;
+
+  return false;
+}
+
+// Detecta el código de idioma para plantillas de WhatsApp según la procedencia del teléfono
+export function detectLanguageFromPhone(phone: string): string {
+  return isSpanishOrLatamPhone(phone) ? 'es' : 'en';
 }
 
 const COUNTRY_TO_PREFIX: Record<string, string> = {
@@ -295,15 +335,16 @@ function isGroupMessageLocked(key: string): boolean {
   return false;
 }
 
-// Envía una plantilla genérica de WhatsApp llamando a Meta Cloud API
+// Envía una plantilla genérica de WhatsApp llamando a YCloud o Meta Cloud API
 export async function sendWhatsAppTemplate(
   phone: string,
   templateName: string,
-  parameters: string[],
+  parameters: string[] = [],
   buttonParameters?: string[],
   bookingId?: string | number,
   buttonType?: 'url' | 'quick_reply',
-  bypassPause: boolean = false
+  bypassPause: boolean = false,
+  languageOverride?: string
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   try {
     const token = process.env.WHATSAPP_TOKEN;
@@ -433,10 +474,9 @@ export async function sendWhatsAppTemplate(
     }
 
     // Resolve language preference
-    let languageCode = 'es_MX';
-    let detectedLang = detectLanguageFromPhone(phone);
+    let detectedLang = languageOverride || detectLanguageFromPhone(phone);
 
-    if (bookingId) {
+    if (bookingId && !languageOverride) {
       try {
         const { data: settings } = await supabase
           .from('booking_portal_settings')
@@ -457,9 +497,7 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    if (detectedLang === 'en') {
-      languageCode = 'en';
-    }
+    let languageCode = detectedLang === 'en' ? 'en' : 'es_MX';
 
     const urlTemplates = [
       'solicitud_recibida',
@@ -504,15 +542,16 @@ export async function sendWhatsAppTemplate(
       const standardPhone = cleanPhoneForMeta(cleanedPhone);
       const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
 
-      const ycloudComponents: any[] = [
-        {
+      const ycloudComponents: any[] = [];
+      if (parameters && parameters.length > 0) {
+        ycloudComponents.push({
           type: 'body',
           parameters: parameters.map(p => ({
             type: 'text',
             text: p || '—'
           }))
-        }
-      ];
+        });
+      }
 
       if (finalButtonParams && finalButtonParams.length > 0) {
         const isQuickReply = resolvedButtonType === 'quick_reply' || finalButtonParams[0].startsWith('VIEW_BOOKING_');
@@ -1366,3 +1405,41 @@ export async function sendTemplate_AlojamientoListo(booking: any, bypassPause: b
 
   return sendWhatsAppTemplate(phone, 'alojamiento_listo', params, undefined, booking.id, 'url', bypassPause);
 }
+
+/**
+ * 13. Plantilla de Bienvenida al Conmutador (bienvenido_cliente_final_v2)
+ * Se envía automáticamente cuando un cliente llama a las líneas telefónicas/conmutador del hotel.
+ * - Idioma 'es' si el prefijo es de Latinoamérica o España.
+ * - Idioma 'en' si el prefijo es de cualquier otra parte del mundo.
+ */
+export async function sendTemplate_BienvenidoConmutador(
+  phone: string,
+  guestName?: string,
+  langOverride?: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+  const lang = langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en');
+  const params = guestName ? [getFirstName(guestName)] : [];
+  console.log(`[WhatsApp Template] Enviando 'bienvenido_cliente_final_v2' (lang: ${lang}) a ${phone}`);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_final_v2', params, undefined, undefined, undefined, true, lang);
+}
+
+/**
+ * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap)
+ * Se envía automáticamente al instante cuando un cliente nuevo escribe por WhatsApp,
+ * o si escribe tras más de 1 semana sin interacción.
+ * - Idioma 'es' si el prefijo es de Latinoamérica o España.
+ * - Idioma 'en' si el prefijo es de cualquier otra parte del mundo.
+ */
+export async function sendTemplate_BienvenidoWhatsApp(
+  phone: string,
+  guestName?: string,
+  langOverride?: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+  const lang = langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en');
+  const params = guestName ? [getFirstName(guestName)] : [];
+  console.log(`[WhatsApp Template] Enviando 'bienvenido_cliente_whatsaap' (lang: ${lang}) a ${phone}`);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap', params, undefined, undefined, undefined, true, lang);
+}
+
