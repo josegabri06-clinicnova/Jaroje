@@ -319,37 +319,22 @@ export async function GET(req: Request) {
 
     // --- REDISTRIBUCIÓN AUTOMÁTICA DE ANTICIPOS GRUPALES EN TIEMPO REAL ---
     try {
-      const groupMap = new Map<string, any[]>();
-      combined.forEach((b: any) => {
-        if (b.status === 'cancelled') return;
-        const cleanStr = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
-        const guestKey = cleanStr(b.guest_name);
-        const bPhone = b.guest_phone || b.phone || b.mobile || '';
-        const phoneKey = bPhone ? normalizePhone(bPhone) : '';
+      const groups: any[][] = [];
+      const processed = new Set<string>();
 
-        let key = '';
-        if (b.masterId) {
-          key = `master_${b.masterId}`;
-        } else if (guestKey) {
-          const chKey = (b.channel || 'directo').toLowerCase().trim();
-          const isOta = ['booking.com', 'airbnb', 'expedia'].some(c => (b.channel || '').toLowerCase().includes(c));
-          if (isOta) {
-            key = `ota_${chKey}_${guestKey}_${b.check_in}_${b.check_out}`;
-          } else if (phoneKey) {
-            key = `phone_${chKey}_${phoneKey}_${b.check_in}_${b.check_out}`;
-          } else {
-            key = `name_${chKey}_${guestKey}_${b.check_in}_${b.check_out}`;
-          }
-        }
-        if (key) {
-          if (!groupMap.has(key)) {
-            groupMap.set(key, []);
-          }
-          groupMap.get(key)!.push(b);
+      combined.forEach((b: any) => {
+        if (b.status === 'cancelled' || processed.has(String(b.id))) return;
+        const siblings = combined.filter((o: any) => o.status !== 'cancelled' && areBookingsInSameGroup(b, o));
+        if (siblings.length > 0) {
+          const allGroup = [b, ...siblings];
+          allGroup.forEach(m => processed.add(String(m.id)));
+          groups.push(allGroup);
+        } else {
+          processed.add(String(b.id));
         }
       });
 
-      groupMap.forEach((group) => {
+      groups.forEach((group) => {
         if (group.length > 1) {
           // 1. Calcular el total del precio del grupo primero
           const totalPriceInGroup = group.reduce((sum, b) => sum + Number(b.price_estimate || b.price || 0), 0);
@@ -375,7 +360,7 @@ export async function GET(req: Request) {
 
           totalDepositInGroup = Math.min(totalDepositInGroup, totalPriceInGroup);
 
-          // 2. Redistribuir proporcionalmente
+          // 3. Redistribuir proporcionalmente
           group.forEach((b: any) => {
             const bPrice = Number(b.price_estimate || b.price || 0);
             const prop = totalPriceInGroup > 0 ? (bPrice / totalPriceInGroup) : (1 / group.length);
