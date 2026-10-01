@@ -268,9 +268,27 @@ function getLocalDateStr(date: Date = new Date()): string {
 
 function extractRoomNumber(roomName: string | null | undefined): string | null {
   if (!roomName) return null;
-  const cleaned = String(roomName).replace(/[\s()]/g, '');
-  const match = cleaned.match(/\b(10[1-7]|20[1-6]|30[1-6]|40[1-2]|50[0-7])\b/) || cleaned.match(/\b\d{3}\b/) || roomName.match(/\d{3}/);
-  return match ? match[0] : null;
+  const str = String(roomName).trim();
+  
+  // 1. Look for number or identifier inside parentheses e.g. "Apartamento de 3 dormitorios (301)" -> "301"
+  const parenMatch = str.match(/\(([^)]+)\)/);
+  if (parenMatch && parenMatch[1].trim()) {
+    return parenMatch[1].trim();
+  }
+  
+  // 2. Look for room numbers (e.g. 101, 202, 301, 501, 401, 101-107, etc.)
+  const digitMatch = str.match(/\b([1-5]\d{2}[a-zA-Z]?|\d{3,4})\b/);
+  if (digitMatch) {
+    return digitMatch[1];
+  }
+
+  // 3. Fallback to generic room code pattern (e.g. "Hab 101", "PH-1", "A-102")
+  const genericMatch = str.match(/(?:hab(?:itación)?|depto|apto|condo|ph|unit|unidad)?\s*[-#]?\s*([a-zA-Z0-9_-]{2,8})/i);
+  if (genericMatch && genericMatch[1] && !['de', 'el', 'la', 'los', 'las', 'general', 'sin', 'del'].includes(genericMatch[1].toLowerCase())) {
+    return genericMatch[1];
+  }
+
+  return null;
 }
 
 function getNextDayStr(dateStr: string): string {

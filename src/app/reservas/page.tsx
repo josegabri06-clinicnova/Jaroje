@@ -139,9 +139,27 @@ function getLocalDateStr(date: Date = new Date()): string {
 
 function extractRoomNumber(roomName: string | null | undefined): string | null {
   if (!roomName) return null;
-  const cleaned = String(roomName).replace(/[\s()]/g, '');
-  const match = cleaned.match(/\b(10[1-7]|20[1-6]|30[1-6]|40[1-2]|50[0-7])\b/) || cleaned.match(/\b\d{3}\b/) || roomName.match(/\d{3}/);
-  return match ? match[0] : null;
+  const str = String(roomName).trim();
+  
+  // 1. Look for number or identifier inside parentheses e.g. "Apartamento de 3 dormitorios (301)" -> "301"
+  const parenMatch = str.match(/\(([^)]+)\)/);
+  if (parenMatch && parenMatch[1].trim()) {
+    return parenMatch[1].trim();
+  }
+  
+  // 2. Look for room numbers (e.g. 101, 202, 301, 501, 401, 101-107, etc.)
+  const digitMatch = str.match(/\b([1-5]\d{2}[a-zA-Z]?|\d{3,4})\b/);
+  if (digitMatch) {
+    return digitMatch[1];
+  }
+
+  // 3. Fallback to generic room code pattern (e.g. "Hab 101", "PH-1", "A-102")
+  const genericMatch = str.match(/(?:hab(?:itación)?|depto|apto|condo|ph|unit|unidad)?\s*[-#]?\s*([a-zA-Z0-9_-]{2,8})/i);
+  if (genericMatch && genericMatch[1] && !['de', 'el', 'la', 'los', 'las', 'general', 'sin', 'del'].includes(genericMatch[1].toLowerCase())) {
+    return genericMatch[1];
+  }
+
+  return null;
 }
 
 function addDaysToDateStr(dateStr: string, days: number): string {
@@ -4531,6 +4549,7 @@ function ReservasListInner() {
                           const isSel = checkInSelectedIds.includes(String(b.id));
                           const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
                           const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+                          const roomNum = extractRoomNumber(b.room_name || b.room);
                           return (
                             <div 
                               key={b.id}
@@ -4541,25 +4560,36 @@ function ReservasListInner() {
                                     : [...prev, String(b.id)]
                                 );
                               }}
-                              className={`p-3 border rounded-xl cursor-pointer transition-all flex items-start gap-2.5 select-none ${
-                                isSel ? 'bg-blue-50/50 border-blue-200' : 'bg-white border-zinc-200 hover:border-zinc-300'
+                              className={`p-3.5 border rounded-2xl cursor-pointer transition-all flex items-start gap-3 select-none ${
+                                isSel ? 'bg-blue-50/60 border-blue-300 ring-1 ring-blue-300 shadow-xs' : 'bg-white border-zinc-200 hover:border-zinc-300'
                               }`}
                             >
-                              <div className={`mt-0.5 w-4.5 h-4.5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                                isSel ? 'bg-blue-600 border-blue-600 text-white' : 'border-zinc-300 bg-white'
+                              <div className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
+                                isSel ? 'bg-blue-600 border-blue-600 text-white shadow-xs' : 'border-zinc-300 bg-white'
                               }`}>
-                                {isSel && <Check size={10} strokeWidth={4} />}
+                                {isSel && <Check size={11} strokeWidth={3.5} />}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-baseline gap-2">
-                                  <span className="text-[12.5px] font-bold text-zinc-800 truncate">
-                                    Hab. {b.room_name || b.room || 'General'}
-                                  </span>
-                                  <span className="text-[10px] font-extrabold text-zinc-550">
+                                <div className="flex justify-between items-start gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      {roomNum && (
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-black tracking-wide shrink-0 ${
+                                          isSel ? 'bg-blue-600 text-white shadow-xs' : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                        }`}>
+                                          🚪 Hab. {roomNum}
+                                        </span>
+                                      )}
+                                      <span className={`text-[12.5px] font-bold leading-snug break-words ${isSel ? 'text-blue-950 font-extrabold' : 'text-zinc-800'}`}>
+                                        {b.room_name || b.room || 'General'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <span className="text-[10px] font-extrabold text-zinc-550 shrink-0 mt-0.5">
                                     Adeudo: {fmtCurrency(bBal, b.guest_name)}
                                   </span>
                                 </div>
-                                <p className="text-[10.5px] text-zinc-400 truncate font-semibold">Huésped: {b.guest_name}</p>
+                                <p className="text-[10.5px] text-zinc-400 font-semibold mt-1">Huésped: {b.guest_name} <span className="text-zinc-300">·</span> ID: {b.id}</p>
                               </div>
                             </div>
                           );
@@ -6767,6 +6797,7 @@ function ReservasListInner() {
                   const isSelected = cancelSelectedIds.includes(String(b.id));
                   const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some(c => b.channel.toLowerCase().includes(c));
                   const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+                  const roomNum = extractRoomNumber(b.room_name || b.room);
                   
                   return (
                     <div 
@@ -6780,32 +6811,45 @@ function ReservasListInner() {
                       }}
                       className={`p-4 border rounded-2xl cursor-pointer transition-all flex items-start gap-3 select-none active:scale-[0.99] ${
                         isSelected 
-                          ? 'bg-rose-50/45 border-rose-200 shadow-sm' 
+                          ? 'bg-rose-50/60 border-rose-300 shadow-sm ring-1 ring-rose-300' 
                           : 'bg-white border-zinc-200/80 hover:border-zinc-300'
                       }`}
                     >
-                      <div className={`mt-0.5 w-4.5 h-4.5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                      <div className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
                         isSelected 
-                          ? 'bg-rose-600 border-rose-600 text-white' 
+                          ? 'bg-rose-600 border-rose-600 text-white shadow-xs' 
                           : 'border-zinc-300 bg-white'
                       }`}>
-                        {isSelected && <Check size={11} strokeWidth={4} />}
+                        {isSelected && <Check size={11} strokeWidth={3.5} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2">
-                          <span className={`text-[13px] font-bold truncate leading-tight ${isSelected ? 'text-rose-950' : 'text-zinc-800'}`}>
-                            {b.room_name || b.room || 'General'}
-                          </span>
-                          <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {roomNum && (
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black tracking-wide shrink-0 ${
+                                  isSelected 
+                                    ? 'bg-rose-600 text-white shadow-xs' 
+                                    : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                }`}>
+                                  🚪 Hab. {roomNum}
+                                </span>
+                              )}
+                              <span className={`text-[13px] font-bold leading-snug break-words ${isSelected ? 'text-rose-950 font-black' : 'text-zinc-800'}`}>
+                                {b.room_name || b.room || 'General'}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider shrink-0 mt-0.5">
                             ID: {b.id}
                           </span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-semibold mt-1 flex-wrap">
+                        <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-semibold mt-1.5 flex-wrap">
                           <span>In: <strong className="text-zinc-700">{b.check_in}</strong></span>
                           <span>·</span>
                           <span>Out: <strong className="text-zinc-700">{b.check_out}</strong></span>
                         </div>
-                        <div className="flex justify-between items-center mt-2 pt-2 border-t border-zinc-100">
+                        <div className="flex justify-between items-center mt-2.5 pt-2 border-t border-zinc-100">
                           <span className="text-[10.5px] font-extrabold text-zinc-400 uppercase tracking-widest">Adeudo</span>
                           <span className={`text-[12px] font-black ${bBal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
                             {fmtCurrency(bBal, selectedRes.guest_name)}
@@ -6907,12 +6951,7 @@ function ReservasListInner() {
                       const checkOutFormatted = b.check_out ? new Date(b.check_out + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short' }) : '';
                       const createdDateFormatted = b.created_at ? new Date(b.created_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'No disp.';
 
-                      const roomNumMatch = (b.room_name || b.room || '').match(/\(([^)]+)\)/);
-                      let roomNumber = roomNumMatch ? roomNumMatch[1] : null;
-                      if (!roomNumber) {
-                        const genericMatch = (b.room_name || b.room || '').match(/([A-Z]?\d+)/i);
-                        roomNumber = genericMatch ? genericMatch[1] : (b.room_name || b.room || 'General');
-                      }
+                      const roomNumber = extractRoomNumber(b.room_name || b.room);
 
                       return (
                         <div 
@@ -6926,23 +6965,36 @@ function ReservasListInner() {
                           }}
                           className={`p-4 border rounded-2xl cursor-pointer transition-all flex items-start gap-3 select-none active:scale-[0.99] ${
                             isSelected 
-                              ? 'bg-rose-50/45 border-rose-200 shadow-sm' 
+                              ? 'bg-rose-50/60 border-rose-300 shadow-sm ring-1 ring-rose-300' 
                               : 'bg-white border-zinc-200/80 hover:border-zinc-300'
                           }`}
                         >
-                          <div className={`mt-0.5 w-4.5 h-4.5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
+                          <div className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
                             isSelected 
-                              ? 'bg-rose-600 border-rose-600 text-white' 
+                              ? 'bg-rose-600 border-rose-600 text-white shadow-xs' 
                               : 'border-zinc-300 bg-white'
                           }`}>
-                            {isSelected && <Check size={11} strokeWidth={4} />}
+                            {isSelected && <Check size={11} strokeWidth={3.5} />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start gap-2">
-                              <span className={`text-[13px] font-extrabold truncate leading-tight ${isSelected ? 'text-rose-950' : 'text-zinc-800'}`}>
-                                🚪 Habitación: {b.room_name || b.room || 'General'}
-                              </span>
-                              <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {roomNumber && (
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-black tracking-wide shrink-0 ${
+                                      isSelected 
+                                        ? 'bg-rose-600 text-white shadow-xs' 
+                                        : 'bg-rose-100 text-rose-800 border border-rose-200'
+                                    }`}>
+                                      🚪 Hab. {roomNumber}
+                                    </span>
+                                  )}
+                                  <span className={`text-[13px] font-extrabold leading-snug break-words ${isSelected ? 'text-rose-950 font-black' : 'text-zinc-800'}`}>
+                                    {b.room_name || b.room || 'General'}
+                                  </span>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider shrink-0 mt-0.5">
                                 ID: {b.id}
                               </span>
                             </div>
@@ -6962,10 +7014,6 @@ function ReservasListInner() {
                             <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 font-semibold mt-2 flex-wrap">
                               <span>Del: <strong className="text-zinc-700">{checkInFormatted}</strong></span>
                               <span>al: <strong className="text-zinc-700">{checkOutFormatted}</strong></span>
-                              <span className="mx-1 text-zinc-300">|</span>
-                              <span className="px-2 py-0.5 bg-rose-50 border border-rose-100 text-rose-700 font-extrabold rounded-md text-[10px] tracking-wide">
-                                Hab. {roomNumber}
-                              </span>
                             </div>
 
                             {/* Fecha de Creación */}
@@ -7058,28 +7106,34 @@ function ReservasListInner() {
                           : 'bg-white border-zinc-200/80 hover:border-zinc-300'
                       }`}
                     >
-                      <div className={`mt-0.5 w-4.5 h-4.5 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                      <div className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
                         isSelected 
-                          ? 'bg-blue-600 border-blue-600 text-white' 
+                          ? 'bg-blue-600 border-blue-600 text-white shadow-xs' 
                           : 'border-zinc-300 bg-white'
                       }`}>
-                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                        {isSelected && <Check size={11} strokeWidth={3.5} />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2">
                           <div className="min-w-0 flex-1">
-                            <span className={`text-[13px] font-bold truncate leading-tight block ${isSelected ? 'text-blue-950' : 'text-zinc-850'}`}>
-                              {b.room_name || b.room || 'General'}
-                            </span>
-                            {(() => {
-                              const roomNum = extractRoomNumber(b.room_name || b.room);
-                              if (!roomNum) return null;
-                              return (
-                                <span className="inline-flex items-center mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-100">
-                                  Habitación {roomNum}
-                                </span>
-                              );
-                            })()}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {(() => {
+                                const roomNum = extractRoomNumber(b.room_name || b.room);
+                                if (!roomNum) return null;
+                                return (
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-black tracking-wide shrink-0 ${
+                                    isSelected 
+                                      ? 'bg-blue-600 text-white shadow-xs' 
+                                      : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                  }`}>
+                                    🚪 Hab. {roomNum}
+                                  </span>
+                                );
+                              })()}
+                              <span className={`text-[13px] font-bold leading-snug break-words ${isSelected ? 'text-blue-950 font-extrabold' : 'text-zinc-850'}`}>
+                                {b.room_name || b.room || 'General'}
+                              </span>
+                            </div>
                           </div>
                           <span className="text-[10px] font-extrabold text-zinc-400 tracking-wider shrink-0 mt-0.5">
                             ID: {b.id}
@@ -7305,15 +7359,28 @@ function ReservasListInner() {
                         {isSelected && <Check size={11} strokeWidth={4} />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex justify-between items-baseline gap-2">
-                          <span className="text-[13.5px] font-bold text-zinc-800 truncate">
-                            Hab. {m.room_name || m.room || 'General'}
-                          </span>
-                          <span className="text-[10px] font-extrabold text-zinc-455 uppercase">
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {(() => {
+                                const roomNum = extractRoomNumber(m.room_name || m.room);
+                                if (!roomNum) return null;
+                                return (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10.5px] font-black tracking-wide shrink-0 bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                    🚪 Hab. {roomNum}
+                                  </span>
+                                );
+                              })()}
+                              <span className="text-[13px] font-bold text-zinc-800 leading-snug break-words">
+                                {m.room_name || m.room || 'General'}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-extrabold text-zinc-455 uppercase shrink-0 mt-0.5">
                             ID: {m.id}
                           </span>
                         </div>
-                        <p className="text-[11px] font-medium text-zinc-500 mt-0.5">
+                        <p className="text-[11px] font-medium text-zinc-500 mt-1">
                           Estancia: {m.check_in ? format(parseISO(m.check_in), 'dd MMM', { locale: es }) : ''} al {m.check_out ? format(parseISO(m.check_out), 'dd MMM', { locale: es }) : ''}
                         </p>
                       </div>
