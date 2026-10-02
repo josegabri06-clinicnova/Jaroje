@@ -24,6 +24,36 @@ export function matchesBookingFinance(description: string, bookingId: string | n
   return regex.test(description);
 }
 
+/**
+ * Extrae todos los IDs de reserva presentes en la descripción de una transacción (ej: [Reservas B24: 12345, 12346] o (IDs: 12345, 12346))
+ */
+export function extractBookingIdsFromDescription(description: string): string[] {
+  if (!description) return [];
+  const found = new Set<string>();
+
+  // 1. [Reservas B24: 12345, 12346] o [Reserva B24: 12345]
+  const b24Bracket = description.match(/\[(?:Reservas B24|Reserva B24|Beds24):\s*([^\]]+)\]/i);
+  if (b24Bracket && b24Bracket[1]) {
+    const parts = b24Bracket[1].split(/[\s,]+/);
+    for (const p of parts) {
+      const clean = p.trim().replace(/^#/, '');
+      if (clean && /^\d+$/.test(clean)) found.add(clean);
+    }
+  }
+
+  // 2. (IDs: 12345, 12346) o (ID: 12345, 12346)
+  const idParens = description.match(/\(IDs?:\s*([^\)]+)\)/i);
+  if (idParens && idParens[1]) {
+    const parts = idParens[1].split(/[\s,]+/);
+    for (const p of parts) {
+      const clean = p.trim().replace(/^#/, '');
+      if (clean && /^\d+$/.test(clean)) found.add(clean);
+    }
+  }
+
+  return Array.from(found);
+}
+
 export interface RevertedFinanceResult {
   success: boolean;
   bookingId: string;
@@ -39,6 +69,11 @@ export interface RevertedFinanceResult {
  * Cuando una reserva se cancela, se deben eliminar sus respectivas transacciones 
  * de la sección finanzas y revertir el saldo de las cuentas bancarias/efectivo asociadas
  * para que no haya descuadre contable. ÚNICAMENTE DE RESERVAS CANCELADAS.
+ * 
+ * Si una transacción financiera contiene múltiples reservas (grupo consolidado) y solo se
+ * cancela 1 habitación del grupo, se revierte únicamente la parte proporcional correspondiente
+ * a esa habitación y se ajusta el saldo restante de la transacción, conservando intactas las
+ * habitaciones que continúan activas.
  *
  * @param bookingId ID de la reserva cancelada (Beds24 o Local)
  * @param reason Motivo o contexto de la cancelación para la bitácora de auditoría
@@ -107,17 +142,51 @@ export async function deleteCancelledReservationFinances(
       };
     }
 
-    console.log(`[deleteCancelledReservationFinances] 🗑️ Eliminando ${matchingRecords.length} transacción(es) de finanzas para la reserva cancelada ${strId}...`);
+    console.log(`[deleteCancelledReservationFinances] 🗑️ Procesando ${matchingRecords.length} transacción(es) de finanzas para la reserva cancelada ${strId}...`);
 
     let totalIngresos = 0;
     let totalGastos = 0;
     const revertedRecords: any[] = [];
 
-    // 3. Revertir saldo de cuentas y eliminar cada registro
+    // 3. Revertir saldo de cuentas y eliminar o ajustar cada registro
     for (const record of matchingRecords) {
       const amount = Number(record.amount || 0);
+      const allIdsInRecord = extractBookingIdsFromDescription(record.description || '');
 
-      if (record.account_id && amount > 0) {
+      let isPartialGroupReversal = false;
+      let cancelShare = amount;
+
+      if (allIdsInRecord.length > 1) {
+        const otherIds = allIdsInRecord.filter(id => id !== strId);
+
+        const { data: b24Active } = await supabase
+          .from('beds24_reservations')
+          .select('id, status')
+          .in('id', otherIds);
+
+        const { data: localActive } = await supabase
+          .from('local_reservas')
+          .select('id, status')
+          .in('id', otherIds);
+
+        const activeOtherIds = new Set<string>();
+        (b24Active || []).forEach((b: any) => {
+          if (String(b.status) !== '0' && b.status !== 'cancelled') activeOtherIds.add(String(b.id));
+        });
+        (localActive || []).forEach((l: any) => {
+          if (l.status !== 'cancelled') activeOtherIds.add(String(l.id));
+        });
+
+        if (activeOtherIds.size > 0) {
+          isPartialGroupReversal = true;
+          cancelShare = Math.round(amount / allIdsInRecord.length);
+          console.log(`[deleteCancelledReservationFinances] ℹ️ Transacción grupal detectada (${allIdsInRecord.join(', ')}). Cancelando únicamente la cuota de la Hab ${strId} ($${cancelShare} de $${amount}). Habitaciones activas restantes: ${Array.from(activeOtherIds).join(', ')}.`);
+        }
+      }
+
+      const amountToRevert = isPartialGroupReversal ? cancelShare : amount;
+
+      if (record.account_id && amountToRevert > 0) {
         // Consultar saldo actual de la cuenta
         const { data: acc, error: accErr } = await supabase
           .from('accounts')
@@ -128,7 +197,7 @@ export async function deleteCancelledReservationFinances(
         if (acc && !accErr) {
           // Si era ingreso, eliminarlo resta al balance de la cuenta
           // Si era gasto/comisión/impuesto, eliminarlo suma de vuelta al balance
-          const revertChange = record.type === 'ingreso' ? -amount : amount;
+          const revertChange = record.type === 'ingreso' ? -amountToRevert : amountToRevert;
           const currentBalance = Number(acc.balance || 0);
           const newBalance = currentBalance + revertChange;
 
@@ -146,21 +215,49 @@ export async function deleteCancelledReservationFinances(
       }
 
       if (record.type === 'ingreso') {
-        totalIngresos += amount;
+        totalIngresos += amountToRevert;
       } else if (record.type === 'gasto') {
-        totalGastos += amount;
+        totalGastos += amountToRevert;
       }
 
-      // 4. Eliminar el registro de 'finances'
-      const { error: delErr } = await supabase
-        .from('finances')
-        .delete()
-        .eq('id', record.id);
+      if (isPartialGroupReversal) {
+        // 4A. Actualizar registro grupal conservando las demás habitaciones
+        const remainingAmount = Math.max(0, amount - cancelShare);
+        const cleanDesc = (record.description || '')
+          .replace(new RegExp(`\\b${escapeRegex(strId)}\\b[,\\s]*`, 'g'), '')
+          .replace(/,\s*\]/, ']')
+          .trim();
+        const updatedDesc = `${cleanDesc} [Ajuste Cancelación Hab ID ${strId}: -$${cancelShare}]`;
 
-      if (delErr) {
-        console.error(`[deleteCancelledReservationFinances] Error eliminando registro financiero ${record.id}:`, delErr);
+        const { error: updErr } = await supabase
+          .from('finances')
+          .update({
+            amount: remainingAmount,
+            description: updatedDesc
+          })
+          .eq('id', record.id);
+
+        if (updErr) {
+          console.error(`[deleteCancelledReservationFinances] Error ajustando registro financiero grupal ${record.id}:`, updErr);
+        } else {
+          revertedRecords.push({
+            ...record,
+            amount_reverted: cancelShare,
+            remaining_amount: remainingAmount
+          });
+        }
       } else {
-        revertedRecords.push(record);
+        // 4B. Eliminar el registro individual de 'finances'
+        const { error: delErr } = await supabase
+          .from('finances')
+          .delete()
+          .eq('id', record.id);
+
+        if (delErr) {
+          console.error(`[deleteCancelledReservationFinances] Error eliminando registro financiero ${record.id}:`, delErr);
+        } else {
+          revertedRecords.push(record);
+        }
       }
     }
 

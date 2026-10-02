@@ -3430,59 +3430,85 @@ export default function RecepcionPage() {
           const totalPayment = amt1 + amt2;
 
           if (totalPayment > 0) {
-            const baseDesc1 = `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} - Habs ${roomNamesList} (Operado por: ${operatorName}) (Parte 1/2: ${paymentMode}) [Reservas B24: ${bookedBeds24Ids.join(', ')}]`;
-            const { data: rows1, error: err1 } = await supabase.from('finances').insert({
-              type: 'ingreso',
-              amount: amt1,
-              category: 'Walk In',
-              description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc1} [Pending Sync: B24]` : `${baseDesc1} [Pending Sync: B24]`,
-              payment_method: paymentMode,
-              account_id: selectedAccountId || null,
-              date: todayStr
-            }).select();
-
-            if (err1) {
-              console.error("Error al registrar pago 1 walkin:", err1);
-              alert(`⚠️ Error al registrar el pago 1 de Walk-in en Finanzas: ${err1.message}`);
-            } else if (selectedAccountId) {
+            // Actualizar saldos de cuenta de forma inmediata
+            if (selectedAccountId && amt1 > 0) {
               const matchedAcc = accounts.find(a => a.id === selectedAccountId);
               if (matchedAcc) {
-                await supabase.from('accounts').update({ balance: matchedAcc.balance + amt1 }).eq('id', selectedAccountId);
+                const newBal = matchedAcc.balance + amt1;
+                await supabase.from('accounts').update({ balance: newBal }).eq('id', selectedAccountId);
+                setAccounts(prev => prev.map(a => a.id === selectedAccountId ? { ...a, balance: newBal } : a));
+              }
+            }
+            if (selectedAccountId2 && amt2 > 0) {
+              const matchedAcc2 = accounts.find(a => a.id === selectedAccountId2);
+              if (matchedAcc2) {
+                const newBal2 = matchedAcc2.balance + amt2;
+                await supabase.from('accounts').update({ balance: newBal2 }).eq('id', selectedAccountId2);
+                setAccounts(prev => prev.map(a => a.id === selectedAccountId2 ? { ...a, balance: newBal2 } : a));
               }
             }
 
-            const baseDesc2 = `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} - Habs ${roomNamesList} (Operado por: ${operatorName}) (Parte 2/2: ${paymentMode2}) [Reservas B24: ${bookedBeds24Ids.join(', ')}]`;
-            const { data: rows2, error: err2 } = await supabase.from('finances').insert({
-              type: 'ingreso',
-              amount: amt2,
-              category: 'Walk In',
-              description: effectivePaymentDesc2 ? `${effectivePaymentDesc2} - ${baseDesc2} [Pending Sync: B24]` : `${baseDesc2} [Pending Sync: B24]`,
-              payment_method: paymentMode2,
-              account_id: selectedAccountId2 || null,
-              date: todayStr
-            }).select();
-
-            if (err2) {
-              console.error("Error al registrar pago 2 walkin:", err2);
-              alert(`⚠️ Error al registrar el pago 2 de Walk-in en Finanzas: ${err2.message}`);
-            } else if (selectedAccountId2) {
-              const matchedAcc = accounts.find(a => a.id === selectedAccountId2);
-              if (matchedAcc) {
-                await supabase.from('accounts').update({ balance: matchedAcc.balance + amt2 }).eq('id', selectedAccountId2);
-              }
-            }
-
-            let allSynced = true;
             let syncErrors: string[] = [];
 
             for (let i = 0; i < bookedBeds24Ids.length; i++) {
               const bookId = bookedBeds24Ids[i];
+              const roomObj = roomDetails[i];
               const splitAmount = i === bookedBeds24Ids.length - 1
                 ? totalPayment - (depositPerRoom * (bookedBeds24Ids.length - 1))
                 : depositPerRoom;
 
               const roomAmt1 = Math.round(splitAmount * (amt1 / totalPayment));
               const roomAmt2 = splitAmount - roomAmt1;
+
+              const descPrefix = bookedBeds24Ids.length > 1
+                ? `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} (ID: ${bookId}) - Hab ${roomObj.name}`
+                : `${selectedReserva.guest_name || 'Huésped'} (ID: ${bookId}) - Hab ${roomObj.name}`;
+
+              let insertedId1: string | null = null;
+              let insertedId2: string | null = null;
+
+              if (roomAmt1 > 0) {
+                const baseDesc1 = `${descPrefix} (Operado por: ${operatorName}) (Parte 1/2: ${paymentMode})`;
+                const { data: r1, error: err1 } = await supabase.from('finances').insert({
+                  type: 'ingreso',
+                  amount: roomAmt1,
+                  category: 'Walk In',
+                  description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc1} [Pending Sync: B24]` : `${baseDesc1} [Pending Sync: B24]`,
+                  payment_method: paymentMode,
+                  account_id: selectedAccountId || null,
+                  date: todayStr
+                }).select();
+
+                if (err1) {
+                  console.error(`Error al registrar pago 1 walkin Hab ${roomObj.name}:`, err1);
+                  alert(`⚠️ Error al registrar el pago 1 de Walk-in en Finanzas para Hab ${roomObj.name}: ${err1.message}`);
+                } else {
+                  insertedId1 = r1?.[0]?.id || null;
+                }
+              }
+
+              if (roomAmt2 > 0) {
+                const baseDesc2 = `${descPrefix} (Operado por: ${operatorName}) (Parte 2/2: ${paymentMode2})`;
+                const { data: r2, error: err2 } = await supabase.from('finances').insert({
+                  type: 'ingreso',
+                  amount: roomAmt2,
+                  category: 'Walk In',
+                  description: effectivePaymentDesc2 ? `${effectivePaymentDesc2} - ${baseDesc2} [Pending Sync: B24]` : `${baseDesc2} [Pending Sync: B24]`,
+                  payment_method: paymentMode2,
+                  account_id: selectedAccountId2 || null,
+                  date: todayStr
+                }).select();
+
+                if (err2) {
+                  console.error(`Error al registrar pago 2 walkin Hab ${roomObj.name}:`, err2);
+                  alert(`⚠️ Error al registrar el pago 2 de Walk-in en Finanzas para Hab ${roomObj.name}: ${err2.message}`);
+                } else {
+                  insertedId2 = r2?.[0]?.id || null;
+                }
+              }
+
+              let pay1Success = false;
+              let pay2Success = false;
 
               if (roomAmt1 > 0) {
                 try {
@@ -3498,14 +3524,16 @@ export default function RecepcionPage() {
                     })
                   });
                   const payData = await b24PayRes.json();
-                  if (!b24PayRes.ok || !payData.success) {
-                    allSynced = false;
-                    syncErrors.push(`Hab ${roomDetails[i].name} (Pago 1): ${payData.error || 'Error'}`);
+                  if (b24PayRes.ok && payData.success) {
+                    pay1Success = true;
+                  } else {
+                    syncErrors.push(`Hab ${roomObj.name} (Pago 1): ${payData.error || 'Error desconocido'}`);
                   }
                 } catch (payErr: any) {
-                  allSynced = false;
-                  syncErrors.push(`Hab ${roomDetails[i].name} (Pago 1): ${payErr.message || payErr}`);
+                  syncErrors.push(`Hab ${roomObj.name} (Pago 1): ${payErr.message || payErr}`);
                 }
+              } else {
+                pay1Success = true;
               }
 
               if (roomAmt2 > 0) {
@@ -3522,29 +3550,34 @@ export default function RecepcionPage() {
                     })
                   });
                   const payData = await b24PayRes.json();
-                  if (!b24PayRes.ok || !payData.success) {
-                    allSynced = false;
-                    syncErrors.push(`Hab ${roomDetails[i].name} (Pago 2): ${payData.error || 'Error'}`);
+                  if (b24PayRes.ok && payData.success) {
+                    pay2Success = true;
+                  } else {
+                    syncErrors.push(`Hab ${roomObj.name} (Pago 2): ${payData.error || 'Error desconocido'}`);
                   }
                 } catch (payErr: any) {
-                  allSynced = false;
-                  syncErrors.push(`Hab ${roomDetails[i].name} (Pago 2): ${payErr.message || payErr}`);
+                  syncErrors.push(`Hab ${roomObj.name} (Pago 2): ${payErr.message || payErr}`);
                 }
+              } else {
+                pay2Success = true;
+              }
+
+              if (pay1Success && insertedId1) {
+                const baseDesc1 = `${descPrefix} (Operado por: ${operatorName}) (Parte 1/2: ${paymentMode})`;
+                await supabase.from('finances').update({
+                  description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc1} [Synced: B24]` : `${baseDesc1} [Synced: B24]`
+                }).eq('id', insertedId1);
+              }
+
+              if (pay2Success && insertedId2) {
+                const baseDesc2 = `${descPrefix} (Operado por: ${operatorName}) (Parte 2/2: ${paymentMode2})`;
+                await supabase.from('finances').update({
+                  description: effectivePaymentDesc2 ? `${effectivePaymentDesc2} - ${baseDesc2} [Synced: B24]` : `${baseDesc2} [Synced: B24]`
+                }).eq('id', insertedId2);
               }
             }
 
-            if (allSynced) {
-              if (rows1?.[0]?.id) {
-                await supabase.from('finances').update({
-                  description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc1} [Synced: B24]` : `${baseDesc1} [Synced: B24]`
-                }).eq('id', rows1[0].id);
-              }
-              if (rows2?.[0]?.id) {
-                await supabase.from('finances').update({
-                  description: effectivePaymentDesc2 ? `${effectivePaymentDesc2} - ${baseDesc2} [Synced: B24]` : `${baseDesc2} [Synced: B24]`
-                }).eq('id', rows2[0].id);
-              }
-            } else {
+            if (syncErrors.length > 0) {
               alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
             }
 
@@ -3567,41 +3600,47 @@ export default function RecepcionPage() {
             }
           }
         } else if (paymentMode && totalPayment > 0) {
-          const baseDesc = `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} - Habs ${roomNamesList} (Operado por: ${operatorName}) [Reservas B24: ${bookedBeds24Ids.join(', ')}]`;
-
-          const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
-            type: 'ingreso',
-            amount: totalPayment,
-            category: 'Walk In',
-            description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
-            payment_method: paymentMode,
-            account_id: selectedAccountId || null,
-            date: todayStr
-          }).select();
-
-          if (insertErr) {
-            console.error("Error al registrar ingreso walkin:", insertErr);
-            alert(`⚠️ Error al registrar el cobro en Finanzas: ${insertErr.message}`);
-          } else {
-            const insertedRecordId = insertedRows?.[0]?.id;
-
-            if (selectedAccountId) {
-              const matchedAcc = accounts.find(a => a.id === selectedAccountId);
-              if (matchedAcc) {
-                const newBalance = matchedAcc.balance + totalPayment;
-                await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
-              }
+          if (selectedAccountId) {
+            const matchedAcc = accounts.find(a => a.id === selectedAccountId);
+            if (matchedAcc) {
+              const newBalance = matchedAcc.balance + totalPayment;
+              await supabase.from('accounts').update({ balance: newBalance }).eq('id', selectedAccountId);
+              setAccounts(prev => prev.map(a => a.id === selectedAccountId ? { ...a, balance: newBalance } : a));
             }
+          }
 
-            let allSynced = true;
-            let syncErrors: string[] = [];
+          let syncErrors: string[] = [];
 
-            for (let i = 0; i < bookedBeds24Ids.length; i++) {
-              const bookId = bookedBeds24Ids[i];
-              const splitAmount = i === bookedBeds24Ids.length - 1
-                ? totalPayment - (depositPerRoom * (bookedBeds24Ids.length - 1))
-                : depositPerRoom;
+          for (let i = 0; i < bookedBeds24Ids.length; i++) {
+            const bookId = bookedBeds24Ids[i];
+            const roomObj = roomDetails[i];
+            const splitAmount = i === bookedBeds24Ids.length - 1
+              ? totalPayment - (depositPerRoom * (bookedBeds24Ids.length - 1))
+              : depositPerRoom;
 
+            const descPrefix = bookedBeds24Ids.length > 1
+              ? `Cobro Check-in Grupo ${selectedReserva.guest_name || 'Huésped'} (ID: ${bookId}) - Hab ${roomObj.name}`
+              : `${selectedReserva.guest_name || 'Huésped'} (ID: ${bookId}) - Hab ${roomObj.name}`;
+
+            const baseDesc = `${descPrefix} (Operado por: ${operatorName})`;
+
+            const { data: insertedRows, error: insertErr } = await supabase.from('finances').insert({
+              type: 'ingreso',
+              amount: splitAmount,
+              category: 'Walk In',
+              description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Pending Sync: B24]` : `${baseDesc} [Pending Sync: B24]`,
+              payment_method: paymentMode,
+              account_id: selectedAccountId || null,
+              date: todayStr
+            }).select();
+
+            if (insertErr) {
+              console.error(`Error al registrar ingreso walkin Hab ${roomObj.name}:`, insertErr);
+              alert(`⚠️ Error al registrar el cobro en Finanzas para la Habitación ${roomObj.name}: ${insertErr.message}`);
+            } else {
+              const insertedRecordId = insertedRows?.[0]?.id;
+
+              let paySuccess = false;
               try {
                 const b24PayRes = await fetch('/api/reservas/payment', {
                   method: 'POST',
@@ -3615,40 +3654,42 @@ export default function RecepcionPage() {
                   })
                 });
                 const payData = await b24PayRes.json();
-                if (!b24PayRes.ok || !payData.success) {
-                  allSynced = false;
-                  syncErrors.push(`Hab ${roomDetails[i].name}: ${payData.error || 'Error desconocido'}`);
+                if (b24PayRes.ok && payData.success) {
+                  paySuccess = true;
+                } else {
+                  syncErrors.push(`Hab ${roomObj.name}: ${payData.error || 'Error desconocido'}`);
                 }
               } catch (payErr: any) {
-                allSynced = false;
-                syncErrors.push(`Hab ${roomDetails[i].name}: ${payErr.message || payErr}`);
+                syncErrors.push(`Hab ${roomObj.name}: ${payErr.message || payErr}`);
+              }
+
+              if (paySuccess && insertedRecordId) {
+                await supabase.from('finances').update({
+                  description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
+                }).eq('id', insertedRecordId);
               }
             }
+          }
 
-            if (allSynced && insertedRecordId) {
-              await supabase.from('finances').update({
-                description: effectivePaymentDesc1 ? `${effectivePaymentDesc1} - ${baseDesc} [Synced: B24]` : `${baseDesc} [Synced: B24]`
-              }).eq('id', insertedRecordId);
-            } else {
-              alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
-            }
+          if (syncErrors.length > 0) {
+            alert(`⚠️ Sincronización Beds24 incompleta:\nEl cobro local se registró con éxito en Supabase, pero Beds24 no pudo procesar los pagos de algunas habitaciones.\nDetalles:\n${syncErrors.join('\n')}\nPodrás reintentar la conciliación desde el panel de Finanzas.`);
+          }
 
-            if (emp) {
-              const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
-              await fetch('/api/employee-logs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  employee_num: emp.employee_num,
-                  employee_name: emp.full_name,
-                  department: emp.department,
-                  module: 'recepcion',
-                  action: 'payment_received',
-                  room: `Grupo: ${roomNamesList}`,
-                  details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (Grupo: ${roomNamesList}) (ID: ${bookedBeds24Ids.join(', ')}) - Recibió pago total de $${totalPayment} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`
-                })
-              });
-            }
+          if (emp) {
+            const matchedAccName = accounts.find(a => a.id === selectedAccountId)?.name || 'Desconocido';
+            await fetch('/api/employee-logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                employee_num: emp.employee_num,
+                employee_name: emp.full_name,
+                department: emp.department,
+                module: 'recepcion',
+                action: 'payment_received',
+                room: `Grupo: ${roomNamesList}`,
+                details: `${selectedReserva.guest_name || 'Huésped'} ${selectedReserva.num_adult || 1}/${selectedReserva.num_child || 0} (Grupo: ${roomNamesList}) (ID: ${bookedBeds24Ids.join(', ')}) - Recibió pago total de $${totalPayment} vía ${paymentMode} (Depositado en sobre: ${matchedAccName}).`
+              })
+            });
           }
         }
 
