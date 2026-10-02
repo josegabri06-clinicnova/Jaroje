@@ -24,6 +24,11 @@ const defaultSeasonRanges = [
   { season: "media", from: "2027-10-29", to: "2027-12-16" }
 ];
 
+const sortSeasonRanges = (list: any[]) => {
+  if (!Array.isArray(list)) return [];
+  return [...list].sort((a, b) => (a.from || '').localeCompare(b.from || ''));
+};
+
 /**
  * GET /api/precios/save-ranges
  * Carga los rangos de temporada de Supabase, auto-sembrando si no existen.
@@ -40,18 +45,19 @@ export async function GET() {
 
     if (data?.value) {
       const parsed = typeof data.value === 'string' ? JSON.parse(data.value) : data.value;
-      return NextResponse.json({ success: true, ranges: parsed });
+      return NextResponse.json({ success: true, ranges: sortSeasonRanges(parsed) });
     }
 
     // Auto-seeding
     console.log('[Save-Ranges API] Sembrando rangos de temporada por defecto...');
+    const sortedDefaults = sortSeasonRanges(defaultSeasonRanges);
     const { error: upsertErr } = await supabase
       .from('settings')
-      .upsert({ key: 'season_ranges', value: defaultSeasonRanges }, { onConflict: 'key' });
+      .upsert({ key: 'season_ranges', value: sortedDefaults }, { onConflict: 'key' });
 
     if (upsertErr) throw upsertErr;
 
-    return NextResponse.json({ success: true, ranges: defaultSeasonRanges });
+    return NextResponse.json({ success: true, ranges: sortedDefaults });
   } catch (err: any) {
     console.error('[Save-Ranges GET Error]:', err.message);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
@@ -71,13 +77,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Se requiere un array de rangos' }, { status: 400 });
     }
 
+    const sortedRanges = sortSeasonRanges(ranges);
+
     const { error } = await supabase
       .from('settings')
-      .upsert({ key: 'season_ranges', value: ranges }, { onConflict: 'key' });
+      .upsert({ key: 'season_ranges', value: sortedRanges }, { onConflict: 'key' });
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, ranges: sortedRanges });
   } catch (err: any) {
     console.error('[Save-Ranges POST Error]:', err.message);
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });

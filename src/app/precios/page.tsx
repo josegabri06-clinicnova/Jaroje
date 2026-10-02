@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { 
-  Calculator, Zap, Check, AlertCircle, RefreshCw, X, Tag, Percent, CalendarDays, Trash2, Calendar, Save
+  Calculator, Zap, Check, AlertCircle, RefreshCw, X, Tag, Percent, CalendarDays, Trash2, Calendar, Save,
+  ArrowUp, ArrowDown, ArrowUpDown
 } from 'lucide-react';
 import { JAROJE_PRICES } from '@/lib/beds24';
 
@@ -404,19 +405,69 @@ export default function PreciosPage() {
     { season: "media", from: "2027-10-29", to: "2027-12-16" }
   ];
 
+  // Ordenar rangos cronológicamente por fecha de inicio ('from')
+  const sortSeasonRangesList = (ranges: any[]) => {
+    if (!Array.isArray(ranges)) return [];
+    return [...ranges].sort((a, b) => (a.from || '').localeCompare(b.from || ''));
+  };
+
+  // Ordenar los rangos de una temporada específica
+  const handleSortSpecificSeason = (seasonKey: string) => {
+    const others = seasonRanges.filter(r => r.season !== seasonKey);
+    const target = seasonRanges.filter(r => r.season === seasonKey);
+    target.sort((a, b) => (a.from || '').localeCompare(b.from || ''));
+    setSeasonRanges([...others, ...target]);
+  };
+
+  // Ordenar TODOS los rangos de todas las temporadas
+  const handleSortAllSeasonRanges = () => {
+    setSeasonRanges(sortSeasonRangesList(seasonRanges));
+  };
+
+  // Mover un rango específico hacia arriba o abajo dentro de su temporada
+  const handleMoveSeasonRange = (globalIdx: number, direction: 'up' | 'down') => {
+    const currentItem = seasonRanges[globalIdx];
+    if (!currentItem) return;
+
+    let targetIdx = -1;
+    if (direction === 'up') {
+      for (let i = globalIdx - 1; i >= 0; i--) {
+        if (seasonRanges[i].season === currentItem.season) {
+          targetIdx = i;
+          break;
+        }
+      }
+    } else {
+      for (let i = globalIdx + 1; i < seasonRanges.length; i++) {
+        if (seasonRanges[i].season === currentItem.season) {
+          targetIdx = i;
+          break;
+        }
+      }
+    }
+
+    if (targetIdx !== -1) {
+      const updated = [...seasonRanges];
+      const temp = updated[globalIdx];
+      updated[globalIdx] = updated[targetIdx];
+      updated[targetIdx] = temp;
+      setSeasonRanges(updated);
+    }
+  };
+
   const loadSeasonRanges = async () => {
     setLoadingSeasonRanges(true);
     try {
       const res = await fetch('/api/precios/save-ranges?t=' + Date.now());
       const data = await res.json();
       if (data.success && Array.isArray(data.ranges)) {
-        setSeasonRanges(data.ranges);
+        setSeasonRanges(sortSeasonRangesList(data.ranges));
       } else {
-        setSeasonRanges(defaultSeasonRanges);
+        setSeasonRanges(sortSeasonRangesList(defaultSeasonRanges));
       }
     } catch (e) {
       console.error('Error al cargar rangos de temporada:', e);
-      setSeasonRanges(defaultSeasonRanges);
+      setSeasonRanges(sortSeasonRangesList(defaultSeasonRanges));
     } finally {
       setLoadingSeasonRanges(false);
     }
@@ -425,17 +476,18 @@ export default function PreciosPage() {
   const handleSaveSeasonRanges = async (rangesToSave: any[]) => {
     setSavingSeasonRanges(true);
     try {
+      const sortedToSave = sortSeasonRangesList(rangesToSave);
       const saveRes = await fetch('/api/precios/save-ranges', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ranges: rangesToSave })
+        body: JSON.stringify({ ranges: sortedToSave })
       });
       const saveData = await saveRes.json();
       if (!saveData.success) {
         throw new Error(saveData.error || 'Error al guardar en la base de datos');
       }
 
-      setSeasonRanges(rangesToSave);
+      setSeasonRanges(sortedToSave);
 
       const doSync = window.confirm(
         '✅ Fechas de temporadas actualizadas con éxito en la base de datos.\n\n' +
@@ -889,14 +941,25 @@ export default function PreciosPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* Explicación */}
-                    <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-[12px] text-blue-800 leading-relaxed space-y-1">
-                      <p className="font-extrabold flex items-center gap-1.5">
-                        💡 Información sobre Temporadas:
-                      </p>
-                      <p>
-                        Los rangos de fechas que definas aquí agruparán automáticamente las tarifas en el calendario. Las fechas que no coincidan con ningún rango se considerarán de <strong>Temporada Baja</strong> por defecto.
-                      </p>
+                    {/* Explicación y botón global de orden */}
+                    <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-[12px] text-blue-800 leading-relaxed flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div>
+                        <p className="font-extrabold flex items-center gap-1.5 mb-1">
+                          💡 Información sobre Temporadas:
+                        </p>
+                        <p>
+                          Los rangos definidos agrupan las tarifas en el calendario. El resto del año se considera <strong>Temporada Baja</strong> por defecto.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleSortAllSeasonRanges}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] rounded-xl shrink-0 flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                        title="Ordena todos los rangos de menor a mayor automáticamente"
+                      >
+                        <ArrowUpDown size={13} />
+                        Acomodar Todo por Fecha
+                      </button>
                     </div>
 
                     {/* Lista de temporadas editables */}
@@ -907,34 +970,76 @@ export default function PreciosPage() {
                                          seasonKey === 'media_alta' ? 'text-orange-600 bg-orange-50 border-orange-100' :
                                          'text-amber-600 bg-amber-50 border-amber-100';
 
-                      const ranges = seasonRanges.filter(r => r.season === seasonKey);
+                      // Obtener los índices de esta temporada para controlar posición y botones arriba/abajo
+                      const seasonIndices: number[] = [];
+                      seasonRanges.forEach((r, i) => {
+                        if (r.season === seasonKey) seasonIndices.push(i);
+                      });
 
                       return (
                         <div key={seasonKey} className="border border-zinc-150 rounded-2xl p-4 space-y-3 bg-zinc-50/20">
-                          <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                          <div className="flex items-center justify-between border-b border-zinc-100 pb-2 flex-wrap gap-2">
                             <span className={`text-[11px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md border ${colorClass}`}>
                               {seasonLabel}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newRange = { season: seasonKey, from: todayStr, to: todayStr };
-                                setSeasonRanges(prev => [...prev, newRange]);
-                              }}
-                              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer bg-indigo-50 px-2 py-1 rounded-lg"
-                            >
-                              + Agregar Rango
-                            </button>
+                            <div className="flex items-center gap-1.5">
+                              {seasonIndices.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSortSpecificSeason(seasonKey)}
+                                  className="text-[11px] font-bold text-zinc-600 hover:text-zinc-900 flex items-center gap-1 cursor-pointer bg-white border border-zinc-200 hover:border-zinc-300 px-2 py-1 rounded-lg transition-colors shadow-2xs"
+                                  title="Acomodar fechas cronológicamente de menor a mayor"
+                                >
+                                  <ArrowUpDown size={12} className="text-zinc-500" />
+                                  Ordenar por Fecha
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newRange = { season: seasonKey, from: todayStr, to: todayStr };
+                                  setSeasonRanges(prev => [...prev, newRange]);
+                                }}
+                                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-lg transition-colors"
+                              >
+                                + Agregar Rango
+                              </button>
+                            </div>
                           </div>
 
-                          {ranges.length === 0 ? (
+                          {seasonIndices.length === 0 ? (
                             <p className="text-[11.5px] text-zinc-400 italic">No hay rangos definidos para esta temporada.</p>
                           ) : (
                             <div className="space-y-2">
-                              {seasonRanges.map((range, idx) => {
-                                if (range.season !== seasonKey) return null;
+                              {seasonIndices.map((idx, posInSeason) => {
+                                const range = seasonRanges[idx];
+                                const isFirst = posInSeason === 0;
+                                const isLast = posInSeason === seasonIndices.length - 1;
+
                                 return (
-                                  <div key={idx} className="flex items-center gap-2 bg-white p-2 rounded-xl border border-zinc-100 shadow-xs">
+                                  <div key={idx} className="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-zinc-100 shadow-xs hover:border-zinc-200 transition-all">
+                                    {/* Botones para subir / bajar el rango manualmente */}
+                                    <div className="flex flex-col gap-0.5 shrink-0">
+                                      <button
+                                        type="button"
+                                        disabled={isFirst}
+                                        onClick={() => handleMoveSeasonRange(idx, 'up')}
+                                        className="p-1 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                                        title="Mover hacia arriba"
+                                      >
+                                        <ArrowUp size={12} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isLast}
+                                        onClick={() => handleMoveSeasonRange(idx, 'down')}
+                                        className="p-1 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed transition-colors"
+                                        title="Mover hacia abajo"
+                                      >
+                                        <ArrowDown size={12} />
+                                      </button>
+                                    </div>
+
                                     <div className="flex-1 grid grid-cols-2 gap-2">
                                       <div>
                                         <span className="text-[8px] font-black text-zinc-400 uppercase tracking-widest block mb-0.5">Desde</span>
@@ -946,7 +1051,7 @@ export default function PreciosPage() {
                                             updated[idx].from = e.target.value;
                                             setSeasonRanges(updated);
                                           }}
-                                          className="w-full text-[12px] font-bold text-zinc-800 border border-zinc-200 focus:outline-none p-1 rounded"
+                                          className="w-full text-[12px] font-bold text-zinc-800 border border-zinc-200 focus:outline-none p-1.5 rounded-lg bg-zinc-50/30 focus:bg-white focus:border-indigo-400 transition-colors"
                                         />
                                       </div>
                                       <div>
@@ -959,19 +1064,20 @@ export default function PreciosPage() {
                                             updated[idx].to = e.target.value;
                                             setSeasonRanges(updated);
                                           }}
-                                          className="w-full text-[12px] font-bold text-zinc-800 border border-zinc-200 focus:outline-none p-1 rounded"
+                                          className="w-full text-[12px] font-bold text-zinc-800 border border-zinc-200 focus:outline-none p-1.5 rounded-lg bg-zinc-50/30 focus:bg-white focus:border-indigo-400 transition-colors"
                                         />
                                       </div>
                                     </div>
+
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setSeasonRanges(prev => prev.filter((_, i) => i !== idx));
                                       }}
-                                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer transition-colors"
+                                      className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg cursor-pointer transition-colors shrink-0"
                                       title="Eliminar rango"
                                     >
-                                      <Trash2 size={13} />
+                                      <Trash2 size={14} />
                                     </button>
                                   </div>
                                 );
