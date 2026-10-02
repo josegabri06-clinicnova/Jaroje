@@ -4996,10 +4996,18 @@ export default function RecepcionPage() {
       });
 
       // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
-      await copyToClipboard(summaryText);
+      const copiedSuccess = await copyToClipboard(summaryText);
 
       // 2. Abrir WhatsApp con el texto ya pre-cargado listo para enviar (Universal Link en móvil, pestaña limpia en PC)
       openWhatsAppUrl({ text: summaryText });
+
+      // 3. Activar Modal de confirmación con vista previa y acciones directas
+      setCheckInSummaryModal({
+        show: true,
+        text: summaryText,
+        reservationTitle: summaryRooms,
+        copied: copiedSuccess
+      });
     } catch (sumErr) {
       console.error('Error al generar resumen de check-in:', sumErr);
     }
@@ -9262,6 +9270,90 @@ export default function RecepcionPage() {
           </div>
         );
       })()}
+
+      {/* Modal de Resumen y Acceso a Grupo de WhatsApp Recepción */}
+      {checkInSummaryModal?.show && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-zinc-200 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="p-5 bg-gradient-to-r from-emerald-600 to-teal-700 text-white flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+                  <CheckCircle2 size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-[15px] leading-tight">Check-In Completado 🎉</h3>
+                  <p className="text-[11.5px] text-emerald-100 font-medium">Resumen listo para enviar al grupo de Recepción</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCheckInSummaryModal(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4 overflow-y-auto flex-1 text-left">
+              <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-2xl flex items-start gap-2.5">
+                <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-emerald-900 leading-snug">
+                  <strong>¡Resumen generado y listo para enviar!</strong><br />
+                  Si no se abrió automáticamente, pulsa el botón verde para abrir el grupo de WhatsApp y pegar el reporte.
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-widest block mb-1.5">
+                  Vista Previa del Mensaje ({checkInSummaryModal.reservationTitle})
+                </span>
+                <pre className="bg-zinc-950 text-zinc-100 p-4 rounded-2xl text-[11.5px] font-mono leading-relaxed whitespace-pre-wrap select-all max-h-60 overflow-y-auto border border-zinc-800 shadow-inner">
+                  {checkInSummaryModal.text}
+                </pre>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-5 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={async () => {
+                  await copyToClipboard(checkInSummaryModal.text);
+                  setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
+                  openWhatsAppUrl({ text: checkInSummaryModal.text });
+                }}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13.5px] rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <MessageCircle size={18} />
+                <span>Abrir Grupo de Recepción (WhatsApp) 💬</span>
+              </button>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await copyToClipboard(checkInSummaryModal.text);
+                    setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
+                  }}
+                  className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold text-[12.5px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Copy size={15} className="text-zinc-500" />
+                  <span>{checkInSummaryModal.copied ? '✓ ¡Resumen Copiado!' : 'Copiar Resumen'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckInSummaryModal(null)}
+                  className="px-6 py-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 font-bold text-[12.5px] rounded-xl transition-colors cursor-pointer"
+                >
+                  Listo
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {zoomImage && (
         <div 

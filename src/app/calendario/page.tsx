@@ -2008,10 +2008,18 @@ export default function CalendarPage() {
       });
 
       // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
-      await copyToClipboard(summaryText);
+      const copiedSuccess = await copyToClipboard(summaryText);
 
       // 2. Redirigir limpiamente a WhatsApp con el texto ya pre-cargado listo para enviar
       openWhatsAppUrl({ text: summaryText });
+
+      // 3. Activar Modal de confirmación con vista previa
+      setCheckInSummaryModal({
+        show: true,
+        text: summaryText,
+        reservationTitle: selectedReserva.room_name || selectedReserva.room || '',
+        copied: copiedSuccess
+      });
     } catch (sumErr) {
       console.error('Error al generar resumen de check-in en calendario:', sumErr);
     }
@@ -4257,24 +4265,25 @@ export default function CalendarPage() {
 
             {/* Footer Buttons */}
             <div className="p-5 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-2.5">
-              <a
-                href={RECEPTION_WA_GROUP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={async () => {
+                  await copyToClipboard(checkInSummaryModal.text);
+                  setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
+                  openWhatsAppUrl({ text: checkInSummaryModal.text });
+                }}
                 className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13.5px] rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
               >
                 <MessageCircle size={18} />
                 <span>Abrir Grupo de Recepción (WhatsApp) 💬</span>
-              </a>
+              </button>
 
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      navigator.clipboard.writeText(checkInSummaryModal.text);
-                      setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
-                    }
+                  onClick={async () => {
+                    await copyToClipboard(checkInSummaryModal.text);
+                    setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
                   }}
                   className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold text-[12.5px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                 >

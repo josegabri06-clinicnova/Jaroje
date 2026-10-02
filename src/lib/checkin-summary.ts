@@ -32,8 +32,10 @@ export interface CheckInSummaryParams {
  * y fallback síncrono mediante textarea temporal en el DOM para evitar bloqueos tras operaciones asíncronas.
  */
 export async function copyToClipboard(text: string): Promise<boolean> {
-  // 1. Intento con API nativa asíncrona
-  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+  if (!text) return false;
+
+  // 1. Intento con API nativa asíncrona (si el foco y permisos lo permiten)
+  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
     try {
       await navigator.clipboard.writeText(text);
       return true;
@@ -42,14 +44,15 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     }
   }
 
-  // 2. Fallback síncrono con textarea en DOM (indispensable en iOS/Safari tras llamadas de red)
+  // 2. Fallback síncrono con textarea en DOM (indispensable en iOS/Safari tras llamadas de red o pérdida de token de interacción)
   if (typeof document !== 'undefined') {
     try {
       const textArea = document.createElement('textarea');
       textArea.value = text;
+      textArea.style.fontSize = '12pt';
       textArea.style.position = 'fixed';
       textArea.style.top = '0';
-      textArea.style.left = '0';
+      textArea.style.left = '-9999px';
       textArea.style.width = '2em';
       textArea.style.height = '2em';
       textArea.style.padding = '0';
@@ -57,14 +60,29 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       textArea.style.outline = 'none';
       textArea.style.boxShadow = 'none';
       textArea.style.background = 'transparent';
-      textArea.style.opacity = '0';
+      textArea.setAttribute('readonly', '');
+
       document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      textArea.setSelectionRange(0, text.length);
+
+      const isIos = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent || '');
+      if (isIos) {
+        const range = document.createRange();
+        range.selectNodeContents(textArea);
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        textArea.setSelectionRange(0, 999999);
+      } else {
+        textArea.focus();
+        textArea.select();
+        textArea.setSelectionRange(0, text.length);
+      }
+
       const successful = document.execCommand('copy');
       document.body.removeChild(textArea);
-      return successful;
+      if (successful) return true;
     } catch (err) {
       console.error('Fallback execCommand falló:', err);
     }
