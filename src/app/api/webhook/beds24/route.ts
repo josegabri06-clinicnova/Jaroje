@@ -54,10 +54,10 @@ export async function POST(req: Request) {
       console.error("Error al registrar log de webhook Beds24:", logErr);
     }
 
-    // Consultar detalles completos de la reserva a Beds24
+    // Consultar detalles completos de la reserva a Beds24 (incluyendo canceladas y rango amplio de fechas)
     try {
       const BEDS24_TOKEN = await getBeds24Token();
-      let b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
+      let b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
         headers: { 'token': BEDS24_TOKEN }
       });
       
@@ -65,18 +65,37 @@ export async function POST(req: Request) {
       if (b24Res.ok) {
         const b24Json = await b24Res.json();
         dataList = b24Json.data || [];
-        
-        // Si no se encuentra en activas, buscar con status=cancelled
-        if (b24Json.success && dataList.length === 0) {
-          const b24ResCancel = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&status=cancelled`, {
-            headers: { 'token': BEDS24_TOKEN }
-          });
-          if (b24ResCancel.ok) {
-            const b24JsonCancel = await b24ResCancel.json();
-            if (b24JsonCancel.success && b24JsonCancel.data && b24JsonCancel.data.length > 0) {
-              dataList = b24JsonCancel.data;
-            }
+      }
+
+      // Si por alguna razón Beds24 no devuelve la reserva vía API (o ya no está activa en su caché), consultar Supabase
+      if (dataList.length === 0) {
+        try {
+          const { data: dbBooking } = await supabase
+            .from('beds24_reservations')
+            .select('*')
+            .eq('id', bookingIdStr)
+            .maybeSingle();
+
+          if (dbBooking) {
+            const nameParts = (dbBooking.guest_name || 'Huésped').split(' ');
+            dataList = [{
+              id: dbBooking.id,
+              masterId: dbBooking.master_id,
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' ') || '',
+              guestName: dbBooking.guest_name,
+              phone: dbBooking.guest_phone,
+              email: dbBooking.guest_email,
+              status: dbBooking.status || '0',
+              arrival: dbBooking.check_in,
+              departure: dbBooking.check_out,
+              channel: dbBooking.channel,
+              deposit: dbBooking.deposit,
+              invoiceItems: dbBooking.invoice_items || []
+            }];
           }
+        } catch (dbFallbackErr) {
+          console.error("[Webhook Beds24] Error en fallback de consulta a Supabase:", dbFallbackErr);
         }
       }
 
@@ -84,10 +103,11 @@ export async function POST(req: Request) {
         let b = dataList[0];
         let country = b.country2 || b.country || b.guestCountry2 || b.guestCountry;
 
-        // Reintento: si el país viene vacío, esperamos 2 segundos y re-consultamos a Beds24
-        if (!country) {
+        // Reintento: si el país viene vacío y no está cancelada, esperamos 2 segundos y re-consultamos a Beds24
+        const bStatusInitial = String(b.status || '').toLowerCase().trim();
+        if (!country && bStatusInitial !== '0' && bStatusInitial !== 'cancelled') {
           await new Promise(resolve => setTimeout(resolve, 2000));
-          const b24ResRetry = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
+          const b24ResRetry = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
             headers: { 'token': BEDS24_TOKEN }
           });
           if (b24ResRetry.ok) {

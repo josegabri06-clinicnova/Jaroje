@@ -493,6 +493,7 @@ export async function sendWhatsAppTemplate(
           }
         } else {
           const singleSendPerReservationTemplates = [
+            'disponibilidad_liberada',
             'bienvenida_checkin',
             'preparacion_llegada',
             'seguimiento_satisfaccion',

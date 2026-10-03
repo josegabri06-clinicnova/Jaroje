@@ -2514,6 +2514,22 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     } catch (finErr) {
       console.error(`[Supabase Sync] Error limpiando finanzas para reserva cancelada ${b.id}:`, finErr);
     }
+
+    // Si la reserva tiene teléfono y su fecha de salida es actual/futura, notificar cancelación por WhatsApp (con deduplicación atómica)
+    const isFutureOrCurrent = !b.departure || new Date(b.departure).getTime() >= Date.now() - 24 * 60 * 60 * 1000;
+    if (phone && isFutureOrCurrent) {
+      try {
+        const { sendTemplate4_DisponibilidadLiberada } = await import('@/lib/whatsapp');
+        const normalizedBooking = {
+          id: b.id,
+          guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || (b.guestName || 'Huésped'),
+          phone: phone
+        };
+        await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
+      } catch (waErr) {
+        console.error(`[Supabase Sync] Error enviando WhatsApp de cancelación para reserva ${b.id}:`, waErr);
+      }
+    }
   }
   return { data, error };
 }
