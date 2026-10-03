@@ -282,13 +282,6 @@ export async function POST(req: Request) {
             // Se envía Mensaje 3 (reservacion_confirmada) INMEDIATAMENTE sin importar la anticipación de la fecha de entrada
             const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
             if (waRes.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: bookingIdStr,
-                template_name: 'reservacion_confirmada',
-                phone: phone,
-                sent_at: new Date().toISOString(),
-                status: 'sent'
-              }]);
               console.log(`[Webhook Beds24] ✅ WhatsApp reservacion_confirmada enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
             } else {
               console.error(`[Webhook Beds24] Error al enviar WhatsApp de reservacion_confirmada:`, waRes.error);
@@ -321,13 +314,6 @@ export async function POST(req: Request) {
 
             const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA, true);
             if (waRes.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: bookingIdStr,
-                template_name: 'solicitud_recibida',
-                phone: phone,
-                sent_at: new Date().toISOString(),
-                status: 'sent'
-              }]);
               console.log(`[Webhook Beds24] ✅ WhatsApp solicitud_recibida enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
             } else {
               console.error(`[Webhook Beds24] Error al enviar WhatsApp de solicitud_recibida:`, waRes.error);

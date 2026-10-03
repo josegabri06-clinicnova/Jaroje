@@ -346,6 +346,7 @@ export async function sendWhatsAppTemplate(
   bypassPause: boolean = false,
   languageOverride?: string
 ): Promise<{ success: boolean; error?: string; data?: any }> {
+  let lockLogId: string | null = null;
   try {
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
@@ -408,71 +409,6 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    // ── CANDADO ANTI-DUPLICADOS A NIVEL BASE DE DATOS (Aplica siempre para garantizar idempotencia) ──
-    try {
-      const bIdStr = bookingId ? String(bookingId) : '';
-
-      // 1. Regla: reservacion_confirmada y solicitud_recibida
-      if (templateName === 'reservacion_confirmada') {
-        if (bIdStr) {
-          const { data: existingConfirmLog } = await supabase
-            .from('whatsapp_logs')
-            .select('id')
-            .eq('reservation_id', bIdStr)
-            .eq('template_name', 'reservacion_confirmada')
-            .limit(1);
-
-          if (existingConfirmLog && existingConfirmLog.length > 0) {
-            console.log(`[WhatsApp Deduplicador DB] Omitiendo reservacion_confirmada, la reserva ${bIdStr} ya tiene registrada confirmación previa.`);
-            return { success: false, data: { deduplicated: true }, error: `reservacion_confirmada ya enviada previamente a esta reserva.` };
-          }
-        }
-      } else if (templateName === 'solicitud_recibida') {
-        if (bIdStr) {
-          const { data: initialLogs } = await supabase
-            .from('whatsapp_logs')
-            .select('id, template_name')
-            .eq('reservation_id', bIdStr)
-            .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'omitido_multi_habitacion'])
-            .limit(1);
-
-          if (initialLogs && initialLogs.length > 0) {
-            console.log(`[WhatsApp Deduplicador DB] Omitiendo solicitud_recibida, la reserva ${bIdStr} ya tiene registrado mensaje inicial (${initialLogs[0].template_name})`);
-            return { success: false, data: { deduplicated: true }, error: `Mensaje inicial ya enviado previamente a esta reserva.` };
-          }
-        }
-      }
-
-      // 2. Candado estricto de una sola vez por reserva para el resto de plantillas de ciclo de vida
-      const singleSendPerReservationTemplates = [
-        'bienvenida_checkin',
-        'preparacion_llegada',
-        'seguimiento_satisfaccion',
-        'salida_checkout',
-        'comparte_experiencia',
-        'recibimiento_nuevamente_5m',
-        'recibimiento_nuevamente_10m',
-        'ultimo_aviso',
-        'alojamiento_listo'
-      ];
-
-      if (bIdStr && singleSendPerReservationTemplates.includes(templateName)) {
-        const { data: existingBookingLog } = await supabase
-          .from('whatsapp_logs')
-          .select('id')
-          .eq('reservation_id', bIdStr)
-          .eq('template_name', templateName)
-          .limit(1);
-
-        if (existingBookingLog && existingBookingLog.length > 0) {
-          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bIdStr}`);
-          return { success: false, data: { deduplicated: true }, error: `Plantilla ${templateName} ya enviada previamente a esta reserva.` };
-        }
-      }
-    } catch (dbDedupErr) {
-      console.error("[WhatsApp Deduplicador DB] Error al verificar logs existentes:", dbDedupErr);
-    }
-
     // Resolve language preference
     let detectedLang = languageOverride || detectLanguageFromPhone(phone);
 
@@ -495,6 +431,117 @@ export async function sendWhatsAppTemplate(
       } catch (dbErr) {
         console.error("Error fetching booking portal settings from DB:", dbErr);
       }
+    }
+
+    // ── CANDADO ANTI-DUPLICADOS A NIVEL BASE DE DATOS (Aplica siempre para garantizar idempotencia) ──
+    const bIdStr = bookingId ? String(bookingId).trim() : '';
+    const rawDigits = cleanedPhone.replace(/\D/g, '');
+    const last10Phone = rawDigits.slice(-10);
+
+    // A. Deduplicación por número de teléfono en ventana de 10 minutos para plantillas iniciales
+    const initialTemplates = ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'preparacion_llegada'];
+    if (initialTemplates.includes(templateName) && last10Phone.length >= 7) {
+      try {
+        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+        const { data: recentPhoneLogs } = await supabase
+          .from('whatsapp_logs')
+          .select('id, phone, template_name, reservation_id, status')
+          .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'preparacion_llegada', 'omitido_multi_habitacion', 'omitido_multi_habitacion_sibling'])
+          .gte('sent_at', tenMinutesAgo)
+          .limit(50);
+
+        const alreadySentToPhone = (recentPhoneLogs || []).some((l: any) => {
+          const logDigits = String(l.phone || '').replace(/\D/g, '');
+          return logDigits && logDigits.includes(last10Phone);
+        });
+
+        if (alreadySentToPhone) {
+          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName} para teléfono ${cleanedPhone}, ya se envió plantilla inicial en ventana de 10 minutos.`);
+          return { success: true, data: { deduplicated: true, message: 'Plantilla omitida por duplicidad reciente a este número de teléfono.' } };
+        }
+      } catch (phoneChkErr) {
+        console.warn("[WhatsApp Deduplicador DB] Error verificando logs por teléfono:", phoneChkErr);
+      }
+    }
+
+    // B. Deduplicación estricta por reservation_id
+    if (bIdStr) {
+      try {
+        if (templateName === 'solicitud_recibida') {
+          const { data: initialLogs } = await supabase
+            .from('whatsapp_logs')
+            .select('id, template_name')
+            .eq('reservation_id', bIdStr)
+            .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'omitido_multi_habitacion', 'omitido_multi_habitacion_sibling'])
+            .limit(1);
+
+          if (initialLogs && initialLogs.length > 0) {
+            console.log(`[WhatsApp Deduplicador DB] Omitiendo solicitud_recibida, la reserva ${bIdStr} ya tiene registrado mensaje inicial (${initialLogs[0].template_name})`);
+            return { success: true, data: { deduplicated: true, message: 'Mensaje inicial ya enviado previamente a esta reserva.' } };
+          }
+        } else if (templateName === 'reservacion_confirmada') {
+          const { data: existingConfirmLog } = await supabase
+            .from('whatsapp_logs')
+            .select('id')
+            .eq('reservation_id', bIdStr)
+            .eq('template_name', 'reservacion_confirmada')
+            .limit(1);
+
+          if (existingConfirmLog && existingConfirmLog.length > 0) {
+            console.log(`[WhatsApp Deduplicador DB] Omitiendo reservacion_confirmada, la reserva ${bIdStr} ya tiene registrada confirmación previa.`);
+            return { success: true, data: { deduplicated: true, message: 'reservacion_confirmada ya enviada previamente a esta reserva.' } };
+          }
+        } else {
+          const singleSendPerReservationTemplates = [
+            'bienvenida_checkin',
+            'preparacion_llegada',
+            'seguimiento_satisfaccion',
+            'salida_checkout',
+            'comparte_experiencia',
+            'recibimiento_nuevamente_5m',
+            'recibimiento_nuevamente_10m',
+            'ultimo_aviso',
+            'alojamiento_listo'
+          ];
+
+          if (singleSendPerReservationTemplates.includes(templateName)) {
+            const { data: existingBookingLog } = await supabase
+              .from('whatsapp_logs')
+              .select('id')
+              .eq('reservation_id', bIdStr)
+              .eq('template_name', templateName)
+              .limit(1);
+
+            if (existingBookingLog && existingBookingLog.length > 0) {
+              console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName}, ya se envió previamente a la reserva ${bIdStr}`);
+              return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} ya enviada previamente a esta reserva.` } };
+            }
+          }
+        }
+      } catch (dbDedupErr) {
+        console.error("[WhatsApp Deduplicador DB] Error al verificar logs existentes:", dbDedupErr);
+      }
+    }
+
+    // C. Candado Atómico Previo en Base de Datos (Pre-Send DB Lock)
+    try {
+      const { data: insertedLock } = await supabase
+        .from('whatsapp_logs')
+        .insert([{
+          reservation_id: bIdStr || 'system_manual',
+          template_name: templateName,
+          phone: cleanedPhone,
+          sent_at: new Date().toISOString(),
+          status: 'sending'
+        }])
+        .select('id')
+        .maybeSingle();
+
+      if (insertedLock?.id) {
+        lockLogId = String(insertedLock.id);
+      }
+    } catch (lockErr) {
+      console.warn("[WhatsApp Pre-Send Lock] Error insertando candado previo:", lockErr);
     }
 
     let languageCode = detectedLang === 'en' ? 'en' : 'es_MX';
@@ -535,6 +582,9 @@ export async function sendWhatsAppTemplate(
       const ycloudFrom = process.env.YCLOUD_FROM_PHONE || '+529581168698';
       
       if (!ycloudApiKey) {
+        if (lockLogId) {
+          try { await supabase.from('whatsapp_logs').delete().eq('id', lockLogId); } catch (_) {}
+        }
         return { success: false, error: 'Credenciales de YCloud (YCLOUD_API_KEY) no configuradas en el servidor' };
       }
 
@@ -728,6 +778,9 @@ export async function sendWhatsAppTemplate(
       const phoneId = process.env.WHATSAPP_PHONE_ID;
 
       if (!token || !phoneId) {
+        if (lockLogId) {
+          try { await supabase.from('whatsapp_logs').delete().eq('id', lockLogId); } catch (_) {}
+        }
         return { success: false, error: 'Credenciales de Meta no configuradas para fallback' };
       }
 
@@ -917,6 +970,9 @@ export async function sendWhatsAppTemplate(
       }
 
       if (status !== 200) {
+        if (lockLogId) {
+          try { await supabase.from('whatsapp_logs').delete().eq('id', lockLogId); } catch (_) {}
+        }
         console.error(`Meta API error template ${templateName}:`, resBody);
         return { success: false, error: resBody.error?.message || 'Error de la API de Meta' };
       }
@@ -1054,8 +1110,21 @@ export async function sendWhatsAppTemplate(
       console.error("[WhatsApp] Error al registrar plantilla en conversations:", convErr);
     }
 
-    // Registrar el envío de plantilla en whatsapp_logs para trazabilidad y búsquedas
-    if (bookingId) {
+    // Actualizar o registrar el envío de plantilla en whatsapp_logs con status 'sent'
+    if (lockLogId) {
+      try {
+        await supabase
+          .from('whatsapp_logs')
+          .update({
+            status: 'sent',
+            sent_at: new Date().toISOString()
+          })
+          .eq('id', lockLogId);
+        console.log(`[WhatsApp Logs] ✅ Confirmado envío de plantilla ${templateName} para reserva ${bookingId || ''} al teléfono ${cleanedPhone}`);
+      } catch (logErr) {
+        console.error("[WhatsApp Logs] Error al actualizar status en whatsapp_logs:", logErr);
+      }
+    } else if (bookingId) {
       try {
         await supabase.from('whatsapp_logs').insert([{
           reservation_id: String(bookingId),
@@ -1072,6 +1141,9 @@ export async function sendWhatsAppTemplate(
 
     return { success: true, data: resBody };
   } catch (err: any) {
+    if (lockLogId) {
+      try { await supabase.from('whatsapp_logs').delete().eq('id', lockLogId); } catch (_) {}
+    }
     console.error(`Exception sending WhatsApp template ${templateName}:`, err);
     return { success: false, error: err.message || 'Error de red' };
   }

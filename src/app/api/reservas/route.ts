@@ -517,12 +517,7 @@ export async function POST(req: Request) {
             if (bookingForWA.deposit > 0) {
               waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
               if (waRes?.success) {
-                await supabase.from('whatsapp_logs').insert([{
-                  reservation_id: bookingIdStr,
-                  template_name: 'reservacion_confirmada',
-                  phone: data.phone
-                }]);
-                console.log(`[WA reservas local] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
+                console.log(`[WA reservas local] reservacion_confirmada procesado para reserva ${bookingIdStr}`);
               }
             } else {
               // Si la reserva proviene de Expedia y faltan más de 7 días, posponer la solicitud de anticipo a T-7 vía Cron
@@ -545,12 +540,7 @@ export async function POST(req: Request) {
 
               waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
               if (waRes?.success) {
-                await supabase.from('whatsapp_logs').insert([{
-                  reservation_id: bookingIdStr,
-                  template_name: 'solicitud_recibida',
-                  phone: data.phone
-                }]);
-                console.log(`[WA reservas local] solicitud_recibida enviado al instante a reserva ${bookingIdStr}`);
+                console.log(`[WA reservas local] solicitud_recibida procesado para reserva ${bookingIdStr}`);
               }
             }
           } catch (waErr) {
@@ -745,12 +735,7 @@ export async function POST(req: Request) {
           if (bookingForWA.deposit > 0) {
             waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
             if (waRes?.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: bookingIdStr,
-                template_name: 'reservacion_confirmada',
-                phone: phone
-              }]);
-              console.log(`[WA reservas B24] reservacion_confirmada enviado a reserva ${bookingIdStr}`);
+              console.log(`[WA reservas B24] reservacion_confirmada procesado para reserva ${bookingIdStr}`);
             }
           } else {
             // Si la reserva proviene de Expedia y faltan más de 7 días, posponer la solicitud de anticipo a T-7 vía Cron
@@ -773,12 +758,7 @@ export async function POST(req: Request) {
 
             waRes = await sendTemplate1_SolicitudRecibida(bookingForWA);
             if (waRes?.success) {
-              await supabase.from('whatsapp_logs').insert([{
-                reservation_id: bookingIdStr,
-                template_name: 'solicitud_recibida',
-                phone: phone
-              }]);
-              console.log(`[WA reservas B24] solicitud_recibida enviado al instante a reserva ${bookingIdStr}`);
+              console.log(`[WA reservas B24] solicitud_recibida procesado para reserva ${bookingIdStr}`);
             }
           }
         } catch (waErr) {
