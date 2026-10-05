@@ -684,16 +684,19 @@ export async function sendWhatsAppTemplate(
       }
 
       const ycloudLang = detectedLang === 'en' ? 'en' : 'es';
-      const ycloudPayload = {
+      const ycloudPayload: any = {
         from: ycloudFrom,
         to: toPhone,
         type: 'template',
         template: {
           name: templateName,
-          language: { code: ycloudLang },
-          components: ycloudComponents
+          language: { code: ycloudLang }
         }
       };
+
+      if (ycloudComponents.length > 0) {
+        ycloudPayload.template.components = ycloudComponents;
+      }
 
       response = await fetch(ycloudUrl, {
         method: 'POST',
@@ -743,13 +746,16 @@ export async function sendWhatsAppTemplate(
       // Retry without buttons for YCloud if it fails due to button structure mismatch
       if (!response.ok && finalButtonParams && finalButtonParams.length > 0) {
         console.warn(`YCloud API failed with ${status} for template ${templateName} (with buttons). Retrying without button parameters...`);
-        const ycloudNoButtonsPayload = {
+        const bodyComponents = ycloudComponents.filter(c => c.type === 'body');
+        const ycloudNoButtonsPayload: any = {
           ...ycloudPayload,
           template: {
-            ...ycloudPayload.template,
-            components: ycloudComponents.filter(c => c.type === 'body')
+            ...ycloudPayload.template
           }
         };
+        if (bodyComponents.length > 0) {
+          ycloudNoButtonsPayload.template.components = bodyComponents;
+        }
 
         try {
           const retryRes = await fetch(ycloudUrl, {
@@ -792,15 +798,17 @@ export async function sendWhatsAppTemplate(
 
       const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
 
-      const components: any[] = [
-        {
+      const components: any[] = [];
+
+      if (parameters && parameters.length > 0) {
+        components.push({
           type: 'body',
           parameters: parameters.map(p => ({
             type: 'text',
             text: p || '—'
           }))
-        }
-      ];
+        });
+      }
 
       if (finalButtonParams && finalButtonParams.length > 0) {
         const isQuickReply = resolvedButtonType === 'quick_reply' || finalButtonParams[0].startsWith('VIEW_BOOKING_');
@@ -855,17 +863,20 @@ export async function sendWhatsAppTemplate(
         }
       }
 
-      const payload = {
+      const payload: any = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: cleanPhoneForMeta(cleanedPhone),
         type: 'template',
         template: {
           name: templateName,
-          language: { code: languageCode },
-          components
+          language: { code: languageCode }
         }
       };
+
+      if (components.length > 0) {
+        payload.template.components = components;
+      }
 
       response = await fetch(url, {
         method: 'POST',
