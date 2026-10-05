@@ -1082,11 +1082,11 @@ export async function checkIfOtaIsAlreadyAdjusted(
     if (channelLower.includes('airbnb')) {
       expectedPrice = Math.round((calculatedTotal / 1.19) * 1.21 * (otaMultipliers.airbnb || 1.20));
     } else if (channelLower.includes('booking')) {
-      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.booking || 1.35));
+      expectedPrice = Math.round(calculatedTotal * (otaMultipliers.booking || 1.35) * 0.90);
     } else if (channelLower.includes('google')) {
       expectedPrice = Math.round((calculatedTotal / 1.19) * (otaMultipliers.google || 1.4024745));
     } else if (channelLower.includes('expedia')) {
-      expectedPrice = Math.round((calculatedTotal / 1.19) * (otaMultipliers.expedia || 1.4603085));
+      expectedPrice = Math.round((calculatedTotal / 1.19) * (otaMultipliers.expedia || 1.622565) * 0.90);
     }
 
     const diff = Math.abs(priceVal - expectedPrice);
@@ -2114,11 +2114,11 @@ export function getDirectStayBreakdown(
   if (isAirbnbChannel) {
     finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.airbnb || 1.20) * 1.21);
   } else if (isBookingChannel) {
-    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.booking || 1.35) * 1.19);
+    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.booking || 1.35) * 1.19 * 0.90);
   } else if (isGoogleChannel) {
     finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.google || 1.4024745));
   } else if (isExpediaChannel) {
-    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.expedia || 1.4603085));
+    finalTotal = Math.round(subtotalBaseStay * (otaMultipliers.expedia || 1.622565) * 0.90);
   } else if (channelMultiplier !== 1.0) {
     finalTotal = Math.round(totalDirect * channelMultiplier);
   }
@@ -2126,10 +2126,12 @@ export function getDirectStayBreakdown(
   let summaryFormula = `${nights} ${nights === 1 ? 'noche' : 'noches'} × $${sampleTotalPerNight.toLocaleString('es-MX')} MXN`;
   if (isAirbnbChannel) {
     summaryFormula += ` × ${channelMultiplier} (Airbnb * 1.20 MUL * 1.21 TAX) = $${finalTotal.toLocaleString('es-MX')} MXN`;
+  } else if (isBookingChannel) {
+    summaryFormula += ` × ${channelMultiplier} (Booking * 1.35 * 1.19 - 10% Promoción) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else if (isGoogleChannel) {
     summaryFormula += ` × ${channelMultiplier} (Google * 1.4024745 MUL) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else if (isExpediaChannel) {
-    summaryFormula += ` × ${channelMultiplier} (Expedia * 1.4603085 MUL) = $${finalTotal.toLocaleString('es-MX')} MXN`;
+    summaryFormula += ` × ${channelMultiplier} (Expedia * 1.622565 - 10% Promoción) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else if (channelMultiplier !== 1.0) {
     summaryFormula += ` × ${channelMultiplier} (${channelLabel}) = $${finalTotal.toLocaleString('es-MX')} MXN`;
   } else {

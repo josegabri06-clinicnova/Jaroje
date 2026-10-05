@@ -374,13 +374,17 @@ export default function VercelActionForm() {
       if (form.channel === 'Google Ads' || form.channel === 'Google') {
         suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.google || 1.4024745) + surchargePerNight);
       } else if (form.channel === 'Expedia') {
-        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.4603085) + surchargePerNight);
+        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.622565) * 0.90 + surchargePerNight);
       } else if (form.channel === 'Airbnb') {
         const priceWithChannel = basePrice * discountMult * (otaMultipliers.airbnb || 1.20);
         const tax = priceWithChannel * 0.21; // 21% IVA Airbnb
         suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
+      } else if (form.channel === 'Booking.com') {
+        const priceWithChannel = basePrice * discountMult * (otaMultipliers.booking || 1.35);
+        const tax = priceWithChannel * 0.19; // 16% IVA + 3% ISH
+        suggestedDailyRate = Math.round((priceWithChannel + tax) * 0.90 + surchargePerNight);
       } else {
-        // Directo (* 1.19 TAX) o Booking (* 1.35 MUL * 1.19 TAX)
+        // Directo (* 1.19 TAX)
         const priceWithChannel = basePrice * discountMult * multiplier;
         const tax = priceWithChannel * 0.19; // 16% IVA + 3% ISH
         suggestedDailyRate = Math.round(priceWithChannel + tax + surchargePerNight);
