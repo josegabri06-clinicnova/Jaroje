@@ -54,10 +54,10 @@ export async function POST(req: Request) {
       console.error("Error al registrar log de webhook Beds24:", logErr);
     }
 
-    // Consultar detalles completos de la reserva a Beds24 (incluyendo canceladas y rango amplio de fechas)
+    // Consultar detalles completos de la reserva a Beds24 (incluyendo canceladas e ítems de factura)
     try {
       const BEDS24_TOKEN = await getBeds24Token();
-      let b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
+      let b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true`, {
         headers: { 'token': BEDS24_TOKEN }
       });
       
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
         const bStatusInitial = String(b.status || '').toLowerCase().trim();
         if (!country && bStatusInitial !== '0' && bStatusInitial !== 'cancelled') {
           await new Promise(resolve => setTimeout(resolve, 2000));
-          const b24ResRetry = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true&arrivalFrom=2024-01-01&arrivalTo=2035-12-31`, {
+          const b24ResRetry = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true&includeCancelled=true`, {
             headers: { 'token': BEDS24_TOKEN }
           });
           if (b24ResRetry.ok) {

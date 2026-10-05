@@ -112,6 +112,43 @@ export async function POST(req: Request) {
         } catch (statusErr) {
           console.error("[YCloud Webhook] Error actualizando whatsapp_logs:", statusErr);
         }
+
+        // Si la entrega falló por parte de Meta/WhatsApp, auditar el motivo exacto en employee_logs
+        if (status === 'failed') {
+          try {
+            const errCode = String(waMsg.errorCode || waMsg.whatsappApiError?.code || '');
+            const errMsg = String(waMsg.errorMessage || waMsg.whatsappApiError?.message || waMsg.whatsappApiError?.error_data?.details || '');
+            const templateName = waMsg.template?.name || 'plantilla';
+
+            let explanation = `Fallo en entrega de WhatsApp al teléfono ${recipientPhone}.`;
+            if (errCode === '131049') {
+              explanation = `⚠️ Meta WhatsApp rechazó la entrega de '${templateName}' al ${recipientPhone} (Error 131049: Límite de frecuencia de Marketing por Meta. Recomendación: categorizar la plantilla como UTILITY).`;
+            } else if (errCode === '100') {
+              explanation = `⚠️ Meta WhatsApp bloqueó el envío al ${recipientPhone} (Error 100: No se puede enviar un mensaje al mismo número de WhatsApp Business del hotel).`;
+            } else if (errMsg) {
+              explanation = `⚠️ Meta WhatsApp no pudo entregar '${templateName}' al ${recipientPhone}: ${errMsg} (Código ${errCode})`;
+            }
+
+            await supabase.from('employee_logs').insert([{
+              employee_num: '000',
+              employee_name: 'WhatsApp Bot',
+              department: 'whatsapp',
+              module: 'whatsapp',
+              action: 'whatsapp_envio_fallido',
+              room: recipientPhone,
+              details: JSON.stringify({
+                text: explanation,
+                phone: recipientPhone,
+                errorCode: errCode,
+                errorMessage: errMsg,
+                template: templateName
+              }),
+              created_at: new Date().toISOString()
+            }]);
+          } catch (auditErr) {
+            console.error("[YCloud Webhook] Error registrando auditoría de fallo:", auditErr);
+          }
+        }
       }
 
       return NextResponse.json({ success: true, event: 'status_updated' });

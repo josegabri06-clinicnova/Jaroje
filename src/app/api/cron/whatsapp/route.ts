@@ -227,10 +227,14 @@ export async function GET(req: Request) {
     const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
     const { data: sentLogs } = await supabase
       .from('whatsapp_logs')
-      .select('reservation_id, template_name, phone, sent_at')
+      .select('reservation_id, template_name, phone, sent_at, status')
       .gte('sent_at', sixtyDaysAgo);
 
-    const sentSet = new Set((sentLogs || []).map(l => `${l.reservation_id}_${l.template_name}`));
+    const sentSet = new Set(
+      (sentLogs || [])
+        .filter((l: any) => l.status !== 'failed')
+        .map(l => `${l.reservation_id}_${l.template_name}`)
+    );
 
     // --- PRECARGA PARA CANCELACIÓN DE 3 HORAS ---
     // Obtener logs de 'ultimo_aviso' enviados en los últimos 7 días ordenados por fecha descendente
@@ -492,6 +496,7 @@ export async function GET(req: Request) {
           const cleanPhoneDigits = String(guestPhone).replace(/\D/g, '');
           
           const phoneHasInitialLog = (sentLogs || []).some((l: any) => {
+            if (l.status === 'failed') return false;
             const lDigits = String(l.phone || '').replace(/\D/g, '');
             const isInitialTmpl = ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'omitido_multi_habitacion'].includes(l.template_name);
             return isInitialTmpl && lDigits && cleanPhoneDigits && (lDigits.includes(cleanPhoneDigits) || cleanPhoneDigits.includes(lDigits));
