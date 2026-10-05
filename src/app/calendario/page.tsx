@@ -120,20 +120,29 @@ function getBookingForRoomDay(
   room: string,
   dayStr: string
 ): any | null {
+  const b24 = ROOM_TO_BEDS24[room];
+
   return reservas.find(r => {
     // Ignorar reservas canceladas en el calendario
-    if (r.status === 'cancelled' || r.status === 'cancelado') {
+    if (r.status === 'cancelled' || r.status === 'cancelado' || String(r.status) === '0') {
       return false;
     }
 
-    // Intentamos extraer el número de habitación de 3 dígitos (ej: '101') del room o room_name
+    // 1. Coincidencia exacta por roomId y unitId de Beds24 si existen
+    if (b24 && r.roomId && r.unitId) {
+      if (String(r.roomId) === b24.roomId && String(r.unitId) === b24.unitId) {
+        return r.check_in <= dayStr && r.check_out > dayStr;
+      }
+    }
+
+    // 2. Coincidencia exacta por número de habitación física (ej: '101')
     const matchSource = `${r.room || ''} | ${r.room_name || ''}`;
     const match = matchSource.match(/\((\d{3})\)/) || matchSource.match(/(\d{3})$/) || matchSource.match(/\b(\d{3})\b/);
     const extractedRoom = match ? match[1] : null;
 
     const isMatch = (extractedRoom === room) || 
-                    (r.room === room) || 
-                    (r.room_name || '').includes(room);
+                    (String(r.room || '').trim() === room) || 
+                    (String(r.room_name || '').trim() === room);
 
     return isMatch && r.check_in <= dayStr && r.check_out > dayStr;
   }) || null;

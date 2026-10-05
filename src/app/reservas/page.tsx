@@ -215,6 +215,16 @@ export default function ReservasList() {
 function ReservasListInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  
+  const getActiveUrlId = useCallback(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const winId = params.get('id');
+      if (winId) return winId;
+    }
+    return searchParams.get('id');
+  }, [searchParams]);
+
   const searchId = searchParams.get('id');
   const [reservas, setReservas] = useState<any[]>([]);
   const [billingRequests, setBillingRequests] = useState<any[]>([]);
@@ -492,6 +502,9 @@ function ReservasListInner() {
 
   const handleCloseModal = () => {
     setSelectedRes(null);
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', '/reservas');
+    }
     setDniPreview(null);
     setDocumentFile(null);
     setShowPaymentFlow(false);
@@ -916,15 +929,16 @@ function ReservasListInner() {
 
   // 1. Sincronizar ID de la URL -> Estado local (La URL manda siempre, grupos consolidados por defecto)
   useEffect(() => {
-    if (searchId) {
+    const activeId = getActiveUrlId();
+    if (activeId) {
       if (reservas.length > 0) {
         // Buscar en la lista agrupada para abrir la tarjeta consolidada por defecto
         const grouped = groupReservations(reservas);
         const found = grouped.find((r: any) => 
-          String(r.id) === searchId || 
-          (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === searchId)) ||
-          (r.group_sibling_ids && r.group_sibling_ids.includes(searchId))
-        );
+          String(r.id) === activeId || 
+          (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === activeId)) ||
+          (r.group_sibling_ids && r.group_sibling_ids.includes(activeId))
+        ) || reservas.find(r => String(r.id) === activeId);
 
         if (found) {
           setSelectedRes(found);
@@ -937,18 +951,13 @@ function ReservasListInner() {
             setActiveTab(isCompleted ? 'Completadas' : 'Todas');
           }
         } else {
-          const rawFound = reservas.find(r => String(r.id) === searchId);
-          if (rawFound) {
-            setSelectedRes(rawFound);
-          } else {
-            setSelectedRes(null);
-          }
+          setSelectedRes(null);
         }
       }
     } else {
       setSelectedRes(null);
     }
-  }, [reservas, searchId, groupReservations]);
+  }, [reservas, searchParams, groupReservations, getActiveUrlId]);
 
   // 2. Limpieza preventiva al desmontar el componente (al volver a Calendario u otra vista)
   useEffect(() => {
@@ -1961,15 +1970,28 @@ function ReservasListInner() {
         );
         setReservas(sorted);
 
-        // Si hay una reserva en la URL o seleccionada activa, refrescar acorde a searchId o selectedRes
-        const targetId = searchId || (selectedRes ? String(selectedRes.id) : null);
-        if (targetId) {
+        // Si hay una reserva en la URL, sincronizar o actualizar sus datos
+        const currentUrlId = getActiveUrlId();
+        if (currentUrlId) {
           const grouped = groupReservations(sorted);
           const found = grouped.find((r: any) => 
-            String(r.id) === targetId || 
-            (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === targetId)) ||
-            (r.group_sibling_ids && r.group_sibling_ids.includes(targetId))
-          ) || sorted.find((r: any) => String(r.id) === targetId);
+            String(r.id) === currentUrlId || 
+            (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === currentUrlId)) ||
+            (r.group_sibling_ids && r.group_sibling_ids.includes(currentUrlId))
+          ) || sorted.find((r: any) => String(r.id) === currentUrlId);
+
+          if (found) {
+            setSelectedRes(found);
+          }
+        } else if (selectedRes) {
+          // Si el usuario tenía una reserva abierta en pantalla sin ID en URL, actualizar sus datos
+          const currentOpenId = String(selectedRes.id);
+          const grouped = groupReservations(sorted);
+          const found = grouped.find((r: any) => 
+            String(r.id) === currentOpenId || 
+            (r.is_group_card && Array.isArray(r.group_members) && r.group_members.some((m: any) => String(m.id) === currentOpenId)) ||
+            (r.group_sibling_ids && r.group_sibling_ids.includes(currentOpenId))
+          ) || sorted.find((r: any) => String(r.id) === currentOpenId);
 
           if (found) {
             setSelectedRes(found);
