@@ -7,6 +7,7 @@ const supabase = createClient(
 );
 
 const requestCache = new Map<string, number>();
+const welcomeSentMemoryCache = new Map<string, number>();
 
 function phonesMatch(phoneA: string, phoneB: string): boolean {
   const normA = normalizePhone(phoneA);
@@ -230,28 +231,22 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
-  // ── REGLA DE BIENVENIDA AUTOMÁTICA A NUEVOS CONTACTOS O SIN CONTACTO RECIENTE (> 1 SEMANA) ──
+  // ── REGLA DE BIENVENIDA AUTOMÁTICA A WHATSAPP (1 VEZ AL DÍA / 24 HORAS) ──
   // Plantilla: bienvenido_cliente_whatsaap
-  // Si es un cliente nuevo (sin conversación previa) o si la última interacción / plantilla
-  // fue hace más de 1 semana (7 días), se envía la plantilla de bienvenida al instante.
-  // Si ha estado hablando hace menos de 1 semana, NO se envía ninguna plantilla.
-  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+  // Cuando el cliente le habla por WhatsApp a Rolando, le llega esta plantilla.
+  // Regla estricta: Solo le llega como máximo 1 vez al día (ventana móvil de 24 horas).
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   const now = Date.now();
 
-  let hasRecentInteraction = false;
   let lastWelcomeSentAt = 0;
 
-  // A. Revisar si hay conversación con mensajes en los últimos 7 días
-  if (existing) {
-    const convTime = new Date(existing.timestamp || 0).getTime();
-    if (!isNaN(convTime) && (now - convTime < SEVEN_DAYS_MS)) {
-      if (Array.isArray(existing.messages) && existing.messages.length > 0) {
-        hasRecentInteraction = true;
-      }
-    }
+  // A. Revisar en memoria para evitar colisiones rápidas
+  const memSentTime = welcomeSentMemoryCache.get(phone);
+  if (memSentTime && now - memSentTime < ONE_DAY_MS) {
+    lastWelcomeSentAt = Math.max(lastWelcomeSentAt, memSentTime);
   }
 
-  // B. Revisar si se le envió la plantilla bienvenido_cliente_whatsaap en los últimos 7 días
+  // B. Revisar en whatsapp_logs si se le envió la plantilla bienvenido_cliente_whatsaap en las últimas 24 horas
   try {
     const { data: lastWelcomeLog } = await supabase
       .from('whatsapp_logs')
@@ -264,7 +259,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
 
     if (lastWelcomeLog?.sent_at) {
       const logTime = new Date(lastWelcomeLog.sent_at).getTime();
-      if (!isNaN(logTime)) {
+      if (!isNaN(logTime) && logTime > lastWelcomeSentAt) {
         lastWelcomeSentAt = logTime;
       }
     }
@@ -272,14 +267,34 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     console.warn("[Inbound Handler] Error verificando whatsapp_logs para welcome template:", logChkErr);
   }
 
-  const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < SEVEN_DAYS_MS);
-  const shouldSendWelcome = (!existing || !hasRecentInteraction) && !isWelcomeCoolingDown;
+  // C. Revisar en historial de conversaciones si hay registro reciente de plantilla en las últimas 24 horas
+  if (existing && Array.isArray(existing.messages)) {
+    for (let i = existing.messages.length - 1; i >= 0; i--) {
+      const msg = existing.messages[i];
+      const botText = String(msg.role_bot || msg.role_manager || '');
+      if (botText.includes('bienvenido_cliente_whatsaap') || botText.includes('bienvenido_cliente_final_v2') || botText.includes('bienvenido_cliente')) {
+        const msgTime = new Date(msg.timestamp || 0).getTime();
+        if (!isNaN(msgTime) && msgTime > lastWelcomeSentAt) {
+          lastWelcomeSentAt = msgTime;
+        }
+        break;
+      }
+    }
+  }
+
+  const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_DAY_MS);
+  const shouldSendWelcome = !isWelcomeCoolingDown;
 
   if (shouldSendWelcome && !isAutoReplyTriggered) {
     try {
-      console.log(`[Inbound Handler] 🌟 Cliente nuevo o sin interacción en > 7 días. Enviando plantilla 'bienvenido_cliente_whatsaap' a ${phone}...`);
+      console.log(`[Inbound Handler] 🌟 Cliente escribió a WhatsApp. Enviando plantilla 'bienvenido_cliente_whatsaap' (1 vez al día) a ${phone}...`);
+      welcomeSentMemoryCache.set(phone, now);
+      if (welcomeSentMemoryCache.size > 100) {
+        const oldest = Array.from(welcomeSentMemoryCache.keys()).slice(0, 20);
+        oldest.forEach(k => welcomeSentMemoryCache.delete(k));
+      }
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
-      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone, params.guest_name);
+      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
       console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
     } catch (welcomeErr) {
       console.error("[Inbound Handler] Error enviando bienvenida WhatsApp:", welcomeErr);

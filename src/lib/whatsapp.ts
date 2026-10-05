@@ -1062,6 +1062,14 @@ export async function sendWhatsAppTemplate(
           case 'rechazo_solicitud':
             const motivo = params[2] || 'No especificado';
             return `❌ Solicitud Reservación Rechazada\n\nHola, ${name}.\n\nTe informamos que tu solicitud de reservación #${params[1] || ''} ha sido rechazada por el siguiente motivo:\n\n*${motivo}*\n\nLamentamos los inconvenientes que esto pueda causarte.`;
+          case 'bienvenido_cliente_final_v2':
+            return detectedLang === 'en'
+              ? `🌴 [Template: bienvenido_cliente_final_v2 (EN)] Welcome to Condominios Jaroje. Thank you for calling our lines.`
+              : `🌴 [Plantilla: bienvenido_cliente_final_v2 (ES)] ¡Gracias por llamar a Condominios Jaroje! Te compartimos información y asistencia directa para tu estancia.`;
+          case 'bienvenido_cliente_whatsaap':
+            return detectedLang === 'en'
+              ? `🌴 [Template: bienvenido_cliente_whatsaap (EN)] Hello! Welcome to Condominios Jaroje. How can we assist you with your stay?`
+              : `🌴 [Plantilla: bienvenido_cliente_whatsaap (ES)] ¡Hola! Bienvenido a Condominios Jaroje. ¿En qué podemos apoyarte con tu hospedaje?`;
           default:
             return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
         }
@@ -1130,16 +1138,16 @@ export async function sendWhatsAppTemplate(
       } catch (logErr) {
         console.error("[WhatsApp Logs] Error al actualizar status en whatsapp_logs:", logErr);
       }
-    } else if (bookingId) {
+    } else {
       try {
         await supabase.from('whatsapp_logs').insert([{
-          reservation_id: String(bookingId),
+          reservation_id: bookingId ? String(bookingId) : null,
           template_name: templateName,
           phone: cleanedPhone,
           sent_at: new Date().toISOString(),
           status: 'sent'
         }]);
-        console.log(`[WhatsApp Logs] ✅ Registrado envío de plantilla ${templateName} para reserva ${bookingId} al teléfono ${cleanedPhone}`);
+        console.log(`[WhatsApp Logs] ✅ Registrado envío de plantilla ${templateName} al teléfono ${cleanedPhone}`);
       } catch (logErr) {
         console.error("[WhatsApp Logs] Error al registrar en whatsapp_logs:", logErr);
       }
@@ -1516,15 +1524,16 @@ export async function sendTemplate_BienvenidoConmutador(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const lang = langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en');
-  const params = guestName ? [getFirstName(guestName)] : [];
+  // bienvenido_cliente_final_v2 no requiere parámetros en el cuerpo (0 parámetros)
+  const params: string[] = [];
   console.log(`[WhatsApp Template] Enviando 'bienvenido_cliente_final_v2' (lang: ${lang}) a ${phone}`);
   return sendWhatsAppTemplate(phone, 'bienvenido_cliente_final_v2', params, undefined, undefined, undefined, true, lang);
 }
 
 /**
  * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap)
- * Se envía automáticamente al instante cuando un cliente nuevo escribe por WhatsApp,
- * o si escribe tras más de 1 semana sin interacción.
+ * Se envía automáticamente cuando un cliente escribe por WhatsApp al número de Rolando.
+ * Regla: Máximo 1 vez al día (ventana de 24 horas) por cliente.
  * - Idioma 'es' si el prefijo es de Latinoamérica o España.
  * - Idioma 'en' si el prefijo es de cualquier otra parte del mundo.
  */
@@ -1535,7 +1544,8 @@ export async function sendTemplate_BienvenidoWhatsApp(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const lang = langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en');
-  const params = guestName ? [getFirstName(guestName)] : [];
+  // bienvenido_cliente_whatsaap no requiere parámetros en el cuerpo (0 parámetros)
+  const params: string[] = [];
   console.log(`[WhatsApp Template] Enviando 'bienvenido_cliente_whatsaap' (lang: ${lang}) a ${phone}`);
   return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap', params, undefined, undefined, undefined, true, lang);
 }
