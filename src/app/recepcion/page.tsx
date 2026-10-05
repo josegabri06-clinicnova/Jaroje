@@ -3387,23 +3387,21 @@ export default function RecepcionPage() {
           });
 
           // Enviar plantilla de bienvenida de WhatsApp en segundo plano
-          const walkinPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone;
-          if (walkinPhone) {
-            fetch('/api/whatsapp/send-template', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                template: 'bienvenida_checkin',
-                booking: {
-                  ...selectedReserva,
-                  id: beds24AssignedId,
-                  guest_name: selectedReserva.guest_name,
-                  phone: walkinPhone,
-                  is_checked_in: true
-                }
-              })
-            }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin walk-in:", err));
-          }
+          const walkinPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
+          fetch('/api/whatsapp/send-template', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              template: 'bienvenida_checkin',
+              booking: {
+                ...selectedReserva,
+                id: beds24AssignedId,
+                guest_name: selectedReserva.guest_name || 'Huésped',
+                phone: walkinPhone,
+                is_checked_in: true
+              }
+            })
+          }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin walk-in:", err));
 
           if (emp) {
             await fetch('/api/employee-logs', {
@@ -3775,8 +3773,8 @@ export default function RecepcionPage() {
           }
 
           // Enviar plantilla de bienvenida WhatsApp en segundo plano (1 sola vez por teléfono)
-          const rawMemberPhone = r.phone || r.mobile || r.guest_phone || '';
-          const cleanPhoneKey = rawMemberPhone.replace(/\D/g, '');
+          const rawMemberPhone = r.phone || r.mobile || r.guest_phone || (r as any).guestPhone || selectedReserva?.phone || selectedReserva?.mobile || selectedReserva?.guest_phone || (selectedReserva as any)?.guestPhone || '';
+          const cleanPhoneKey = rawMemberPhone.replace(/\D/g, '') || String(r.id || '');
           if (cleanPhoneKey && !sentGroupWelcomePhones.has(cleanPhoneKey)) {
             sentGroupWelcomePhones.add(cleanPhoneKey);
             fetch('/api/whatsapp/send-template', {
@@ -3787,7 +3785,7 @@ export default function RecepcionPage() {
                 booking: {
                   ...r,
                   id: r.id,
-                  guest_name: r.guest_name,
+                  guest_name: r.guest_name || 'Huésped',
                   phone: rawMemberPhone,
                   is_checked_in: true
                 }
@@ -4394,23 +4392,21 @@ export default function RecepcionPage() {
         }
 
         // Enviar plantilla de bienvenida WhatsApp en segundo plano
-        const indPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone;
-        if (indPhone) {
-          fetch('/api/whatsapp/send-template', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              template: 'bienvenida_checkin',
-              booking: {
-                ...selectedReserva,
-                id: selectedReserva.id,
-                guest_name: selectedReserva.guest_name,
-                phone: indPhone,
-                is_checked_in: true
-              }
-            })
-          }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin:", err));
-        }
+        const indPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
+        fetch('/api/whatsapp/send-template', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            template: 'bienvenida_checkin',
+            booking: {
+              ...selectedReserva,
+              id: selectedReserva.id,
+              guest_name: selectedReserva.guest_name || 'Huésped',
+              phone: indPhone,
+              is_checked_in: true
+            }
+          })
+        }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin:", err));
 
         const guestsChanged = editedAdults !== Number(selectedReserva.num_adult) || editedChildren !== Number(selectedReserva.num_child);
         const notesChanged = checkInNotes !== (selectedReserva.notes || '');

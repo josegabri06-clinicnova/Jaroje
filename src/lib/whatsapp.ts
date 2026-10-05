@@ -440,7 +440,7 @@ export async function sendWhatsAppTemplate(
 
     // A. Deduplicación por número de teléfono en ventana de 10 minutos para la MISMA plantilla (multi-habitación)
     const multiRoomDedupTemplates = ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'preparacion_llegada'];
-    if (multiRoomDedupTemplates.includes(templateName) && last10Phone.length >= 7) {
+    if (multiRoomDedupTemplates.includes(templateName) && last10Phone.length >= 7 && !bypassPause) {
       try {
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
         const { data: recentPhoneLogs } = await supabase
@@ -468,7 +468,8 @@ export async function sendWhatsAppTemplate(
     }
 
     // B. Deduplicación estricta por reservation_id (ignorando envíos fallidos para permitir reintentos)
-    if (bIdStr) {
+    // NOTA: Si bypassPause === true (disparo manual explícito de usuario/recepción/check-in), se omite el bloqueo para permitir reenvíos
+    if (bIdStr && !bypassPause) {
       try {
         if (templateName === 'solicitud_recibida') {
           const { data: initialLogs } = await supabase
@@ -1399,11 +1400,42 @@ export async function sendTemplate5_PreparacionLlegada(booking: any, bypassPause
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
 export async function sendTemplate6_BienvenidaCheckin(booking: any, bypassPause: boolean = false) {
-  const phone = booking.phone || booking.mobile || booking.guest_phone;
+  let phone = booking.phone || booking.mobile || booking.guest_phone || booking.guestPhone;
+  let guestName = booking.guest_name || booking.name || booking.guestName;
+
+  if (!phone && booking.id) {
+    try {
+      const { supabase } = require('@/lib/supabase');
+      const bIdStr = String(booking.id).trim();
+      const { data: dbRes } = await supabase
+        .from('beds24_reservations')
+        .select('guest_phone, phone, guest_name')
+        .eq('id', bIdStr)
+        .maybeSingle();
+
+      if (dbRes?.guest_phone || dbRes?.phone) {
+        phone = dbRes.guest_phone || dbRes.phone;
+        if (!guestName && dbRes.guest_name) guestName = dbRes.guest_name;
+      } else {
+        const { data: locRes } = await supabase
+          .from('local_reservas')
+          .select('phone, guest_name')
+          .eq('id', bIdStr)
+          .maybeSingle();
+        if (locRes?.phone) {
+          phone = locRes.phone;
+          if (!guestName && locRes.guest_name) guestName = locRes.guest_name;
+        }
+      }
+    } catch (ePhone) {
+      console.warn("[sendTemplate6_BienvenidaCheckin] Error fetching fallback phone:", ePhone);
+    }
+  }
+
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const params = [
-    getFirstName(booking.guest_name) // {{1}} Nombre
+    getFirstName(guestName || 'Huésped') // {{1}} Nombre
   ];
 
   return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, undefined, booking.id, 'url', bypassPause);

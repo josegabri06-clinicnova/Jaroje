@@ -1459,23 +1459,21 @@ export default function CalendarPage() {
     }
 
     // Enviar plantilla de bienvenida WhatsApp en segundo plano
-    const calPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone;
-    if (calPhone) {
-      fetch('/api/whatsapp/send-template', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          template: 'bienvenida_checkin',
-          booking: {
-            ...selectedReserva,
-            id: selectedReserva.id,
-            guest_name: selectedReserva.guest_name,
-            phone: calPhone,
-            is_checked_in: true
-          }
-        })
-      }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin:", err));
-    }
+    const calPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
+    fetch('/api/whatsapp/send-template', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template: 'bienvenida_checkin',
+        booking: {
+          ...selectedReserva,
+          id: selectedReserva.id,
+          guest_name: selectedReserva.guest_name || 'Huésped',
+          phone: calPhone,
+          is_checked_in: true
+        }
+      })
+    }).catch(err => console.error("Error al enviar WhatsApp bienvenida_checkin:", err));
 
     setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, checked_in: true, dni_image: finalDniUrl || undefined } : r));
 
