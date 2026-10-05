@@ -4985,24 +4985,27 @@ function ReservasListInner() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
-                      {selectedRes.guest_phone ? (
-                        <a 
-                          href={`https://wa.me/${selectedRes.guest_phone.replace(/\D/g, '')}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>{selectedRes.guest_phone}</span>
-                          <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                            <polyline points="15 3 21 3 21 9"></polyline>
-                            <line x1="10" y1="14" x2="21" y2="3"></line>
-                          </svg>
-                        </a>
-                      ) : (
-                        <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
-                      )}
+                      {(() => {
+                        const rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
+                        return rawPhone ? (
+                          <a 
+                            href={`https://wa.me/${rawPhone.replace(/\D/g, '')}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>{rawPhone}</span>
+                            <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                              <polyline points="15 3 21 3 21 9"></polyline>
+                              <line x1="10" y1="14" x2="21" y2="3"></line>
+                            </svg>
+                          </a>
+                        ) : (
+                          <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
+                        );
+                      })()}
                     </div>
                   </div>
 
@@ -5198,18 +5201,22 @@ function ReservasListInner() {
 
                         const message = templates[selectedMessageIndex] || templates[0];
 
-                        const handleCopyAndSend = () => {
-                          // 1. Copiar al portapapeles en segundo plano
-                          navigator.clipboard.writeText(message).catch(err => {
+                        const handleCopyAndSend = async () => {
+                          // 1. Copiar al portapapeles siempre
+                          try {
+                            if (navigator?.clipboard?.writeText) {
+                              await navigator.clipboard.writeText(message);
+                            }
+                          } catch (err) {
                             console.error("Error al copiar al portapapeles:", err);
-                          });
+                          }
 
-                          // 2. Extraer únicamente los dígitos numéricos
-                          let cleanPhone = String(selectedRes.guest_phone || '').replace(/\D/g, '');
+                          // 2. Extraer teléfono
+                          const rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
+                          let cleanPhone = String(rawPhone).replace(/\D/g, '');
 
-                          // Si no hay teléfono registrado, no redirigir a un link roto (404)
                           if (!cleanPhone) {
-                            alert("⚠️ Esta reservación no tiene un teléfono registrado. El mensaje ha sido copiado al portapapeles para que puedas pegarlo manualmente.");
+                            alert("✅ El texto de la plantilla ha sido copiado al portapapeles.\n\nPuedes pegarlo directamente en el chat de Booking.com, Airbnb o WhatsApp.");
                             return;
                           }
 
@@ -5218,26 +5225,27 @@ function ReservasListInner() {
                             cleanPhone = '52' + cleanPhone;
                           }
 
-                          // 3. Abrir WhatsApp de forma síncrona en el contexto del click
+                          // 3. Abrir WhatsApp
                           const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
                           window.open(url, '_blank');
                         };
 
                         const apiTemplates = [
-                          'reservacion_confirmada',
-                          'solicitud_recibida',
-                          'ultimo_aviso',
-                          'reservacion_confirmada',
-                          'disponibilidad_liberada',
-                          'disponibilidad_liberada',
-                          'preparacion_llegada',
-                          'bienvenida_checkin',
-                          'seguimiento_satisfaccion',
-                          'salida_checkout',
-                          'comparte_experiencia',
-                          'recibimiento_nuevamente'
+                          'bienvenido_cliente_whatsaap', // 0: Mensaje Bienvenida OTA (Sin Enlaces)
+                          'solicitud_recibida',          // 1: Mensaje 1: Solicitud de Reservación Recibida (24h)
+                          'ultimo_aviso',                // 2: Mensaje 2: Último recordatorio (1h)
+                          'reservacion_confirmada',      // 3: Mensaje 3: Confirmación de Pago y Reservación
+                          'disponibilidad_liberada',     // 4: Mensaje 4: Disponibilidad Liberada (Español)
+                          'disponibilidad_liberada',     // 5: Mensaje 4 (EN): Availability Released (English)
+                          'preparacion_llegada',         // 6: Mensaje 5: Todo listo para tu llegada
+                          'bienvenida_checkin',          // 7: Mensaje 6: Bienvenido a Condominios Jaroje
+                          'seguimiento_satisfaccion',    // 8: Mensaje 7: ¿Cómo va tu estancia?
+                          'salida_checkout',             // 9: Mensaje 8: Check-out 12:00 p.m.
+                          'comparte_experiencia',        // 10: Mensaje 9: ¿Cómo estuvo tu experiencia?
+                          'recibimiento_nuevamente',     // 11: Mensaje 10: Nos encantará recibirte nuevamente
+                          'bienvenida_checkin'           // 12: Mensaje: 📶 WiFi, Claves e Información Importante
                         ];
-                        const apiTemplateKey = apiTemplates[selectedMessageIndex];
+                        const apiTemplateKey = apiTemplates[selectedMessageIndex] || 'bienvenido_cliente_whatsaap';
 
                         const handleSendApiTemplate = async () => {
                           if (!apiTemplateKey) return;
@@ -5251,25 +5259,47 @@ function ReservasListInner() {
                             if (!hasConfirmed) return;
                           }
                           
-                          let cleanPhone = String(selectedRes.guest_phone || '').replace(/\D/g, '');
+                          let rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
+                          let cleanPhone = String(rawPhone).replace(/\D/g, '');
+
+                          // Si no tiene teléfono guardado, permitir ingresarlo en el momento
                           if (!cleanPhone) {
-                            alert("⚠️ Esta reservación no tiene un teléfono registrado para el envío de la plantilla.");
-                            return;
+                            const inputPhone = window.prompt(
+                              "⚠️ Esta reservación no tiene un teléfono guardado.\n\n" +
+                              "Por favor ingresa el número de WhatsApp con código de país (ej: 529581168698) para enviar la plantilla oficial:"
+                            );
+                            if (!inputPhone) return;
+                            cleanPhone = inputPhone.replace(/\D/g, '');
+                            if (!cleanPhone || cleanPhone.length < 10) {
+                              alert("❌ El número ingresado no es válido.");
+                              return;
+                            }
+                            if (cleanPhone.length === 10) {
+                              cleanPhone = '52' + cleanPhone;
+                            }
+                            rawPhone = '+' + cleanPhone;
                           }
 
                           setSendingTemplate(true);
                           try {
+                            const bookingPayload = {
+                              ...selectedRes,
+                              phone: rawPhone,
+                              guest_phone: rawPhone,
+                              mobile: rawPhone
+                            };
+
                             const res = await fetch('/api/whatsapp/send-template', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
                                 template: apiTemplateKey,
-                                booking: selectedRes
+                                booking: bookingPayload
                               })
                             });
                             const data = await res.json();
                             if (data.success) {
-                              alert(`✅ ¡Mensaje enviado con éxito por la API oficial!\nEl huésped recibirá el formato nativo con botones interactivos y sin links visibles.`);
+                              alert(`✅ ¡Mensaje enviado con éxito por la API oficial (YCloud)!\nEl huésped recibirá el formato nativo con botones interactivos.`);
                             } else {
                               alert(`❌ Error al enviar la plantilla: ${data.error || 'Error desconocido'}`);
                             }

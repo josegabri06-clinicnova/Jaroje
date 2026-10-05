@@ -391,7 +391,7 @@ export async function sendWhatsAppTemplate(
       'preparacion_llegada'
     ];
 
-    if (bookingId && preCheckInTemplates.includes(templateName)) {
+    if (bookingId && preCheckInTemplates.includes(templateName) && !bypassPause) {
       try {
         const cleanBookingIdStr = String(bookingId).toLowerCase().trim();
         const { data: dbCheckin } = await supabase
