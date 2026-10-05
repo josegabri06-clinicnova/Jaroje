@@ -9352,41 +9352,20 @@ export default function RecepcionPage() {
               </div>
             </div>
 
-            {/* Footer Buttons */}
-            <div className="p-5 bg-zinc-50 border-t border-zinc-100 flex flex-col gap-2.5">
+            {/* Footer Buttons - Único botón principal */}
+            <div className="p-5 bg-zinc-50 border-t border-zinc-100">
               <button
                 type="button"
                 onClick={async () => {
                   await copyToClipboard(checkInSummaryModal.text);
-                  setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
                   openWhatsAppUrl({ text: checkInSummaryModal.text });
+                  setCheckInSummaryModal(null);
                 }}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[13.5px] rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[14px] rounded-2xl transition-all shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2.5 cursor-pointer active:scale-98"
               >
-                <MessageCircle size={18} />
-                <span>Abrir Grupo de Recepción (WhatsApp) 💬</span>
+                <MessageCircle size={20} />
+                <span>Abrir WhatsApp y Pegar Resumen 💬</span>
               </button>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await copyToClipboard(checkInSummaryModal.text);
-                    setCheckInSummaryModal(prev => prev ? { ...prev, copied: true } : null);
-                  }}
-                  className="flex-1 py-3 bg-white border border-zinc-200 text-zinc-800 hover:bg-zinc-100 font-bold text-[12.5px] rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <Copy size={15} className="text-zinc-500" />
-                  <span>{checkInSummaryModal.copied ? '✓ ¡Resumen Copiado!' : 'Copiar Resumen'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCheckInSummaryModal(null)}
-                  className="px-6 py-3 bg-zinc-200 hover:bg-zinc-300 text-zinc-800 font-bold text-[12.5px] rounded-xl transition-colors cursor-pointer"
-                >
-                  Listo
-                </button>
-              </div>
             </div>
           </div>
         </div>
