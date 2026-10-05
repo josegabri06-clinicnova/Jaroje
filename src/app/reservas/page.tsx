@@ -3218,7 +3218,7 @@ function ReservasListInner() {
     try {
       for (const id of cancelSelectedIds) {
         try {
-          const res = await fetch(`/api/reservas?id=${id}`, {
+          const res = await fetch(`/api/reservas?id=${id}&force=true`, {
             method: 'DELETE'
           });
           const data = await res.json();
@@ -6719,14 +6719,29 @@ function ReservasListInner() {
                         )}
                       </button>
                     ) : (
-                      <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-center flex flex-col items-center gap-1 animate-in fade-in">
+                      <div className="p-3 bg-amber-50 border border-amber-200/80 rounded-2xl text-center flex flex-col items-center gap-2 animate-in fade-in">
                         <div className="flex items-center gap-1.5 text-[11.5px] font-bold text-amber-900">
                           <Lock size={13} className="text-amber-700 shrink-0" />
-                          <span>Cancelación restringida ({selectedRes.channel || 'Canal OTA'})</span>
+                          <span>Reserva de Canal ({selectedRes.channel || 'OTA'})</span>
                         </div>
                         <p className="text-[10.5px] text-amber-700/90 font-medium leading-tight max-w-xs">
-                          Las reservas de Airbnb, Booking.com y Expedia deben cancelarse directamente desde el portal del canal para evitar penalizaciones.
+                          Normalmente se gestiona en {selectedRes.channel || 'el canal'}. Si ya fue cancelada por el huésped y no se reflejó, puedes forzar la cancelación en la app:
                         </p>
+                        <button
+                          onClick={() => {
+                            if (userRole !== 'admin') {
+                              alert('❌ Error: Solo los administradores pueden cancelar reservas.');
+                              return;
+                            }
+                            setCancelSelectedIds(groupBookings.map((b: any) => String(b.id)));
+                            setShowCancelModal(true);
+                          }}
+                          disabled={cancelLoading}
+                          className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11.5px] py-2 rounded-xl transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                        >
+                          <AlertTriangle size={13} />
+                          Forzar Cancelación en la App
+                        </button>
                       </div>
                     )
                   )}
@@ -6834,6 +6849,8 @@ function ReservasListInner() {
               <p className="text-[12.5px] font-semibold text-zinc-600 leading-relaxed text-left">
                 {selectedRes.status === 'black' 
                   ? 'Selecciona qué habitaciones deseas desbloquear y liberar en la App:' 
+                  : isOtaRes
+                  ? `Selecciona qué habitaciones deseas cancelar y liberar en la App y Beds24 (Asegúrate de que ya fue cancelada en ${selectedRes.channel || 'el canal'}):`
                   : 'Selecciona qué habitaciones deseas cancelar de forma permanente en Beds24 y liberar en la App:'}
               </p>
 

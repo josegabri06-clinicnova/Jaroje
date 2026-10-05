@@ -807,6 +807,7 @@ export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
+    const force = searchParams.get('force') === 'true';
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id de la reserva' }, { status: 400 });
@@ -822,9 +823,9 @@ export async function DELETE(req: Request) {
     if (localRes) {
       const localChannel = String(localRes.channel || '').toLowerCase();
       const isLocalOTA = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => localChannel.includes(ota));
-      if (isLocalOTA) {
+      if (isLocalOTA && !force) {
         return NextResponse.json({ 
-          error: `No está permitido cancelar reservaciones de canales OTA (${localRes.channel}) desde la app. La cancelación debe gestionarse directamente desde el portal del canal para evitar penalizaciones.` 
+          error: `No está permitido cancelar reservaciones de canales OTA (${localRes.channel}) directamente sin confirmación. Si ya fue cancelada en el portal del canal o importada por iCal, use la opción de Forzar Cancelación.` 
         }, { status: 403 });
       }
 
@@ -942,14 +943,13 @@ export async function DELETE(req: Request) {
     }
 
     // Validar si la reserva proviene de un canal OTA (Airbnb, Booking.com, Expedia)
-    if (bookingB24Raw) {
-      const rawChannel = String(bookingB24Raw.channel || bookingB24Raw.referer || '').toLowerCase();
-      const isOTA = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => rawChannel.includes(ota));
-      if (isOTA) {
-        return NextResponse.json({ 
-          error: `No está permitido cancelar reservaciones de canales OTA (${bookingB24Raw.channel || 'OTA'}) desde la app. La cancelación debe gestionarse directamente desde el portal del canal para evitar penalizaciones y desincronización de inventario.` 
-        }, { status: 403 });
-      }
+    const rawChannel = bookingB24Raw ? String(bookingB24Raw.channel || bookingB24Raw.referer || '').toLowerCase() : '';
+    const isOTA = ['airbnb', 'booking', 'expedia', 'vrbo'].some(ota => rawChannel.includes(ota));
+
+    if (bookingB24Raw && isOTA && !force) {
+      return NextResponse.json({ 
+        error: `No está permitido cancelar reservaciones de canales OTA (${bookingB24Raw.channel || 'OTA'}) desde la app sin confirmación. Si ya fue cancelada en el portal del canal o importada por iCal, use la opción de Forzar Cancelación.` 
+      }, { status: 403 });
     }
 
     // Verificar si es parte de una reserva grupal en Beds24 y tiene depósito acumulado
@@ -1071,8 +1071,8 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ error: `Beds24 rechazó la cancelación: ${errorMsg}` }, { status: 400 });
     }
 
-    // Enviar WhatsApp de disponibilidad liberada al instante al cancelar
-    if (bookingForWA && bookingForWA.phone) {
+    // Enviar WhatsApp de disponibilidad liberada al instante solo para reservas directas/no-OTA
+    if (!isOTA && bookingForWA && bookingForWA.phone) {
       try {
         const waRes = await sendTemplate4_DisponibilidadLiberada(bookingForWA, true);
         if (waRes.success) {
