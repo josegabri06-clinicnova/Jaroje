@@ -1011,6 +1011,7 @@ function ReservasListInner() {
       const employeeName = emp.full_name;
       const sentWelcomePhones = new Set<string>();
 
+      let successCount = 0;
       // Realizar check-in y registrar pagos para cada habitación seleccionada
       for (const room of selectedCheckInBookings) {
         // 1. Guardar el Check-in local en Supabase
@@ -1022,8 +1023,7 @@ function ReservasListInner() {
           check_out_date: room.check_out,
           status: 'checked_in',
           checked_in_by: 'Admin',
-          document_url: document_url || room.document_url || null,
-          voucher_url: voucher_url || room.voucher_url || null
+          document_url: document_url || room.document_url || null
         }, { onConflict: 'reservation_id' });
 
         if (upsertErr) {
@@ -1031,6 +1031,7 @@ function ReservasListInner() {
           alert(`Fallo al guardar el Check-in en la base de datos para ID ${room.id}: ${upsertErr.message}`);
           continue;
         }
+        successCount++;
 
         const channel = room.channel || '';
         const isOtaAutomated = ['Airbnb', 'Booking.com'].includes(channel);
@@ -1360,6 +1361,10 @@ function ReservasListInner() {
         } catch (logErr) {
           console.error("Error registrando log de checkin:", logErr);
         }
+      }
+
+      if (successCount === 0) {
+        return;
       }
 
       // 3. Actualizar estado reactivo local principal
