@@ -131,7 +131,27 @@ export async function POST(req: Request) {
           console.error(`[Webhook Beds24] Error al guardar reserva ${bookingIdStr} localmente:`, dbSyncErr);
         }
 
-        const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || '', country);
+        let rawPhone = b.phone || b.mobile || b.guestPhone || '';
+        if (!rawPhone) {
+          const fullText = `${b.notes || ''} ${b.comments || ''} ${b.message || ''} ${b.apiMessage || ''} ${b.custom1 || ''} ${b.custom2 || ''}`;
+          const match = fullText.match(/(?:tel|phone|cel|whatsapp|móvil|movil)[\s:]*([+\d\s().-]{7,25})/i);
+          if (match) {
+            rawPhone = match[1];
+          }
+        }
+        let phone = normalizePhone(rawPhone, country);
+        if (!phone && bookingIdStr) {
+          try {
+            const { data: dbB } = await supabase
+              .from('beds24_reservations')
+              .select('guest_phone, phone')
+              .eq('id', bookingIdStr)
+              .maybeSingle();
+            if (dbB?.guest_phone || dbB?.phone) {
+              phone = dbB.guest_phone || dbB.phone;
+            }
+          } catch (_) {}
+        }
         const bStatus = String(b.status || '').toLowerCase().trim();
         const isCancelled = bStatus === '0' || bStatus === 'cancelled';
 

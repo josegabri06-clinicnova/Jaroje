@@ -2452,7 +2452,30 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
     : Math.max(0, calculatedCharges - depositVal);
 
-  const phone = normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+  let rawPhone = b.phone || b.mobile || b.guestPhone || b.guestMobile || '';
+  if (!rawPhone) {
+    const fullText = `${b.notes || ''} ${b.comments || ''} ${b.message || ''} ${b.apiMessage || ''} ${b.custom1 || ''} ${b.custom2 || ''}`;
+    const match = fullText.match(/(?:tel|phone|cel|whatsapp|móvil|movil)[\s:]*([+\d\s().-]{7,25})/i);
+    if (match) {
+      rawPhone = match[1];
+    }
+  }
+
+  let phone = normalizePhone(rawPhone, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+  
+  // Si Beds24 no devuelve teléfono, consultar si ya teníamos el teléfono guardado en la base de datos
+  if (!phone && b.id) {
+    try {
+      const { data: prevDb } = await supabase
+        .from('beds24_reservations')
+        .select('guest_phone, phone')
+        .eq('id', String(b.id))
+        .maybeSingle();
+      if (prevDb?.guest_phone || prevDb?.phone) {
+        phone = prevDb.guest_phone || prevDb.phone;
+      }
+    } catch (_) {}
+  }
   const email = b.email || null;
 
   const dbStatus = (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending');

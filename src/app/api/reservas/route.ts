@@ -498,8 +498,9 @@ export async function POST(req: Request) {
               num_child: Number(data.num_child || 0)
             };
 
-            // Verificar que no se haya enviado ya este mensaje de confirmación de reserva
-            const templateName = bookingForWA.deposit > 0 ? 'reservacion_confirmada' : 'solicitud_recibida';
+            const isPrepaidOTA = ['airbnb', 'booking', 'vrbo'].some(ota => String(data.channel || '').toLowerCase().includes(ota));
+            const isConfirmed = isPrepaidOTA || Number(bookingForWA.deposit || 0) > 0 || Number((bookingForWA as any).actualPaid || 0) > 0;
+            const templateName = isConfirmed ? 'reservacion_confirmada' : 'solicitud_recibida';
 
             const { data: existingLog } = await supabase
               .from('whatsapp_logs')
@@ -508,14 +509,14 @@ export async function POST(req: Request) {
               .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'pago_anticipo_recibido'])
               .limit(1);
 
-            if (existingLog && existingLog.length > 0 && bookingForWA.deposit === 0) {
+            if (existingLog && existingLog.length > 0 && !isConfirmed) {
               console.log(`[WA reservas local] Omitiendo solicitud_recibida, ya se envió mensaje inicial a reserva ${bookingIdStr}`);
               return;
             }
 
             let waRes;
-            if (bookingForWA.deposit > 0) {
-              waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+            if (isConfirmed) {
+              waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
               if (waRes?.success) {
                 console.log(`[WA reservas local] reservacion_confirmada procesado para reserva ${bookingIdStr}`);
               }
@@ -716,8 +717,9 @@ export async function POST(req: Request) {
             num_child: numChild ? Number(numChild) : 0
           };
 
-          // Verificar que no se haya enviado ya este mensaje de confirmación de reserva
-          const templateName = bookingForWA.deposit > 0 ? 'reservacion_confirmada' : 'solicitud_recibida';
+          const isPrepaidOTA = ['airbnb', 'booking', 'vrbo'].some(ota => String(body.channel || '').toLowerCase().includes(ota));
+          const isConfirmed = isPrepaidOTA || Number(bookingForWA.deposit || 0) > 0 || Number((bookingForWA as any).actualPaid || 0) > 0;
+          const templateName = isConfirmed ? 'reservacion_confirmada' : 'solicitud_recibida';
 
           const { data: existingLog } = await supabase
             .from('whatsapp_logs')
@@ -726,14 +728,14 @@ export async function POST(req: Request) {
             .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'pago_anticipo_recibido'])
             .limit(1);
 
-          if (existingLog && existingLog.length > 0 && bookingForWA.deposit === 0) {
+          if (existingLog && existingLog.length > 0 && !isConfirmed) {
             console.log(`[WA reservas B24] Omitiendo solicitud_recibida, ya se envió mensaje inicial a reserva ${bookingIdStr}`);
             return;
           }
 
           let waRes;
-          if (bookingForWA.deposit > 0) {
-            waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+          if (isConfirmed) {
+            waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
             if (waRes?.success) {
               console.log(`[WA reservas B24] reservacion_confirmada procesado para reserva ${bookingIdStr}`);
             }
