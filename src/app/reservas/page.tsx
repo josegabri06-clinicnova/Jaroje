@@ -1022,7 +1022,8 @@ function ReservasListInner() {
           check_out_date: room.check_out,
           status: 'checked_in',
           checked_in_by: 'Admin',
-          document_url: document_url || room.document_url || null
+          document_url: document_url || room.document_url || null,
+          voucher_url: voucher_url || room.voucher_url || null
         }, { onConflict: 'reservation_id' });
 
         if (upsertErr) {
@@ -1932,6 +1933,12 @@ function ReservasListInner() {
             : (isOta ? 0 : Number(r.deposit || 0));
           const balanceVal = (isOta || isSettled) ? 0 : Math.max(0, priceVal - depositVal);
 
+          const voucherFromCheckin = checkinMap[resIdStr]?.voucher_url;
+          const voucherFromNotes = (() => {
+            const match = (r.notes || '').match(/(?:Foto Voucher TPV \/ Comprobante:\s*|voucher_url:\s*)(https?:\/\/[^\s]+)/i);
+            return match ? match[1] : null;
+          })();
+
           return {
             ...r,
             is_checked_in: isChIn,
@@ -1939,6 +1946,7 @@ function ReservasListInner() {
             is_acknowledged: Boolean(r.is_acknowledged) || checkinMap[resIdStr]?.status === 'acknowledged' || isChIn || isChOut,
             last_notice_sent: Boolean(r.last_notice_sent),
             document_url: checkinMap[resIdStr]?.document_url,
+            voucher_url: voucherFromCheckin || voucherFromNotes || r.voucher_url || null,
             transfer_receipts: transferMap[resIdStr] || [],
             deposit: depositVal,
             balance: balanceVal
@@ -5864,6 +5872,30 @@ function ReservasListInner() {
                     </div>
                   )}
 
+                  {/* Voucher TPV / Comprobante de Pago */}
+                  {(() => {
+                    const vUrl = selectedRes.voucher_url || (() => {
+                      const match = (selectedRes.notes || '').match(/(?:Foto Voucher TPV \/ Comprobante:\s*|voucher_url:\s*)(https?:\/\/[^\s]+)/i);
+                      return match ? match[1] : null;
+                    })();
+                    if (!vUrl) return null;
+
+                    return (
+                      <div className="bg-amber-50/60 border border-amber-200/80 p-4 rounded-2xl mt-1 text-left">
+                        <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest block mb-2">Voucher TPV / Comprobante de Pago</span>
+                        <a 
+                          href={vUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 px-4 py-3 bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 hover:text-amber-950 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
+                        >
+                          <CreditCard size={15} className="text-amber-600 shrink-0" />
+                          <span>Ver Voucher TPV / Comprobante 💳 ↗</span>
+                        </a>
+                      </div>
+                    );
+                  })()}
+
                   {/* Comprobantes de Transferencia Bancaria */}
                   {selectedRes.transfer_receipts && selectedRes.transfer_receipts.length > 0 && (
                     <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1 space-y-4 text-left animate-in fade-in duration-200">
@@ -6495,6 +6527,25 @@ function ReservasListInner() {
                           </a>
                         )
                       )}
+                      {(() => {
+                        const vUrl = selectedRes.voucher_url || (() => {
+                          const match = (selectedRes.notes || '').match(/(?:Foto Voucher TPV \/ Comprobante:\s*|voucher_url:\s*)(https?:\/\/[^\s]+)/i);
+                          return match ? match[1] : null;
+                        })();
+                        if (!vUrl) return null;
+
+                        return (
+                          <a 
+                            href={vUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-[12.5px] py-2.5 rounded-xl flex items-center justify-center gap-1.5 border border-amber-200 transition-colors shadow-sm col-span-2"
+                          >
+                            <CreditCard size={15} className="text-amber-600 shrink-0" /> 
+                            <span>Ver Voucher TPV / Comprobante 💳</span>
+                          </a>
+                        );
+                      })()}
                       {userRole === 'admin' && (
                         <>
                           <button
