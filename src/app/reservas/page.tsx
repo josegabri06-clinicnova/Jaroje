@@ -1311,9 +1311,9 @@ function ReservasListInner() {
           }
         }
 
-        // Enviar plantilla de bienvenida WhatsApp en segundo plano (1 sola vez por teléfono de huésped)
-        const rawPhone = room.phone || room.mobile || room.guest_phone || '';
-        const cleanPhoneKey = rawPhone.replace(/\D/g, '');
+        // Enviar plantilla de bienvenida WhatsApp en segundo plano (1 sola vez por teléfono de huésped o reserva)
+        const rawPhone = room.phone || room.mobile || room.guest_phone || room.guestPhone || selectedRes?.phone || selectedRes?.mobile || selectedRes?.guest_phone || selectedRes?.guestPhone || '';
+        const cleanPhoneKey = rawPhone.replace(/\D/g, '') || String(room.id || selectedRes?.id || '');
         if (cleanPhoneKey && !sentWelcomePhones.has(cleanPhoneKey)) {
           sentWelcomePhones.add(cleanPhoneKey);
           fetch('/api/whatsapp/send-template', {
@@ -1323,8 +1323,8 @@ function ReservasListInner() {
               template: 'bienvenida_checkin',
               booking: {
                 ...room,
-                id: room.id,
-                guest_name: room.guest_name,
+                id: room.id || selectedRes?.id,
+                guest_name: room.guest_name || selectedRes?.guest_name || 'Huésped',
                 phone: rawPhone,
                 is_checked_in: true
               }

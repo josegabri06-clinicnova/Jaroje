@@ -438,28 +438,29 @@ export async function sendWhatsAppTemplate(
     const rawDigits = cleanedPhone.replace(/\D/g, '');
     const last10Phone = rawDigits.slice(-10);
 
-    // A. Deduplicación por número de teléfono en ventana de 10 minutos para plantillas iniciales
-    const initialTemplates = ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'preparacion_llegada'];
-    if (initialTemplates.includes(templateName) && last10Phone.length >= 7) {
+    // A. Deduplicación por número de teléfono en ventana de 10 minutos para la MISMA plantilla (multi-habitación)
+    const multiRoomDedupTemplates = ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'preparacion_llegada'];
+    if (multiRoomDedupTemplates.includes(templateName) && last10Phone.length >= 7) {
       try {
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
         const { data: recentPhoneLogs } = await supabase
           .from('whatsapp_logs')
           .select('id, phone, template_name, reservation_id, status')
-          .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'preparacion_llegada', 'omitido_multi_habitacion', 'omitido_multi_habitacion_sibling'])
+          .eq('template_name', templateName)
           .gte('sent_at', tenMinutesAgo)
           .neq('status', 'failed')
           .limit(50);
 
         const alreadySentToPhone = (recentPhoneLogs || []).some((l: any) => {
           if (l.status === 'failed') return false;
+          if (l.template_name !== templateName) return false;
           const logDigits = String(l.phone || '').replace(/\D/g, '');
           return logDigits && logDigits.includes(last10Phone);
         });
 
         if (alreadySentToPhone) {
-          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName} para teléfono ${cleanedPhone}, ya se envió plantilla inicial en ventana de 10 minutos.`);
-          return { success: true, data: { deduplicated: true, message: 'Plantilla omitida por duplicidad reciente a este número de teléfono.' } };
+          console.log(`[WhatsApp Deduplicador DB] Omitiendo ${templateName} para teléfono ${cleanedPhone}, ya se envió esta misma plantilla en los últimos 10 minutos.`);
+          return { success: true, data: { deduplicated: true, message: `Plantilla ${templateName} omitida por duplicidad reciente a este número de teléfono.` } };
         }
       } catch (phoneChkErr) {
         console.warn("[WhatsApp Deduplicador DB] Error verificando logs por teléfono:", phoneChkErr);

@@ -75,14 +75,17 @@ export async function POST(req: Request) {
         // Obtener datos actualizados de Beds24
         try {
           const beds24Token = await getBeds24Token();
-          const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
+          const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true`, {
             headers: { 'token': beds24Token },
             cache: 'no-store'
           });
           if (b24Res.ok) {
             const rawBookingData = await b24Res.json();
-            if (rawBookingData && rawBookingData.success && Array.isArray(rawBookingData.data) && rawBookingData.data.length > 0) {
-              const rawB = rawBookingData.data[0];
+            const rawB = Array.isArray(rawBookingData?.data)
+              ? rawBookingData.data[0]
+              : (Array.isArray(rawBookingData) ? rawBookingData[0] : (rawBookingData?.data || rawBookingData));
+
+            if (rawB && (rawB.id || rawB.firstName || rawB.phone || rawB.mobile || rawB.guestPhone)) {
               guestName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || 'Huésped';
               const { normalizePhone } = await import('@/lib/whatsapp');
               phone = normalizePhone(rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || '', rawB.country2 || rawB.country || rawB.guestCountry2 || rawB.guestCountry);
@@ -111,7 +114,7 @@ export async function POST(req: Request) {
                   });
                   if (resSiblings.ok) {
                     const jsonSiblings = await resSiblings.json();
-                    const allArrival = jsonSiblings.data || [];
+                    const allArrival = Array.isArray(jsonSiblings?.data) ? jsonSiblings.data : (Array.isArray(jsonSiblings) ? jsonSiblings : []);
                     
                     const isOTA = (bookingObj: any) => {
                       const channel = String(`${bookingObj.referer || ''} ${bookingObj.source || ''} ${bookingObj.apiSource || ''}`).toLowerCase();
@@ -151,6 +154,48 @@ export async function POST(req: Request) {
           }
         } catch (errB24) {
           console.error("[Approve Transfer] Error fetching Beds24 details:", errB24);
+        }
+
+        // Búsqueda de fallback en Supabase si phone o datos clave no se obtuvieron
+        if (!phone) {
+          try {
+            const { data: dbRes } = await supabase
+              .from('beds24_reservations')
+              .select('*')
+              .eq('id', String(bookingId))
+              .maybeSingle();
+            if (dbRes) {
+              const { normalizePhone } = await import('@/lib/whatsapp');
+              phone = normalizePhone(dbRes.guest_phone || dbRes.phone || '', '');
+              if (guestName === 'Huésped' && dbRes.guest_name) guestName = dbRes.guest_name;
+              if (!price && dbRes.price) price = Number(dbRes.price);
+              if (!newDeposit && dbRes.deposit) newDeposit = Number(dbRes.deposit);
+              if (!checkIn && dbRes.check_in) checkIn = dbRes.check_in;
+              if (!checkOut && dbRes.check_out) checkOut = dbRes.check_out;
+              if (numAdult === 1 && dbRes.num_adult) numAdult = Number(dbRes.num_adult);
+              if (numChild === 0 && dbRes.num_child) numChild = Number(dbRes.num_child);
+            }
+          } catch (eDb) {
+            console.warn("[Approve Transfer] Error buscando en beds24_reservations:", eDb);
+          }
+        }
+
+        // Si todavía no hay teléfono, buscar en transfer_receipts
+        if (!phone && receiptId) {
+          try {
+            const { data: rcptRow } = await supabase
+              .from('transfer_receipts')
+              .select('guest_phone, guest_name')
+              .eq('id', receiptId)
+              .maybeSingle();
+            if (rcptRow) {
+              const { normalizePhone } = await import('@/lib/whatsapp');
+              if (rcptRow.guest_phone) phone = normalizePhone(rcptRow.guest_phone, '');
+              if (guestName === 'Huésped' && rcptRow.guest_name) guestName = rcptRow.guest_name;
+            }
+          } catch (eRcpt) {
+            console.warn("[Approve Transfer] Error buscando teléfono en transfer_receipts:", eRcpt);
+          }
         }
       }
 
@@ -373,20 +418,57 @@ export async function POST(req: Request) {
       } else {
         try {
           const beds24Token = await getBeds24Token();
-          const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
+          const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoice=true`, {
             headers: { 'token': beds24Token },
             cache: 'no-store'
           });
           if (b24Res.ok) {
             const rawBookingData = await b24Res.json();
-            if (rawBookingData && rawBookingData.success && Array.isArray(rawBookingData.data) && rawBookingData.data.length > 0) {
-              const rawB = rawBookingData.data[0];
-              phone = rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || '';
+            const rawB = Array.isArray(rawBookingData?.data)
+              ? rawBookingData.data[0]
+              : (Array.isArray(rawBookingData) ? rawBookingData[0] : (rawBookingData?.data || rawBookingData));
+            if (rawB && (rawB.id || rawB.firstName || rawB.phone || rawB.mobile || rawB.guestPhone)) {
+              const { normalizePhone } = await import('@/lib/whatsapp');
+              phone = normalizePhone(rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || '', rawB.country2 || rawB.country || rawB.guestCountry2 || rawB.guestCountry);
               guestName = `${rawB.firstName || ''} ${rawB.lastName || ''}`.trim() || 'Huésped';
             }
           }
         } catch (errWa) {
           console.error("[Reject Transfer] Error fetching booking for rejection notification:", errWa);
+        }
+
+        if (!phone) {
+          try {
+            const { data: dbRes } = await supabase
+              .from('beds24_reservations')
+              .select('guest_phone, phone, guest_name')
+              .eq('id', String(bookingId))
+              .maybeSingle();
+            if (dbRes) {
+              const { normalizePhone } = await import('@/lib/whatsapp');
+              phone = normalizePhone(dbRes.guest_phone || dbRes.phone || '', '');
+              if (guestName === 'Huésped' && dbRes.guest_name) guestName = dbRes.guest_name;
+            }
+          } catch (eDb) {
+            console.warn("[Reject Transfer] Error buscando en beds24_reservations:", eDb);
+          }
+        }
+
+        if (!phone && receiptId) {
+          try {
+            const { data: rcptRow } = await supabase
+              .from('transfer_receipts')
+              .select('guest_phone, guest_name')
+              .eq('id', receiptId)
+              .maybeSingle();
+            if (rcptRow) {
+              const { normalizePhone } = await import('@/lib/whatsapp');
+              if (rcptRow.guest_phone) phone = normalizePhone(rcptRow.guest_phone, '');
+              if (guestName === 'Huésped' && rcptRow.guest_name) guestName = rcptRow.guest_name;
+            }
+          } catch (eRcpt) {
+            console.warn("[Reject Transfer] Error buscando teléfono en transfer_receipts:", eRcpt);
+          }
         }
       }
 

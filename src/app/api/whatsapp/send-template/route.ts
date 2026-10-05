@@ -26,6 +26,42 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
+    let activeBooking = { ...booking };
+    if (!activeBooking.phone && !activeBooking.mobile && !activeBooking.guest_phone && !activeBooking.guestPhone && activeBooking.id) {
+      try {
+        const { supabase } = require('@/lib/supabase');
+        const { normalizePhone } = await import('@/lib/whatsapp');
+        const bIdStr = String(activeBooking.id).trim();
+        
+        const { data: dbRes } = await supabase
+          .from('beds24_reservations')
+          .select('guest_phone, phone, guest_name')
+          .eq('id', bIdStr)
+          .maybeSingle();
+
+        if (dbRes?.guest_phone || dbRes?.phone) {
+          activeBooking.phone = normalizePhone(dbRes.guest_phone || dbRes.phone, '');
+          if (!activeBooking.guest_name && dbRes.guest_name) {
+            activeBooking.guest_name = dbRes.guest_name;
+          }
+        } else {
+          const { data: locRes } = await supabase
+            .from('local_reservas')
+            .select('phone, guest_name')
+            .eq('id', bIdStr)
+            .maybeSingle();
+          if (locRes?.phone) {
+            activeBooking.phone = normalizePhone(locRes.phone, '');
+            if (!activeBooking.guest_name && locRes.guest_name) {
+              activeBooking.guest_name = locRes.guest_name;
+            }
+          }
+        }
+      } catch (ePhone) {
+        console.warn("[send-template] Error fetching fallback phone from DB:", ePhone);
+      }
+    }
+
     const provider = process.env.WHATSAPP_PROVIDER || 'ycloud';
 
     if (provider === 'ycloud') {
@@ -52,14 +88,14 @@ export async function POST(req: Request) {
 
     switch (template) {
       case 'solicitud_recibida':
-        res = await sendTemplate1_SolicitudRecibida(booking, true);
+        res = await sendTemplate1_SolicitudRecibida(activeBooking, true);
         break;
       case 'ultimo_aviso':
-        res = await sendTemplate2_UltimoAviso(booking, true);
+        res = await sendTemplate2_UltimoAviso(activeBooking, true);
         break;
       case 'reservacion_confirmada': {
-        const bookingIdStr = String(booking.id || '').toLowerCase().trim();
-        if (booking.is_checked_in || booking.checked_in) {
+        const bookingIdStr = String(activeBooking.id || '').toLowerCase().trim();
+        if (activeBooking.is_checked_in || activeBooking.checked_in) {
           console.log(`[send-template] Omitiendo reservacion_confirmada porque la reserva ${bookingIdStr} ya tiene check-in.`);
           return NextResponse.json({ success: true, message: 'Omitido: La reservación ya cuenta con Check-In realizado.' });
         }
@@ -80,44 +116,44 @@ export async function POST(req: Request) {
             console.warn("[send-template] Error verificando check-in en BD:", chkErr);
           }
         }
-        res = await sendTemplate3_ReservacionConfirmada(booking, true);
+        res = await sendTemplate3_ReservacionConfirmada(activeBooking, true);
         break;
       }
       case 'disponibilidad_liberada':
-        res = await sendTemplate4_DisponibilidadLiberada(booking, true);
+        res = await sendTemplate4_DisponibilidadLiberada(activeBooking, true);
         break;
       case 'preparacion_llegada':
-        res = await sendTemplate5_PreparacionLlegada(booking, true);
+        res = await sendTemplate5_PreparacionLlegada(activeBooking, true);
         break;
       case 'bienvenida_checkin':
-        res = await sendTemplate6_BienvenidaCheckin(booking, true);
+        res = await sendTemplate6_BienvenidaCheckin(activeBooking, true);
         break;
       case 'seguimiento_satisfaccion':
-        res = await sendTemplate7_SeguimientoSatisfaccion(booking, true);
+        res = await sendTemplate7_SeguimientoSatisfaccion(activeBooking, true);
         break;
       case 'checkout_manana':
       case 'salida_checkout':
-        res = await sendTemplate8_SalidaCheckout(booking, true);
+        res = await sendTemplate8_SalidaCheckout(activeBooking, true);
         break;
       case 'recordatorio_opinion':
       case 'comparte_experiencia':
-        res = await sendTemplate9_ComparteExperiencia(booking, true);
+        res = await sendTemplate9_ComparteExperiencia(activeBooking, true);
         break;
       case 'recordatorio_estancia_anterior':
       case 'recibimiento_nuevamente':
-        res = await sendTemplate10_RecibimientoNuevamente(booking, true);
+        res = await sendTemplate10_RecibimientoNuevamente(activeBooking, true);
         break;
       case 'pago_anticipo_recibido':
-        res = await sendTemplate11_PagoAnticipoRecibido(booking, true);
+        res = await sendTemplate11_PagoAnticipoRecibido(activeBooking, true);
         break;
       case 'bienvenido_cliente_final_v2': {
-        const ph = booking.phone || booking.mobile || booking.guest_phone || '';
-        res = await sendTemplate_BienvenidoConmutador(ph, booking.guest_name);
+        const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
+        res = await sendTemplate_BienvenidoConmutador(ph, activeBooking.guest_name);
         break;
       }
       case 'bienvenido_cliente_whatsaap': {
-        const ph = booking.phone || booking.mobile || booking.guest_phone || '';
-        res = await sendTemplate_BienvenidoWhatsApp(ph, booking.guest_name);
+        const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
+        res = await sendTemplate_BienvenidoWhatsApp(ph, activeBooking.guest_name);
         break;
       }
       default:
