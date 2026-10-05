@@ -151,7 +151,7 @@ export default function VercelActionForm() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [capacitySettings, setCapacitySettings] = useState<any>(null);
-  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.5745, expedia: 1.622565 });
+  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 });
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
@@ -305,8 +305,8 @@ export default function VercelActionForm() {
     let multiplier = 1;
     if (form.channel === 'Airbnb') multiplier = otaMultipliers.airbnb;
     if (form.channel === 'Booking.com') multiplier = otaMultipliers.booking;
-    if (form.channel === 'Google Ads' || form.channel === 'Google') multiplier = otaMultipliers.google || 1.5745;
-    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.622565;
+    if (form.channel === 'Google Ads' || form.channel === 'Google') multiplier = otaMultipliers.google || 1.4024745;
+    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.4603085;
 
     let totalStay = 0;
     let sumSuggestedRates = 0;
@@ -372,9 +372,9 @@ export default function VercelActionForm() {
 
       let suggestedDailyRate = 0;
       if (form.channel === 'Google Ads' || form.channel === 'Google') {
-        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.google || 1.5745) + surchargePerNight);
+        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.google || 1.4024745) + surchargePerNight);
       } else if (form.channel === 'Expedia') {
-        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.622565) + surchargePerNight);
+        suggestedDailyRate = Math.round(basePrice * discountMult * (otaMultipliers.expedia || 1.4603085) + surchargePerNight);
       } else if (form.channel === 'Airbnb') {
         const priceWithChannel = basePrice * discountMult * (otaMultipliers.airbnb || 1.20);
         const tax = priceWithChannel * 0.21; // 21% IVA Airbnb
@@ -534,8 +534,8 @@ export default function VercelActionForm() {
           setOtaMultipliers({
             airbnb: parsed.airbnb ?? 1.20,
             booking: parsed.booking ?? 1.35,
-            google: parsed.google ?? 1.5745,
-            expedia: parsed.expedia ?? 1.622565
+            google: parsed.google ?? 1.4024745,
+            expedia: parsed.expedia ?? 1.4603085
           });
         }
       } catch (err) {

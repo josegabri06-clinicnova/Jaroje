@@ -1610,7 +1610,7 @@ export async function PUT(req: Request) {
               let seasonBasePrices: Record<string, any> = {};
               let seasonRanges: any[] = [];
               let capacitySettings: any = null;
-              let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.5745, expedia: 1.622565 };
+              let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 };
 
               try {
                 const [{ data: rulesData }, { data: discountRow }, { data: basePricesRow }, { data: seasonRow }, { data: capRow }, { data: otaRow }] = await Promise.all([
@@ -1959,7 +1959,7 @@ export async function PUT(req: Request) {
             }
 
             calculatedBreakdown = null;
-            let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.5745, expedia: 1.622565 };
+            let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 };
             try {
               const { data: otaRow } = await supabase
                 .from('settings')
