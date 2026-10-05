@@ -487,21 +487,30 @@ export async function GET(req: Request) {
 
         const isAlreadyCheckedIn = Boolean(booking.checked_in || booking.status === 'checked_in' || booking.status === 'checked_out');
 
-        // --- ENVÍO DE PLANTILLAS INICIALES ---
-        // 1. Reservaciones CONFIRMADAS (Booking.com, Airbnb, o con anticipo/pago registrado):
-        //    Se envía Mensaje 3 (reservacion_confirmada) a cualquier reserva activa (daysUntilCheckIn >= 0),
-        //    sin importar si la llegada es en 1 día, 15 días o meses.
-        // 2. Reservaciones NO CONFIRMADAS (Expedia sin anticipo o Directas sin anticipo):
-        //    - Expedia sin anticipo: Se espera a la ventana de 7 días previos (0 <= daysUntilCheckIn <= 7) para enviar Mensaje 1 (solicitud_recibida).
-        //    - Directas sin anticipo: Se envía Mensaje 1 (solicitud_recibida).
-        if (!isCancelled && !isAlreadyCheckedIn && daysUntilCheckIn >= 0) {
+        // --- ENVÍO DE PLANTILLAS INICIALES (CONTROL ANTI-SPAM MASIVO) ---
+        // Regla de seguridad estricta:
+        // El Cron SOLO debe evaluar el envío inicial si:
+        // 1. La reserva fue creada RECIENTEMENTE (en las últimas 24 horas), O BIEN
+        // 2. La reserva entra en la ventana de 7 días previos al Check-In (0 <= daysUntilCheckIn <= 7).
+        // Esto PREVIENE que reservas antiguas creadas meses atrás reciban mensajes masivos por error.
+        const isCreatedRecently = (() => {
+          const cTime = booking.bookingTime || booking.booking_time || booking.created_at;
+          if (!cTime) return false;
+          const createdMs = new Date(cTime).getTime();
+          if (isNaN(createdMs)) return false;
+          return (Date.now() - createdMs) <= 24 * 60 * 60 * 1000;
+        })();
+
+        const isInPreArrivalWindow = daysUntilCheckIn >= 0 && daysUntilCheckIn <= 7;
+
+        if (!isCancelled && !isAlreadyCheckedIn && daysUntilCheckIn >= 0 && (isCreatedRecently || isInPreArrivalWindow)) {
           const actualPaid = Number(booking.actualPaid || 0);
           const depositVal = Number(booking.deposit || 0);
           const isConfirmed = isPrepaidOtaBooking || actualPaid > 0 || depositVal > 0;
           const isExpediaUnpaid = !isConfirmed && channelLower.includes('expedia');
 
-          // Si es Expedia no pagada y faltan más de 7 días, esperar a la ventana de 7 días
-          const shouldEvaluateInitial = isConfirmed || (!isExpediaUnpaid) || (isExpediaUnpaid && daysUntilCheckIn <= 7);
+          // Si es Expedia sin pago y faltan más de 7 días, esperar a la ventana de 7 días
+          const shouldEvaluateInitial = isConfirmed || (!isExpediaUnpaid) || (isExpediaUnpaid && isInPreArrivalWindow);
 
           if (shouldEvaluateInitial && guestPhone) {
             const cleanPhoneDigits = String(guestPhone).replace(/\D/g, '');
@@ -531,7 +540,7 @@ export async function GET(req: Request) {
                     status: 'sent'
                   }]);
                   sentSet.add(`${bookingIdStr}_reservacion_confirmada`);
-                  reports.push(`Enviado Mensaje 3 (Confirmada - OTA/Pago) a ${booking.guest_name} (ID: ${bookingIdStr})`);
+                  reports.push(`Enviado Mensaje 3 (Confirmada - Reciente/T-7) a ${booking.guest_name} (ID: ${bookingIdStr})`);
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 3 a ${booking.guest_name}:`, waRes.error);
                 }
