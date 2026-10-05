@@ -20,7 +20,7 @@ export default function PreciosPage() {
   // Beds24 direct pricing state
   const [beds24Rooms, setBeds24Rooms] = useState<any[]>([]);
   const [beds24Loading, setBeds24Loading] = useState(false);
-  const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 });
+  const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.622565 });
   const [beds24Error, setBeds24Error] = useState<string | null>(null);
 
   // Key format: `${roomId}_${seasonId}` — permite editar cada bloque de temporada por separado

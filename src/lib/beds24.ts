@@ -365,7 +365,7 @@ export function getChannelMultiplier(
   const multAirbnb = customMultipliers?.airbnb !== undefined ? customMultipliers.airbnb : 1.20;
   const multBooking = customMultipliers?.booking !== undefined ? customMultipliers.booking : 1.35;
   const multGoogle = customMultipliers?.google !== undefined ? customMultipliers.google : 1.4024745;
-  const multExpedia = customMultipliers?.expedia !== undefined ? customMultipliers.expedia : 1.4603085;
+  const multExpedia = customMultipliers?.expedia !== undefined ? customMultipliers.expedia : 1.622565;
   const multDirecto = customMultipliers?.directo !== undefined ? customMultipliers.directo : 1.00;
 
   if (r.includes('airbnb')) return multAirbnb;
@@ -1279,7 +1279,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
   // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
   let rulesList: any[] = [];
   let capacitySettings: any = null;
-  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 };
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.622565 };
 
   try {
     const { data: rulesData } = await supabase.from('pricing_rules').select('*');
@@ -1937,7 +1937,7 @@ export function getDirectStayBreakdown(
   seasonBasePrices?: Record<string, any>,
   seasonRanges?: any[],
   channel: string = 'Directo',
-  otaMultipliers: { airbnb?: number; booking?: number; google?: number; expedia?: number } = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 }
+  otaMultipliers: { airbnb?: number; booking?: number; google?: number; expedia?: number } = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.622565 }
 ): DirectStayBreakdown | null {
   const roomB24 = getBeds24RoomIdAndUnit(roomName);
   if (!roomB24) return null;
@@ -2101,7 +2101,7 @@ export function getDirectStayBreakdown(
     channelMultiplier = otaMultipliers.google || 1.4024745;
     channelLabel = `Google Ads (+${Math.round((channelMultiplier - 1) * 100)}%)`;
   } else if (channelLower.includes('expedia')) {
-    channelMultiplier = otaMultipliers.expedia || 1.4603085;
+    channelMultiplier = otaMultipliers.expedia || 1.622565;
     channelLabel = `Expedia (+${Math.round((channelMultiplier - 1) * 100)}%)`;
   }
 
@@ -2384,7 +2384,7 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
   // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
   let rulesList: any[] = [];
   let capacitySettings: any = null;
-  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 };
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.622565 };
 
   try {
     const { data: rulesData } = await supabase.from('pricing_rules').select('*');
@@ -2580,7 +2580,7 @@ export async function syncBeds24ReservationsRange(
   // Cargar pricing rules, capacitySettings y otaMultipliers de la base de datos
   let rulesList: any[] = [];
   let capacitySettings: any = null;
-  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 };
+  let otaMultipliers = { airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.622565 };
 
   try {
     const { data: rulesData } = await supabase.from('pricing_rules').select('*');

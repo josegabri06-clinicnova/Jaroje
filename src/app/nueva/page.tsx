@@ -151,7 +151,7 @@ export default function VercelActionForm() {
   const [showPinModal, setShowPinModal] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [capacitySettings, setCapacitySettings] = useState<any>(null);
-  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.4603085 });
+  const [otaMultipliers, setOtaMultipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.622565 });
   const [seasonRanges, setSeasonRanges] = useState<any[]>([]);
   const [tempDiscounts, setTempDiscounts] = useState<any[]>([]);
   const [formPaymentMethod, setFormPaymentMethod] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
@@ -306,7 +306,7 @@ export default function VercelActionForm() {
     if (form.channel === 'Airbnb') multiplier = otaMultipliers.airbnb;
     if (form.channel === 'Booking.com') multiplier = otaMultipliers.booking;
     if (form.channel === 'Google Ads' || form.channel === 'Google') multiplier = otaMultipliers.google || 1.4024745;
-    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.4603085;
+    if (form.channel === 'Expedia') multiplier = otaMultipliers.expedia || 1.622565;
 
     let totalStay = 0;
     let sumSuggestedRates = 0;
@@ -539,7 +539,7 @@ export default function VercelActionForm() {
             airbnb: parsed.airbnb ?? 1.20,
             booking: parsed.booking ?? 1.35,
             google: parsed.google ?? 1.4024745,
-            expedia: parsed.expedia ?? 1.4603085
+            expedia: parsed.expedia ?? 1.622565
           });
         }
       } catch (err) {
