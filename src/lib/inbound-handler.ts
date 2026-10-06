@@ -90,6 +90,66 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   const rawPayload = String(params.button_payload || '').toLowerCase();
   const guestMsgClean = guestMsgText.toLowerCase();
 
+  // ── AUTO-VINCULACIÓN INTELIGENTE DE RESERVAS SIN TELÉFONO (Booking.com / Expedia) ──
+  try {
+    const { data: unlinkedBookings } = await supabase
+      .from('beds24_reservations')
+      .select('id, guest_name, check_in, check_out, guest_phone, status')
+      .or('guest_phone.is.null,guest_phone.eq.')
+      .neq('status', 'cancelled')
+      .gte('check_out', new Date().toISOString().split('T')[0])
+      .order('check_in', { ascending: true })
+      .limit(20);
+
+    if (unlinkedBookings && unlinkedBookings.length > 0) {
+      let matchedBooking: any = null;
+
+      // Match A: Por ID de reserva presente en el texto del mensaje (ej: "94232573")
+      for (const ub of unlinkedBookings) {
+        const bIdStr = String(ub.id);
+        if (guestMsgText.includes(bIdStr) || rawPayload.includes(bIdStr)) {
+          matchedBooking = ub;
+          break;
+        }
+      }
+
+      // Match B: Por coincidencia de nombre completo si el senderName o el mensaje contiene el nombre del huésped
+      if (!matchedBooking) {
+        const candidateName = String(params.guest_name || '').toLowerCase().trim();
+        for (const ub of unlinkedBookings) {
+          const bName = String(ub.guest_name || '').toLowerCase().trim();
+          if (bName && bName.length > 3 && (candidateName.includes(bName) || guestMsgClean.includes(bName))) {
+            matchedBooking = ub;
+            break;
+          }
+        }
+      }
+
+      if (matchedBooking) {
+        console.log(`[Inbound Handler] 🔗 Vinculando teléfono ${phone} con la reserva ${matchedBooking.id} (${matchedBooking.guest_name})`);
+        await supabase
+          .from('beds24_reservations')
+          .update({ guest_phone: phone })
+          .eq('id', matchedBooking.id);
+
+        const { updateBeds24BookingPhone } = await import('@/lib/beds24');
+        updateBeds24BookingPhone(matchedBooking.id, phone).catch(console.error);
+
+        await supabase.from('employee_logs').insert([{
+          employee_num: 'wa-bot',
+          employee_name: 'WhatsApp Auto-Linker',
+          department: 'recepcion',
+          module: 'recepcion',
+          action: 'telefono_vinculado_inbound',
+          details: `Teléfono ${phone} vinculado automáticamente a la reserva ${matchedBooking.id} (${matchedBooking.guest_name}) por mensaje entrante de WhatsApp.`,
+          created_at: new Date().toISOString()
+        }]);
+      }
+    }
+  } catch (linkErr) {
+    console.warn("[Inbound Handler] Error en auto-vinculación de reserva:", linkErr);
+  }
+
   // ── DETECCIÓN DE INTENCIONES AUTOMÁTICAS ────────────────────────────────────
 
   // A. Contactar con administrador / humano

@@ -2325,6 +2325,146 @@ export function computeOtaSplit(
   return { isOTA: false, netRevenue: totalAmount, commission: 0, taxesRetained: 0, channelLabel: '' };
 }
 
+/** Extrae con máxima precisión números telefónicos de cualquier objeto de reserva de Beds24/OTAs */
+export function extractPhoneFromBookingData(b: any): string | null {
+  if (!b) return null;
+
+  // 1. Campos telefónicos explícitos
+  const explicitCandidates = [
+    b.phone,
+    b.mobile,
+    b.guestPhone,
+    b.guestMobile,
+    b.phone1,
+    b.phone2,
+    b.telephone
+  ];
+  for (const cand of explicitCandidates) {
+    if (cand) {
+      const norm = normalizePhone(String(cand), b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+      const digits = norm.replace(/\D/g, '');
+      if (digits.length >= 10 && digits !== '0000000000' && digits !== '1234567890') {
+        return norm;
+      }
+    }
+  }
+
+  // 2. Extraer de campos de texto (notes, comments, messages, infoItems)
+  const textPool: string[] = [];
+  if (b.notes) textPool.push(String(b.notes));
+  if (b.comments) textPool.push(String(b.comments));
+  if (b.guestComments) textPool.push(String(b.guestComments));
+  if (b.message) textPool.push(String(b.message));
+  if (b.apiMessage) textPool.push(String(b.apiMessage));
+  if (b.custom1) textPool.push(String(b.custom1));
+  if (b.custom2) textPool.push(String(b.custom2));
+  if (b.custom3) textPool.push(String(b.custom3));
+  if (b.custom4) textPool.push(String(b.custom4));
+  if (b.custom5) textPool.push(String(b.custom5));
+
+  if (Array.isArray(b.messages)) {
+    b.messages.forEach((m: any) => {
+      if (m && (m.message || m.text || m.body)) {
+        textPool.push(String(m.message || m.text || m.body));
+      }
+    });
+  }
+
+  if (Array.isArray(b.infoItems)) {
+    b.infoItems.forEach((it: any) => {
+      if (it && it.text) textPool.push(String(it.text));
+    });
+  }
+
+  const fullText = textPool.join(' ');
+  if (!fullText.trim()) return null;
+
+  const bookingIdStr = String(b.id || '').replace(/\D/g, '');
+
+  // Patrón A: Palabras clave (tel, cel, whats, wapp, contacto, numero, etc.)
+  const kwMatch = fullText.match(/(?:tel|cel|phone|whats|wapp|m[oó]vil|contacto|n[uú]mero|num|wa\.me)[\s:=]*([+\d\s().-]{8,25})/i);
+  if (kwMatch && kwMatch[1]) {
+    const rawCandidate = kwMatch[1].trim();
+    const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+    const digits = norm.replace(/\D/g, '');
+    if (digits.length >= 10 && digits !== bookingIdStr && digits !== '0000000000') {
+      return norm;
+    }
+  }
+
+  // Patrón B: Formato internacional con signo +
+  const intlMatches = fullText.match(/\+\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3,4}[\s.-]?\d{3,4}/g);
+  if (intlMatches) {
+    for (const rawCandidate of intlMatches) {
+      const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+      const digits = norm.replace(/\D/g, '');
+      if (digits.length >= 10 && digits !== bookingIdStr) {
+        return norm;
+      }
+    }
+  }
+
+  // Patrón C: Formato mexicano estándar de 10 dígitos (ej: 958 116 8698 o 55 1234 5678)
+  const mxMatches = fullText.match(/\b([2-9]\d{2}[\s.-]?\d{3}[\s.-]?\d{4})\b/g);
+  if (mxMatches) {
+    for (const rawCandidate of mxMatches) {
+      const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry || 'MX');
+      const digits = norm.replace(/\D/g, '');
+      if (digits.length >= 10 && digits !== bookingIdStr) {
+        return norm;
+      }
+    }
+  }
+
+  // Patrón D: Secuencias continuas de 10 a 13 dígitos que no sean el ID de reserva
+  const seqMatches = fullText.match(/\b\d{10,13}\b/g);
+  if (seqMatches) {
+    for (const rawCandidate of seqMatches) {
+      if (rawCandidate === bookingIdStr) continue;
+      const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+      const digits = norm.replace(/\D/g, '');
+      if (digits.length >= 10 && digits !== bookingIdStr) {
+        return norm;
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Actualiza el teléfono de una reserva directamente en la API de Beds24 */
+export async function updateBeds24BookingPhone(bookingId: string | number, phone: string): Promise<boolean> {
+  if (!bookingId || !phone) return false;
+  try {
+    const token = await getBeds24Token();
+    const cleanId = Number(String(bookingId).replace(/\D/g, ''));
+    if (!cleanId) return false;
+
+    const payload = [{ id: cleanId, phone: phone, mobile: phone }];
+    const res = await fetch('https://api.beds24.com/v2/bookings', {
+      method: 'POST',
+      headers: {
+        'token': token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      cache: 'no-store'
+    });
+
+    if (res.ok) {
+      console.log(`[Beds24 API] ✅ Teléfono ${phone} sincronizado con éxito para reserva ${bookingId}`);
+      return true;
+    } else {
+      const errText = await res.text();
+      console.warn(`[Beds24 API] Fallo al actualizar teléfono para reserva ${bookingId}:`, errText);
+      return false;
+    }
+  } catch (err) {
+    console.error(`[Beds24 API] Error actualizando teléfono en Beds24:`, err);
+    return false;
+  }
+}
+
 /** Mapea e inserta una reserva de Beds24 en la tabla local de Supabase 'beds24_reservations' */
 export async function syncBeds24BookingLocal(b: any): Promise<any> {
   const arrivalDate = b.arrival ? new Date(b.arrival) : null;
@@ -2452,16 +2592,7 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     ? ((actualPaid > 0 || depositVal > 0) ? 0 : Math.max(0, calculatedCharges - depositVal)) 
     : Math.max(0, calculatedCharges - depositVal);
 
-  let rawPhone = b.phone || b.mobile || b.guestPhone || b.guestMobile || '';
-  if (!rawPhone) {
-    const fullText = `${b.notes || ''} ${b.comments || ''} ${b.message || ''} ${b.apiMessage || ''} ${b.custom1 || ''} ${b.custom2 || ''}`;
-    const match = fullText.match(/(?:tel|phone|cel|whatsapp|móvil|movil)[\s:]*([+\d\s().-]{7,25})/i);
-    if (match) {
-      rawPhone = match[1];
-    }
-  }
-
-  let phone = normalizePhone(rawPhone, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+  let phone = extractPhoneFromBookingData(b);
   
   // Si Beds24 no devuelve teléfono, consultar si ya teníamos el teléfono guardado en la base de datos
   if (!phone && b.id) {

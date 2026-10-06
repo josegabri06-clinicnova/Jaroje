@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameGroup } from '@/lib/beds24';
+import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameGroup, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 import {
@@ -184,12 +184,20 @@ export async function GET(req: Request) {
           b.status = 'checked_out';
         }
 
-        // Si la reserva de Beds24 no trajo teléfono en la API (común en OTAs), usar el registrado en Supabase
+        // Si la reserva de Beds24 no trajo teléfono en la API (común en OTAs), intentar leer de Supabase o extraer de notas/mensajes
         if (!b.guest_phone && !b.phone && !b.mobile) {
           const dbPhone = b24PhoneMap.get(bIdRaw) || (bIdDigits ? b24PhoneMap.get(bIdDigits) : undefined);
           if (dbPhone) {
             b.guest_phone = dbPhone;
             b.phone = dbPhone;
+          } else {
+            const extractedPhone = extractPhoneFromBookingData(b);
+            if (extractedPhone) {
+              b.guest_phone = extractedPhone;
+              b.phone = extractedPhone;
+              supabase.from('beds24_reservations').update({ guest_phone: extractedPhone }).eq('id', b.id).then(() => {});
+              updateBeds24BookingPhone(b.id, extractedPhone).catch(() => {});
+            }
           }
         }
       }

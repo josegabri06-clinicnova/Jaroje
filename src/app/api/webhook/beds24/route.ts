@@ -7,7 +7,7 @@ import {
   sendTemplate4_DisponibilidadLiberada, 
   detectLanguageFromPhone 
 } from '@/lib/whatsapp';
-import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal, isInvoicePayment } from '@/lib/beds24';
+import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal, isInvoicePayment, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
@@ -131,15 +131,7 @@ export async function POST(req: Request) {
           console.error(`[Webhook Beds24] Error al guardar reserva ${bookingIdStr} localmente:`, dbSyncErr);
         }
 
-        let rawPhone = b.phone || b.mobile || b.guestPhone || '';
-        if (!rawPhone) {
-          const fullText = `${b.notes || ''} ${b.comments || ''} ${b.message || ''} ${b.apiMessage || ''} ${b.custom1 || ''} ${b.custom2 || ''}`;
-          const match = fullText.match(/(?:tel|phone|cel|whatsapp|móvil|movil)[\s:]*([+\d\s().-]{7,25})/i);
-          if (match) {
-            rawPhone = match[1];
-          }
-        }
-        let phone = normalizePhone(rawPhone, country);
+        let phone = extractPhoneFromBookingData(b);
         if (!phone && bookingIdStr) {
           try {
             const { data: dbB } = await supabase
@@ -151,6 +143,13 @@ export async function POST(req: Request) {
               phone = dbB.guest_phone || dbB.phone;
             }
           } catch (_) {}
+        }
+
+        // Si se extrajo un teléfono válido de notas/mensajes y Beds24 no lo tenía en sus campos nativos, sincronizarlo a Beds24
+        if (phone && (!b.phone || !b.mobile)) {
+          updateBeds24BookingPhone(bookingIdStr, phone).catch(err => {
+            console.warn("[Webhook Beds24] No se pudo sincronizar teléfono a Beds24:", err);
+          });
         }
         const bStatus = String(b.status || '').toLowerCase().trim();
         const isCancelled = bStatus === '0' || bStatus === 'cancelled';
