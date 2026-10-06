@@ -2017,10 +2017,7 @@ export default function CalendarPage() {
       // 1. Copiar al portapapeles de forma ultra robusta (con fallback DOM)
       const copiedSuccess = await copyToClipboard(summaryText);
 
-      // 2. Redirigir limpiamente a WhatsApp con el texto ya pre-cargado listo para enviar
-      openWhatsAppUrl({ text: summaryText });
-
-      // 3. Activar Modal de confirmación con vista previa
+      // 2. Activar Modal de confirmación con vista previa en la app
       setCheckInSummaryModal({
         show: true,
         text: summaryText,
@@ -4255,8 +4252,8 @@ export default function CalendarPage() {
               <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-2xl flex items-start gap-2.5">
                 <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                 <div className="text-[12px] text-emerald-900 leading-snug">
-                  <strong>¡Resumen copiado al portapapeles!</strong><br />
-                  Se ha intentado abrir el grupo de WhatsApp de Recepción. Si no se abrió automáticamente, pulsa el botón verde para abrirlo y pega el mensaje.
+                  <strong>¡Check-In registrado exitosamente!</strong><br />
+                  Pulsa el botón verde para abrir el grupo de WhatsApp de Recepción y pegar el resumen del huésped.
                 </div>
               </div>
 
@@ -4275,9 +4272,10 @@ export default function CalendarPage() {
               <button
                 type="button"
                 onClick={async () => {
-                  await copyToClipboard(checkInSummaryModal.text);
-                  openWhatsAppUrl({ text: checkInSummaryModal.text });
+                  const textToSend = checkInSummaryModal.text;
+                  await copyToClipboard(textToSend);
                   setCheckInSummaryModal(null);
+                  openWhatsAppUrl({ text: textToSend });
                 }}
                 className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[14px] rounded-2xl transition-all shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2.5 cursor-pointer active:scale-98"
               >
