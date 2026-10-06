@@ -2518,17 +2518,17 @@ export default function FinanzasPage() {
                               <div className="mt-2.5 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] text-zinc-500 flex-wrap gap-1.5">
                                 <span className="font-bold text-zinc-400">Desglose Factura Booking:</span>
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    18.0% Base (${fmtOtaMoney(r.metrics.breakdown.roomBase)}): ${fmtOtaMoney(r.metrics.breakdown.bookingBaseCommission)}
+                                  <span className="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md border border-zinc-200 font-bold">
+                                    Tarifa Base: ${fmtOtaMoney(r.metrics.breakdown.roomBase)}
                                   </span>
-                                  <span className="bg-blue-50 text-blue-800 px-2 py-0.5 rounded-md border border-blue-100 font-bold">
-                                    3.1% Tarjeta (${fmtOtaMoney(r.metrics.totalBruto)}): ${fmtOtaMoney(r.metrics.breakdown.cardProcessing)}
+                                  <span className="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md border border-zinc-200 font-bold">
+                                    Impuestos: ${fmtOtaMoney(r.metrics.breakdown.totalTaxes)}
                                   </span>
                                   <span className="bg-rose-50 text-rose-800 px-2 py-0.5 rounded-md border border-rose-100 font-bold">
-                                    Total Factura: ${fmtOtaMoney(r.metrics.commission)} ({r.metrics.commissionPct}%)
+                                    Comisión (18% Base + 3.1% Tarjeta): -${fmtOtaMoney(r.metrics.commission)} ({r.metrics.commissionPct}%)
                                   </span>
                                   <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-100 font-bold">
-                                    Neto Real: ${fmtOtaMoney(r.metrics.netRevenue)}
+                                    Neto Real: +${fmtOtaMoney(r.metrics.netRevenue)}
                                   </span>
                                 </div>
                               </div>
@@ -2538,14 +2538,14 @@ export default function FinanzasPage() {
                               <div className="mt-2.5 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] text-zinc-500 flex-wrap gap-1.5">
                                 <span className="font-bold text-zinc-400">Desglose Factura Expedia:</span>
                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md border border-amber-100 font-bold">
-                                    15.0% Tarifa Base (${fmtOtaMoney(r.metrics.breakdown.roomBase)}): ${fmtOtaMoney(r.metrics.commission)}
+                                  <span className="bg-amber-50 text-amber-900 px-2 py-0.5 rounded-md border border-amber-200 font-bold">
+                                    Tarifa Base Habitación: ${fmtOtaMoney(r.metrics.breakdown.roomBase)}
                                   </span>
                                   <span className="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md border border-zinc-200 font-bold">
-                                    Impuestos 21% (IVA 16% + ISH 5%): ${fmtOtaMoney(r.metrics.breakdown.totalTaxes)}
+                                    Impuestos (IVA 16% + ISH 5%): ${fmtOtaMoney(r.metrics.breakdown.totalTaxes)}
                                   </span>
                                   <span className="bg-rose-50 text-rose-800 px-2 py-0.5 rounded-md border border-rose-100 font-bold">
-                                    Factura Comisión: -${fmtOtaMoney(r.metrics.commission)} (15.0%)
+                                    Factura Comisión (15%): -${fmtOtaMoney(r.metrics.commission)}
                                   </span>
                                   <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-100 font-bold">
                                     Neto Real Hotel: +${fmtOtaMoney(r.metrics.netRevenue)}
