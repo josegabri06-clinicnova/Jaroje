@@ -222,8 +222,8 @@ export default function PagoTransferenciaPage() {
     hsbc: {
       banco: 'HSBC',
       titular: 'Rolando Diaz Ceballos',
-      cuenta: '70042002214',
-      clabe: '002634700420022141'
+      cuenta: '6394579992',
+      clabe: '021634063945799923'
     },
     wise: {
       banco: 'WISE USD',
