@@ -286,7 +286,7 @@ export default function FinanzasPage() {
   }, [pinLocked, pinInput]);
 
   const [activeTab, setActiveTab] = useState<'libro' | 'registro' | 'otas'>('libro');
-  const [selectedOta, setSelectedOta] = useState<'booking' | 'expedia'>('booking');
+  const [selectedOta, setSelectedOta] = useState<'booking' | 'expedia'>('expedia');
   
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [records, setRecords] = useState<FinanceRecord[]>([]);
@@ -1724,12 +1724,15 @@ export default function FinanzasPage() {
           Registro
         </button>
         <button 
-          onClick={() => setActiveTab('otas')}
+          onClick={() => {
+            setActiveTab('otas');
+            setSelectedOta('expedia');
+          }}
           className={`flex-1 py-2.5 text-[13.5px] font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === 'otas' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
         >
-          <span>Liquidación OTAs</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-extrabold border border-blue-100">
-            Booking & Expedia
+          <span>Liquidación Expedia</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-800 font-extrabold border border-amber-200">
+            Comisiones
           </span>
         </button>
       </div>
@@ -2045,97 +2048,50 @@ export default function FinanzasPage() {
           </div>
         </div>
       ) : (
-        // VISTA LIQUIDACIÓN OTAs (2 Pestañas: Booking.com, Expedia)
+        // VISTA LIQUIDACIÓN EXPEDIA (Comisiones Mensuales)
         <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {/* Helper para formatear montos exactos con 2 decimales sin descuadres */}
           {(() => {
             const fmtOtaMoney = (val: number) => (Number(val) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             return null;
           })()}
-          {/* 2 SUBTABS DE LAS OTAS */}
-          <div className="grid grid-cols-2 gap-2 bg-zinc-100/80 p-1.5 rounded-2xl border border-zinc-200/60 shadow-inner">
-            {/* Booking.com Tab */}
-            <button
-              onClick={() => setSelectedOta('booking')}
-              className={`py-3 px-3 rounded-xl transition-all flex flex-col items-center justify-center relative cursor-pointer ${
-                selectedOta === 'booking'
-                  ? 'bg-white text-zinc-950 shadow-md ring-2 ring-blue-600/20'
-                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/50'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#003580]" />
-                <span className="font-extrabold text-[13px] tracking-tight">Booking.com</span>
-              </div>
-              <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'booking' ? 'text-blue-600' : 'text-zinc-400'}`}>
-                {otaAnalytics.booking.filteredCount} reservas • ${(otaAnalytics.booking.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} com.
-              </span>
-            </button>
 
-            {/* Expedia Tab */}
-            <button
-              onClick={() => setSelectedOta('expedia')}
-              className={`py-3 px-3 rounded-xl transition-all flex flex-col items-center justify-center relative cursor-pointer ${
-                selectedOta === 'expedia'
-                  ? 'bg-white text-zinc-950 shadow-md ring-2 ring-amber-500/20'
-                  : 'text-zinc-500 hover:text-zinc-900 hover:bg-white/50'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FFCC00] border border-amber-400" />
-                <span className="font-extrabold text-[13px] tracking-tight">Expedia</span>
-              </div>
-              <span className={`text-[10px] font-bold mt-0.5 ${selectedOta === 'expedia' ? 'text-amber-600' : 'text-zinc-400'}`}>
-                {otaAnalytics.expedia.filteredCount} reservas • ${(otaAnalytics.expedia.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} com.
-              </span>
-            </button>
-          </div>
-
-          {/* BANNER COMPARATIVO GLOBAL DE LIQUIDACIÓN DE COMISIONES */}
+          {/* BANNER DE LIQUIDACIÓN DE COMISIONES EXPEDIA */}
           <div className="bg-gradient-to-r from-zinc-900 via-zinc-850 to-zinc-900 text-white rounded-[28px] p-5 shadow-xl border border-zinc-800 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Sparkles size={16} className="text-amber-400 animate-pulse" />
                   <span className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">
-                    Comisiones por Liquidar a Fin de Mes ({otaPeriodLabels[otaPeriodFilter] || 'Este Mes'})
+                    Comisiones por Liquidar a Expedia ({otaPeriodLabels[otaPeriodFilter] || 'Este Mes'})
                   </span>
                 </div>
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl text-zinc-400 font-bold">$</span>
                   <span className="text-3xl sm:text-4xl font-black tracking-tight text-white">
-                    {(
-                      otaAnalytics.booking.totalComision + 
-                      otaAnalytics.expedia.totalComision
-                    ).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {(otaAnalytics.expedia.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
-                  <span className="text-xs text-zinc-400 font-bold tracking-wider">MXN Total por Transferir a OTAs</span>
+                  <span className="text-xs text-zinc-400 font-bold tracking-wider">MXN Total por Transferir a Expedia</span>
                 </div>
               </div>
 
-              {/* Mini desglose por canal */}
+              {/* Tag Expedia Partner Central */}
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-400" />
-                  <span className="text-zinc-300 font-medium">Booking.com:</span>
-                  <strong className="text-white font-black">${(otaAnalytics.booking.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
-                </div>
-                <div className="bg-white/10 px-3 py-1.5 rounded-xl border border-white/10 text-xs flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
-                  <span className="text-zinc-300 font-medium">Expedia:</span>
-                  <strong className="text-white font-black">${(otaAnalytics.expedia.totalComision || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#FFCC00] border border-amber-400" />
+                  <span className="text-zinc-300 font-medium">Expedia Partner Central:</span>
+                  <strong className="text-amber-300 font-black">15.0% sobre Tarifa Base</strong>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* TARJETAS EJECUTIVAS DE LA OTA SELECCIONADA */}
+          {/* TARJETAS EJECUTIVAS DE EXPEDIA */}
           {(() => {
-            const currentOtaData = otaAnalytics[selectedOta];
-            const otaBrandColor = selectedOta === 'booking' ? 'blue' : 'amber';
-            const otaTitle = selectedOta === 'booking' ? 'Booking.com' : 'Expedia';
-            const matchedAccount = accounts.find(a => a.name.toUpperCase().includes(selectedOta.toUpperCase()));
+            const currentOtaData = otaAnalytics.expedia;
+            const otaTitle = 'Expedia';
+            const matchedAccount = accounts.find(a => a.name.toUpperCase().includes('EXPEDIA'));
             const fmtOtaMoney = (val: number) => (Number(val) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
             return (
@@ -2157,16 +2113,12 @@ export default function FinanzasPage() {
                     </p>
                   </div>
 
-                  {/* Card 2: Comisión a Pagar a la OTA */}
-                  <div className={`bg-white border rounded-2xl p-4 shadow-sm space-y-1 ${
-                    selectedOta === 'booking' ? 'border-blue-200/80 bg-blue-50/10' : 'border-amber-200/80 bg-amber-50/10'
-                  }`}>
+                  {/* Card 2: Comisión a Pagar a Expedia */}
+                  <div className="bg-white border border-amber-200/80 bg-amber-50/10 rounded-2xl p-4 shadow-sm space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700">Comisión por Liquidar ({otaTitle})</span>
-                      <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border uppercase ${
-                        selectedOta === 'booking' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}>
-                        {currentOtaData.avgCommissionPct}%
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-rose-700">Comisión a Liquidar (Expedia)</span>
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-md border uppercase bg-amber-50 text-amber-700 border-amber-200">
+                        15.0%
                       </span>
                     </div>
                     <p className="text-xl sm:text-2xl font-black text-rose-600 tracking-tight">
@@ -2174,7 +2126,7 @@ export default function FinanzasPage() {
                       <span className="text-[10px] text-rose-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
-                      Total a transferir a {otaTitle}
+                      Factura a transferir a Expedia
                     </p>
                   </div>
 
@@ -2189,7 +2141,7 @@ export default function FinanzasPage() {
                       <span className="text-[10px] text-emerald-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium">
-                      Tarifa Base Sin Impuestos - Comisiones
+                      Tarifa Base Sin Impuestos - Comisión
                     </p>
                   </div>
 
@@ -2204,30 +2156,24 @@ export default function FinanzasPage() {
                       <span className="text-[10px] text-zinc-400 ml-1 font-bold">MXN</span>
                     </p>
                     <p className="text-[11px] text-zinc-500 font-medium truncate">
-                      {matchedAccount ? matchedAccount.name : `Cuenta COMISIÓN ${otaTitle}`}
+                      {matchedAccount ? matchedAccount.name : 'Cuenta COMISIÓN EXPEDIA'}
                     </p>
                   </div>
                 </div>
 
-                {/* DESGLOSE FACTURACIÓN OTA (CONCILIACIÓN FIN DE MES) */}
-                <div className={`p-4 sm:p-5 rounded-2xl border shadow-sm ${
-                  selectedOta === 'booking'
-                    ? 'bg-gradient-to-br from-blue-50/70 via-white to-blue-50/40 border-blue-200/80'
-                    : 'bg-gradient-to-br from-amber-50/70 via-white to-amber-50/40 border-amber-200/80'
-                }`}>
+                {/* DESGLOSE FACTURACIÓN EXPEDIA (CONCILIACIÓN FIN DE MES) */}
+                <div className="p-4 sm:p-5 rounded-2xl border shadow-sm bg-gradient-to-br from-amber-50/70 via-white to-amber-50/40 border-amber-200/80">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-200/70 pb-3 mb-3">
                     <div className="flex items-center gap-2.5">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-white ${
-                        selectedOta === 'booking' ? 'bg-[#003580]' : 'bg-[#FFCC00] text-zinc-900 border border-amber-400'
-                      }`}>
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black bg-[#FFCC00] text-zinc-900 border border-amber-400">
                         <Receipt size={18} />
                       </div>
                       <div>
                         <h4 className="font-black text-zinc-900 text-sm">
-                          Conciliación de Factura Mensual • {otaTitle}
+                          Conciliación de Factura Mensual • Expedia Partner Central
                         </h4>
                         <p className="text-[11px] text-zinc-500 font-medium">
-                          Monto total exigible por la plataforma al cierre del periodo seleccionado
+                          Monto total exigible por Expedia al cierre del periodo seleccionado (15% sobre tarifa base)
                         </p>
                       </div>
                     </div>
@@ -2237,95 +2183,38 @@ export default function FinanzasPage() {
                       <span className="text-lg sm:text-xl font-black text-rose-600">
                         ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-xs font-bold text-rose-400">MXN</span>
                       </span>
-                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border uppercase ${
-                        selectedOta === 'booking' ? 'bg-blue-100/70 text-blue-800 border-blue-300' : 'bg-amber-100/70 text-amber-800 border-amber-300'
-                      }`}>
-                        {currentOtaData.avgCommissionPct}%
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-md border uppercase bg-amber-100/70 text-amber-800 border-amber-300">
+                        15.0% Base
                       </span>
                     </div>
                   </div>
 
-                  {/* Desglose de componentes de la comisión */}
-                  {selectedOta === 'booking' ? (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                        {/* 1. Base Habitación (18%) */}
-                        <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">1. Comisión Base Booking</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">18.0%</span>
-                          </div>
-                          <p className="text-base font-black text-zinc-900">
-                            ${fmtOtaMoney(currentOtaData.totalBookingBaseCommission)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
-                          </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">18% sobre tarifa base (${fmtOtaMoney(currentOtaData.totalRoomBase)})</p>
+                  {/* Componentes de la liquidación */}
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">1. Comisión Base Expedia (Factura)</span>
+                          <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">15.0% Base</span>
                         </div>
-
-                        {/* 2. Tarjeta (3.1%) */}
-                        <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">2. Pago con Tarjeta</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-blue-50 text-blue-700 border border-blue-200">3.1%</span>
-                          </div>
-                          <p className="text-base font-black text-zinc-900">
-                            ${fmtOtaMoney(currentOtaData.totalCardProcessing)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
-                          </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">3.1% sobre cobro total (${fmtOtaMoney(currentOtaData.totalBruto)})</p>
-                        </div>
-
-                        {/* 3. Total Factura */}
-                        <div className="bg-white/90 border border-blue-100 p-3 rounded-xl shadow-xs space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">3. Factura Exigible Booking</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200">~{currentOtaData.avgCommissionPct}%</span>
-                          </div>
-                          <p className="text-base font-black text-rose-600">
-                            ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-[10px] text-rose-400 font-bold">MXN</span>
-                          </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">Total exigible por Booking al cierre de mes</p>
-                        </div>
+                        <p className="text-base font-black text-zinc-900">
+                          ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                        </p>
+                        <p className="text-[10px] text-zinc-400 font-medium">15% sobre la tarifa base de habitación (sin impuestos)</p>
                       </div>
 
-                      {/* Margen Protegido beds24 banner */}
-                      <div className="bg-blue-900/5 border border-blue-900/10 rounded-xl p-2.5 flex items-center justify-between text-xs gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">🛡️</span>
-                          <span className="text-zinc-700 font-medium">
-                            <strong>Margen Protegido en Beds24:</strong> El multiplicador de tarifa del <strong>+35%</strong> absorbe holgadamente la deducción de Booking (<strong>~18.2%</strong>) y el descuento Genius (<strong>10%</strong>), blindando el ingreso neto del hotel.
-                          </span>
+                      <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">2. Cobro al Huésped (Hotel Collect)</span>
+                          <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">En Recepción</span>
                         </div>
-                        <span className="text-[10px] font-black px-2 py-1 bg-white text-blue-900 rounded-lg border border-blue-200 shrink-0">
-                          Multiplicador 35% Activo
-                        </span>
+                        <p className="text-base font-black text-emerald-600">
+                          ${fmtOtaMoney(currentOtaData.totalBruto)} <span className="text-[10px] text-emerald-500 font-bold">MXN</span>
+                        </p>
+                        <p className="text-[10px] text-zinc-400 font-medium">Cobrado directamente por el hotel (Tarifa Base + Impuestos)</p>
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">1. Comisión Base Expedia (Factura)</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">15.0% Base</span>
-                          </div>
-                          <p className="text-base font-black text-zinc-900">
-                            ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
-                          </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">15% sobre la tarifa base de habitación (sin impuestos)</p>
-                        </div>
-
-                        <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">2. Cobro al Huésped (Hotel Collect)</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">En Recepción</span>
-                          </div>
-                          <p className="text-base font-black text-emerald-600">
-                            ${fmtOtaMoney(currentOtaData.totalBruto)} <span className="text-[10px] text-emerald-500 font-bold">MXN</span>
-                          </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">Cobrado directamente por el hotel (Tarifa Base + Impuestos)</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* BARRA DE HERRAMIENTAS Y FILTROS */}
