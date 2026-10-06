@@ -1324,7 +1324,8 @@ export default function FinanzasPage() {
         }
       };
     } else {
-      // Expedia: 15% flat de comisión
+      // Expedia: 15% flat de comisión sobre la tarifa base de habitación sin impuestos
+      // En México / Oaxaca: 16% IVA + 5% ISH = 21% de impuestos totales (Divisor 1.21)
       let roomBase = 0;
       let totalTaxes = 0;
       if (r.invoice_items && Array.isArray(r.invoice_items) && r.invoice_items.length > 0) {
@@ -1345,17 +1346,20 @@ export default function FinanzasPage() {
           totalTaxes = taxItems.reduce((acc: number, it: any) => acc + (Number(it.lineTotal !== undefined ? it.lineTotal : (it.amount || 0))), 0);
         }
       }
+      // En México/Oaxaca, la tarifa base antes de IVA (16%) e ISH (5%) es Total Bruto / 1.21
       if (roomBase <= 0 && totalBruto > 0) {
-        roomBase = Number((totalBruto / 1.19).toFixed(2));
+        roomBase = Number((totalBruto / 1.21).toFixed(2));
       }
       if (totalTaxes <= 0 && totalBruto > 0) {
         totalTaxes = Number((totalBruto - roomBase).toFixed(2));
       }
 
+      // Comisión Expedia: 15% sobre la tarifa base sin impuestos
       const rawComm = Number(r.commission || r.rawCommission || 0);
-      const commission = rawComm > 0 ? Number(rawComm.toFixed(2)) : Number((totalBruto * 0.15).toFixed(2));
+      const commission = rawComm > 0 ? Number(rawComm.toFixed(2)) : Number((roomBase * 0.15).toFixed(2));
+      // NETO HOTEL REAL = Tarifa Base Sin Impuestos - Comisión 15%
       const netRevenue = Number((roomBase - commission).toFixed(2));
-      const commissionPct = totalBruto > 0 ? ((commission / totalBruto) * 100).toFixed(2) : '15.00';
+      const commissionPct = '15.00';
 
       return {
         totalBruto: Math.max(0, totalBruto),
@@ -1369,7 +1373,7 @@ export default function FinanzasPage() {
           cardProcessing: 0,
           roomBase,
           totalTaxes,
-          totalPct: Number(commissionPct)
+          totalPct: 15.0
         }
       };
     }
@@ -1463,7 +1467,9 @@ export default function FinanzasPage() {
         };
       });
 
-      const avgCommissionPct = totalBruto > 0 ? ((totalComision / totalBruto) * 100).toFixed(1) : (otaKey === 'booking' ? '18.2' : '15.0');
+      const avgCommissionPct = otaKey === 'expedia' 
+        ? (totalRoomBase > 0 ? ((totalComision / totalRoomBase) * 100).toFixed(1) : '15.0')
+        : (totalBruto > 0 ? ((totalComision / totalBruto) * 100).toFixed(1) : '18.2');
 
       return {
         allCount: allForOta.length,
@@ -2298,24 +2304,24 @@ export default function FinanzasPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">1. Comisión Base Expedia</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">15.0%</span>
+                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">1. Comisión Base Expedia (Factura)</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 border border-amber-200">15.0% Base</span>
                           </div>
                           <p className="text-base font-black text-zinc-900">
                             ${fmtOtaMoney(currentOtaData.totalComision)} <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">Comisión directa por reservación</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">15% sobre la tarifa base de habitación (sin impuestos)</p>
                         </div>
 
                         <div className="bg-white/90 border border-amber-100 p-3 rounded-xl shadow-xs space-y-0.5">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">2. Cargos Adicionales</span>
-                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-zinc-100 text-zinc-600 border border-zinc-200">0.0%</span>
+                            <span className="text-[10px] font-extrabold text-amber-900 uppercase tracking-wider">2. Cobro al Huésped (Hotel Collect)</span>
+                            <span className="text-[10px] font-black px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">En Recepción</span>
                           </div>
-                          <p className="text-base font-black text-zinc-900">
-                            $0.00 <span className="text-[10px] text-zinc-400 font-bold">MXN</span>
+                          <p className="text-base font-black text-emerald-600">
+                            ${fmtOtaMoney(currentOtaData.totalBruto)} <span className="text-[10px] text-emerald-500 font-bold">MXN</span>
                           </p>
-                          <p className="text-[10px] text-zinc-400 font-medium">Cobro directo por Expedia Partner Central</p>
+                          <p className="text-[10px] text-zinc-400 font-medium">Cobrado directamente por el hotel (Tarifa Base + Impuestos)</p>
                         </div>
                       </div>
                     </div>
@@ -2523,6 +2529,26 @@ export default function FinanzasPage() {
                                   </span>
                                   <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-100 font-bold">
                                     Neto Real: ${fmtOtaMoney(r.metrics.netRevenue)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+
+                            {selectedOta === 'expedia' && r.metrics.breakdown && (
+                              <div className="mt-2.5 pt-2 border-t border-zinc-100 flex items-center justify-between text-[10px] text-zinc-500 flex-wrap gap-1.5">
+                                <span className="font-bold text-zinc-400">Desglose Factura Expedia:</span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded-md border border-amber-100 font-bold">
+                                    15.0% Tarifa Base (${fmtOtaMoney(r.metrics.breakdown.roomBase)}): ${fmtOtaMoney(r.metrics.commission)}
+                                  </span>
+                                  <span className="bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-md border border-zinc-200 font-bold">
+                                    Impuestos 21% (IVA 16% + ISH 5%): ${fmtOtaMoney(r.metrics.breakdown.totalTaxes)}
+                                  </span>
+                                  <span className="bg-rose-50 text-rose-800 px-2 py-0.5 rounded-md border border-rose-100 font-bold">
+                                    Factura Comisión: -${fmtOtaMoney(r.metrics.commission)} (15.0%)
+                                  </span>
+                                  <span className="bg-emerald-50 text-emerald-800 px-2 py-0.5 rounded-md border border-emerald-100 font-bold">
+                                    Neto Real Hotel: +${fmtOtaMoney(r.metrics.netRevenue)}
                                   </span>
                                 </div>
                               </div>

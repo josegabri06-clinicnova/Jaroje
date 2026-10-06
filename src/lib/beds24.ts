@@ -2306,10 +2306,13 @@ export function computeOtaSplit(
       taxesRetained = Number((totalAmount - roomRate).toFixed(2));
       netRevenue = Number((totalAmount - commission).toFixed(2));
     } else {
-      // Expedia
-      const roomRate = Number((totalAmount / 1.19).toFixed(2));
-      commission = Number((totalAmount * 0.15).toFixed(2));
+      // Expedia (en México / Oaxaca: 16% IVA + 5% ISH = 21% de impuestos totales)
+      // Tarifa Base Habitación (sin impuestos) = Total / 1.21
+      const roomRate = Number((totalAmount / 1.21).toFixed(2));
+      // Comisión Expedia: 15% sobre la tarifa base de la habitación
+      commission = Number((roomRate * 0.15).toFixed(2));
       taxesRetained = Number((totalAmount - roomRate).toFixed(2));
+      // Ingreso Neto Real del Hotel = Tarifa Base - Comisión 15%
       netRevenue = Number((roomRate - commission).toFixed(2));
     }
 
