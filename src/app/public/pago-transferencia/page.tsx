@@ -115,7 +115,7 @@ export default function PagoTransferenciaPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
-  const [transferAccount, setTransferAccount] = useState<string>(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : 'santander'));
+  const [transferAccount, setTransferAccount] = useState<string>(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : 'hsbc'));
   const [loadingAccount, setLoadingAccount] = useState<boolean>(true);
   const curr = (transferAccount === 'wise' || transferAccount === 'paypal' || isWiseMethod || isPaypalMethod) ? 'USD' : 'MXN';
 
@@ -145,7 +145,7 @@ export default function PagoTransferenciaPage() {
           .eq('booking_id', String(bookingId))
           .maybeSingle();
         if (!error && data) {
-          setTransferAccount(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : (data.transfer_account || 'santander')));
+          setTransferAccount(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : (data.transfer_account || 'hsbc')));
         }
       } catch (err) {
         console.error("Error loading transfer settings:", err);
@@ -245,7 +245,7 @@ export default function PagoTransferenciaPage() {
     }
   };
 
-  const activeAccount = allAccounts[transferAccount] || allAccounts.santander;
+  const activeAccount = allAccounts[transferAccount] || allAccounts.hsbc;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

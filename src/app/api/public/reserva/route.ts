@@ -208,7 +208,7 @@ export async function GET(req: Request) {
           transfer_receipts: groupTransferReceipts || [],
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment !== false,
-            transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
+            transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'hsbc'),
             language: portalSettings?.language || detectLanguageFromPhone(localRes.phone),
             db_error: portalSettingsError?.message || null
           }
@@ -461,7 +461,7 @@ export async function GET(req: Request) {
             transfer_receipts: groupTransferReceipts || [],
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment !== false,
-              transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
+              transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'hsbc'),
               language: portalSettings?.language || detectLanguageFromPhone(booking.guest_phone || booking.phone || booking.mobile),
               db_error: portalSettingsError?.message || null
             }

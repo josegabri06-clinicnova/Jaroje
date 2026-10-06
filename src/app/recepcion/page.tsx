@@ -927,7 +927,7 @@ export default function RecepcionPage() {
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [savingNotesOnly, setSavingNotesOnly] = useState(false);
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
-  const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
+  const [portalTransferAccount, setPortalTransferAccount] = useState('hsbc');
   const [portalLanguage, setPortalLanguage] = useState('es');
   const [portalMuteNotifications, setPortalMuteNotifications] = useState(false);
 
@@ -1041,7 +1041,7 @@ export default function RecepcionPage() {
 
       // Cargar ajustes de portal para la reserva seleccionada
       setPortalShowCardPayment(true);
-      setPortalTransferAccount('santander');
+      setPortalTransferAccount('hsbc');
       setPortalLanguage('es');
       setPortalMuteNotifications(false);
       if (selectedReserva.id !== 'walkin') {

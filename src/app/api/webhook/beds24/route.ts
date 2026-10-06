@@ -213,7 +213,7 @@ export async function POST(req: Request) {
                 .insert({
                   booking_id: bookingIdStr,
                   show_card_payment: true,
-                  transfer_account: 'santander',
+                  transfer_account: 'hsbc',
                   language: autoLang
                 });
             }

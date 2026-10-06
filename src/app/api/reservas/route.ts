@@ -471,7 +471,7 @@ export async function POST(req: Request) {
           .upsert({
             booking_id: String(data.id),
             show_card_payment: portalSettings?.showCardPayment ?? true,
-            transfer_account: portalSettings?.transferAccount ?? 'santander',
+            transfer_account: portalSettings?.transferAccount ?? 'hsbc',
             language: portalSettings?.language || detectLanguageFromPhone(data.phone)
           });
       } catch (dbErr) {
@@ -689,7 +689,7 @@ export async function POST(req: Request) {
           .upsert({
             booking_id: String(bookingId),
             show_card_payment: portalSettings.showCardPayment ?? true,
-            transfer_account: portalSettings.transferAccount ?? 'santander',
+            transfer_account: portalSettings.transferAccount ?? 'hsbc',
             language: portalSettings.language || detectLanguageFromPhone(phone)
           });
       } catch (dbErr) {
