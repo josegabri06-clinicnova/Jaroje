@@ -118,20 +118,55 @@ export async function POST(req: Request) {
       console.error("[Submit Transfer] Error registrando employee_log:", logErr);
     }
 
-    // 5. Obtener teléfono del huésped para enviarle una notificación automática por WhatsApp
-    let guestPhone = '';
-    let dbGuestName = name || 'Invitado';
+    // 5. Obtener teléfono y detalles de la reserva para enviar notificación por WhatsApp
+    const formPhone = formData.get('phone') as string;
+    const { normalizePhone } = await import('@/lib/whatsapp');
+    let guestPhone = formPhone ? normalizePhone(formPhone) : '';
+    let dbGuestName = name || 'Huésped';
+    let reservationTotal = 0;
+    let reservationDeposit = 0;
+
+    // A. Buscar en beds24_reservations de Supabase
     try {
-      const { data: localRes } = await supabase
-        .from('local_reservas')
-        .select('phone, guest_name')
-        .eq('id', Number(bookingId))
+      const { data: b24Db } = await supabase
+        .from('beds24_reservations')
+        .select('guest_phone, phone, guest_name, price, deposit')
+        .eq('id', String(bookingId))
         .maybeSingle();
 
-      if (localRes) {
-        guestPhone = localRes.phone || '';
-        dbGuestName = localRes.guest_name || dbGuestName;
-      } else {
+      if (b24Db) {
+        if (!guestPhone) guestPhone = normalizePhone(b24Db.guest_phone || b24Db.phone || '');
+        if (b24Db.guest_name && (dbGuestName === 'Invitado' || dbGuestName === 'Huésped' || !dbGuestName)) {
+          dbGuestName = b24Db.guest_name;
+        }
+        reservationTotal = Number(b24Db.price || 0);
+        reservationDeposit = Number(b24Db.deposit || 0);
+      }
+    } catch (err) {}
+
+    // B. Buscar en local_reservas de Supabase si no se encontró
+    if (!guestPhone || !reservationTotal) {
+      try {
+        const { data: localRes } = await supabase
+          .from('local_reservas')
+          .select('phone, guest_name, price, deposit')
+          .eq('id', Number(bookingId))
+          .maybeSingle();
+
+        if (localRes) {
+          if (!guestPhone) guestPhone = normalizePhone(localRes.phone || '');
+          if (localRes.guest_name && (dbGuestName === 'Invitado' || dbGuestName === 'Huésped' || !dbGuestName)) {
+            dbGuestName = localRes.guest_name;
+          }
+          if (!reservationTotal) reservationTotal = Number(localRes.price || 0);
+          if (!reservationDeposit) reservationDeposit = Number(localRes.deposit || 0);
+        }
+      } catch (err) {}
+    }
+
+    // C. Fallback a Beds24 API si todavía no tenemos teléfono
+    if (!guestPhone) {
+      try {
         const { getBeds24Token } = await import('@/lib/beds24');
         const BEDS24_TOKEN = await getBeds24Token();
         const b24Res = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}`, {
@@ -141,17 +176,20 @@ export async function POST(req: Request) {
           const b24Json = await b24Res.json();
           const b = Array.isArray(b24Json?.data) ? b24Json.data[0] : (Array.isArray(b24Json) ? b24Json[0] : null);
           if (b) {
-            const { normalizePhone } = await import('@/lib/whatsapp');
             guestPhone = normalizePhone(b.phone || b.mobile || b.guestPhone || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry);
-            dbGuestName = b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || dbGuestName);
+            if (dbGuestName === 'Invitado' || dbGuestName === 'Huésped' || !dbGuestName) {
+              dbGuestName = b.firstName && b.lastName ? `${b.firstName} ${b.lastName}` : (b.guestName || dbGuestName);
+            }
+            if (!reservationTotal) reservationTotal = Number(b.price || 0);
+            if (!reservationDeposit) reservationDeposit = Number(b.deposit || 0);
           }
         }
+      } catch (waLookupErr) {
+        console.error("[Submit Transfer] Error buscando teléfono en Beds24:", waLookupErr);
       }
-    } catch (waLookupErr) {
-      console.error("[Submit Transfer] Error buscando teléfono para WhatsApp automático:", waLookupErr);
     }
 
-    // Enviar mensaje de confirmación al huésped si tenemos su número
+    // Enviar mensaje de confirmación de captura recibida al huésped si tenemos su número
     if (guestPhone) {
       const notesStr = String(notes || '').toUpperCase();
       const isCard = notesStr.includes('TARJETA') || notesStr.includes('MERCADO PAGO') || notesStr.includes('MERPAGO');
@@ -162,9 +200,16 @@ export async function POST(req: Request) {
         ? 'pago con tarjeta / Mercado Pago' 
         : (isWise ? 'pago vía Wise' : (isPayPal ? 'pago vía PayPal' : 'transferencia'));
 
-      const currLabel = (isWise || isPayPal) ? 'USD' : 'MXN';
-      const guestNotificationBody = `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para la reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado. ¡Muchas gracias!`;
-      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone}`);
+      const currLabel = (isWise || isPayPal || String(dbGuestName).toUpperCase().includes('(US DOLLARS)')) ? 'USD' : 'MXN';
+      const numAmount = Number(amount || 0);
+      const remainingBalance = Math.max(0, reservationTotal - reservationDeposit);
+      const isFullPayment = reservationTotal > 0 && (numAmount >= remainingBalance || numAmount >= reservationTotal * 0.95);
+
+      const guestNotificationBody = isFullPayment
+        ? `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para el pago total (100%) de tu reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!`
+        : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para la reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado. ¡Muchas gracias!`;
+
+      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone} (isFullPayment: ${isFullPayment})`);
       await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
     }
 

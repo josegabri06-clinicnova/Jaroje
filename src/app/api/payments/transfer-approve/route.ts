@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token } from '@/lib/beds24';
-import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName } from '@/lib/whatsapp';
+import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -390,6 +390,28 @@ export async function POST(req: Request) {
           console.log(`[Approve Transfer] WhatsApp ${templateLogged} enviado y registrado en logs (reserva ${bookingId})`);
         } else {
           console.warn('[Approve Transfer] WhatsApp send template failed:', waRes.error);
+        }
+
+        // Enviar mensaje personalizado confirmando estado de pago (100% liquidado o anticipo 50% aprobado)
+        try {
+          const firstName = getFirstName(guestName);
+          const currLabel = String(guestName).toUpperCase().includes('(US DOLLARS)') ? 'USD' : 'MXN';
+          const formattedAmount = Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+          const formattedBalance = balance.toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+          if (balance <= 0 || newDeposit >= price) {
+            // Pago 100% Completado y Liquidado
+            const fullPaymentMsg = `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu reservación #${bookingId} en Condominios Jaroje se encuentra **100% PAGADA Y LIQUIDADA** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`;
+            console.log(`[Approve Transfer] Sending 100% full payment confirmation message to ${phone}`);
+            await sendWhatsAppTextMessage(phone, fullPaymentMsg);
+          } else {
+            // Anticipo Aprobado (50%)
+            const partialPaymentMsg = `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para la reserva #${bookingId}.\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`;
+            console.log(`[Approve Transfer] Sending partial payment approval confirmation message to ${phone}`);
+            await sendWhatsAppTextMessage(phone, partialPaymentMsg);
+          }
+        } catch (msgErr) {
+          console.error("[Approve Transfer] Error enviando mensaje de estado de pago:", msgErr);
         }
       }
 

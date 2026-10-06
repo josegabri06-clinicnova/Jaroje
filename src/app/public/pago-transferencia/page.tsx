@@ -98,6 +98,7 @@ export default function PagoTransferenciaPage() {
   const rawAmount = searchParams.get('amount') || '';
   const name = searchParams.get('name') || '';
   const email = searchParams.get('email') || '';
+  const phone = searchParams.get('phone') || '';
 
   const lang = (searchParams.get('lang') || 'es') as 'es' | 'en';
   const method = searchParams.get('method') || '';
@@ -261,6 +262,7 @@ export default function PagoTransferenciaPage() {
         formData.append('amount', String(amount));
         formData.append('name', String(name));
         formData.append('email', String(email));
+        formData.append('phone', String(phone));
         formData.append(
           'notes',
           method === 'mercadopago'
