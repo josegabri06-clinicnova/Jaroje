@@ -794,8 +794,8 @@ export default function VercelActionForm() {
 
         if (!bgRes.ok) throw new Error(responseData.error || `Error al registrar habitación ${room.name} en Beds24`);
 
-        // Extraer la ID de la reserva de forma robusta (soporta array directo u objeto envuelto)
-        const b24Id = String(responseData.data?.[0]?.id || responseData.data?.data?.[0]?.id || responseData.data?.bookId || '');
+        // Extraer la ID de la reserva de forma robusta (soporta bookingId directo, .new.id, o array)
+        const b24Id = String(responseData.bookingId || responseData.data?.[0]?.new?.id || responseData.data?.[0]?.id || responseData.data?.data?.[0]?.id || responseData.data?.bookId || '');
 
         // Registrar auditoría rica 360 por habitación
         try {

@@ -773,20 +773,52 @@ export async function POST(req: Request) {
     if (bookingId) {
       try {
         console.log(`[Reservas POST] Sincronizando reserva recién creada en Beds24 (${bookingId}) en Supabase...`);
-        const b24FetchRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
-          method: 'GET',
-          headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
-          cache: 'no-store'
-        });
-        if (b24FetchRes.ok) {
-          const fetchJson = await b24FetchRes.json();
-          const freshBooking = fetchJson.data?.[0];
-          if (freshBooking) {
-            const { syncBeds24BookingLocal } = await import('@/lib/beds24');
-            await syncBeds24BookingLocal(freshBooking);
-            console.log(`[Reservas POST] ✅ Reserva ${bookingId} sincronizada con éxito en Supabase.`);
+        let freshBooking: any = null;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const b24FetchRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookingId}&includeInvoiceItems=true`, {
+            method: 'GET',
+            headers: { 'token': BEDS24_TOKEN, 'Content-Type': 'application/json' },
+            cache: 'no-store'
+          });
+          if (b24FetchRes.ok) {
+            const fetchJson = await b24FetchRes.json();
+            if (fetchJson.data?.[0]) {
+              freshBooking = fetchJson.data[0];
+              break;
+            }
           }
+          await new Promise(r => setTimeout(r, 600));
         }
+
+        const { syncBeds24BookingLocal } = await import('@/lib/beds24');
+        if (freshBooking) {
+          await syncBeds24BookingLocal(freshBooking);
+        } else {
+          // Fallback con los datos del payload para garantizar persistencia inmediata
+          const parts = (guestName || 'Reserva Directa').trim().split(/\s+/);
+          const fallbackBooking = {
+            id: bookingId,
+            roomId: targetRoomId,
+            unitId: targetUnitId,
+            arrival: checkIn,
+            departure: checkOut,
+            firstName: isBlock ? 'BLOQUEO:' : parts[0],
+            lastName: isBlock ? ((guestName || 'Mantenimiento').replace(/^bloqueo:/i, '').trim() || 'Mantenimiento') : parts.slice(1).join(' '),
+            phone: phone || '',
+            mobile: phone || '',
+            price: isBlock ? 0 : (price ? Number(price) : 0),
+            deposit: isBlock ? 0 : (deposit ? Number(deposit) : 0),
+            status: isBlock ? 'black' : (Number(deposit || 0) > 0 ? 'confirmed' : 'request'),
+            channel: 'direct',
+            numAdult: isBlock ? 1 : (numAdult ? Number(numAdult) : 1),
+            numChild: isBlock ? 0 : (numChild ? Number(numChild) : 0),
+            notes: notes || '',
+            comments: notes || '',
+            bookingTime: new Date().toISOString()
+          };
+          await syncBeds24BookingLocal(fallbackBooking);
+        }
+        console.log(`[Reservas POST] ✅ Reserva ${bookingId} sincronizada con éxito en Supabase.`);
       } catch (syncErr) {
         console.error(`[Reservas POST] Error sincronizando reserva creada ${bookingId}:`, syncErr);
       }
@@ -795,7 +827,12 @@ export async function POST(req: Request) {
     // Invalidar caché tras creación
     clearBeds24Cache();
 
-    return NextResponse.json({ success: true, message: "Reserva registrada en Beds24.", data: dataB24 });
+    return NextResponse.json({ 
+      success: true, 
+      message: "Reserva registrada en Beds24.", 
+      bookingId: bookingId ? String(bookingId) : undefined,
+      data: dataB24 
+    });
 
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
