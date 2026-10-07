@@ -125,12 +125,15 @@ export async function POST(req: Request) {
     let dbGuestName = name || 'Huésped';
     let reservationTotal = 0;
     let reservationDeposit = 0;
+    let checkInDate = '';
+    let checkOutDate = '';
+    let groupCount = 1;
 
     // A. Buscar en beds24_reservations de Supabase
     try {
       const { data: b24Db } = await supabase
         .from('beds24_reservations')
-        .select('guest_phone, phone, guest_name, price, deposit')
+        .select('guest_phone, phone, guest_name, price, deposit, check_in, check_out')
         .eq('id', String(bookingId))
         .maybeSingle();
 
@@ -141,6 +144,8 @@ export async function POST(req: Request) {
         }
         reservationTotal = Number(b24Db.price || 0);
         reservationDeposit = Number(b24Db.deposit || 0);
+        checkInDate = b24Db.check_in || '';
+        checkOutDate = b24Db.check_out || '';
       }
     } catch (err) {}
 
@@ -149,7 +154,7 @@ export async function POST(req: Request) {
       try {
         const { data: localRes } = await supabase
           .from('local_reservas')
-          .select('phone, guest_name, price, deposit')
+          .select('phone, guest_name, price, deposit, check_in, check_out')
           .eq('id', Number(bookingId))
           .maybeSingle();
 
@@ -160,6 +165,8 @@ export async function POST(req: Request) {
           }
           if (!reservationTotal) reservationTotal = Number(localRes.price || 0);
           if (!reservationDeposit) reservationDeposit = Number(localRes.deposit || 0);
+          if (!checkInDate) checkInDate = localRes.check_in || '';
+          if (!checkOutDate) checkOutDate = localRes.check_out || '';
         }
       } catch (err) {}
     }
@@ -182,10 +189,44 @@ export async function POST(req: Request) {
             }
             if (!reservationTotal) reservationTotal = Number(b.price || 0);
             if (!reservationDeposit) reservationDeposit = Number(b.deposit || 0);
+            if (!checkInDate) checkInDate = b.arrival || '';
+            if (!checkOutDate) checkOutDate = b.departure || '';
           }
         }
       } catch (waLookupErr) {
         console.error("[Submit Transfer] Error buscando teléfono en Beds24:", waLookupErr);
+      }
+    }
+
+    // D. Consolidar totales si pertenece a un grupo de condominios
+    if (checkInDate && checkOutDate) {
+      try {
+        const { data: siblings } = await supabase
+          .from('beds24_reservations')
+          .select('id, price, deposit, status, guest_name, phone, guest_phone')
+          .eq('check_in', checkInDate)
+          .eq('check_out', checkOutDate);
+
+        if (siblings && siblings.length > 1) {
+          const targetName = String(dbGuestName || '').trim().toLowerCase();
+          const targetPhone = String(guestPhone || '').trim();
+          const grp = siblings.filter(s => {
+            if (String(s.status) === '0' || s.status === 'cancelled') return false;
+            const sName = String(s.guest_name || '').trim().toLowerCase();
+            const sPhone = String(s.guest_phone || s.phone || '').trim();
+            return (sName && targetName && (sName.includes(targetName) || targetName.includes(sName))) ||
+                   (sPhone && targetPhone && (sPhone.includes(targetPhone) || targetPhone.includes(sPhone)));
+          });
+
+          if (grp.length > 1) {
+            groupCount = grp.length;
+            reservationTotal = grp.reduce((sum, item) => sum + Number(item.price || 0), 0);
+            reservationDeposit = grp.reduce((sum, item) => sum + Number(item.deposit || 0), 0);
+            console.log(`[Submit Transfer] Grupo detectado (${groupCount} condominios). Total: $${reservationTotal}, Depósito: $${reservationDeposit}`);
+          }
+        }
+      } catch (grpLookupErr) {
+        console.warn("[Submit Transfer] Error detecting group in submit:", grpLookupErr);
       }
     }
 
@@ -205,11 +246,15 @@ export async function POST(req: Request) {
       const remainingBalance = Math.max(0, reservationTotal - reservationDeposit);
       const isFullPayment = reservationTotal > 0 && (numAmount >= remainingBalance || numAmount >= reservationTotal * 0.95);
 
-      const guestNotificationBody = isFullPayment
-        ? `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para el pago total (100%) de tu reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!`
-        : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para la reserva #${bookingId}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado. ¡Muchas gracias!`;
+      const refText = groupCount > 1 
+        ? `tu grupo de reservaciones (${groupCount} condominios, ref: #${bookingId})` 
+        : `tu reserva #${bookingId}`;
 
-      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone} (isFullPayment: ${isFullPayment})`);
+      const guestNotificationBody = isFullPayment
+        ? `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para el pago total (100%) de ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado para confirmarte que tu estancia ha quedado totalmente liquidada. ¡Muchas gracias!`
+        : `¡Hola, ${dbGuestName}! Hemos recibido tu comprobante de ${methodLabel} por $${numAmount.toLocaleString('es-MX', { minimumFractionDigits: 2 })} ${currLabel} para ${refText}.\n\nNuestro equipo lo está validando (este proceso puede tardar hasta 24 horas). Te notificaremos por este medio tan pronto como esté aprobado. ¡Muchas gracias!`;
+
+      console.log(`[Submit Transfer] Sending automated receipt notification to guest: ${guestPhone} (isFullPayment: ${isFullPayment}, group: ${groupCount})`);
       await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
     }
 

@@ -42,6 +42,12 @@ export async function POST(req: Request) {
       let numAdult = 1;
       let numChild = 0;
 
+      // Variables para consolidación de grupo en mensajes
+      let isGroupBooking = false;
+      let groupTotalCount = 1;
+      let groupTotalPrice = 0;
+      let groupTotalDeposit = 0;
+
       if (localRes) {
         // Reserva local: Actualizar depósito en local_reservas
         newDeposit = Number(localRes.deposit || 0) + Number(amount);
@@ -63,6 +69,40 @@ export async function POST(req: Request) {
         checkOut = localRes.check_out || '';
         numAdult = Number(localRes.num_adult || 1);
         numChild = Number(localRes.num_child || 0);
+
+        groupTotalPrice = price;
+        groupTotalDeposit = newDeposit;
+
+        // Detectar si pertenece a un grupo en local_reservas
+        try {
+          if (localRes.check_in && localRes.check_out) {
+            const { data: localSiblings } = await supabase
+              .from('local_reservas')
+              .select('id, price, deposit, status, guest_name, phone')
+              .eq('check_in', localRes.check_in)
+              .eq('check_out', localRes.check_out);
+
+            if (localSiblings && localSiblings.length > 1) {
+              const targetName = String(localRes.guest_name || '').trim().toLowerCase();
+              const targetPhone = String(localRes.phone || '').trim();
+              const grp = localSiblings.filter(s => {
+                if (s.status === 'cancelled') return false;
+                const sName = String(s.guest_name || '').trim().toLowerCase();
+                const sPhone = String(s.phone || '').trim();
+                return (sName && targetName && (sName.includes(targetName) || targetName.includes(sName))) ||
+                       (sPhone && targetPhone && (sPhone.includes(targetPhone) || targetPhone.includes(sPhone)));
+              });
+              if (grp.length > 1) {
+                isGroupBooking = true;
+                groupTotalCount = grp.length;
+                groupTotalPrice = grp.reduce((sum, item) => sum + Number(item.price || 0), 0);
+                groupTotalDeposit = grp.reduce((sum, item) => sum + Number(item.deposit || 0), 0);
+              }
+            }
+          }
+        } catch (lGrpErr) {
+          console.warn("[Approve Transfer] Error detecting local group:", lGrpErr);
+        }
       } else {
         // Reserva de Beds24: Registrar pago en Beds24 con soporte para distribución de grupo
         const desc = `Abono por transferencia bancaria (Ref: ${receiptId.substring(0, 8)})`;
@@ -96,6 +136,9 @@ export async function POST(req: Request) {
               checkOut = rawB.departure || '';
               numAdult = Number(rawB.numAdult || 1);
               numChild = Number(rawB.numChild || 0);
+
+              groupTotalPrice = price;
+              groupTotalDeposit = newDeposit;
 
               // ¡Sincronizar de inmediato en Supabase local!
               try {
@@ -138,10 +181,19 @@ export async function POST(req: Request) {
                       return (targetIsOta || bIsOta) ? !!sameName : !!samePhone;
                     });
 
-                    console.log(`[Approve Transfer] Detectados ${groupMembers.length} hermanos en Beds24 para sincronizar.`);
-                    for (const member of groupMembers) {
-                      await syncBeds24BookingLocal(member);
-                      console.log(`[Approve Transfer] ✅ Reserva hermana B24:${member.id} sincronizada síncronamente.`);
+                    if (groupMembers.length > 0) {
+                      isGroupBooking = true;
+                      groupTotalCount = groupMembers.length + 1;
+                      groupTotalPrice = Number(rawB.price || 0);
+                      groupTotalDeposit = Number(rawB.deposit || 0);
+                      console.log(`[Approve Transfer] Detectados ${groupMembers.length} hermanos en Beds24 para sincronizar y consolidar.`);
+                      for (const member of groupMembers) {
+                        groupTotalPrice += Number(member.price || 0);
+                        groupTotalDeposit += Number(member.deposit || 0);
+                        await syncBeds24BookingLocal(member);
+                        console.log(`[Approve Transfer] ✅ Reserva hermana B24:${member.id} sincronizada síncronamente.`);
+                      }
+                      console.log(`[Approve Transfer] Grupo consolidado (${groupTotalCount} habs) -> Precio Total: $${groupTotalPrice}, Depósito Total: $${groupTotalDeposit}`);
                     }
                   }
                 } catch (siblingsErr) {
@@ -355,13 +407,16 @@ export async function POST(req: Request) {
 
       // 3. Notificar vía WhatsApp
       if (phone) {
-        const balance = Math.max(0, price - newDeposit);
+        const effectivePrice = isGroupBooking ? groupTotalPrice : price;
+        const effectiveDeposit = isGroupBooking ? groupTotalDeposit : newDeposit;
+        const balance = Math.max(0, effectivePrice - effectiveDeposit);
+
         const bookingForWA = {
           id: String(bookingId),
           guest_name: guestName,
           phone: phone,
-          price: price,
-          deposit: newDeposit,
+          price: effectivePrice,
+          deposit: effectiveDeposit,
           last_payment_amount: Number(amount),
           check_in: checkIn,
           check_out: checkOut,
@@ -376,7 +431,7 @@ export async function POST(req: Request) {
         let templateLogged = '';
 
         // Siempre se envía Mensaje 3 (reservacion_confirmada) independientemente de si es 50% o 100% de anticipo
-        console.log(`[Approve Transfer] Sending WhatsApp reservacion_confirmada (Mensaje 3) to ${phone} (depósito: $${newDeposit}, saldo: $${balance})`);
+        console.log(`[Approve Transfer] Sending WhatsApp reservacion_confirmada (Mensaje 3) to ${phone} (depósito: $${effectiveDeposit}, saldo: $${balance}, grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
         waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
         templateLogged = 'reservacion_confirmada';
 
@@ -392,21 +447,25 @@ export async function POST(req: Request) {
           console.warn('[Approve Transfer] WhatsApp send template failed:', waRes.error);
         }
 
-        // Enviar mensaje personalizado confirmando estado de pago (100% liquidado o anticipo 50% aprobado)
+        // Enviar mensaje personalizado confirmando estado de pago (100% liquidado o anticipo aprobado)
         try {
           const firstName = getFirstName(guestName);
           const currLabel = String(guestName).toUpperCase().includes('(US DOLLARS)') ? 'USD' : 'MXN';
           const formattedAmount = Number(amount).toLocaleString('es-MX', { minimumFractionDigits: 2 });
           const formattedBalance = balance.toLocaleString('es-MX', { minimumFractionDigits: 2 });
 
-          if (balance <= 0 || newDeposit >= price) {
+          if (balance <= 0 || effectiveDeposit >= effectivePrice) {
             // Pago 100% Completado y Liquidado
-            const fullPaymentMsg = `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu reservación #${bookingId} en Condominios Jaroje se encuentra **100% PAGADA Y LIQUIDADA** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`;
+            const fullPaymentMsg = isGroupBooking
+              ? `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu grupo de reservaciones (${groupTotalCount} condominios, ref: #${bookingId}) en Condominios Jaroje se encuentra **100% PAGADO Y LIQUIDADO** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`
+              : `🎉 ¡Excelente noticia, ${firstName}! Confirmamos la aprobación de tu pago por $${formattedAmount} ${currLabel}.\n\nTu reservación #${bookingId} en Condominios Jaroje se encuentra **100% PAGADA Y LIQUIDADA** (Saldo restante: $0.00).\n\n¡Todo está listo para tu llegada${checkIn ? ` el ${checkIn}` : ''}! Puedes consultar las amenidades, WiFi y detalles en tu Portal del Huésped. ¡Nos vemos pronto! 🌴`;
             console.log(`[Approve Transfer] Sending 100% full payment confirmation message to ${phone}`);
             await sendWhatsAppTextMessage(phone, fullPaymentMsg);
           } else {
-            // Anticipo Aprobado (50%)
-            const partialPaymentMsg = `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para la reserva #${bookingId}.\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`;
+            // Anticipo Aprobado (50% u otro abono)
+            const partialPaymentMsg = isGroupBooking
+              ? `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para tu grupo de reservaciones (${groupTotalCount} condominios, ref: #${bookingId}).\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`
+              : `✅ ¡Hola, ${firstName}! Confirmamos que tu anticipo por $${formattedAmount} ${currLabel} ha sido **APROBADO con éxito** para la reserva #${bookingId}.\n\nTu saldo restante a pagar al momento del Check-In es de **$${formattedBalance} ${currLabel}**.\n\n¡Tu estancia está reservada y asegurada! Puedes ver los detalles en tu Portal del Huésped. 🌴`;
             console.log(`[Approve Transfer] Sending partial payment approval confirmation message to ${phone}`);
             await sendWhatsAppTextMessage(phone, partialPaymentMsg);
           }
