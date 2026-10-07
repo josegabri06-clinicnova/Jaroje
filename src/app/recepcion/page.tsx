@@ -314,33 +314,94 @@ function getNightsBetweenDates(checkIn: string, checkOut: string): number {
 }
 
 
-async function compressImage(file: File): Promise<string> {
-  return new Promise(resolve => {
+async function compressImageToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve) => {
     const reader = new FileReader();
     reader.onload = e => {
       const img = new Image();
       img.onload = () => {
-        const MAX = 900;
+        const MAX = 1200;
         let w = img.width, h = img.height;
         if (w > MAX || h > MAX) {
           if (w > h) {
-            h = (h * MAX) / w;
+            h = Math.round((h * MAX) / w);
             w = MAX;
           } else {
-            w = (w * MAX) / h;
+            w = Math.round((w * MAX) / h);
             h = MAX;
           }
         }
         const canvas = document.createElement('canvas');
         canvas.width = w;
         canvas.height = h;
-        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', 0.75));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(e.target!.result as string);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
       };
+      img.onerror = () => resolve(e.target!.result as string);
       img.src = e.target!.result as string;
     };
+    reader.onerror = () => resolve('');
     reader.readAsDataURL(file);
   });
+}
+
+function dataUrlToBlob(dataUrl: string): Blob {
+  const arr = dataUrl.split(',');
+  const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new Blob([u8arr], { type: mime });
+}
+
+function dataUrlToFile(dataUrl: string, filename = `img_${Date.now()}.jpg`): File {
+  const blob = dataUrlToBlob(dataUrl);
+  return new File([blob], filename, { type: blob.type || 'image/jpeg' });
+}
+
+async function uploadImageToStorage(
+  supabaseClient: any,
+  bucket: string,
+  fileName: string,
+  fileOrBlobOrDataUrl: File | Blob | string
+): Promise<string> {
+  let blobToUpload: Blob;
+  if (typeof fileOrBlobOrDataUrl === 'string') {
+    if (fileOrBlobOrDataUrl.startsWith('data:')) {
+      blobToUpload = dataUrlToBlob(fileOrBlobOrDataUrl);
+    } else {
+      return fileOrBlobOrDataUrl; // URL ya existente
+    }
+  } else {
+    blobToUpload = fileOrBlobOrDataUrl;
+  }
+
+  const { data, error } = await supabaseClient.storage
+    .from(bucket)
+    .upload(fileName, blobToUpload, {
+      contentType: blobToUpload.type || 'image/jpeg',
+      upsert: true
+    });
+
+  if (error) {
+    console.error(`Error subiendo imagen a ${bucket}/${fileName}:`, error);
+    throw error;
+  }
+
+  const { data: publicUrlData } = supabaseClient.storage
+    .from(bucket)
+    .getPublicUrl(data.path);
+
+  return publicUrlData.publicUrl;
+}
+
+async function compressImage(file: File): Promise<string> {
+  return compressImageToDataUrl(file);
 }
 
 function getRoomDbStatus(roomNum: string, roomStatuses: any[]): string {
@@ -2981,20 +3042,16 @@ export default function RecepcionPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     
-    const b64 = await compressImage(file);
-    setDniPreview(b64);
-    setDniFile(file);
+    setDniUploadLoading(true);
+    try {
+      const b64 = await compressImageToDataUrl(file);
+      setDniPreview(b64);
+      const compressedFile = dataUrlToFile(b64, `dni_${selectedReserva?.id || 'doc'}_${Date.now()}.jpg`);
+      setDniFile(compressedFile);
 
-    if (selectedReserva && selectedReserva.checked_in) {
-      setDniUploadLoading(true);
-      try {
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
-        const { data, error: uploadErr } = await supabase.storage.from('dni_images').upload(fileName, file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-        const newDniUrl = publicUrlData.publicUrl;
+      if (selectedReserva && selectedReserva.checked_in) {
+        const fileName = `dni_${selectedReserva.id}_${Date.now()}.jpg`;
+        const newDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
 
         const cleanId = String(selectedReserva.id).toLowerCase().trim();
         const { data: existingCheckin } = await supabase
@@ -3027,12 +3084,12 @@ export default function RecepcionPage() {
         setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
         setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
         alert('✅ Identificación guardada con éxito.');
-      } catch (err: any) {
-        console.error('Error al subir DNI:', err);
-        alert('❌ Error al guardar identificación: ' + err.message);
-      } finally {
-        setDniUploadLoading(false);
       }
+    } catch (err: any) {
+      console.error('Error al procesar/subir DNI:', err);
+      alert('❌ Error al procesar o guardar identificación: ' + (err?.message || 'Error de conexión'));
+    } finally {
+      setDniUploadLoading(false);
     }
   };
 
@@ -3041,11 +3098,13 @@ export default function RecepcionPage() {
     if (!file) return;
     setVoucherUploadLoading(true);
     try {
-      const b64 = await compressImage(file);
+      const b64 = await compressImageToDataUrl(file);
       setVoucherPreview(b64);
-      setVoucherFile(file);
-    } catch (err) {
+      const compressedFile = dataUrlToFile(b64, `voucher_${selectedReserva?.id || 'pay'}_${Date.now()}.jpg`);
+      setVoucherFile(compressedFile);
+    } catch (err: any) {
       console.error("Error al procesar voucher:", err);
+      alert("❌ Error al procesar imagen del voucher: " + (err?.message || 'Error de compresión'));
     } finally {
       setVoucherUploadLoading(false);
     }
@@ -3053,23 +3112,20 @@ export default function RecepcionPage() {
 
   const processCapturedVoucher = (file: File, b64: string) => {
     setVoucherPreview(b64);
-    setVoucherFile(file);
+    const compressedFile = dataUrlToFile(b64, `voucher_${selectedReserva?.id || 'pay'}_${Date.now()}.jpg`);
+    setVoucherFile(compressedFile);
   };
 
   const processCapturedDni = async (file: File, b64: string) => {
     setDniPreview(b64);
-    setDniFile(file);
+    const compressedFile = dataUrlToFile(b64, `dni_${selectedReserva?.id || 'doc'}_${Date.now()}.jpg`);
+    setDniFile(compressedFile);
 
     if (selectedReserva && selectedReserva.checked_in) {
       setDniUploadLoading(true);
       try {
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
-        const { data, error: uploadErr } = await supabase.storage.from('dni_images').upload(fileName, file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-        const newDniUrl = publicUrlData.publicUrl;
+        const fileName = `dni_${selectedReserva.id}_${Date.now()}.jpg`;
+        const newDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
 
         const cleanId = String(selectedReserva.id).toLowerCase().trim();
         const { data: existingCheckin } = await supabase
@@ -3103,8 +3159,8 @@ export default function RecepcionPage() {
         setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
         alert('✅ Identificación guardada con éxito.');
       } catch (err: any) {
-        console.error('Error al subir DNI:', err);
-        alert('❌ Error al guardar identificación: ' + err.message);
+        console.error('Error al subir DNI capturado:', err);
+        alert('❌ Error al guardar identificación: ' + (err?.message || 'Error de conexión'));
       } finally {
         setDniUploadLoading(false);
       }
@@ -3292,24 +3348,18 @@ export default function RecepcionPage() {
         const roomNamesList = roomDetails.map(r => r.name).join(', ');
 
         if (dniFile) {
-          const fileExt = dniFile.name.split('.').pop() || 'jpg';
-          const fileName = `dni_walkin_group_${Date.now()}.${fileExt}`;
-          const { data, error } = await supabase.storage.from('dni_images').upload(fileName, dniFile);
-          if (!error && data) {
-            const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-            finalDniUrl = publicUrlData.publicUrl;
+          try {
+            const fileName = `dni_walkin_group_${Date.now()}.jpg`;
+            finalDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, dniFile);
+          } catch (dErr) {
+            console.error('Error al subir DNI walkin:', dErr);
           }
         }
 
         if (voucherFile) {
           try {
-            const fileExt = voucherFile.name.split('.').pop() || 'jpg';
-            const fileName = `voucher_walkin_group_${Date.now()}.${fileExt}`;
-            const { data, error: vErr } = await supabase.storage.from('dni_images').upload(fileName, voucherFile);
-            if (!vErr && data) {
-              const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-              finalVoucherUrl = publicUrlData.publicUrl;
-            }
+            const fileName = `voucher_walkin_group_${Date.now()}.jpg`;
+            finalVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, voucherFile);
           } catch (vErr) {
             console.error('Error al subir voucher walk-in:', vErr);
           }
@@ -3709,24 +3759,18 @@ export default function RecepcionPage() {
       }
 
       if (dniFile) {
-        const fileExt = dniFile.name.split('.').pop() || 'jpg';
-        const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
-        const { data, error } = await supabase.storage.from('dni_images').upload(fileName, dniFile);
-        if (!error && data) {
-          const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-          finalDniUrl = publicUrlData.publicUrl;
+        try {
+          const fileName = `dni_${selectedReserva.id}_${Date.now()}.jpg`;
+          finalDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, dniFile);
+        } catch (dErr) {
+          console.error('Error al subir DNI reservación:', dErr);
         }
       }
 
       if (voucherFile) {
         try {
-          const fileExt = voucherFile.name.split('.').pop() || 'jpg';
-          const fileName = `voucher_${selectedReserva.id}_${Date.now()}.${fileExt}`;
-          const { data, error: vErr } = await supabase.storage.from('dni_images').upload(fileName, voucherFile);
-          if (!vErr && data) {
-            const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-            finalVoucherUrl = publicUrlData.publicUrl;
-          }
+          const fileName = `voucher_${selectedReserva.id}_${Date.now()}.jpg`;
+          finalVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, voucherFile);
         } catch (vErr) {
           console.error('Error al subir voucher reservación:', vErr);
         }
