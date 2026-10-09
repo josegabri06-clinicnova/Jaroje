@@ -2491,8 +2491,19 @@ export async function updateBeds24BookingPhone(bookingId: string | number, phone
   }
 }
 
-/** Mapea e inserta una reserva de Beds24 en la tabla local de Supabase 'beds24_reservations' */
-export async function syncBeds24BookingLocal(b: any): Promise<any> {
+/**
+ * Mapea e inserta una reserva de Beds24 en la tabla local de Supabase 'beds24_reservations'.
+ * Beds24 es la fuente de verdad: esta función siempre guarda lo que Beds24 devuelve.
+ *
+ * `overrides.phone` existe solo para el caso de "acabamos de escribir este valor en Beds24 nosotros
+ * mismos, en esta misma petición, y vamos a releer Beds24 de inmediato": Beds24 tarda en propagar
+ * internamente sus propias escrituras, así que una lectura hecha milisegundos después de nuestro POST
+ * puede devolver el valor anterior. En ese caso concreto confiamos en lo que acabamos de enviarle a
+ * Beds24 (no en lo que Supabase ya tenía) en lugar de re-preguntarle algo que todavía no actualizó.
+ * El resto de sincronizaciones (lote, rango nocturno, webhooks entrantes) no pasan este parámetro y
+ * siguen tomando a Beds24 como autoridad sin condiciones.
+ */
+export async function syncBeds24BookingLocal(b: any, overrides?: { phone?: string }): Promise<any> {
   const arrivalDate = b.arrival ? new Date(b.arrival) : null;
   const departureDate = b.departure ? new Date(b.departure) : null;
   const nights = (arrivalDate && departureDate)
@@ -2619,7 +2630,7 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
     : Math.max(0, calculatedCharges - depositVal);
 
   let phone = extractPhoneFromBookingData(b);
-  
+
   // Si Beds24 no devuelve teléfono, consultar si ya teníamos el teléfono guardado en la base de datos
   if (!phone && b.id) {
     try {
@@ -2632,6 +2643,10 @@ export async function syncBeds24BookingLocal(b: any): Promise<any> {
         phone = prevDb.guest_phone || prevDb.phone;
       }
     } catch (_) {}
+  }
+
+  if (overrides?.phone !== undefined) {
+    phone = overrides.phone;
   }
   const email = b.email || null;
 

@@ -1604,7 +1604,9 @@ export async function PUT(req: Request) {
               const freshBooking = fetchJson.data?.[0];
               if (freshBooking) {
                 const { syncBeds24BookingLocal } = await import('@/lib/beds24');
-                await syncBeds24BookingLocal(freshBooking);
+                // Beds24 puede tardar en propagar el teléfono que le acabamos de enviar en este mismo
+                // request; si no lo refleja todavía, no pisamos lo que nosotros mismos le pedimos guardar.
+                await syncBeds24BookingLocal(freshBooking, phone !== undefined ? { phone } : undefined);
               }
             }
           } catch (syncErr) {
@@ -2292,7 +2294,9 @@ export async function PUT(req: Request) {
         const freshBooking = fetchJson.data?.[0];
         if (freshBooking) {
           const { syncBeds24BookingLocal } = await import('@/lib/beds24');
-          await syncBeds24BookingLocal(freshBooking);
+          // Igual que en el PUT de grupo: Beds24 puede no reflejar todavía el teléfono que esta misma
+          // petición le acaba de enviar, así que no dejamos que esa lectura prematura lo deshaga.
+          await syncBeds24BookingLocal(freshBooking, phone !== undefined ? { phone } : undefined);
           console.log(`[Reservas PUT] ✅ Reserva ${id} Sincronizada con éxito en Supabase.`);
         }
       }

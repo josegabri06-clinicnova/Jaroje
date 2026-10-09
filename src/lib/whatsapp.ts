@@ -201,6 +201,14 @@ function countryNameToCode(name: string): string {
   return '';
 }
 
+// Normaliza un número mexicano al formato canónico único de esta app: '52' + 10 dígitos (12 en total).
+// WhatsApp (Meta y YCloud) dejó de requerir el '1' extra tras el '52' desde 2021; mantenerlo generaba
+// un doble formato interno (guardar con '521' y despojarlo recién al llamar a la API). Si el número ya
+// trae ese '1' heredado (datos antiguos, u otro sistema que todavía lo añade), se elimina aquí mismo.
+function toCanonicalMx(tenDigits: string): string {
+  return '52' + tenDigits;
+}
+
 // Normaliza y limpia el número de teléfono para base de datos y búsqueda
 export function normalizePhone(phone: string, countryCodeOrName?: string | null): string {
   if (!phone) return '';
@@ -218,10 +226,10 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   // Si el número ingresado ya contiene un código de país conocido y su longitud es la estándar,
   // respetamos ese prefijo de forma prioritaria, ignorando el código del país de facturación (cc).
   if (cleaned.startsWith('521') && cleaned.length === 13) {
-    return cleaned; // México Móvil
+    return toCanonicalMx(cleaned.substring(3)); // México Móvil (formato heredado con '1') -> canónico '52'
   }
   if (cleaned.startsWith('52') && cleaned.length === 12) {
-    return '521' + cleaned.substring(2); // México Fijo -> normalizar a móvil
+    return cleaned; // Ya viene en formato canónico '52' + 10 dígitos
   }
   if (cleaned.startsWith('1') && cleaned.length === 11) {
     return cleaned; // US/Canada
@@ -230,12 +238,16 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
     return cleaned; // España (34 + 9 dígitos)
   }
 
-  // Si el número ya empieza con algún prefijo internacional conocido de COUNTRY_TO_PREFIX y tiene longitud válida
-  for (const p of Object.values(COUNTRY_TO_PREFIX)) {
-    if (p !== '52' && p !== '1' && p !== '34' && cleaned.startsWith(p)) {
-      const restLen = cleaned.length - p.length;
-      if (restLen >= 7 && restLen <= 11) {
-        return cleaned;
+  // Si el número ya empieza con algún prefijo internacional conocido de COUNTRY_TO_PREFIX y tiene longitud
+  // válida. Solo a partir de 11 dígitos: un número de 10 dígitos es un local mexicano (55 CDMX, 33 GDL,
+  // 81 MTY...) y no debe confundirse con los prefijos de Brasil, Francia, Japón, etc.
+  if (cleaned.length >= 11) {
+    for (const p of Object.values(COUNTRY_TO_PREFIX)) {
+      if (p !== '52' && p !== '1' && p !== '34' && cleaned.startsWith(p)) {
+        const restLen = cleaned.length - p.length;
+        if (restLen >= 7 && restLen <= 11) {
+          return cleaned;
+        }
       }
     }
   }
@@ -243,10 +255,12 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   // Si no tenemos código de país, aplicamos la lógica clásica basada en la longitud
   if (!cc) {
     if (cleaned.length === 10) {
-      cleaned = '521' + cleaned;
-    } else if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
-      cleaned = '521' + cleaned.substring(2);
-    } else if (cleaned.length === 9) {
+      return toCanonicalMx(cleaned);
+    }
+    if (cleaned.startsWith('521') && cleaned.length === 13) {
+      return toCanonicalMx(cleaned.substring(3));
+    }
+    if (cleaned.length === 9) {
       cleaned = '34' + cleaned;
     }
     return cleaned;
@@ -255,16 +269,16 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   // Si el país es México
   if (cc === 'MX') {
     if (cleaned.length === 10) {
-      return '521' + cleaned;
+      return toCanonicalMx(cleaned);
     }
-    if (cleaned.startsWith('521')) {
-      return cleaned;
+    if (cleaned.startsWith('521') && cleaned.length === 13) {
+      return toCanonicalMx(cleaned.substring(3));
     }
     if (cleaned.startsWith('52') && cleaned.length === 12) {
-      return '521' + cleaned.substring(2);
+      return cleaned;
     }
     if (!cleaned.startsWith('52') && cleaned.length === 10) {
-      return '521' + cleaned;
+      return toCanonicalMx(cleaned);
     }
     return cleaned;
   }
@@ -285,7 +299,7 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
 
   // Caída por defecto si el país es desconocido pero se pasó algo que no mapeamos
   if (cleaned.length === 10) {
-    cleaned = '521' + cleaned;
+    return toCanonicalMx(cleaned);
   } else if (cleaned.length === 9) {
     cleaned = '34' + cleaned;
   }
