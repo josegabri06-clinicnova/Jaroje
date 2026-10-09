@@ -239,12 +239,42 @@ export async function GET(req: Request) {
       .select('reservation_id, template_name, phone, sent_at, status')
       .gte('sent_at', sixtyDaysAgo);
 
-    // Consideramos enviado si el status no es 'failed', O si ya se intentó en las últimas 24h (para evitar bombardear a Meta cada 5 minutos si el usuario tiene límite de marketing)
-    const sentSet = new Set(
-      (sentLogs || [])
-        .filter((l: any) => l.status !== 'failed' || (l.sent_at && l.sent_at >= oneDayAgo))
-        .map(l => `${l.reservation_id}_${l.template_name}`)
-    );
+    // Consideramos enviado si el status no es 'failed', O si ya se intentó en las últimas 24h
+    const validLogs = (sentLogs || []).filter((l: any) => l.status !== 'failed' || (l.sent_at && l.sent_at >= oneDayAgo));
+
+    const sentBookingSet = new Set<string>();
+    const sentPhoneSet = new Set<string>();
+
+    validLogs.forEach((l: any) => {
+      const rId = String(l.reservation_id || '').trim();
+      const tmpl = String(l.template_name || '').trim();
+      const phoneDigits = String(l.phone || '').replace(/\D/g, '').slice(-10);
+
+      if (rId && tmpl) {
+        sentBookingSet.add(`${rId}_${tmpl}`);
+      }
+      if (phoneDigits && phoneDigits.length >= 7 && tmpl) {
+        sentPhoneSet.add(`${phoneDigits}_${tmpl}`);
+      }
+    });
+
+    const isTemplateAlreadySent = (bId: string, phone: string | undefined, tmpl: string): boolean => {
+      const bIdStr = String(bId || '').trim();
+      const phoneDigits = String(phone || '').replace(/\D/g, '').slice(-10);
+
+      if (bIdStr && sentBookingSet.has(`${bIdStr}_${tmpl}`)) return true;
+      if (phoneDigits && phoneDigits.length >= 7 && sentPhoneSet.has(`${phoneDigits}_${tmpl}`)) return true;
+      return false;
+    };
+
+    const markTemplateAsSent = (bId: string, phone: string | undefined, tmpl: string) => {
+      const bIdStr = String(bId || '').trim();
+      const phoneDigits = String(phone || '').replace(/\D/g, '').slice(-10);
+      if (bIdStr) sentBookingSet.add(`${bIdStr}_${tmpl}`);
+      if (phoneDigits && phoneDigits.length >= 7) sentPhoneSet.add(`${phoneDigits}_${tmpl}`);
+    };
+
+    const sentSet = sentBookingSet;
 
     // --- PRECARGA PARA CANCELACIÓN DE 3 HORAS ---
     // Obtener logs de 'ultimo_aviso' enviados en los últimos 7 días ordenados por fecha descendente
@@ -523,20 +553,10 @@ export async function GET(req: Request) {
           const shouldEvaluateInitial = isConfirmed || (!isExpediaUnpaid) || (isExpediaUnpaid && isInPreArrivalWindow);
 
           if (shouldEvaluateInitial && guestPhone) {
-            const cleanPhoneDigits = String(guestPhone).replace(/\D/g, '');
-            
-            const phoneHasInitialLog = (sentLogs || []).some((l: any) => {
-              if (l.status === 'failed') return false;
-              const lDigits = String(l.phone || '').replace(/\D/g, '');
-              const isInitialTmpl = ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'omitido_multi_habitacion'].includes(l.template_name);
-              return isInitialTmpl && lDigits && cleanPhoneDigits && (lDigits.includes(cleanPhoneDigits) || cleanPhoneDigits.includes(lDigits));
-            });
-
-            const hasInitialMessage = sentSet.has(`${bookingIdStr}_solicitud_recibida`) || 
-                                      sentSet.has(`${bookingIdStr}_reservacion_confirmada`) ||
-                                      sentSet.has(`${bookingIdStr}_bienvenida_checkin`) ||
-                                      sentSet.has(`${bookingIdStr}_omitido_multi_habitacion`) ||
-                                      phoneHasInitialLog;
+            const hasInitialMessage = isTemplateAlreadySent(bookingIdStr, guestPhone, 'solicitud_recibida') || 
+                                      isTemplateAlreadySent(bookingIdStr, guestPhone, 'reservacion_confirmada') ||
+                                      isTemplateAlreadySent(bookingIdStr, guestPhone, 'bienvenida_checkin') ||
+                                      isTemplateAlreadySent(bookingIdStr, guestPhone, 'omitido_multi_habitacion');
 
             if (!hasInitialMessage) {
               if (isConfirmed) {
@@ -549,7 +569,7 @@ export async function GET(req: Request) {
                     sent_at: new Date().toISOString(),
                     status: 'sent'
                   }]);
-                  sentSet.add(`${bookingIdStr}_reservacion_confirmada`);
+                  markTemplateAsSent(bookingIdStr, guestPhone, 'reservacion_confirmada');
                   reports.push(`Enviado Mensaje 3 (Confirmada - Reciente/T-7) a ${booking.guest_name} (ID: ${bookingIdStr})`);
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 3 a ${booking.guest_name}:`, waRes.error);
@@ -564,7 +584,7 @@ export async function GET(req: Request) {
                     sent_at: new Date().toISOString(),
                     status: 'sent'
                   }]);
-                  sentSet.add(`${bookingIdStr}_solicitud_recibida`);
+                  markTemplateAsSent(bookingIdStr, guestPhone, 'solicitud_recibida');
                   reports.push(`Enviado Mensaje 1 (Solicitud Recibida) a ${booking.guest_name} (ID: ${bookingIdStr})`);
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 1 a ${booking.guest_name}:`, waRes.error);
@@ -574,24 +594,14 @@ export async function GET(req: Request) {
           }
         }
 
-        // Helper para comprobar si una plantilla ya se envió HOY a esta reserva
-        const isTemplateSentToday = (templateName: string): boolean => {
-          return (sentLogs || []).some(l => 
-            String(l.reservation_id) === bookingIdStr && 
-            l.template_name === templateName && 
-            (l.sent_at || '').startsWith(todayStr)
-          );
-        };
-
         // --- MENSAJE 5: Todo listo para su llegada (6:00 PM del día anterior) ---
         // NUNCA enviar si la reserva ya está en el hotel (checked_in) o cancelada
         if (!isCancelled && !isAlreadyCheckedIn && cleanCheckIn === tomorrowStr && (currentHour >= 18 && currentHour < 21)) {
-          const logKey = `${bookingIdStr}_preparacion_llegada_${todayStr}`;
-          if (!sentSet.has(logKey) && !isTemplateSentToday('preparacion_llegada')) {
+          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'preparacion_llegada')) {
             const res = await sendTemplate5_PreparacionLlegada(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone, sent_at: new Date().toISOString() }]);
-              sentSet.add(logKey);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'preparacion_llegada', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
+              markTemplateAsSent(bookingIdStr, guestPhone, 'preparacion_llegada');
               reports.push(`Enviado Mensaje 5 (Prep llegada 6PM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
           }
@@ -599,8 +609,7 @@ export async function GET(req: Request) {
 
         // --- MENSAJE EXTRA: Alojamiento Listo para habitaciones vacías el día anterior (12:00 PM de hoy) ---
         if (cleanCheckIn === todayStr && (currentHour === 12 || (currentHour >= 12 && currentHour < 15))) {
-          const logKey = `${bookingIdStr}_alojamiento_listo_${todayStr}`;
-          if (!sentSet.has(logKey) && !isTemplateSentToday('alojamiento_listo')) {
+          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'alojamiento_listo')) {
             const rRoom = getCleanRoom(booking.room_name, booking.room);
             if (rRoom) {
               // Verificar si alguna reserva ocupaba la habitación ayer por la noche
@@ -626,9 +635,10 @@ export async function GET(req: Request) {
                     reservation_id: bookingIdStr,
                     template_name: 'alojamiento_listo',
                     phone: guestPhone,
-                    sent_at: new Date().toISOString()
+                    sent_at: new Date().toISOString(),
+                    status: 'sent'
                   }]);
-                  sentSet.add(logKey);
+                  markTemplateAsSent(bookingIdStr, guestPhone, 'alojamiento_listo');
                   reports.push(`Enviado Mensaje Alojamiento Listo (Vacante ayer) a ${booking.guest_name} para Habitación ${rRoom} (ID: ${bookingIdStr})`);
                 }
               }
@@ -638,12 +648,11 @@ export async function GET(req: Request) {
 
         // --- MENSAJE 6: Bienvenidos a Condominios Jaroje (Automático en Check-In) ---
         if (booking.checked_in || booking.status === 'checked_in') {
-          const logKey = `${bookingIdStr}_bienvenida_checkin`;
-          if (!sentSet.has(logKey)) {
+          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'bienvenida_checkin')) {
             const res = await sendTemplate6_BienvenidaCheckin(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'bienvenida_checkin', phone: guestPhone, sent_at: new Date().toISOString() }]);
-              sentSet.add(logKey);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'bienvenida_checkin', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
+              markTemplateAsSent(bookingIdStr, guestPhone, 'bienvenida_checkin');
               reports.push(`Enviado Mensaje 6 (Bienvenida Check-In) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
           }
@@ -655,12 +664,11 @@ export async function GET(req: Request) {
         const isStayActiveForTemplate7 = (isDayTwo || (cleanCheckIn < todayStr && cleanCheckOut > todayStr)) && bookingNights >= 2;
 
         if (isStayActiveForTemplate7 && currentHour >= 9 && currentHour < 14) {
-          const logKey = `${bookingIdStr}_seguimiento_satisfaccion`;
-          if (!sentSet.has(logKey)) {
+          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'seguimiento_satisfaccion')) {
             const res = await sendTemplate7_SeguimientoSatisfaccion(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone, sent_at: new Date().toISOString() }]);
-              sentSet.add(logKey);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'seguimiento_satisfaccion', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
+              markTemplateAsSent(bookingIdStr, guestPhone, 'seguimiento_satisfaccion');
               reports.push(`Enviado Mensaje 7 (Satisfacción 9AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             } else {
               console.warn(`[Cron WhatsApp] Fallo al enviar Mensaje 7 a ${booking.guest_name} (ID: ${bookingIdStr}):`, res.error);
@@ -671,12 +679,11 @@ export async function GET(req: Request) {
         // --- MENSAJE 8: Check-out 12:00 p.m. (7:00 AM del día del Check-Out) ---
         // Soporta extensiones de estancia: Se enviará a las 7 AM de la nueva fecha de salida si la estancia fue extendida
         if (cleanCheckOut === todayStr && currentHour >= 7 && currentHour < 12) {
-          const logKey = `${bookingIdStr}_salida_checkout_${todayStr}`;
-          if (!sentSet.has(logKey) && !isTemplateSentToday('salida_checkout')) {
+          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'salida_checkout')) {
             const res = await sendTemplate8_SalidaCheckout(booking);
             if (res.success) {
-              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'salida_checkout', phone: guestPhone, sent_at: new Date().toISOString() }]);
-              sentSet.add(logKey);
+              await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'salida_checkout', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
+              markTemplateAsSent(bookingIdStr, guestPhone, 'salida_checkout');
               reports.push(`Enviado Mensaje 8 (Salida Checkout 7AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
             }
           }
@@ -686,8 +693,7 @@ export async function GET(req: Request) {
         // Condición de exclusión: OMITIR si existió un reporte en mantenimiento con urgencia alta durante la estancia
         // Soporta extensiones de estancia: Se envía el día después de la fecha real de salida
         if (cleanCheckOut === yesterdayStr && currentHour >= 10 && currentHour < 14) {
-          const logKey = `${bookingIdStr}_comparte_experiencia_${todayStr}`;
-          if (!sentSet.has(logKey) && !isTemplateSentToday('comparte_experiencia')) {
+          if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'comparte_experiencia')) {
             const roomStr = booking.room_name || booking.room || '';
             const hasIncident = await hasHighUrgencyIncident(roomStr, cleanCheckIn, cleanCheckOut);
             if (hasIncident) {
@@ -695,8 +701,8 @@ export async function GET(req: Request) {
             } else {
               const res = await sendTemplate9_ComparteExperiencia(booking);
               if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone, sent_at: new Date().toISOString() }]);
-                sentSet.add(logKey);
+                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'comparte_experiencia', phone: guestPhone, sent_at: new Date().toISOString(), status: 'sent' }]);
+                markTemplateAsSent(bookingIdStr, guestPhone, 'comparte_experiencia');
                 reports.push(`Enviado Mensaje 9 (Encuesta Experiencia 10AM) a ${booking.guest_name} (ID: ${bookingIdStr})`);
               }
             }
@@ -706,22 +712,20 @@ export async function GET(req: Request) {
         // --- MENSAJE 10: ¡Nos encantará recibirte nuevamente! (5 y 10 meses posteriores al Check-In) ---
         if (currentHour >= 10 && currentHour < 14) {
           if (cleanCheckIn === fiveMonthsAgoCheckinStr) {
-            const logKey = `${bookingIdStr}_recibimiento_nuevamente_5m`;
-            if (!sentSet.has(logKey)) {
+            if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_5m')) {
               const res = await sendTemplate10_RecibimientoNuevamente(booking);
               if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_5m', phone: guestPhone }]);
-                sentSet.add(logKey);
+                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_5m', phone: guestPhone, status: 'sent' }]);
+                markTemplateAsSent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_5m');
                 reports.push(`Enviado Mensaje 10 (Fidelización 5 meses) a ${booking.guest_name} (ID: ${bookingIdStr})`);
               }
             }
           } else if (cleanCheckIn === tenMonthsAgoCheckinStr) {
-            const logKey = `${bookingIdStr}_recibimiento_nuevamente_10m`;
-            if (!sentSet.has(logKey)) {
+            if (!isTemplateAlreadySent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_10m')) {
               const res = await sendTemplate10_RecibimientoNuevamente(booking);
               if (res.success) {
-                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_10m', phone: guestPhone }]);
-                sentSet.add(logKey);
+                await supabase.from('whatsapp_logs').insert([{ reservation_id: bookingIdStr, template_name: 'recibimiento_nuevamente_10m', phone: guestPhone, status: 'sent' }]);
+                markTemplateAsSent(bookingIdStr, guestPhone, 'recibimiento_nuevamente_10m');
                 reports.push(`Enviado Mensaje 10 (Fidelización 10 meses) a ${booking.guest_name} (ID: ${bookingIdStr})`);
               }
             }
