@@ -1439,7 +1439,7 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         check_in: b.arrival,
         check_out: b.departure,
         guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || 'Huésped',
-        guest_phone: normalizePhone(b.phone || b.mobile || b.guestPhone || b.guestMobile || '', b.country2 || b.country || b.guestCountry2 || b.guestCountry) || null,
+        guest_phone: extractPhoneFromBookingData(b) || null,
         guest_email: b.email || null,
         status: (String(b.status) === '0' || b.status === 'cancelled') ? 'cancelled' : (b.status === 'black' ? 'black' : (String(b.status) === '1' || b.status === 'confirmed') ? 'confirmed' : 'pending'),
         source: 'beds24',
@@ -1517,6 +1517,29 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
           updated_at: dbUpdatedAt
         };
       });
+
+      // Preservar teléfonos existentes en Supabase si Beds24 viene vacío
+      const rowsNeedingPhone = upsertRows.filter((r: any) => !r.guest_phone);
+      if (rowsNeedingPhone.length > 0) {
+        try {
+          const missingIds = rowsNeedingPhone.map((r: any) => r.id);
+          for (let i = 0; i < missingIds.length; i += 100) {
+            const idChunk = missingIds.slice(i, i + 100);
+            const { data: dbPhones } = await supabase
+              .from('beds24_reservations')
+              .select('id, guest_phone, phone')
+              .in('id', idChunk);
+            if (dbPhones) {
+              const phoneMap = new Map(dbPhones.map((p: any) => [String(p.id), p.guest_phone || p.phone]));
+              upsertRows.forEach((r: any) => {
+                if (!r.guest_phone && phoneMap.has(r.id)) {
+                  r.guest_phone = phoneMap.get(r.id);
+                }
+              });
+            }
+          }
+        } catch (_) {}
+      }
 
       for (let i = 0; i < upsertRows.length; i += 50) {
         const chunk = upsertRows.slice(i, i + 50);
