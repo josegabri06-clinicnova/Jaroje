@@ -231,16 +231,18 @@ export async function GET(req: Request) {
       return undefined;
     };
 
-    // 4. Obtener mensajes ya enviados para evitar duplicados (últimos 60 días para cubrir reservas con anticipación)
+    // 4. Obtener mensajes ya enviados o intentados para evitar duplicados y tormentas de reintentos
     const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: sentLogs } = await supabase
       .from('whatsapp_logs')
       .select('reservation_id, template_name, phone, sent_at, status')
       .gte('sent_at', sixtyDaysAgo);
 
+    // Consideramos enviado si el status no es 'failed', O si ya se intentó en las últimas 24h (para evitar bombardear a Meta cada 5 minutos si el usuario tiene límite de marketing)
     const sentSet = new Set(
       (sentLogs || [])
-        .filter((l: any) => l.status !== 'failed')
+        .filter((l: any) => l.status !== 'failed' || (l.sent_at && l.sent_at >= oneDayAgo))
         .map(l => `${l.reservation_id}_${l.template_name}`)
     );
 
