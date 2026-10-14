@@ -250,11 +250,16 @@ export async function GET(req: Request) {
       const tmpl = String(l.template_name || '').trim();
       const phoneDigits = String(l.phone || '').replace(/\D/g, '').slice(-10);
 
+      // Deduplicación por Reserva (60 días): Evita reenvíos a la misma reservación
       if (rId && tmpl) {
         sentBookingSet.add(`${rId}_${tmpl}`);
       }
+      // Deduplicación por Teléfono (24 horas): Solo para evitar duplicados en habitaciones hermanas
+      // del MISMO grupo en el mismo día. NUNCA debe silenciar a clientes recurrentes en estancias posteriores.
       if (phoneDigits && phoneDigits.length >= 7 && tmpl) {
-        sentPhoneSet.add(`${phoneDigits}_${tmpl}`);
+        if (l.sent_at && l.sent_at >= oneDayAgo) {
+          sentPhoneSet.add(`${phoneDigits}_${tmpl}`);
+        }
       }
     });
 

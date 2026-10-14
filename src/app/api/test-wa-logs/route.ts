@@ -8,18 +8,18 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const phone = searchParams.get('phone') || '';
 
-    // Auto-corrección temporal de números de teléfono en base de datos para emparejar con Meta webhook id (521...)
+    // Auto-corrección de números de teléfono en base de datos para estándar E.164 (52...)
     try {
       const { data: convsToFix } = await supabase
         .from('conversations')
         .select('id, guest_phone')
-        .like('guest_phone', '52%');
+        .like('guest_phone', '521%');
 
       if (convsToFix) {
         for (const conv of convsToFix) {
           const raw = conv.guest_phone.replace(/\D/g, '');
-          if (raw.length === 12 && !raw.startsWith('521')) {
-            const fixedPhone = '521' + raw.substring(2);
+          if (raw.length === 13 && raw.startsWith('521')) {
+            const fixedPhone = '52' + raw.substring(3);
             await supabase
               .from('conversations')
               .update({ guest_phone: fixedPhone })
@@ -35,14 +35,14 @@ export async function GET(req: Request) {
       if (logsToFix) {
         for (const log of logsToFix) {
           const raw = (log.phone || '').replace(/\D/g, '');
-          if (raw.length === 12 && raw.startsWith('52') && !raw.startsWith('521')) {
-            const fixedPhone = '521' + raw.substring(2);
+          if (raw.length === 13 && raw.startsWith('521')) {
+            const fixedPhone = '52' + raw.substring(3);
             await supabase
               .from('whatsapp_logs')
               .update({ phone: fixedPhone })
               .eq('id', log.id);
           } else if (raw.length === 10) {
-            const fixedPhone = '521' + raw;
+            const fixedPhone = '52' + raw;
             await supabase
               .from('whatsapp_logs')
               .update({ phone: fixedPhone })

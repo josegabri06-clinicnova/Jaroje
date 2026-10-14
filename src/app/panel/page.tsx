@@ -1003,18 +1003,23 @@ export default function AdminDashboard() {
                           })()}
                         </td>
                         <td className="py-3 px-4 text-[12px] text-zinc-500 font-medium">
-                          {r.guest_phone ? (
-                            <a
-                              href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
-                            >
-                              <Phone size={11} className="text-emerald-500" />
-                              {r.guest_phone}
-                            </a>
-                          ) : (
+                          {r.guest_phone ? (() => {
+                            let waPhone = r.guest_phone.replace(/\D/g, '');
+                            if (waPhone.startsWith('521') && waPhone.length === 13) waPhone = '52' + waPhone.substring(3);
+                            else if (waPhone.length === 10) waPhone = '52' + waPhone;
+                            return (
+                              <a
+                                href={`https://wa.me/${waPhone}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                              >
+                                <Phone size={11} className="text-emerald-500" />
+                                {r.guest_phone}
+                              </a>
+                            );
+                          })() : (
                             <span className="text-zinc-300">—</span>
                           )}
                         </td>
@@ -1134,18 +1139,23 @@ export default function AdminDashboard() {
                           {r.guest_name}
                         </td>
                         <td className="py-3 px-4 text-[12px] text-zinc-500 font-medium">
-                          {r.guest_phone ? (
-                            <a
-                              href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
-                            >
-                              <Phone size={11} className="text-emerald-500" />
-                              {r.guest_phone}
-                            </a>
-                          ) : (
+                          {r.guest_phone ? (() => {
+                            let waPhone = r.guest_phone.replace(/\D/g, '');
+                            if (waPhone.startsWith('521') && waPhone.length === 13) waPhone = '52' + waPhone.substring(3);
+                            else if (waPhone.length === 10) waPhone = '52' + waPhone;
+                            return (
+                              <a
+                                href={`https://wa.me/${waPhone}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                              >
+                                <Phone size={11} className="text-emerald-500" />
+                                {r.guest_phone}
+                              </a>
+                            );
+                          })() : (
                             <span className="text-zinc-300">—</span>
                           )}
                         </td>
@@ -1574,19 +1584,24 @@ export default function AdminDashboard() {
                               </div>
 
                               {/* Fila 3: Acciones (WhatsApp) */}
-                              {activeRes.guest_phone && (
-                                <div className="flex justify-end pt-1">
-                                  <a
-                                    href={`https://wa.me/${activeRes.guest_phone.replace(/\D/g, '')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="border border-emerald-250 hover:bg-emerald-50 text-emerald-600 font-bold text-[12.5px] px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
-                                  >
-                                    <Phone size={13} className="text-emerald-500 fill-emerald-500/10" />
-                                    <span>WhatsApp</span>
-                                  </a>
-                                </div>
-                              )}
+                              {activeRes.guest_phone && (() => {
+                                let waPhone = activeRes.guest_phone.replace(/\D/g, '');
+                                if (waPhone.startsWith('521') && waPhone.length === 13) waPhone = '52' + waPhone.substring(3);
+                                else if (waPhone.length === 10) waPhone = '52' + waPhone;
+                                return (
+                                  <div className="flex justify-end pt-1">
+                                    <a
+                                      href={`https://wa.me/${waPhone}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="border border-emerald-250 hover:bg-emerald-50 text-emerald-600 font-bold text-[12.5px] px-4 py-2.5 rounded-xl flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
+                                    >
+                                      <Phone size={13} className="text-emerald-500 fill-emerald-500/10" />
+                                      <span>WhatsApp</span>
+                                    </a>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         }
@@ -1914,7 +1929,12 @@ export default function AdminDashboard() {
                     }
 
                     const nightsVal = r.nights || 1;
-                    const cleanPhone = r.guest_phone ? r.guest_phone.replace(/\D/g, '') : '';
+                    let cleanPhone = r.guest_phone ? r.guest_phone.replace(/\D/g, '') : '';
+                    if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+                      cleanPhone = '52' + cleanPhone.substring(3);
+                    } else if (cleanPhone.length === 10) {
+                      cleanPhone = '52' + cleanPhone;
+                    }
 
                     return (
                       <div

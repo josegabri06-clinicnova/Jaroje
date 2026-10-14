@@ -14,7 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, clearActiveEmployee, Employee, syncEmployeesFromServer, getOfficialEmployees } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import { getSeason } from '@/lib/beds24';
-import { copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
+import { copyToClipboard, openWhatsAppUrl, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -1316,7 +1316,7 @@ export default function StaffPage() {
       await copyToClipboard(waText);
       setSuccessMsg('🔧 ¡Reporte copiado! Abriendo grupo de Mantenimiento...');
       setTimeout(() => setSuccessMsg(''), 5000);
-      openWhatsAppUrl({ url: 'https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', text: waText });
+      openWhatsAppUrl({ url: MAINTENANCE_WA_GROUP_URL, text: waText });
     } else if (isEditing) {
       setSuccessMsg('✅ ¡Reporte actualizado con éxito!');
       setTimeout(() => setSuccessMsg(''), 3000);

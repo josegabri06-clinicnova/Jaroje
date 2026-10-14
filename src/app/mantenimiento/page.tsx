@@ -13,7 +13,7 @@ const supabase = createClient(
 
 import { getActiveEmployee } from '@/lib/auth';
 import CameraModal from '@/components/CameraModal';
-import { copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
+import { copyToClipboard, openWhatsAppUrl, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 
 const safeFormatDate = (dateVal: any, formatStr: string, options?: any) => {
   if (!dateVal) return '—';
@@ -752,7 +752,7 @@ export default function MantenimientoPage() {
         `_Generado automáticamente desde Jaroje OS_`;
 
       await copyToClipboard(waText);
-      openWhatsAppUrl({ url: 'https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq', text: waText });
+      openWhatsAppUrl({ url: MAINTENANCE_WA_GROUP_URL, text: waText });
     }
 
     setShowModal(false);

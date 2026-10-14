@@ -1,4 +1,5 @@
-export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/BiuXSGpiTVL92fjPEsHbma';
+export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/CaqLF4tScJRJ1BeUx7ANUy?s=cl&p=i&ilr=4&iam=0';
+export const MAINTENANCE_WA_GROUP_URL = 'https://chat.whatsapp.com/K2u4HU8kxVmGREYaZSkuZ6?s=cl&p=i&ilr=4&iam=0';
 
 export interface CheckInSummaryParams {
   guestName: string;
@@ -146,7 +147,12 @@ export function openWhatsAppUrl(
     if (target.url) {
       finalUrl = target.url;
     } else if (target.phone) {
-      const cleanPhone = target.phone.replace(/\D/g, '');
+      let cleanPhone = target.phone.replace(/\D/g, '');
+      if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+        cleanPhone = '52' + cleanPhone.substring(3);
+      } else if (cleanPhone.length === 10) {
+        cleanPhone = '52' + cleanPhone;
+      }
       finalUrl = textToPreload
         ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(textToPreload)}`
         : `https://api.whatsapp.com/send?phone=${cleanPhone}`;

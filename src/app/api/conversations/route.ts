@@ -16,16 +16,16 @@ const requestCache = new Map<string, number>();
 function normalizePhone(rawPhone: string): string {
   let cleaned = String(rawPhone || '').replace(/\D/g, '');
   
-  // Si tiene 10 dígitos (México sin lada), agregar '521'
-  if (cleaned.length === 10) {
-    cleaned = '521' + cleaned;
+  // Si viene con prefijo obsoleto 521 (13 dígitos), corregir a 52 estándar
+  if (cleaned.startsWith('521') && cleaned.length === 13) {
+    cleaned = '52' + cleaned.substring(3);
   }
-  // Si tiene 12 dígitos y empieza con '52' pero no '521', agregar el '1' -> 521...
-  if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
-    cleaned = '521' + cleaned.substring(2);
+  // Si tiene 10 dígitos (México sin lada), agregar '52'
+  else if (cleaned.length === 10) {
+    cleaned = '52' + cleaned;
   }
   // Si tiene 9 dígitos (España sin lada), agregar '34'
-  if (cleaned.length === 9) {
+  else if (cleaned.length === 9) {
     cleaned = '34' + cleaned;
   }
   
@@ -36,6 +36,8 @@ function cleanPhoneForMeta(phone: string): string {
   let cleaned = String(phone || '').replace(/\D/g, '');
   if (cleaned.startsWith('521') && cleaned.length === 13) {
     cleaned = '52' + cleaned.substring(3);
+  } else if (cleaned.length === 10) {
+    cleaned = '52' + cleaned;
   }
   return cleaned;
 }

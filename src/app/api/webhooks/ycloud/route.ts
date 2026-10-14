@@ -11,13 +11,11 @@ const supabase = createClient(
 
 function normalizePhone(rawPhone: string): string {
   let cleaned = String(rawPhone || '').replace(/\D/g, '');
-  if (cleaned.length === 10) {
-    cleaned = '521' + cleaned;
-  }
-  if (cleaned.startsWith('52') && !cleaned.startsWith('521') && cleaned.length === 12) {
-    cleaned = '521' + cleaned.substring(2);
-  }
-  if (cleaned.length === 9) {
+  if (cleaned.startsWith('521') && cleaned.length === 13) {
+    cleaned = '52' + cleaned.substring(3);
+  } else if (cleaned.length === 10) {
+    cleaned = '52' + cleaned;
+  } else if (cleaned.length === 9) {
     cleaned = '34' + cleaned;
   }
   return cleaned;

@@ -7,7 +7,7 @@ import {
   CheckCircle2, ArrowDownLeft, ArrowUpRight, BedDouble,
   User, UserPlus, Camera, Upload, Wallet, X, Plus, Sparkles, Wrench, AlertTriangle, Send, Package, Minus,
   ShieldAlert, Lock, Unlock, Phone, Calendar, Moon, Users, CircleDot, ChevronDown, FileText, Edit, Loader2, RefreshCw, Trash2, Video, LogOut,
-  MessageCircle, CreditCard, Copy, ExternalLink
+  MessageCircle, CreditCard, Copy, ExternalLink, AlertCircle
 } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
@@ -18,7 +18,8 @@ import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
 import { getParentMapping, getBeds24RoomIdAndUnit, getDirectTotalForStay, getCapacityRules, computeOtaSplit, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
-import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
+import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
+import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -963,6 +964,8 @@ export default function RecepcionPage() {
 
   // Estados para reasignar y editar reservas existentes en Recepción
   const [editedPhone, setEditedPhone] = useState('');
+  const [savingPhoneOnly, setSavingPhoneOnly] = useState(false);
+  const [phoneSavedSuccess, setPhoneSavedSuccess] = useState(false);
   const [editedAdults, setEditedAdults] = useState(1);
   const [editedChildren, setEditedChildren] = useState(0);
   const [groupGuestsMap, setGroupGuestsMap] = useState<Record<string, { adults: number; children: number }>>({});
@@ -1038,6 +1041,42 @@ export default function RecepcionPage() {
       alert(`⚠️ ${err.message || 'Error al guardar observación'}`);
     } finally {
       setSavingNotesOnly(false);
+    }
+  };
+
+  const handleSavePhoneOnly = async () => {
+    if (!selectedReserva || !editedPhone.trim()) return;
+    setSavingPhoneOnly(true);
+    try {
+      const cleanPhone = editedPhone.trim();
+      // 1. Guardar en beds24_reservations de Supabase
+      const { error: dbErr } = await supabase
+        .from('beds24_reservations')
+        .update({ guest_phone: cleanPhone, updated_at: new Date().toISOString() })
+        .eq('id', String(selectedReserva.id));
+      if (dbErr) console.warn("Aviso actualizando beds24_reservations:", dbErr.message);
+
+      // 2. Sincronizar vía API PUT
+      await fetch('/api/reservas', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: selectedReserva.id,
+          phone: cleanPhone
+        })
+      }).catch(e => console.warn("Aviso PUT /api/reservas:", e));
+
+      // 3. Actualizar estado local reactivo
+      setSelectedReserva((prev: any) => prev ? { ...prev, guest_phone: cleanPhone, phone: cleanPhone } : null);
+      setReservas((prev: any[]) => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, guest_phone: cleanPhone, phone: cleanPhone } : r));
+
+      setPhoneSavedSuccess(true);
+      setTimeout(() => setPhoneSavedSuccess(false), 3000);
+    } catch (err: any) {
+      console.error("Error guardando teléfono:", err);
+      alert("Error al guardar teléfono: " + (err.message || err));
+    } finally {
+      setSavingPhoneOnly(false);
     }
   };
 
@@ -2010,9 +2049,11 @@ export default function RecepcionPage() {
   };
   const [dniPreview, setDniPreview] = useState<string | null>(null);
   const [dniFile, setDniFile] = useState<File | null>(null);
+  const [uploadedDniUrl, setUploadedDniUrl] = useState<string | null>(null);
   const [dniUploadLoading, setDniUploadLoading] = useState<boolean>(false);
   const [voucherPreview, setVoucherPreview] = useState<string | null>(null);
   const [voucherFile, setVoucherFile] = useState<File | null>(null);
+  const [uploadedVoucherUrl, setUploadedVoucherUrl] = useState<string | null>(null);
   const [voucherUploadLoading, setVoucherUploadLoading] = useState<boolean>(false);
   const [checkInSummaryModal, setCheckInSummaryModal] = useState<{ show: boolean; text: string; reservationTitle: string; copied: boolean } | null>(null);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
@@ -2021,13 +2062,43 @@ export default function RecepcionPage() {
     if (showCheckInModal && selectedReserva) {
       const userRole = getRole();
       const isFuture = selectedReserva.check_in && selectedReserva.check_in > todayStr;
-      if (selectedReserva.dni_image && !(userRole === 'recepcion' && isFuture)) {
+      if (uploadedDniUrl) {
+        setDniPreview(uploadedDniUrl);
+      } else if (selectedReserva.dni_image && !(userRole === 'recepcion' && isFuture)) {
         setDniPreview(selectedReserva.dni_image);
+        setUploadedDniUrl(selectedReserva.dni_image);
       } else {
         setDniPreview(null);
+        setUploadedDniUrl(null);
+
+        // Auto-detección proactiva: Si el huésped ya estuvo antes y tiene DNI en la nube, recuperarlo
+        const guestName = selectedReserva.guest_name?.trim();
+        if (guestName && guestName !== 'Huésped' && selectedReserva.id !== 'walkin') {
+          const fetchPastDni = async () => {
+            try {
+              const { data: pastCheckin } = await supabase
+                .from('checkins')
+                .select('document_url')
+                .eq('guest_name', guestName)
+                .not('document_url', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (pastCheckin?.document_url) {
+                setDniPreview(pastCheckin.document_url);
+                setUploadedDniUrl(pastCheckin.document_url);
+                setSelectedReserva(prev => prev ? { ...prev, dni_image: pastCheckin.document_url } : null);
+              }
+            } catch (err: any) {
+              console.warn('Búsqueda DNI previo falló:', err);
+            }
+          };
+          fetchPastDni();
+        }
       }
     }
-  }, [showCheckInModal, selectedReserva, todayStr]);
+  }, [showCheckInModal, selectedReserva?.id]);
   const [paymentMode, setPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentDescription, setPaymentDescription] = useState('');
@@ -3046,27 +3117,21 @@ export default function RecepcionPage() {
     try {
       const b64 = await compressImageToDataUrl(file);
       setDniPreview(b64);
-      const compressedFile = dataUrlToFile(b64, `dni_${selectedReserva?.id || 'doc'}_${Date.now()}.jpg`);
+      const fileName = `dni_${selectedReserva?.id || 'doc'}_${Date.now()}.jpg`;
+      const compressedFile = dataUrlToFile(b64, fileName);
       setDniFile(compressedFile);
 
-      if (selectedReserva && selectedReserva.checked_in) {
-        const fileName = `dni_${selectedReserva.id}_${Date.now()}.jpg`;
-        const newDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
+      // Subir INMEDIATAMENTE a Supabase Storage para evitar pérdidas de memoria en móviles
+      const newDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
+      setUploadedDniUrl(newDniUrl);
+      setDniPreview(newDniUrl);
 
-        const cleanId = String(selectedReserva.id).toLowerCase().trim();
-        const { data: existingCheckin } = await supabase
-          .from('checkins')
-          .select('reservation_id')
-          .eq('reservation_id', cleanId)
-          .maybeSingle();
+      if (selectedReserva) {
+        setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
+        setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
 
-        if (existingCheckin) {
-          const { error: updateErr } = await supabase
-            .from('checkins')
-            .update({ document_url: newDniUrl })
-            .eq('reservation_id', cleanId);
-          if (updateErr) throw updateErr;
-        } else {
+        if (selectedReserva.checked_in) {
+          const cleanId = String(selectedReserva.id).toLowerCase().trim();
           const { error: upsertErr } = await supabase
             .from('checkins')
             .upsert({
@@ -3077,19 +3142,17 @@ export default function RecepcionPage() {
               check_out_date: selectedReserva.check_out,
               status: 'checked_in',
               document_url: newDniUrl
-            });
+            }, { onConflict: 'reservation_id' });
           if (upsertErr) throw upsertErr;
+          alert('✅ Identificación guardada con éxito.');
         }
-
-        setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
-        setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
-        alert('✅ Identificación guardada con éxito.');
       }
     } catch (err: any) {
       console.error('Error al procesar/subir DNI:', err);
       alert('❌ Error al procesar o guardar identificación: ' + (err?.message || 'Error de conexión'));
     } finally {
       setDniUploadLoading(false);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -3100,47 +3163,59 @@ export default function RecepcionPage() {
     try {
       const b64 = await compressImageToDataUrl(file);
       setVoucherPreview(b64);
-      const compressedFile = dataUrlToFile(b64, `voucher_${selectedReserva?.id || 'pay'}_${Date.now()}.jpg`);
+      const fileName = `voucher_${selectedReserva?.id || 'pay'}_${Date.now()}.jpg`;
+      const compressedFile = dataUrlToFile(b64, fileName);
       setVoucherFile(compressedFile);
+
+      // Subir INMEDIATAMENTE a Supabase Storage
+      const newVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
+      setUploadedVoucherUrl(newVoucherUrl);
+      setVoucherPreview(newVoucherUrl);
     } catch (err: any) {
       console.error("Error al procesar voucher:", err);
       alert("❌ Error al procesar imagen del voucher: " + (err?.message || 'Error de compresión'));
     } finally {
       setVoucherUploadLoading(false);
+      if (e.target) e.target.value = '';
     }
   };
 
-  const processCapturedVoucher = (file: File, b64: string) => {
+  const processCapturedVoucher = async (file: File, b64: string) => {
     setVoucherPreview(b64);
-    const compressedFile = dataUrlToFile(b64, `voucher_${selectedReserva?.id || 'pay'}_${Date.now()}.jpg`);
+    const fileName = `voucher_${selectedReserva?.id || 'pay'}_${Date.now()}.jpg`;
+    const compressedFile = dataUrlToFile(b64, fileName);
     setVoucherFile(compressedFile);
+
+    setVoucherUploadLoading(true);
+    try {
+      const newVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
+      setUploadedVoucherUrl(newVoucherUrl);
+      setVoucherPreview(newVoucherUrl);
+    } catch (err: any) {
+      console.error("Error subiendo voucher capturado:", err);
+    } finally {
+      setVoucherUploadLoading(false);
+    }
   };
 
   const processCapturedDni = async (file: File, b64: string) => {
     setDniPreview(b64);
-    const compressedFile = dataUrlToFile(b64, `dni_${selectedReserva?.id || 'doc'}_${Date.now()}.jpg`);
+    const fileName = `dni_${selectedReserva?.id || 'doc'}_${Date.now()}.jpg`;
+    const compressedFile = dataUrlToFile(b64, fileName);
     setDniFile(compressedFile);
 
-    if (selectedReserva && selectedReserva.checked_in) {
-      setDniUploadLoading(true);
-      try {
-        const fileName = `dni_${selectedReserva.id}_${Date.now()}.jpg`;
-        const newDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
+    setDniUploadLoading(true);
+    try {
+      const newDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, compressedFile);
+      setUploadedDniUrl(newDniUrl);
+      setDniPreview(newDniUrl);
 
-        const cleanId = String(selectedReserva.id).toLowerCase().trim();
-        const { data: existingCheckin } = await supabase
-          .from('checkins')
-          .select('reservation_id')
-          .eq('reservation_id', cleanId)
-          .maybeSingle();
+      if (selectedReserva) {
+        setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
+        setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
 
-        if (existingCheckin) {
-          const { error: updateErr } = await supabase
-            .from('checkins')
-            .update({ document_url: newDniUrl })
-            .eq('reservation_id', cleanId);
-          if (updateErr) throw updateErr;
-        } else {
+        if (selectedReserva.checked_in) {
+          const cleanId = String(selectedReserva.id).toLowerCase().trim();
           const { error: upsertErr } = await supabase
             .from('checkins')
             .upsert({
@@ -3151,24 +3226,30 @@ export default function RecepcionPage() {
               check_out_date: selectedReserva.check_out,
               status: 'checked_in',
               document_url: newDniUrl
-            });
+            }, { onConflict: 'reservation_id' });
           if (upsertErr) throw upsertErr;
+          alert('✅ Identificación guardada con éxito.');
         }
-
-        setSelectedReserva(prev => prev ? { ...prev, dni_image: newDniUrl } : null);
-        setReservas(prev => prev.map(r => String(r.id) === String(selectedReserva.id) ? { ...r, dni_image: newDniUrl } : r));
-        alert('✅ Identificación guardada con éxito.');
-      } catch (err: any) {
-        console.error('Error al subir DNI capturado:', err);
-        alert('❌ Error al guardar identificación: ' + (err?.message || 'Error de conexión'));
-      } finally {
-        setDniUploadLoading(false);
       }
+    } catch (err: any) {
+      console.error('Error al subir DNI capturado:', err);
+      alert('❌ Error al guardar identificación: ' + (err?.message || 'Error de conexión'));
+    } finally {
+      setDniUploadLoading(false);
     }
   };
 
   const processCheckIn = async () => {
     if (!selectedReserva) return;
+
+    const channel = (selectedReserva.channel || '').toLowerCase();
+    const isOta = channel.includes('booking') || channel.includes('expedia') || channel.includes('airbnb') || channel.includes('agoda');
+    const cleanDigits = (editedPhone || '').replace(/\D/g, '');
+    if (isOta && (cleanDigits.length < 8 || editedPhone.includes('@') || cleanDigits.startsWith('0000'))) {
+      alert(`🚨 TELÉFONO OBLIGATORIO:\nEsta reserva proviene de ${selectedReserva.channel || 'Booking / Expedia'}.\nEs estrictamente obligatorio registrar el número de WhatsApp del huésped para enviarle las plantillas de bienvenida, claves de acceso y portal digital.`);
+      setSubmitting(false);
+      return;
+    }
 
     setSubmitting(true);
 
@@ -3347,21 +3428,39 @@ export default function RecepcionPage() {
 
         const roomNamesList = roomDetails.map(r => r.name).join(', ');
 
-        if (dniFile) {
+        // Resolver DNI para Walk-in
+        if (uploadedDniUrl) {
+          finalDniUrl = uploadedDniUrl;
+        } else if (dniPreview && dniPreview.startsWith('http')) {
+          finalDniUrl = dniPreview;
+        } else if (dniFile || (dniPreview && dniPreview.startsWith('data:'))) {
           try {
             const fileName = `dni_walkin_group_${Date.now()}.jpg`;
-            finalDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, dniFile);
-          } catch (dErr) {
+            finalDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, (dniFile || dniPreview)!);
+            setUploadedDniUrl(finalDniUrl);
+          } catch (dErr: any) {
             console.error('Error al subir DNI walkin:', dErr);
+            alert('❌ Error al guardar identificación en la nube: ' + (dErr?.message || 'Error de conexión'));
+            setSubmitting(false);
+            return;
           }
         }
 
-        if (voucherFile) {
+        // Resolver Voucher para Walk-in
+        if (uploadedVoucherUrl) {
+          finalVoucherUrl = uploadedVoucherUrl;
+        } else if (voucherPreview && voucherPreview.startsWith('http')) {
+          finalVoucherUrl = voucherPreview;
+        } else if (voucherFile || (voucherPreview && voucherPreview.startsWith('data:'))) {
           try {
             const fileName = `voucher_walkin_group_${Date.now()}.jpg`;
-            finalVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, voucherFile);
-          } catch (vErr) {
+            finalVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, (voucherFile || voucherPreview)!);
+            setUploadedVoucherUrl(finalVoucherUrl);
+          } catch (vErr: any) {
             console.error('Error al subir voucher walk-in:', vErr);
+            alert('❌ Error al guardar comprobante/voucher en la nube: ' + (vErr?.message || 'Error de conexión'));
+            setSubmitting(false);
+            return;
           }
         }
 
@@ -3758,21 +3857,44 @@ export default function RecepcionPage() {
         return;
       }
 
-      if (dniFile) {
+      // 1. Resolver DNI con múltiples capas de seguridad
+      if (uploadedDniUrl) {
+        finalDniUrl = uploadedDniUrl;
+      } else if (dniPreview && dniPreview.startsWith('http')) {
+        finalDniUrl = dniPreview;
+      } else if (selectedReserva.dni_image && selectedReserva.dni_image.startsWith('http')) {
+        finalDniUrl = selectedReserva.dni_image;
+      } else if (dniFile || (dniPreview && dniPreview.startsWith('data:'))) {
         try {
           const fileName = `dni_${selectedReserva.id}_${Date.now()}.jpg`;
-          finalDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, dniFile);
-        } catch (dErr) {
+          finalDniUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, (dniFile || dniPreview)!);
+          setUploadedDniUrl(finalDniUrl);
+        } catch (dErr: any) {
           console.error('Error al subir DNI reservación:', dErr);
+          alert('❌ Error crítico: no se pudo guardar la identificación en la nube.\n' + (dErr?.message || 'Error de conexión') + '\n\nPor favor intenta tomar la foto de nuevo antes de completar el Check-In.');
+          setSubmitting(false);
+          return;
         }
       }
 
-      if (voucherFile) {
+      // 2. Resolver Voucher con múltiples capas de seguridad
+      if (uploadedVoucherUrl) {
+        finalVoucherUrl = uploadedVoucherUrl;
+      } else if (voucherPreview && voucherPreview.startsWith('http')) {
+        finalVoucherUrl = voucherPreview;
+      } else if (voucherFile || (voucherPreview && voucherPreview.startsWith('data:'))) {
         try {
           const fileName = `voucher_${selectedReserva.id}_${Date.now()}.jpg`;
-          finalVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, voucherFile);
-        } catch (vErr) {
+          finalVoucherUrl = await uploadImageToStorage(supabase, 'dni_images', fileName, (voucherFile || voucherPreview)!);
+          setUploadedVoucherUrl(finalVoucherUrl);
+        } catch (vErr: any) {
           console.error('Error al subir voucher reservación:', vErr);
+          const reqV = paymentMode === 'tarjeta' || paymentMode === 'transferencia' || (isSplitPayment && (paymentMode2 === 'tarjeta' || paymentMode2 === 'transferencia'));
+          if (reqV) {
+            alert('❌ Error crítico: no se pudo guardar el comprobante/voucher en la nube.\n' + (vErr?.message || 'Error de conexión') + '\n\nPor favor intenta tomar la foto de nuevo.');
+            setSubmitting(false);
+            return;
+          }
         }
       }
 
@@ -3796,6 +3918,15 @@ export default function RecepcionPage() {
         });
         paymentSplits[selectedReserva.id] = Math.max(0, totalPayment - allocatedSum);
 
+        // Guardar teléfono actualizado en beds24_reservations si se ingresó durante check-in
+        if (editedPhone.trim()) {
+          const cleanPhone = editedPhone.trim();
+          await supabase
+            .from('beds24_reservations')
+            .update({ guest_phone: cleanPhone, updated_at: new Date().toISOString() })
+            .eq('id', String(selectedReserva.id));
+        }
+
         const sentGroupWelcomePhones = new Set<string>();
         for (const r of groupBookings) {
           // A. Guardar check-in local en Supabase
@@ -3817,7 +3948,7 @@ export default function RecepcionPage() {
           }
 
           // Enviar plantilla de bienvenida WhatsApp en segundo plano (1 sola vez por teléfono)
-          const rawMemberPhone = r.phone || r.mobile || r.guest_phone || (r as any).guestPhone || selectedReserva?.phone || selectedReserva?.mobile || selectedReserva?.guest_phone || (selectedReserva as any)?.guestPhone || '';
+          const rawMemberPhone = editedPhone.trim() || r.phone || r.mobile || r.guest_phone || (r as any).guestPhone || selectedReserva?.phone || selectedReserva?.mobile || selectedReserva?.guest_phone || (selectedReserva as any)?.guestPhone || '';
           const cleanPhoneKey = rawMemberPhone.replace(/\D/g, '') || String(r.id || '');
           if (cleanPhoneKey && !sentGroupWelcomePhones.has(cleanPhoneKey)) {
             sentGroupWelcomePhones.add(cleanPhoneKey);
@@ -4435,8 +4566,17 @@ export default function RecepcionPage() {
           return;
         }
 
+        // Guardar teléfono actualizado en beds24_reservations si se ingresó durante check-in
+        if (editedPhone.trim()) {
+          const cleanPhone = editedPhone.trim();
+          await supabase
+            .from('beds24_reservations')
+            .update({ guest_phone: cleanPhone, updated_at: new Date().toISOString() })
+            .eq('id', String(selectedReserva.id));
+        }
+
         // Enviar plantilla de bienvenida WhatsApp en segundo plano
-        const indPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
+        const indPhone = editedPhone.trim() || selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
         fetch('/api/whatsapp/send-template', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -5094,8 +5234,10 @@ export default function RecepcionPage() {
     setSelectedReserva(null);
     setDniPreview(null);
     setDniFile(null);
+    setUploadedDniUrl(null);
     setVoucherPreview(null);
     setVoucherFile(null);
+    setUploadedVoucherUrl(null);
     setPaymentMode(null);
     setPaymentAmount('');
     setPaymentDescription('');
@@ -5519,18 +5661,23 @@ export default function RecepcionPage() {
                             })()}
                           </td>
                           <td className="py-4 px-4 text-[12px] text-zinc-500 font-medium">
-                            {r.guest_phone ? (
-                              <a
-                                href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
-                              >
-                                <Phone size={11} className="text-emerald-500" />
-                                {r.guest_phone}
-                              </a>
-                            ) : (
+                            {r.guest_phone ? (() => {
+                              let waPhone = r.guest_phone.replace(/\D/g, '');
+                              if (waPhone.startsWith('521') && waPhone.length === 13) waPhone = '52' + waPhone.substring(3);
+                              else if (waPhone.length === 10) waPhone = '52' + waPhone;
+                              return (
+                                <a
+                                  href={`https://wa.me/${waPhone}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                                >
+                                  <Phone size={11} className="text-emerald-500" />
+                                  {r.guest_phone}
+                                </a>
+                              );
+                            })() : (
                               <span className="text-zinc-300">—</span>
                             )}
                           </td>
@@ -5645,18 +5792,23 @@ export default function RecepcionPage() {
                             {r.guest_name}
                           </td>
                           <td className="py-4 px-4 text-[12px] text-zinc-500 font-medium">
-                            {r.guest_phone ? (
-                              <a
-                                href={`https://wa.me/${r.guest_phone.replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
-                              >
-                                <Phone size={11} className="text-emerald-500" />
-                                {r.guest_phone}
-                              </a>
-                            ) : (
+                            {r.guest_phone ? (() => {
+                              let waPhone = r.guest_phone.replace(/\D/g, '');
+                              if (waPhone.startsWith('521') && waPhone.length === 13) waPhone = '52' + waPhone.substring(3);
+                              else if (waPhone.length === 10) waPhone = '52' + waPhone;
+                              return (
+                                <a
+                                  href={`https://wa.me/${waPhone}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center gap-1 hover:text-emerald-600 transition-colors"
+                                >
+                                  <Phone size={11} className="text-emerald-500" />
+                                  {r.guest_phone}
+                                </a>
+                              );
+                            })() : (
                               <span className="text-zinc-300">—</span>
                             )}
                           </td>
@@ -5898,8 +6050,10 @@ export default function RecepcionPage() {
                     setShowCheckInModal(false);
                     setDniPreview(null);
                     setDniFile(null);
+                    setUploadedDniUrl(null);
                     setVoucherPreview(null);
                     setVoucherFile(null);
+                    setUploadedVoucherUrl(null);
                   }}
                   className="w-8 h-8 flex items-center justify-center bg-zinc-100 hover:bg-zinc-200 rounded-full text-zinc-500 transition-colors active:scale-95 cursor-pointer"
                 >
@@ -6458,35 +6612,17 @@ export default function RecepcionPage() {
                   </div>
 
 
-                  {/* 2. Teléfono */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-center shrink-0">
-                      <svg className="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                      </svg>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
-                      {selectedReserva.guest_phone ? (
-                        <a 
-                          href={`https://wa.me/${selectedReserva.guest_phone.replace(/\D/g, '')}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>{selectedReserva.guest_phone}</span>
-                          <svg className="w-2.5 h-2.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                            <polyline points="15 3 21 3 21 9"></polyline>
-                            <line x1="10" y1="14" x2="21" y2="3"></line>
-                          </svg>
-                        </a>
-                      ) : (
-                        <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
-                      )}
-                    </div>
-                  </div>
+                  {/* 2. Teléfono WhatsApp del Huésped (Con selector de país y obligatorio para OTAs) */}
+                  <PhoneWithCountrySelect
+                    value={editedPhone}
+                    onChange={setEditedPhone}
+                    channel={selectedReserva.channel}
+                    guestCountry={(selectedReserva as any).country || (selectedReserva as any).guest_country}
+                    onSaveOnly={handleSavePhoneOnly}
+                    savingOnly={savingPhoneOnly}
+                    savedSuccess={phoneSavedSuccess}
+                    required={true}
+                  />
 
 
                   {/* Ajustes del Portal del Huésped (Solo locales y sin anticipo) */}
@@ -7497,6 +7633,7 @@ export default function RecepcionPage() {
                               }
                               setDniPreview(null);
                               setDniFile(null);
+                              setUploadedDniUrl(null);
                             }
                           }}
                           className="px-3 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
@@ -8462,6 +8599,7 @@ export default function RecepcionPage() {
                                           onClick={() => {
                                             setVoucherPreview(null);
                                             setVoucherFile(null);
+                                            setUploadedVoucherUrl(null);
                                           }}
                                           className="px-3 bg-red-50 border border-red-200 text-red-600 hover:bg-red-100 flex items-center justify-center rounded-xl transition-all cursor-pointer shadow-sm active:scale-98"
                                           title="Eliminar voucher"
@@ -8508,6 +8646,22 @@ export default function RecepcionPage() {
                   return null;
                 })()}
 
+                {(() => {
+                  const channel = (selectedReserva.channel || '').toLowerCase();
+                  const isOta = channel.includes('booking') || channel.includes('expedia') || channel.includes('airbnb') || channel.includes('agoda');
+                  const cleanDigits = (editedPhone || '').replace(/\D/g, '');
+                  const isPhoneMissing = isOta && (cleanDigits.length < 8 || editedPhone.includes('@') || cleanDigits.startsWith('0000'));
+                  if (isPhoneMissing) {
+                    return (
+                      <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-1.5 animate-in fade-in duration-200">
+                        <AlertCircle size={13} className="text-amber-700 shrink-0" />
+                        <span>Obligatorio registrar el WhatsApp del huésped para completar el Check-In ({selectedReserva.channel || 'OTA'})</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <button
                   onClick={() => runWithSignature('checkin', () => processCheckIn())}
                   disabled={(() => {
@@ -8516,6 +8670,14 @@ export default function RecepcionPage() {
                     if (isFuture) return true;
 
                     if (submitting) return true;
+
+                    // Validación obligatoria de WhatsApp para OTAs (Booking, Expedia, etc.)
+                    const ch = (selectedReserva.channel || '').toLowerCase();
+                    const isOtaBooking = ch.includes('booking') || ch.includes('expedia') || ch.includes('airbnb') || ch.includes('agoda');
+                    const cleanPhoneDigits = (editedPhone || '').replace(/\D/g, '');
+                    if (isOtaBooking && (cleanPhoneDigits.length < 8 || editedPhone.includes('@') || cleanPhoneDigits.startsWith('0000'))) {
+                      return true;
+                    }
 
                     // Validación DNI obligatoria para todas las reservas y walk-ins
                     if (!dniPreview) return true;
@@ -8827,7 +8989,7 @@ export default function RecepcionPage() {
                       `_Generado automáticamente desde Jaroje OS_`;
 
                     await copyToClipboard(waText);
-                    openWhatsAppUrl('https://chat.whatsapp.com/0ZEzlGKFLdzEvqOOiAFhmq');
+                    openWhatsAppUrl({ url: MAINTENANCE_WA_GROUP_URL, text: waText });
                   });
                 }}
                 disabled={!form.description.trim() || submitting}

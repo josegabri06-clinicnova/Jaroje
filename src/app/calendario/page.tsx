@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, RefreshCw, CalendarDays, UserPlus, X, BedDouble,
   ArrowDownLeft, ArrowUpRight, Moon, Phone, CheckCircle2, User, Camera, Upload, Wallet, Plus,
   Sparkles, Wrench, AlertTriangle, Send, Package, Minus, ShieldAlert, Lock, Unlock, Calendar, Users,
-  CircleDot, ChevronDown, LogIn, FileText, AlertCircle, Trash2, Loader2, CreditCard, Copy, MessageCircle
+  CircleDot, ChevronDown, LogIn, FileText, AlertCircle, Trash2, Loader2, CreditCard, Copy, MessageCircle, Check
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
@@ -15,6 +15,7 @@ import { getActiveEmployee, getAdminPin, getRole, getOperatorForLog } from '@/li
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
+import { PhoneWithCountrySelect } from '@/components/PhoneWithCountrySelect';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -332,6 +333,50 @@ export default function CalendarPage() {
   const [editedNotes, setEditedNotes] = useState('');
   const [isSavingChanges, setIsSavingChanges] = useState(false);
   const [isEditingRes, setIsEditingRes] = useState(false);
+  const [savingPhoneOnly, setSavingPhoneOnly] = useState(false);
+  const [phoneSavedSuccess, setPhoneSavedSuccess] = useState(false);
+
+  const handleSavePhoneOnly = async () => {
+    if (!selectedReserva) return;
+    setSavingPhoneOnly(true);
+    try {
+      const rawVal = editedPhone.trim();
+      const primaryId = selectedReserva.id;
+
+      // 1. Guardar en Supabase beds24_reservations
+      await supabase
+        .from('beds24_reservations')
+        .update({ guest_phone: rawVal })
+        .eq('id', primaryId);
+
+      // 2. Sincronizar vía API PUT /api/reservas para Beds24
+      try {
+        await fetch('/api/reservas', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: primaryId,
+            phone: rawVal,
+            b24BookingId: selectedReserva.b24_booking_id || selectedReserva.booking_id
+          })
+        });
+      } catch (apiErr) {
+        console.warn("Error sincronizando teléfono con Beds24 desde calendario:", apiErr);
+      }
+
+      // 3. Actualizar estado local
+      setSelectedReserva((prev: any) => prev ? { ...prev, guest_phone: rawVal, phone: rawVal, mobile: rawVal } : null);
+      setReservas(prev => prev.map(r => r.id === primaryId ? { ...r, guest_phone: rawVal, phone: rawVal, mobile: rawVal } : r));
+
+      setPhoneSavedSuccess(true);
+      setTimeout(() => setPhoneSavedSuccess(false), 2500);
+    } catch (err: any) {
+      console.error("Error guardando teléfono desde calendario:", err);
+      alert("Error al guardar teléfono: " + (err.message || 'Error desconocido'));
+    } finally {
+      setSavingPhoneOnly(false);
+    }
+  };
 
   const [abonoPaymentMode, setAbonoPaymentMode] = useState<'efectivo' | 'tarjeta' | 'transferencia' | null>(null);
   const [abonoAccountId, setAbonoAccountId] = useState('');
@@ -561,7 +606,7 @@ export default function CalendarPage() {
   useEffect(() => {
     if (selectedReserva) {
       setEditedGuestName(selectedReserva.guest_name || '');
-      setEditedPhone(selectedReserva.guest_phone || '');
+      setEditedPhone(selectedReserva.guest_phone || selectedReserva.phone || selectedReserva.mobile || '');
       setEditedAdults(Number(selectedReserva.num_adult || 1));
       setEditedChildren(Number(selectedReserva.num_child || 0));
       const priceEstimate = selectedReserva.price_estimate || 0;
@@ -1449,6 +1494,40 @@ export default function CalendarPage() {
       }
     }
 
+    const resChannel = (selectedReserva.channel || '').toLowerCase();
+    const isOta = resChannel.includes('booking') || resChannel.includes('expedia') || resChannel.includes('airbnb') || resChannel.includes('agoda');
+    const cleanDigits = (editedPhone || '').replace(/\D/g, '');
+    if (isOta && (cleanDigits.length < 8 || editedPhone.includes('@') || cleanDigits.startsWith('0000'))) {
+      alert(`🚨 TELÉFONO OBLIGATORIO:\nEsta reserva proviene de ${selectedReserva.channel || 'Booking / Expedia'}.\nEs estrictamente obligatorio registrar el número de WhatsApp del huésped para enviarle las plantillas de bienvenida, claves de acceso y portal digital.`);
+      setSubmitting(false);
+      return;
+    }
+
+    const trimmedPhone = editedPhone.trim();
+    if (trimmedPhone && selectedReserva) {
+      try {
+        await supabase
+          .from('beds24_reservations')
+          .update({ guest_phone: trimmedPhone })
+          .eq('id', selectedReserva.id);
+
+        fetch('/api/reservas', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: selectedReserva.id,
+            phone: trimmedPhone,
+            b24BookingId: selectedReserva.b24_booking_id || selectedReserva.booking_id
+          })
+        }).catch(e => console.warn("Error sync phone Beds24:", e));
+
+        setSelectedReserva((prev: any) => prev ? { ...prev, guest_phone: trimmedPhone, phone: trimmedPhone, mobile: trimmedPhone } : null);
+        setReservas(prev => prev.map(r => r.id === selectedReserva.id ? { ...r, guest_phone: trimmedPhone, phone: trimmedPhone, mobile: trimmedPhone } : r));
+      } catch (phErr) {
+        console.warn("Error updating guest_phone during check-in in calendario:", phErr);
+      }
+    }
+
     const { error: upsertErr } = await supabase.from('checkins').upsert({
       reservation_id: String(selectedReserva.id).toLowerCase().trim(),
       guest_name: selectedReserva.guest_name,
@@ -1468,7 +1547,7 @@ export default function CalendarPage() {
     }
 
     // Enviar plantilla de bienvenida WhatsApp en segundo plano
-    const calPhone = selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
+    const calPhone = trimmedPhone || selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || (selectedReserva as any).guestPhone || '';
     fetch('/api/whatsapp/send-template', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1991,7 +2070,7 @@ export default function CalendarPage() {
       const summaryText = buildCheckInSummaryMessage({
         guestName: selectedReserva.guest_name || 'Huésped',
         rooms: selectedReserva.room_name || selectedReserva.room || '',
-        phone: selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || '',
+        phone: trimmedPhone || editedPhone.trim() || selectedReserva.phone || selectedReserva.mobile || selectedReserva.guest_phone || '',
         adults: Number(selectedReserva.num_adult || 1),
         children: Number(selectedReserva.num_child || 0),
         checkIn: selectedReserva.check_in || todayStr,
@@ -2687,29 +2766,17 @@ export default function CalendarPage() {
                     </div>
                   </div>
 
-                  {/* 2. Teléfono */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center gap-3 shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-50/50 border border-emerald-100 flex items-center justify-center shrink-0">
-                      <Phone size={14} className="text-emerald-600" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Teléfono</span>
-                      {selectedReserva.guest_phone ? (
-                        <a 
-                          href={`https://wa.me/${selectedReserva.guest_phone.replace(/\D/g, '')}`} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-[13px] font-bold text-emerald-700 hover:text-emerald-800 hover:underline flex items-center gap-1.5 cursor-pointer mt-0.5 w-fit"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span>{selectedReserva.guest_phone}</span>
-                          <Send size={10} className="text-emerald-600 rotate-45" />
-                        </a>
-                      ) : (
-                        <p className="text-[13px] font-medium text-zinc-500 mt-0.5">Sin teléfono</p>
-                      )}
-                    </div>
-                  </div>
+                  {/* 2. Teléfono Huésped / WhatsApp (Con selector de país y obligatorio para OTAs) */}
+                  <PhoneWithCountrySelect
+                    value={editedPhone}
+                    onChange={setEditedPhone}
+                    channel={selectedReserva.channel}
+                    guestCountry={(selectedReserva as any).country || (selectedReserva as any).guest_country}
+                    onSaveOnly={handleSavePhoneOnly}
+                    savingOnly={savingPhoneOnly}
+                    savedSuccess={phoneSavedSuccess}
+                    required={true}
+                  />
 
                   {/* 3. Habitación asignada */}
                   <div className="space-y-2">
@@ -3879,6 +3946,22 @@ export default function CalendarPage() {
                           return null;
                         })()}
 
+                        {(() => {
+                          const channel = (selectedReserva.channel || '').toLowerCase();
+                          const isOta = channel.includes('booking') || channel.includes('expedia') || channel.includes('airbnb') || channel.includes('agoda');
+                          const cleanDigits = (editedPhone || '').replace(/\D/g, '');
+                          const isPhoneMissing = isOta && (cleanDigits.length < 8 || editedPhone.includes('@') || cleanDigits.startsWith('0000'));
+                          if (isPhoneMissing) {
+                            return (
+                              <div className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-300 rounded-xl py-2 px-3 text-center flex items-center justify-center gap-1.5 animate-in fade-in duration-200 mb-2">
+                                <AlertCircle size={13} className="text-amber-700 shrink-0" />
+                                <span>Obligatorio registrar el WhatsApp del huésped para completar el Check-In ({selectedReserva.channel || 'OTA'})</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
@@ -3904,6 +3987,14 @@ export default function CalendarPage() {
                             disabled={(() => {
                               if (submitting) return true;
                               if (!dniPreview) return true; // DNI obligatorio
+
+                              // Validación obligatoria de WhatsApp para OTAs (Booking, Expedia, etc.)
+                              const ch = (selectedReserva.channel || '').toLowerCase();
+                              const isOtaBooking = ch.includes('booking') || ch.includes('expedia') || ch.includes('airbnb') || ch.includes('agoda');
+                              const cleanPhoneDigits = (editedPhone || '').replace(/\D/g, '');
+                              if (isOtaBooking && (cleanPhoneDigits.length < 8 || editedPhone.includes('@') || cleanPhoneDigits.startsWith('0000'))) {
+                                return true;
+                              }
 
                               // Validación Voucher obligatoria si se paga con Tarjeta o Transferencia
                               const requiresVoucher = paymentMode === 'tarjeta' || paymentMode === 'transferencia' || (isSplitPayment && (paymentMode2 === 'tarjeta' || paymentMode2 === 'transferencia'));

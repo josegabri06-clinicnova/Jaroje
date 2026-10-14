@@ -306,11 +306,13 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   return cleaned;
 }
 
-// Limpia el teléfono específicamente para la llamada de Meta (removiendo el '1' de México)
+// Limpia el teléfono específicamente para la llamada de Meta, YCloud y enlaces wa.me (removiendo el '1' legado de México y asegurando formato E.164)
 export function cleanPhoneForMeta(phone: string): string {
-  let cleaned = phone.replace(/\D/g, '');
+  let cleaned = (phone || '').replace(/\D/g, '');
   if (cleaned.startsWith('521') && cleaned.length === 13) {
     cleaned = '52' + cleaned.substring(3);
+  } else if (cleaned.length === 10) {
+    cleaned = '52' + cleaned;
   }
   return cleaned;
 }
@@ -572,6 +574,7 @@ export async function sendWhatsAppTemplate(
       'solicitud_recibida',
       'ultimo_aviso',
       'reservacion_confirmada',
+      'confirmacion_reserva_util',
       'preparacion_llegada',
       'bienvenida_checkin',
       'seguimiento_satisfaccion',
@@ -616,10 +619,14 @@ export async function sendWhatsAppTemplate(
 
       const ycloudComponents: any[] = [];
 
-      if (templateName === 'bienvenido_cliente_final_v2') {
+      if (templateName === 'bienvenido_cliente_final_v2' || templateName === 'bienvenido_cliente_whatsaap') {
         const imageUrl = detectedLang === 'en'
-          ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/09/29/423d7a83-1e4f-47de-ad3b-aebcc59016ed.jpg'
-          : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/633b619b-41d4-4c6f-ad76-4ac0ba3bb924.jpg';
+          ? (templateName === 'bienvenido_cliente_whatsaap'
+              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/e0abe9ca-b97d-4d88-ad86-8da55f4b18f0.jpg'
+              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/09/29/423d7a83-1e4f-47de-ad3b-aebcc59016ed.jpg')
+          : (templateName === 'bienvenido_cliente_whatsaap'
+              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/a7251aab-6406-4a82-8a44-170a405bc466.jpg'
+              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/633b619b-41d4-4c6f-ad76-4ac0ba3bb924.jpg');
 
         ycloudComponents.push({
           type: 'header',
@@ -700,12 +707,17 @@ export async function sendWhatsAppTemplate(
       }
 
       const ycloudLang = detectedLang === 'en' ? 'en' : 'es';
+      let targetTemplate = templateName;
+      if (templateName === 'reservacion_confirmada' && (toPhone.startsWith('+1') || cleanedPhone.startsWith('1'))) {
+        targetTemplate = 'confirmacion_reserva_util';
+      }
+
       const ycloudPayload: any = {
         from: ycloudFrom,
         to: toPhone,
         type: 'template',
         template: {
-          name: templateName,
+          name: targetTemplate,
           language: { code: ycloudLang }
         }
       };
@@ -726,10 +738,15 @@ export async function sendWhatsAppTemplate(
       status = response.status;
       resBody = await response.json();
 
-      // Si falla por plantilla no disponible (ej: 'disponibilidad_liberada' vs 'disponibilidad_liberada_'), reintentar con el nombre alternativo
+      // Si falla por plantilla no disponible (ej: 'confirmacion_reserva_util' PENDING o 'disponibilidad_liberada' vs 'disponibilidad_liberada_'), reintentar con el nombre alternativo
       if (!response.ok && (resBody.error?.code === 'WHATSAPP_TEMPLATE_UNAVAILABLE' || String(resBody.error?.message || '').includes('PENDING'))) {
-        const altName = templateName.endsWith('_') ? templateName.slice(0, -1) : `${templateName}_`;
-        console.warn(`[YCloud] Plantilla '${templateName}' no disponible. Reintentando con alias '${altName}'...`);
+        let altName = targetTemplate.endsWith('_') ? targetTemplate.slice(0, -1) : `${targetTemplate}_`;
+        if (targetTemplate === 'confirmacion_reserva_util') {
+          altName = 'reservacion_confirmada';
+        } else if (targetTemplate === 'reservacion_confirmada') {
+          altName = 'confirmacion_reserva_util';
+        }
+        console.warn(`[YCloud] Plantilla '${targetTemplate}' no disponible. Reintentando con alias '${altName}'...`);
         const ycloudAltNamePayload = {
           ...ycloudPayload,
           template: {
@@ -815,6 +832,28 @@ export async function sendWhatsAppTemplate(
       const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
 
       const components: any[] = [];
+
+      if (templateName === 'bienvenido_cliente_final_v2' || templateName === 'bienvenido_cliente_whatsaap') {
+        const imageUrl = detectedLang === 'en'
+          ? (templateName === 'bienvenido_cliente_whatsaap'
+              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/e0abe9ca-b97d-4d88-ad86-8da55f4b18f0.jpg'
+              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/09/29/423d7a83-1e4f-47de-ad3b-aebcc59016ed.jpg')
+          : (templateName === 'bienvenido_cliente_whatsaap'
+              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/a7251aab-6406-4a82-8a44-170a405bc466.jpg'
+              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/633b619b-41d4-4c6f-ad76-4ac0ba3bb924.jpg');
+
+        components.push({
+          type: 'header',
+          parameters: [
+            {
+              type: 'image',
+              image: {
+                link: imageUrl
+              }
+            }
+          ]
+        });
+      }
 
       if (parameters && parameters.length > 0) {
         components.push({
@@ -1023,6 +1062,7 @@ export async function sendWhatsAppTemplate(
             case 'ultimo_aviso':
               return `⏳ Last reminder (3 hours left to confirm your reservation)\n\nHello, ${name}.\n\nWe just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 3 hours.\n\nIn "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n👇 Make Deposit\n\n[Button: Make deposit]`;
             case 'reservacion_confirmada':
+            case 'confirmacion_reserva_util':
               return `🎉 Your reservation is confirmed!\n\nExcellent, ${name}!\n\nWe are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\nIn "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n[Button: Guest Portal] [Button: How to get there]`;
             case 'disponibilidad_liberada':
               return `😔 Availability released\n\nHello, ${name}.\n\nWe regret to inform you that since we did not receive the deposit within the indicated period, the availability of your accommodation was released.\n\nIf you still wish to stay with us, press "Check availability" to see if we still have accommodation available for your travel dates and, if available, make a new reservation.\n\n👇 Check availability\n\n[Button: Check availability] [Button: Photos and Rates]`;
@@ -1061,6 +1101,7 @@ export async function sendWhatsAppTemplate(
           case 'ultimo_aviso':
             return `⏳ Último recordatorio (queda 3 horas para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito\n\n[Botón: Realizar depósito]`;
           case 'reservacion_confirmada':
+          case 'confirmacion_reserva_util':
             return `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n[Botón: Portal del Huésped] [Botón: Cómo llegar]`;
           case 'disponibilidad_liberada':
             return `😔 Disponibilidad liberada\n\nHola, ${name}.\n\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad] [Botón: Fotos y Tarifas]`;
