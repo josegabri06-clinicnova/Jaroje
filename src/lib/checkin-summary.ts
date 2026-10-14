@@ -127,6 +127,22 @@ export function formatPhoneForDisplay(rawPhone?: string | null): string {
   return trimmed;
 }
 
+export function getActiveReceptionWaGroupUrl(): string {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem('jaroje_reception_wa_group_url');
+    if (cached && cached.startsWith('http')) return cached;
+  }
+  return RECEPTION_WA_GROUP_URL;
+}
+
+export function getActiveMaintenanceWaGroupUrl(): string {
+  if (typeof window !== 'undefined') {
+    const cached = localStorage.getItem('jaroje_maintenance_wa_group_url');
+    if (cached && cached.startsWith('http')) return cached;
+  }
+  return MAINTENANCE_WA_GROUP_URL;
+}
+
 /**
  * Abre el grupo o chat de WhatsApp de manera directa e instantánea sin dejar pestañas huérfanas en 'about:blank'.
  * Copia automáticamente el texto proporcionado al portapapeles con fallback robusto.
@@ -139,13 +155,19 @@ export function openWhatsAppUrl(
 ): void {
   if (typeof window === 'undefined') return;
 
-  let finalUrl = RECEPTION_WA_GROUP_URL;
+  let finalUrl = getActiveReceptionWaGroupUrl();
   let textToPreload = '';
 
   if (typeof target === 'object' && target !== null) {
     textToPreload = target.text || '';
     if (target.url) {
-      finalUrl = target.url;
+      if (target.url === MAINTENANCE_WA_GROUP_URL) {
+        finalUrl = getActiveMaintenanceWaGroupUrl();
+      } else if (target.url === RECEPTION_WA_GROUP_URL) {
+        finalUrl = getActiveReceptionWaGroupUrl();
+      } else {
+        finalUrl = target.url;
+      }
     } else if (target.phone) {
       let cleanPhone = target.phone.replace(/\D/g, '');
       if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
@@ -157,16 +179,22 @@ export function openWhatsAppUrl(
         ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(textToPreload)}`
         : `https://api.whatsapp.com/send?phone=${cleanPhone}`;
     } else {
-      finalUrl = RECEPTION_WA_GROUP_URL;
+      finalUrl = getActiveReceptionWaGroupUrl();
     }
   } else if (typeof target === 'string') {
     if (target.startsWith('http://') || target.startsWith('https://') || target.startsWith('whatsapp://')) {
-      finalUrl = target;
+      if (target === MAINTENANCE_WA_GROUP_URL) {
+        finalUrl = getActiveMaintenanceWaGroupUrl();
+      } else if (target === RECEPTION_WA_GROUP_URL) {
+        finalUrl = getActiveReceptionWaGroupUrl();
+      } else {
+        finalUrl = target;
+      }
       textToPreload = legacyText || '';
     } else {
       // Es el texto directo del mensaje
       textToPreload = target;
-      finalUrl = RECEPTION_WA_GROUP_URL;
+      finalUrl = getActiveReceptionWaGroupUrl();
     }
   }
 

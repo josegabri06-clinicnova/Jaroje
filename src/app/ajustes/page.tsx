@@ -9,8 +9,9 @@ import {
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
   Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench,
-  TrendingUp, RotateCcw, Bell
+  TrendingUp, RotateCcw, Bell, ExternalLink
 } from 'lucide-react';
+import { RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 import { 
   getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, 
   saveAdminPin, saveStaffLimpiezaPin, saveStaffMantenimientoPin, saveRecepcionPin, 
@@ -56,6 +57,10 @@ export default function AjustesPage() {
   const [adminNotificationPhone, setAdminNotificationPhone] = useState('');
   const [savingAdminNotificationPhone, setSavingAdminNotificationPhone] = useState(false);
   const [testingAdminPhone, setTestingAdminPhone] = useState(false);
+  const [receptionWaGroupUrl, setReceptionWaGroupUrl] = useState(RECEPTION_WA_GROUP_URL);
+  const [savingReceptionWaGroupUrl, setSavingReceptionWaGroupUrl] = useState(false);
+  const [maintenanceWaGroupUrl, setMaintenanceWaGroupUrl] = useState(MAINTENANCE_WA_GROUP_URL);
+  const [savingMaintenanceWaGroupUrl, setSavingMaintenanceWaGroupUrl] = useState(false);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -476,6 +481,84 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchReceptionWaGroupUrl = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'reception_wa_group_url')
+        .maybeSingle();
+      if (!error && data && data.value) {
+        setReceptionWaGroupUrl(String(data.value));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('jaroje_reception_wa_group_url', String(data.value));
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching reception WA group setting:', e);
+    }
+  };
+
+  const handleSaveReceptionWaGroupUrl = async () => {
+    setSavingReceptionWaGroupUrl(true);
+    try {
+      const url = receptionWaGroupUrl.trim();
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'reception_wa_group_url', value: url }, { onConflict: 'key' });
+      if (error) throw error;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jaroje_reception_wa_group_url', url);
+      }
+      setToastMessage("✅ Enlace del Grupo de Recepción actualizado.");
+      setTimeout(() => setToastMessage(''), 3000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Error al guardar enlace de recepción: ${err.message}`);
+    } finally {
+      setSavingReceptionWaGroupUrl(false);
+    }
+  };
+
+  const fetchMaintenanceWaGroupUrl = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'maintenance_wa_group_url')
+        .maybeSingle();
+      if (!error && data && data.value) {
+        setMaintenanceWaGroupUrl(String(data.value));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('jaroje_maintenance_wa_group_url', String(data.value));
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching maintenance WA group setting:', e);
+    }
+  };
+
+  const handleSaveMaintenanceWaGroupUrl = async () => {
+    setSavingMaintenanceWaGroupUrl(true);
+    try {
+      const url = maintenanceWaGroupUrl.trim();
+      const { error } = await supabase
+        .from('settings')
+        .upsert({ key: 'maintenance_wa_group_url', value: url }, { onConflict: 'key' });
+      if (error) throw error;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jaroje_maintenance_wa_group_url', url);
+      }
+      setToastMessage("✅ Enlace del Grupo de Mantenimiento actualizado.");
+      setTimeout(() => setToastMessage(''), 3000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Error al guardar enlace de mantenimiento: ${err.message}`);
+    } finally {
+      setSavingMaintenanceWaGroupUrl(false);
+    }
+  };
+
   const fetchPasskeys = async () => {
     try {
       const { data, error } = await supabase
@@ -550,6 +633,8 @@ export default function AjustesPage() {
         fetchRecoveryKey(),
         fetchDisableAutoWA(),
         fetchAdminNotificationPhone(),
+        fetchReceptionWaGroupUrl(),
+        fetchMaintenanceWaGroupUrl(),
         expandedSections.depuracion ? fetchDepurarData() : Promise.resolve()
       ]);
     } catch (e) {
@@ -569,6 +654,8 @@ export default function AjustesPage() {
     fetchRecoveryKey();
     fetchDisableAutoWA();
     fetchAdminNotificationPhone();
+    fetchReceptionWaGroupUrl();
+    fetchMaintenanceWaGroupUrl();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
@@ -1192,6 +1279,86 @@ export default function AjustesPage() {
                   </>
                 )}
               </button>
+            </div>
+          </div>
+
+          {/* GRUPO RECEPCIÓN */}
+          <div className="pt-3 border-t border-zinc-100">
+            <div className="flex flex-col gap-1 mb-2">
+              <span className="text-[14px] font-bold text-zinc-800 flex items-center gap-1.5">
+                <Users size={14} className="text-emerald-500" />
+                Grupo WhatsApp: Recepción (Check-In y Turnos)
+              </span>
+              <span className="text-[11px] text-zinc-400 font-sans leading-normal">
+                Enlace de invitación al grupo donde se envían los resúmenes de check-in completados y reportes diarios de recepción.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-2 flex-wrap sm:flex-nowrap">
+              <input
+                type="text"
+                value={receptionWaGroupUrl}
+                onChange={(e) => setReceptionWaGroupUrl(e.target.value)}
+                placeholder="https://chat.whatsapp.com/..."
+                className="flex-1 min-w-[200px] px-3 py-2 text-[13px] bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleSaveReceptionWaGroupUrl}
+                disabled={savingReceptionWaGroupUrl}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                {savingReceptionWaGroupUrl ? 'Guardando...' : 'Guardar'}
+              </button>
+              <a
+                href={receptionWaGroupUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 text-[12px] font-semibold rounded-lg shadow-sm transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+                title="Abrir grupo de WhatsApp de Recepción"
+              >
+                <ExternalLink size={13} />
+                <span>Abrir Grupo</span>
+              </a>
+            </div>
+          </div>
+
+          {/* GRUPO MANTENIMIENTO */}
+          <div className="pt-3 border-t border-zinc-100">
+            <div className="flex flex-col gap-1 mb-2">
+              <span className="text-[14px] font-bold text-zinc-800 flex items-center gap-1.5">
+                <Wrench size={14} className="text-blue-500" />
+                Grupo WhatsApp: Mantenimiento (Tickets e Incidencias)
+              </span>
+              <span className="text-[11px] text-zinc-400 font-sans leading-normal">
+                Enlace de invitación al grupo donde se envían las alertas de tareas, incidencias y reportes del personal de mantenimiento.
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mt-2 flex-wrap sm:flex-nowrap">
+              <input
+                type="text"
+                value={maintenanceWaGroupUrl}
+                onChange={(e) => setMaintenanceWaGroupUrl(e.target.value)}
+                placeholder="https://chat.whatsapp.com/..."
+                className="flex-1 min-w-[200px] px-3 py-2 text-[13px] bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-mono"
+              />
+              <button
+                type="button"
+                onClick={handleSaveMaintenanceWaGroupUrl}
+                disabled={savingMaintenanceWaGroupUrl}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-[12px] font-semibold rounded-lg shadow-sm transition-all disabled:opacity-50 cursor-pointer shrink-0"
+              >
+                {savingMaintenanceWaGroupUrl ? 'Guardando...' : 'Guardar'}
+              </button>
+              <a
+                href={maintenanceWaGroupUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-300 text-[12px] font-semibold rounded-lg shadow-sm transition-all cursor-pointer shrink-0 flex items-center gap-1.5"
+                title="Abrir grupo de WhatsApp de Mantenimiento"
+              >
+                <ExternalLink size={13} />
+                <span>Abrir Grupo</span>
+              </a>
             </div>
           </div>
         </div>
