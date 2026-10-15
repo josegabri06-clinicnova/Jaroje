@@ -353,6 +353,11 @@ const resolveDeepLink = (log: any) => {
   if (moduleLower === 'equipo') {
     return '/equipo';
   }
+
+  if (moduleLower === 'llamadas' || actionLower.includes('conmutador') || actionLower.includes('llamada')) {
+    return '/llamadas';
+  }
+
   if (moduleLower === 'bot' || actionLower.includes('bot') || actionLower.includes('whatsapp')) {
     return '/reservas';
   }
