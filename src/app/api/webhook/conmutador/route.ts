@@ -40,34 +40,88 @@ async function processConmutadorCall(req: Request) {
 
     if (!rawPhone && req.method === 'POST') {
       const contentType = req.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
+      if (contentType.includes('application/json') || contentType.includes('text/plain')) {
         try {
           const body = await req.json();
-          rawPhone = body.phone || body.from || body.caller || body.caller_id || 
-                     body.Caller || body.From || body.numero || body.telefono || 
-                     body.contact || body.data?.phone || body.data?.caller || '';
-          callerName = body.name || body.caller_name || body.CallerName || body.nombre || '';
+          
+          // Grandstream UCM envía un array de objetos CDR: [ { "src": "...", "dst": "...", "clid": "..." } ]
+          // o un objeto con propiedad cdr: { "cdr": [ { ... } ] }
+          let item = body;
+          if (Array.isArray(body) && body.length > 0) {
+            item = body[0];
+          } else if (body && Array.isArray(body.cdr) && body.cdr.length > 0) {
+            item = body.cdr[0];
+          } else if (body && typeof body.cdr === 'object' && body.cdr !== null) {
+            item = body.cdr;
+          }
+
+          if (item && typeof item === 'object') {
+            // Teléfono: Grandstream usa 'src' o 'caller_id_number' o 'clid'
+            rawPhone = item.src || item.caller_id_number || item.cid_num || 
+                       item.phone || item.from || item.caller || item.caller_id || 
+                       item.Caller || item.From || item.numero || item.telefono || 
+                       item.contact || item.data?.phone || item.data?.caller || '';
+
+            // Nombre: Grandstream usa 'caller_name', 'caller_id_name', o viene dentro de 'clid'
+            callerName = item.caller_name || item.caller_id_name || item.name || 
+                         item.CallerName || item.nombre || '';
+
+            // Si viene el campo 'clid' (Caller ID) con formato: "Nombre Huésped" <9581168698>
+            if (item.clid && typeof item.clid === 'string') {
+              const clidMatch = item.clid.match(/"?([^"<]*)"?\s*<([^>]+)>/);
+              if (clidMatch) {
+                if (!callerName && clidMatch[1]?.trim()) {
+                  callerName = clidMatch[1].trim();
+                }
+                if (!rawPhone && clidMatch[2]?.trim()) {
+                  rawPhone = clidMatch[2].trim();
+                }
+              } else if (!rawPhone) {
+                const digits = item.clid.replace(/[^\d+]/g, '');
+                if (digits.length >= 7) rawPhone = digits;
+              }
+            }
+
+            // Metadatos de Grandstream
+            if (item.disposition) (url as any)._disposition = item.disposition;
+            if (item.duration) (url as any)._duration = item.duration;
+            if (item.dst) (url as any)._dst = item.dst;
+          }
         } catch (jsonErr) {
           console.warn("[Webhook Conmutador] No se pudo parsear JSON:", jsonErr);
         }
       } else if (contentType.includes('application/x-www-form-urlencoded') || contentType.includes('multipart/form-data')) {
         try {
           const formData = await req.formData();
-          rawPhone = (formData.get('phone') || formData.get('from') || formData.get('caller') || 
+          rawPhone = (formData.get('src') || formData.get('caller_id_number') ||
+                      formData.get('phone') || formData.get('from') || formData.get('caller') || 
                       formData.get('Caller') || formData.get('From') || formData.get('numero') || 
                       formData.get('telefono')) as string || '';
-          callerName = (formData.get('name') || formData.get('caller_name') || formData.get('CallerName') || formData.get('nombre')) as string || '';
+          callerName = (formData.get('caller_name') || formData.get('caller_id_name') ||
+                        formData.get('name') || formData.get('CallerName') || formData.get('nombre')) as string || '';
         } catch (formErr) {
           console.warn("[Webhook Conmutador] No se pudo parsear FormData:", formErr);
         }
       }
     }
 
+    // Filtrar llamadas internas entre extensiones del conmutador (ej. Ext 101 llamando a 102)
+    const rawDigits = (rawPhone || '').replace(/\D/g, '');
+    if (rawDigits.length > 0 && rawDigits.length < 7) {
+      console.log(`[Webhook Conmutador] Llamada interna entre extensiones (${rawPhone}). Ignorada para plantillas de clientes.`);
+      return NextResponse.json({
+        success: true,
+        message: 'Llamada interna entre extensiones del conmutador ignorada.',
+        internal: true,
+        src: rawPhone
+      }, { status: 200 });
+    }
+
     const cleanPhone = normalizePhone(rawPhone);
     if (!cleanPhone) {
       return NextResponse.json({
         success: false,
-        error: 'No se detectó un número telefónico válido en la petición del conmutador.',
+        error: 'No se detectó un número telefónico externo válido en la petición del conmutador.',
         received: { rawPhone }
       }, { status: 400 });
     }
@@ -120,6 +174,9 @@ async function processConmutadorCall(req: Request) {
             rawPhone,
             originalCallerName: callerName,
             resolvedName: resolvedCallerName,
+            disposition: (url as any)._disposition || 'COMPLETED',
+            duration: (url as any)._duration || 0,
+            extension: (url as any)._dst || null,
             method: req.method,
             query: Object.fromEntries(url.searchParams),
             timestamp: new Date().toISOString()
