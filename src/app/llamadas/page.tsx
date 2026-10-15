@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { 
-  PhoneCall, Phone, PhoneForwarded, MessageSquare, Send, Check, Clock, 
+  PhoneCall, Phone, PhoneForwarded, MessageSquare, MessageCircle, Send, Check, Clock, 
   Search, Filter, Plus, Trash2, Edit3, CheckCircle2, AlertCircle, RefreshCw, 
   ExternalLink, Copy, User, ChevronRight, Sparkles, X, ArrowUpRight, Shield
 } from 'lucide-react';
@@ -13,6 +13,8 @@ import { parsePhoneAndDialCode, POPULAR_COUNTRY_CODES, ALL_COUNTRY_CODES } from 
 import { formatPhoneForDisplay } from '@/lib/checkin-summary';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+
+import { isSpanishOrLatamPhone } from '@/lib/whatsapp';
 
 interface CallRecord {
   id: string;
@@ -29,67 +31,241 @@ interface CallRecord {
   updated_at?: string;
 }
 
+// Enlaces oficiales del hotel
+const LINK_FOTOS = 'https://condominiosjaroje.com/';
+const LINK_COMO_LLEGAR = 'https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic';
+const LINK_UBICACION = 'https://maps.app.goo.gl/ZEYCWntV2rdT48kK8';
+const LINK_DISPONIBILIDAD_ES = 'https://beds24.com/booking2.php?propid=327286';
+const LINK_DISPONIBILIDAD_EN = 'https://beds24.com/booking2.php?propid=327286&lang=en';
+const LINK_REVIEW = 'https://g.page/r/CVL6xPUz98QaEAE/review';
+
+function getPortalUrl(bookingId?: string | null, lang: 'es' | 'en' = 'es'): string {
+  if (bookingId && bookingId.trim()) {
+    return `https://jaroje-app.vercel.app/public/reserva/${bookingId.trim()}?lang=${lang}`;
+  }
+  return `https://jaroje-app.vercel.app/public/reserva`;
+}
+
+function getWifiBlock(bookingId?: string | null, lang: 'es' | 'en' = 'es'): string {
+  const portalUrl = getPortalUrl(bookingId, lang);
+  if (lang === 'en') {
+    return (
+      `📶 *WiFi and Access*\n` +
+      `WiFi: JAROJE\n` +
+      `Password: HUXX2025\n` +
+      `Gate: 3456\n\n` +
+      `ℹ️ *Important Information*\n` +
+      `• Clean dry towels available at reception.\n` +
+      `• Exclusive access for registered guests.\n` +
+      `• No pets allowed.\n` +
+      `• 100% smoke-free property.\n` +
+      `• Hotel is not responsible for valuables.\n` +
+      `• Parking subject to availability.\n\n` +
+      `⏰ *Schedules*\n` +
+      `Pool: 9:00–22:00\n` +
+      `Reception: 8:00–20:00\n` +
+      `WhatsApp: 9:00–16:00\n\n` +
+      `🌐 *Guest Portal:*\n` +
+      `${portalUrl}`
+    );
+  }
+  return (
+    `📶 *WiFi y Claves*\n` +
+    `WiFi: JAROJE\n` +
+    `Contraseña: HUXX2025\n` +
+    `Portón: 3456\n\n` +
+    `ℹ️ *Información importante*\n` +
+    `• Toallas secas disponibles en recepción.\n` +
+    `• Acceso exclusivo para huéspedes registrados.\n` +
+    `• No se admiten mascotas.\n` +
+    `• Propiedad 100% libre de humo.\n` +
+    `• El hotel no se hace responsable por objetos de valor.\n` +
+    `• Estacionamiento sujeto a disponibilidad.\n\n` +
+    `⏰ *Horarios*\n` +
+    `Alberca: 9:00–22:00\n` +
+    `Recepción: 8:00–20:00\n` +
+    `WhatsApp: 9:00–16:00\n\n` +
+    `🌐 *Portal del Huésped:*\n` +
+    `${portalUrl}`
+  );
+}
+
 interface CallTemplate {
   id: string;
   title: string;
+  shortDesc: string;
   tag: string;
-  color: string;
+  category: 'bienvenida' | 'reserva' | 'estancia' | 'en';
   lang: 'es' | 'en';
-  buildText: (callerName?: string | null) => string;
+  requiresBookingId?: boolean;
+  buildText: (callerName?: string | null, bookingId?: string | null) => string;
 }
 
 const TEMPLATES: CallTemplate[] = [
+  // 1. BIENVENIDA CONMUTADOR (OFICIAL)
   {
-    id: 'bienvenida_conmutador_es',
-    title: '🌴 Bienvenida Conmutador (Español)',
+    id: 'bienvenida_conmutador_oficial',
+    title: '🌴 Bienvenida Conmutador Oficial',
+    shortDesc: 'Fotos, tarifas y cómo llegar (mensaje oficial de llamadas)',
     tag: 'Recomendada',
-    color: 'emerald',
+    category: 'bienvenida',
     lang: 'es',
     buildText: (name) => {
-      const greeting = name ? `¡Hola ${name.split(' ')[0]}! 🌴` : `¡Hola! 🌴`;
-      return `${greeting} Te saludamos de *Condominios Jaroje* en Bahías de Huatulco.\n\nVimos que llamaste a nuestras líneas. Con mucho gusto te atendemos por aquí para cualquier duda, cotización de departamentos o asistencia con tu reservación.\n\n¿En qué podemos apoyarte el día de hoy? 😊`;
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : '';
+      const saludo = firstName ? `🌴 ¡Hola, ${firstName}! Bienvenido a Condominios Jaroje.` : `🌴 ¡Hola! Bienvenido a Condominios Jaroje.`;
+      return `${saludo}\n\nSerá un gusto atenderte y brindarte el mejor servicio para tu estancia en Huatulco.\n\n📸 *Fotos y Tarifas:*\n${LINK_FOTOS}\n\n📍 *Cómo llegar:*\n${LINK_COMO_LLEGAR}\n\n¿En qué podemos apoyarte el día de hoy? 😊`;
     }
   },
+
+  // 2. SOLICITUD DE RESERVACIÓN RECIBIDA (PORTAL + UBICACIÓN)
   {
-    id: 'bienvenida_conmutador_en',
-    title: '🌴 Welcome Call (English)',
-    tag: 'Internacional',
-    color: 'blue',
+    id: 'solicitud_recibida_portal',
+    title: '📋 Solicitud Recibida (24h)',
+    shortDesc: 'Portal del Huésped + Ubicación (24 horas para confirmar)',
+    tag: 'Portal',
+    category: 'reserva',
+    lang: 'es',
+    requiresBookingId: true,
+    buildText: (name, bId) => {
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : 'Huésped';
+      const portalUrl = getPortalUrl(bId, 'es');
+      return `📋 Solicitud de reservación recibida (24 h para confirmar)\n\nHola, ${firstName}.\n\n¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\nEn tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n🌐 *Portal del Huésped:*\n${portalUrl}\n\n📍 *Ubicación:*\n${LINK_UBICACION}`;
+    }
+  },
+
+  // 3. RESERVACIÓN CONFIRMADA (PORTAL + CÓMO LLEGAR)
+  {
+    id: 'reservacion_confirmada_portal',
+    title: '🎉 Reservación Confirmada',
+    shortDesc: 'Confirmación con Portal del Huésped y Cómo llegar',
+    tag: 'Portal',
+    category: 'reserva',
+    lang: 'es',
+    requiresBookingId: true,
+    buildText: (name, bId) => {
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : 'Huésped';
+      const portalUrl = getPortalUrl(bId, 'es');
+      return `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${firstName}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n🌐 *Portal del Huésped:*\n${portalUrl}\n\n📍 *Cómo llegar:*\n${LINK_COMO_LLEGAR}`;
+    }
+  },
+
+  // 4. TODO LISTO PARA TU LLEGADA (PORTAL + WIFI + PORTÓN)
+  {
+    id: 'preparacion_llegada_portal',
+    title: '🚗 Todo Listo para tu Llegada',
+    shortDesc: 'Mi reservación, claves del portón, WiFi y mapa',
+    tag: 'Check-in',
+    category: 'reserva',
+    lang: 'es',
+    requiresBookingId: true,
+    buildText: (name, bId) => {
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : 'Huésped';
+      const portalUrl = getPortalUrl(bId, 'es');
+      const wifi = getWifiBlock(bId, 'es');
+      return `🚗 Todo listo para tu llegada\n\nHola, ${firstName}.\n\n¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\nEn "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!\n\n🌐 *Mi reservación:*\n${portalUrl}\n\n📍 *Cómo llegar:*\nCONDOMINIOS JAROJE 958 116 8698 ${LINK_COMO_LLEGAR}\n\n${wifi}`;
+    }
+  },
+
+  // 5. BIENVENIDO A CONDOMINIOS JAROJE (ESTANCIA + MANTENIMIENTO)
+  {
+    id: 'bienvenida_checkin_portal',
+    title: '🏡 Bienvenida al Alojamiento',
+    shortDesc: 'Portal estancia, reporte de mantenimiento y claves WiFi',
+    tag: 'Estancia',
+    category: 'estancia',
+    lang: 'es',
+    requiresBookingId: true,
+    buildText: (name, bId) => {
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : 'Huésped';
+      const portalUrl = getPortalUrl(bId, 'es');
+      const maintUrl = `${portalUrl}#mantenimiento`;
+      const wifi = getWifiBlock(bId, 'es');
+      return `🏡 ¡Bienvenido a Condominios Jaroje!\n\n¡Qué gusto recibirte, ${firstName}!\n\nEsperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\n\nEn "Mi estancia" encontrarás el código del portón, la red WiFi y su contraseña, las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\n\nSi durante tu estancia necesitas reportar algún detalle de mantenimiento podrás hacerlo desde "Mi estancia".\n\nDeseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n🌐 *Mi estancia:*\n${portalUrl}\n\n🔧 *Reporte de Mantenimiento:*\n${maintUrl}\n\n${wifi}`;
+    }
+  },
+
+  // 6. WIFI Y CLAVES DE ACCESO
+  {
+    id: 'wifi_claves_portal',
+    title: '📶 WiFi, Claves e Información',
+    shortDesc: 'Claves de red, portón 3456, horarios y Portal del Huésped',
+    tag: 'WiFi & Claves',
+    category: 'estancia',
+    lang: 'es',
+    buildText: (name, bId) => {
+      return getWifiBlock(bId, 'es');
+    }
+  },
+
+  // 7. COTIZACIÓN Y DISPONIBILIDAD EN LÍNEA
+  {
+    id: 'cotizacion_beds24',
+    title: '🏷️ Cotización y Disponibilidad',
+    shortDesc: 'Enlace Beds24 para reservar + fotos oficiales y mapa',
+    tag: 'Ventas',
+    category: 'bienvenida',
+    lang: 'es',
+    buildText: (name) => {
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : '';
+      const saludo = firstName ? `¡Hola, ${firstName}!` : `¡Hola!`;
+      return `${saludo} 🌴 Con gusto te compartimos disponibilidad y tarifas en *Condominios Jaroje*:\n\n🌐 *Verificar disponibilidad y reservar en línea:*\n${LINK_DISPONIBILIDAD_ES}\n\n📸 *Fotos y Tarifas:*\n${LINK_FOTOS}\n\n📍 *Cómo llegar:*\n${LINK_COMO_LLEGAR}\n\nSi nos indicas tus fechas de llegada y número de huéspedes, con gusto te preparamos tu cotización personalizada. 😊`;
+    }
+  },
+
+  // 8. UBICACIÓN Y CÓMO LLEGAR
+  {
+    id: 'ubicacion_maps',
+    title: '📍 Ubicación y Cómo Llegar',
+    shortDesc: 'Google Maps oficial, ruta e información de llegada',
+    tag: 'Ubicación',
+    category: 'bienvenida',
+    lang: 'es',
+    buildText: () => {
+      return `📍 *Ubicación y Cómo llegar a Condominios Jaroje:*\n\n🗺️ *Google Maps:* ${LINK_COMO_LLEGAR}\n📍 *Ubicación alternativa:* ${LINK_UBICACION}\n📸 *Fotos del alojamiento:* ${LINK_FOTOS}\n\nCualquier duda en el camino con gusto te orientamos. ¡Buen viaje! 🚗`;
+    }
+  },
+
+  // 9. ENGLISH - WELCOME CALL & RATES
+  {
+    id: 'welcome_call_en',
+    title: '🌴 Welcome Call & Direct Booking (EN)',
+    shortDesc: 'English greeting, online booking, photos and map',
+    tag: 'English',
+    category: 'en',
     lang: 'en',
     buildText: (name) => {
-      const greeting = name ? `Hello ${name.split(' ')[0]}! 🌴` : `Hello! 🌴`;
-      return `${greeting} Greetings from *Condominios Jaroje* in Huatulco.\n\nWe noticed you called our phone lines. We'd love to assist you directly here on WhatsApp regarding room availability, direct rates, or any questions about your upcoming stay.\n\nHow can we help you today? 😊`;
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : '';
+      const greeting = firstName ? `🌴 Hello, ${firstName}! Welcome to Condominios Jaroje.` : `🌴 Hello! Welcome to Condominios Jaroje.`;
+      return `${greeting}\n\nThank you for calling our lines. It will be our pleasure to assist you and provide you with the best experience for your stay in Huatulco.\n\n📸 *Photos and Rates:*\n${LINK_FOTOS}\n\n🌐 *Check availability and book online:*\n${LINK_DISPONIBILIDAD_EN}\n\n📍 *How to get there:*\n${LINK_COMO_LLEGAR}\n\nHow can we help you today? 😊`;
     }
   },
+
+  // 10. ENGLISH - RESERVATION CONFIRMED
   {
-    id: 'cotizacion_tarifas',
-    title: '🏷️ Cotización y Tarifas',
-    tag: 'Ventas',
-    color: 'indigo',
-    lang: 'es',
-    buildText: (name) => {
-      const greeting = name ? `¡Hola ${name.split(' ')[0]}!` : `¡Hola!`;
-      return `${greeting} Con gusto te compartimos disponibilidad y nuestras mejores tarifas directas en *Condominios Jaroje*.\n\n📅 ¿Para qué fechas tienes planeada tu visita y para cuántos adultos y niños sería tu estancia?\n\nCon esos datos te enviamos las opciones ideales de inmediato. 🌴`;
+    id: 'reservation_confirmed_en',
+    title: '🎉 Reservation Confirmed (EN)',
+    shortDesc: 'Confirmation with Guest Portal link & Directions',
+    tag: 'English',
+    category: 'en',
+    lang: 'en',
+    requiresBookingId: true,
+    buildText: (name, bId) => {
+      const firstName = name && name.trim() ? name.trim().split(' ')[0] : 'Guest';
+      const portalUrl = getPortalUrl(bId, 'en');
+      return `🎉 Your reservation is confirmed!\n\nExcellent, ${firstName}!\n\nWe are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\nIn "Guest Portal" you will be able to check any updates to your reservation in real time, as well as photos, descriptions, and accommodation services.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n🌐 *Guest Portal:*\n${portalUrl}\n\n📍 *How to get there:*\n${LINK_COMO_LLEGAR}`;
     }
   },
+
+  // 11. ENGLISH - WIFI & ACCESS
   {
-    id: 'ubicacion_llegar',
-    title: '📍 Ubicación y Cómo Llegar',
-    tag: 'Información',
-    color: 'amber',
-    lang: 'es',
-    buildText: () => {
-      return `¡Hola! 🌴 Te compartimos la ubicación oficial de *Condominios Jaroje* en Bahías de Huatulco:\n\n📍 *Google Maps:* https://maps.app.goo.gl/jaroje\n📍 *Dirección:* Sector H3, Manzana 16, Lote 14, Bahías de Huatulco, Oaxaca.\n\nCualquier duda en el camino con gusto te orientamos. ¡Buen viaje! 🚗`;
-    }
-  },
-  {
-    id: 'servicios_amenidades',
-    title: '✨ Servicios y Amenidades',
-    tag: 'Detalles',
-    color: 'purple',
-    lang: 'es',
-    buildText: () => {
-      return `¡Hola! 🌴 En *Condominios Jaroje* todos nuestros alojamientos cuentan con:\n\n🏊‍♂️ Alberca familiar con camastros\n🍳 Cocina completa con refrigerador, estufa y utensilios\n❄️ Aire acondicionado en todas las áreas\n📶 WiFi de alta velocidad\n🚗 Estacionamiento privado seguro\n\n¿Te gustaría que te compartamos fotos de las habitaciones disponibles?`;
+    id: 'wifi_access_en',
+    title: '📶 WiFi & Stay Info (EN)',
+    shortDesc: 'WiFi credentials, gate code 3456 and Guest Portal in English',
+    tag: 'English',
+    category: 'en',
+    lang: 'en',
+    buildText: (name, bId) => {
+      return getWifiBlock(bId, 'en');
     }
   }
 ];
@@ -111,7 +287,11 @@ export default function LlamadasPage() {
 
   // Modal Enviar Plantilla
   const [selectedCallForTemplate, setSelectedCallForTemplate] = useState<CallRecord | null>(null);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('bienvenida_conmutador_es');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('bienvenida_conmutador_oficial');
+  const [templateCategory, setTemplateCategory] = useState<'todos' | 'bienvenida' | 'reserva' | 'estancia' | 'en'>('todos');
+  const [bookingIdInput, setBookingIdInput] = useState<string>('');
+  const [matchedBooking, setMatchedBooking] = useState<{ id: string; guest_name: string } | null>(null);
+  const [isSearchingBooking, setIsSearchingBooking] = useState(false);
   const [customMessage, setCustomMessage] = useState<string>('');
   const [isSendingTemplate, setIsSendingTemplate] = useState(false);
   const [templateSuccessToast, setTemplateSuccessToast] = useState('');
@@ -177,13 +357,83 @@ export default function LlamadasPage() {
     };
   }, []);
 
-  // Auto-recálculo del texto cuando cambia la plantilla o la llamada seleccionada
+  // Buscar reservación vinculada automáticamente cuando se abre el modal para una llamada
+  useEffect(() => {
+    if (!selectedCallForTemplate) {
+      setMatchedBooking(null);
+      setBookingIdInput('');
+      return;
+    }
+
+    const cleanPhone = selectedCallForTemplate.phone.replace(/\D/g, '');
+    const last10 = cleanPhone.slice(-10);
+    const isEn = !isSpanishOrLatamPhone(cleanPhone);
+
+    if (isEn) {
+      setSelectedTemplateId('welcome_call_en');
+      setTemplateCategory('en');
+    } else {
+      setSelectedTemplateId('bienvenida_conmutador_oficial');
+      setTemplateCategory('todos');
+    }
+
+    let active = true;
+    setIsSearchingBooking(true);
+
+    const lookupBooking = async () => {
+      try {
+        // 1. Buscar en local_reservas
+        const { data: loc } = await supabase
+          .from('local_reservas')
+          .select('id, guest_name')
+          .or(`phone.ilike.%${cleanPhone}%,phone.ilike.%${last10}%`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!active) return;
+        if (loc) {
+          setMatchedBooking({ id: String(loc.id), guest_name: loc.guest_name });
+          setBookingIdInput(String(loc.id));
+          setIsSearchingBooking(false);
+          return;
+        }
+
+        // 2. Buscar en beds24_reservations
+        const { data: b24 } = await supabase
+          .from('beds24_reservations')
+          .select('id, guest_name')
+          .or(`phone.ilike.%${cleanPhone}%,guest_phone.ilike.%${cleanPhone}%,phone.ilike.%${last10}%`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!active) return;
+        if (b24) {
+          setMatchedBooking({ id: String(b24.id), guest_name: b24.guest_name });
+          setBookingIdInput(String(b24.id));
+        } else {
+          setMatchedBooking(null);
+          setBookingIdInput('');
+        }
+      } catch (err) {
+        console.warn("[Lookup Booking Error]:", err);
+      } finally {
+        if (active) setIsSearchingBooking(false);
+      }
+    };
+
+    lookupBooking();
+    return () => { active = false; };
+  }, [selectedCallForTemplate]);
+
+  // Auto-recálculo del texto cuando cambia la plantilla, llamada o ID de reservación
   useEffect(() => {
     if (selectedCallForTemplate) {
       const tmpl = TEMPLATES.find(t => t.id === selectedTemplateId) || TEMPLATES[0];
-      setCustomMessage(tmpl.buildText(selectedCallForTemplate.caller_name));
+      setCustomMessage(tmpl.buildText(selectedCallForTemplate.caller_name, bookingIdInput));
     }
-  }, [selectedCallForTemplate, selectedTemplateId]);
+  }, [selectedCallForTemplate, selectedTemplateId, bookingIdInput]);
 
   // Manejo de envío de plantilla por WhatsApp
   const handleOpenWhatsAppAndMarkSent = async () => {
@@ -659,89 +909,174 @@ export default function LlamadasPage() {
       {/* MODAL: SELECCIONAR Y ENVIAR PLANTILLA WHATSAPP       */}
       {/* ===================================================== */}
       {selectedCallForTemplate && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-3xl p-5 shadow-2xl border border-zinc-200 max-h-[92vh] flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl shadow-2xl border border-zinc-200 max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
             
-            {/* Header Modal */}
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-black">
-                  <Send size={15} />
+            {/* Header Modal Sticky */}
+            <div className="p-4 sm:p-5 border-b border-zinc-100 flex items-center justify-between shrink-0 bg-white">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-2xl bg-[#25D366]/15 text-[#20ba59] flex items-center justify-center shrink-0">
+                  <MessageCircle size={18} strokeWidth={2.5} />
                 </div>
-                <div>
-                  <h3 className="text-[15px] font-black text-zinc-900">Despacho de Plantilla WhatsApp</h3>
-                  <p className="text-[11px] text-zinc-400">
-                    Destinatario: <span className="font-extrabold text-zinc-700">{selectedCallForTemplate.caller_name || 'Cliente'}</span> (+{selectedCallForTemplate.phone})
+                <div className="min-w-0">
+                  <h3 className="text-[15px] font-black text-zinc-900 truncate">
+                    Despacho de Plantilla Oficial
+                  </h3>
+                  <p className="text-[11px] text-zinc-500 truncate flex items-center gap-1.5">
+                    <span>A: <strong className="text-zinc-800">{selectedCallForTemplate.caller_name || 'Huésped'}</strong></span>
+                    <span>(+{selectedCallForTemplate.phone})</span>
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedCallForTemplate(null)}
-                className="text-zinc-400 hover:text-zinc-700 p-1.5 rounded-xl hover:bg-zinc-100"
+                className="text-zinc-400 hover:text-zinc-700 p-2 rounded-xl hover:bg-zinc-100 shrink-0 cursor-pointer"
               >
                 <X size={18} />
               </button>
             </div>
 
-            {/* Selector de Plantilla */}
-            <div className="py-3 space-y-2 overflow-y-auto flex-1 pr-1">
-              <label className="text-[11px] font-black text-zinc-500 uppercase tracking-widest block">
-                Selecciona la Plantilla a Enviar:
-              </label>
+            {/* Scrollable Body */}
+            <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-3.5 pr-2 sm:pr-4 overscroll-contain">
               
-              <div className="grid grid-cols-1 gap-2">
-                {TEMPLATES.map((tmpl) => (
-                  <button
-                    key={tmpl.id}
-                    type="button"
-                    onClick={() => setSelectedTemplateId(tmpl.id)}
-                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between ${
-                      selectedTemplateId === tmpl.id
-                        ? 'border-emerald-600 bg-emerald-50/50 ring-2 ring-emerald-500/20'
-                        : 'border-zinc-200 hover:border-zinc-300 bg-white'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[13px] font-extrabold text-zinc-900">{tmpl.title}</span>
-                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">
-                          {tmpl.tag}
-                        </span>
+              {/* Bloque de Portal del Huésped / Reservación vinculada */}
+              <div className="p-3 rounded-2xl bg-zinc-50 border border-zinc-200/80 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-black text-zinc-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🌐 Portal del Huésped</span>
+                    {isSearchingBooking && <RefreshCw size={11} className="animate-spin text-emerald-600" />}
+                  </span>
+                  {matchedBooking && (
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                      Reserva vinculada #{matchedBooking.id}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={bookingIdInput}
+                    onChange={(e) => setBookingIdInput(e.target.value)}
+                    placeholder="ID de reservación (ej. 327286 o loc_123)..."
+                    className="flex-1 px-3 py-1.5 bg-white border border-zinc-200 rounded-xl text-[12px] font-mono outline-none focus:border-emerald-500 shadow-inner"
+                  />
+                  {bookingIdInput && (
+                    <a
+                      href={getPortalUrl(bookingIdInput)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="px-2.5 py-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-[11px] font-extrabold flex items-center gap-1 shrink-0"
+                      title="Abrir enlace del portal"
+                    >
+                      <ExternalLink size={12} />
+                      <span>Ver</span>
+                    </a>
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-500">
+                  {bookingIdInput 
+                    ? `Los enlaces del Portal se generarán hacia: https://jaroje-app.vercel.app/public/reserva/${bookingIdInput}`
+                    : 'Sin ID de reserva, los enlaces dirigirán a la web oficial y disponibilidad directa.'}
+                </p>
+              </div>
+
+              {/* Filtro por Categorías de Plantilla */}
+              <div>
+                <label className="text-[11px] font-black text-zinc-500 uppercase tracking-widest block mb-1.5">
+                  Categoría de Plantilla:
+                </label>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px] font-bold">
+                  {[
+                    { id: 'todos', label: 'Todas' },
+                    { id: 'bienvenida', label: '🌴 Bienvenida & Ventas' },
+                    { id: 'reserva', label: '📋 Portal & Reservas' },
+                    { id: 'estancia', label: '🏡 Estancia & WiFi' },
+                    { id: 'en', label: '🇺🇸 English' },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setTemplateCategory(tab.id as any)}
+                      className={`px-3 py-1.5 rounded-xl whitespace-nowrap transition-all cursor-pointer ${
+                        templateCategory === tab.id
+                          ? 'bg-zinc-900 text-white shadow-xs'
+                          : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Lista de Plantillas */}
+              <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1">
+                {TEMPLATES
+                  .filter(t => templateCategory === 'todos' || t.category === templateCategory)
+                  .map((tmpl) => (
+                    <button
+                      key={tmpl.id}
+                      type="button"
+                      onClick={() => setSelectedTemplateId(tmpl.id)}
+                      className={`w-full p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                        selectedTemplateId === tmpl.id
+                          ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-500/20'
+                          : 'border-zinc-200 hover:border-zinc-300 bg-white'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[12.5px] font-black text-zinc-900 truncate">{tmpl.title}</span>
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200 shrink-0">
+                            {tmpl.tag}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-500 line-clamp-1 mt-0.5 font-sans">
+                          {tmpl.shortDesc}
+                        </p>
                       </div>
-                      <p className="text-[11px] text-zinc-500 line-clamp-1 mt-0.5 font-sans">
-                        {tmpl.buildText(selectedCallForTemplate.caller_name)}
-                      </p>
-                    </div>
-                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ml-2 ${
-                      selectedTemplateId === tmpl.id ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300'
-                    }`}>
-                      {selectedTemplateId === tmpl.id && <Check size={10} strokeWidth={3} />}
-                    </div>
-                  </button>
-                ))}
+                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                        selectedTemplateId === tmpl.id ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300'
+                      }`}>
+                        {selectedTemplateId === tmpl.id && <Check size={10} strokeWidth={3} />}
+                      </div>
+                    </button>
+                  ))}
               </div>
 
               {/* Vista Previa y Edición */}
-              <div className="mt-3 pt-3 border-t border-zinc-100">
+              <div className="pt-2 border-t border-zinc-100">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-black text-zinc-500 uppercase tracking-widest">
-                    Vista Previa del Mensaje (Editable):
+                  <label className="text-[11px] font-black text-zinc-600 uppercase tracking-widest">
+                    Texto del Mensaje (Editable):
                   </label>
-                  <span className="text-[10px] font-bold text-zinc-400">
-                    Se abrirá en WhatsApp listo para enviar
-                  </span>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        await navigator.clipboard.writeText(customMessage);
+                        setTemplateSuccessToast('📋 Texto copiado');
+                        setTimeout(() => setTemplateSuccessToast(''), 3000);
+                      }
+                    }}
+                    className="text-[10px] font-extrabold text-zinc-500 hover:text-zinc-800 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Copy size={11} />
+                    <span>Copiar</span>
+                  </button>
                 </div>
                 <textarea
                   rows={6}
                   value={customMessage}
                   onChange={(e) => setCustomMessage(e.target.value)}
-                  className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-[12px] font-mono leading-relaxed text-zinc-800 outline-none focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
+                  className="w-full p-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-[12px] font-sans leading-relaxed text-zinc-800 outline-none focus:border-emerald-500 focus:bg-white transition-all shadow-inner"
                 />
               </div>
+
             </div>
 
-            {/* Footer Botón Acción */}
-            <div className="pt-3 border-t border-zinc-100 flex items-center gap-2">
+            {/* Footer Botón Acción Sticky (Siempre visible y por encima de BottomNav) */}
+            <div className="p-3.5 sm:p-4 border-t border-zinc-100 bg-white shrink-0 flex items-center gap-2 pb-safe sm:pb-4">
               <button
                 type="button"
                 onClick={() => setSelectedCallForTemplate(null)}
@@ -753,9 +1088,9 @@ export default function LlamadasPage() {
                 type="button"
                 onClick={handleOpenWhatsAppAndMarkSent}
                 disabled={isSendingTemplate || !customMessage.trim()}
-                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white rounded-xl text-[13px] font-black transition-all flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                className="flex-1 py-3 px-4 bg-[#25D366] hover:bg-[#20ba59] active:scale-98 text-white rounded-xl text-[13px] font-black transition-all flex items-center justify-center gap-2 shadow-md shadow-[#25D366]/25 cursor-pointer disabled:opacity-50"
               >
-                <Send size={15} className="rotate-45" />
+                <MessageCircle size={16} />
                 <span>{isSendingTemplate ? 'Registrando...' : 'Abrir WhatsApp y Enviar'}</span>
               </button>
             </div>
