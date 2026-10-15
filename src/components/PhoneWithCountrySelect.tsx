@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Phone, AlertCircle, Check, Loader2, Send } from 'lucide-react';
+import { Phone, AlertCircle, Check, Loader2, Send, ChevronDown, Save } from 'lucide-react';
 import {
   ALL_COUNTRY_CODES,
   POPULAR_COUNTRY_CODES,
@@ -64,7 +64,7 @@ export function PhoneWithCountrySelect({
 
   const handleNationalNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawInput = e.target.value;
-    // Permitir dígitos y espacios
+    // Solo dígitos para almacenar en BD
     const digitsOnly = rawInput.replace(/\D/g, '');
     setNationalNumber(digitsOnly);
     const full = buildE164Phone(dialCode, digitsOnly);
@@ -75,6 +75,21 @@ export function PhoneWithCountrySelect({
     return buildWhatsAppLink(dialCode, nationalNumber);
   }, [dialCode, nationalNumber]);
 
+  // País seleccionado actual para mostrar bandera y prefijo compacto
+  const selectedCountry = useMemo(() => {
+    if (guestCountry) {
+      const byGuest = ALL_COUNTRY_CODES.find(
+        c => (c.code.toUpperCase() === guestCountry.trim().toUpperCase() || c.name.toLowerCase() === guestCountry.trim().toLowerCase()) && c.dialCode === dialCode
+      );
+      if (byGuest) return byGuest;
+    }
+    const pop = POPULAR_COUNTRY_CODES.find(c => c.dialCode === dialCode);
+    if (pop) return pop;
+    const all = ALL_COUNTRY_CODES.find(c => c.dialCode === dialCode);
+    if (all) return all;
+    return { name: 'Prefijo', code: '', dialCode: dialCode || '+52', flag: '🌐' };
+  }, [dialCode, guestCountry]);
+
   // Lista ordenada alfabéticamente para la segunda sección
   const alphabetizedCountries = useMemo(() => {
     return [...ALL_COUNTRY_CODES].sort((a, b) => a.name.localeCompare(b.name, 'es'));
@@ -82,7 +97,7 @@ export function PhoneWithCountrySelect({
 
   return (
     <div
-      className={`p-4 rounded-2xl border transition-all ${
+      className={`p-3.5 sm:p-4 rounded-2xl border transition-all ${
         isMandatoryOta && isMissing
           ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-400/20 shadow-sm'
           : 'bg-zinc-50 border-zinc-200/80 shadow-[0_2px_8px_rgba(0,0,0,0.01)]'
@@ -131,72 +146,71 @@ export function PhoneWithCountrySelect({
       )}
 
       {/* Selector de País + Input de Número + Botón Guardar */}
-      <div className="flex items-center gap-2">
-        {/* Dropdown con banderas y prefijos */}
-        <div className="relative shrink-0">
-          <select
-            value={dialCode}
-            onChange={handleDialCodeChange}
-            aria-label="Prefijo de país"
-            className="appearance-none bg-white border border-zinc-300 hover:border-zinc-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl px-2.5 py-2 pr-7 text-[13px] font-extrabold text-zinc-800 outline-none transition-all cursor-pointer shadow-inner max-w-[130px] truncate"
-          >
-            <optgroup label="🌟 Más Frecuentes">
-              {POPULAR_COUNTRY_CODES.map((c, i) => (
-                <option key={`pop-${c.code}-${c.dialCode}-${i}`} value={c.dialCode}>
-                  {c.flag} {c.code} ({c.dialCode})
-                </option>
-              ))}
-            </optgroup>
-            <optgroup label="🌍 Todos los Países (A-Z)">
-              {alphabetizedCountries.map((c, i) => (
-                <option key={`all-${c.code}-${c.dialCode}-${i}`} value={c.dialCode}>
-                  {c.flag} {c.name} ({c.dialCode})
-                </option>
-              ))}
-            </optgroup>
-          </select>
-          {/* Chevron flecha hacia abajo */}
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-zinc-400">
-            <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-                clipRule="evenodd"
-              />
-            </svg>
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Input Bar Unificado: Prefijo a la izquierda + Número nacional a la derecha */}
+        <div className="flex-1 min-w-0 flex items-center bg-white border border-zinc-300 hover:border-zinc-400 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 rounded-xl shadow-xs transition-all overflow-hidden">
+          {/* Selector de prefijo ultra compacto con bandera y chevron */}
+          <div className="relative shrink-0 flex items-center bg-zinc-50 hover:bg-zinc-100 border-r border-zinc-200 px-2 sm:px-2.5 py-2.5 cursor-pointer transition-colors select-none">
+            <span className="text-[17px] leading-none shrink-0 mr-1">{selectedCountry.flag}</span>
+            <span className="text-[13px] font-black text-zinc-800 tracking-tight">{selectedCountry.dialCode}</span>
+            <ChevronDown size={12} className="text-zinc-400 ml-0.5 shrink-0" />
+
+            {/* Select nativo superpuesto para máxima ergonomía táctil en iOS y Android */}
+            <select
+              value={dialCode}
+              onChange={handleDialCodeChange}
+              aria-label="Prefijo de país"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer text-[16px]"
+            >
+              <optgroup label="🌟 Más Frecuentes">
+                {POPULAR_COUNTRY_CODES.map((c, i) => (
+                  <option key={`pop-${c.code}-${c.dialCode}-${i}`} value={c.dialCode}>
+                    {c.flag} {c.name} ({c.dialCode})
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="🌍 Todos los Países (A-Z)">
+                {alphabetizedCountries.map((c, i) => (
+                  <option key={`all-${c.code}-${c.dialCode}-${i}`} value={c.dialCode}>
+                    {c.flag} {c.name} ({c.dialCode})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
           </div>
+
+          {/* Campo de número telefónico: toma TODO el espacio restante */}
+          <input
+            type="tel"
+            value={nationalNumber}
+            onChange={handleNationalNumberChange}
+            placeholder="Ej: 608 290 664"
+            className="flex-1 min-w-0 bg-transparent px-3 py-2 text-[14px] font-bold text-zinc-900 outline-none placeholder:text-zinc-400 tracking-wider"
+          />
         </div>
 
-        {/* Input de Número Nacional */}
-        <input
-          type="tel"
-          value={nationalNumber}
-          onChange={handleNationalNumberChange}
-          placeholder="Ej: 998 123 4567"
-          className="flex-1 min-w-0 bg-white border border-zinc-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 rounded-xl px-3 py-2 text-[13px] font-bold text-zinc-900 outline-none transition-all shadow-inner tracking-wider"
-        />
-
-        {/* Botón Guardar (si aplica) */}
+        {/* Botón Guardar compacto y estilizado */}
         {showSaveButton && onSaveOnly && (
           <button
             type="button"
             onClick={onSaveOnly}
             disabled={savingOnly || !nationalNumber.trim()}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 disabled:pointer-events-none text-white text-[11px] font-extrabold rounded-xl transition-all flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+            className="px-2.5 sm:px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-40 disabled:pointer-events-none text-white text-[11px] sm:text-[12px] font-black rounded-xl transition-all flex items-center gap-1 shadow-xs shrink-0 cursor-pointer"
           >
             {savingOnly ? (
               <>
                 <Loader2 size={13} className="animate-spin" />
-                <span>Guardando...</span>
+                <span className="hidden xs:inline">Guardando...</span>
               </>
             ) : savedSuccess ? (
               <>
                 <Check size={13} className="text-white" />
-                <span>¡Guardado!</span>
+                <span>¡Listo!</span>
               </>
             ) : (
               <>
-                <span>💾 Guardar</span>
+                <Save size={13} />
+                <span>Guardar</span>
               </>
             )}
           </button>
