@@ -215,6 +215,12 @@ export function normalizePhone(phone: string, countryCodeOrName?: string | null)
   let cleaned = phone.replace(/\D/g, '');
   if (!cleaned) return '';
 
+  // Limpiar prefijo internacional heredado de conmutadores/telcos '00' (ej. 0034... -> 34..., 0052... -> 52...)
+  if (cleaned.startsWith('00')) {
+    cleaned = cleaned.replace(/^00+/, '');
+    if (!cleaned) return '';
+  }
+
   let cc = (countryCodeOrName || '').trim().toUpperCase();
 
   // Traducir nombre de país largo a código de 2 letras si es necesario

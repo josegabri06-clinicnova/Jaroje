@@ -46,13 +46,17 @@ async function processConmutadorCall(req: Request) {
           
           // Grandstream UCM envía un array de objetos CDR: [ { "src": "...", "dst": "...", "clid": "..." } ]
           // o un objeto con propiedad cdr: { "cdr": [ { ... } ] }
+          // o si n8n envía el webhook con la propiedad body: { "body": [ { "src": ... } ] }
           let item = body;
-          if (Array.isArray(body) && body.length > 0) {
-            item = body[0];
-          } else if (body && Array.isArray(body.cdr) && body.cdr.length > 0) {
-            item = body.cdr[0];
-          } else if (body && typeof body.cdr === 'object' && body.cdr !== null) {
-            item = body.cdr;
+          if (body && body.body) {
+            item = body.body;
+          }
+          if (Array.isArray(item) && item.length > 0) {
+            item = item[0];
+          } else if (item && Array.isArray(item.cdr) && item.cdr.length > 0) {
+            item = item.cdr[0];
+          } else if (item && typeof item.cdr === 'object' && item.cdr !== null) {
+            item = item.cdr;
           }
 
           if (item && typeof item === 'object') {
