@@ -46,3 +46,5 @@ next-env.d.ts
 # large inventory data files
 /inventario_temp.csv
 
+# separate standalone projects
+/bahias-guest-services/
