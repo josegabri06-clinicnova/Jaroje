@@ -102,6 +102,36 @@ interface CallTemplate {
 }
 
 const TEMPLATES: CallTemplate[] = [
+  // 0. AVISO CAMBIO DE WHATSAPP (ESPAÑOL)
+  {
+    id: 'cambio_numero_whatsapp_es',
+    title: '📲 Cambio de Número WhatsApp (Español)',
+    shortDesc: 'Aviso de nuevo número 958 131 44 44 y enlace al Portal',
+    tag: 'Aviso WhatsApp',
+    category: 'bienvenida',
+    lang: 'es',
+    requiresBookingId: false,
+    buildText: (_name, bId) => {
+      const portalUrl = getPortalUrl(bId, 'es');
+      return `¡Hola! 👋\n\nSoy Rolando Díaz Ceballos, de Condominios Jaroje Huatulco. 🌴\n\nTe comparto mi nuevo número de WhatsApp:\n\n📲 958 131 44 44\n\nMi número anterior, 958 116 86 98, ya no está disponible para WhatsApp y por el momento seguirá funcionando únicamente para llamadas. Más adelante será deshabilitado por completo.\n\nPor favor, guarda mi nuevo número.\n\n¡Gracias!\n\n🌐 Portal del Huésped:\n${portalUrl}`;
+    }
+  },
+
+  // 0.1 AVISO CAMBIO DE WHATSAPP (ENGLISH)
+  {
+    id: 'cambio_numero_whatsapp_en',
+    title: '📲 WhatsApp Number Change (English)',
+    shortDesc: 'Notice of new number +52 958 131 4444 & Guest Portal',
+    tag: 'Notice EN',
+    category: 'en',
+    lang: 'en',
+    requiresBookingId: false,
+    buildText: (_name, bId) => {
+      const portalUrl = getPortalUrl(bId, 'en');
+      return `Hi! 👋\n\nThis is Rolando from Condominios Jaroje Huatulco,\n\nJust letting you know that I’ve changed my WhatsApp number.\n\n📲 My new number is: +52 958 131 4444\n\nMy previous number, +52 958 116 8698, is temporarily unavailable on WhatsApp, but it still works for phone calls.\n\nI’d appreciate it if you could update my contact information!\n\nBest regards,\nRolando\n\n🌐 Guest Portal:\n${portalUrl}`;
+    }
+  },
+
   // 1. BIENVENIDA CONMUTADOR (OFICIAL)
   {
     id: 'bienvenida_conmutador_oficial',

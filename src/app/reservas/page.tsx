@@ -328,7 +328,7 @@ function ReservasListInner() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(0);
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(100);
   const [copiedManualSuccess, setCopiedManualSuccess] = useState<boolean>(false);
   const [sendingTemplate, setSendingTemplate] = useState<boolean>(false);
   const [showGuestPortalIframe, setShowGuestPortalIframe] = useState<string | null>(null);
@@ -513,6 +513,11 @@ function ReservasListInner() {
             setPortalTransferAccount(data.transfer_account);
             setPortalLanguage(data.language || 'es');
             setPortalMuteNotifications(data.mute_notifications || false);
+            const isEnglishGuest = (data.language === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US');
+            setSelectedMessageIndex(prev => (prev === 100 || prev === 101) ? (isEnglishGuest ? 101 : 100) : prev);
+          } else {
+            const isEnglishGuest = (selectedRes.guest_country === 'US' || selectedRes.country === 'US');
+            setSelectedMessageIndex(prev => (prev === 100 || prev === 101) ? (isEnglishGuest ? 101 : 100) : prev);
           }
         } catch (e) {
           console.error("Error loading portal settings:", e);
@@ -5134,6 +5139,8 @@ function ReservasListInner() {
                           onChange={(e) => setSelectedMessageIndex(Number(e.target.value))}
                           className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[12px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
                         >
+                          <option value={100}>📲 Aviso: Cambio de WhatsApp (Español)</option>
+                          <option value={101}>📲 Notice: WhatsApp Number Change (English)</option>
                           <option value={0}>Mensaje Bienvenida OTA (Sin Enlaces para Booking/Airbnb)</option>
                           <option value={1}>Mensaje 1: Solicitud de Reservación Recibida (24h)</option>
                           <option value={2}>Mensaje 2: Último recordatorio (3h para confirmar)</option>
@@ -5154,7 +5161,7 @@ function ReservasListInner() {
                       {(() => {
                         const rawName = selectedRes.guest_name || selectedRes.name || selectedRes.guestName || '';
                         const cleanName = rawName.trim();
-                        const isEn = (selectedMessageIndex === 5) || (selectedMessageIndex !== 4 && portalLanguage === 'en');
+                        const isEn = (selectedMessageIndex === 5 || selectedMessageIndex === 101) || (selectedMessageIndex !== 4 && selectedMessageIndex !== 100 && portalLanguage === 'en');
                         const guestFirstName = cleanName ? cleanName.split(' ')[0] : (isEn ? 'Guest' : 'Huésped');
 
                         const langParam = isEn ? 'en' : 'es';
@@ -5205,6 +5212,32 @@ function ReservasListInner() {
                         );
 
                         const templates: Record<number, string> = {
+                          // 100: Aviso Cambio de WhatsApp (Español)
+                          100: (
+                            `¡Hola! 👋\n\n` +
+                            `Soy Rolando Díaz Ceballos, de Condominios Jaroje Huatulco. 🌴\n\n` +
+                            `Te comparto mi nuevo número de WhatsApp:\n\n` +
+                            `📲 958 131 44 44\n\n` +
+                            `Mi número anterior, 958 116 86 98, ya no está disponible para WhatsApp y por el momento seguirá funcionando únicamente para llamadas. Más adelante será deshabilitado por completo.\n\n` +
+                            `Por favor, guarda mi nuevo número.\n\n` +
+                            `¡Gracias!\n\n` +
+                            `🌐 Portal del Huésped:\n` +
+                            `https://jaroje-app.vercel.app/public/reserva/${selectedRes?.id || ''}?lang=es`
+                          ),
+
+                          // 101: Notice: WhatsApp Number Change (English)
+                          101: (
+                            `Hi! 👋\n\n` +
+                            `This is Rolando from Condominios Jaroje Huatulco,\n\n` +
+                            `Just letting you know that I’ve changed my WhatsApp number.\n\n` +
+                            `📲 My new number is: +52 958 131 4444\n\n` +
+                            `My previous number, +52 958 116 8698, is temporarily unavailable on WhatsApp, but it still works for phone calls.\n\n` +
+                            `I’d appreciate it if you could update my contact information!\n\n` +
+                            `Best regards,\n` +
+                            `Rolando\n\n` +
+                            `🌐 Guest Portal:\n` +
+                            `https://jaroje-app.vercel.app/public/reserva/${selectedRes?.id || ''}?lang=en`
+                          ),
                           // 0: Mensaje de Bienvenida OTA (Sin Enlaces para Booking / Airbnb)
                           0: isEn ? (
                             `🏖️ Thank you for choosing Condominios Jaroje!\n\n` +
@@ -5564,25 +5597,31 @@ function ReservasListInner() {
                           }
                         };
 
-                        const apiTemplates = [
-                          'bienvenido_cliente_whatsaap', // 0: Mensaje Bienvenida OTA (Sin Enlaces)
-                          'solicitud_recibida',          // 1: Mensaje 1: Solicitud de Reservación Recibida (24h)
-                          'ultimo_aviso',                // 2: Mensaje 2: Último recordatorio (1h / 3h)
-                          'reservacion_confirmada',      // 3: Mensaje 3: Confirmación de Pago y Reservación
-                          'disponibilidad_liberada',     // 4: Mensaje 4: Disponibilidad Liberada (Español)
-                          'disponibilidad_liberada',     // 5: Mensaje 4 (EN): Availability Released (English)
-                          'preparacion_llegada',         // 6: Mensaje 5: Todo listo para tu llegada
-                          'bienvenida_checkin',          // 7: Mensaje 6: Bienvenido a Condominios Jaroje
-                          'seguimiento_satisfaccion',    // 8: Mensaje 7: ¿Cómo va tu estancia?
-                          'salida_checkout',             // 9: Mensaje 8: Check-out 12:00 p.m.
-                          'comparte_experiencia',        // 10: Mensaje 9: ¿Cómo estuvo tu experiencia?
-                          'recibimiento_nuevamente',     // 11: Mensaje 10: Nos encantará recibirte nuevamente
-                          'bienvenida_checkin',          // 12: Mensaje: 📶 WiFi, Claves e Información Importante
-                          'bienvenido_cliente_whatsaap'  // 13: Mensaje: 🌴 Bienvenida Directa WhatsApp
-                        ];
+                        const apiTemplates: Record<number, string> = {
+                          100: 'cambio_numero_whatsapp_es',
+                          101: 'cambio_numero_whatsapp_en',
+                          0: 'bienvenido_cliente_whatsaap', // 0: Mensaje Bienvenida OTA (Sin Enlaces)
+                          1: 'solicitud_recibida',          // 1: Mensaje 1: Solicitud de Reservación Recibida (24h)
+                          2: 'ultimo_aviso',                // 2: Mensaje 2: Último recordatorio (1h / 3h)
+                          3: 'reservacion_confirmada',      // 3: Mensaje 3: Confirmación de Pago y Reservación
+                          4: 'disponibilidad_liberada',     // 4: Mensaje 4: Disponibilidad Liberada (Español)
+                          5: 'disponibilidad_liberada',     // 5: Mensaje 4 (EN): Availability Released (English)
+                          6: 'preparacion_llegada',         // 6: Mensaje 5: Todo listo para tu llegada
+                          7: 'bienvenida_checkin',          // 7: Mensaje 6: Bienvenido a Condominios Jaroje
+                          8: 'seguimiento_satisfaccion',    // 8: Mensaje 7: ¿Cómo va tu estancia?
+                          9: 'salida_checkout',             // 9: Mensaje 8: Check-out 12:00 p.m.
+                          10: 'comparte_experiencia',        // 10: Mensaje 9: ¿Cómo estuvo tu experiencia?
+                          11: 'recibimiento_nuevamente',     // 11: Mensaje 10: Nos encantará recibirte nuevamente
+                          12: 'bienvenida_checkin',          // 12: Mensaje: 📶 WiFi, Claves e Información Importante
+                          13: 'bienvenido_cliente_whatsaap'  // 13: Mensaje: 🌴 Bienvenida Directa WhatsApp
+                        };
                         const apiTemplateKey = apiTemplates[selectedMessageIndex] || 'bienvenido_cliente_whatsaap';
 
                         const handleSendApiTemplate = async () => {
+                          if (selectedMessageIndex === 100 || selectedMessageIndex === 101) {
+                            alert("ℹ️ Esta plantilla de aviso de cambio de número debe enviarse manualmente usando el botón negro 'Copiar y Enviar Manual' desde tu nuevo número de WhatsApp.");
+                            return;
+                          }
                           if (!apiTemplateKey) return;
 
                           if (apiTemplateKey === 'ultimo_aviso') {
@@ -5648,6 +5687,11 @@ function ReservasListInner() {
 
                         return (
                           <div className="flex flex-col gap-2.5">
+                            {/* Vista Previa del Mensaje con Enlace Dinámico */}
+                            <div className="p-3 bg-zinc-50 border border-zinc-200/90 rounded-xl text-[11px] text-zinc-700 whitespace-pre-line max-h-36 overflow-y-auto leading-relaxed select-all font-sans shadow-inner">
+                              {message}
+                            </div>
+
                             {/* Botón Principal: Enviar Plantilla Oficial API con botones nativos */}
                             <button
                               onClick={handleSendApiTemplate}
