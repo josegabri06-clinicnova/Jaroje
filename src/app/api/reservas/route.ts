@@ -506,6 +506,7 @@ export async function POST(req: Request) {
               .from('whatsapp_logs')
               .select('id')
               .eq('reservation_id', bookingIdStr)
+              .neq('status', 'failed')
               .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'pago_anticipo_recibido'])
               .limit(1);
 
@@ -725,6 +726,7 @@ export async function POST(req: Request) {
             .from('whatsapp_logs')
             .select('id')
             .eq('reservation_id', bookingIdStr)
+            .neq('status', 'failed')
             .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'pago_anticipo_recibido'])
             .limit(1);
 
