@@ -5217,7 +5217,7 @@ function ReservasListInner() {
                             `¡Hola! 👋\n\n` +
                             `Soy Rolando Díaz Ceballos, de Condominios Jaroje Huatulco. 🌴\n\n` +
                             `Te comparto mi nuevo número de WhatsApp:\n\n` +
-                            `📲 958 131 44 44\n\n` +
+                            `📲 958 122 11 11\n\n` +
                             `Mi número anterior, 958 116 86 98, ya no está disponible para WhatsApp y por el momento seguirá funcionando únicamente para llamadas. Más adelante será deshabilitado por completo.\n\n` +
                             `Por favor, guarda mi nuevo número.\n\n` +
                             `¡Gracias!\n\n` +
@@ -5230,7 +5230,7 @@ function ReservasListInner() {
                             `Hi! 👋\n\n` +
                             `This is Rolando from Condominios Jaroje Huatulco,\n\n` +
                             `Just letting you know that I’ve changed my WhatsApp number.\n\n` +
-                            `📲 My new number is: +52 958 131 4444\n\n` +
+                            `📲 My new number is: +52 958 122 1111\n\n` +
                             `My previous number, +52 958 116 8698, is temporarily unavailable on WhatsApp, but it still works for phone calls.\n\n` +
                             `I’d appreciate it if you could update my contact information!\n\n` +
                             `Best regards,\n` +
