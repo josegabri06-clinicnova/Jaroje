@@ -574,7 +574,7 @@ export async function sendWhatsAppTemplate(
       console.warn("[WhatsApp Pre-Send Lock] Error insertando candado previo:", lockErr);
     }
 
-    let languageCode = detectedLang === 'en' ? 'en' : 'es_MX';
+    let languageCode = detectedLang === 'en' ? 'en' : 'es';
 
     const urlTemplates = [
       'solicitud_recibida',

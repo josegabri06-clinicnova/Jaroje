@@ -11,11 +11,11 @@ const chosenPath = fs.existsSync(envLocalPath) ? envLocalPath : (fs.existsSync(e
 
 if (chosenPath) {
   const envContent = fs.readFileSync(chosenPath, 'utf8');
-  const tokenMatch = envContent.match(/WHATSAPP_TOKEN\s*=\s*(.+)/);
+  const tokenMatch = envContent.match(/^WHATSAPP_TOKEN\s*=\s*(.+)/m);
   if (tokenMatch) {
     token = tokenMatch[1].replace(/["']/g, '').trim();
   }
-  const phoneIdMatch = envContent.match(/WHATSAPP_PHONE_ID\s*=\s*(.+)/);
+  const phoneIdMatch = envContent.match(/^WHATSAPP_PHONE_ID\s*=\s*(.+)/m);
   if (phoneIdMatch) {
     phoneId = phoneIdMatch[1].replace(/["']/g, '').trim();
   }
@@ -112,7 +112,7 @@ async function run() {
     type: 'template',
     template: {
       name: templateName,
-      language: { code: 'es_MX' },
+      language: { code: 'es' },
       components: components
     }
   };
@@ -120,7 +120,7 @@ async function run() {
   console.log(`\n📤 Enviando plantilla '${templateName}' a: ${cleanedPhone}...`);
 
   try {
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -129,8 +129,24 @@ async function run() {
       body: JSON.stringify(payload),
     });
 
-    const status = res.status;
-    const body = await res.json();
+    let status = res.status;
+    let body = await res.json();
+
+    if (status !== 200 && payload.template.language.code === 'es') {
+      console.log("⚠️ Falló con 'es', reintentando con 'es_MX'...");
+      payload.template.language.code = 'es_MX';
+      res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      status = res.status;
+      body = await res.json();
+    }
+
     console.log("\n=== RESPUESTA DE LA API DE META ===");
     console.log("Status Code:", status);
     console.log("Response Body:", JSON.stringify(body, null, 2));
