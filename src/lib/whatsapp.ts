@@ -601,7 +601,10 @@ export async function sendWhatsAppTemplate(
       }
     }
 
-    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
+    // Prioridad absoluta: Si existen credenciales de Meta Cloud API, usar 'meta'.
+    // La cuenta de YCloud fue bloqueada por Meta (Error 131031) y no debe usarse bajo ninguna circunstancia.
+    const isMetaConfigured = Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+    const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
     let response: Response;
     let status: number;
@@ -1225,7 +1228,8 @@ export async function sendWhatsAppTextMessage(
 
     const standardPhone = cleanPhoneForMeta(cleanedPhone);
     const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
-    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
+    const isMetaConfigured = Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+    const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
     // 1. Intentar con YCloud si es el proveedor seleccionado
     if (provider === 'ycloud') {

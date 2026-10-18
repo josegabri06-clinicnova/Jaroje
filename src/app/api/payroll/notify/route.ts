@@ -225,7 +225,8 @@ Este documento sirve como desglose quincenal de n√≥mina generado de forma autom√
     ];
 
     // Enviar WhatsApp usando el proveedor activo (YCloud o Meta)
-    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
+    const isMetaConfigured = Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+    const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
     if (provider === 'ycloud') {
       const ycloudApiKey = process.env.YCLOUD_API_KEY;

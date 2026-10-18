@@ -5673,7 +5673,7 @@ function ReservasListInner() {
                             });
                             const data = await res.json();
                             if (data.success) {
-                              alert(`✅ ¡Mensaje enviado con éxito por la API oficial (YCloud)!\nEl huésped recibirá el formato nativo con botones interactivos.`);
+                              alert(`✅ ¡Mensaje enviado con éxito por la API oficial (Meta Cloud API)!\nEl huésped recibirá el formato nativo con botones interactivos.`);
                             } else {
                               alert(`❌ Error al enviar la plantilla: ${data.error || 'Error desconocido'}`);
                             }
