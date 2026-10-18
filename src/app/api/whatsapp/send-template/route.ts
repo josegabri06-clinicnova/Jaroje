@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const provider = process.env.WHATSAPP_PROVIDER || 'ycloud';
+    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
 
     if (provider === 'ycloud') {
       const ycloudApiKey = process.env.YCLOUD_API_KEY;

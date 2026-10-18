@@ -1225,7 +1225,7 @@ export async function sendWhatsAppTextMessage(
 
     const standardPhone = cleanPhoneForMeta(cleanedPhone);
     const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
-    const provider = process.env.WHATSAPP_PROVIDER || 'ycloud';
+    const provider = process.env.WHATSAPP_PROVIDER || 'meta';
 
     // 1. Intentar con YCloud si es el proveedor seleccionado
     if (provider === 'ycloud') {
