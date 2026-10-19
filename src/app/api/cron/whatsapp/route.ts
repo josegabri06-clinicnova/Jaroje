@@ -89,6 +89,10 @@ function getMexicoDateStr(offsetDays = 0): string {
 }
 
 export async function GET(req: Request) {
+  // Interruptor de emergencia: no procesar nada (evita registrar envíos como 'sent' sin haberlos enviado)
+  if (process.env.WHATSAPP_TEMPLATES_ENABLED !== 'true') {
+    return NextResponse.json({ success: true, paused: true, message: 'Plantillas de WhatsApp deshabilitadas por emergencia' });
+  }
   try {
     // 0. Autenticación básica de cron (URL token, x-cron-secret, o Authorization Bearer)
     const { searchParams } = new URL(req.url);

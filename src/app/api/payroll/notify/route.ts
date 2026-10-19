@@ -102,6 +102,9 @@ function getCompactNotesVertical(text: string): string {
 
 
 export async function POST(req: Request) {
+  if (process.env.WHATSAPP_TEMPLATES_ENABLED !== 'true') {
+    return NextResponse.json({ success: false, error: 'Envío de plantillas de WhatsApp deshabilitado por emergencia' }, { status: 503 });
+  }
   try {
     const { phone, employeeName, amount, period, type, document_url, notes, templateName } = await req.json();
 

@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+  if (process.env.WHATSAPP_TEMPLATES_ENABLED !== 'true') {
+    return NextResponse.json({ error: 'Envío de plantillas de WhatsApp deshabilitado por emergencia' }, { status: 503 });
+  }
   try {
     const { searchParams } = new URL(req.url);
     const phone = searchParams.get('phone');

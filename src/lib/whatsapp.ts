@@ -345,6 +345,12 @@ function getSiteUrl(): string {
   return process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
 }
 
+// INTERRUPTOR DE EMERGENCIA: los envíos de plantillas están bloqueados por defecto.
+// Solo se reactivan si WHATSAPP_TEMPLATES_ENABLED === 'true' en las variables de entorno.
+export function areWhatsAppTemplatesEnabled(): boolean {
+  return process.env.WHATSAPP_TEMPLATES_ENABLED === 'true';
+}
+
 const groupMessageLocks = new Map<string, number>();
 
 function isGroupMessageLocked(key: string): boolean {
@@ -369,6 +375,13 @@ export async function sendWhatsAppTemplate(
   languageOverride?: string
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   let lockLogId: string | null = null;
+
+  // Bloqueo total (incluye envíos manuales con bypassPause)
+  if (!areWhatsAppTemplatesEnabled()) {
+    console.warn(`[WhatsApp API] BLOQUEADO por interruptor de emergencia: plantilla ${templateName} a ${phone} (reserva ${bookingId ?? 'n/a'}) NO enviada.`);
+    return { success: false, error: 'paused', data: { status: 'paused', message: 'Envío de plantillas de WhatsApp deshabilitado por emergencia.' } };
+  }
+
   try {
     const token = process.env.WHATSAPP_TOKEN;
     const phoneId = process.env.WHATSAPP_PHONE_ID;
