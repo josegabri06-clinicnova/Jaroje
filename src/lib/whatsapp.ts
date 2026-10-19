@@ -842,26 +842,11 @@ export async function sendWhatsAppTemplate(
 
       const components: any[] = [];
 
-      if (templateName === 'bienvenido_cliente_final_v2' || templateName === 'bienvenido_cliente_whatsaap') {
-        const imageUrl = detectedLang === 'en'
-          ? (templateName === 'bienvenido_cliente_whatsaap'
-              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/e0abe9ca-b97d-4d88-ad86-8da55f4b18f0.jpg'
-              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/09/29/423d7a83-1e4f-47de-ad3b-aebcc59016ed.jpg')
-          : (templateName === 'bienvenido_cliente_whatsaap'
-              ? 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/a7251aab-6406-4a82-8a44-170a405bc466.jpg'
-              : 'https://oss-ycloud-publicread.oss-ap-southeast-1.aliyuncs.com/online/BASE-FILE/2026/10/01/633b619b-41d4-4c6f-ad76-4ac0ba3bb924.jpg');
-
-        components.push({
-          type: 'header',
-          parameters: [
-            {
-              type: 'image',
-              image: {
-                link: imageUrl
-              }
-            }
-          ]
-        });
+      let actualMetaTemplate = templateName;
+      if (templateName === 'bienvenido_cliente_whatsaap' || templateName === 'bienvenido_cliente_final_v2') {
+        actualMetaTemplate = bookingId ? 'reservacion_confirmada' : 'portal_huesped_link';
+      } else if (templateName === 'portal_huesped_link_en') {
+        actualMetaTemplate = 'portal_huesped_link';
       }
 
       if (parameters && parameters.length > 0) {
@@ -902,14 +887,18 @@ export async function sendWhatsAppTemplate(
         }
       }
 
+      // En Meta WABA 3456203501226234 todas las plantillas están aprobadas en español ('es')
+      // Para huéspedes internacionales, el parámetro URL del botón (?lang=en) adapta la interfaz del portal
+      const metaLanguage = languageOverride || 'es';
+
       const payload: any = {
         messaging_product: 'whatsapp',
         recipient_type: 'individual',
         to: cleanPhoneForMeta(cleanedPhone),
         type: 'template',
         template: {
-          name: templateName,
-          language: { code: languageCode }
+          name: actualMetaTemplate,
+          language: { code: metaLanguage }
         }
       };
 
@@ -1569,18 +1558,18 @@ export async function sendTemplate_PortalHuespedLink(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
-  const templateName = lang === 'en' ? 'portal_huesped_link_en' : 'portal_huesped_link';
+  // En Meta WABA 3456203501226234, la plantilla aprobada es 'portal_huesped_link' (lang: 'es')
+  const templateName = 'portal_huesped_link';
   const firstName = (guestName || '').trim() ? (guestName || '').trim().split(' ')[0] : 'Huésped';
 
   // Parámetro body: {{1}} = nombre del huésped
   const bodyParams = [firstName];
 
-  // Parámetro botón URL: sufijo que se añade a la URL base del template en Meta
-  // URL base en Meta: https://jaroje-app.vercel.app/public/reserva/
-  // Sufijo: "<bookingId>?lang=es"
-  const buttonParams = [`${bookingId}?lang=${lang}`];
+  // Parámetro botón URL: sufijo que se añade a la URL base en Meta
+  const cleanBookingId = (bookingId && String(bookingId) !== '0') ? String(bookingId) : '';
+  const buttonParams = [`${cleanBookingId}?lang=${lang}`];
 
-  return sendWhatsAppTemplate(phone, templateName, bodyParams, buttonParams, bookingId, 'url');
+  return sendWhatsAppTemplate(phone, templateName, bodyParams, buttonParams, bookingId, 'url', false, 'es');
 }
 
 // Mensaje de Alojamiento Listo / Limpieza Terminada (alojamiento_listo)
@@ -1598,8 +1587,7 @@ export async function sendTemplate_AlojamientoListo(booking: any, bypassPause: b
 /**
  * 13. Plantilla de Bienvenida al Conmutador (bienvenido_cliente_final_v2)
  * Se envía automáticamente cuando un cliente llama a las líneas telefónicas/conmutador del hotel.
- * - Idioma 'es' si el prefijo es de Latinoamérica o España.
- * - Idioma 'en' si el prefijo es de cualquier otra parte del mundo.
+ * Utiliza portal_huesped_link de Meta con botón al portal.
  */
 export async function sendTemplate_BienvenidoConmutador(
   phone: string,
@@ -1607,30 +1595,28 @@ export async function sendTemplate_BienvenidoConmutador(
   langOverride?: string
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
-  const lang = langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en');
-  // bienvenido_cliente_final_v2 no requiere parámetros en el cuerpo (0 parámetros)
-  const params: string[] = [];
-  console.log(`[WhatsApp Template] Enviando 'bienvenido_cliente_final_v2' (lang: ${lang}) a ${phone}`);
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_final_v2', params, undefined, undefined, undefined, true, lang);
+  const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
+  return sendTemplate_PortalHuespedLink(phone, 'general', guestName || 'Huésped', lang);
 }
 
 /**
  * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap)
- * Se envía automáticamente cuando un cliente escribe por WhatsApp al número de Rolando.
- * Regla: Máximo 1 vez al día (ventana de 24 horas) por cliente.
- * - Idioma 'es' si el prefijo es de Latinoamérica o España.
- * - Idioma 'en' si el prefijo es de cualquier otra parte del mundo.
+ * Se envía automáticamente cuando un cliente escribe por WhatsApp al número del hotel o desde el conmutador.
+ * Utiliza la plantilla oficial correspondiente en Meta WABA (reservacion_confirmada o portal_huesped_link).
  */
 export async function sendTemplate_BienvenidoWhatsApp(
   phone: string,
   guestName?: string,
-  langOverride?: string
+  langOverride?: string,
+  bookingId?: string | number
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
-  const lang = langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en');
-  // bienvenido_cliente_whatsaap no requiere parámetros en el cuerpo (0 parámetros)
-  const params: string[] = [];
-  console.log(`[WhatsApp Template] Enviando 'bienvenido_cliente_whatsaap' (lang: ${lang}) a ${phone}`);
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap', params, undefined, undefined, undefined, true, lang);
+  const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
+  const name = guestName ? getFirstName(guestName) : 'Huésped';
+
+  if (bookingId && String(bookingId) !== '0' && String(bookingId) !== 'general') {
+    return sendTemplate3_ReservacionConfirmada({ id: bookingId, guest_name: name, phone }, true);
+  }
+  return sendTemplate_PortalHuespedLink(phone, 'general', name, lang);
 }
 

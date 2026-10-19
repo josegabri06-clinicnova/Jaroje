@@ -239,8 +239,23 @@ export async function GET(req: Request) {
       .select('reservation_id, template_name, phone, sent_at, status')
       .gte('sent_at', sixtyDaysAgo);
 
-    // Consideramos enviado si el status no es 'failed', O si ya se intentó en las últimas 24h
-    const validLogs = (sentLogs || []).filter((l: any) => l.status !== 'failed' || (l.sent_at && l.sent_at >= oneDayAgo));
+    // Consideramos enviado únicamente si el status es exitoso (distinto de 'failed')
+    // NUNCA debemos marcar un intento 'failed' como enviado porque silencia permanentemente al huésped
+    const validLogs = (sentLogs || []).filter((l: any) => l.status !== 'failed');
+
+    // Cooldown de 30 minutos para reintentos de fallas recientes:
+    // Si un mensaje falló hace menos de 30 minutos, se pausa temporalmente para no saturar la API
+    const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+    const recentFailedSet = new Set<string>();
+    (sentLogs || []).forEach((l: any) => {
+      if (l.status === 'failed' && l.sent_at && l.sent_at >= thirtyMinutesAgo) {
+        const rId = String(l.reservation_id || '').trim();
+        const tmpl = String(l.template_name || '').trim();
+        if (rId && tmpl) {
+          recentFailedSet.add(`${rId}_${tmpl}`);
+        }
+      }
+    });
 
     const sentBookingSet = new Set<string>();
     const sentPhoneSet = new Set<string>();
@@ -269,6 +284,8 @@ export async function GET(req: Request) {
 
       if (bIdStr && sentBookingSet.has(`${bIdStr}_${tmpl}`)) return true;
       if (phoneDigits && phoneDigits.length >= 7 && sentPhoneSet.has(`${phoneDigits}_${tmpl}`)) return true;
+      // Pausa temporal de 30 minutos si falló recientemente
+      if (bIdStr && recentFailedSet.has(`${bIdStr}_${tmpl}`)) return true;
       return false;
     };
 
@@ -548,16 +565,19 @@ export async function GET(req: Request) {
 
         const isInPreArrivalWindow = daysUntilCheckIn >= 0 && daysUntilCheckIn <= 7;
 
-        if (!isCancelled && !isAlreadyCheckedIn && daysUntilCheckIn >= 0 && (isCreatedRecently || isInPreArrivalWindow)) {
-          const actualPaid = Number(booking.actualPaid || 0);
-          const depositVal = Number(booking.deposit || 0);
-          const isConfirmed = isPrepaidOtaBooking || actualPaid > 0 || depositVal > 0;
-          const isExpediaUnpaid = !isConfirmed && channelLower.includes('expedia');
+        const actualPaid = Number(booking.actualPaid || 0);
+        const depositVal = Number(booking.deposit || 0);
+        const isConfirmed = isPrepaidOtaBooking || actualPaid > 0 || depositVal > 0;
+        const isExpediaUnpaid = !isConfirmed && channelLower.includes('expedia');
 
-          // Si es Expedia sin pago y faltan más de 7 días, esperar a la ventana de 7 días
-          const shouldEvaluateInitial = isConfirmed || (!isExpediaUnpaid) || (isExpediaUnpaid && isInPreArrivalWindow);
+        // Reservas confirmadas (OTAs prepagadas Airbnb/Booking o directas con anticipo): Si su llegada es futura y no se ha enviado confirmación, debe enviarse.
+        // Reservas no confirmadas (solicitud 24h directas): Solo se evalúan si fueron creadas en las últimas 24h para evitar spam masivo.
+        // Reservas Expedia no pagadas: Se evalúan en la ventana T-7 previa al check-in.
+        const shouldEvaluateInitial = !isCancelled && !isAlreadyCheckedIn && daysUntilCheckIn >= 0 && (
+          isConfirmed || isCreatedRecently || (isExpediaUnpaid && isInPreArrivalWindow)
+        );
 
-          if (shouldEvaluateInitial && guestPhone) {
+        if (shouldEvaluateInitial && guestPhone) {
             const hasInitialMessage = isTemplateAlreadySent(bookingIdStr, guestPhone, 'solicitud_recibida') || 
                                       isTemplateAlreadySent(bookingIdStr, guestPhone, 'reservacion_confirmada') ||
                                       isTemplateAlreadySent(bookingIdStr, guestPhone, 'bienvenida_checkin') ||
@@ -594,7 +614,6 @@ export async function GET(req: Request) {
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 1 a ${booking.guest_name}:`, waRes.error);
                 }
-              }
             }
           }
         }

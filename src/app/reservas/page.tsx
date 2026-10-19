@@ -5155,6 +5155,7 @@ function ReservasListInner() {
                           <option value={11}>Mensaje 10: Nos encantará recibirte nuevamente</option>
                           <option value={12}>Mensaje: 📶 WiFi, Claves e Información Importante</option>
                           <option value={13}>Mensaje: 🌴 Bienvenida Directa WhatsApp (Fotos y Cómo llegar)</option>
+                          <option value={14}>Mensaje: 🔗 Enlace al Portal del Huésped (Botón Oficial)</option>
                         </select>
                       </div>
 
@@ -5528,6 +5529,21 @@ function ReservasListInner() {
                             `${linkFotos}\n\n` +
                             `📍 *Cómo llegar:*\n` +
                             `${linkComoLlegar}`
+                          ),
+
+                          // 14: Enlace al Portal del Huésped
+                          14: isEn ? (
+                            `Hello, ${guestFirstName}!\n\n` +
+                            `Here is your real-time access to your reservation.\n\n` +
+                            `From your Guest Portal you can check your room status, property rules, WiFi details, and make additional payments. ✅\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${linkPortal}`
+                          ) : (
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `Aquí tienes acceso a tu reservación en tiempo real.\n\n` +
+                            `Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales. ✅\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${linkPortal}`
                           )
                         };
 
@@ -5600,22 +5616,23 @@ function ReservasListInner() {
                         const apiTemplates: Record<number, string> = {
                           100: 'cambio_numero_whatsapp_es',
                           101: 'cambio_numero_whatsapp_en',
-                          0: 'bienvenido_cliente_whatsaap', // 0: Mensaje Bienvenida OTA (Sin Enlaces)
-                          1: 'solicitud_recibida',          // 1: Mensaje 1: Solicitud de Reservación Recibida (24h)
-                          2: 'ultimo_aviso',                // 2: Mensaje 2: Último recordatorio (1h / 3h)
-                          3: 'reservacion_confirmada',      // 3: Mensaje 3: Confirmación de Pago y Reservación
-                          4: 'disponibilidad_liberada',     // 4: Mensaje 4: Disponibilidad Liberada (Español)
-                          5: 'disponibilidad_liberada',     // 5: Mensaje 4 (EN): Availability Released (English)
-                          6: 'preparacion_llegada',         // 6: Mensaje 5: Todo listo para tu llegada
-                          7: 'bienvenida_checkin',          // 7: Mensaje 6: Bienvenido a Condominios Jaroje
-                          8: 'seguimiento_satisfaccion',    // 8: Mensaje 7: ¿Cómo va tu estancia?
-                          9: 'salida_checkout',             // 9: Mensaje 8: Check-out 12:00 p.m.
-                          10: 'comparte_experiencia',        // 10: Mensaje 9: ¿Cómo estuvo tu experiencia?
-                          11: 'recibimiento_nuevamente',     // 11: Mensaje 10: Nos encantará recibirte nuevamente
-                          12: 'bienvenida_checkin',          // 12: Mensaje: 📶 WiFi, Claves e Información Importante
-                          13: 'bienvenido_cliente_whatsaap'  // 13: Mensaje: 🌴 Bienvenida Directa WhatsApp
+                          0: 'reservacion_confirmada',   // 0: Mensaje Bienvenida OTA -> Oficial: Confirmada con Botones
+                          1: 'solicitud_recibida',      // 1: Mensaje 1: Solicitud de Reservación Recibida (24h)
+                          2: 'ultimo_aviso',            // 2: Mensaje 2: Último recordatorio (1h / 3h)
+                          3: 'reservacion_confirmada',  // 3: Mensaje 3: Confirmación de Pago y Reservación
+                          4: 'disponibilidad_liberada', // 4: Mensaje 4: Disponibilidad Liberada (Español)
+                          5: 'disponibilidad_liberada', // 5: Mensaje 4 (EN): Availability Released (English)
+                          6: 'preparacion_llegada',     // 6: Mensaje 5: Todo listo para tu llegada
+                          7: 'bienvenida_checkin',      // 7: Mensaje 6: Bienvenido a Condominios Jaroje
+                          8: 'seguimiento_satisfaccion',// 8: Mensaje 7: ¿Cómo va tu estancia?
+                          9: 'salida_checkout',         // 9: Mensaje 8: Check-out 12:00 p.m.
+                          10: 'comparte_experiencia',    // 10: Mensaje 9: ¿Cómo estuvo tu experiencia?
+                          11: 'recibimiento_nuevamente', // 11: Mensaje 10: Nos encantará recibirte nuevamente
+                          12: 'bienvenida_checkin',      // 12: Mensaje: 📶 WiFi, Claves e Información Importante
+                          13: 'portal_huesped_link',     // 13: Mensaje: 🌴 Bienvenida Directa WhatsApp -> Portal del Huésped
+                          14: 'portal_huesped_link'      // 14: Mensaje: 🔗 Enlace al Portal del Huésped (Botón Interactivo)
                         };
-                        const apiTemplateKey = apiTemplates[selectedMessageIndex] || 'bienvenido_cliente_whatsaap';
+                        const apiTemplateKey = apiTemplates[selectedMessageIndex] || 'reservacion_confirmada';
 
                         const handleSendApiTemplate = async () => {
                           if (selectedMessageIndex === 100 || selectedMessageIndex === 101) {

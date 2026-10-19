@@ -12,7 +12,9 @@ import {
   sendTemplate10_RecibimientoNuevamente,
   sendTemplate11_PagoAnticipoRecibido,
   sendTemplate_BienvenidoConmutador,
-  sendTemplate_BienvenidoWhatsApp
+  sendTemplate_BienvenidoWhatsApp,
+  sendTemplate_PortalHuespedLink,
+  detectLanguageFromPhone
 } from '@/lib/whatsapp';
 
 export async function POST(req: Request) {
@@ -124,14 +126,26 @@ export async function POST(req: Request) {
       case 'pago_anticipo_recibido':
         res = await sendTemplate11_PagoAnticipoRecibido(activeBooking, true);
         break;
+      case 'portal_huesped_link': {
+        const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
+        const lang = detectLanguageFromPhone(ph);
+        res = await sendTemplate_PortalHuespedLink(ph, activeBooking.id || 'general', activeBooking.guest_name, lang as 'es' | 'en');
+        break;
+      }
       case 'bienvenido_cliente_final_v2': {
         const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
         res = await sendTemplate_BienvenidoConmutador(ph, activeBooking.guest_name);
         break;
       }
       case 'bienvenido_cliente_whatsaap': {
-        const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
-        res = await sendTemplate_BienvenidoWhatsApp(ph, activeBooking.guest_name);
+        // Fallback resiliente: Si es una reserva existente, enviar confirmación oficial con botones. Si es genérico, portal link.
+        if (activeBooking.id && String(activeBooking.id) !== '0') {
+          res = await sendTemplate3_ReservacionConfirmada(activeBooking, true);
+        } else {
+          const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
+          const lang = detectLanguageFromPhone(ph);
+          res = await sendTemplate_PortalHuespedLink(ph, 'general', activeBooking.guest_name, lang as 'es' | 'en');
+        }
         break;
       }
       default:
