@@ -282,10 +282,13 @@ export async function GET(req: Request) {
       const bIdStr = String(bId || '').trim();
       const phoneDigits = String(phone || '').replace(/\D/g, '').slice(-10);
 
-      if (bIdStr && sentBookingSet.has(`${bIdStr}_${tmpl}`)) return true;
-      if (phoneDigits && phoneDigits.length >= 7 && sentPhoneSet.has(`${phoneDigits}_${tmpl}`)) return true;
-      // Pausa temporal de 30 minutos si falló recientemente
-      if (bIdStr && recentFailedSet.has(`${bIdStr}_${tmpl}`)) return true;
+      const variants = [tmpl, `${tmpl}_v2`, tmpl.replace(/_v2$/, '')];
+      for (const t of variants) {
+        if (bIdStr && sentBookingSet.has(`${bIdStr}_${t}`)) return true;
+        if (phoneDigits && phoneDigits.length >= 7 && sentPhoneSet.has(`${phoneDigits}_${t}`)) return true;
+        // Pausa temporal de 30 minutos si falló recientemente
+        if (bIdStr && recentFailedSet.has(`${bIdStr}_${t}`)) return true;
+      }
       return false;
     };
 
@@ -552,7 +555,7 @@ export async function GET(req: Request) {
         // --- ENVÍO DE PLANTILLAS INICIALES (CONTROL ANTI-SPAM MASIVO) ---
         // Regla de seguridad estricta:
         // El Cron SOLO debe evaluar el envío inicial si:
-        // 1. La reserva fue creada RECIENTEMENTE (en las últimas 24 horas), O BIEN
+        // 1. La reserva fue creada RECIENTEMENTE (en las últimas 48 horas), O BIEN
         // 2. La reserva entra en la ventana de 7 días previos al Check-In (0 <= daysUntilCheckIn <= 7).
         // Esto PREVIENE que reservas antiguas creadas meses atrás reciban mensajes masivos por error.
         const isCreatedRecently = (() => {
@@ -560,7 +563,7 @@ export async function GET(req: Request) {
           if (!cTime) return false;
           const createdMs = new Date(cTime).getTime();
           if (isNaN(createdMs)) return false;
-          return (Date.now() - createdMs) <= 24 * 60 * 60 * 1000;
+          return (Date.now() - createdMs) <= 48 * 60 * 60 * 1000;
         })();
 
         const isInPreArrivalWindow = daysUntilCheckIn >= 0 && daysUntilCheckIn <= 7;
@@ -570,11 +573,13 @@ export async function GET(req: Request) {
         const isConfirmed = isPrepaidOtaBooking || actualPaid > 0 || depositVal > 0;
         const isExpediaUnpaid = !isConfirmed && channelLower.includes('expedia');
 
-        // Reservas confirmadas (OTAs prepagadas Airbnb/Booking o directas con anticipo): Si su llegada es futura y no se ha enviado confirmación, debe enviarse.
-        // Reservas no confirmadas (solicitud 24h directas): Solo se evalúan si fueron creadas en las últimas 24h para evitar spam masivo.
+        // Reservas confirmadas (OTAs prepagadas Airbnb/Booking o directas con anticipo): Solo se evalúan si fueron creadas en las últimas 48h.
+        // Reservas no confirmadas (solicitud 24h directas): Solo se evalúan si fueron creadas en las últimas 48h para evitar spam masivo.
         // Reservas Expedia no pagadas: Se evalúan en la ventana T-7 previa al check-in.
         const shouldEvaluateInitial = !isCancelled && !isAlreadyCheckedIn && daysUntilCheckIn >= 0 && (
-          isConfirmed || isCreatedRecently || (isExpediaUnpaid && isInPreArrivalWindow)
+          (isConfirmed && isCreatedRecently) || 
+          (!isConfirmed && !isExpediaUnpaid && isCreatedRecently) || 
+          (isExpediaUnpaid && isInPreArrivalWindow)
         );
 
         if (shouldEvaluateInitial && guestPhone) {

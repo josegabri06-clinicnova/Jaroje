@@ -410,7 +410,8 @@ export async function sendWhatsAppTemplate(
     // ── GUARDIA DE CICLO DE VIDA: No enviar plantillas previas al Check-in si el huésped ya está en el hotel ──
     const preCheckInTemplates = [
       'solicitud_recibida',
-      'preparacion_llegada'
+      'preparacion_llegada',
+      'preparacion_llegada_v2'
     ];
 
     if (bookingId && preCheckInTemplates.includes(templateName) && !bypassPause) {
@@ -461,7 +462,14 @@ export async function sendWhatsAppTemplate(
     const last10Phone = rawDigits.slice(-10);
 
     // A. Deduplicación por número de teléfono en ventana de 10 minutos para la MISMA plantilla (multi-habitación)
-    const multiRoomDedupTemplates = ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'preparacion_llegada'];
+    const multiRoomDedupTemplates = [
+      'solicitud_recibida',
+      'reservacion_confirmada',
+      'bienvenida_checkin',
+      'bienvenida_checkin_v2',
+      'preparacion_llegada',
+      'preparacion_llegada_v2'
+    ];
     if (multiRoomDedupTemplates.includes(templateName) && last10Phone.length >= 7 && !bypassPause) {
       try {
         const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
@@ -499,7 +507,7 @@ export async function sendWhatsAppTemplate(
             .select('id, template_name, status')
             .eq('reservation_id', bIdStr)
             .neq('status', 'failed')
-            .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'omitido_multi_habitacion', 'omitido_multi_habitacion_sibling'])
+            .in('template_name', ['solicitud_recibida', 'reservacion_confirmada', 'bienvenida_checkin', 'bienvenida_checkin_v2', 'omitido_multi_habitacion', 'omitido_multi_habitacion_sibling'])
             .limit(1);
 
           if (initialLogs && initialLogs.length > 0) {
@@ -523,22 +531,40 @@ export async function sendWhatsAppTemplate(
           const singleSendPerReservationTemplates = [
             'disponibilidad_liberada',
             'bienvenida_checkin',
+            'bienvenida_checkin_v2',
             'preparacion_llegada',
+            'preparacion_llegada_v2',
             'seguimiento_satisfaccion',
+            'seguimiento_satisfaccion_v2',
             'salida_checkout',
             'comparte_experiencia',
+            'recibimiento_nuevamente',
             'recibimiento_nuevamente_5m',
             'recibimiento_nuevamente_10m',
             'ultimo_aviso',
-            'alojamiento_listo'
+            'ultimo_aviso_v2',
+            'alojamiento_listo',
+            'wifi_informacion'
           ];
 
           if (singleSendPerReservationTemplates.includes(templateName)) {
+            const templateVariantsMap: Record<string, string[]> = {
+              'ultimo_aviso': ['ultimo_aviso', 'ultimo_aviso_v2'],
+              'ultimo_aviso_v2': ['ultimo_aviso', 'ultimo_aviso_v2'],
+              'preparacion_llegada': ['preparacion_llegada', 'preparacion_llegada_v2'],
+              'preparacion_llegada_v2': ['preparacion_llegada', 'preparacion_llegada_v2'],
+              'bienvenida_checkin': ['bienvenida_checkin', 'bienvenida_checkin_v2'],
+              'bienvenida_checkin_v2': ['bienvenida_checkin', 'bienvenida_checkin_v2'],
+              'seguimiento_satisfaccion': ['seguimiento_satisfaccion', 'seguimiento_satisfaccion_v2'],
+              'seguimiento_satisfaccion_v2': ['seguimiento_satisfaccion', 'seguimiento_satisfaccion_v2'],
+            };
+            const checkedVariants = templateVariantsMap[templateName] || [templateName];
+
             const { data: existingBookingLog } = await supabase
               .from('whatsapp_logs')
               .select('id, status')
               .eq('reservation_id', bIdStr)
-              .eq('template_name', templateName)
+              .in('template_name', checkedVariants)
               .neq('status', 'failed')
               .limit(1);
 
@@ -579,11 +605,15 @@ export async function sendWhatsAppTemplate(
     const urlTemplates = [
       'solicitud_recibida',
       'ultimo_aviso',
+      'ultimo_aviso_v2',
       'reservacion_confirmada',
       'confirmacion_reserva_util',
       'preparacion_llegada',
+      'preparacion_llegada_v2',
       'bienvenida_checkin',
+      'bienvenida_checkin_v2',
       'seguimiento_satisfaccion',
+      'seguimiento_satisfaccion_v2',
       'pago_anticipo_recibido',
       'portal_huesped_link',
       'portal_huesped_link_en',
@@ -838,16 +868,19 @@ export async function sendWhatsAppTemplate(
         return { success: false, error: 'Credenciales de Meta no configuradas para fallback' };
       }
 
-      const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+      const url = `https://graph.facebook.com/v21.0/${phoneId}/messages`;
 
       const components: any[] = [];
 
-      let actualMetaTemplate = templateName;
-      if (templateName === 'bienvenido_cliente_whatsaap' || templateName === 'bienvenido_cliente_final_v2') {
-        actualMetaTemplate = bookingId ? 'reservacion_confirmada' : 'portal_huesped_link';
-      } else if (templateName === 'portal_huesped_link_en') {
-        actualMetaTemplate = 'portal_huesped_link';
-      }
+      const META_TEMPLATE_ALIASES: Record<string, string> = {
+        'ultimo_aviso': 'ultimo_aviso_v2',
+        'preparacion_llegada': 'preparacion_llegada_v2',
+        'bienvenida_checkin': 'bienvenida_checkin_v2',
+        'seguimiento_satisfaccion': 'seguimiento_satisfaccion_v2',
+        'bienvenido_cliente_final_v2': 'bienvenido_cliente_llamada',
+        'portal_huesped_link_en': 'portal_huesped_link',
+      };
+      const actualMetaTemplate = META_TEMPLATE_ALIASES[templateName] || templateName;
 
       if (parameters && parameters.length > 0) {
         components.push({
@@ -887,9 +920,8 @@ export async function sendWhatsAppTemplate(
         }
       }
 
-      // En Meta WABA 3456203501226234 todas las plantillas están aprobadas en español ('es')
-      // Para huéspedes internacionales, el parámetro URL del botón (?lang=en) adapta la interfaz del portal
-      const metaLanguage = languageOverride || 'es';
+      // Soporte bilingüe dinámico: huéspedes de habla hispana ('es') e internacionales ('en')
+      const metaLanguage = languageOverride || (detectedLang === 'en' ? 'en' : 'es');
 
       const payload: any = {
         messaging_product: 'whatsapp',
@@ -1033,24 +1065,35 @@ export async function sendWhatsAppTemplate(
             case 'solicitud_recibida':
               return `📋 Reservation request received (24 h to confirm)\n\nHello, ${name}.\n\nThank you for choosing Condominios Jaroje for your next vacation in Huatulco! 🌴\n\nIn your "Guest Portal" you will find all the information about your reservation, including photos and description of your accommodation, reservation details, hotel and cancellation policies, as well as payment options, if you need them.\n\n👇 Guest Portal\n\n[Button: Guest Portal] [Button: Location]`;
             case 'ultimo_aviso':
-              return `⏳ Last reminder (3 hours left to confirm your reservation)\n\nHello, ${name}.\n\nWe just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 3 hours.\n\nIn "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n👇 Make Deposit\n\n[Button: Make deposit]`;
+            case 'ultimo_aviso_v2':
+              return `⏳ Last reminder (1 hour left to confirm your reservation)\n\nHello, ${name}.\n\nWe just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 1 hour.\n\nIn "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n👇 Make Deposit\n\n[Button: Make deposit]`;
             case 'reservacion_confirmada':
             case 'confirmacion_reserva_util':
               return `🎉 Your reservation is confirmed!\n\nExcellent, ${name}!\n\nWe are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\nIn "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n[Button: Guest Portal] [Button: How to get there]`;
             case 'disponibilidad_liberada':
               return `😔 Availability released\n\nHello, ${name}.\n\nWe regret to inform you that since we did not receive the deposit within the indicated period, the availability of your accommodation was released.\n\nIf you still wish to stay with us, press "Check availability" to see if we still have accommodation available for your travel dates and, if available, make a new reservation.\n\n👇 Check availability\n\n[Button: Check availability] [Button: Photos and Rates]`;
             case 'preparacion_llegada':
-              return `🚗 Everything ready for your arrival\n\nHello, ${name}.\n\nVery soon we will welcome you to Condominios Jaroje! We want your arrival to be as comfortable as possible.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\nIn "My reservation" you will find the gate code, location, directions, photos, description and services of your accommodation, as well as everything you need to prepare for your arrival.\n\nArriving after 8:00 p.m.? Let us know in advance to welcome you.\n\nWe wish you an excellent trip!\n\n[Button: My reservation] [Button: How to get there] [Button: WiFi and Keys]`;
+            case 'preparacion_llegada_v2':
+              return `🚗 Everything ready for your arrival\n\nHello, ${name}.\n\nVery soon we will welcome you to Condominios Jaroje! We want your arrival to be as comfortable as possible.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\nIn "My reservation" you will find the gate code, location, directions, photos, description and services of your accommodation, as well as everything you need to prepare for your arrival.\n\nArriving after 8:00 p.m.? Let us know in advance to welcome you.\n\nWe wish you an excellent trip!\n\n[Button: My reservation] [Button: How to get there] [Button: Ver WiFi y claves]`;
             case 'bienvenida_checkin':
-              return `🏡 Welcome to Condominios Jaroje!\n\nWhat a pleasure to welcome you, ${name}!\n\nWe hope you had an excellent trip. We hope you enjoy an excellent stay and feel at home.\n\nIn "My stay" you will find the gate code, WiFi network and password, photos, description and services of your accommodation, as well as all the necessary information to enjoy your stay.\n\nIf during your stay you need to report any maintenance details, you can do so from "My stay".\n\nWe wish you a wonderful stay. If you need anything, we are here to help.\n\n👇 My stay\n\n[Button: My stay] [Button: Maintenance Report] [Button: WiFi and Keys]`;
+            case 'bienvenida_checkin_v2':
+              return `🏡 Welcome to Condominios Jaroje!\n\nWhat a pleasure to welcome you, ${name}!\n\nWe hope you had an excellent trip. We hope you enjoy an excellent stay and feel at home.\n\nIn "My stay" you will find the gate code, WiFi network and password, photos, description and services of your accommodation, as well as all the necessary information to enjoy your stay.\n\nIf during your stay you need to report any maintenance details, you can do so from "My stay".\n\nWe wish you a wonderful stay. If you need anything, we are here to help.\n\n👇 My stay\n\n[Button: My stay] [Button: Ver WiFi y claves]`;
             case 'seguimiento_satisfaccion':
-              return `😊 How is your stay going?\n\nGood morning, ${name}.\n\nWe want to make sure everything is going as expected.\n\nIf there is anything we can do to make you enjoy your stay even more, we will gladly be at your service.\n\n👇 My stay\n\n[Button: My stay] [Button: Maintenance Report] [Button: WiFi and Keys]`;
+            case 'seguimiento_satisfaccion_v2':
+              return `😊 How is your stay going?\n\nGood morning, ${name}.\n\nWe want to make sure everything is going as expected.\n\nIf there is anything we can do to make you enjoy your stay even more, we will gladly be at your service.\n\n👇 My stay\n\n[Button: My stay] [Button: Ver WiFi y claves]`;
             case 'salida_checkout':
               return `🚪 Check-out 12:00 p.m.\n\nVery good morning, ${name}.\n\nToday your stay with us ends. Thank you very much for choosing us and we hope you enjoyed your stay.\n\nIf you need to store your luggage after check-out or require assistance with your departure, we will gladly be here to help.\n\nIf there was anything that did not meet your expectations, please let us know so we can help you.\n\nIf you feel your experience was ⭐⭐⭐⭐⭐, we would love for you to share your review.\n\n👇 Write review\n\n[Button: Write review]`;
             case 'comparte_experiencia':
               return `⭐ How was your experience?\n\nHello, ${name}.\n\nWe hope you arrived home safely and keep an excellent memory of your stay with us.\n\nIf there was anything that did not meet your expectations, please let us know so we can help you.\n\nIf your experience was ⭐⭐⭐⭐⭐, it would make us very happy if you shared your review. Your review helps other travelers choose us with greater confidence and motivates us to keep improving.\n\n👇 Rate accommodation\n\n[Button: Rate your accommodation]`;
             case 'recibimiento_nuevamente':
               return `🌴 We would love to welcome you again!\n\nHello again, ${name}.\n\nToday we remembered your stay with us and wanted to say hello. We hope you keep a great memory of Huatulco and your stay with us.\n\nIf you are thinking of returning to Huatulco, it will be a pleasure to welcome you again. In "Check availability" you can consult availability and start a new reservation.\n\n👇 Check availability\n\n[Button: Check availability]`;
+            case 'wifi_informacion':
+              return `📶 WiFi, Access Codes & Important Info\n\nWiFi: JAROJE\nPassword: HUXX2025\nGate Code: 3456\nPool Hours: 9:00 AM – 10:00 PM`;
+            case 'bienvenido_cliente_llamada':
+            case 'bienvenido_cliente_final_v2':
+              return `🌴 Hello! Welcome to Condominios Jaroje. We apologize for missing your call. How can we assist you today? 😊\n\n[Button: Photos and Rates] [Button: How to get there]`;
+            case 'bienvenido_cliente_whatsaap':
+              return `🌴 Hello! Welcome to Condominios Jaroje. It will be our pleasure to assist you. How can we assist you today? 😊\n\n[Button: Photos and Rates] [Button: How to get there]`;
             case 'pago_anticipo_recibido':
               const abonadoEn = params[1] || '$0.00';
               const saldoEn = params[2] || '$0.00';
@@ -1072,24 +1115,30 @@ export async function sendWhatsAppTemplate(
           case 'solicitud_recibida':
             return `📋 Solicitud de reservación recibida (24 h para confirmar)\n\nHola, ${name}.\n\n¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\nEn tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n👇 Portal del Huésped\n\n[Botón: Portal del Huésped] [Botón: Ubicación]`;
           case 'ultimo_aviso':
-            return `⏳ Último recordatorio (queda 3 horas para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito\n\n[Botón: Realizar depósito]`;
+          case 'ultimo_aviso_v2':
+            return `⏳ Último recordatorio (queda 1 hora para confirmar tu reservación)\n\nHola, ${name}.\n\nSolo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 1 hora.\n\nEn "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n👇 Realizar Depósito\n\n[Botón: Realizar depósito]`;
           case 'reservacion_confirmada':
           case 'confirmacion_reserva_util':
             return `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n[Botón: Portal del Huésped] [Botón: Cómo llegar]`;
           case 'disponibilidad_liberada':
             return `😔 Disponibilidad liberada\n\nHola, ${name}.\n\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad] [Botón: Fotos y Tarifas]`;
           case 'preparacion_llegada':
-            return `🚗 Todo listo para tu llegada\n\nHola, ${name}.\n\n¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\nEn "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!\n\n[Botón: Mi reservación] [Botón: Cómo llegar] [Botón: WiFi y Claves]`;
+          case 'preparacion_llegada_v2':
+            return `🚗 Todo listo para tu llegada\n\nHola, ${name}.\n\n¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\nEn "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!\n\n[Botón: Mi reservación] [Botón: Cómo llegar] [Botón: Ver WiFi y claves]`;
           case 'bienvenida_checkin':
-            return `🏡 ¡Bienvenido a Condominios Jaroje!\n\n¡Qué gusto recibirte, ${name}!\n\nEsperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\n\nEn "Mi estancia" encontrarás el código del portón, la red WiFi y su contraseña, las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\n\nSi durante tu estancia necesitas reportar algún detalle de mantenimiento podrás hacerlo desde "Mi estancia".\n\nDeseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n👇 Mi estancia\n\n[Botón: Mi estancia] [Botón: Reporte de Mantenimiento] [Botón: WiFi y Claves]`;
+          case 'bienvenida_checkin_v2':
+            return `🏡 ¡Bienvenido a Condominios Jaroje!\n\n¡Qué gusto recibirte, ${name}!\n\nEsperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\n\nEn "Mi estancia" encontrarás el código del portón, la red WiFi y su contraseña, las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\n\nSi durante tu estancia necesitas reportar algún detalle de mantenimiento podrás hacerlo desde "Mi estancia".\n\nDeseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n👇 Mi estancia\n\n[Botón: Mi estancia] [Botón: Ver WiFi y claves]`;
           case 'seguimiento_satisfaccion':
-            return `😊 ¿Cómo va tu estancia?\n\nBuenos días, ${name}.\n\nQueremos asegurarnos de que todo esté transcurriendo como esperabas.\n\nSi hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n👇 Mi estancia\n\n[Botón: Mi estancia] [Botón: Reporte de Mantenimiento] [Botón: WiFi y Claves]`;
+          case 'seguimiento_satisfaccion_v2':
+            return `😊 ¿Cómo va tu estancia?\n\nBuenos días, ${name}.\n\nQueremos asegurarnos de que todo esté transcurriendo como esperabas.\n\nSi hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n👇 Mi estancia\n\n[Botón: Mi estancia] [Botón: Ver WiFi y claves]`;
           case 'salida_checkout':
             return `🚪 Check-out 12:00 p.m.\n\nMuy buenos días, ${name}.\n\nHoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n\nSi necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.\n\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\nSi consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.\n\n👇 Escribir reseña\n\n[Botón: Escribir reseña]`;
           case 'comparte_experiencia':
             return `⭐ ¿Cómo estuvo tu experiencia?\n\nHola, ${name}.\n\nEsperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\n\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\nSi tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n👇 Calificar alojamiento\n\n[Botón: Califica tu alojamiento]`;
           case 'recibimiento_nuevamente':
             return `🌴 ¡Nos encantará recibirte nuevamente!\n\nHola de nuevo, ${name}.\n\nHoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\nSi estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En "Verificar disponibilidad" podrás consultar disponibilidad y comenzar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad]`;
+          case 'wifi_informacion':
+            return `📶 WiFi, Claves e Información Importante\n\nRed WiFi: JAROJE\nContraseña: HUXX2025\nPortón: 3456\nHorario alberca: 9:00 a 22:00 hrs.`;
           case 'pago_anticipo_recibido':
             const abonado = params[1] || '$0.00';
             const saldo = params[2] || '$0.00';
@@ -1103,14 +1152,11 @@ export async function sendWhatsAppTemplate(
           case 'rechazo_solicitud':
             const motivo = params[2] || 'No especificado';
             return `❌ Solicitud Reservación Rechazada\n\nHola, ${name}.\n\nTe informamos que tu solicitud de reservación #${params[1] || ''} ha sido rechazada por el siguiente motivo:\n\n*${motivo}*\n\nLamentamos los inconvenientes que esto pueda causarte.`;
+          case 'bienvenido_cliente_llamada':
           case 'bienvenido_cliente_final_v2':
-            return detectedLang === 'en'
-              ? `🌴 [Template: bienvenido_cliente_final_v2 (EN)] Welcome to Condominios Jaroje. Thank you for calling our lines.`
-              : `🌴 [Plantilla: bienvenido_cliente_final_v2 (ES)] ¡Gracias por llamar a Condominios Jaroje! Te compartimos información y asistencia directa para tu estancia.`;
+            return `🌴 ¡Hola! Bienvenido a Condominios Jaroje. Sentimos no haber podido atender tu llamada. ¿En qué podemos apoyarte el día de hoy? 😊\n\n[Botón: Fotos y Tarifas] [Botón: Cómo llegar]`;
           case 'bienvenido_cliente_whatsaap':
-            return detectedLang === 'en'
-              ? `🌴 [Template: bienvenido_cliente_whatsaap (EN)] Hello! Welcome to Condominios Jaroje. How can we assist you with your stay?`
-              : `🌴 [Plantilla: bienvenido_cliente_whatsaap (ES)] ¡Hola! Bienvenido a Condominios Jaroje. ¿En qué podemos apoyarte con tu hospedaje?`;
+            return `🌴 ¡Hola! Bienvenido a Condominios Jaroje. Será un gusto atenderte. ¿En qué podemos apoyarte el día de hoy? 😊\n\n[Botón: Fotos y Tarifas] [Botón: Cómo llegar]`;
           default:
             return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
         }
@@ -1585,9 +1631,9 @@ export async function sendTemplate_AlojamientoListo(booking: any, bypassPause: b
 }
 
 /**
- * 13. Plantilla de Bienvenida al Conmutador (bienvenido_cliente_final_v2)
+ * 13. Plantilla de Bienvenida al Conmutador (bienvenido_cliente_llamada)
  * Se envía automáticamente cuando un cliente llama a las líneas telefónicas/conmutador del hotel.
- * Utiliza portal_huesped_link de Meta con botón al portal.
+ * Utiliza la plantilla oficial bienvenido_cliente_llamada en Meta WABA.
  */
 export async function sendTemplate_BienvenidoConmutador(
   phone: string,
@@ -1596,13 +1642,13 @@ export async function sendTemplate_BienvenidoConmutador(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
-  return sendTemplate_PortalHuespedLink(phone, 'general', guestName || 'Huésped', lang);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada', [], undefined, undefined, undefined, true, lang);
 }
 
 /**
  * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap)
  * Se envía automáticamente cuando un cliente escribe por WhatsApp al número del hotel o desde el conmutador.
- * Utiliza la plantilla oficial correspondiente en Meta WABA (reservacion_confirmada o portal_huesped_link).
+ * Utiliza la plantilla oficial bienvenido_cliente_whatsaap en Meta WABA.
  */
 export async function sendTemplate_BienvenidoWhatsApp(
   phone: string,
@@ -1617,6 +1663,19 @@ export async function sendTemplate_BienvenidoWhatsApp(
   if (bookingId && String(bookingId) !== '0' && String(bookingId) !== 'general') {
     return sendTemplate3_ReservacionConfirmada({ id: bookingId, guest_name: name, phone }, true);
   }
-  return sendTemplate_PortalHuespedLink(phone, 'general', name, lang);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap', [], undefined, undefined, undefined, true, lang);
+}
+
+/**
+ * 15. Plantilla de WiFi, Claves e Información Importante (wifi_informacion)
+ * Se envía cuando el huésped pulsa "Ver WiFi y claves" o solicita información de acceso.
+ */
+export async function sendTemplate_WiFiInformacion(
+  phone: string,
+  langOverride?: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+  const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
+  return sendWhatsAppTemplate(phone, 'wifi_informacion', [], undefined, undefined, undefined, true, lang);
 }
 

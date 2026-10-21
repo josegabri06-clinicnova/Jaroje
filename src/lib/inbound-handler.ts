@@ -188,13 +188,29 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     guestMsgClean.includes('porton') || 
     guestMsgClean.includes('portón') || 
     guestMsgClean.includes('contraseña') || 
-    guestMsgClean.includes('password') ||
+    guestMsgClean.includes('password') || 
     guestMsgClean.includes('reglas') ||
     rawPayload.includes('wifi') ||
     rawPayload.includes('claves')
   ) {
-    finalBotResponse = "📶 *Información de Wi-Fi, Claves y Reglas de Jaroje* 🌴\n\n• *Red Wi-Fi:* Jaroje\n• *Contraseña:* HUXX2025\n• *🔑 Clave del Portón:* 3456\n• *Servicios:* Piscina, terraza y estacionamiento incluidos.\n• *Reglas de convivencia:* Favor de moderar el ruido a partir de las 10:00 PM para la comodidad de todos los huéspedes.\n\nCualquier otra duda o solicitud especial, escríbenos directamente aquí y te atenderemos con gusto.";
-    isAutoReplyTriggered = true;
+    const { isSpanishOrLatamPhone, sendTemplate_WiFiInformacion } = await import('@/lib/whatsapp');
+    const isEnglish = guestMsgClean.includes('password') || rawPayload.includes('wifi_en') || !isSpanishOrLatamPhone(phone);
+    const lang = isEnglish ? 'en' : 'es';
+    try {
+      const wifiRes = await sendTemplate_WiFiInformacion(phone, lang);
+      if (wifiRes.success) {
+        finalBotResponse = null;
+        isAutoReplyTriggered = false;
+      } else {
+        finalBotResponse = lang === 'en'
+          ? "📶 *WiFi, Access Codes & Important Info - Condominios Jaroje*\n\n• *WiFi Network:* JAROJE\n• *Password:* HUXX2025\n• *Gate Code:* 3456\n• *Pool Hours:* 9:00 AM – 10:00 PM\n\nIf you need anything else, feel free to reply directly here! 😊"
+          : "📶 *WiFi, Claves e Información Importante - Condominios Jaroje*\n\n• *Red WiFi:* JAROJE\n• *Contraseña:* HUXX2025\n• *Portón:* 3456\n• *Horario alberca:* 9:00 a 22:00 hrs.\n\n¿Necesitas algo más? Con gusto estamos para servirte. 😊";
+        isAutoReplyTriggered = true;
+      }
+    } catch (wifiErr) {
+      finalBotResponse = "📶 *WiFi:* JAROJE | *Password:* HUXX2025 | *Portón:* 3456";
+      isAutoReplyTriggered = true;
+    }
   }
   // C. Ver mi reserva / Portal del Huésped
   else if (
