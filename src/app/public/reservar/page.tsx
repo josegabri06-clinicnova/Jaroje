@@ -35,6 +35,8 @@ interface QuoteItem {
   name_en: string;
   capacity: number;
   maxCapacity: number;
+  capacityText?: string;
+  capacityText_en?: string;
   description: string;
   description_en: string;
   features: string[];
@@ -120,8 +122,8 @@ function ReservarContent() {
           myStayTab: 'My Current Stay',
           bookNewTab: 'Book Accommodation',
           datesTitle: 'Choose Dates & Guests',
-          checkInLabel: 'Check-in',
-          checkOutLabel: 'Check-out',
+          checkInLabel: 'Check in',
+          checkOutLabel: 'Check out',
           adultsLabel: 'Adults',
           childrenLabel: 'Children',
           searchButton: 'Search Availability',
@@ -176,8 +178,8 @@ function ReservarContent() {
           myStayTab: 'Mi Estancia Actual',
           bookNewTab: 'Cotizar y Reservar',
           datesTitle: 'Fechas y Huéspedes',
-          checkInLabel: 'Entrada',
-          checkOutLabel: 'Salida',
+          checkInLabel: 'Check in',
+          checkOutLabel: 'Check out',
           adultsLabel: 'Adultos',
           childrenLabel: 'Niños',
           searchButton: 'Consultar Disponibilidad',
@@ -852,8 +854,14 @@ function ReservarContent() {
 
                         {/* Badge de capacidad */}
                         <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-black text-zinc-900 flex items-center gap-1 shadow-sm">
-                          <Users size={12} className="text-indigo-600" />
-                          <span>{t.maxGuests} {q.capacity} {t.guests}</span>
+                          <Users size={12} className="text-indigo-600 shrink-0" />
+                          <span>
+                            {q.key === '3rec'
+                              ? (lang === 'en' ? 'Up to 6 guests + 2 extra with fee' : 'Hasta 6 huéspedes + 2 adicionales con costo')
+                              : (lang === 'en'
+                                  ? (q.capacityText_en || `${t.maxGuests} ${q.capacity} ${t.guests}`)
+                                  : (q.capacityText || `${t.maxGuests} ${q.capacity} ${t.guests}`))}
+                          </span>
                         </div>
 
                         {/* Badge de disponibilidad */}
