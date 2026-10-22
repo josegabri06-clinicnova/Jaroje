@@ -115,6 +115,26 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Debes seleccionar al menos una habitación.' }, { status: 400 });
     }
 
+    // Validación estricta de ocupación máxima de habitaciones
+    const totalGuests = Number(adults || 0) + Number(children || 0);
+    const ROOM_CAPACITIES: Record<string, number> = {
+      'doble': 4,
+      '1rec': 4,
+      '2rec': 8,
+      '3rec': 8,
+      'casa': 12
+    };
+    let totalMaxCapacity = 0;
+    validRooms.forEach((r: any) => {
+      totalMaxCapacity += (ROOM_CAPACITIES[r.key] || 4) * Number(r.quantity || 1);
+    });
+
+    if (totalGuests > totalMaxCapacity) {
+      return NextResponse.json({
+        error: `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${totalMaxCapacity}.`
+      }, { status: 400 });
+    }
+
     // 2. Candado anti-spam por teléfono (máximo 1 reserva creada cada 5 minutos por el mismo número)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const last10 = cleanPhone.slice(-10);

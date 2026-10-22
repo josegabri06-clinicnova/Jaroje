@@ -42,6 +42,27 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Formato de teléfono no válido' }, { status: 400 });
     }
 
+    // Validación estricta de ocupación máxima de habitaciones
+    const totalGuests = Number(adults || 0) + Number(children || 0);
+    const ROOM_CAPACITIES: Record<string, number> = {
+      'doble': 4,
+      '1rec': 4,
+      '2rec': 8,
+      '3rec': 8,
+      'casa': 12
+    };
+    let totalMaxCapacity = 0;
+    rooms.forEach((r: any) => {
+      totalMaxCapacity += (ROOM_CAPACITIES[r.key] || 4) * Number(r.quantity || 1);
+    });
+
+    if (totalGuests > totalMaxCapacity) {
+      return NextResponse.json({
+        success: false,
+        error: `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${totalMaxCapacity}.`
+      }, { status: 400 });
+    }
+
     const quoteId = `Q_${Date.now()}`;
     const nowIso = new Date().toISOString();
 

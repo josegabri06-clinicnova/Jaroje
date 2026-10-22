@@ -303,10 +303,15 @@ function ReservarContent() {
     }));
   };
 
+  const totalGuests = useMemo(() => {
+    return Number(adults || 0) + Number(children || 0);
+  }, [adults, children]);
+
   // Cálculo del total seleccionado
   const selectionSummary = useMemo(() => {
     let totalRooms = 0;
     let grandTotal = 0;
+    let totalMaxCapacity = 0;
     const selectedList: { quote: QuoteItem; quantity: number }[] = [];
 
     quotes.forEach(q => {
@@ -314,6 +319,7 @@ function ReservarContent() {
       if (qty > 0) {
         totalRooms += qty;
         grandTotal += q.totalPrice * qty;
+        totalMaxCapacity += (q.maxCapacity || q.capacity || 2) * qty;
         selectedList.push({ quote: q, quantity: qty });
       }
     });
@@ -324,6 +330,7 @@ function ReservarContent() {
       totalRooms,
       grandTotal,
       deposit,
+      totalMaxCapacity,
       selectedList
     };
   }, [quotes, selectedRooms]);
@@ -335,11 +342,14 @@ function ReservarContent() {
     }
     if (pendingQuote && Array.isArray(pendingQuote.rooms) && pendingQuote.rooms.length > 0) {
       let totalRooms = 0;
+      let totalMaxCapacity = 0;
       const selectedList: { quote: QuoteItem; quantity: number }[] = [];
       pendingQuote.rooms.forEach((r: any) => {
         const qty = Number(r.quantity || 1);
         totalRooms += qty;
         const matchingCat = quotes.find(q => q.key === r.key);
+        const maxCap = matchingCat?.maxCapacity || (r.key === 'doble' ? 4 : r.key === '1rec' ? 4 : r.key === '2rec' ? 8 : r.key === '3rec' ? 8 : 12);
+        totalMaxCapacity += maxCap * qty;
         selectedList.push({
           quote: matchingCat || {
             key: r.key,
@@ -347,7 +357,7 @@ function ReservarContent() {
             name: r.name || (r.key === 'doble' ? 'Habitación Doble' : r.key === '1rec' ? 'Condominio de 1 Recámara' : r.key === '2rec' ? 'Condominio de 2 Recámaras' : r.key === '3rec' ? 'Condominio de 3 Recámaras' : 'Casa Vacacional'),
             name_en: r.name_en || 'Accommodation',
             capacity: 2,
-            maxCapacity: 4,
+            maxCapacity: maxCap,
             description: '',
             description_en: '',
             features: [],
@@ -369,11 +379,14 @@ function ReservarContent() {
         totalRooms,
         grandTotal: Number(pendingQuote.totalAmount || 0),
         deposit: Number(pendingQuote.depositRequired || Math.round((pendingQuote.totalAmount || 0) * 0.5)),
+        totalMaxCapacity,
         selectedList
       };
     }
     return selectionSummary;
   }, [selectionSummary, pendingQuote, quotes]);
+
+  const isOverCapacity = activeSummary.totalRooms > 0 && totalGuests > activeSummary.totalMaxCapacity;
 
   // Enviar cotización por WhatsApp (Paso 1 del flujo)
   const handleRequestQuote = async () => {
@@ -385,6 +398,13 @@ function ReservarContent() {
 
     if (activeSummary.totalRooms === 0) {
       alert(lang === 'en' ? 'Please select at least one room.' : 'Por favor selecciona al menos una habitación.');
+      return;
+    }
+
+    if (isOverCapacity) {
+      alert(lang === 'en'
+        ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
+        : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`);
       return;
     }
 
@@ -433,6 +453,12 @@ function ReservarContent() {
   // Enviar confirmación y bloqueo a Beds24 (Paso 2 del flujo)
   const handleConfirmBooking = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isOverCapacity) {
+      setSubmitError(lang === 'en'
+        ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
+        : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`);
+      return;
+    }
     if (!guestName.trim()) {
       setSubmitError(lang === 'en' ? 'Please enter your full name.' : 'Por favor ingresa tu nombre completo.');
       return;
@@ -963,55 +989,72 @@ function ReservarContent() {
       {/* ── BARRA FLOTANTE STICKY INFERIOR (CARRITO DE RESERVA) ── */}
       {activeSummary.totalRooms > 0 && !bookingSuccess && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-zinc-200/80 p-4 shadow-xl animate-in slide-in-from-bottom-5">
-          <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-500">
-                <BedDouble size={14} className="text-indigo-600" />
-                <span>
-                  {activeSummary.totalRooms} {t.selectedRoomsCount}
-                </span>
+          <div className="max-w-xl mx-auto space-y-2.5">
+            {/* Mensaje de error de sobrecapacidad */}
+            {isOverCapacity && (
+              <div className="bg-rose-50 border border-rose-200/90 text-rose-800 px-3.5 py-2.5 rounded-2xl text-xs font-bold flex items-start gap-2.5 shadow-xs animate-in fade-in slide-in-from-bottom-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <p className="leading-snug">
+                  {lang === 'en'
+                    ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
+                    : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`}
+                </p>
               </div>
-              <div className="text-base font-black text-zinc-900">
-                ${activeSummary.grandTotal.toLocaleString()} MXN
-              </div>
-              <div className="text-[10px] font-bold text-emerald-600">
-                50% Anticipo: ${activeSummary.deposit.toLocaleString()} MXN
-              </div>
-            </div>
+            )}
 
-            <button
-              type="button"
-              disabled={quoteSending}
-              onClick={() => {
-                if (isConfirmStep) {
-                  setIsModalOpen(true);
-                } else {
-                  handleRequestQuote();
-                }
-              }}
-              className={`py-3.5 px-6 rounded-2xl text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
-                isConfirmStep
-                  ? 'bg-emerald-600 hover:bg-emerald-700'
-                  : 'bg-indigo-600 hover:bg-indigo-700'
-              } disabled:bg-zinc-400`}
-            >
-              {quoteSending ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  <span>{t.quoteSending}</span>
-                </>
-              ) : isConfirmStep ? (
-                <>
-                  <span>{t.completeNameBtn}</span>
-                  <ArrowRight size={14} />
-                </>
-              ) : (
-                <>
-                  <span>{t.continueBtn}</span>
-                  <ArrowRight size={14} />
-                </>
-              )}
-            </button>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-500">
+                  <BedDouble size={14} className={isOverCapacity ? "text-rose-600" : "text-indigo-600"} />
+                  <span>
+                    {activeSummary.totalRooms} {t.selectedRoomsCount} (máx. {activeSummary.totalMaxCapacity} pers.)
+                  </span>
+                </div>
+                <div className="text-base font-black text-zinc-900">
+                  ${activeSummary.grandTotal.toLocaleString()} MXN
+                </div>
+                <div className="text-[10px] font-bold text-emerald-600">
+                  50% Anticipo: ${activeSummary.deposit.toLocaleString()} MXN
+                </div>
+              </div>
+
+              <button
+                type="button"
+                disabled={quoteSending || isOverCapacity}
+                onClick={() => {
+                  if (isOverCapacity) return;
+                  if (isConfirmStep) {
+                    setIsModalOpen(true);
+                  } else {
+                    handleRequestQuote();
+                  }
+                }}
+                className={`py-3.5 px-6 rounded-2xl text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 ${
+                  isOverCapacity
+                    ? 'bg-zinc-300 text-zinc-500 cursor-not-allowed shadow-none'
+                    : isConfirmStep
+                    ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer active:scale-95'
+                    : 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer active:scale-95'
+                }`}
+              >
+                {quoteSending ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>{t.quoteSending}</span>
+                  </>
+                ) : isConfirmStep ? (
+                  <>
+                    <span>{t.completeNameBtn}</span>
+                    <ArrowRight size={14} />
+                  </>
+                ) : (
+                  <>
+                    <span>{t.continueBtn}</span>
+                    <ArrowRight size={14} />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1080,6 +1123,18 @@ function ReservarContent() {
                 <span>${activeSummary.deposit.toLocaleString()} MXN</span>
               </div>
             </div>
+
+            {/* Aviso de sobrecapacidad dentro del modal */}
+            {isOverCapacity && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2.5 rounded-2xl text-xs font-bold flex items-start gap-2.5 shadow-xs">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <p className="leading-snug">
+                  {lang === 'en'
+                    ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
+                    : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`}
+                </p>
+              </div>
+            )}
 
             {/* Formulario de contacto con exigencia de Nombre Completo */}
             <form onSubmit={handleConfirmBooking} className="space-y-4">
@@ -1160,7 +1215,7 @@ function ReservarContent() {
 
               <button
                 type="submit"
-                disabled={submitting || !guestName.trim()}
+                disabled={submitting || !guestName.trim() || isOverCapacity}
                 className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 {submitting ? (
