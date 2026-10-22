@@ -306,6 +306,35 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       finalBotResponse = `Hola. No logramos encontrar una reservación activa vinculada a tu número en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de inmediato. 🌴`;
     }
   }
+  // D. Botones de Cotización, Disponibilidad y Reserva Directa ("Disponibili. y cotización" / "¡Reserva YA!")
+  else if (
+    guestMsgClean.includes('disponibili') || 
+    guestMsgClean.includes('cotización') || 
+    guestMsgClean.includes('cotizacion') || 
+    guestMsgClean.includes('cotizar') || 
+    guestMsgClean.includes('reserva ya') || 
+    guestMsgClean.includes('¡reserva ya!') || 
+    guestMsgClean.includes('reservar') || 
+    guestMsgClean.includes('disponibilidad') || 
+    guestMsgClean.includes('quote & availability') || 
+    guestMsgClean.includes('book now') || 
+    rawPayload.includes('cotizar') || 
+    rawPayload.includes('disponibilidad') || 
+    rawPayload.includes('reserva_ya') || 
+    rawPayload.includes('book_now')
+  ) {
+    const { isSpanishOrLatamPhone } = await import('@/lib/whatsapp');
+    const isEnglish = guestMsgClean.includes('quote') || guestMsgClean.includes('book now') || !isSpanishOrLatamPhone(phone);
+    const lang = isEnglish ? 'en' : 'es';
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+    const cleanPhoneDigits = phone.replace(/\D/g, '');
+    const bookingEngineUrl = `${siteUrl}/public/reservar?phone=${cleanPhoneDigits}&lang=${lang}`;
+
+    isAutoReplyTriggered = true;
+    finalBotResponse = lang === 'en'
+      ? `🏨 *Direct Booking Portal - Condominios Jaroje*\n\nYou can check live availability, photos, and book with exclusive direct rates right here:\n\n👉 ${bookingEngineUrl}\n\n✨ Instant confirmation, 24-hour payment hold, and zero OTA markups!`
+      : `🏨 *Portal de Reservas Directas - Condominios Jaroje*\n\nConsulta disponibilidad en tiempo real, fotos de cada alojamiento y reserva con tarifa directa neta aquí:\n\n👉 ${bookingEngineUrl}\n\n✨ Confirmación inmediata, 24 hrs para transferir tu anticipo del 50% y sin comisiones de agencias.`;
+  }
 
   // ── REGLA DE BIENVENIDA AUTOMÁTICA A WHATSAPP (1 VEZ AL DÍA / 24 HORAS) ──
   // Plantilla: bienvenido_cliente_whatsaap

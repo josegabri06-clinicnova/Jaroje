@@ -877,10 +877,27 @@ export async function sendWhatsAppTemplate(
         'preparacion_llegada': 'preparacion_llegada_v2',
         'bienvenida_checkin': 'bienvenida_checkin_v2',
         'seguimiento_satisfaccion': 'seguimiento_satisfaccion_v2',
-        'bienvenido_cliente_final_v2': 'bienvenido_cliente_llamada',
+        'bienvenido_cliente_final_v2': 'bienvenido_cliente_llamada_v2',
+        'bienvenido_cliente_llamada': 'bienvenido_cliente_llamada_v2',
+        'bienvenido_cliente_whatsaap': 'bienvenido_cliente_whatsaap_v2',
         'portal_huesped_link_en': 'portal_huesped_link',
       };
       const actualMetaTemplate = META_TEMPLATE_ALIASES[templateName] || templateName;
+
+      // Header de imagen para plantillas con portada multimedia (Conmutador y WhatsApp Directo)
+      if (actualMetaTemplate === 'bienvenido_cliente_llamada_v2' || actualMetaTemplate === 'bienvenido_cliente_whatsaap_v2') {
+        components.push({
+          type: 'header',
+          parameters: [
+            {
+              type: 'image',
+              image: {
+                link: 'https://jaroje-app.vercel.app/images/general/1.jpg'
+              }
+            }
+          ]
+        });
+      }
 
       if (parameters && parameters.length > 0) {
         components.push({
@@ -1090,10 +1107,12 @@ export async function sendWhatsAppTemplate(
             case 'wifi_informacion':
               return `📶 WiFi, Access Codes & Important Info\n\nWiFi: JAROJE\nPassword: HUXX2025\nGate Code: 3456\nPool Hours: 9:00 AM – 10:00 PM`;
             case 'bienvenido_cliente_llamada':
+            case 'bienvenido_cliente_llamada_v2':
             case 'bienvenido_cliente_final_v2':
-              return `🌴 Hello! Welcome to Condominios Jaroje. We apologize for missing your call. How can we assist you today? 😊\n\n[Button: Photos and Rates] [Button: How to get there]`;
+              return `👋 Hello! Welcome to Condominios Jaroje 🌴\n\nWe noticed you tried to call us and apologize for missing your call. We are pleased to share our lodging options, rates, and availability.\n\n[Button: Photos and rates] [Button: Quote & availability] [Button: Book NOW!]`;
             case 'bienvenido_cliente_whatsaap':
-              return `🌴 Hello! Welcome to Condominios Jaroje. It will be our pleasure to assist you. How can we assist you today? 😊\n\n[Button: Photos and Rates] [Button: How to get there]`;
+            case 'bienvenido_cliente_whatsaap_v2':
+              return `👋 Hello! Welcome to Condominios Jaroje 🌴\n\nWe are pleased to share our lodging options, rates, and availability.\n\n[Button: Photos and rates] [Button: Quote & availability] [Button: Book NOW!]`;
             case 'pago_anticipo_recibido':
               const abonadoEn = params[1] || '$0.00';
               const saldoEn = params[2] || '$0.00';
@@ -1153,10 +1172,12 @@ export async function sendWhatsAppTemplate(
             const motivo = params[2] || 'No especificado';
             return `❌ Solicitud Reservación Rechazada\n\nHola, ${name}.\n\nTe informamos que tu solicitud de reservación #${params[1] || ''} ha sido rechazada por el siguiente motivo:\n\n*${motivo}*\n\nLamentamos los inconvenientes que esto pueda causarte.`;
           case 'bienvenido_cliente_llamada':
+          case 'bienvenido_cliente_llamada_v2':
           case 'bienvenido_cliente_final_v2':
-            return `🌴 ¡Hola! Bienvenido a Condominios Jaroje. Sentimos no haber podido atender tu llamada. ¿En qué podemos apoyarte el día de hoy? 😊\n\n[Botón: Fotos y Tarifas] [Botón: Cómo llegar]`;
+            return `👋 ¡Hola! Bienvenido a Condominios Jaroje 🌴\n\nVimos que intentaste comunicarte con nosotros por teléfono y lamentamos no haber podido responder tu llamada. Con gusto te compartimos nuestras opciones de alojamiento, tarifas y disponibilidad.\n\n[Botón: Fotos y tarifas] [Botón: Disponibili. y cotización] [Botón: ¡Reserva YA!]`;
           case 'bienvenido_cliente_whatsaap':
-            return `🌴 ¡Hola! Bienvenido a Condominios Jaroje. Será un gusto atenderte. ¿En qué podemos apoyarte el día de hoy? 😊\n\n[Botón: Fotos y Tarifas] [Botón: Cómo llegar]`;
+          case 'bienvenido_cliente_whatsaap_v2':
+            return `👋 ¡Hola! Bienvenido a Condominios Jaroje 🌴\n\nCon gusto te compartimos nuestras opciones de alojamiento, tarifas y disponibilidad.\n\n[Botón: Fotos y tarifas] [Botón: Disponibili. y cotización] [Botón: ¡Reserva YA!]`;
           default:
             return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
         }
@@ -1631,9 +1652,9 @@ export async function sendTemplate_AlojamientoListo(booking: any, bypassPause: b
 }
 
 /**
- * 13. Plantilla de Bienvenida al Conmutador (bienvenido_cliente_llamada)
+ * 13. Plantilla de Bienvenida al Conmutador (bienvenido_cliente_llamada_v2)
  * Se envía automáticamente cuando un cliente llama a las líneas telefónicas/conmutador del hotel.
- * Utiliza la plantilla oficial bienvenido_cliente_llamada en Meta WABA.
+ * Utiliza la plantilla oficial con foto de fachada y 3 botones (Fotos, Cotización, Reserva YA).
  */
 export async function sendTemplate_BienvenidoConmutador(
   phone: string,
@@ -1642,13 +1663,13 @@ export async function sendTemplate_BienvenidoConmutador(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada', [], undefined, undefined, undefined, true, lang);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada_v2', [], undefined, undefined, undefined, true, lang);
 }
 
 /**
- * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap)
- * Se envía automáticamente cuando un cliente escribe por WhatsApp al número del hotel o desde el conmutador.
- * Utiliza la plantilla oficial bienvenido_cliente_whatsaap en Meta WABA.
+ * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap_v2)
+ * Se envía automáticamente cuando un cliente escribe por WhatsApp al número del hotel o solicita cotización.
+ * Idéntica a la del conmutador pero sin la frase de perdón por la llamada perdida.
  */
 export async function sendTemplate_BienvenidoWhatsApp(
   phone: string,
@@ -1663,7 +1684,7 @@ export async function sendTemplate_BienvenidoWhatsApp(
   if (bookingId && String(bookingId) !== '0' && String(bookingId) !== 'general') {
     return sendTemplate3_ReservacionConfirmada({ id: bookingId, guest_name: name, phone }, true);
   }
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap', [], undefined, undefined, undefined, true, lang);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap_v2', [], undefined, undefined, undefined, true, lang);
 }
 
 /**
