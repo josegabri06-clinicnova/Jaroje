@@ -337,9 +337,11 @@ function ReservarContent() {
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200/80 shadow-xs">
         <div className="max-w-xl mx-auto px-4 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-lg shadow-sm">
-              J
-            </div>
+            <img 
+              src="/logo-jaroje.png" 
+              alt="Condominios Jaroje" 
+              className="h-10 w-auto object-contain shrink-0" 
+            />
             <div>
               <h1 className="text-[15px] font-black tracking-tight text-zinc-900 leading-none">
                 {t.hotelName}
@@ -394,6 +396,11 @@ function ReservarContent() {
         {bookingSuccess ? (
           <div className="space-y-5 animate-in fade-in duration-300">
             <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-6 text-center space-y-3 shadow-xs">
+              <img 
+                src="/logo-jaroje.png" 
+                alt="Condominios Jaroje" 
+                className="h-10 w-auto mx-auto object-contain mb-1" 
+              />
               <div className="w-14 h-14 bg-emerald-600 text-white rounded-2xl flex items-center justify-center mx-auto shadow-md">
                 <Check size={32} className="stroke-[3]" />
               </div>
@@ -792,9 +799,16 @@ function ReservarContent() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl">
             <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
-              <h3 className="text-base font-black text-zinc-900">
-                {t.summaryTitle}
-              </h3>
+              <div className="flex items-center gap-2.5">
+                <img 
+                  src="/logo-jaroje.png" 
+                  alt="Condominios Jaroje" 
+                  className="h-6 w-auto object-contain" 
+                />
+                <h3 className="text-base font-black text-zinc-900">
+                  {t.summaryTitle}
+                </h3>
+              </div>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center cursor-pointer"
