@@ -879,13 +879,19 @@ export async function sendWhatsAppTemplate(
         'seguimiento_satisfaccion': 'seguimiento_satisfaccion_v2',
         'bienvenido_cliente_final_v2': 'bienvenido_cliente_llamada_v2',
         'bienvenido_cliente_llamada': 'bienvenido_cliente_llamada_v2',
-        'bienvenido_cliente_whatsaap': 'bienvenido_cliente_whatsaap_v2',
+        'bienvenido_cliente_whatsaap': 'bienvenido_cliente_whatsaap_v4',
+        'bienvenido_cliente_whatsaap_v4': 'bienvenido_cliente_whatsaap_v4',
+        'confirmar_reserva': 'confirmar_reserva',
         'portal_huesped_link_en': 'portal_huesped_link',
       };
       const actualMetaTemplate = META_TEMPLATE_ALIASES[templateName] || templateName;
 
       // Header de imagen para plantillas con portada multimedia (Conmutador y WhatsApp Directo)
-      if (actualMetaTemplate === 'bienvenido_cliente_llamada_v2' || actualMetaTemplate === 'bienvenido_cliente_whatsaap_v2') {
+      if (
+        actualMetaTemplate === 'bienvenido_cliente_llamada_v2' || 
+        actualMetaTemplate === 'bienvenido_cliente_whatsaap_v2' ||
+        actualMetaTemplate === 'bienvenido_cliente_whatsaap_v4'
+      ) {
         components.push({
           type: 'header',
           parameters: [
@@ -1177,7 +1183,10 @@ export async function sendWhatsAppTemplate(
             return `👋 ¡Hola! Bienvenido a Condominios Jaroje 🌴\n\nVimos que intentaste comunicarte con nosotros por teléfono y lamentamos no haber podido responder tu llamada. Con gusto te compartimos nuestras opciones de alojamiento, tarifas y disponibilidad.\n\n[Botón: Fotos y tarifas] [Botón: Disponibili. y cotización] [Botón: ¡Reserva YA!]`;
           case 'bienvenido_cliente_whatsaap':
           case 'bienvenido_cliente_whatsaap_v2':
-            return `👋 ¡Hola! Bienvenido a Condominios Jaroje 🌴\n\nCon gusto te compartimos nuestras opciones de alojamiento, tarifas y disponibilidad.\n\n[Botón: Fotos y tarifas] [Botón: Disponibili. y cotización] [Botón: ¡Reserva YA!]`;
+          case 'bienvenido_cliente_whatsaap_v4':
+            return `👋 ¡Hola! Bienvenido a Condominios Jaroje 🌴\n\nCon gusto te compartimos nuestras opciones de alojamiento, tarifas y disponibilidad.\n\n[Botón: Disponibilidad y Cotización] [Botón: Fotos y Tarifas] [Botón: Ubicación]`;
+          case 'confirmar_reserva':
+            return `🎉 ¡Excelente! 🎉\n\nHemos recibido tu cotización. Para confirmar tu reserva, necesitamos que introduzcas tu nombre y apellidos.\n\nPulsa el botón para completar tu reserva 👇\n\n[Botón: Confirmar Reserva]`;
           default:
             return `[Plantilla: ${tName}]` + (params.length > 0 ? ` (Parámetros: ${params.join(', ')})` : '');
         }
@@ -1667,9 +1676,9 @@ export async function sendTemplate_BienvenidoConmutador(
 }
 
 /**
- * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap_v2)
- * Se envía automáticamente cuando un cliente escribe por WhatsApp al número del hotel o solicita cotización.
- * Idéntica a la del conmutador pero sin la frase de perdón por la llamada perdida.
+ * 14. Plantilla de Bienvenida a WhatsApp (bienvenido_cliente_whatsaap_v4)
+ * Se envía automáticamente cuando un cliente escribe por WhatsApp y no había interactuado en 1 semana.
+ * Contiene botón directo con enlace dinámico al portal de reservas (?phone={{1}}).
  */
 export async function sendTemplate_BienvenidoWhatsApp(
   phone: string,
@@ -1678,13 +1687,29 @@ export async function sendTemplate_BienvenidoWhatsApp(
   bookingId?: string | number
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
+  const cleanPhone = cleanPhoneForMeta(phone);
   const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
   const name = guestName ? getFirstName(guestName) : 'Huésped';
 
   if (bookingId && String(bookingId) !== '0' && String(bookingId) !== 'general') {
     return sendTemplate3_ReservacionConfirmada({ id: bookingId, guest_name: name, phone }, true);
   }
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap_v2', [], undefined, undefined, undefined, true, lang);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap_v4', [], [cleanPhone], undefined, 'url', true, lang);
+}
+
+/**
+ * 14.1. Plantilla de Confirmación de Reserva / Paso 2 (confirmar_reserva)
+ * Se envía al instante cuando el cliente finaliza la selección de fechas y habitaciones en el portal.
+ * Invita al cliente a pulsar el botón "Confirmar Reserva" para abrir el portal y solicitar su nombre completo.
+ */
+export async function sendTemplate_ConfirmarReserva(
+  phone: string,
+  langOverride?: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  if (!phone) return { success: false, error: 'Sin teléfono' };
+  const cleanPhone = cleanPhoneForMeta(phone);
+  const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
+  return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [cleanPhone], undefined, 'url', true, lang);
 }
 
 /**

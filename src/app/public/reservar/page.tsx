@@ -99,6 +99,14 @@ function ReservarContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // ── Flujo de Cotización y Confirmación de 2 Pasos con WhatsApp ──
+  const [pendingQuote, setPendingQuote] = useState<any | null>(null);
+  const [hasRestoredPendingQuote, setHasRestoredPendingQuote] = useState(false);
+  const [isConfirmStep, setIsConfirmStep] = useState(false);
+  const [quoteSending, setQuoteSending] = useState(false);
+  const [isQuoteSentModal, setIsQuoteSentModal] = useState(false);
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+
   // Pantalla de éxito
   const [bookingSuccess, setBookingSuccess] = useState<any | null>(null);
 
@@ -130,8 +138,14 @@ function ReservarContent() {
           guests: 'guests',
           selectRoom: 'Select',
           selectedRoomsCount: 'accommodations selected',
-          continueBtn: 'Continue to Lock Booking',
+          continueBtn: 'Continue to Book',
+          requestQuoteBtn: 'Send Quote to WhatsApp',
+          quoteSending: 'Sending to your WhatsApp...',
+          completeNameBtn: 'Enter Full Name & Confirm',
           summaryTitle: 'Booking Summary',
+          confirmPendingQuoteTitle: 'Official Booking Confirmation',
+          confirmPendingQuoteBadge: 'Step 2: Official Confirmation',
+          confirmPendingQuoteDesc: 'We received your WhatsApp quote. To lock your stay in Beds24 for 24 hours, please enter your full name.',
           guestDetailsTitle: 'Guest Details',
           fullName: 'Full Name',
           phone: 'WhatsApp Phone',
@@ -150,7 +164,10 @@ function ReservarContent() {
           bankAccountHolder: 'Beneficiary: Condominios Jaroje',
           timeRemainingBanner: '⏳ You have 24 hours to upload your payment receipt to avoid cancellation.',
           activeBookingBanner: 'You already have an active stay with us:',
-          viewPortalLink: 'View Guest Portal'
+          viewPortalLink: 'View Guest Portal',
+          phoneModalTitle: 'Where should we send your quote?',
+          phoneModalDesc: 'Enter your WhatsApp number so we can send you the official breakdown and confirmation button:',
+          sendQuoteBtn: 'Send Quote to WhatsApp'
         }
       : {
           portalTitle: 'Portal Oficial de Reservas',
@@ -178,9 +195,15 @@ function ReservarContent() {
           selectRoom: 'Seleccionar',
           selectedRoomsCount: 'alojamientos seleccionados',
           continueBtn: 'Continuar a Reservar',
+          requestQuoteBtn: 'Enviar Cotización a WhatsApp',
+          quoteSending: 'Enviando a tu WhatsApp...',
+          completeNameBtn: 'Ingresar Nombre y Confirmar',
           summaryTitle: 'Resumen de tu Solicitud',
+          confirmPendingQuoteTitle: 'Confirmar Reserva Oficial',
+          confirmPendingQuoteBadge: 'Paso 2: Confirmación Oficial',
+          confirmPendingQuoteDesc: 'Recibimos tu cotización por WhatsApp. Para formalizar el bloqueo en Beds24 por 24 horas, necesitamos tu nombre y apellidos.',
           guestDetailsTitle: 'Datos del Titular',
-          fullName: 'Nombre completo',
+          fullName: 'Nombre y Apellidos completos',
           phone: 'Teléfono WhatsApp',
           email: 'Correo electrónico (Opcional)',
           notesPlaceholder: 'Petición especial o comentarios para tu llegada...',
@@ -197,7 +220,10 @@ function ReservarContent() {
           bankAccountHolder: 'Beneficiario: Condominios Jaroje',
           timeRemainingBanner: '⏳ Cuentas con 24 horas para enviar tu comprobante y confirmar tu estancia.',
           activeBookingBanner: 'Ya cuentas con una reservación activa con nosotros:',
-          viewPortalLink: 'Ver Portal del Huésped'
+          viewPortalLink: 'Ver Portal del Huésped',
+          phoneModalTitle: '¿A qué WhatsApp enviamos tu cotización?',
+          phoneModalDesc: 'Ingresa tu número de WhatsApp para enviarte el desglose oficial y el botón de confirmación directa:',
+          sendQuoteBtn: 'Enviar Cotización a mi WhatsApp'
         };
   }, [lang]);
 
@@ -213,7 +239,31 @@ function ReservarContent() {
         setQuotes(data.quotes || []);
         if (data.existingReservations && data.existingReservations.length > 0) {
           setExistingReservations(data.existingReservations);
-          // Si el usuario llega por primera vez con reservas existentes, podemos mostrar pestaña
+        }
+
+        // Si hay una cotización pendiente (el huésped pulsó "Confirmar Reserva" en WhatsApp):
+        if (data.pendingQuote && data.pendingQuote.status === 'pending_name') {
+          setPendingQuote(data.pendingQuote);
+          if (!hasRestoredPendingQuote) {
+            setHasRestoredPendingQuote(true);
+            if (data.pendingQuote.checkIn) setCheckIn(data.pendingQuote.checkIn);
+            if (data.pendingQuote.checkOut) setCheckOut(data.pendingQuote.checkOut);
+            if (data.pendingQuote.adults) setAdults(Number(data.pendingQuote.adults));
+            if (data.pendingQuote.children) setChildren(Number(data.pendingQuote.children));
+            if (Array.isArray(data.pendingQuote.rooms)) {
+              const restoredRooms: Record<string, number> = {};
+              data.pendingQuote.rooms.forEach((r: any) => {
+                if (r.key && r.quantity) restoredRooms[r.key] = Number(r.quantity);
+              });
+              setSelectedRooms(restoredRooms);
+            }
+            if (data.pendingQuote.phone) {
+              setGuestPhone(data.pendingQuote.phone);
+            }
+            // "se abrirá una ventana que les exigirá pedir el nombre completo"
+            setIsConfirmStep(true);
+            setIsModalOpen(true);
+          }
         }
       }
     } catch (err) {
@@ -276,7 +326,109 @@ function ReservarContent() {
     };
   }, [quotes, selectedRooms]);
 
-  // Enviar confirmación y bloqueo a Beds24
+  // Resumen activo que respalda pendingQuote si fue restaurado antes de que carguen las cotizaciones
+  const activeSummary = useMemo(() => {
+    if (selectionSummary.totalRooms > 0) {
+      return selectionSummary;
+    }
+    if (pendingQuote && Array.isArray(pendingQuote.rooms) && pendingQuote.rooms.length > 0) {
+      let totalRooms = 0;
+      const selectedList: { quote: QuoteItem; quantity: number }[] = [];
+      pendingQuote.rooms.forEach((r: any) => {
+        const qty = Number(r.quantity || 1);
+        totalRooms += qty;
+        const matchingCat = quotes.find(q => q.key === r.key);
+        selectedList.push({
+          quote: matchingCat || {
+            key: r.key,
+            roomId: r.roomId || '',
+            name: r.name || (r.key === 'doble' ? 'Habitación Doble' : r.key === '1rec' ? 'Condominio de 1 Recámara' : r.key === '2rec' ? 'Condominio de 2 Recámaras' : r.key === '3rec' ? 'Condominio de 3 Recámaras' : 'Casa Vacacional'),
+            name_en: r.name_en || 'Accommodation',
+            capacity: 2,
+            maxCapacity: 4,
+            description: '',
+            description_en: '',
+            features: [],
+            features_en: [],
+            photos: [],
+            totalUnits: 1,
+            availableUnitsCount: 1,
+            isAvailable: true,
+            nights: Number(r.nights || 1),
+            pricePerNight: Number(r.pricePerNight || 0),
+            totalPrice: Number(r.totalPrice || 0),
+            depositRequired: Math.round(Number(r.totalPrice || 0) * 0.5),
+            currency: 'MXN'
+          },
+          quantity: qty
+        });
+      });
+      return {
+        totalRooms,
+        grandTotal: Number(pendingQuote.totalAmount || 0),
+        deposit: Number(pendingQuote.depositRequired || Math.round((pendingQuote.totalAmount || 0) * 0.5)),
+        selectedList
+      };
+    }
+    return selectionSummary;
+  }, [selectionSummary, pendingQuote, quotes]);
+
+  // Enviar cotización por WhatsApp (Paso 1 del flujo)
+  const handleRequestQuote = async () => {
+    const phoneToUse = guestPhone.trim() || phoneParam.trim();
+    if (!phoneToUse) {
+      setIsPhoneModalOpen(true);
+      return;
+    }
+
+    if (activeSummary.totalRooms === 0) {
+      alert(lang === 'en' ? 'Please select at least one room.' : 'Por favor selecciona al menos una habitación.');
+      return;
+    }
+
+    setQuoteSending(true);
+    setSubmitError('');
+
+    try {
+      const payloadRooms = activeSummary.selectedList.map(item => ({
+        key: item.quote.key,
+        name: lang === 'en' ? item.quote.name_en : item.quote.name,
+        quantity: item.quantity,
+        pricePerNight: item.quote.pricePerNight,
+        totalPrice: item.quote.totalPrice
+      }));
+
+      const res = await fetch('/api/public/cotizacion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: phoneToUse,
+          checkIn,
+          checkOut,
+          adults,
+          children,
+          rooms: payloadRooms,
+          totalAmount: activeSummary.grandTotal,
+          depositRequired: activeSummary.deposit
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al enviar cotización');
+      }
+
+      setPendingQuote(data.quoteData);
+      setIsQuoteSentModal(true);
+    } catch (err: any) {
+      console.error("Error requesting quote:", err);
+      alert(err.message || 'Error al enviar cotización a WhatsApp. Intenta de nuevo.');
+    } finally {
+      setQuoteSending(false);
+    }
+  };
+
+  // Enviar confirmación y bloqueo a Beds24 (Paso 2 del flujo)
   const handleConfirmBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guestName.trim()) {
@@ -292,7 +444,7 @@ function ReservarContent() {
     setSubmitError('');
 
     try {
-      const payloadRooms = selectionSummary.selectedList.map(item => ({
+      const payloadRooms = activeSummary.selectedList.map(item => ({
         key: item.quote.key,
         quantity: item.quantity,
         pricePerNight: item.quote.pricePerNight,
@@ -323,6 +475,8 @@ function ReservarContent() {
 
       setBookingSuccess(data);
       setIsModalOpen(false);
+      setIsConfirmStep(false);
+      setPendingQuote(null);
     } catch (err: any) {
       console.error("Error submitting booking:", err);
       setSubmitError(err.message || 'Error al procesar la reserva. Por favor intenta de nuevo.');
@@ -504,6 +658,41 @@ function ReservarContent() {
         ) : (
           /* ── MOTOR DE RESERVAS (ESTILO BOOKING) ── */
           <div className="space-y-5 animate-in fade-in duration-200">
+            {/* BANNER DE COTIZACIÓN PENDIENTE (PROVENIENTE DE WHATSAPP) */}
+            {pendingQuote && (
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/90 rounded-3xl p-4 shadow-xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center">
+                      ✓
+                    </span>
+                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800">
+                      {lang === 'en' ? 'Quote in progress from WhatsApp' : 'Cotización en progreso desde WhatsApp'}
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-2xs">
+                    24h Hold
+                  </span>
+                </div>
+                <div className="flex justify-between items-baseline text-xs text-zinc-700 font-medium px-1">
+                  <span>📅 {checkIn} al {checkOut} ({activeSummary.totalRooms} {t.selectedRoomsCount})</span>
+                  <span className="font-black text-sm text-zinc-900">${activeSummary.grandTotal.toLocaleString()} MXN</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsConfirmStep(true);
+                    setIsModalOpen(true);
+                  }}
+                  className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+                >
+                  <User size={14} />
+                  <span>{t.completeNameBtn}</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
+            )}
+
             {/* BUSCADOR DE FECHAS Y PERSONAS */}
             <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-xs space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
@@ -764,37 +953,62 @@ function ReservarContent() {
       </main>
 
       {/* ── BARRA FLOTANTE STICKY INFERIOR (CARRITO DE RESERVA) ── */}
-      {selectionSummary.totalRooms > 0 && !bookingSuccess && (
+      {activeSummary.totalRooms > 0 && !bookingSuccess && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-zinc-200/80 p-4 shadow-xl animate-in slide-in-from-bottom-5">
           <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-500">
                 <BedDouble size={14} className="text-indigo-600" />
                 <span>
-                  {selectionSummary.totalRooms} {t.selectedRoomsCount}
+                  {activeSummary.totalRooms} {t.selectedRoomsCount}
                 </span>
               </div>
               <div className="text-base font-black text-zinc-900">
-                ${selectionSummary.grandTotal.toLocaleString()} MXN
+                ${activeSummary.grandTotal.toLocaleString()} MXN
               </div>
               <div className="text-[10px] font-bold text-emerald-600">
-                50% Anticipo: ${selectionSummary.deposit.toLocaleString()} MXN
+                50% Anticipo: ${activeSummary.deposit.toLocaleString()} MXN
               </div>
             </div>
 
             <button
               type="button"
-              onClick={() => setIsModalOpen(true)}
-              className="py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+              disabled={quoteSending}
+              onClick={() => {
+                if (isConfirmStep) {
+                  setIsModalOpen(true);
+                } else {
+                  handleRequestQuote();
+                }
+              }}
+              className={`py-3.5 px-6 rounded-2xl text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95 ${
+                isConfirmStep
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-indigo-600 hover:bg-indigo-700'
+              } disabled:bg-zinc-400`}
             >
-              <span>{t.continueBtn}</span>
-              <ArrowRight size={14} />
+              {quoteSending ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" />
+                  <span>{t.quoteSending}</span>
+                </>
+              ) : isConfirmStep ? (
+                <>
+                  <span>{t.completeNameBtn}</span>
+                  <ArrowRight size={14} />
+                </>
+              ) : (
+                <>
+                  <span>{t.continueBtn}</span>
+                  <ArrowRight size={14} />
+                </>
+              )}
             </button>
           </div>
         </div>
       )}
 
-      {/* ── MODAL / BOTTOM SHEET DE CONFIRMACIÓN Y CONTACTO ── */}
+      {/* ── MODAL / BOTTOM SHEET DE CONFIRMACIÓN Y CONTACTO (DEMANDA NOMBRE COMPLETO) ── */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl">
@@ -805,9 +1019,16 @@ function ReservarContent() {
                   alt="Condominios Jaroje" 
                   className="h-6 w-auto object-contain" 
                 />
-                <h3 className="text-base font-black text-zinc-900">
-                  {t.summaryTitle}
-                </h3>
+                <div>
+                  <h3 className="text-base font-black text-zinc-900 leading-tight">
+                    {isConfirmStep ? t.confirmPendingQuoteTitle : t.summaryTitle}
+                  </h3>
+                  {isConfirmStep && (
+                    <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                      {t.confirmPendingQuoteBadge}
+                    </span>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -817,13 +1038,26 @@ function ReservarContent() {
               </button>
             </div>
 
+            {/* Aviso de confirmación o garantía */}
+            {isConfirmStep ? (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-emerald-950 font-medium">
+                <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                <p className="leading-snug">{t.confirmPendingQuoteDesc}</p>
+              </div>
+            ) : (
+              <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-indigo-950 font-medium">
+                <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                <p className="leading-snug">{t.guaranteeDesc}</p>
+              </div>
+            )}
+
             {/* Resumen de selección */}
             <div className="bg-zinc-50 rounded-2xl p-4 space-y-2 border border-zinc-200/60 text-xs">
               <div className="flex justify-between font-bold text-zinc-600">
                 <span>Fechas:</span>
-                <span className="text-zinc-900">{checkIn} al {checkOut} ({quotes[0]?.nights} noches)</span>
+                <span className="text-zinc-900">{checkIn} al {checkOut} ({activeSummary.selectedList[0]?.quote?.nights || 1} noches)</span>
               </div>
-              {selectionSummary.selectedList.map(item => (
+              {activeSummary.selectedList.map(item => (
                 <div key={item.quote.key} className="flex justify-between text-zinc-700">
                   <span>{item.quantity}x {lang === 'en' ? item.quote.name_en : item.quote.name}</span>
                   <span className="font-bold text-zinc-900">${(item.quote.totalPrice * item.quantity).toLocaleString()} MXN</span>
@@ -831,37 +1065,36 @@ function ReservarContent() {
               ))}
               <div className="border-t border-zinc-200 pt-2 flex justify-between font-black text-sm text-zinc-900">
                 <span>Total de la estancia:</span>
-                <span>${selectionSummary.grandTotal.toLocaleString()} MXN</span>
+                <span>${activeSummary.grandTotal.toLocaleString()} MXN</span>
               </div>
               <div className="flex justify-between font-black text-xs text-indigo-700">
                 <span>Anticipo a pagar (50%):</span>
-                <span>${selectionSummary.deposit.toLocaleString()} MXN</span>
+                <span>${activeSummary.deposit.toLocaleString()} MXN</span>
               </div>
             </div>
 
-            {/* Aviso de garantía de 24 horas */}
-            <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-indigo-950 font-medium">
-              <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-              <p className="leading-snug">{t.guaranteeDesc}</p>
-            </div>
-
-            {/* Formulario de contacto */}
-            <form onSubmit={handleConfirmBooking} className="space-y-3.5">
-              <div>
-                <label className="text-[11px] font-bold text-zinc-500 block mb-1">
-                  {t.fullName} *
+            {/* Formulario de contacto con exigencia de Nombre Completo */}
+            <form onSubmit={handleConfirmBooking} className="space-y-4">
+              <div className="p-3.5 bg-indigo-50/50 border-2 border-indigo-200 rounded-2xl space-y-1.5">
+                <label className="text-[12px] font-black text-zinc-900 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <User className="w-4 h-4 text-indigo-600" />
+                    {t.fullName} *
+                  </span>
+                  <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">Obligatorio</span>
                 </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-3 w-4 h-4 text-zinc-400" />
-                  <input
-                    type="text"
-                    required
-                    value={guestName}
-                    onChange={e => setGuestName(e.target.value)}
-                    placeholder="Ej. Juan Pérez"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none"
-                  />
-                </div>
+                <p className="text-[11px] text-zinc-600">
+                  Ingresa tu nombre y apellidos tal como aparecen en tu identificación oficial.
+                </p>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={guestName}
+                  onChange={e => setGuestName(e.target.value)}
+                  placeholder="Ej. Juan Carlos Pérez Morales"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 text-xs font-bold text-zinc-900 bg-white outline-none transition-all shadow-xs"
+                />
               </div>
 
               <div>
@@ -919,13 +1152,13 @@ function ReservarContent() {
 
               <button
                 type="submit"
-                disabled={submitting}
-                className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                disabled={submitting || !guestName.trim()}
+                className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 {submitting ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Bloqueando en calendario...</span>
+                    <span>Bloqueando en Beds24...</span>
                   </>
                 ) : (
                   <>
@@ -935,6 +1168,126 @@ function ReservarContent() {
                 )}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: COTIZACIÓN ENVIADA POR WHATSAPP (PASO 1 EXITOSO) ── */}
+      {isQuoteSentModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <img 
+                  src="/logo-jaroje.png" 
+                  alt="Condominios Jaroje" 
+                  className="h-6 w-auto object-contain" 
+                />
+                <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  WhatsApp Enviado 📲
+                </span>
+              </div>
+              <button
+                onClick={() => setIsQuoteSentModal(false)}
+                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="text-center py-2 space-y-2">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl shadow-inner">
+                💬
+              </div>
+              <h3 className="text-lg font-black text-zinc-900">
+                {lang === 'en' ? 'Quote sent to your WhatsApp!' : '¡Cotización enviada a tu WhatsApp!'}
+              </h3>
+              <p className="text-xs text-zinc-600 leading-relaxed max-w-sm mx-auto">
+                {lang === 'en'
+                  ? 'We have sent your quotation to your WhatsApp. To guarantee and lock your dates for 24 hours:'
+                  : 'Hemos enviado el detalle de tu cotización a tu WhatsApp. Para asegurar y bloquear tus habitaciones por 24 horas:'}
+              </p>
+            </div>
+
+            {/* Instrucciones paso a paso */}
+            <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-200/70 space-y-3 text-xs">
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">1</span>
+                <p className="text-zinc-700 font-medium">
+                  {lang === 'en' ? 'Open your WhatsApp chat with Condominios Jaroje.' : 'Abre tu chat de WhatsApp con Condominios Jaroje.'}
+                </p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">2</span>
+                <p className="text-zinc-700 font-medium">
+                  {lang === 'en' ? 'Tap the button ' : 'Pulsa el botón '}<strong className="text-emerald-700 font-bold">"Confirmar Reserva"</strong>.
+                </p>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">3</span>
+                <p className="text-zinc-700 font-medium">
+                  {lang === 'en' ? 'Enter your full name to instantly block your rooms in Beds24.' : 'Introduce tu nombre completo para asegurar tus habitaciones de inmediato en Beds24.'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setIsQuoteSentModal(false)}
+              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>{lang === 'en' ? 'Understood, check my WhatsApp' : 'Entendido, revisar mi WhatsApp'}</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: PEDIR NÚMERO DE TELÉFONO SI NO VIENE EN LA URL ── */}
+      {isPhoneModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <h3 className="text-sm font-black text-zinc-900">
+                {t.phoneModalTitle}
+              </h3>
+              <button
+                onClick={() => setIsPhoneModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center cursor-pointer"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-600 leading-relaxed">
+              {t.phoneModalDesc}
+            </p>
+
+            <div>
+              <div className="relative">
+                <Phone className="absolute left-3 top-3 w-4 h-4 text-zinc-400" />
+                <input
+                  type="tel"
+                  autoFocus
+                  value={guestPhone}
+                  onChange={e => setGuestPhone(e.target.value)}
+                  placeholder="Ej. +52 958 123 4567"
+                  className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none"
+                />
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={!guestPhone.trim() || quoteSending}
+              onClick={() => {
+                setIsPhoneModalOpen(false);
+                handleRequestQuote();
+              }}
+              className="w-full py-3.5 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {quoteSending ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+              <span>{t.sendQuoteBtn}</span>
+            </button>
           </div>
         </div>
       )}

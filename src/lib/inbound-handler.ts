@@ -336,22 +336,41 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       : `🏨 *Portal de Reservas Directas - Condominios Jaroje*\n\nConsulta disponibilidad en tiempo real, fotos de cada alojamiento y reserva con tarifa directa neta aquí:\n\n👉 ${bookingEngineUrl}\n\n✨ Confirmación inmediata, 24 hrs para transferir tu anticipo del 50% y sin comisiones de agencias.`;
   }
 
-  // ── REGLA DE BIENVENIDA AUTOMÁTICA A WHATSAPP (1 VEZ AL DÍA / 24 HORAS) ──
-  // Plantilla: bienvenido_cliente_whatsaap
-  // Cuando el cliente le habla por WhatsApp a Rolando, le llega esta plantilla.
-  // Regla estricta: Solo le llega como máximo 1 vez al día (ventana móvil de 24 horas).
-  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  // E. Botón / Consulta de Ubicación (Botón "Ubicación" de bienvenido_cliente_whatsaap_v4)
+  else if (
+    guestMsgClean.includes('ubicacion') || 
+    guestMsgClean.includes('ubicación') || 
+    guestMsgClean.includes('como llegar') || 
+    guestMsgClean.includes('cómo llegar') || 
+    guestMsgClean.includes('location') || 
+    guestMsgClean.includes('maps') || 
+    rawPayload.includes('ubicacion') || 
+    rawPayload.includes('ubicación')
+  ) {
+    const isEnglish = guestMsgClean.includes('location') || guestMsgClean.includes('maps');
+    const mapsUrl = 'https://maps.app.goo.gl/ZEYCWntV2rdT48kK8';
+    isAutoReplyTriggered = true;
+    finalBotResponse = isEnglish
+      ? `📍 *Location - Condominios Jaroje*\n\nWe are located in Santa María Huatulco, Oaxaca.\n\n👉 Google Maps directions: ${mapsUrl}`
+      : `📍 *Ubicación - Condominios Jaroje*\n\nEstamos ubicados en Santa María Huatulco, Oaxaca.\n\n👉 Cómo llegar en Google Maps: ${mapsUrl}`;
+  }
+
+  // ── REGLA DE BIENVENIDA AUTOMÁTICA A WHATSAPP (1 VEZ POR SEMANA / 7 DÍAS) ──
+  // Plantilla: bienvenido_cliente_whatsaap_v4
+  // Cuando el cliente le habla por WhatsApp a Rolando y no había interactuado en 1 semana.
+  // Regla estricta: Solo le llega como máximo 1 vez cada 7 días.
+  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const now = Date.now();
 
   let lastWelcomeSentAt = 0;
 
   // A. Revisar en memoria para evitar colisiones rápidas
   const memSentTime = welcomeSentMemoryCache.get(phone);
-  if (memSentTime && now - memSentTime < ONE_DAY_MS) {
+  if (memSentTime && now - memSentTime < ONE_WEEK_MS) {
     lastWelcomeSentAt = Math.max(lastWelcomeSentAt, memSentTime);
   }
 
-  // B. Revisar en whatsapp_logs si se le envió la plantilla bienvenido_cliente_whatsaap en las últimas 24 horas
+  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida en los últimos 7 días
   try {
     const { data: lastWelcomeLog } = await supabase
       .from('whatsapp_logs')
@@ -372,7 +391,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     console.warn("[Inbound Handler] Error verificando whatsapp_logs para welcome template:", logChkErr);
   }
 
-  // C. Revisar en historial de conversaciones si hay registro reciente de plantilla en las últimas 24 horas
+  // C. Revisar en historial de conversaciones si hay registro reciente en los últimos 7 días
   if (existing && Array.isArray(existing.messages)) {
     for (let i = existing.messages.length - 1; i >= 0; i--) {
       const msg = existing.messages[i];
@@ -387,12 +406,12 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
-  const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_DAY_MS);
+  const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
   const shouldSendWelcome = !isWelcomeCoolingDown;
 
   if (shouldSendWelcome && !isAutoReplyTriggered) {
     try {
-      console.log(`[Inbound Handler] 🌟 Cliente escribió a WhatsApp. Enviando plantilla 'bienvenido_cliente_whatsaap' (1 vez al día) a ${phone}...`);
+      console.log(`[Inbound Handler] 🌟 Cliente escribió a WhatsApp (sin contacto en 1 semana). Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
       welcomeSentMemoryCache.set(phone, now);
       if (welcomeSentMemoryCache.size > 100) {
         const oldest = Array.from(welcomeSentMemoryCache.keys()).slice(0, 20);

@@ -330,6 +330,47 @@ export async function POST(req: Request) {
       console.error("[Reservar API] Error al disparar Plantilla 1 de WhatsApp:", waErr);
     }
 
+    // 8.1. Actualizar la cotización pendiente en 'conversations' a confirmed
+    try {
+      const { data: conv } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('guest_phone', cleanPhone)
+        .order('timestamp', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (conv && Array.isArray(conv.messages)) {
+        let changed = false;
+        const updatedMessages = conv.messages.map((m: any) => {
+          if (m.quote_data && m.quote_data.status === 'pending_name') {
+            changed = true;
+            return {
+              ...m,
+              quote_data: {
+                ...m.quote_data,
+                status: 'confirmed',
+                confirmedBookingId: masterBookingId
+              }
+            };
+          }
+          return m;
+        });
+        if (changed) {
+          await supabase
+            .from('conversations')
+            .update({ 
+              messages: updatedMessages,
+              guest_name: guestName.trim(),
+              booking_created: true 
+            })
+            .eq('id', conv.id);
+        }
+      }
+    } catch (qUpdErr) {
+      console.warn("[Reservar API] Error actualizando pendingQuote a confirmed:", qUpdErr);
+    }
+
     return NextResponse.json({
       success: true,
       masterBookingId,

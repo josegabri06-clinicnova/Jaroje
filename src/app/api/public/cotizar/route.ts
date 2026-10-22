@@ -283,6 +283,7 @@ export async function GET(req: Request) {
 
     // 1. Si se proporciona teléfono, verificar si el cliente ya tiene reservaciones activas o futuras
     let existingReservations: any[] = [];
+    let pendingQuote: any = null;
     if (rawPhone) {
       const cleanPhone = normalizePhone(rawPhone);
       const last10 = cleanPhone.slice(-10);
@@ -313,6 +314,31 @@ export async function GET(req: Request) {
       } catch (errDb) {
         console.warn("[Cotizar API] Error buscando reservas previas:", errDb);
       }
+
+      // 1.1. Buscar si hay una cotización pendiente reciente (últimas 24 horas) para este teléfono
+      try {
+        const { data: conv } = await supabase
+          .from('conversations')
+          .select('messages')
+          .eq('guest_phone', cleanPhone)
+          .maybeSingle();
+
+        if (conv && Array.isArray(conv.messages)) {
+          const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+          for (let i = conv.messages.length - 1; i >= 0; i--) {
+            const m = conv.messages[i];
+            if (m.quote_data && m.quote_data.status === 'pending_name') {
+              const quoteTime = new Date(m.quote_data.createdAt || m.timestamp || 0).getTime();
+              if (quoteTime > oneDayAgo) {
+                pendingQuote = m.quote_data;
+                break;
+              }
+            }
+          }
+        }
+      } catch (qErr) {
+        console.warn("[Cotizar API] Error buscando pendingQuote:", qErr);
+      }
     }
 
     // Si no se pasaron fechas, retornar información general de categorías y reservas existentes
@@ -320,6 +346,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         success: true,
         existingReservations,
+        pendingQuote,
         categories: CATEGORY_DEFINITIONS.map(c => ({
           key: c.key,
           name: c.name,
@@ -497,6 +524,7 @@ export async function GET(req: Request) {
       checkOut,
       nights,
       existingReservations,
+      pendingQuote,
       quotes
     });
 
