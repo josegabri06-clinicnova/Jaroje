@@ -877,9 +877,12 @@ export async function sendWhatsAppTemplate(
         'preparacion_llegada': 'preparacion_llegada_v2',
         'bienvenida_checkin': 'bienvenida_checkin_v2',
         'seguimiento_satisfaccion': 'seguimiento_satisfaccion_v2',
-        'bienvenido_cliente_final_v2': 'bienvenido_cliente_llamada_v2',
-        'bienvenido_cliente_llamada': 'bienvenido_cliente_llamada_v2',
+        'bienvenido_cliente_final_v2': 'bienvenido_cliente_llamada_v4',
+        'bienvenido_cliente_llamada': 'bienvenido_cliente_llamada_v4',
+        'bienvenido_cliente_llamada_v2': 'bienvenido_cliente_llamada_v4',
         'bienvenido_cliente_whatsaap': 'bienvenido_cliente_whatsaap_v4',
+        'bienvenido_cliente_whatsaap_v2': 'bienvenido_cliente_whatsaap_v4',
+        'bienvenido_cliente_whatsaap_v3': 'bienvenido_cliente_whatsaap_v4',
         'bienvenido_cliente_whatsaap_v4': 'bienvenido_cliente_whatsaap_v4',
         'confirmar_reserva': 'confirmar_reserva',
         'portal_huesped_link_en': 'portal_huesped_link',
@@ -889,6 +892,7 @@ export async function sendWhatsAppTemplate(
       // Header de imagen para plantillas con portada multimedia (Conmutador y WhatsApp Directo)
       if (
         actualMetaTemplate === 'bienvenido_cliente_llamada_v2' || 
+        actualMetaTemplate === 'bienvenido_cliente_llamada_v4' ||
         actualMetaTemplate === 'bienvenido_cliente_whatsaap_v2' ||
         actualMetaTemplate === 'bienvenido_cliente_whatsaap_v4'
       ) {
@@ -1671,8 +1675,9 @@ export async function sendTemplate_BienvenidoConmutador(
   langOverride?: string
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
-  const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada_v2', [], undefined, undefined, undefined, true, lang);
+  const cleanPhone = cleanPhoneForMeta(phone);
+  // En Meta WABA, bienvenido_cliente_llamada_v4 está aprobada bajo código de idioma 'en'
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada_v4', [], [cleanPhone], undefined, 'url', true, 'en');
 }
 
 /**
