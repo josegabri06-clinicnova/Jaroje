@@ -2,6 +2,17 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabase } from '@/lib/supabase';
 
+const FALLBACK_WHATSAPP_TOKEN = 'EAAbMZBnocDPcBQXZAAa1jEiOoQJSTWaLTLzyWoAaERAjarPbviSjYXWCitQvX6CnhHNCEcNUnAWuiZAIU4VY7NjG7m8ZA9HwJzM6s8k29v4BxvfitmKkNdFTcQhMnPEcOUZCZBiNnA6ZACZCFRZBOyNJgK8XEwJa0UWqSxaTb9rosgMVtZC1ZBX4tMpNTZBU2ytZCjwZDZD';
+const FALLBACK_WHATSAPP_PHONE_ID = '1378816458649407';
+
+export function getWhatsAppToken(): string {
+  return process.env.WHATSAPP_TOKEN || FALLBACK_WHATSAPP_TOKEN;
+}
+
+export function getWhatsAppPhoneId(): string {
+  return process.env.WHATSAPP_PHONE_ID || FALLBACK_WHATSAPP_PHONE_ID;
+}
+
 /**
  * Determina con precisión si un número telefónico pertenece a Latinoamérica o España.
  * Regla de negocio:
@@ -370,8 +381,8 @@ export async function sendWhatsAppTemplate(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   let lockLogId: string | null = null;
   try {
-    const token = process.env.WHATSAPP_TOKEN;
-    const phoneId = process.env.WHATSAPP_PHONE_ID;
+    const token = getWhatsAppToken();
+    const phoneId = getWhatsAppPhoneId();
 
     if (!token || !phoneId) {
       return { success: false, error: 'Credenciales de WhatsApp no configuradas en el servidor' };
@@ -633,7 +644,7 @@ export async function sendWhatsAppTemplate(
 
     // Prioridad absoluta: Si existen credenciales de Meta Cloud API, usar 'meta'.
     // La cuenta de YCloud fue bloqueada por Meta (Error 131031) y no debe usarse bajo ninguna circunstancia.
-    const isMetaConfigured = Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+    const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
     const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
     let response: Response;
@@ -858,8 +869,8 @@ export async function sendWhatsAppTemplate(
 
     if (executeMeta) {
       // ── DRIVER META CLOUD API (RESPALDO AUTOMÁTICO O PROVEEDOR PRINCIPAL) ──
-      const token = process.env.WHATSAPP_TOKEN;
-      const phoneId = process.env.WHATSAPP_PHONE_ID;
+      const token = getWhatsAppToken();
+      const phoneId = getWhatsAppPhoneId();
 
       if (!token || !phoneId) {
         if (lockLogId) {
@@ -1297,7 +1308,7 @@ export async function sendWhatsAppTextMessage(
 
     const standardPhone = cleanPhoneForMeta(cleanedPhone);
     const toPhone = standardPhone.startsWith('+') ? standardPhone : `+${standardPhone}`;
-    const isMetaConfigured = Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+    const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
     const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
     // 1. Intentar con YCloud si es el proveedor seleccionado
@@ -1342,8 +1353,8 @@ export async function sendWhatsAppTextMessage(
     }
 
     // 2. Fallback automático a Meta Cloud API (o si provider === 'meta')
-    const token = process.env.WHATSAPP_TOKEN;
-    const phoneId = process.env.WHATSAPP_PHONE_ID;
+    const token = getWhatsAppToken();
+    const phoneId = getWhatsAppPhoneId();
 
     if (token && phoneId) {
       try {
@@ -1713,7 +1724,8 @@ export async function sendTemplate_ConfirmarReserva(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const cleanPhone = cleanPhoneForMeta(phone);
-  const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
+  // La plantilla 'confirmar_reserva' está aprobada en Meta WhatsApp Business exclusivamente en idioma español ('es')
+  const lang = (langOverride || 'es') as 'es' | 'en';
   return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [cleanPhone], undefined, 'url', true, lang);
 }
 

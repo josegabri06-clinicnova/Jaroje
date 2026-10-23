@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { sendTemplate3_ReservacionConfirmada } from '@/lib/whatsapp';
+import { sendTemplate3_ReservacionConfirmada, getWhatsAppToken, getWhatsAppPhoneId } from '@/lib/whatsapp';
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const { booking, phone, guestName } = body;
 
-    const token = process.env.WHATSAPP_TOKEN;
-    const phoneId = process.env.WHATSAPP_PHONE_ID;
+    const token = getWhatsAppToken();
+    const phoneId = getWhatsAppPhoneId();
 
     if (!token || !phoneId) {
       return NextResponse.json({

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getWhatsAppToken, getWhatsAppPhoneId } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,11 +12,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Falta parámetro phone' }, { status: 400 });
     }
 
-    const token = process.env.WHATSAPP_TOKEN;
-    const phoneId = process.env.WHATSAPP_PHONE_ID;
+    const token = getWhatsAppToken();
+    const phoneId = getWhatsAppPhoneId();
 
     if (!token || !phoneId) {
-      return NextResponse.json({ error: 'Faltan variables de entorno WHATSAPP_TOKEN o WHATSAPP_PHONE_ID' }, { status: 500 });
+      return NextResponse.json({ error: 'Faltan credenciales de WhatsApp' }, { status: 500 });
     }
 
     const url = `https://graph.facebook.com/v18.0/${phoneId}/messages`;

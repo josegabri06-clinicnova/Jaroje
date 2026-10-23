@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getWhatsAppToken, getWhatsAppPhoneId } from '@/lib/whatsapp';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -109,8 +110,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan datos obligatorios' }, { status: 400 });
     }
 
-    const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
-    const PHONE_ID = process.env.WHATSAPP_PHONE_ID;
+    const WHATSAPP_TOKEN = getWhatsAppToken();
+    const PHONE_ID = getWhatsAppPhoneId();
 
     if (!WHATSAPP_TOKEN || !PHONE_ID) {
       throw new Error('Credenciales de WhatsApp no configuradas en el servidor.');
@@ -225,7 +226,7 @@ Este documento sirve como desglose quincenal de n√≥mina generado de forma autom√
     ];
 
     // Enviar WhatsApp usando el proveedor activo (YCloud o Meta)
-    const isMetaConfigured = Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+    const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
     const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
     if (provider === 'ycloud') {

@@ -14,7 +14,9 @@ import {
   sendTemplate_BienvenidoConmutador,
   sendTemplate_BienvenidoWhatsApp,
   sendTemplate_PortalHuespedLink,
-  detectLanguageFromPhone
+  detectLanguageFromPhone,
+  getWhatsAppToken,
+  getWhatsAppPhoneId
 } from '@/lib/whatsapp';
 
 export async function POST(req: Request) {
@@ -64,7 +66,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const isMetaConfigured = Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID);
+    const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
     const provider = isMetaConfigured ? 'meta' : (process.env.WHATSAPP_PROVIDER || 'meta');
 
     if (provider === 'ycloud') {
@@ -76,8 +78,8 @@ export async function POST(req: Request) {
         }, { status: 500 });
       }
     } else {
-      const token = process.env.WHATSAPP_TOKEN;
-      const phoneId = process.env.WHATSAPP_PHONE_ID;
+      const token = getWhatsAppToken();
+      const phoneId = getWhatsAppPhoneId();
 
       if (!token || !phoneId) {
         return NextResponse.json({
