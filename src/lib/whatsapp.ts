@@ -1424,6 +1424,84 @@ export async function sendWhatsAppTextMessage(
   }
 }
 
+/**
+ * Envía un mensaje interactivo con Botón CTA URL (disparador del In-App Browser nativo).
+ * A diferencia de los links de texto plano que iOS envía a Safari externo, los botones
+ * interactivos CTA de Meta abren directamente el WebView / In-App Browser dentro de WhatsApp.
+ */
+export async function sendWhatsAppCTAButtonMessage(
+  phone: string,
+  bodyText: string,
+  buttonText: string,
+  url: string,
+  headerText?: string,
+  footerText?: string
+): Promise<{ success: boolean; error?: string; data?: any }> {
+  try {
+    const cleanedPhone = normalizePhone(phone);
+    if (!cleanedPhone) return { success: false, error: 'Formato de teléfono no válido' };
+
+    const standardPhone = cleanPhoneForMeta(cleanedPhone);
+    const token = getWhatsAppToken();
+    const phoneId = getWhatsAppPhoneId();
+
+    if (token && phoneId) {
+      const endpoint = `https://graph.facebook.com/v18.0/${phoneId}/messages`;
+      const actionParams: any = {
+        name: 'cta_url',
+        parameters: {
+          display_text: buttonText.slice(0, 20), // Máximo 20 caracteres según la spec de Meta
+          url: url
+        }
+      };
+
+      const interactivePayload: any = {
+        type: 'cta_url',
+        body: { text: bodyText },
+        action: actionParams
+      };
+
+      if (headerText) {
+        interactivePayload.header = { type: 'text', text: headerText.slice(0, 60) };
+      }
+      if (footerText) {
+        interactivePayload.footer = { text: footerText.slice(0, 60) };
+      }
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: standardPhone,
+        type: 'interactive',
+        interactive: interactivePayload
+      };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const resBody = await response.json();
+      if (response.ok) {
+        console.log(`[WhatsApp CTA] ✅ Botón CTA In-App Browser enviado a ${standardPhone}:`, buttonText);
+        return { success: true, data: resBody };
+      }
+
+      console.warn(`[WhatsApp CTA] Falló mensaje interactivo (${response.status}), aplicando fallback a texto:`, resBody);
+    }
+
+    // Fallback si no hay token de Meta o si falló la interacción
+    return sendWhatsAppTextMessage(phone, `${bodyText}\n\n👉 ${url}`);
+  } catch (err: any) {
+    console.error(`Error en sendWhatsAppCTAButtonMessage para ${phone}:`, err);
+    return sendWhatsAppTextMessage(phone, `${bodyText}\n\n👉 ${url}`);
+  }
+}
+
 
 // Helper para extraer el primer nombre de forma ultra-robusta
 export function getFirstName(fullNameOrBooking: any): string {

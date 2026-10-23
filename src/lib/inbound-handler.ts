@@ -325,7 +325,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     rawPayload.includes('reserva') || 
     rawPayload.includes('book_now')
   ) {
-    const { isSpanishOrLatamPhone } = await import('@/lib/whatsapp');
+    const { isSpanishOrLatamPhone, sendWhatsAppCTAButtonMessage } = await import('@/lib/whatsapp');
     const isEnglish = guestMsgClean.includes('quote') || guestMsgClean.includes('book now') || guestMsgClean.includes('booking') || !isSpanishOrLatamPhone(phone);
     const lang = isEnglish ? 'en' : 'es';
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
@@ -333,9 +333,34 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     const bookingEngineUrl = `${siteUrl}/public/reservar?phone=${cleanPhoneDigits}&lang=${lang}`;
 
     isAutoReplyTriggered = true;
-    finalBotResponse = lang === 'en'
-      ? `🏨 *Direct Booking Portal - Condominios Jaroje*\n\nYou can check live availability, photos, and book with exclusive direct rates right here:\n\n👉 ${bookingEngineUrl}\n\n✨ Instant confirmation, 24-hour payment hold, and zero OTA markups!`
-      : `🏨 *Portal de Reservas Directas - Condominios Jaroje*\n\nConsulta disponibilidad en tiempo real, fotos de cada alojamiento y reserva con tarifa directa neta aquí:\n\n👉 ${bookingEngineUrl}\n\n✨ Confirmación inmediata, 24 hrs para transferir tu anticipo del 50% y sin comisiones de agencias.`;
+    const header = 'Condominios Jaroje';
+    const bodyText = lang === 'en'
+      ? 'Check live availability, apartment photos, and book with exclusive direct rates and instant 24h hold.'
+      : 'Consulta disponibilidad en tiempo real, fotos de cada alojamiento y reserva con tarifa directa sin comisiones.';
+    const buttonText = lang === 'en' ? 'Book Direct' : 'Reservar Ahora';
+    const footerText = lang === 'en' ? 'Direct Rate · Instant Hold' : 'Tarifa Directa · Confirmación Inmediata';
+
+    try {
+      const ctaRes = await sendWhatsAppCTAButtonMessage(
+        phone,
+        bodyText,
+        buttonText,
+        bookingEngineUrl,
+        header,
+        footerText
+      );
+      if (ctaRes.success) {
+        finalBotResponse = null;
+      } else {
+        finalBotResponse = lang === 'en'
+          ? `🏨 *Direct Booking Portal - Condominios Jaroje*\n\nYou can check live availability, photos, and book with exclusive direct rates right here:\n\n👉 ${bookingEngineUrl}\n\n✨ Instant confirmation, 24-hour payment hold, and zero OTA markups!`
+          : `🏨 *Portal de Reservas Directas - Condominios Jaroje*\n\nConsulta disponibilidad en tiempo real, fotos de cada alojamiento y reserva con tarifa directa neta aquí:\n\n👉 ${bookingEngineUrl}\n\n✨ Confirmación inmediata, 24 hrs para transferir tu anticipo del 50% y sin comisiones de agencias.`;
+      }
+    } catch {
+      finalBotResponse = lang === 'en'
+        ? `🏨 *Direct Booking Portal - Condominios Jaroje*\n\n👉 ${bookingEngineUrl}`
+        : `🏨 *Portal de Reservas Directas - Condominios Jaroje*\n\n👉 ${bookingEngineUrl}`;
+    }
   }
 
   // E. Botón / Consulta de Ubicación (Botón "Ubicación" de bienvenido_cliente_whatsaap_v4)

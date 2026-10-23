@@ -23,7 +23,8 @@ import {
   ExternalLink,
   BedDouble,
   Compass,
-  AlertCircle
+  AlertCircle,
+  MessageCircle
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -640,14 +641,24 @@ function ReservarContent() {
               <p className="text-xs text-zinc-600">{t.bankAccountHolder}</p>
             </div>
 
-            {/* Botón directo al Portal del Huésped */}
-            <a
-              href={bookingSuccess.portalUrl}
-              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <span>{t.goToPortal}</span>
-              <ArrowRight size={16} />
-            </a>
+            {/* Acciones Finales: Volver a WhatsApp + Ir al Portal */}
+            <div className="space-y-2.5 pt-2">
+              <a
+                href="https://wa.me/529581168698"
+                className="w-full py-4 bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-sm rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                <MessageCircle size={18} className="fill-white/20 stroke-[2.2]" />
+                <span>{lang === 'en' ? 'Return to WhatsApp Chat' : 'Volver a la Conversación en WhatsApp'}</span>
+              </a>
+
+              <a
+                href={bookingSuccess.portalUrl}
+                className="w-full py-3.5 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>{t.goToPortal}</span>
+                <ArrowRight size={14} />
+              </a>
+            </div>
           </div>
         ) : activeTab === 'existing' && existingReservations.length > 0 ? (
           /* ── VISTA DE RESERVAS EXISTENTES (MI ESTANCIA ACTUAL) ── */
