@@ -315,16 +315,18 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     guestMsgClean.includes('reserva ya') || 
     guestMsgClean.includes('¡reserva ya!') || 
     guestMsgClean.includes('reservar') || 
+    guestMsgClean.includes('reserva') || 
     guestMsgClean.includes('disponibilidad') || 
     guestMsgClean.includes('quote & availability') || 
     guestMsgClean.includes('book now') || 
+    guestMsgClean.includes('booking') || 
     rawPayload.includes('cotizar') || 
     rawPayload.includes('disponibilidad') || 
-    rawPayload.includes('reserva_ya') || 
+    rawPayload.includes('reserva') || 
     rawPayload.includes('book_now')
   ) {
     const { isSpanishOrLatamPhone } = await import('@/lib/whatsapp');
-    const isEnglish = guestMsgClean.includes('quote') || guestMsgClean.includes('book now') || !isSpanishOrLatamPhone(phone);
+    const isEnglish = guestMsgClean.includes('quote') || guestMsgClean.includes('book now') || guestMsgClean.includes('booking') || !isSpanishOrLatamPhone(phone);
     const lang = isEnglish ? 'en' : 'es';
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
     const cleanPhoneDigits = phone.replace(/\D/g, '');
@@ -409,7 +411,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
   const shouldSendWelcome = !isWelcomeCoolingDown;
 
-  if (shouldSendWelcome && !isAutoReplyTriggered) {
+  if (shouldSendWelcome) {
     try {
       console.log(`[Inbound Handler] 🌟 Cliente escribió a WhatsApp (sin contacto en 1 semana). Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
       welcomeSentMemoryCache.set(phone, now);
@@ -420,6 +422,12 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
       const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
       console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
+
+      // Si se envió exitosamente la plantilla oficial con botones, no duplicar con texto plano
+      if (welcomeResult.success) {
+        isAutoReplyTriggered = false;
+        finalBotResponse = null;
+      }
     } catch (welcomeErr) {
       console.error("[Inbound Handler] Error enviando bienvenida WhatsApp:", welcomeErr);
     }
