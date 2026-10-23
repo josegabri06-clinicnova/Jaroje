@@ -108,7 +108,7 @@ function ReservarContent() {
   const [hasRestoredPendingQuote, setHasRestoredPendingQuote] = useState(false);
   const [isConfirmStep, setIsConfirmStep] = useState(false);
   const [quoteSending, setQuoteSending] = useState(false);
-  const [isQuoteSentModal, setIsQuoteSentModal] = useState(false);
+  const [quoteSentToast, setQuoteSentToast] = useState(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
 
   // Pantalla de éxito
@@ -492,7 +492,8 @@ function ReservarContent() {
       }
 
       setPendingQuote(data.quoteData);
-      setIsQuoteSentModal(true);
+      setQuoteSentToast(true);
+      setTimeout(() => setQuoteSentToast(false), 6000);
     } catch (err: any) {
       console.error("Error requesting quote:", err);
       alert(err.message || 'Error al enviar cotización a WhatsApp. Intenta de nuevo.');
@@ -753,36 +754,53 @@ function ReservarContent() {
           <div className="space-y-5 animate-in fade-in duration-200">
             {/* BUSCADOR DE FECHAS Y PERSONAS */}
             <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-xs space-y-4">
-              <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
-                <Calendar className="w-4 h-4 text-indigo-600" />
-                <h2 className="text-xs font-black uppercase tracking-widest text-zinc-900">
-                  {t.datesTitle}
-                </h2>
+              <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-indigo-600" />
+                  <h2 className="text-xs font-black uppercase tracking-widest text-zinc-900">
+                    {t.datesTitle}
+                  </h2>
+                </div>
+                {activeSummary.nights > 0 && (
+                  <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
+                    {activeSummary.nights} {activeSummary.nights === 1 ? t.night : t.nights}
+                  </span>
+                )}
               </div>
 
               {/* Rango de fechas */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[11px] font-bold text-zinc-500 block mb-1">
-                    {t.checkInLabel}
-                  </label>
-                  <input
-                    type="date"
-                    value={checkIn}
-                    onChange={e => setCheckIn(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
-                  />
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-500 block mb-1">
+                      {t.checkInLabel}
+                    </label>
+                    <input
+                      type="date"
+                      value={checkIn}
+                      onChange={e => setCheckIn(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-500 block mb-1">
+                      {t.checkOutLabel}
+                    </label>
+                    <input
+                      type="date"
+                      value={checkOut}
+                      onChange={e => setCheckOut(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="text-[11px] font-bold text-zinc-500 block mb-1">
-                    {t.checkOutLabel}
-                  </label>
-                  <input
-                    type="date"
-                    value={checkOut}
-                    onChange={e => setCheckOut(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
-                  />
+
+                {/* Badge visible de número de noches con las fechas */}
+                <div className="flex items-center justify-center pt-0.5">
+                  <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
+                    <Clock size={12} className="text-indigo-600" />
+                    <span>Estancia de {activeSummary.nights} {activeSummary.nights === 1 ? t.night : t.nights}</span>
+                  </span>
                 </div>
               </div>
 
@@ -908,27 +926,32 @@ function ReservarContent() {
                           </>
                         )}
 
-                        {/* Badge de capacidad con personas adicionales */}
-                        <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-black text-zinc-900 flex items-center gap-1 shadow-sm">
-                          <Users size={12} className="text-indigo-600 shrink-0" />
-                          <span>
-                            {lang === 'en'
-                              ? (q.capacityText_en || `Base ${q.capacity} guests${q.maxCapacity > q.capacity ? ` (+ up to ${q.maxCapacity - q.capacity} extra · max ${q.maxCapacity})` : ''}`)
-                              : (q.capacityText || `Base ${q.capacity} huéspedes${q.maxCapacity > q.capacity ? ` (+ hasta ${q.maxCapacity - q.capacity} adicionales · máx. ${q.maxCapacity})` : ''}`)}
-                          </span>
-                        </div>
+                        {/* Badges de cabecera de foto en Flex Row (NUNCA se tapan entre sí) */}
+                        <div className="absolute top-3 inset-x-3 flex items-start justify-between gap-2 z-10 pointer-events-none">
+                          <div className="bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-black text-zinc-900 flex items-center gap-1 shadow-sm shrink min-w-0 max-w-[calc(100%-85px)]">
+                            <Users size={12} className="text-indigo-600 shrink-0" />
+                            <span className="truncate">
+                              {lang === 'en'
+                                ? (q.maxCapacity > q.capacity
+                                    ? `Base ${q.capacity} (+${q.maxCapacity - q.capacity} extra · max ${q.maxCapacity})`
+                                    : `Up to ${q.capacity} guests`)
+                                : (q.maxCapacity > q.capacity
+                                    ? `Base ${q.capacity} (+${q.maxCapacity - q.capacity} extras · máx. ${q.maxCapacity})`
+                                    : `Hasta ${q.capacity} huéspedes`)}
+                            </span>
+                          </div>
 
-                        {/* Badge de disponibilidad */}
-                        <div className="absolute top-3 right-3">
-                          {q.availableUnitsCount > 0 ? (
-                            <span className="bg-emerald-500/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-xs">
-                              {q.availableUnitsCount} {t.availableUnits}
-                            </span>
-                          ) : (
-                            <span className="bg-rose-500/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-lg shadow-xs">
-                              Agotado
-                            </span>
-                          )}
+                          <div className="shrink-0">
+                            {q.availableUnitsCount > 0 ? (
+                              <span className="bg-emerald-500/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-xs block">
+                                {q.availableUnitsCount} {t.availableUnits}
+                              </span>
+                            ) : (
+                              <span className="bg-rose-500/90 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-lg shadow-xs block">
+                                Agotado
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -938,6 +961,14 @@ function ReservarContent() {
                           <h4 className="text-base font-black text-zinc-900 leading-tight">
                             {lang === 'en' ? q.name_en : q.name}
                           </h4>
+                          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-bold text-indigo-700 bg-indigo-50/70 border border-indigo-100/80 px-2.5 py-1 rounded-xl w-fit">
+                            <Users size={13} className="shrink-0 text-indigo-600" />
+                            <span>
+                              {lang === 'en'
+                                ? (q.capacityText_en || `Base ${q.capacity} guests (+ up to ${q.maxCapacity - q.capacity} extra)`)
+                                : (q.capacityText || `Base ${q.capacity} huéspedes (+ hasta ${q.maxCapacity - q.capacity} adicionales · máx. ${q.maxCapacity})`)}
+                            </span>
+                          </div>
                         </div>
 
                         {/* Lista de características completas (sin prosa y sin truncar) */}
@@ -1336,7 +1367,7 @@ function ReservarContent() {
                 {submitting ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Bloqueando en Beds24...</span>
+                    <span>Bloqueando en el sistema...</span>
                   </>
                 ) : (
                   <>
@@ -1350,74 +1381,25 @@ function ReservarContent() {
         </div>
       )}
 
-      {/* ── MODAL: COTIZACIÓN ENVIADA POR WHATSAPP (PASO 1 EXITOSO) ── */}
-      {isQuoteSentModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl p-6 space-y-5 shadow-2xl">
-            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
-              <div className="flex items-center gap-2.5">
-                <img 
-                  src="/logo-jaroje.png" 
-                  alt="Condominios Jaroje" 
-                  className="h-6 w-auto object-contain" 
-                />
-                <span className="text-[11px] font-black px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  WhatsApp Enviado 📲
-                </span>
-              </div>
-              <button
-                onClick={() => setIsQuoteSentModal(false)}
-                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="text-center py-2 space-y-2">
-              <div className="w-14 h-14 mx-auto rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl shadow-inner">
-                💬
-              </div>
-              <h3 className="text-lg font-black text-zinc-900">
-                {lang === 'en' ? 'Quote sent to your WhatsApp!' : '¡Cotización enviada a tu WhatsApp!'}
-              </h3>
-              <p className="text-xs text-zinc-600 leading-relaxed max-w-sm mx-auto">
-                {lang === 'en'
-                  ? 'We have sent your quotation to your WhatsApp. To guarantee and lock your dates for 24 hours:'
-                  : 'Hemos enviado el detalle de tu cotización a tu WhatsApp. Para asegurar y bloquear tus habitaciones por 24 horas:'}
+      {/* ── TOAST NOTIFICACIÓN NO INTRUSIVA DE COTIZACIÓN ENVIADA ── */}
+      {quoteSentToast && (
+        <div className="fixed top-4 inset-x-4 z-50 max-w-md mx-auto bg-emerald-700 text-white p-3.5 rounded-2xl shadow-2xl border border-emerald-500/40 flex items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-2.5">
+            <span className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center font-black text-xs shrink-0">✓</span>
+            <div>
+              <p className="text-xs font-black">{lang === 'en' ? 'Quote sent to your WhatsApp!' : '¡Cotización enviada a tu WhatsApp!'}</p>
+              <p className="text-[11px] text-emerald-100 font-medium">
+                {lang === 'en' ? 'Check your chat, or enter your name below to lock for 24 hours.' : 'Revisa tu chat, o ingresa tu nombre abajo para bloquear 24 horas.'}
               </p>
             </div>
-
-            {/* Instrucciones paso a paso */}
-            <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-200/70 space-y-3 text-xs">
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">1</span>
-                <p className="text-zinc-700 font-medium">
-                  {lang === 'en' ? 'Open your WhatsApp chat with Condominios Jaroje.' : 'Abre tu chat de WhatsApp con Condominios Jaroje.'}
-                </p>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">2</span>
-                <p className="text-zinc-700 font-medium">
-                  {lang === 'en' ? 'Tap the button ' : 'Pulsa el botón '}<strong className="text-emerald-700 font-bold">"Confirmar Reserva"</strong>.
-                </p>
-              </div>
-              <div className="flex items-start gap-2.5">
-                <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">3</span>
-                <p className="text-zinc-700 font-medium">
-                  {lang === 'en' ? 'Enter your full name to instantly lock your rooms in our system.' : 'Introduce tu nombre completo para asegurar tus habitaciones de inmediato en nuestro sistema.'}
-                </p>
-              </div>
-            </div>
-
-            <a
-              href="https://wa.me/529581168698"
-              className="w-full py-3.5 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-            >
-              <MessageCircle size={16} className="fill-white/20 stroke-[2.2]" />
-              <span>{lang === 'en' ? 'Open WhatsApp Chat' : 'Abrir Chat de WhatsApp'}</span>
-              <ArrowRight size={14} />
-            </a>
           </div>
+          <button
+            type="button"
+            onClick={() => setQuoteSentToast(false)}
+            className="w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white shrink-0 cursor-pointer"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
