@@ -306,7 +306,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       finalBotResponse = `Hola. No logramos encontrar una reservación activa vinculada a tu número en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de inmediato. 🌴`;
     }
   }
-  // D. Botones de Cotización, Disponibilidad y Reserva Directa ("Disponibili. y cotización" / "¡Reserva YA!")
+  // D. Intenciones de Cotización, Disponibilidad y Reserva ("Hola quiero hacer una reserva", "cotizar", etc.)
   else if (
     guestMsgClean.includes('disponibili') || 
     guestMsgClean.includes('cotización') || 
@@ -325,41 +325,19 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     rawPayload.includes('reserva') || 
     rawPayload.includes('book_now')
   ) {
-    const { isSpanishOrLatamPhone, sendWhatsAppCTAButtonMessage } = await import('@/lib/whatsapp');
-    const isEnglish = guestMsgClean.includes('quote') || guestMsgClean.includes('book now') || guestMsgClean.includes('booking') || !isSpanishOrLatamPhone(phone);
-    const lang = isEnglish ? 'en' : 'es';
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-    const cleanPhoneDigits = phone.replace(/\D/g, '');
-    const bookingEngineUrl = `${siteUrl}/public/reservar?phone=${cleanPhoneDigits}&lang=${lang}`;
-
-    isAutoReplyTriggered = true;
-    const header = 'Condominios Jaroje';
-    const bodyText = lang === 'en'
-      ? 'Check live availability, apartment photos, and book with exclusive direct rates and instant 24h hold.'
-      : 'Consulta disponibilidad en tiempo real, fotos de cada alojamiento y reserva con tarifa directa sin comisiones.';
-    const buttonText = lang === 'en' ? 'Book Direct' : 'Reservar Ahora';
-    const footerText = lang === 'en' ? 'Direct Rate · Instant Hold' : 'Tarifa Directa · Confirmación Inmediata';
-
+    // Enviar EXCLUSIVAMENTE la plantilla oficial aprobada por Meta 'bienvenido_cliente_whatsaap_v4'
+    const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
     try {
-      const ctaRes = await sendWhatsAppCTAButtonMessage(
-        phone,
-        bodyText,
-        buttonText,
-        bookingEngineUrl,
-        header,
-        footerText
-      );
-      if (ctaRes.success) {
+      console.log(`[Inbound Handler] 🌟 Intención de reserva detectada. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
+      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
+      if (welcomeResult.success) {
+        isAutoReplyTriggered = false;
         finalBotResponse = null;
       } else {
-        finalBotResponse = lang === 'en'
-          ? `🏨 *Direct Booking Portal - Condominios Jaroje*\n\nYou can check live availability, photos, and book with exclusive direct rates right here:\n\n👉 ${bookingEngineUrl}\n\n✨ Instant confirmation, 24-hour payment hold, and zero OTA markups!`
-          : `🏨 *Portal de Reservas Directas - Condominios Jaroje*\n\nConsulta disponibilidad en tiempo real, fotos de cada alojamiento y reserva con tarifa directa neta aquí:\n\n👉 ${bookingEngineUrl}\n\n✨ Confirmación inmediata, 24 hrs para transferir tu anticipo del 50% y sin comisiones de agencias.`;
+        console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
       }
-    } catch {
-      finalBotResponse = lang === 'en'
-        ? `🏨 *Direct Booking Portal - Condominios Jaroje*\n\n👉 ${bookingEngineUrl}`
-        : `🏨 *Portal de Reservas Directas - Condominios Jaroje*\n\n👉 ${bookingEngineUrl}`;
+    } catch (err) {
+      console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
     }
   }
 
