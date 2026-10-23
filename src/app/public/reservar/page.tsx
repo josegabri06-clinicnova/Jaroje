@@ -1060,7 +1060,8 @@ function ReservarContent() {
                   </>
                 ) : (
                   <>
-                    <span>{t.continueBtn}</span>
+                    <MessageCircle size={14} className="stroke-[2.5]" />
+                    <span>{t.requestQuoteBtn}</span>
                     <ArrowRight size={14} />
                   </>
                 )}
@@ -1305,13 +1306,14 @@ function ReservarContent() {
               </div>
             </div>
 
-            <button
-              onClick={() => setIsQuoteSentModal(false)}
-              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+            <a
+              href="https://wa.me/529581168698"
+              className="w-full py-3.5 rounded-2xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
-              <span>{lang === 'en' ? 'Understood, check my WhatsApp' : 'Entendido, revisar mi WhatsApp'}</span>
+              <MessageCircle size={16} className="fill-white/20 stroke-[2.2]" />
+              <span>{lang === 'en' ? 'Open WhatsApp Chat' : 'Abrir Chat de WhatsApp'}</span>
               <ArrowRight size={14} />
-            </button>
+            </a>
           </div>
         </div>
       )}
