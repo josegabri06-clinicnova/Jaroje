@@ -232,15 +232,15 @@ export async function GET(req: Request) {
     };
 
     // 4. Obtener mensajes ya enviados o intentados para evitar duplicados y tormentas de reintentos
-    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+    // IMPORTANTE: Ordenar por sent_at DESCENDENTE para que siempre incluya los registros recientes (últimos minutos y días).
+    // PostgREST tiene un límite de 1,000 filas por consulta; sin orden descendente, devuelve los registros más viejos de agosto
+    // ignorando completamente los mensajes enviados hoy, lo que causaba spam en bucle cada 10 minutos.
+    const [p1, p2] = await Promise.all([
+      supabase.from('whatsapp_logs').select('reservation_id, template_name, phone, sent_at, status').order('sent_at', { ascending: false }).range(0, 999),
+      supabase.from('whatsapp_logs').select('reservation_id, template_name, phone, sent_at, status').order('sent_at', { ascending: false }).range(1000, 1999)
+    ]);
+    const sentLogs = [...(p1.data || []), ...(p2.data || [])];
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: sentLogs } = await supabase
-      .from('whatsapp_logs')
-      .select('reservation_id, template_name, phone, sent_at, status')
-      .gte('sent_at', sixtyDaysAgo);
-
-    // Consideramos enviado únicamente si el status es exitoso (distinto de 'failed')
-    // NUNCA debemos marcar un intento 'failed' como enviado porque silencia permanentemente al huésped
     const validLogs = (sentLogs || []).filter((l: any) => l.status !== 'failed');
 
     // Cooldown de 30 minutos para reintentos de fallas recientes:
@@ -589,8 +589,11 @@ export async function GET(req: Request) {
                                       isTemplateAlreadySent(bookingIdStr, guestPhone, 'omitido_multi_habitacion');
 
             if (!hasInitialMessage) {
+              // Bloquear inmediatamente en memoria antes del await para prevenir tormentas de reintentos concurrentes
+              markTemplateAsSent(bookingIdStr, guestPhone, isConfirmed ? 'reservacion_confirmada' : 'solicitud_recibida');
+
               if (isConfirmed) {
-                const waRes = await sendTemplate3_ReservacionConfirmada(booking, true);
+                const waRes = await sendTemplate3_ReservacionConfirmada(booking, false);
                 if (waRes.success) {
                   await supabase.from('whatsapp_logs').insert([{
                     reservation_id: bookingIdStr,
@@ -599,13 +602,12 @@ export async function GET(req: Request) {
                     sent_at: new Date().toISOString(),
                     status: 'sent'
                   }]);
-                  markTemplateAsSent(bookingIdStr, guestPhone, 'reservacion_confirmada');
                   reports.push(`Enviado Mensaje 3 (Confirmada - Reciente/T-7) a ${booking.guest_name} (ID: ${bookingIdStr})`);
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 3 a ${booking.guest_name}:`, waRes.error);
                 }
               } else {
-                const waRes = await sendTemplate1_SolicitudRecibida(booking, true);
+                const waRes = await sendTemplate1_SolicitudRecibida(booking, false);
                 if (waRes.success) {
                   await supabase.from('whatsapp_logs').insert([{
                     reservation_id: bookingIdStr,
@@ -614,13 +616,12 @@ export async function GET(req: Request) {
                     sent_at: new Date().toISOString(),
                     status: 'sent'
                   }]);
-                  markTemplateAsSent(bookingIdStr, guestPhone, 'solicitud_recibida');
                   reports.push(`Enviado Mensaje 1 (Solicitud Recibida) a ${booking.guest_name} (ID: ${bookingIdStr})`);
                 } else {
                   console.error(`[Cron WhatsApp] Error enviando Mensaje 1 a ${booking.guest_name}:`, waRes.error);
                 }
+              }
             }
-          }
         }
 
         // --- MENSAJE 5: Todo listo para su llegada (6:00 PM del día anterior) ---
