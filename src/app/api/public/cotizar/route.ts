@@ -25,6 +25,8 @@ const CATEGORY_DEFINITIONS = [
     name_en: 'Standard Double Room',
     capacity: 2,
     maxCapacity: 4,
+    capacityText: 'Base 2 huéspedes (+ hasta 2 adicionales · máx. 4)',
+    capacityText_en: 'Base 2 guests (+ up to 2 extra · max 4)',
     description: 'Habitación amplia con 2 camas matrimoniales, aire acondicionado, baño privado y TV.',
     description_en: 'Spacious room with 2 double beds, A/C, private bathroom and Smart TV.',
     features: [
@@ -70,6 +72,8 @@ const CATEGORY_DEFINITIONS = [
     name_en: '1-Bedroom Apartment',
     capacity: 4,
     maxCapacity: 4,
+    capacityText: 'Hasta 4 huéspedes (1 recámara privada)',
+    capacityText_en: 'Up to 4 guests (1 private bedroom)',
     description: 'Condominio completo con 1 recámara privada, cocina equipada, sala, comedor y terraza.',
     description_en: 'Full condo with 1 private bedroom, equipped kitchen, living area, dining and terrace.',
     features: [
@@ -112,6 +116,8 @@ const CATEGORY_DEFINITIONS = [
     name_en: '2-Bedroom Apartment',
     capacity: 6,
     maxCapacity: 8,
+    capacityText: 'Base 6 huéspedes (+ hasta 2 adicionales · máx. 8)',
+    capacityText_en: 'Base 6 guests (+ up to 2 extra · max 8)',
     description: 'Ideal para familias. 2 recámaras independientes, cocina completa, amplia sala y comedor.',
     description_en: 'Ideal for families. 2 separate bedrooms, full kitchen, spacious living and dining area.',
     features: [
@@ -165,8 +171,8 @@ const CATEGORY_DEFINITIONS = [
     name_en: '3-Bedroom Apartment',
     capacity: 6,
     maxCapacity: 8,
-    capacityText: 'Hasta 6 huéspedes + 2 adicionales con costo',
-    capacityText_en: 'Up to 6 guests + 2 extra with fee',
+    capacityText: 'Base 6 huéspedes (+ hasta 2 adicionales · máx. 8)',
+    capacityText_en: 'Base 6 guests (+ up to 2 extra · max 8)',
     description: 'Máximo confort para grupos y familias grandes. 3 recámaras, amplia cocina y sala.',
     description_en: 'Maximum comfort for groups and large families. 3 bedrooms, large kitchen and living room.',
     features: [
@@ -225,6 +231,8 @@ const CATEGORY_DEFINITIONS = [
     name_en: '3-Bedroom Vacation House',
     capacity: 10,
     maxCapacity: 12,
+    capacityText: 'Base 10 huéspedes (+ hasta 2 adicionales · máx. 12)',
+    capacityText_en: 'Base 10 guests (+ up to 2 extra · max 12)',
     description: 'Casa privada independiente de 2 plantas. Sala, cocina, comedor, terraza y máxima privacidad.',
     description_en: 'Independent private 2-story house. Living room, full kitchen, terrace and total privacy.',
     features: [

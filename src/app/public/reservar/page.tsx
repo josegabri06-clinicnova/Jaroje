@@ -143,13 +143,13 @@ function ReservarContent() {
           selectRoom: 'Select',
           selectedRoomsCount: 'accommodations selected',
           continueBtn: 'Continue to Book',
-          requestQuoteBtn: 'Send Quote to WhatsApp',
+          requestQuoteBtn: 'Send Quote',
           quoteSending: 'Sending to your WhatsApp...',
           completeNameBtn: 'Enter Full Name & Confirm',
           summaryTitle: 'Booking Summary',
           confirmPendingQuoteTitle: 'Official Booking Confirmation',
           confirmPendingQuoteBadge: 'Step 2: Official Confirmation',
-          confirmPendingQuoteDesc: 'We received your WhatsApp quote. To lock your stay in Beds24 for 24 hours, please enter your full name.',
+          confirmPendingQuoteDesc: 'We received your WhatsApp quote. To formalize the 24-hour hold in our system, we need your full name.',
           guestDetailsTitle: 'Guest Details',
           fullName: 'Full Name',
           phone: 'WhatsApp Phone',
@@ -199,13 +199,13 @@ function ReservarContent() {
           selectRoom: 'Seleccionar',
           selectedRoomsCount: 'alojamientos seleccionados',
           continueBtn: 'Continuar a Reservar',
-          requestQuoteBtn: 'Enviar Cotización a WhatsApp',
+          requestQuoteBtn: 'Enviar cotización',
           quoteSending: 'Enviando a tu WhatsApp...',
           completeNameBtn: 'Ingresar Nombre y Confirmar',
           summaryTitle: 'Resumen de tu Solicitud',
           confirmPendingQuoteTitle: 'Confirmar Reserva Oficial',
           confirmPendingQuoteBadge: 'Paso 2: Confirmación Oficial',
-          confirmPendingQuoteDesc: 'Recibimos tu cotización por WhatsApp. Para formalizar el bloqueo en Beds24 por 24 horas, necesitamos tu nombre y apellidos.',
+          confirmPendingQuoteDesc: 'Recibimos tu cotización por WhatsApp. Para formalizar el bloqueo en nuestro sistema por 24 horas, necesitamos tu nombre completo.',
           guestDetailsTitle: 'Datos del Titular',
           fullName: 'Nombre y Apellidos completos',
           phone: 'Teléfono WhatsApp',
@@ -311,10 +311,11 @@ function ReservarContent() {
     return Number(adults || 0) + Number(children || 0);
   }, [adults, children]);
 
-  // Cálculo del total seleccionado
+  // Cálculo del total seleccionado con desglose transparente y personas extras
   const selectionSummary = useMemo(() => {
     let totalRooms = 0;
-    let grandTotal = 0;
+    let baseLodgingTotal = 0;
+    let totalBaseCapacity = 0;
     let totalMaxCapacity = 0;
     const selectedList: { quote: QuoteItem; quantity: number }[] = [];
 
@@ -322,22 +323,36 @@ function ReservarContent() {
       const qty = selectedRooms[q.key] || 0;
       if (qty > 0) {
         totalRooms += qty;
-        grandTotal += q.totalPrice * qty;
+        baseLodgingTotal += q.totalPrice * qty;
+        totalBaseCapacity += (q.capacity || 2) * qty;
         totalMaxCapacity += (q.maxCapacity || q.capacity || 2) * qty;
         selectedList.push({ quote: q, quantity: qty });
       }
     });
 
+    const nights = selectedList[0]?.quote?.nights || 1;
+    const extraGuests = totalGuests > totalBaseCapacity
+      ? Math.min(totalGuests - totalBaseCapacity, Math.max(0, totalMaxCapacity - totalBaseCapacity))
+      : 0;
+    const extraGuestsFee = extraGuests * 500 * nights;
+    const grandTotal = baseLodgingTotal + extraGuestsFee;
     const deposit = Math.round(grandTotal * 0.5);
+    const balanceRemaining = grandTotal - deposit;
 
     return {
       totalRooms,
+      nights,
+      baseLodgingTotal,
+      extraGuests,
+      extraGuestsFee,
       grandTotal,
       deposit,
+      balanceRemaining,
+      totalBaseCapacity,
       totalMaxCapacity,
       selectedList
     };
-  }, [quotes, selectedRooms]);
+  }, [quotes, selectedRooms, totalGuests]);
 
   // Resumen activo que respalda pendingQuote si fue restaurado antes de que carguen las cotizaciones
   const activeSummary = useMemo(() => {
@@ -346,21 +361,32 @@ function ReservarContent() {
     }
     if (pendingQuote && Array.isArray(pendingQuote.rooms) && pendingQuote.rooms.length > 0) {
       let totalRooms = 0;
+      let baseLodgingTotal = 0;
+      let totalBaseCapacity = 0;
       let totalMaxCapacity = 0;
       const selectedList: { quote: QuoteItem; quantity: number }[] = [];
+      const nights = Number(pendingQuote.nights || 1);
+
       pendingQuote.rooms.forEach((r: any) => {
         const qty = Number(r.quantity || 1);
         totalRooms += qty;
         const matchingCat = quotes.find(q => q.key === r.key);
+        const baseCap = matchingCat?.capacity || (r.key === 'doble' ? 2 : r.key === '1rec' ? 4 : r.key === '2rec' ? 6 : r.key === '3rec' ? 6 : 10);
         const maxCap = matchingCat?.maxCapacity || (r.key === 'doble' ? 4 : r.key === '1rec' ? 4 : r.key === '2rec' ? 8 : r.key === '3rec' ? 8 : 12);
+        totalBaseCapacity += baseCap * qty;
         totalMaxCapacity += maxCap * qty;
+
+        const pricePerNight = Number(r.pricePerNight || matchingCat?.pricePerNight || 0);
+        const itemTotalPrice = Number(r.totalPrice || (pricePerNight * nights));
+        baseLodgingTotal += itemTotalPrice * qty;
+
         selectedList.push({
           quote: matchingCat || {
             key: r.key,
             roomId: r.roomId || '',
             name: r.name || (r.key === 'doble' ? 'Habitación Doble' : r.key === '1rec' ? 'Condominio de 1 Recámara' : r.key === '2rec' ? 'Condominio de 2 Recámaras' : r.key === '3rec' ? 'Condominio de 3 Recámaras' : 'Casa Vacacional'),
             name_en: r.name_en || 'Accommodation',
-            capacity: 2,
+            capacity: baseCap,
             maxCapacity: maxCap,
             description: '',
             description_en: '',
@@ -370,25 +396,40 @@ function ReservarContent() {
             totalUnits: 1,
             availableUnitsCount: 1,
             isAvailable: true,
-            nights: Number(r.nights || 1),
-            pricePerNight: Number(r.pricePerNight || 0),
-            totalPrice: Number(r.totalPrice || 0),
-            depositRequired: Math.round(Number(r.totalPrice || 0) * 0.5),
+            nights: nights,
+            pricePerNight: pricePerNight,
+            totalPrice: itemTotalPrice,
+            depositRequired: Math.round(itemTotalPrice * 0.5),
             currency: 'MXN'
           },
           quantity: qty
         });
       });
+
+      const extraGuests = totalGuests > totalBaseCapacity
+        ? Math.min(totalGuests - totalBaseCapacity, Math.max(0, totalMaxCapacity - totalBaseCapacity))
+        : 0;
+      const extraGuestsFee = extraGuests * 500 * nights;
+      const grandTotal = pendingQuote.totalAmount ? Number(pendingQuote.totalAmount) : (baseLodgingTotal + extraGuestsFee);
+      const deposit = pendingQuote.depositRequired ? Number(pendingQuote.depositRequired) : Math.round(grandTotal * 0.5);
+      const balanceRemaining = grandTotal - deposit;
+
       return {
         totalRooms,
-        grandTotal: Number(pendingQuote.totalAmount || 0),
-        deposit: Number(pendingQuote.depositRequired || Math.round((pendingQuote.totalAmount || 0) * 0.5)),
+        nights,
+        baseLodgingTotal,
+        extraGuests,
+        extraGuestsFee,
+        grandTotal,
+        deposit,
+        balanceRemaining,
+        totalBaseCapacity,
         totalMaxCapacity,
         selectedList
       };
     }
     return selectionSummary;
-  }, [selectionSummary, pendingQuote, quotes]);
+  }, [selectionSummary, pendingQuote, quotes, totalGuests]);
 
   const isOverCapacity = activeSummary.totalRooms > 0 && totalGuests > activeSummary.totalMaxCapacity;
 
@@ -431,11 +472,17 @@ function ReservarContent() {
           phone: phoneToUse,
           checkIn,
           checkOut,
+          nights: activeSummary.nights,
           adults,
           children,
+          totalGuests,
           rooms: payloadRooms,
+          baseLodgingTotal: activeSummary.baseLodgingTotal,
+          extraGuests: activeSummary.extraGuests,
+          extraGuestsFee: activeSummary.extraGuestsFee,
           totalAmount: activeSummary.grandTotal,
-          depositRequired: activeSummary.deposit
+          depositRequired: activeSummary.deposit,
+          balanceRemaining: activeSummary.balanceRemaining
         })
       });
 
@@ -495,7 +542,11 @@ function ReservarContent() {
           adults,
           children,
           rooms: payloadRooms,
-          notes: notes.trim()
+          notes: notes.trim(),
+          totalAmount: activeSummary.grandTotal,
+          depositRequired: activeSummary.deposit,
+          extraGuests: activeSummary.extraGuests,
+          extraGuestsFee: activeSummary.extraGuestsFee
         })
       });
 
@@ -700,41 +751,6 @@ function ReservarContent() {
         ) : (
           /* ── MOTOR DE RESERVAS (ESTILO BOOKING) ── */
           <div className="space-y-5 animate-in fade-in duration-200">
-            {/* BANNER DE COTIZACIÓN PENDIENTE (PROVENIENTE DE WHATSAPP) */}
-            {pendingQuote && (
-              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200/90 rounded-3xl p-4 shadow-xs space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-emerald-600 text-white font-black text-xs flex items-center justify-center">
-                      ✓
-                    </span>
-                    <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800">
-                      {lang === 'en' ? 'Quote in progress from WhatsApp' : 'Cotización en progreso desde WhatsApp'}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-bold text-emerald-700 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200 shadow-2xs">
-                    24h Hold
-                  </span>
-                </div>
-                <div className="flex justify-between items-baseline text-xs text-zinc-700 font-medium px-1">
-                  <span>📅 {checkIn} al {checkOut} ({activeSummary.totalRooms} {t.selectedRoomsCount})</span>
-                  <span className="font-black text-sm text-zinc-900">${activeSummary.grandTotal.toLocaleString()} MXN</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsConfirmStep(true);
-                    setIsModalOpen(true);
-                  }}
-                  className="w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
-                >
-                  <User size={14} />
-                  <span>{t.completeNameBtn}</span>
-                  <ArrowRight size={14} />
-                </button>
-              </div>
-            )}
-
             {/* BUSCADOR DE FECHAS Y PERSONAS */}
             <div className="bg-white rounded-3xl p-5 border border-zinc-200/80 shadow-xs space-y-4">
               <div className="flex items-center gap-2 border-b border-zinc-100 pb-3">
@@ -892,15 +908,13 @@ function ReservarContent() {
                           </>
                         )}
 
-                        {/* Badge de capacidad */}
+                        {/* Badge de capacidad con personas adicionales */}
                         <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-2.5 py-1 rounded-lg text-[10px] font-black text-zinc-900 flex items-center gap-1 shadow-sm">
                           <Users size={12} className="text-indigo-600 shrink-0" />
                           <span>
-                            {q.key === '3rec'
-                              ? (lang === 'en' ? 'Up to 6 guests + 2 extra with fee' : 'Hasta 6 huéspedes + 2 adicionales con costo')
-                              : (lang === 'en'
-                                  ? (q.capacityText_en || `${t.maxGuests} ${q.capacity} ${t.guests}`)
-                                  : (q.capacityText || `${t.maxGuests} ${q.capacity} ${t.guests}`))}
+                            {lang === 'en'
+                              ? (q.capacityText_en || `Base ${q.capacity} guests${q.maxCapacity > q.capacity ? ` (+ up to ${q.maxCapacity - q.capacity} extra · max ${q.maxCapacity})` : ''}`)
+                              : (q.capacityText || `Base ${q.capacity} huéspedes${q.maxCapacity > q.capacity ? ` (+ hasta ${q.maxCapacity - q.capacity} adicionales · máx. ${q.maxCapacity})` : ''}`)}
                           </span>
                         </div>
 
@@ -918,23 +932,20 @@ function ReservarContent() {
                         </div>
                       </div>
 
-                      {/* Detalles y precios */}
-                      <div className="p-5 space-y-4">
+                      {/* Detalles y características */}
+                      <div className="p-5 space-y-3">
                         <div>
                           <h4 className="text-base font-black text-zinc-900 leading-tight">
                             {lang === 'en' ? q.name_en : q.name}
                           </h4>
-                          <p className="text-xs text-zinc-500 mt-1 leading-relaxed">
-                            {lang === 'en' ? q.description_en : q.description}
-                          </p>
                         </div>
 
-                        {/* Lista de características */}
-                        <div className="grid grid-cols-2 gap-1.5 text-[11px] text-zinc-600 border-t border-zinc-100 pt-3">
-                          {(lang === 'en' ? q.features_en : q.features).slice(0, 4).map((f, i) => (
-                            <div key={i} className="flex items-center gap-1.5">
-                              <Check size={12} className="text-emerald-600 shrink-0" />
-                              <span className="truncate">{f}</span>
+                        {/* Lista de características completas (sin prosa y sin truncar) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-zinc-700 border-t border-zinc-100 pt-3">
+                          {(lang === 'en' ? q.features_en : q.features).map((f, i) => (
+                            <div key={i} className="flex items-start gap-1.5 leading-snug">
+                              <Check size={13} className="text-emerald-600 shrink-0 mt-0.5" />
+                              <span className="font-medium">{f}</span>
                             </div>
                           ))}
                         </div>
@@ -1070,6 +1081,27 @@ function ReservarContent() {
                 )}
               </button>
             </div>
+
+            {/* Opción abajo de enviar cotización para ingresar nombre y bloquear directamente en el sistema */}
+            <div className="pt-2 border-t border-zinc-100 flex items-center justify-center">
+              <button
+                type="button"
+                disabled={isOverCapacity}
+                onClick={() => {
+                  if (isOverCapacity) return;
+                  setIsConfirmStep(true);
+                  setIsModalOpen(true);
+                }}
+                className="w-full py-2 px-3 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-98"
+              >
+                <User size={13} className="text-emerald-700 shrink-0" />
+                <span>
+                  {lang === 'en'
+                    ? 'Or enter full name & lock in our system (24h) →'
+                    : 'O ingresar nombre y bloquear 24 horas en nuestro sistema →'}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1117,25 +1149,93 @@ function ReservarContent() {
               </div>
             )}
 
-            {/* Resumen de selección */}
-            <div className="bg-zinc-50 rounded-2xl p-4 space-y-2 border border-zinc-200/60 text-xs">
-              <div className="flex justify-between font-bold text-zinc-600">
-                <span>Fechas:</span>
-                <span className="text-zinc-900">{checkIn} al {checkOut} ({activeSummary.selectedList[0]?.quote?.nights || 1} noches)</span>
+            {/* Resumen detallado de la cotización con desglose completo */}
+            <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-200/80 text-xs shadow-xs">
+              {/* Fechas y noches */}
+              <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
+                <span className="text-zinc-500 font-semibold">{lang === 'en' ? 'Dates:' : 'Fechas:'}</span>
+                <span className="text-zinc-900 font-extrabold">{checkIn} al {checkOut} ({activeSummary.nights} {activeSummary.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')})</span>
               </div>
-              {activeSummary.selectedList.map(item => (
-                <div key={item.quote.key} className="flex justify-between text-zinc-700">
-                  <span>{item.quantity}x {lang === 'en' ? item.quote.name_en : item.quote.name}</span>
-                  <span className="font-bold text-zinc-900">${(item.quote.totalPrice * item.quantity).toLocaleString()} MXN</span>
+
+              {/* Número de huéspedes */}
+              <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
+                <span className="text-zinc-500 font-semibold">{lang === 'en' ? 'Guests:' : 'Huéspedes:'}</span>
+                <span className="text-zinc-900 font-bold">
+                  {totalGuests} {lang === 'en' ? 'guests' : 'personas'} ({adults} {lang === 'en' ? 'adults' : 'adultos'}{children > 0 ? `, ${children} ${lang === 'en' ? 'children' : 'niños'}` : ''})
+                </span>
+              </div>
+
+              {/* Desglose de cada alojamiento con costo por noche */}
+              <div className="space-y-2 border-b border-zinc-200/60 pb-2.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400 block">
+                  {lang === 'en' ? 'Selected Accommodations:' : 'Alojamientos seleccionados:'}
+                </span>
+                {activeSummary.selectedList.map(item => (
+                  <div key={item.quote.key} className="flex justify-between items-start text-zinc-700">
+                    <div>
+                      <div className="font-bold text-zinc-900">
+                        {item.quantity}x {lang === 'en' ? item.quote.name_en : item.quote.name}
+                      </div>
+                      <div className="text-[10px] text-zinc-500">
+                        ${item.quote.pricePerNight.toLocaleString()} MXN / {lang === 'en' ? 'night' : 'noche'} × {item.quote.nights} {item.quote.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')}
+                      </div>
+                    </div>
+                    <span className="font-black text-zinc-900 text-sm">
+                      ${(item.quote.totalPrice * item.quantity).toLocaleString()} MXN
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Número de personas adicionales con costo desglosado */}
+              <div className="flex justify-between items-start border-b border-zinc-200/60 pb-2.5">
+                <div>
+                  <div className="font-bold text-zinc-900">
+                    {lang === 'en' ? 'Extra Guests:' : 'Personas adicionales:'} {activeSummary.extraGuests}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">
+                    {activeSummary.extraGuests > 0 ? (
+                      lang === 'en'
+                        ? `$500 MXN / night × ${activeSummary.extraGuests} extra guests × ${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'}`
+                        : `$500 MXN / noche × ${activeSummary.extraGuests} pers. adicionales × ${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'}`
+                    ) : (
+                      lang === 'en'
+                        ? 'Included in base capacity (no extra charge)'
+                        : 'Incluidas en capacidad base (sin cargo extra)'
+                    )}
+                  </div>
                 </div>
-              ))}
-              <div className="border-t border-zinc-200 pt-2 flex justify-between font-black text-sm text-zinc-900">
-                <span>Total de la estancia:</span>
-                <span>${activeSummary.grandTotal.toLocaleString()} MXN</span>
+                <span className={`font-black text-xs ${activeSummary.extraGuestsFee > 0 ? 'text-amber-800' : 'text-zinc-500'}`}>
+                  {activeSummary.extraGuestsFee > 0
+                    ? `+$${activeSummary.extraGuestsFee.toLocaleString()} MXN`
+                    : '$0 MXN'}
+                </span>
               </div>
-              <div className="flex justify-between font-black text-xs text-indigo-700">
-                <span>Anticipo a pagar (50%):</span>
-                <span>${activeSummary.deposit.toLocaleString()} MXN</span>
+
+              {/* Totales específicos para evitar dudas */}
+              <div className="space-y-1.5 pt-0.5">
+                <div className="flex justify-between text-zinc-600 font-semibold text-xs">
+                  <span>{lang === 'en' ? 'Lodging Subtotal:' : 'Subtotal habitaciones:'}</span>
+                  <span className="font-bold text-zinc-900">${activeSummary.baseLodgingTotal.toLocaleString()} MXN</span>
+                </div>
+                {activeSummary.extraGuestsFee > 0 && (
+                  <div className="flex justify-between text-amber-900 font-semibold text-xs">
+                    <span>{lang === 'en' ? 'Extra Guests Surcharge:' : 'Suplemento personas adicionales:'}</span>
+                    <span className="font-bold">+${activeSummary.extraGuestsFee.toLocaleString()} MXN</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-black text-sm text-zinc-900 pt-1.5 border-t border-zinc-200">
+                  <span>{lang === 'en' ? 'Total for Stay:' : 'Total de la estancia:'}</span>
+                  <span className="text-base text-indigo-900 font-black">${activeSummary.grandTotal.toLocaleString()} MXN</span>
+                </div>
+                <div className="flex justify-between font-black text-xs text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">
+                  <span>{lang === 'en' ? '50% Required Deposit to Lock:' : 'Anticipo requerido para bloquear (50%):'}</span>
+                  <span className="text-sm font-black">${activeSummary.deposit.toLocaleString()} MXN</span>
+                </div>
+                <div className="flex justify-between text-[11px] font-bold text-zinc-500 px-1 pt-0.5">
+                  <span>{lang === 'en' ? 'Remaining Balance at Check-in (50%):' : 'Saldo restante a liquidar al check-in (50%):'}</span>
+                  <span>${activeSummary.balanceRemaining.toLocaleString()} MXN</span>
+                </div>
               </div>
             </div>
 
@@ -1304,7 +1404,7 @@ function ReservarContent() {
               <div className="flex items-start gap-2.5">
                 <span className="w-5 h-5 rounded-full bg-emerald-600 text-white font-black text-[11px] flex items-center justify-center shrink-0">3</span>
                 <p className="text-zinc-700 font-medium">
-                  {lang === 'en' ? 'Enter your full name to instantly block your rooms in Beds24.' : 'Introduce tu nombre completo para asegurar tus habitaciones de inmediato en Beds24.'}
+                  {lang === 'en' ? 'Enter your full name to instantly lock your rooms in our system.' : 'Introduce tu nombre completo para asegurar tus habitaciones de inmediato en nuestro sistema.'}
                 </p>
               </div>
             </div>

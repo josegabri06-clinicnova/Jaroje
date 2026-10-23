@@ -234,6 +234,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudieron asignar habitaciones válidas.' }, { status: 400 });
     }
 
+    const totalExtraGuestsFee = Number(body.extraGuestsFee || 0);
+    if (totalExtraGuestsFee > 0 && beds24Payload.length > 0) {
+      beds24Payload[0].price += totalExtraGuestsFee;
+      grandTotalPrice += totalExtraGuestsFee;
+    }
+
     const depositRequired = Math.round(grandTotalPrice * 0.5);
 
     // 5. Enviar creación a Beds24 API v2

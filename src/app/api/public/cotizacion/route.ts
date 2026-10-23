@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { normalizePhone, sendTemplate_ConfirmarReserva } from '@/lib/whatsapp';
+import { normalizePhone, sendWhatsAppTextMessage, sendTemplate_ConfirmarReserva } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +12,8 @@ const supabase = createClient(
 /**
  * POST /api/public/cotizacion
  * Guarda la cotización de fechas y habitaciones seleccionadas por el huésped en el portal,
- * e inmediatamente despacha la plantilla de WhatsApp 'confirmar_reserva' con el botón interactivo
+ * envía por WhatsApp el desglose detallado con costo por noche y personas extras,
+ * e inmediatamente despacha la plantilla oficial 'confirmar_reserva' con el botón interactivo
  * 'Confirmar Reserva' para que el huésped regrese a ingresar su nombre completo y formalizar.
  */
 export async function POST(req: Request) {
@@ -42,26 +43,61 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Formato de teléfono no válido' }, { status: 400 });
     }
 
-    // Validación estricta de ocupación máxima de habitaciones
-    const totalGuests = Number(adults || 0) + Number(children || 0);
-    const ROOM_CAPACITIES: Record<string, number> = {
+    // Reglas de capacidad base y máxima por categoría
+    const ROOM_BASE_CAPACITIES: Record<string, number> = {
+      'doble': 2,
+      '1rec': 4,
+      '2rec': 6,
+      '3rec': 6,
+      'casa': 10
+    };
+    const ROOM_MAX_CAPACITIES: Record<string, number> = {
       'doble': 4,
       '1rec': 4,
       '2rec': 8,
       '3rec': 8,
       'casa': 12
     };
+
+    const totalGuests = Number(adults || 0) + Number(children || 0);
+    let totalBaseCapacity = 0;
     let totalMaxCapacity = 0;
+
     rooms.forEach((r: any) => {
-      totalMaxCapacity += (ROOM_CAPACITIES[r.key] || 4) * Number(r.quantity || 1);
+      const qty = Number(r.quantity || 1);
+      totalBaseCapacity += (ROOM_BASE_CAPACITIES[r.key] || 2) * qty;
+      totalMaxCapacity += (ROOM_MAX_CAPACITIES[r.key] || 4) * qty;
     });
 
     if (totalGuests > totalMaxCapacity) {
       return NextResponse.json({
         success: false,
-        error: `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${totalMaxCapacity}.`
+        error: `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones seleccionadas es ${totalMaxCapacity}.`
       }, { status: 400 });
     }
+
+    const reqIn = new Date(checkIn);
+    const reqOut = new Date(checkOut);
+    const nights = Math.max(1, Math.round((reqOut.getTime() - reqIn.getTime()) / (1000 * 60 * 60 * 24)));
+
+    // Cálculo exacto de personas adicionales ($500 MXN / noche)
+    const extraGuests = totalGuests > totalBaseCapacity
+      ? Math.min(totalGuests - totalBaseCapacity, Math.max(0, totalMaxCapacity - totalBaseCapacity))
+      : 0;
+    const extraGuestsFee = extraGuests * 500 * nights;
+
+    let baseLodgingTotal = 0;
+    rooms.forEach((r: any) => {
+      const pNight = Number(r.pricePerNight || 0);
+      const qty = Number(r.quantity || 1);
+      const itemSubtotal = r.totalPrice ? Number(r.totalPrice) * qty : (pNight * nights * qty);
+      baseLodgingTotal += itemSubtotal;
+    });
+
+    const calculatedGrandTotal = baseLodgingTotal + extraGuestsFee;
+    const finalTotal = totalAmount && Number(totalAmount) > 0 ? Number(totalAmount) : calculatedGrandTotal;
+    const finalDeposit = depositRequired && Number(depositRequired) > 0 ? Number(depositRequired) : Math.round(finalTotal * 0.5);
+    const balanceRemaining = finalTotal - finalDeposit;
 
     const quoteId = `Q_${Date.now()}`;
     const nowIso = new Date().toISOString();
@@ -71,11 +107,17 @@ export async function POST(req: Request) {
       phone: cleanPhone,
       checkIn,
       checkOut,
+      nights,
       adults: Number(adults),
       children: Number(children),
+      totalGuests,
       rooms,
-      totalAmount: Number(totalAmount),
-      depositRequired: Number(depositRequired),
+      baseLodgingTotal,
+      extraGuests,
+      extraGuestsFee,
+      totalAmount: finalTotal,
+      depositRequired: finalDeposit,
+      balanceRemaining,
       status: 'pending_name',
       createdAt: nowIso
     };
@@ -92,7 +134,7 @@ export async function POST(req: Request) {
 
       const quoteMessage = {
         role_guest: null,
-        role_bot: `🎉 ¡Cotización generada! Folio: ${quoteId}. Total: $${Number(totalAmount).toLocaleString()} MXN (50% anticipo: $${Number(depositRequired).toLocaleString()} MXN). Pendiente de nombre completo.`,
+        role_bot: `🎉 ¡Cotización generada! Folio: #${quoteId}. Total: $${finalTotal.toLocaleString()} MXN (50% anticipo: $${finalDeposit.toLocaleString()} MXN). Pendiente de nombre completo.`,
         role_manager: null,
         quote_data: quoteData,
         timestamp: nowIso
@@ -125,7 +167,44 @@ export async function POST(req: Request) {
       console.error("[Cotizacion API] Error guardando cotización en BD:", dbErr);
     }
 
-    // 2. Disparar al instante la plantilla oficial 'confirmar_reserva' de WhatsApp
+    // 2. Enviar por WhatsApp el resumen completo con desglose detallado
+    const roomsText = rooms.map((r: any) => {
+      const pNight = Number(r.pricePerNight || 0);
+      const qty = Number(r.quantity || 1);
+      const itemSub = (pNight * nights * qty);
+      return `• *${qty}x ${r.name}*\n  $${pNight.toLocaleString()} MXN / noche × ${nights} ${nights === 1 ? 'noche' : 'noches'} = $${itemSub.toLocaleString()} MXN`;
+    }).join('\n');
+
+    const whatsappSummaryText =
+`🏨 *COTIZACIÓN OFICIAL — CONDOMINIOS JAROJE*
+Santa Cruz Huatulco, Oaxaca
+Folio: *#${quoteId}*
+
+📅 *Fechas:* ${checkIn} al ${checkOut} (${nights} ${nights === 1 ? 'noche' : 'noches'})
+👥 *Huéspedes:* ${totalGuests} personas (${adults} adultos${children > 0 ? `, ${children} niños` : ''})
+
+🛏️ *Alojamientos seleccionados:*
+${roomsText}
+
+👤 *Personas adicionales:* ${extraGuests > 0 ? `${extraGuests} adicionales ($500 MXN / noche × ${extraGuests} pers. × ${nights} noches = $${extraGuestsFee.toLocaleString()} MXN)` : '0 adicionales (incluidas en capacidad base sin costo)'}
+
+💰 *DESGLOSE TOTAL:*
+• Subtotal hospedaje: $${baseLodgingTotal.toLocaleString()} MXN
+${extraGuestsFee > 0 ? `• Suplemento adicionales: $${extraGuestsFee.toLocaleString()} MXN\n` : ''}• *Total de la estancia:* $${finalTotal.toLocaleString()} MXN
+• *Anticipo requerido para apartar (50%):* $${finalDeposit.toLocaleString()} MXN
+• Saldo restante al check-in (50%): $${balanceRemaining.toLocaleString()} MXN
+
+🔒 *Garantía de bloqueo por 24 horas:*
+Tus habitaciones quedarán formalmente apartadas por 24 horas en nuestro sistema en cuanto pulses el botón de abajo e ingreses tu nombre completo 👇`;
+
+    try {
+      console.log(`[Cotizacion API] Enviando resumen detallado de cotización por WhatsApp a ${cleanPhone}...`);
+      await sendWhatsAppTextMessage(cleanPhone, whatsappSummaryText);
+    } catch (msgErr) {
+      console.warn("[Cotizacion API] Aviso enviando texto de resumen (posible ventana de 24h cerrada):", msgErr);
+    }
+
+    // 3. Disparar al instante la plantilla oficial 'confirmar_reserva' de WhatsApp
     let waResult: any = { success: false };
     try {
       console.log(`[Cotizacion API] Disparando plantilla 'confirmar_reserva' para ${cleanPhone}...`);
@@ -140,7 +219,7 @@ export async function POST(req: Request) {
       quoteId,
       quoteData,
       waSent: waResult?.success ?? false,
-      message: 'Cotización guardada exitosamente y confirmación enviada a WhatsApp'
+      message: 'Cotización guardada exitosamente y enviada a WhatsApp'
     });
 
   } catch (err: any) {
