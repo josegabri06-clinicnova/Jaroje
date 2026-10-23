@@ -325,19 +325,20 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     rawPayload.includes('reserva') || 
     rawPayload.includes('book_now')
   ) {
-    // Disparar invitación interactiva CTA_URL (In-App Browser nativo dentro de WhatsApp, réplica Clinicnova)
-    const { sendJarojeBookingPortalInvitation } = await import('@/lib/whatsapp');
+    // Despachar exclusivamente la plantilla oficial de 3 botones aprobada en Meta (bienvenido_cliente_whatsaap_v4)
+    const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
     try {
-      console.log(`[Inbound Handler] 🌟 Intención de reserva detectada. Despachando invitación interactiva In-App a ${phone}...`);
-      const inviteResult = await sendJarojeBookingPortalInvitation(phone);
-      if (inviteResult.success) {
+      console.log(`[Inbound Handler] 🌟 Intención de reserva detectada. Despachando plantilla oficial de 3 botones 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
+      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
+      if (welcomeResult.success) {
+        welcomeSentMemoryCache.set(phone, Date.now());
         isAutoReplyTriggered = false;
         finalBotResponse = null;
       } else {
-        console.error('[Inbound Handler] Error enviando invitación interactiva In-App:', inviteResult.error);
+        console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
       }
     } catch (err) {
-      console.error('[Inbound Handler] Excepción enviando invitación interactiva:', err);
+      console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
     }
   }
 
