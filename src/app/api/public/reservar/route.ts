@@ -257,20 +257,24 @@ export async function POST(req: Request) {
     const b24Data = await beds24Res.json();
     console.log("[Reservar API] Respuesta de Beds24:", JSON.stringify(b24Data));
 
-    // Extraer IDs creados
+    // Extraer IDs creados (en Beds24 v2 POST los nuevos IDs vienen en cb.new.id o cb.new.bookId)
     const createdBookings: any[] = Array.isArray(b24Data) ? b24Data : (b24Data.data || []);
     const successfulBookingIds: string[] = [];
 
-    createdBookings.forEach((cb: any, idx: number) => {
-      const bId = cb.id || cb.bookId || (cb.success && cb.id);
+    createdBookings.forEach((cb: any) => {
+      const bId = cb.id || cb.bookId || cb.new?.id || cb.new?.bookId || (cb.info && cb.info[0]?.id) || (cb.success && (cb.id || cb.new?.id));
       if (bId) {
         successfulBookingIds.push(String(bId));
       }
     });
 
     if (successfulBookingIds.length === 0) {
+      const firstError = createdBookings[0];
+      const errorMsg = firstError?.errors
+        ? firstError.errors.map((e: any) => `${e.field || ''}: ${e.message || ''}`).join(', ')
+        : firstError?.message || 'Beds24 no retornó IDs de reserva válidos.';
       return NextResponse.json({
-        error: 'Beds24 no retornó IDs de reserva válidos.',
+        error: errorMsg,
         details: b24Data
       }, { status: 500 });
     }
@@ -311,11 +315,12 @@ export async function POST(req: Request) {
           check_out: checkOut,
           guest_name: guestName.trim(),
           guest_phone: cleanPhone,
-          phone: cleanPhone,
           guest_email: guestEmail || null,
           status: 'confirmed',
           channel: 'Directo whatssap',
           room_name: assignedRoomSummary,
+          room_id: String(payloadItem.roomId),
+          unit_id: String(payloadItem.unitId),
           price: payloadItem.price,
           deposit: 0,
           balance: payloadItem.price,
