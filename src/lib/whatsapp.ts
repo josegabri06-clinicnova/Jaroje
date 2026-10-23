@@ -1827,7 +1827,9 @@ export async function sendTemplate_ConfirmarReserva(
   const cleanPhone = cleanPhoneForMeta(phone);
   // La plantilla 'confirmar_reserva' está aprobada en Meta WhatsApp Business exclusivamente en idioma español ('es')
   const lang = (langOverride || 'es') as 'es' | 'en';
-  return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [cleanPhone], undefined, 'url', true, lang);
+  // El botón URL dinámico en Meta es: https://jaroje-app.vercel.app/public/reservar?phone={{1}}
+  // Pasamos `${cleanPhone}&step=confirm` para que la web reconozca exclusivamente que es el Paso 2 de confirmación
+  return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [`${cleanPhone}&step=confirm`], undefined, 'url', true, lang);
 }
 
 /**

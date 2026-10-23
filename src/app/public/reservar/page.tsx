@@ -70,6 +70,7 @@ function ReservarContent() {
   const searchParams = useSearchParams();
   const phoneParam = searchParams.get('phone') || searchParams.get('p') || '';
   const langParam = searchParams.get('lang') || 'es';
+  const stepParam = searchParams.get('step') || searchParams.get('action') || '';
 
   const [lang, setLang] = useState<'es' | 'en'>(langParam === 'en' ? 'en' : 'es');
 
@@ -244,8 +245,10 @@ function ReservarContent() {
           setExistingReservations(data.existingReservations);
         }
 
-        // Si hay una cotización pendiente (el huésped pulsó "Confirmar Reserva" en WhatsApp):
-        if (data.pendingQuote && data.pendingQuote.status === 'pending_name') {
+        // Solo restaurar la cotización si el usuario viene EXPLÍCITAMENTE de pulsar "Confirmar Reserva" (&step=confirm)
+        const isConfirmStepRequested = stepParam === 'confirm';
+
+        if (isConfirmStepRequested && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
           setPendingQuote(data.pendingQuote);
           if (!hasRestoredPendingQuote) {
             setHasRestoredPendingQuote(true);
