@@ -958,8 +958,31 @@ export async function sendWhatsAppTemplate(
         }
       }
 
-      // Soporte bilingüe dinámico: huéspedes de habla hispana ('es') e internacionales ('en')
-      const metaLanguage = languageOverride || (detectedLang === 'en' ? 'en' : 'es');
+      // Plantillas que SOLO existen en español ('es') en Meta WhatsApp Business
+      const SPANISH_ONLY_TEMPLATES = new Set([
+        'confirmar_reserva',
+        'portal_huesped_link',
+        'rechazo_solicitud',
+        'alojamiento_listo',
+        'pago_anticipo_recibido',
+        'bienvenido_cliente_whatsaap_v4',
+        'test_mixed_buttons_no_emoji'
+      ]);
+
+      // Plantillas que fueron registradas con código de idioma 'en' en Meta WhatsApp Business
+      const ENGLISH_CODE_TEMPLATES = new Set([
+        'bienvenido_cliente_llamada_v4'
+      ]);
+
+      // Resolución estricta de idioma según el catálogo oficial aprobado en Meta
+      let metaLanguage: string;
+      if (SPANISH_ONLY_TEMPLATES.has(actualMetaTemplate)) {
+        metaLanguage = 'es';
+      } else if (ENGLISH_CODE_TEMPLATES.has(actualMetaTemplate)) {
+        metaLanguage = 'en';
+      } else {
+        metaLanguage = languageOverride || (detectedLang === 'en' ? 'en' : 'es');
+      }
 
       const payload: any = {
         messaging_product: 'whatsapp',
