@@ -15,11 +15,6 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: 'Condominios Jaroje | Portal de Reservas y Huéspedes',
   description: 'Portal de reservas directas y gestión de autoservicio para huéspedes de Condominios Jaroje.',
-  appleWebApp: {
-    capable: true,
-    statusBarStyle: 'black-translucent',
-    title: 'Jaroje In-App',
-  },
   formatDetection: {
     telephone: false,
   },
