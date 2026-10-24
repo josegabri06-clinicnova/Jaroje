@@ -368,6 +368,44 @@ function isGroupMessageLocked(key: string): boolean {
   return false;
 }
 
+// Cache en memoria para la verificación de pausa de WhatsApp (3 segundos)
+let cachedPauseState: { value: boolean; timestamp: number } | null = null;
+
+/**
+ * Consulta de forma centralizada y ultra-rápida si los envíos automáticos de WhatsApp están pausados
+ */
+export async function isWhatsAppAutomationsPaused(): Promise<boolean> {
+  const now = Date.now();
+  if (cachedPauseState && (now - cachedPauseState.timestamp < 3000)) {
+    return cachedPauseState.value;
+  }
+  try {
+    const { data, error } = await supabase
+      .from('settings')
+      .select('value')
+      .eq('key', 'disable_automatic_whatsapp')
+      .maybeSingle();
+
+    if (error) {
+      console.warn("[WhatsApp Pause Check] Error leyendo settings:", error.message);
+      return false;
+    }
+
+    const rawVal = data?.value;
+    const isPaused = Boolean(
+      rawVal === true || 
+      rawVal === 'true' || 
+      rawVal === 1 || 
+      rawVal === '1'
+    );
+    cachedPauseState = { value: isPaused, timestamp: now };
+    return isPaused;
+  } catch (err) {
+    console.error("[WhatsApp Pause Check] Error inesperado:", err);
+    return false;
+  }
+}
+
 // Envía una plantilla genérica de WhatsApp llamando a YCloud o Meta Cloud API
 export async function sendWhatsAppTemplate(
   phone: string,
@@ -395,19 +433,14 @@ export async function sendWhatsAppTemplate(
 
     // Verificar si los envíos automáticos de WhatsApp están deshabilitados en la base de datos (solo si no es un envío manual)
     if (!bypassPause) {
-      try {
-        const { data: disableSetting } = await supabase
-          .from('settings')
-          .select('value')
-          .eq('key', 'disable_automatic_whatsapp')
-          .maybeSingle();
-
-        if (disableSetting && (disableSetting.value === true || disableSetting.value === 'true')) {
-          console.log(`[WhatsApp API] Envíos automáticos pausados por configuración (disable_automatic_whatsapp: true)`);
-          return { success: false, error: 'paused', data: { status: 'paused', message: 'WhatsApp automatizado pausado por administrador.' } };
-        }
-      } catch (e) {
-        console.error("Error al consultar configuración de pausa de WhatsApp:", e);
+      const isPaused = await isWhatsAppAutomationsPaused();
+      if (isPaused) {
+        console.log(`[WhatsApp API] ⏸️ Envíos automáticos PAUSADOS por configuración (disable_automatic_whatsapp: true). Omitiendo plantilla '${templateName}' para ${cleanedPhone}.`);
+        return { 
+          success: false, 
+          error: 'paused', 
+          data: { status: 'paused', message: 'WhatsApp automatizado pausado por administrador.' } 
+        };
       }
     }
 
@@ -1789,7 +1822,7 @@ export async function sendTemplate_BienvenidoConmutador(
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const cleanPhone = cleanPhoneForMeta(phone);
   // En Meta WABA, bienvenido_cliente_llamada_v4 está aprobada bajo código de idioma 'en'
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada_v4', [], [cleanPhone], undefined, 'url', true, 'en');
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada_v4', [], [cleanPhone], undefined, 'url', false, 'en');
 }
 
 /**
@@ -1881,7 +1914,7 @@ export async function sendTemplate_BienvenidoWhatsApp(
   if (bookingId && String(bookingId) !== '0' && String(bookingId) !== 'general') {
     return sendTemplate3_ReservacionConfirmada({ id: bookingId, guest_name: name, phone }, true);
   }
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap_v4', [], [cleanPhone], undefined, 'url', true, lang);
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_whatsaap_v4', [], [cleanPhone], undefined, 'url', false, lang);
 }
 
 /**
@@ -1899,7 +1932,7 @@ export async function sendTemplate_ConfirmarReserva(
   const lang = (langOverride || 'es') as 'es' | 'en';
   // El botón URL dinámico en Meta es: https://jaroje-app.vercel.app/public/reservar?phone={{1}}
   // Pasamos `${cleanPhone}&step=confirm` para que la web reconozca exclusivamente que es el Paso 2 de confirmación
-  return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [`${cleanPhone}&step=confirm`], undefined, 'url', true, lang);
+  return sendWhatsAppTemplate(phone, 'confirmar_reserva', [], [`${cleanPhone}&step=confirm`], undefined, 'url', false, lang);
 }
 
 /**
@@ -1912,6 +1945,6 @@ export async function sendTemplate_WiFiInformacion(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
-  return sendWhatsAppTemplate(phone, 'wifi_informacion', [], undefined, undefined, undefined, true, lang);
+  return sendWhatsAppTemplate(phone, 'wifi_informacion', [], undefined, undefined, undefined, false, lang);
 }
 

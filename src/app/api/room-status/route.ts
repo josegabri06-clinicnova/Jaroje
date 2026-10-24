@@ -183,7 +183,7 @@ export async function POST(req: Request) {
                 id: String(matchedRes.id),
                 guest_name: matchedRes.guest_name,
                 phone: phone
-              }, true);
+              }, false);
               if (waRes.success) {
                 await supabase.from('whatsapp_logs').insert([{
                   reservation_id: String(matchedRes.id),

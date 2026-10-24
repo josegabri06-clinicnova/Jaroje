@@ -357,7 +357,7 @@ export async function POST(req: Request) {
         price: grandTotalPrice,
         deposit: 0
       };
-      const waRes = await sendTemplate1_SolicitudRecibida(bookingForWhatsApp, true);
+      const waRes = await sendTemplate1_SolicitudRecibida(bookingForWhatsApp, false);
       console.log(`[Reservar API] Plantilla 1 enviada a ${cleanPhone} (Reserva ${masterBookingId}):`, waRes);
     } catch (waErr) {
       console.error("[Reservar API] Error al disparar Plantilla 1 de WhatsApp:", waErr);

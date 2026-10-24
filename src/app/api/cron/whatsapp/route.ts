@@ -102,6 +102,18 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
+    // 0.1. FRENO DE EMERGENCIA GLOBAL: Verificar si los envíos automáticos están pausados por el administrador
+    const { isWhatsAppAutomationsPaused } = await import('@/lib/whatsapp');
+    if (await isWhatsAppAutomationsPaused()) {
+      console.log("[Cron WhatsApp] ⏸️ FRENO DE EMERGENCIA ACTIVO: Envíos automáticos pausados en Ajustes (disable_automatic_whatsapp: true). Abortando cron.");
+      return NextResponse.json({
+        success: true,
+        paused: true,
+        message: '⏸️ FRENO DE EMERGENCIA: Los envíos automáticos de WhatsApp se encuentran pausados desde Ajustes por el administrador.',
+        reports: ['Envíos automáticos pausados por configuración global.']
+      });
+    }
+
     // 1. Autocreación de la tabla de logs si no existe
     await ensureLogsTable();
 
@@ -497,8 +509,8 @@ export async function GET(req: Request) {
                 console.error("Error al registrar cron-cancel-success:", e);
               }
 
-              // 6. Enviar WhatsApp de disponibilidad liberada una sola vez para todo el grupo
-              const waRes = await sendTemplate4_DisponibilidadLiberada(booking, true);
+              // 6. Enviar WhatsApp de disponibilidad liberada una sola vez para todo el grupo (respetando freno de emergencia)
+              const waRes = await sendTemplate4_DisponibilidadLiberada(booking, false);
               
               // 7. Registrar logs de whatsapp_logs para TODOS los miembros del grupo
               for (const memberId of groupMemberIds) {

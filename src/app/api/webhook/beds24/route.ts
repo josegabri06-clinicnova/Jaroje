@@ -180,7 +180,7 @@ export async function POST(req: Request) {
                 guest_name: `${b.firstName || ''} ${b.lastName || ''}`.trim() || (b.guestName || guestName || 'Huésped'),
                 phone: phone
               };
-              const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
+              const waRes = await sendTemplate4_DisponibilidadLiberada(normalizedBooking, false);
               if (waRes.success) {
                 console.log(`[Webhook Beds24] ✅ WhatsApp disponibilidad_liberada enviado AL INSTANTE a ${normalizedBooking.guest_name} (ID: ${bookingIdStr}).`);
               } else {
@@ -320,7 +320,7 @@ export async function POST(req: Request) {
           if (isConfirmedBooking) {
             // RESERVACIÓN CONFIRMADA (Booking.com, Airbnb, con anticipo pagado, etc.):
             // Se envía Mensaje 3 (reservacion_confirmada) INMEDIATAMENTE sin importar la anticipación de la fecha de entrada
-            const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
+            const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, false);
             if (waRes.success) {
               console.log(`[Webhook Beds24] ✅ WhatsApp reservacion_confirmada enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
             } else {
@@ -352,7 +352,7 @@ export async function POST(req: Request) {
               }
             }
 
-            const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA, true);
+            const waRes = await sendTemplate1_SolicitudRecibida(bookingForWA, false);
             if (waRes.success) {
               console.log(`[Webhook Beds24] ✅ WhatsApp solicitud_recibida enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
             } else {

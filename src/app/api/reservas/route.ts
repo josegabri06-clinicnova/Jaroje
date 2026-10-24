@@ -521,7 +521,7 @@ export async function POST(req: Request) {
 
             let waRes;
             if (isConfirmed) {
-              waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
+              waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, false);
               if (waRes?.success) {
                 console.log(`[WA reservas local] reservacion_confirmada procesado para reserva ${bookingIdStr}`);
               }
@@ -741,7 +741,7 @@ export async function POST(req: Request) {
 
           let waRes;
           if (isConfirmed) {
-            waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
+            waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, false);
             if (waRes?.success) {
               console.log(`[WA reservas B24] reservacion_confirmada procesado para reserva ${bookingIdStr}`);
             }
@@ -1117,7 +1117,7 @@ export async function DELETE(req: Request) {
     // Enviar WhatsApp de disponibilidad liberada al instante solo para reservas directas/no-OTA
     if (!isOTA && bookingForWA && bookingForWA.phone) {
       try {
-        const waRes = await sendTemplate4_DisponibilidadLiberada(bookingForWA, true);
+        const waRes = await sendTemplate4_DisponibilidadLiberada(bookingForWA, false);
         if (waRes.success) {
           console.log(`[Reservas DELETE] ✅ WhatsApp disponibilidad_liberada enviado al instante para B24:${id}`);
         } else {

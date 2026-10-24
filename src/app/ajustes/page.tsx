@@ -385,13 +385,22 @@ export default function AjustesPage() {
 
   const fetchDisableAutoWA = async () => {
     try {
+      const res = await fetch('/api/settings/whatsapp-pause', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setDisableAutoWA(Boolean(data.paused));
+          return;
+        }
+      }
       const { data, error } = await supabase
         .from('settings')
         .select('value')
         .eq('key', 'disable_automatic_whatsapp')
         .maybeSingle();
       if (!error && data) {
-        setDisableAutoWA(data.value === true || data.value === 'true');
+        const rawVal = data.value;
+        setDisableAutoWA(rawVal === true || rawVal === 'true' || rawVal === 1 || rawVal === '1');
       } else {
         setDisableAutoWA(false);
       }
@@ -403,17 +412,32 @@ export default function AjustesPage() {
   const handleToggleAutoWA = async (checked: boolean) => {
     setSavingAutoWA(true);
     try {
-      const { error } = await supabase
-        .from('settings')
-        .upsert({ key: 'disable_automatic_whatsapp', value: String(checked) }, { onConflict: 'key' });
-      
-      if (error) throw error;
+      const res = await fetch('/api/settings/whatsapp-pause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: checked })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al actualizar configuración en el servidor');
+      }
+
       setDisableAutoWA(checked);
-      setToastMessage(checked ? "⏸️ WhatsApp automático pausado." : "▶️ WhatsApp automático activado.");
-      setTimeout(() => setToastMessage(''), 3000);
+      setToastMessage(checked ? "🛑 Freno de emergencia: WhatsApp automático pausado." : "▶️ WhatsApp automático activado.");
+      setTimeout(() => setToastMessage(''), 4000);
     } catch (err: any) {
       console.error(err);
-      alert(`Error al actualizar configuración de WhatsApp: ${err.message}`);
+      try {
+        await supabase
+          .from('settings')
+          .upsert({ key: 'disable_automatic_whatsapp', value: String(checked) }, { onConflict: 'key' });
+        setDisableAutoWA(checked);
+        setToastMessage(checked ? "🛑 Freno de emergencia: WhatsApp automático pausado." : "▶️ WhatsApp automático activado.");
+        setTimeout(() => setToastMessage(''), 4000);
+      } catch (fallbackErr: any) {
+        alert(`Error al actualizar configuración de WhatsApp: ${err.message}`);
+      }
     } finally {
       setSavingAutoWA(false);
     }
@@ -1210,29 +1234,63 @@ export default function AjustesPage() {
         onToggle={() => toggleSection('whatsapp')}
       >
         <div className="space-y-4">
-          <div className="flex items-center justify-between py-2">
-            <div className="flex flex-col flex-1 pr-4">
-              <span className="text-[14px] font-bold text-zinc-800">Pausar Envíos Automáticos</span>
-              <span className="text-[11px] text-zinc-400 mt-1 font-sans leading-normal">
-                Si activas esta opción, el sistema dejará de enviar de forma automatizada los mensajes de reserva, confirmación de pago, check-in, check-out, etc.
-              </span>
-            </div>
-            <div className="flex items-center shrink-0">
-              <button
-                type="button"
-                onClick={() => handleToggleAutoWA(!disableAutoWA)}
-                disabled={savingAutoWA}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer focus:outline-none ${
-                  disableAutoWA ? 'bg-rose-500' : 'bg-zinc-200'
-                }`}
-              >
-                <span
-                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    disableAutoWA ? 'translate-x-6' : 'translate-x-1'
+          <div className="py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col flex-1 pr-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-[14px] font-bold text-zinc-800">Pausar Envíos Automáticos</span>
+                  {disableAutoWA ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 animate-pulse">
+                      🛑 PAUSADO
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                      🟢 ACTIVO
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] text-zinc-400 mt-1 font-sans leading-normal">
+                  Freno de emergencia global: Si activas esta opción, el sistema detiene inmediatamente todos los envíos automáticos (Cron, webhooks de Beds24, bienvenida y recordatorios). Los envíos manuales desde el panel seguirán disponibles.
+                </span>
+              </div>
+              <div className="flex items-center shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleToggleAutoWA(!disableAutoWA)}
+                  disabled={savingAutoWA}
+                  title={disableAutoWA ? "Reactivar envíos automáticos" : "Pausar envíos automáticos de emergencia"}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer focus:outline-none disabled:opacity-50 ${
+                    disableAutoWA ? 'bg-rose-500' : 'bg-zinc-200'
                   }`}
-                />
-              </button>
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      disableAutoWA ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
             </div>
+
+            {/* Banner de Estado de Emergencia */}
+            {disableAutoWA ? (
+              <div className="mt-3 p-3 rounded-xl bg-rose-50/90 border border-rose-200 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-rose-800">
+                  <span className="font-bold block">🛑 MODO DE EMERGENCIA ACTIVO: Envíos automáticos suspendidos</span>
+                  <span className="text-[11px] text-rose-700 leading-relaxed block mt-0.5">
+                    No se enviará ningún mensaje automatizado a los huéspedes hasta que desactives esta opción. El personal de recepción aún puede enviar plantillas manualmente desde el panel de reservas si es necesario.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/60 flex items-center gap-2">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="text-[11px] font-semibold text-emerald-800">
+                  Envíos automáticos operando con normalidad (Cron y webhooks activos).
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="pt-3 border-t border-zinc-100">

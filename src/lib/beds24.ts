@@ -2722,7 +2722,7 @@ export async function syncBeds24BookingLocal(b: any, overrides?: { phone?: strin
           guest_name: `${b.firstName || ''}${b.lastName ? ' ' + b.lastName : ''}`.trim() || (b.guestName || 'Huésped'),
           phone: phone
         };
-        await sendTemplate4_DisponibilidadLiberada(normalizedBooking, true);
+        await sendTemplate4_DisponibilidadLiberada(normalizedBooking, false);
       } catch (waErr) {
         console.error(`[Supabase Sync] Error enviando WhatsApp de cancelación para reserva ${b.id}:`, waErr);
       }
