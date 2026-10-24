@@ -76,12 +76,14 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    const reqIn = new Date(checkIn + 'T12:00:00');
-    const reqOut = new Date(checkOut + 'T12:00:00');
-    const diffTime = reqOut.getTime() - reqIn.getTime();
+    const cleanCheckIn = String(checkIn || '').split('T')[0].split(' ')[0].trim();
+    const cleanCheckOut = String(checkOut || '').split('T')[0].split(' ')[0].trim();
+    const dIn = new Date(`${cleanCheckIn}T00:00:00Z`);
+    const dOut = new Date(`${cleanCheckOut}T00:00:00Z`);
+    const diffTime = dOut.getTime() - dIn.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 0 || isNaN(diffDays) || checkIn >= checkOut) {
+    if (diffDays <= 0 || isNaN(diffDays) || cleanCheckIn >= cleanCheckOut) {
       return NextResponse.json({ success: false, error: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche).' }, { status: 400 });
     }
 

@@ -100,12 +100,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'El número de teléfono no es válido.' }, { status: 400 });
     }
 
-    const reqIn = new Date(checkIn + 'T12:00:00');
-    const reqOut = new Date(checkOut + 'T12:00:00');
-    const diffTime = reqOut.getTime() - reqIn.getTime();
+    const cleanCheckIn = String(checkIn || '').split('T')[0].split(' ')[0].trim();
+    const cleanCheckOut = String(checkOut || '').split('T')[0].split(' ')[0].trim();
+
+    const dIn = new Date(`${cleanCheckIn}T00:00:00Z`);
+    const dOut = new Date(`${cleanCheckOut}T00:00:00Z`);
+    const diffTime = dOut.getTime() - dIn.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 0 || isNaN(diffDays) || checkIn >= checkOut) {
+    if (diffDays <= 0 || isNaN(diffDays) || cleanCheckIn >= cleanCheckOut) {
       return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche).' }, { status: 400 });
     }
 
@@ -167,9 +170,9 @@ export async function POST(req: Request) {
     const occupiedUnitIds = new Set<string>();
     (bookingsRaw || []).forEach((b: any) => {
       if (String(b.status) !== '0' && b.status !== 'cancelled') {
-        const bIn = new Date(b.arrival);
-        const bOut = new Date(b.departure);
-        if (bIn < reqOut && bOut > reqIn) {
+        const bIn = String(b.arrival || '').split('T')[0].split(' ')[0].trim();
+        const bOut = String(b.departure || '').split('T')[0].split(' ')[0].trim();
+        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
           const parent = getParentMapping(b.roomId, b.unitId);
           if (parent.roomId && parent.unitId) {
             occupiedUnitIds.add(`${parent.roomId}_${parent.unitId}`);
@@ -177,6 +180,27 @@ export async function POST(req: Request) {
         }
       }
     });
+
+    // Cargar también reservas locales activas de Supabase
+    try {
+      const { data: localBookings } = await supabase
+        .from('local_reservas')
+        .select('*')
+        .neq('status', 'cancelled');
+
+      (localBookings || []).forEach((b: any) => {
+        const bIn = String(b.check_in || '').split('T')[0].split(' ')[0].trim();
+        const bOut = String(b.check_out || '').split('T')[0].split(' ')[0].trim();
+        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
+          const parent = getParentMapping(b.room_id, b.unit_id);
+          if (parent.roomId && parent.unitId) {
+            occupiedUnitIds.add(`${parent.roomId}_${parent.unitId}`);
+          }
+        }
+      });
+    } catch (lErr) {
+      console.warn("[Reservar API] Error checking local_reservas:", lErr);
+    }
 
     // Separar nombre y apellido
     const nameParts = guestName.trim().split(' ');

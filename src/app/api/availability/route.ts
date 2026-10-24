@@ -121,8 +121,8 @@ export async function GET(req: Request) {
     }
 
     // Calcular ocupación cruzada contemplando reservas de categoría general (sin unidad física asignada)
-    const reqIn = new Date(checkIn);
-    const reqOut = new Date(checkOut);
+    const cleanCheckIn = String(checkIn || '').split('T')[0].split(' ')[0].trim();
+    const cleanCheckOut = String(checkOut || '').split('T')[0].split(' ')[0].trim();
     const bookings = bookingsData.data && Array.isArray(bookingsData.data) ? bookingsData.data : [];
 
     // Inicializar estadísticas de ocupación por categoría
@@ -145,10 +145,10 @@ export async function GET(req: Request) {
     // Procesar reservas de Beds24
     bookings.forEach((b: any) => {
       if (String(b.status) !== '0' && b.status !== 'cancelled') {
-        const bIn = new Date(b.arrival);
-        const bOut = new Date(b.departure);
+        const bIn = String(b.arrival || '').split('T')[0].split(' ')[0].trim();
+        const bOut = String(b.departure || '').split('T')[0].split(' ')[0].trim();
         
-        if (bIn < reqOut && bOut > reqIn) {
+        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
           if (b.roomId) {
             const parent = getParentMapping(b.roomId, b.unitId);
             const stats = categoryStats[parent.roomId];
@@ -173,9 +173,9 @@ export async function GET(req: Request) {
         .neq('status', 'cancelled');
 
       (localBookings || []).forEach((b: any) => {
-        const bIn = new Date(b.check_in);
-        const bOut = new Date(b.check_out);
-        if (bIn < reqOut && bOut > reqIn) {
+        const bIn = String(b.check_in || '').split('T')[0].split(' ')[0].trim();
+        const bOut = String(b.check_out || '').split('T')[0].split(' ')[0].trim();
+        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
           const parent = getParentMapping(b.room_id, b.unit_id);
           const stats = categoryStats[parent.roomId];
           if (stats) {

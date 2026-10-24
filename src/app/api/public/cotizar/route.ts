@@ -403,12 +403,15 @@ export async function GET(req: Request) {
       });
     }
 
-    const reqIn = new Date(checkIn + 'T12:00:00');
-    const reqOut = new Date(checkOut + 'T12:00:00');
-    const diffTime = reqOut.getTime() - reqIn.getTime();
+    const cleanCheckIn = String(checkIn || '').split('T')[0].split(' ')[0].trim();
+    const cleanCheckOut = String(checkOut || '').split('T')[0].split(' ')[0].trim();
+
+    const dIn = new Date(`${cleanCheckIn}T00:00:00Z`);
+    const dOut = new Date(`${cleanCheckOut}T00:00:00Z`);
+    const diffTime = dOut.getTime() - dIn.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 0 || isNaN(diffDays) || checkIn >= checkOut) {
+    if (diffDays <= 0 || isNaN(diffDays) || cleanCheckIn >= cleanCheckOut) {
       return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche)' }, { status: 400 });
     }
 
@@ -469,9 +472,10 @@ export async function GET(req: Request) {
     const bookings = Array.isArray(bookingsRaw) ? bookingsRaw : [];
     bookings.forEach((b: any) => {
       if (String(b.status) !== '0' && b.status !== 'cancelled') {
-        const bIn = new Date(b.arrival);
-        const bOut = new Date(b.departure);
-        if (bIn < reqOut && bOut > reqIn) {
+        const bIn = String(b.arrival || '').split('T')[0].split(' ')[0].trim();
+        const bOut = String(b.departure || '').split('T')[0].split(' ')[0].trim();
+        // Dos estancias se solapan si y solo si bIn < cleanCheckOut && bOut > cleanCheckIn
+        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
           if (b.roomId) {
             const parent = getParentMapping(b.roomId, b.unitId);
             const stats = categoryStats[parent.roomId];
@@ -496,9 +500,9 @@ export async function GET(req: Request) {
         .neq('status', 'cancelled');
 
       (localBookings || []).forEach((b: any) => {
-        const bIn = new Date(b.check_in);
-        const bOut = new Date(b.check_out);
-        if (bIn < reqOut && bOut > reqIn) {
+        const bIn = String(b.check_in || '').split('T')[0].split(' ')[0].trim();
+        const bOut = String(b.check_out || '').split('T')[0].split(' ')[0].trim();
+        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
           const parent = getParentMapping(b.room_id, b.unit_id);
           const stats = categoryStats[parent.roomId];
           if (stats) {
