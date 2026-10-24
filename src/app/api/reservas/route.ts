@@ -434,6 +434,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan parámetros: roomId, unitId, checkIn, checkOut' }, { status: 400 });
     }
 
+    if (checkIn >= checkOut) {
+      return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in' }, { status: 400 });
+    }
+
     const finalRoomId = Number(roomId);
     const finalUnitId = Number(unitId);
 
@@ -1165,6 +1169,10 @@ export async function PUT(req: Request) {
 
     if (!id) {
       return NextResponse.json({ error: 'Falta el parámetro id' }, { status: 400 });
+    }
+
+    if (checkIn && checkOut && checkIn >= checkOut) {
+      return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in' }, { status: 400 });
     }
 
     if (body.action === 'reactivate') {

@@ -100,14 +100,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'El número de teléfono no es válido.' }, { status: 400 });
     }
 
-    const reqIn = new Date(checkIn);
-    const reqOut = new Date(checkOut);
+    const reqIn = new Date(checkIn + 'T12:00:00');
+    const reqOut = new Date(checkOut + 'T12:00:00');
     const diffTime = reqOut.getTime() - reqIn.getTime();
-    const nights = Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-    if (nights <= 0 || isNaN(diffTime)) {
-      return NextResponse.json({ error: 'El rango de fechas no es válido.' }, { status: 400 });
+    if (diffDays <= 0 || isNaN(diffDays) || checkIn >= checkOut) {
+      return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche).' }, { status: 400 });
     }
+
+    const nights = diffDays;
 
     // Filtrar habitaciones solicitadas con cantidad > 0
     const validRooms = rooms.filter((r: any) => Number(r.quantity || 0) > 0);

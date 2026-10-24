@@ -75,11 +75,65 @@ function ReservarContent() {
   const [lang, setLang] = useState<'es' | 'en'>(langParam === 'en' ? 'en' : 'es');
 
   // Fechas por defecto: mañana a 3 días después
+  const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
   const defaultCheckIn = useMemo(() => format(addDays(new Date(), 1), 'yyyy-MM-dd'), []);
   const defaultCheckOut = useMemo(() => format(addDays(new Date(), 4), 'yyyy-MM-dd'), []);
 
   const [checkIn, setCheckIn] = useState(defaultCheckIn);
   const [checkOut, setCheckOut] = useState(defaultCheckOut);
+
+  // Fecha mínima permitida de check-out (al menos 1 día después de check-in)
+  const minCheckOut = useMemo(() => {
+    if (!checkIn) return format(addDays(new Date(), 1), 'yyyy-MM-dd');
+    try {
+      const d = new Date(checkIn + 'T12:00:00');
+      return format(addDays(d, 1), 'yyyy-MM-dd');
+    } catch {
+      return format(addDays(new Date(), 1), 'yyyy-MM-dd');
+    }
+  }, [checkIn]);
+
+  const isInvalidDateRange = useMemo(() => {
+    if (!checkIn || !checkOut) return true;
+    return checkIn >= checkOut;
+  }, [checkIn, checkOut]);
+
+  const handleCheckInChange = (newIn: string) => {
+    setCheckIn(newIn);
+    if (!newIn) return;
+
+    // Si la nueva fecha de check-in es igual o posterior a la fecha de check-out actual:
+    // mover automáticamente check-out a newIn + 1 día para garantizar al menos 1 noche válida
+    if (!checkOut || newIn >= checkOut) {
+      try {
+        const dIn = new Date(newIn + 'T12:00:00');
+        const nextDay = format(addDays(dIn, 1), 'yyyy-MM-dd');
+        setCheckOut(nextDay);
+      } catch {
+        // fallback
+      }
+    }
+  };
+
+  const handleCheckOutChange = (newOut: string) => {
+    if (!newOut) {
+      setCheckOut('');
+      return;
+    }
+    // Si el usuario intenta seleccionar una fecha de check-out igual o anterior a check-in:
+    // forzar automáticamente a check-in + 1 día
+    if (checkIn && newOut <= checkIn) {
+      try {
+        const dIn = new Date(checkIn + 'T12:00:00');
+        const minOut = format(addDays(dIn, 1), 'yyyy-MM-dd');
+        setCheckOut(minOut);
+      } catch {
+        setCheckOut(newOut);
+      }
+    } else {
+      setCheckOut(newOut);
+    }
+  };
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
 
@@ -124,6 +178,7 @@ function ReservarContent() {
           myStayTab: 'My Current Stay',
           bookNewTab: 'Book Accommodation',
           datesTitle: 'Choose Dates & Guests',
+          invalidDatesError: 'Check-out date must be after check-in date (minimum 1 night).',
           checkInLabel: 'Check in',
           checkOutLabel: 'Check out',
           adultsLabel: 'Adults',
@@ -180,6 +235,7 @@ function ReservarContent() {
           myStayTab: 'Mi Estancia Actual',
           bookNewTab: 'Cotizar y Reservar',
           datesTitle: 'Fechas y Huéspedes',
+          invalidDatesError: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche).',
           checkInLabel: 'Check in',
           checkOutLabel: 'Check out',
           adultsLabel: 'Adultos',
@@ -233,6 +289,11 @@ function ReservarContent() {
 
   // Consultar cotización y reservas existentes
   const fetchQuotes = async () => {
+    if (!checkIn || !checkOut || checkIn >= checkOut) {
+      setQuotes([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const url = `/api/public/cotizar?checkIn=${checkIn}&checkOut=${checkOut}&phone=${encodeURIComponent(phoneParam)}`;
@@ -313,11 +374,11 @@ function ReservarContent() {
 
   // Cálculo directo de noches de estancia basado en checkIn y checkOut (independiente de habitaciones seleccionadas)
   const stayNights = useMemo(() => {
-    if (!checkIn || !checkOut) return 1;
+    if (!checkIn || !checkOut || checkIn >= checkOut) return 0;
     const dIn = new Date(checkIn + 'T12:00:00');
     const dOut = new Date(checkOut + 'T12:00:00');
     const diff = Math.round((dOut.getTime() - dIn.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(1, isNaN(diff) ? 1 : diff);
+    return diff > 0 ? diff : 0;
   }, [checkIn, checkOut]);
 
   // Cálculo del total seleccionado con desglose transparente y personas extras
@@ -444,6 +505,11 @@ function ReservarContent() {
 
   // Enviar cotización por WhatsApp (Paso 1 del flujo)
   const handleRequestQuote = async () => {
+    if (isInvalidDateRange || stayNights <= 0) {
+      alert(t.invalidDatesError);
+      return;
+    }
+
     const phoneToUse = guestPhone.trim() || phoneParam.trim();
     if (!phoneToUse) {
       setIsPhoneModalOpen(true);
@@ -514,6 +580,10 @@ function ReservarContent() {
   // Enviar confirmación y bloqueo a Beds24 (Paso 2 del flujo)
   const handleConfirmBooking = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isInvalidDateRange || stayNights <= 0) {
+      setSubmitError(t.invalidDatesError);
+      return;
+    }
     if (isOverCapacity) {
       setSubmitError(lang === 'en'
         ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
@@ -786,8 +856,9 @@ function ReservarContent() {
                     </label>
                     <input
                       type="date"
+                      min={todayStr}
                       value={checkIn}
-                      onChange={e => setCheckIn(e.target.value)}
+                      onChange={e => handleCheckInChange(e.target.value)}
                       className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
                     />
                   </div>
@@ -797,20 +868,28 @@ function ReservarContent() {
                     </label>
                     <input
                       type="date"
+                      min={minCheckOut}
                       value={checkOut}
-                      onChange={e => setCheckOut(e.target.value)}
+                      onChange={e => handleCheckOutChange(e.target.value)}
                       className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
                     />
                   </div>
                 </div>
 
-                {/* Badge visible de número de noches con las fechas */}
-                <div className="flex items-center justify-center pt-0.5">
-                  <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
-                    <Clock size={12} className="text-indigo-600" />
-                    <span>{lang === 'en' ? `Stay of ${stayNights} ${stayNights === 1 ? 'night' : 'nights'}` : `Estancia de ${stayNights} ${stayNights === 1 ? 'noche' : 'noches'}`}</span>
-                  </span>
-                </div>
+                {/* Banner de error o badge de estancia */}
+                {isInvalidDateRange ? (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center justify-center gap-1.5 animate-in fade-in">
+                    <AlertCircle size={13} className="shrink-0 text-rose-600" />
+                    <span>{t.invalidDatesError}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center pt-0.5">
+                    <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
+                      <Clock size={12} className="text-indigo-600" />
+                      <span>{lang === 'en' ? `Stay of ${stayNights} ${stayNights === 1 ? 'night' : 'nights'}` : `Estancia de ${stayNights} ${stayNights === 1 ? 'noche' : 'noches'}`}</span>
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Huéspedes */}
@@ -1085,9 +1164,9 @@ function ReservarContent() {
 
               <button
                 type="button"
-                disabled={quoteSending || isOverCapacity}
+                disabled={quoteSending || isOverCapacity || isInvalidDateRange || stayNights <= 0}
                 onClick={() => {
-                  if (isOverCapacity) return;
+                  if (isOverCapacity || isInvalidDateRange || stayNights <= 0) return;
                   if (isConfirmStep) {
                     setIsModalOpen(true);
                   } else {
@@ -1095,7 +1174,7 @@ function ReservarContent() {
                   }
                 }}
                 className={`py-3.5 px-6 rounded-2xl text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 ${
-                  isOverCapacity
+                  isOverCapacity || isInvalidDateRange || stayNights <= 0
                     ? 'bg-zinc-300 text-zinc-500 cursor-not-allowed shadow-none'
                     : isConfirmStep
                     ? 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer active:scale-95'
@@ -1370,7 +1449,7 @@ function ReservarContent() {
 
               <button
                 type="submit"
-                disabled={submitting || !guestName.trim() || isOverCapacity}
+                disabled={submitting || !guestName.trim() || isOverCapacity || isInvalidDateRange || stayNights <= 0}
                 className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-300 text-white font-extrabold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 {submitting ? (
@@ -1448,7 +1527,7 @@ function ReservarContent() {
 
             <button
               type="button"
-              disabled={!guestPhone.trim() || quoteSending}
+              disabled={!guestPhone.trim() || quoteSending || isInvalidDateRange || stayNights <= 0}
               onClick={() => {
                 setIsPhoneModalOpen(false);
                 handleRequestQuote();

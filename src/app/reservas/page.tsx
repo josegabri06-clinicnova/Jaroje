@@ -117,8 +117,9 @@ function getNightsBetweenDates(checkIn: string, checkOut: string): number {
   if (!checkIn || !checkOut) return 1;
   const d1 = new Date(checkIn + 'T12:00:00');
   const d2 = new Date(checkOut + 'T12:00:00');
-  const diffTime = Math.abs(d2.getTime() - d1.getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 1;
+  const diffTime = d2.getTime() - d1.getTime();
+  const nights = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  return nights > 0 ? nights : 1;
 }
 
 function getLocalDateStr(date: Date = new Date()): string {
@@ -2095,6 +2096,11 @@ function ReservasListInner() {
 
   const handleSaveReservationEdit = async () => {
     if (!selectedRes) return;
+
+    if (editCheckIn && editCheckOut && editCheckIn >= editCheckOut) {
+      alert('⚠️ La fecha de Check-Out debe ser posterior a la fecha de Check-In.');
+      return;
+    }
 
     // Validar capacidad máxima de la habitación
     if (editGroupMembers.length > 1) {
@@ -4215,8 +4221,13 @@ function ReservasListInner() {
                           onChange={e => {
                             const newIn = e.target.value;
                             setEditCheckIn(newIn);
-                            if (newIn && editCheckOut) {
-                              const nights = getNightsBetweenDates(newIn, editCheckOut) || 1;
+                            let targetOut = editCheckOut;
+                            if (newIn && editCheckOut && newIn >= editCheckOut) {
+                              targetOut = addDaysToDateStr(newIn, 1);
+                              setEditCheckOut(targetOut);
+                            }
+                            if (newIn && targetOut) {
+                              const nights = getNightsBetweenDates(newIn, targetOut) || 1;
                               if (editDailyRate !== '') {
                                 setEditPrice(String(Math.round(Number(editDailyRate) * nights)));
                               }
@@ -4237,10 +4248,14 @@ function ReservasListInner() {
                         <label className="text-[10px] font-extrabold text-zinc-500 uppercase tracking-widest pl-0.5 mb-1.5 block">Check-Out</label>
                         <input
                           type="date"
+                          min={editCheckIn ? addDaysToDateStr(editCheckIn, 1) : undefined}
                           value={editCheckOut}
                           disabled={isCheckedIn}
                           onChange={e => {
-                            const newOut = e.target.value;
+                            let newOut = e.target.value;
+                            if (editCheckIn && newOut && newOut <= editCheckIn) {
+                              newOut = addDaysToDateStr(editCheckIn, 1);
+                            }
                             setEditCheckOut(newOut);
                             if (editCheckIn && newOut) {
                               const nights = getNightsBetweenDates(editCheckIn, newOut) || 1;

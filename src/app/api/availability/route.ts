@@ -95,6 +95,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'Faltan fechas de checkIn y checkOut' }, { status: 400 });
     }
 
+    if (checkIn >= checkOut) {
+      return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in' }, { status: 400 });
+    }
+
     const today = new Date();
     const fromDate = new Date(today);
     fromDate.setDate(today.getDate() - 180);
