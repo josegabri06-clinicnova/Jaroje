@@ -32,14 +32,14 @@ const ROOM_MAP: Record<string, { roomId: string; name: string; units: { unitId: 
   },
   '1rec': {
     roomId: '679087',
-    name: 'Condominio de 1 Recámara',
+    name: 'Condominio de 1 dormitorio',
     units: [
       { unitId: '1', name: '402' }
     ]
   },
   '2rec': {
     roomId: '679091',
-    name: 'Condominio de 2 Recámaras',
+    name: 'Condominio de 2 dormitorios',
     units: [
       { unitId: '1', name: '201' },
       { unitId: '2', name: '202' },
@@ -51,7 +51,7 @@ const ROOM_MAP: Record<string, { roomId: string; name: string; units: { unitId: 
   },
   '3rec': {
     roomId: '679092',
-    name: 'Condominio de 3 Recámaras',
+    name: 'Condominio de 3 dormitorios',
     units: [
       { unitId: '1', name: '101' },
       { unitId: '2', name: '102' },
@@ -64,7 +64,7 @@ const ROOM_MAP: Record<string, { roomId: string; name: string; units: { unitId: 
   },
   'casa': {
     roomId: '679093',
-    name: 'Casa Vacacional de 3 Recámaras',
+    name: 'Casa de Lujo',
     units: [
       { unitId: '1', name: '401' }
     ]

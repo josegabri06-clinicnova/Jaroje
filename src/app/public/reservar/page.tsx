@@ -311,6 +311,15 @@ function ReservarContent() {
     return Number(adults || 0) + Number(children || 0);
   }, [adults, children]);
 
+  // Cálculo directo de noches de estancia basado en checkIn y checkOut (independiente de habitaciones seleccionadas)
+  const stayNights = useMemo(() => {
+    if (!checkIn || !checkOut) return 1;
+    const dIn = new Date(checkIn + 'T12:00:00');
+    const dOut = new Date(checkOut + 'T12:00:00');
+    const diff = Math.round((dOut.getTime() - dIn.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(1, isNaN(diff) ? 1 : diff);
+  }, [checkIn, checkOut]);
+
   // Cálculo del total seleccionado con desglose transparente y personas extras
   const selectionSummary = useMemo(() => {
     let totalRooms = 0;
@@ -330,7 +339,7 @@ function ReservarContent() {
       }
     });
 
-    const nights = selectedList[0]?.quote?.nights || 1;
+    const nights = quotes[0]?.nights || selectedList[0]?.quote?.nights || stayNights;
     const extraGuests = totalGuests > totalBaseCapacity
       ? Math.min(totalGuests - totalBaseCapacity, Math.max(0, totalMaxCapacity - totalBaseCapacity))
       : 0;
@@ -352,7 +361,7 @@ function ReservarContent() {
       totalMaxCapacity,
       selectedList
     };
-  }, [quotes, selectedRooms, totalGuests]);
+  }, [quotes, selectedRooms, totalGuests, stayNights]);
 
   // Resumen activo que respalda pendingQuote si fue restaurado antes de que carguen las cotizaciones
   const activeSummary = useMemo(() => {
@@ -365,14 +374,14 @@ function ReservarContent() {
       let totalBaseCapacity = 0;
       let totalMaxCapacity = 0;
       const selectedList: { quote: QuoteItem; quantity: number }[] = [];
-      const nights = Number(pendingQuote.nights || 1);
+      const nights = Number(pendingQuote.nights || stayNights);
 
       pendingQuote.rooms.forEach((r: any) => {
         const qty = Number(r.quantity || 1);
         totalRooms += qty;
         const matchingCat = quotes.find(q => q.key === r.key);
-        const baseCap = matchingCat?.capacity || (r.key === 'doble' ? 2 : r.key === '1rec' ? 4 : r.key === '2rec' ? 6 : r.key === '3rec' ? 6 : 10);
-        const maxCap = matchingCat?.maxCapacity || (r.key === 'doble' ? 4 : r.key === '1rec' ? 4 : r.key === '2rec' ? 8 : r.key === '3rec' ? 8 : 12);
+        const baseCap = matchingCat?.capacity || (r.key === 'doble' ? 2 : r.key === '1rec' ? 4 : r.key === '2rec' ? 6 : r.key === '3rec' ? 10 : 12);
+        const maxCap = matchingCat?.maxCapacity || (r.key === 'doble' ? 4 : r.key === '1rec' ? 4 : r.key === '2rec' ? 8 : r.key === '3rec' ? 12 : 16);
         totalBaseCapacity += baseCap * qty;
         totalMaxCapacity += maxCap * qty;
 
@@ -384,7 +393,7 @@ function ReservarContent() {
           quote: matchingCat || {
             key: r.key,
             roomId: r.roomId || '',
-            name: r.name || (r.key === 'doble' ? 'Habitación Doble' : r.key === '1rec' ? 'Condominio de 1 Recámara' : r.key === '2rec' ? 'Condominio de 2 Recámaras' : r.key === '3rec' ? 'Condominio de 3 Recámaras' : 'Casa Vacacional'),
+            name: r.name || (r.key === 'doble' ? 'Habitación Doble' : r.key === '1rec' ? 'Condominio de 1 dormitorio' : r.key === '2rec' ? 'Condominio de 2 dormitorios' : r.key === '3rec' ? 'Condominio de 3 dormitorios' : 'Casa de Lujo'),
             name_en: r.name_en || 'Accommodation',
             capacity: baseCap,
             maxCapacity: maxCap,
@@ -429,7 +438,7 @@ function ReservarContent() {
       };
     }
     return selectionSummary;
-  }, [selectionSummary, pendingQuote, quotes, totalGuests]);
+  }, [selectionSummary, pendingQuote, quotes, totalGuests, stayNights]);
 
   const isOverCapacity = activeSummary.totalRooms > 0 && totalGuests > activeSummary.totalMaxCapacity;
 
@@ -761,9 +770,9 @@ function ReservarContent() {
                     {t.datesTitle}
                   </h2>
                 </div>
-                {activeSummary.nights > 0 && (
+                {stayNights > 0 && (
                   <span className="text-[11px] font-black text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-200 shadow-2xs">
-                    {activeSummary.nights} {activeSummary.nights === 1 ? t.night : t.nights}
+                    {stayNights} {stayNights === 1 ? t.night : t.nights}
                   </span>
                 )}
               </div>
@@ -799,7 +808,7 @@ function ReservarContent() {
                 <div className="flex items-center justify-center pt-0.5">
                   <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
                     <Clock size={12} className="text-indigo-600" />
-                    <span>Estancia de {activeSummary.nights} {activeSummary.nights === 1 ? t.night : t.nights}</span>
+                    <span>{lang === 'en' ? `Stay of ${stayNights} ${stayNights === 1 ? 'night' : 'nights'}` : `Estancia de ${stayNights} ${stayNights === 1 ? 'noche' : 'noches'}`}</span>
                   </span>
                 </div>
               </div>
@@ -860,9 +869,9 @@ function ReservarContent() {
                 <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
                   {t.availableRooms}
                 </h3>
-                {quotes.length > 0 && (
+                {stayNights > 0 && (
                   <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
-                    {quotes[0].nights} {quotes[0].nights === 1 ? t.night : t.nights}
+                    {stayNights} {stayNights === 1 ? t.night : t.nights}
                   </span>
                 )}
               </div>
@@ -934,10 +943,10 @@ function ReservarContent() {
                               {lang === 'en'
                                 ? (q.maxCapacity > q.capacity
                                     ? `Base ${q.capacity} (+${q.maxCapacity - q.capacity} extra · max ${q.maxCapacity})`
-                                    : `Up to ${q.capacity} guests`)
+                                    : `Max ${q.capacity} guests`)
                                 : (q.maxCapacity > q.capacity
                                     ? `Base ${q.capacity} (+${q.maxCapacity - q.capacity} extras · máx. ${q.maxCapacity})`
-                                    : `Hasta ${q.capacity} huéspedes`)}
+                                    : `Máx. ${q.capacity} personas`)}
                             </span>
                           </div>
 
