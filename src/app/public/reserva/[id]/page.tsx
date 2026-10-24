@@ -448,7 +448,8 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     cardNote: 'Si realizas tu pago con tarjeta, no es necesario enviar comprobante.',
     optionTransfer: 'Opción 2: Transferencia o Depósito Bancario',
     payWithTransfer: 'Pagar por Transferencia Bancaria',
-    transferNote: 'Obtén la cuenta CLABE oficial y reporta tu comprobante de inmediato al panel de staySync.',
+    uploadTransferReceipt: 'Subir Comprobante de Transferencia',
+    transferNote: 'Obtén la cuenta CLABE oficial y sube tu comprobante para validación inmediata.',
 
     featuresTitle: 'Características del Alojamiento',
     capacity: (c: number) => `Capacidad: ${c} Huéspedes`,
@@ -570,7 +571,8 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     cardNote: 'If you pay with a card, sending a receipt is not required.',
     optionTransfer: 'Option 2: Bank Transfer or Cash Deposit',
     payWithTransfer: 'Pay by Bank Transfer',
-    transferNote: 'Obtain the official bank details and upload your receipt directly to staySync.',
+    uploadTransferReceipt: 'Upload Transfer Receipt',
+    transferNote: 'Obtain the official bank details and upload your receipt for immediate verification.',
 
     featuresTitle: 'Accommodation Features',
     capacity: (c: number) => `Capacity: ${c} Guests`,
@@ -2260,7 +2262,7 @@ export default function PublicReservaPage() {
                   )}
 
                   {/* Método 2: Transferencia */}
-                  <div className="space-y-3 pt-2">
+                  <div className="space-y-2 pt-2">
                     <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">{t.optionTransfer}</span>
                     <a
                       href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}`}
@@ -2268,6 +2270,13 @@ export default function PublicReservaPage() {
                     >
                       <FileText size={18} />
                       {t.payWithTransfer}
+                    </a>
+                    <a
+                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}#subir-comprobante`}
+                      className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <Upload size={14} className="text-zinc-600" />
+                      {t.uploadTransferReceipt}
                     </a>
                     <p className="text-[10px] text-zinc-500 italic text-center mt-1">{t.transferNote}</p>
                   </div>

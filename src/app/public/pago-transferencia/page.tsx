@@ -565,7 +565,7 @@ export default function PagoTransferenciaPage() {
               )}
 
               {/* Uploader Section */}
-              <div className="space-y-3.5">
+              <div id="subir-comprobante" className="space-y-3.5 scroll-mt-6">
                 <h3 className="text-[12px] font-extrabold text-zinc-400 uppercase tracking-wider px-1">{t.uploadReceiptTitle}</h3>
                 
                 <div className="relative border-2 border-dashed border-zinc-300 hover:border-zinc-400 rounded-2xl transition-colors bg-zinc-50/50">
