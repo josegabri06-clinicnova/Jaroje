@@ -315,7 +315,14 @@ export async function POST(req: Request) {
             });
           }
 
-          const isConfirmedBooking = isPrepaidOTA || actualPaid > 0 || Number(b.deposit || 0) > 0;
+          const isRequest = bStatus === 'request';
+          const bookingPrice = Number(b.price || 0);
+          const effectivePaid = Math.max(actualPaid, Number(b.deposit || 0));
+          const hasMin50Deposit = bookingPrice > 0 
+            ? (effectivePaid >= (bookingPrice * 0.5 - 0.01)) 
+            : (effectivePaid > 0);
+
+          const isConfirmedBooking = !isRequest && (isPrepaidOTA || (hasMin50Deposit && bStatus === 'confirmed'));
 
           if (isConfirmedBooking) {
             // RESERVACIÓN CONFIRMADA (Booking.com, Airbnb, con anticipo pagado, etc.):

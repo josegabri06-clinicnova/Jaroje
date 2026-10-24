@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Token, getBeds24Bookings, clearBeds24Cache } from '@/lib/beds24';
 import { supabase } from '@/lib/supabase';
-import { sendTemplate3_ReservacionConfirmada, sendTemplate6_BienvenidaCheckin } from '@/lib/whatsapp';
+import { sendTemplate3_ReservacionConfirmada, sendTemplate11_PagoAnticipoRecibido, sendTemplate6_BienvenidaCheckin } from '@/lib/whatsapp';
 
 // POST: Registrar un cobro/pago en Beds24 asociado a una reserva o localmente en Supabase
 export async function POST(req: Request) {
@@ -24,11 +24,19 @@ export async function POST(req: Request) {
       .maybeSingle();
 
     if (localRes) {
-      // Es local! Registrar el pago actualizando el depósito en la tabla local_reservas
+      // Es local! Registrar el pago actualizando el depósito y status en la tabla local_reservas
       const newDeposit = Number(localRes.deposit || 0) + Number(amount);
+      const isMet50 = (Number(localRes.price || 0) > 0)
+        ? (newDeposit >= (Number(localRes.price) * 0.5 - 0.01))
+        : (newDeposit > 0);
+      const nextStatus = isMet50 ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
+
       const { error: updateErr } = await supabase
         .from('local_reservas')
-        .update({ deposit: newDeposit })
+        .update({ 
+          deposit: newDeposit,
+          status: nextStatus
+        })
         .eq('id', Number(bookId));
 
       if (updateErr) {
@@ -87,11 +95,15 @@ export async function POST(req: Request) {
               num_child: Number(localRes.num_child || 0)
             };
 
-            const waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA);
+            const tmplToSend = isMet50 ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
+            const waRes = isMet50 
+              ? await sendTemplate3_ReservacionConfirmada(bookingForWA)
+              : await sendTemplate11_PagoAnticipoRecibido(bookingForWA);
+
             if (waRes?.success) {
               await supabase.from('whatsapp_logs').insert([{
                 reservation_id: String(localRes.id),
-                template_name: 'reservacion_confirmada',
+                template_name: tmplToSend,
                 phone: localRes.phone,
                 sent_at: new Date().toISOString(),
                 status: 'sent'
@@ -116,6 +128,27 @@ export async function POST(req: Request) {
     const currentDeposit = bodyDeposit !== undefined ? Number(bodyDeposit) : 0;
     const newDeposit = currentDeposit + Number(amount);
 
+    let bookingPrice = Number(body.totalPrice || body.price || 0);
+    let currentStatus = 'request';
+    try {
+      const { data: dbB } = await supabase
+        .from('beds24_reservations')
+        .select('price, status')
+        .eq('id', String(bookId))
+        .maybeSingle();
+      if (dbB) {
+        if (!bookingPrice) bookingPrice = Number(dbB.price || 0);
+        if (dbB.status) currentStatus = dbB.status;
+      }
+    } catch (_) {}
+
+    const isMet50B24 = (bookingPrice > 0)
+      ? (newDeposit >= (bookingPrice * 0.5 - 0.01))
+      : (newDeposit > 0);
+    const targetStatusB24 = isMet50B24
+      ? 'confirmed'
+      : (currentStatus === 'confirmed' ? 'confirmed' : 'request');
+
     // Estructurar el pago según la especificación contable de Beds24 API v2:
     // - Las entradas de dinero (pagos recibidos) se mandan con qty = -1 y price = valor positivo.
     // - Se envía deposit: newDeposit para que el resumen del depósito se actualice explícitamente.
@@ -130,7 +163,7 @@ export async function POST(req: Request) {
       body: JSON.stringify([{
         id: Number(bookId),
         bookId: Number(bookId),
-        status: 'confirmed', // 'confirmed' = Confirmed in Beds24 API V2
+        status: targetStatusB24,
         deposit: newDeposit,
         invoiceItems: [
           {
@@ -186,11 +219,18 @@ export async function POST(req: Request) {
           const booking = allBookings.find(r => r.id === Number(bookId));
           if (booking && (booking.phone || booking.mobile || booking.guest_phone)) {
             const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
-            const waRes = await sendTemplate3_ReservacionConfirmada(booking);
+            const bPrice = Number(booking.price || bookingPrice || 0);
+            const is50Covered = bPrice > 0 ? (newDeposit >= (bPrice * 0.5 - 0.01)) : true;
+            const tmplToSend = is50Covered ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
+
+            const waRes = is50Covered
+              ? await sendTemplate3_ReservacionConfirmada(booking)
+              : await sendTemplate11_PagoAnticipoRecibido(booking);
+
             if (waRes?.success) {
               await supabase.from('whatsapp_logs').insert([{
                 reservation_id: String(bookId),
-                template_name: 'reservacion_confirmada',
+                template_name: tmplToSend,
                 phone: guestPhone,
                 sent_at: new Date().toISOString(),
                 status: 'sent'

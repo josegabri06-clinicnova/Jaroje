@@ -223,7 +223,7 @@ export async function POST(req: Request) {
           lastName: lastName,
           phone: `+${cleanPhoneForMeta(cleanPhone)}`,
           email: guestEmail || '',
-          status: 'confirmed', // Bloqueado en Beds24 por 24 horas
+          status: 'request', // Solicitud provisional pendiente de anticipo 50% (bloquea unidad en Beds24 por 24h)
           channel: 'Directo whatssap',
           price: itemPrice,
           deposit: 0,
@@ -324,7 +324,7 @@ export async function POST(req: Request) {
           guest_name: guestName.trim(),
           guest_phone: cleanPhone,
           guest_email: guestEmail || null,
-          status: 'confirmed',
+          status: 'request',
           channel: 'Directo whatssap',
           room_name: assignedRoomSummary,
           room_id: String(payloadItem.roomId),

@@ -1322,7 +1322,15 @@ export default function PublicReservaPage() {
   const isCancelled = booking.status === 'cancelled';
   const isCheckedIn = booking.is_checked_in;
   const isCheckedOut = booking.is_checked_out;
-  const hasPaid = booking.deposit > 0;
+  const hasPaid = Number(booking.deposit || 0) > 0;
+  const rawStatus = String(booking.status || '').toLowerCase().trim();
+  const isRequestStatus = rawStatus === 'request';
+  const isBedsConfirmed = rawStatus === 'confirmed' || rawStatus === '1';
+
+  const bPrice = Number(booking.price || 0);
+  const bDeposit = Number(booking.deposit || 0);
+  const hasMinDeposit = bPrice > 0 ? (bDeposit >= (bPrice * 0.5 - 0.01)) : (bDeposit > 0);
+
   const rawChannel = (booking.channel || '').toLowerCase();
   const rawName = (booking.guest_name || '').toLowerCase();
   const rawNotes = (booking.notes || '').toLowerCase();
@@ -1330,7 +1338,11 @@ export default function PublicReservaPage() {
   const isOta = ['airbnb', 'booking', 'vrbo'].some(c => 
     rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c) || rawSource.includes(c)
   ) || rawName.includes('pagado a') || rawName.includes('pagado b');
-  const isConfirmed = hasPaid || isOta;
+
+  // Solo se considera confirmada si:
+  // 1. Es OTA (prepagada / garantizada por canal), O
+  // 2. NO está en estado 'request' Y cuenta con al menos el 50% de anticipo cubierto (o confirmada explícita en Beds24 con anticipo)
+  const isConfirmed = isOta || (!isRequestStatus && hasMinDeposit && isBedsConfirmed);
 
   // Fechas clave
   const checkInDate = booking.check_in ? new Date(booking.check_in) : null;

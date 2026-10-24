@@ -458,7 +458,7 @@ export async function POST(req: Request) {
           num_child: numChild ? Number(numChild) : 0,
           notes: notes || '',
           channel: isBlock ? 'Bloqueo' : 'Recepción',
-          status: isBlock ? 'black' : (Number(deposit || 0) > 0 ? 'confirmed' : 'request')
+          status: isBlock ? 'black' : ((Number(price || 0) > 0 ? Number(deposit || 0) >= (Number(price) * 0.5 - 0.01) : Number(deposit || 0) > 0) ? 'confirmed' : 'request')
         }])
         .select()
         .single();
@@ -596,7 +596,7 @@ export async function POST(req: Request) {
           ? { firstName: parts[0], lastName: parts.slice(1).join(' ') }
           : { firstName: fullName.trim(), lastName: '' };
       })(),
-      status: isBlock ? "black" : (Number(deposit || 0) > 0 ? "confirmed" : "request"),
+      status: isBlock ? "black" : ((Number(price || 0) > 0 ? Number(deposit || 0) >= (Number(price) * 0.5 - 0.01) : Number(deposit || 0) > 0) ? "confirmed" : "request"),
       ...(!isBlock && price !== undefined && price !== null ? { 
         price: Number(price),
         invoiceItems: [
@@ -814,7 +814,7 @@ export async function POST(req: Request) {
             mobile: phone || '',
             price: isBlock ? 0 : (price ? Number(price) : 0),
             deposit: isBlock ? 0 : (deposit ? Number(deposit) : 0),
-            status: isBlock ? 'black' : (Number(deposit || 0) > 0 ? 'confirmed' : 'request'),
+            status: isBlock ? 'black' : ((Number(price || 0) > 0 ? Number(deposit || 0) >= (Number(price) * 0.5 - 0.01) : Number(deposit || 0) > 0) ? 'confirmed' : 'request'),
             channel: 'direct',
             numAdult: isBlock ? 1 : (numAdult ? Number(numAdult) : 1),
             numChild: isBlock ? 0 : (numChild ? Number(numChild) : 0),

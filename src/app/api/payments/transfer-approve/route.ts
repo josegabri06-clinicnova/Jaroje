@@ -49,11 +49,18 @@ export async function POST(req: Request) {
       let groupTotalDeposit = 0;
 
       if (localRes) {
-        // Reserva local: Actualizar depósito en local_reservas
+        // Reserva local: Actualizar depósito y status en local_reservas
         newDeposit = Number(localRes.deposit || 0) + Number(amount);
+        const isMet50 = (Number(localRes.price || 0) > 0)
+          ? (newDeposit >= (Number(localRes.price) * 0.5 - 0.01))
+          : (newDeposit > 0);
+        const nextStatus = isMet50 ? 'confirmed' : (localRes.status === 'confirmed' ? 'confirmed' : 'request');
         const { error: dbError } = await supabase
           .from('local_reservas')
-          .update({ deposit: newDeposit })
+          .update({ 
+            deposit: newDeposit,
+            status: nextStatus
+          })
           .eq('id', bookingIdNum);
 
         if (dbError) {
@@ -430,10 +437,19 @@ export async function POST(req: Request) {
         let waRes: { success: boolean; error?: string; data?: any };
         let templateLogged = '';
 
-        // Siempre se envía Mensaje 3 (reservacion_confirmada) independientemente de si es 50% o 100% de anticipo
-        console.log(`[Approve Transfer] Sending WhatsApp reservacion_confirmada (Mensaje 3) to ${phone} (depósito: $${effectiveDeposit}, saldo: $${balance}, grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
-        waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
-        templateLogged = 'reservacion_confirmada';
+        const isMin50Met = effectivePrice > 0
+          ? (effectiveDeposit >= (effectivePrice * 0.5 - 0.01))
+          : true;
+
+        if (isMin50Met) {
+          console.log(`[Approve Transfer] Mínimo 50% cubierto ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${phone} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
+          waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
+          templateLogged = 'reservacion_confirmada';
+        } else {
+          console.log(`[Approve Transfer] Anticipo parcial inferior al 50% ($${effectiveDeposit}/$${effectivePrice}). Enviando pago_anticipo_recibido (Mensaje 11) a ${phone}`);
+          waRes = await sendTemplate11_PagoAnticipoRecibido(bookingForWA, true);
+          templateLogged = 'pago_anticipo_recibido';
+        }
 
         if (waRes.success) {
           // Registrar en whatsapp_logs para evitar que el cron reenvíe mensajes

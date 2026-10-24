@@ -1628,8 +1628,10 @@ export async function pushRatesToBeds24(ratesPayload: any[]): Promise<any> {
 // Registrar un pago por transferencia en Beds24 como un ítem de factura (negativo)
 export async function addBeds24Payment(bookId: number | string, amount: number, description: string = 'Pago por transferencia'): Promise<boolean> {
   const token = await getBeds24Token();
-  // 1. Obtener la reserva actual para conocer el valor del campo 'deposit' previo
+  // 1. Obtener la reserva actual para conocer el valor del campo 'deposit', 'price' y 'status' previos
   let currentDeposit = 0;
+  let bookingPrice = 0;
+  let currentStatus = 'request';
   try {
     const getRes = await fetch(`https://api.beds24.com/v2/bookings?id=${bookId}`, {
       headers: { 'token': token },
@@ -1639,19 +1641,42 @@ export async function addBeds24Payment(bookId: number | string, amount: number, 
       const getData = await getRes.json();
       if (getData && getData.success && Array.isArray(getData.data) && getData.data.length > 0) {
         currentDeposit = Number(getData.data[0].deposit || 0);
+        bookingPrice = Number(getData.data[0].price || 0);
+        currentStatus = getData.data[0].status || 'request';
       }
     }
   } catch (e) {
     console.error(`[Beds24 API] Error fetching booking for deposit calculation:`, e);
   }
 
+  // Fallback a Supabase si no se obtuvo el precio desde Beds24
+  if (!bookingPrice) {
+    try {
+      const { data: dbB } = await supabase
+        .from('beds24_reservations')
+        .select('price, status')
+        .eq('id', String(bookId))
+        .maybeSingle();
+      if (dbB) {
+        bookingPrice = Number(dbB.price || 0);
+        if (dbB.status) currentStatus = dbB.status;
+      }
+    } catch (_) {}
+  }
+
   const newDeposit = currentDeposit + Number(amount);
+  const is50PercentMet = (bookingPrice > 0)
+    ? (newDeposit >= (bookingPrice * 0.5 - 0.01))
+    : (newDeposit > 0);
+  const targetStatus = is50PercentMet
+    ? 'confirmed'
+    : (currentStatus === 'confirmed' ? 'confirmed' : 'request');
 
   const payload = [
     {
       id: Number(bookId),
       bookId: Number(bookId),
-      status: 'confirmed',
+      status: targetStatus,
       deposit: newDeposit,
       invoiceItems: [
         {
@@ -1775,11 +1800,18 @@ export async function addBeds24GroupPayment(
       if (shareAmount <= 0) continue;
 
       const newDep = item.dep + shareAmount;
+      const is50PercentMet = (item.price > 0)
+        ? (newDep >= (item.price * 0.5 - 0.01))
+        : (newDep > 0);
+      const targetStatus = is50PercentMet
+        ? 'confirmed'
+        : (item.b.status === 'confirmed' ? 'confirmed' : 'request');
+
       const payload = [
         {
           id: Number(item.b.id),
           bookId: Number(item.b.id),
-          status: 'confirmed',
+          status: targetStatus,
           deposit: newDep,
           invoiceItems: [
             {

@@ -582,7 +582,11 @@ export async function GET(req: Request) {
 
         const actualPaid = Number(booking.actualPaid || 0);
         const depositVal = Number(booking.deposit || 0);
-        const isConfirmed = isPrepaidOtaBooking || actualPaid > 0 || depositVal > 0;
+        const bPrice = Number(booking.price || 0);
+        const effectiveDeposit = Math.max(actualPaid, depositVal);
+        const hasMin50 = bPrice > 0 ? (effectiveDeposit >= (bPrice * 0.5 - 0.01)) : (effectiveDeposit > 0);
+        const isRequestStatus = String(booking.status || '').toLowerCase() === 'request';
+        const isConfirmed = !isRequestStatus && (isPrepaidOtaBooking || (hasMin50 && String(booking.status || '').toLowerCase() === 'confirmed'));
         const isExpediaUnpaid = !isConfirmed && channelLower.includes('expedia');
 
         // Reservas confirmadas (OTAs prepagadas Airbnb/Booking o directas con anticipo): Solo se evalúan si fueron creadas en las últimas 48h.
