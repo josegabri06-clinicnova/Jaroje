@@ -16,7 +16,8 @@ import {
   MessageSquare,
   ArrowRight,
   TrendingUp,
-  Clock
+  Clock,
+  ArrowLeft
 } from 'lucide-react';
 
 const TRANSLATIONS: Record<'es' | 'en', any> = {
@@ -297,21 +298,49 @@ export default function PagoTransferenciaPage() {
 
   return (
     <div className="min-h-screen bg-[#F6F5F2] flex flex-col items-center justify-center p-4 font-sans select-none">
+      
+      {/* Botón de retorno al portal */}
+      {bookingId && (
+        <div className="w-full max-w-md mb-3 flex items-center justify-between px-1">
+          <Link
+            href={`/public/reserva/${bookingId}${lang !== 'es' ? `?lang=${lang}` : ''}`}
+            className="inline-flex items-center gap-2 text-xs font-bold text-zinc-700 hover:text-zinc-950 bg-white hover:bg-zinc-50 border border-zinc-200/90 px-3.5 py-2 rounded-xl transition-all shadow-xs active:scale-95 cursor-pointer"
+          >
+            <ArrowLeft size={14} className="stroke-[2.5]" />
+            <span>{lang === 'en' ? '← Back to My Reservation' : '← Volver a Mi Reserva'}</span>
+          </Link>
+          <span className="text-[11px] font-extrabold text-zinc-400 uppercase tracking-wider">
+            #{bookingId}
+          </span>
+        </div>
+      )}
+
       <div className="w-full max-w-md bg-white rounded-3xl border border-zinc-200/80 shadow-xl overflow-hidden">
         
         {/* Top Header */}
         <div className="bg-[#18181b] px-6 py-5 text-white flex items-center justify-between">
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t.portalTitle}</span>
-            <h2 className="text-lg font-bold">
-              {method === 'mercadopago' 
-                ? (lang === 'en' ? 'Card Receipt' : 'Comprobante de Tarjeta') 
-                : (isWiseMethod 
-                  ? (lang === 'en' ? 'Wise Receipt' : 'Comprobante de Wise') 
-                  : (isPaypalActive
-                    ? (lang === 'en' ? 'PayPal Receipt' : 'Comprobante de PayPal')
-                    : t.pageTitle))}
-            </h2>
+          <div className="flex items-center gap-3">
+            {bookingId && (
+              <Link
+                href={`/public/reserva/${bookingId}${lang !== 'es' ? `?lang=${lang}` : ''}`}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white transition-all cursor-pointer shrink-0"
+                title={lang === 'en' ? 'Back to My Reservation' : 'Volver a Mi Reserva'}
+              >
+                <ArrowLeft size={16} />
+              </Link>
+            )}
+            <div>
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{t.portalTitle}</span>
+              <h2 className="text-lg font-bold">
+                {method === 'mercadopago' 
+                  ? (lang === 'en' ? 'Card Receipt' : 'Comprobante de Tarjeta') 
+                  : (isWiseMethod 
+                    ? (lang === 'en' ? 'Wise Receipt' : 'Comprobante de Wise') 
+                    : (isPaypalActive
+                      ? (lang === 'en' ? 'PayPal Receipt' : 'Comprobante de PayPal')
+                      : t.pageTitle))}
+              </h2>
+            </div>
           </div>
           <div className="bg-[#25D366] text-[10px] font-black px-2.5 py-1 rounded-full uppercase text-zinc-950 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-zinc-950 animate-ping"></span>
