@@ -5120,6 +5120,638 @@ function ReservasListInner() {
                     </div>
                   </div>
 
+
+                  {/* 3. Habitación asignada */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
+                      <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedRes.room_name || 'Sin asignar'}</p>
+                    </div>
+                    {getRole() === 'admin' && selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
+                      <button
+                        onClick={() => {
+                          setShowReassignModal(true);
+                          if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0) {
+                            setReassigningRes(selectedRes.group_members[0]);
+                          } else {
+                            setReassigningRes(selectedRes);
+                          }
+                        }}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+                      >
+                        Reasignar 🔀
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Banner de Grupo — siempre visible si hay hermanas */}
+                  {siblingBookings.length > 0 && (() => {
+                    const totalGroupBalance = groupBookings.reduce((sum: number, b: any) => {
+                      const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
+                      const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+                      return sum + bBal;
+                    }, 0);
+
+                    return (
+                      <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-2xl space-y-3 animate-in fade-in duration-200 shadow-[0_2px_12px_rgba(59,130,246,0.08)]">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
+                            <Users size={16} className="text-blue-600" />
+                          </div>
+                          <div className="flex-1 flex justify-between items-center min-w-0 flex-wrap gap-2">
+                            <div>
+                              <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">
+                                {selectedRes.is_group_card ? 'Grupo Consolidado' : 'Habitación de Grupo'}
+                              </span>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <p className="text-[13px] font-bold text-blue-900 leading-tight">
+                                  {groupBookings.length} habitaciones
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              {selectedRes.is_group_card ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const targetMember = (selectedRes.group_members && selectedRes.group_members[0]) || selectedRes;
+                                    const memberIds = (selectedRes.group_members || []).map((m: any) => String(m.id));
+                                    setSeparatedGroupIds(prev => Array.from(new Set([...prev, ...memberIds])));
+                                    setSelectedRes(targetMember);
+                                    if (typeof window !== 'undefined') {
+                                      window.history.replaceState(null, '', `/reservas?id=${targetMember.id}`);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
+                                >
+                                  🔓 Separar Grupo
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const allMembers = groupBookings;
+                                    const groupCard = buildGroupCard(allMembers);
+                                    if (groupCard) {
+                                      const memberIds = allMembers.map((m: any) => String(m.id));
+                                      setSeparatedGroupIds(prev => prev.filter(id => !memberIds.includes(id)));
+                                      setSelectedRes(groupCard);
+                                      if (typeof window !== 'undefined') {
+                                        window.history.replaceState(null, '', `/reservas?id=${groupCard.id}`);
+                                      }
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 text-[10px] font-extrabold text-blue-800 bg-blue-100 hover:bg-blue-200 border border-blue-300 rounded-lg transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
+                                >
+                                  🔗 Consolidar Grupo
+                                </button>
+                              )}
+
+                              {totalGroupBalance > 0 && (
+                                <div className="text-right shrink-0">
+                                  <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Adeudo Total</span>
+                                  <span className="text-[13px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg">
+                                    {fmtCurrency(totalGroupBalance, selectedRes.guest_name)}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {selectedRes.is_group_card ? (
+                          <div className="bg-blue-50/80 border border-blue-200/80 p-3 rounded-2xl text-left shadow-2xs">
+                            <p className="text-[11px] text-blue-950 font-bold leading-relaxed">
+                              👥 <b>Estás viendo el grupo consolidado.</b> Al hacer clic en <b>"Editar 📝"</b> arriba podrás modificar huéspedes, fechas, anticipos y balance de todo el grupo a la vez. O usa el botón <b>"🔓 Separar Grupo"</b> para desglosar y gestionar cada habitación individualmente.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-amber-50/80 border border-amber-200/80 p-3 rounded-2xl text-left shadow-2xs">
+                            <p className="text-[11px] text-amber-950 font-bold leading-relaxed">
+                              🏢 <b>Estás viendo esta habitación individualmente.</b> Los cambios de tarifa, anticipo o pax se aplicarán únicamente a esta habitación. Para volver a unirlas en una sola pantalla consolidada, haz clic en <b>"🔗 Consolidar Grupo"</b>.
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
+                          {groupBookings.map((b: any) => {
+                            const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
+                            const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
+                            const isCurrent = String(b.id) === String(selectedRes.id);
+                            return (
+                              <div key={b.id} className={`flex justify-between items-start text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
+                                <span className="font-bold text-blue-800 flex items-center gap-1.5 flex-wrap">
+                                  <BedDouble size={11} className="text-blue-500 shrink-0" />
+                                  {b.room_name || b.room}
+                                  {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
+                                  {(() => {
+                                    const total = (b.display_num_adult !== undefined ? b.display_num_adult : (b.num_adult || 0)) + 
+                                                  (b.display_num_child !== undefined ? b.display_num_child : (b.num_child || 0));
+                                    if (total === 0) return null;
+                                    const baseCapacity = getCapacityRules(b.room_name || b.room || '', capacitySettings || undefined).base;
+                                    const isExtra = total > baseCapacity;
+                                    return (
+                                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-bold border ${isExtra ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`}>
+                                        👤 {total} {total === 1 ? 'huésped' : 'huéspedes'}
+                                        {isExtra && <span className="text-amber-500 font-black">+extra</span>}
+                                      </span>
+                                    );
+                                  })()}
+                                </span>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {userRole === 'admin' && b.status !== 'cancelled' && (
+                                    <>
+                                      {!isCurrent && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const found = reservas.find((r: any) => String(r.id) === String(b.id));
+                                            if (found) {
+                                              setSelectedRes(found);
+                                            } else {
+                                              setSelectedRes(b);
+                                            }
+                                            if (typeof window !== 'undefined') {
+                                              window.history.replaceState(null, '', `/reservas?id=${b.id}`);
+                                            }
+                                          }}
+                                          className="text-[9.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-all cursor-pointer active:scale-95"
+                                        >
+                                          Seleccionar 🔎
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => { setShowReassignModal(true); setReassigningRes(b); }}
+                                        className="text-[9.5px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-all cursor-pointer active:scale-95"
+                                      >
+                                        Reasignar 🔀
+                                      </button>
+                                    </>
+                                  )}
+                                  <span className={`font-extrabold ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                    {bBal > 0 ? `Adeudo: ${fmtCurrency(bBal, b.guest_name)}` : '✅ Pagado'}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex-1 text-left min-w-[200px]">
+                            <p className="text-[10px] font-semibold text-blue-600 leading-tight">
+                              💡 Al registrar un anticipo, puedes distribuirlo proporcionalmente en todas las habitaciones del grupo.
+                            </p>
+                            {totalGroupBalance > 0 && (
+                              <p className="text-[11px] font-extrabold text-blue-900 mt-1">
+                                Adeudo Total del Grupo: <span className="text-rose-600 font-black">{fmtCurrency(totalGroupBalance, selectedRes.guest_name)}</span>
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRebalanceGroup}
+                            disabled={rebalancingGroup}
+                            className="shrink-0 px-2.5 py-1.5 text-[10px] font-extrabold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all cursor-pointer shadow-sm"
+                          >
+                            {rebalancingGroup ? 'Rebalanceando...' : '⚖️ Rebalancear anticipos'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 4. Canal reservado */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
+                      {(() => { const badge = getChannelBadge(selectedRes.channel); return (<span className={`px-2.5 py-1 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1 ${badge.className}`}>{badge.emoji} {badge.label}</span>); })()}
+                    </div>
+                    <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
+                  </div>
+
+                  {/* 5. Tarifa diaria */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2.5">
+                    {selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 1 ? (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tarifas diarias del Grupo</span>
+                          <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
+                            {selectedRes.group_members.length} Habitaciones
+                          </span>
+                        </div>
+                        <div className="divide-y divide-zinc-200/60 pt-0.5">
+                          {selectedRes.group_members.map((m: any) => {
+                            const mNights = m.nights || selectedRes.nights || 1;
+                            const mPrice = Number(m.price_estimate || m.price || 0);
+                            const mDaily = m.price_per_night || Math.round(mPrice / mNights);
+                            return (
+                              <div key={m.id} className="flex justify-between items-center py-1.5 text-[12.5px]">
+                                <span className="font-semibold text-zinc-600 truncate max-w-[190px]">
+                                  {m.room_name || m.room || 'Habitación'}
+                                </span>
+                                <span className="font-bold text-zinc-900">
+                                  {fmtCurrency(mDaily, selectedRes.guest_name)} <span className="text-[10px] font-normal text-zinc-400">/ noche</span>
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="pt-2 border-t border-zinc-200/80 flex justify-between items-center text-[12px]">
+                          <span className="font-extrabold text-zinc-500 uppercase tracking-wider text-[9.5px]">Total Diario del Grupo:</span>
+                          <span className="font-black text-zinc-900">
+                            {fmtCurrency(
+                              selectedRes.group_members.reduce((sum: number, m: any) => {
+                                const mNights = m.nights || selectedRes.nights || 1;
+                                const mPrice = Number(m.price_estimate || m.price || 0);
+                                return sum + (m.price_per_night || Math.round(mPrice / mNights));
+                              }, 0),
+                              selectedRes.guest_name
+                            )} <span className="text-[10px] font-semibold text-zinc-400">/ noche</span>
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Tarifa diaria</span>
+                        <p className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
+                          {fmtCurrency(
+                            selectedRes.price_per_night || Math.round((Number(selectedRes.price_estimate || selectedRes.price || 0)) / (selectedRes.nights || 1)),
+                            selectedRes.guest_name
+                          )}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 6. Total de la reserva */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      {siblingBookings.length > 0 ? (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total del Grupo (Consolidado)</span>
+                          <p className="text-[15px] font-black text-zinc-950 mt-0.5">
+                            {fmtCurrency(groupBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0), selectedRes.guest_name)}
+                          </p>
+                          {!selectedRes.is_group_card && (
+                            <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)})</span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total de la reserva</span>
+                          <p className="text-[15px] font-black text-zinc-950 mt-0.5">
+                            {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Desglose de Impuestos (Mapeado desde Invoice Beds24) */}
+                  {selectedRes.taxes && selectedRes.taxes.total > 0 && (
+                    <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2.5">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Impuestos (Factura Beds24)</span>
+                      
+                      <div className="flex justify-between items-center text-[13px]">
+                        <span className="text-zinc-500 font-semibold">IVA (16%):</span>
+                        <span className="font-extrabold text-zinc-900">
+                          {fmtCurrency(selectedRes.taxes.iva, selectedRes.guest_name)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[13px]">
+                        <span className="text-zinc-500 font-semibold">ISH (3%):</span>
+                        <span className="font-extrabold text-zinc-900">
+                          {fmtCurrency(selectedRes.taxes.ish, selectedRes.guest_name)}
+                        </span>
+                      </div>
+
+                      {selectedRes.taxes.otros > 0 && (
+                        <div className="flex justify-between items-center text-[13px]">
+                          <span className="text-zinc-500 font-semibold">Otros Impuestos:</span>
+                          <span className="font-extrabold text-zinc-900">
+                            {fmtCurrency(selectedRes.taxes.otros, selectedRes.guest_name)}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="border-t border-zinc-200/60 pt-2.5 flex justify-between items-center text-[13px] font-black">
+                        <span className="text-zinc-700">Total Impuestos:</span>
+                        <span className="text-zinc-950">
+                          {fmtCurrency(selectedRes.taxes.total, selectedRes.guest_name)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 7. Anticipo depositado */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      {siblingBookings.length > 0 ? (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo Total del Grupo</span>
+                          <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                            {fmtCurrency(
+                              (() => {
+                                const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0);
+                                const rawDeps = groupBookings.reduce((sum: number, b: any) => sum + Number(b.deposit || 0), 0);
+                                return Math.min(totalGroupPrice, rawDeps);
+                              })(),
+                              selectedRes.guest_name
+                            )}
+                          </p>
+                          {!selectedRes.is_group_card && (
+                            <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)})</span>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
+                          <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
+                            {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 8. Adeudo Pendiente (Consolidado si es Grupo) */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <div>
+                      {(() => {
+                        const isGroup = siblingBookings.length > 0;
+                        const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
+                        const isCheckedIn = selectedRes.checked_in === true || selectedRes.is_checked_in === true;
+                        let balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, Number(selectedRes.price_estimate || selectedRes.price || 0) - Number(selectedRes.deposit || 0));
+
+                        if (isGroup) {
+                          const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + (Number(b.price_estimate) || Number(b.price) || 0), 0);
+                          const totalGroupDeposit = Math.min(totalGroupPrice, groupBookings.reduce((sum: number, b: any) => sum + (Number(b.deposit) || 0), 0));
+                          balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, totalGroupPrice - totalGroupDeposit);
+                        }
+
+                        return (
+                          <>
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">
+                              {isGroup ? '👥 Adeudo Total del Grupo (Consolidado)' : 'Adeudo Pendiente'}
+                            </span>
+                            <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
+                              {fmtCurrency(balanceVal, selectedRes.guest_name)}
+                            </p>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* 9. Fecha check in- días de estancia- fecha check Out */}
+                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Check-in · Estancia · Check-out</span>
+                    <div className="flex items-center justify-between text-[13px] font-semibold text-zinc-900 mt-1 bg-white border border-zinc-150 p-3 rounded-xl">
+                      <span>{selectedRes.check_in ? format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                      <span className="bg-zinc-100 text-zinc-700 px-2.5 py-0.5 rounded-lg font-bold text-[11px] shrink-0 border border-zinc-200">
+                        {selectedRes.nights} noche{selectedRes.nights !== 1 ? 's' : ''}
+                      </span>
+                      <span>{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
+                    </div>
+                  </div>
+
+                  {/* OBSERVACIONES DE LA RESERVA (Editable desde Admin en cualquier momento) */}
+                  <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left space-y-2.5 mt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
+                        <FileText size={13} className="text-amber-600" />
+                        Observaciones de la Reserva
+                      </span>
+                      {!isEditingNotes ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditNotes(selectedRes.notes || selectedRes.comments || '');
+                            setIsEditingNotes(true);
+                          }}
+                          className="text-[10.5px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-xs"
+                        >
+                          <Edit size={11} /> Editar Observaciones 📝
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingNotes(false)}
+                          className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 cursor-pointer"
+                        >
+                          ✕ Cancelar
+                        </button>
+                      )}
+                    </div>
+
+                    {!isEditingNotes ? (
+                      <p className="text-[12px] font-semibold text-amber-950 whitespace-pre-line leading-relaxed bg-white/80 p-3 rounded-xl border border-amber-200/60">
+                        {selectedRes.notes || selectedRes.comments || <span className="text-amber-700/60 font-normal italic">Sin observaciones registradas. Haz clic en "Editar Observaciones" para agregar notas...</span>}
+                      </p>
+                    ) : (
+                      <div className="space-y-2 animate-in fade-in duration-150">
+                        <textarea
+                          rows={3}
+                          value={editNotes}
+                          onChange={(e) => setEditNotes(e.target.value)}
+                          placeholder="Escribe aquí las observaciones especiales de la reservación (ej. llegada tardía, solicitudes especiales, grupo, etc.)..."
+                          className="w-full bg-white border border-amber-300 rounded-xl p-3 text-[12.5px] font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 placeholder:text-amber-700/40"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveNotesOnlyInReservas}
+                          disabled={savingNotesOnly}
+                          className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {savingNotesOnly ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
+                          Guardar Observaciones
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Documento Adjunto (DNI/Pasaporte) */}
+                  {selectedRes.document_url && (
+                    <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Identificación del Huésped</span>
+                      {userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
+                        <div className="flex items-center gap-2.5 px-4 py-3 bg-zinc-100 border border-zinc-205 text-zinc-450 font-bold rounded-xl text-[12px] shadow-sm select-none">
+                          <Lock size={15} className="text-zinc-400 shrink-0" />
+                          <span>🔒 Oculto hasta el día de llegada ({format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es })})</span>
+                        </div>
+                      ) : (
+                        <a 
+                          href={selectedRes.document_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 px-4 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
+                        >
+                          <FileText size={15} className="text-zinc-500" />
+                          <span>Ver DNI / Pasaporte Escaneado ↗</span>
+                        </a>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Voucher TPV / Comprobante de Pago */}
+                  {(() => {
+                    const vUrl = selectedRes.voucher_url || (() => {
+                      const match = (selectedRes.notes || '').match(/(?:Foto Voucher TPV \/ Comprobante:\s*|voucher_url:\s*)(https?:\/\/[^\s]+)/i);
+                      return match ? match[1] : null;
+                    })();
+                    if (!vUrl) return null;
+
+                    return (
+                      <div className="bg-amber-50/60 border border-amber-200/80 p-4 rounded-2xl mt-1 text-left">
+                        <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest block mb-2">Voucher TPV / Comprobante de Pago</span>
+                        <a 
+                          href={vUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2.5 px-4 py-3 bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 hover:text-amber-950 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
+                        >
+                          <CreditCard size={15} className="text-amber-600 shrink-0" />
+                          <span>Ver Voucher TPV / Comprobante 💳 ↗</span>
+                        </a>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Comprobantes de Transferencia Bancaria */}
+                  {selectedRes.transfer_receipts && selectedRes.transfer_receipts.length > 0 && (
+                    <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1 space-y-4 text-left animate-in fade-in duration-200">
+                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comprobantes de Transferencia</span>
+                      
+                      <div className="space-y-3">
+                        {selectedRes.transfer_receipts.map((receipt: any) => {
+                          const isPending = receipt.status === 'pending';
+                          const isApproved = receipt.status === 'approved';
+                          const isRejected = receipt.status === 'rejected';
+                          const isProcessing = approvingReceiptId === receipt.id;
+
+                          return (
+                            <div key={receipt.id} className="bg-white border border-zinc-200 rounded-xl p-3.5 space-y-3 shadow-sm">
+                              {/* Header del Comprobante */}
+                              <div className="flex justify-between items-start gap-2">
+                                <div>
+                                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Monto Declarado</span>
+                                  <div className="flex items-center gap-1.5 mt-0.5">
+                                    <p className="text-[14px] font-black text-zinc-900">
+                                      ${receipt.amount?.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
+                                    </p>
+                                    {isPending && userRole === 'admin' && (
+                                      <button 
+                                        onClick={() => handleEditReceiptAmount(receipt.id, receipt.amount)}
+                                        className="p-1 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+                                        title="Editar monto"
+                                      >
+                                        <Edit size={12} />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
+                                  isPending ? 'bg-amber-50 border-amber-200 text-amber-700' :
+                                  isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
+                                  'bg-rose-50 border-rose-200 text-rose-700'
+                                }`}>
+                                  {isPending ? 'Pendiente' : isApproved ? 'Aprobado' : 'Rechazado'}
+                                </span>
+                              </div>
+
+                              {/* Detalles */}
+                              <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-zinc-500 bg-zinc-50 p-2 rounded-lg">
+                                <div>
+                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Fecha de Envío</span>
+                                  <span className="text-zinc-800 font-semibold">
+                                    {receipt.created_at ? new Date(receipt.created_at).toLocaleString('es-MX') : '—'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Registrado por</span>
+                                  <span className="text-zinc-800 font-semibold truncate block">
+                                    {receipt.guest_name || 'Huésped'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {receipt.notes && (
+                                <div className="bg-blue-50/70 border border-blue-200/80 p-2.5 rounded-xl text-[11px] text-blue-950 font-medium space-y-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-[9px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1">
+                                      🏦 Cuenta / Método Destino:
+                                    </span>
+                                    <span className="font-black text-blue-900 bg-white px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs">
+                                      {receipt.notes.includes('[Banco Destino:')
+                                        ? receipt.notes.replace('[Banco Destino: ', '').replace(']', '')
+                                        : (receipt.notes.includes('[Plataforma:')
+                                          ? receipt.notes.replace('[Plataforma: ', '').replace(']', '')
+                                          : receipt.notes)}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Botones de acción y visualización */}
+                              <div className="space-y-2 pt-1 border-t border-zinc-100">
+                                <a
+                                  href={receipt.receipt_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-center gap-1.5 w-full py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
+                                >
+                                  <FileText size={12} />
+                                  <span>Ver Comprobante Subido ↗</span>
+                                </a>
+
+                                {isPending && userRole === 'admin' && (
+                                  <div className="space-y-2 pt-1.5">
+                                    <textarea
+                                      value={rejectionNotes[receipt.id] || ''}
+                                      onChange={(e) => setRejectionNotes(prev => ({ ...prev, [receipt.id]: e.target.value }))}
+                                      placeholder="Escribe notas o motivo si vas a rechazar el pago..."
+                                      className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-zinc-800 text-[11px] outline-none focus:border-zinc-350 h-14 resize-none shadow-sm"
+                                    />
+                                    
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={() => handleProcessTransferReceipt(receipt.id, receipt.booking_id.toString(), receipt.amount, 'reject')}
+                                        disabled={isProcessing}
+                                        className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-lg text-[11px] transition-colors disabled:opacity-55 cursor-pointer"
+                                      >
+                                        <span>❌ Rechazar</span>
+                                      </button>
+                                      <button
+                                        onClick={() => handleProcessTransferReceipt(receipt.id, receipt.booking_id.toString(), receipt.amount, 'approve')}
+                                        disabled={isProcessing}
+                                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-all disabled:opacity-55 flex justify-center items-center gap-1.5 shadow shadow-emerald-600/10 cursor-pointer"
+                                      >
+                                        {isProcessing ? (
+                                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        ) : (
+                                          <span>✅ Aprobar</span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                 )}
+                                 {isPending && userRole !== 'admin' && (
+                                   <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold p-2.5 rounded-lg text-center mt-2">
+                                     🔒 Pendiente de aprobación por Administrador
+                                   </div>
+                                 )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+
                   {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp (Solo para flujo de reservas nuevas y con selector multimensaje para Admin) */}
                   {userRole === 'admin' && selectedRes.id !== 'walkin' && (
                     <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
@@ -5864,637 +6496,6 @@ function ReservasListInner() {
                       </div>
                     </div>
                   )}
-
-                  {/* 3. Habitación asignada */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex items-center justify-between shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Habitación asignada</span>
-                      <p className="text-[14px] font-bold text-zinc-900 mt-0.5">{selectedRes.room_name || 'Sin asignar'}</p>
-                    </div>
-                    {getRole() === 'admin' && selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
-                      <button
-                        onClick={() => {
-                          setShowReassignModal(true);
-                          if (selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 0) {
-                            setReassigningRes(selectedRes.group_members[0]);
-                          } else {
-                            setReassigningRes(selectedRes);
-                          }
-                        }}
-                        className="text-[11px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
-                      >
-                        Reasignar 🔀
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Banner de Grupo — siempre visible si hay hermanas */}
-                  {siblingBookings.length > 0 && (() => {
-                    const totalGroupBalance = groupBookings.reduce((sum: number, b: any) => {
-                      const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
-                      const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
-                      return sum + bBal;
-                    }, 0);
-
-                    return (
-                      <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-2xl space-y-3 animate-in fade-in duration-200 shadow-[0_2px_12px_rgba(59,130,246,0.08)]">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center shrink-0">
-                            <Users size={16} className="text-blue-600" />
-                          </div>
-                          <div className="flex-1 flex justify-between items-center min-w-0 flex-wrap gap-2">
-                            <div>
-                              <span className="text-[10px] font-extrabold text-blue-500 uppercase tracking-widest block">
-                                {selectedRes.is_group_card ? 'Grupo Consolidado' : 'Habitación de Grupo'}
-                              </span>
-                              <div className="flex items-center gap-2 mt-0.5">
-                                <p className="text-[13px] font-bold text-blue-900 leading-tight">
-                                  {groupBookings.length} habitaciones
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              {selectedRes.is_group_card ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const targetMember = (selectedRes.group_members && selectedRes.group_members[0]) || selectedRes;
-                                    const memberIds = (selectedRes.group_members || []).map((m: any) => String(m.id));
-                                    setSeparatedGroupIds(prev => Array.from(new Set([...prev, ...memberIds])));
-                                    setSelectedRes(targetMember);
-                                    if (typeof window !== 'undefined') {
-                                      window.history.replaceState(null, '', `/reservas?id=${targetMember.id}`);
-                                    }
-                                  }}
-                                  className="px-2.5 py-1 text-[10px] font-extrabold text-amber-800 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-lg transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
-                                >
-                                  🔓 Separar Grupo
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const allMembers = groupBookings;
-                                    const groupCard = buildGroupCard(allMembers);
-                                    if (groupCard) {
-                                      const memberIds = allMembers.map((m: any) => String(m.id));
-                                      setSeparatedGroupIds(prev => prev.filter(id => !memberIds.includes(id)));
-                                      setSelectedRes(groupCard);
-                                      if (typeof window !== 'undefined') {
-                                        window.history.replaceState(null, '', `/reservas?id=${groupCard.id}`);
-                                      }
-                                    }
-                                  }}
-                                  className="px-2.5 py-1 text-[10px] font-extrabold text-blue-800 bg-blue-100 hover:bg-blue-200 border border-blue-300 rounded-lg transition-all cursor-pointer uppercase select-none active:scale-[0.97] flex items-center gap-1 shadow-2xs"
-                                >
-                                  🔗 Consolidar Grupo
-                                </button>
-                              )}
-
-                              {totalGroupBalance > 0 && (
-                                <div className="text-right shrink-0">
-                                  <span className="text-[9px] font-bold text-rose-500 uppercase tracking-wider block">Adeudo Total</span>
-                                  <span className="text-[13px] font-black text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-lg">
-                                    {fmtCurrency(totalGroupBalance, selectedRes.guest_name)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        {selectedRes.is_group_card ? (
-                          <div className="bg-blue-50/80 border border-blue-200/80 p-3 rounded-2xl text-left shadow-2xs">
-                            <p className="text-[11px] text-blue-950 font-bold leading-relaxed">
-                              👥 <b>Estás viendo el grupo consolidado.</b> Al hacer clic en <b>"Editar 📝"</b> arriba podrás modificar huéspedes, fechas, anticipos y balance de todo el grupo a la vez. O usa el botón <b>"🔓 Separar Grupo"</b> para desglosar y gestionar cada habitación individualmente.
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="bg-amber-50/80 border border-amber-200/80 p-3 rounded-2xl text-left shadow-2xs">
-                            <p className="text-[11px] text-amber-950 font-bold leading-relaxed">
-                              🏢 <b>Estás viendo esta habitación individualmente.</b> Los cambios de tarifa, anticipo o pax se aplicarán únicamente a esta habitación. Para volver a unirlas en una sola pantalla consolidada, haz clic en <b>"🔗 Consolidar Grupo"</b>.
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="space-y-1.5 pt-2 border-t border-blue-200/60">
-                          {groupBookings.map((b: any) => {
-                            const isOta = b.channel && ['airbnb', 'booking', 'expedia'].some((c: string) => b.channel.toLowerCase().includes(c));
-                            const bBal = isOta ? 0 : (b.balance !== undefined ? b.balance : Math.max(0, (b.price_estimate || 0) - (b.deposit || 0)));
-                            const isCurrent = String(b.id) === String(selectedRes.id);
-                            return (
-                              <div key={b.id} className={`flex justify-between items-start text-[11px] px-2.5 py-1.5 rounded-lg ${isCurrent ? 'bg-blue-100/80 border border-blue-200' : 'bg-white/60'}`}>
-                                <span className="font-bold text-blue-800 flex items-center gap-1.5 flex-wrap">
-                                  <BedDouble size={11} className="text-blue-500 shrink-0" />
-                                  {b.room_name || b.room}
-                                  {isCurrent && <span className="text-[8px] font-extrabold text-blue-600 bg-blue-50 border border-blue-200 px-1 py-0.5 rounded">ACTUAL</span>}
-                                  {(() => {
-                                    const total = (b.display_num_adult !== undefined ? b.display_num_adult : (b.num_adult || 0)) + 
-                                                  (b.display_num_child !== undefined ? b.display_num_child : (b.num_child || 0));
-                                    if (total === 0) return null;
-                                    const baseCapacity = getCapacityRules(b.room_name || b.room || '', capacitySettings || undefined).base;
-                                    const isExtra = total > baseCapacity;
-                                    return (
-                                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8.5px] font-bold border ${isExtra ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-zinc-50 border-zinc-200 text-zinc-600'}`}>
-                                        👤 {total} {total === 1 ? 'huésped' : 'huéspedes'}
-                                        {isExtra && <span className="text-amber-500 font-black">+extra</span>}
-                                      </span>
-                                    );
-                                  })()}
-                                </span>
-                                <div className="flex items-center gap-2 shrink-0">
-                                  {userRole === 'admin' && b.status !== 'cancelled' && (
-                                    <>
-                                      {!isCurrent && (
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            const found = reservas.find((r: any) => String(r.id) === String(b.id));
-                                            if (found) {
-                                              setSelectedRes(found);
-                                            } else {
-                                              setSelectedRes(b);
-                                            }
-                                            if (typeof window !== 'undefined') {
-                                              window.history.replaceState(null, '', `/reservas?id=${b.id}`);
-                                            }
-                                          }}
-                                          className="text-[9.5px] font-extrabold text-indigo-700 bg-indigo-50 border border-indigo-150 hover:bg-indigo-100 px-1.5 py-0.5 rounded transition-all cursor-pointer active:scale-95"
-                                        >
-                                          Seleccionar 🔎
-                                        </button>
-                                      )}
-                                      <button
-                                        type="button"
-                                        onClick={() => { setShowReassignModal(true); setReassigningRes(b); }}
-                                        className="text-[9.5px] font-extrabold text-blue-600 bg-blue-50 border border-blue-100 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-all cursor-pointer active:scale-95"
-                                      >
-                                        Reasignar 🔀
-                                      </button>
-                                    </>
-                                  )}
-                                  <span className={`font-extrabold ${bBal > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                    {bBal > 0 ? `Adeudo: ${fmtCurrency(bBal, b.guest_name)}` : '✅ Pagado'}
-                                  </span>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex-1 text-left min-w-[200px]">
-                            <p className="text-[10px] font-semibold text-blue-600 leading-tight">
-                              💡 Al registrar un anticipo, puedes distribuirlo proporcionalmente en todas las habitaciones del grupo.
-                            </p>
-                            {totalGroupBalance > 0 && (
-                              <p className="text-[11px] font-extrabold text-blue-900 mt-1">
-                                Adeudo Total del Grupo: <span className="text-rose-600 font-black">{fmtCurrency(totalGroupBalance, selectedRes.guest_name)}</span>
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleRebalanceGroup}
-                            disabled={rebalancingGroup}
-                            className="shrink-0 px-2.5 py-1.5 text-[10px] font-extrabold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all cursor-pointer shadow-sm"
-                          >
-                            {rebalancingGroup ? 'Rebalanceando...' : '⚖️ Rebalancear anticipos'}
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* 4. Canal reservado */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div>
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Canal reservado</span>
-                      {(() => { const badge = getChannelBadge(selectedRes.channel); return (<span className={`px-2.5 py-1 font-bold rounded-lg text-[11px] uppercase tracking-wide inline-block mt-1 ${badge.className}`}>{badge.emoji} {badge.label}</span>); })()}
-                    </div>
-                    <StatusBadge status={selectedRes.status} isCheckedIn={selectedRes.is_checked_in} isCheckedOut={selectedRes.is_checked_out} />
-                  </div>
-
-                  {/* 5. Tarifa diaria */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2.5">
-                    {selectedRes.is_group_card && Array.isArray(selectedRes.group_members) && selectedRes.group_members.length > 1 ? (
-                      <>
-                        <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Tarifas diarias del Grupo</span>
-                          <span className="text-[10px] font-extrabold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                            {selectedRes.group_members.length} Habitaciones
-                          </span>
-                        </div>
-                        <div className="divide-y divide-zinc-200/60 pt-0.5">
-                          {selectedRes.group_members.map((m: any) => {
-                            const mNights = m.nights || selectedRes.nights || 1;
-                            const mPrice = Number(m.price_estimate || m.price || 0);
-                            const mDaily = m.price_per_night || Math.round(mPrice / mNights);
-                            return (
-                              <div key={m.id} className="flex justify-between items-center py-1.5 text-[12.5px]">
-                                <span className="font-semibold text-zinc-600 truncate max-w-[190px]">
-                                  {m.room_name || m.room || 'Habitación'}
-                                </span>
-                                <span className="font-bold text-zinc-900">
-                                  {fmtCurrency(mDaily, selectedRes.guest_name)} <span className="text-[10px] font-normal text-zinc-400">/ noche</span>
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="pt-2 border-t border-zinc-200/80 flex justify-between items-center text-[12px]">
-                          <span className="font-extrabold text-zinc-500 uppercase tracking-wider text-[9.5px]">Total Diario del Grupo:</span>
-                          <span className="font-black text-zinc-900">
-                            {fmtCurrency(
-                              selectedRes.group_members.reduce((sum: number, m: any) => {
-                                const mNights = m.nights || selectedRes.nights || 1;
-                                const mPrice = Number(m.price_estimate || m.price || 0);
-                                return sum + (m.price_per_night || Math.round(mPrice / mNights));
-                              }, 0),
-                              selectedRes.guest_name
-                            )} <span className="text-[10px] font-semibold text-zinc-400">/ noche</span>
-                          </span>
-                        </div>
-                      </>
-                    ) : (
-                      <div>
-                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Tarifa diaria</span>
-                        <p className="text-[15px] font-extrabold text-zinc-900 mt-0.5">
-                          {fmtCurrency(
-                            selectedRes.price_per_night || Math.round((Number(selectedRes.price_estimate || selectedRes.price || 0)) / (selectedRes.nights || 1)),
-                            selectedRes.guest_name
-                          )}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 6. Total de la reserva */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div>
-                      {siblingBookings.length > 0 ? (
-                        <>
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total del Grupo (Consolidado)</span>
-                          <p className="text-[15px] font-black text-zinc-950 mt-0.5">
-                            {fmtCurrency(groupBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0), selectedRes.guest_name)}
-                          </p>
-                          {!selectedRes.is_group_card && (
-                            <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)})</span>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Total de la reserva</span>
-                          <p className="text-[15px] font-black text-zinc-950 mt-0.5">
-                            {fmtCurrency(selectedRes.price_estimate || 0, selectedRes.guest_name)}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Desglose de Impuestos (Mapeado desde Invoice Beds24) */}
-                  {selectedRes.taxes && selectedRes.taxes.total > 0 && (
-                    <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-2.5">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Impuestos (Factura Beds24)</span>
-                      
-                      <div className="flex justify-between items-center text-[13px]">
-                        <span className="text-zinc-500 font-semibold">IVA (16%):</span>
-                        <span className="font-extrabold text-zinc-900">
-                          {fmtCurrency(selectedRes.taxes.iva, selectedRes.guest_name)}
-                        </span>
-                      </div>
-
-                      <div className="flex justify-between items-center text-[13px]">
-                        <span className="text-zinc-500 font-semibold">ISH (3%):</span>
-                        <span className="font-extrabold text-zinc-900">
-                          {fmtCurrency(selectedRes.taxes.ish, selectedRes.guest_name)}
-                        </span>
-                      </div>
-
-                      {selectedRes.taxes.otros > 0 && (
-                        <div className="flex justify-between items-center text-[13px]">
-                          <span className="text-zinc-500 font-semibold">Otros Impuestos:</span>
-                          <span className="font-extrabold text-zinc-900">
-                            {fmtCurrency(selectedRes.taxes.otros, selectedRes.guest_name)}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="border-t border-zinc-200/60 pt-2.5 flex justify-between items-center text-[13px] font-black">
-                        <span className="text-zinc-700">Total Impuestos:</span>
-                        <span className="text-zinc-950">
-                          {fmtCurrency(selectedRes.taxes.total, selectedRes.guest_name)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 7. Anticipo depositado */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div>
-                      {siblingBookings.length > 0 ? (
-                        <>
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo Total del Grupo</span>
-                          <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                            {fmtCurrency(
-                              (() => {
-                                const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + Number(b.price_estimate || b.price || 0), 0);
-                                const rawDeps = groupBookings.reduce((sum: number, b: any) => sum + Number(b.deposit || 0), 0);
-                                return Math.min(totalGroupPrice, rawDeps);
-                              })(),
-                              selectedRes.guest_name
-                            )}
-                          </p>
-                          {!selectedRes.is_group_card && (
-                            <span className="text-[9.5px] text-zinc-400 block mt-0.5">(Habitación actual: {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)})</span>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">Anticipo depositado</span>
-                          <p className="text-[15px] font-extrabold text-emerald-600 mt-0.5">
-                            {fmtCurrency(selectedRes.deposit || 0, selectedRes.guest_name)}
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 8. Adeudo Pendiente (Consolidado si es Grupo) */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl flex justify-between items-center shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <div>
-                      {(() => {
-                        const isGroup = siblingBookings.length > 0;
-                        const isOta = selectedRes.channel && ['airbnb', 'booking', 'expedia'].some(c => selectedRes.channel.toLowerCase().includes(c));
-                        const isCheckedIn = selectedRes.checked_in === true || selectedRes.is_checked_in === true;
-                        let balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, Number(selectedRes.price_estimate || selectedRes.price || 0) - Number(selectedRes.deposit || 0));
-
-                        if (isGroup) {
-                          const totalGroupPrice = groupBookings.reduce((sum: number, b: any) => sum + (Number(b.price_estimate) || Number(b.price) || 0), 0);
-                          const totalGroupDeposit = Math.min(totalGroupPrice, groupBookings.reduce((sum: number, b: any) => sum + (Number(b.deposit) || 0), 0));
-                          balanceVal = (isOta || isCheckedIn) ? 0 : Math.max(0, totalGroupPrice - totalGroupDeposit);
-                        }
-
-                        return (
-                          <>
-                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-0.5">
-                              {isGroup ? '👥 Adeudo Total del Grupo (Consolidado)' : 'Adeudo Pendiente'}
-                            </span>
-                            <p className={`text-[15px] font-black mt-0.5 ${balanceVal > 0 ? 'text-amber-600' : 'text-zinc-650'}`}>
-                              {fmtCurrency(balanceVal, selectedRes.guest_name)}
-                            </p>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  {/* 9. Fecha check in- días de estancia- fecha check Out */}
-                  <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)]">
-                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">Check-in · Estancia · Check-out</span>
-                    <div className="flex items-center justify-between text-[13px] font-semibold text-zinc-900 mt-1 bg-white border border-zinc-150 p-3 rounded-xl">
-                      <span>{selectedRes.check_in ? format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es }) : '—'}</span>
-                      <span className="bg-zinc-100 text-zinc-700 px-2.5 py-0.5 rounded-lg font-bold text-[11px] shrink-0 border border-zinc-200">
-                        {selectedRes.nights} noche{selectedRes.nights !== 1 ? 's' : ''}
-                      </span>
-                      <span>{selectedRes.check_out ? format(parseISO(selectedRes.check_out), 'dd MMM yyyy', { locale: es }) : '—'}</span>
-                    </div>
-                  </div>
-
-                  {/* OBSERVACIONES DE LA RESERVA (Editable desde Admin en cualquier momento) */}
-                  <div className="bg-amber-50/60 border border-amber-200 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] text-left space-y-2.5 mt-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-amber-800 uppercase tracking-widest flex items-center gap-1.5">
-                        <FileText size={13} className="text-amber-600" />
-                        Observaciones de la Reserva
-                      </span>
-                      {!isEditingNotes ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditNotes(selectedRes.notes || selectedRes.comments || '');
-                            setIsEditingNotes(true);
-                          }}
-                          className="text-[10.5px] font-extrabold bg-amber-100 hover:bg-amber-200 text-amber-900 px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow-xs"
-                        >
-                          <Edit size={11} /> Editar Observaciones 📝
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingNotes(false)}
-                          className="text-[10px] font-bold text-zinc-500 hover:text-zinc-700 cursor-pointer"
-                        >
-                          ✕ Cancelar
-                        </button>
-                      )}
-                    </div>
-
-                    {!isEditingNotes ? (
-                      <p className="text-[12px] font-semibold text-amber-950 whitespace-pre-line leading-relaxed bg-white/80 p-3 rounded-xl border border-amber-200/60">
-                        {selectedRes.notes || selectedRes.comments || <span className="text-amber-700/60 font-normal italic">Sin observaciones registradas. Haz clic en "Editar Observaciones" para agregar notas...</span>}
-                      </p>
-                    ) : (
-                      <div className="space-y-2 animate-in fade-in duration-150">
-                        <textarea
-                          rows={3}
-                          value={editNotes}
-                          onChange={(e) => setEditNotes(e.target.value)}
-                          placeholder="Escribe aquí las observaciones especiales de la reservación (ej. llegada tardía, solicitudes especiales, grupo, etc.)..."
-                          className="w-full bg-white border border-amber-300 rounded-xl p-3 text-[12.5px] font-medium text-zinc-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 placeholder:text-amber-700/40"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleSaveNotesOnlyInReservas}
-                          disabled={savingNotesOnly}
-                          className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-[12px] rounded-xl transition-all shadow-md active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        >
-                          {savingNotesOnly ? <Loader2 className="animate-spin" size={13} /> : <CheckCircle2 size={13} />}
-                          Guardar Observaciones
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Documento Adjunto (DNI/Pasaporte) */}
-                  {selectedRes.document_url && (
-                    <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Identificación del Huésped</span>
-                      {userRole === 'recepcion' && selectedRes.check_in && selectedRes.check_in > todayStr ? (
-                        <div className="flex items-center gap-2.5 px-4 py-3 bg-zinc-100 border border-zinc-205 text-zinc-450 font-bold rounded-xl text-[12px] shadow-sm select-none">
-                          <Lock size={15} className="text-zinc-400 shrink-0" />
-                          <span>🔒 Oculto hasta el día de llegada ({format(parseISO(selectedRes.check_in), 'dd MMM yyyy', { locale: es })})</span>
-                        </div>
-                      ) : (
-                        <a 
-                          href={selectedRes.document_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2.5 px-4 py-3 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
-                        >
-                          <FileText size={15} className="text-zinc-500" />
-                          <span>Ver DNI / Pasaporte Escaneado ↗</span>
-                        </a>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Voucher TPV / Comprobante de Pago */}
-                  {(() => {
-                    const vUrl = selectedRes.voucher_url || (() => {
-                      const match = (selectedRes.notes || '').match(/(?:Foto Voucher TPV \/ Comprobante:\s*|voucher_url:\s*)(https?:\/\/[^\s]+)/i);
-                      return match ? match[1] : null;
-                    })();
-                    if (!vUrl) return null;
-
-                    return (
-                      <div className="bg-amber-50/60 border border-amber-200/80 p-4 rounded-2xl mt-1 text-left">
-                        <span className="text-[10px] font-bold text-amber-800 uppercase tracking-widest block mb-2">Voucher TPV / Comprobante de Pago</span>
-                        <a 
-                          href={vUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2.5 px-4 py-3 bg-white border border-amber-200 hover:bg-amber-50 text-amber-900 hover:text-amber-950 font-bold rounded-xl text-[12.5px] transition-all cursor-pointer shadow-sm w-full"
-                        >
-                          <CreditCard size={15} className="text-amber-600 shrink-0" />
-                          <span>Ver Voucher TPV / Comprobante 💳 ↗</span>
-                        </a>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Comprobantes de Transferencia Bancaria */}
-                  {selectedRes.transfer_receipts && selectedRes.transfer_receipts.length > 0 && (
-                    <div className="bg-zinc-50 border border-zinc-200/85 p-4 rounded-2xl mt-1 space-y-4 text-left animate-in fade-in duration-200">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Comprobantes de Transferencia</span>
-                      
-                      <div className="space-y-3">
-                        {selectedRes.transfer_receipts.map((receipt: any) => {
-                          const isPending = receipt.status === 'pending';
-                          const isApproved = receipt.status === 'approved';
-                          const isRejected = receipt.status === 'rejected';
-                          const isProcessing = approvingReceiptId === receipt.id;
-
-                          return (
-                            <div key={receipt.id} className="bg-white border border-zinc-200 rounded-xl p-3.5 space-y-3 shadow-sm">
-                              {/* Header del Comprobante */}
-                              <div className="flex justify-between items-start gap-2">
-                                <div>
-                                  <span className="text-[10px] font-extrabold text-zinc-400 uppercase tracking-wider block">Monto Declarado</span>
-                                  <div className="flex items-center gap-1.5 mt-0.5">
-                                    <p className="text-[14px] font-black text-zinc-900">
-                                      ${receipt.amount?.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN
-                                    </p>
-                                    {isPending && userRole === 'admin' && (
-                                      <button 
-                                        onClick={() => handleEditReceiptAmount(receipt.id, receipt.amount)}
-                                        className="p-1 hover:bg-zinc-100 rounded-lg text-zinc-400 hover:text-zinc-700 transition-colors cursor-pointer flex items-center justify-center shrink-0"
-                                        title="Editar monto"
-                                      >
-                                        <Edit size={12} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
-                                  isPending ? 'bg-amber-50 border-amber-200 text-amber-700' :
-                                  isApproved ? 'bg-emerald-50 border-emerald-200 text-emerald-700' :
-                                  'bg-rose-50 border-rose-200 text-rose-700'
-                                }`}>
-                                  {isPending ? 'Pendiente' : isApproved ? 'Aprobado' : 'Rechazado'}
-                                </span>
-                              </div>
-
-                              {/* Detalles */}
-                              <div className="grid grid-cols-2 gap-2 text-[11px] font-medium text-zinc-500 bg-zinc-50 p-2 rounded-lg">
-                                <div>
-                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Fecha de Envío</span>
-                                  <span className="text-zinc-800 font-semibold">
-                                    {receipt.created_at ? new Date(receipt.created_at).toLocaleString('es-MX') : '—'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="block text-[8px] font-bold text-zinc-400 uppercase tracking-wider">Registrado por</span>
-                                  <span className="text-zinc-800 font-semibold truncate block">
-                                    {receipt.guest_name || 'Huésped'}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {receipt.notes && (
-                                <div className="bg-blue-50/70 border border-blue-200/80 p-2.5 rounded-xl text-[11px] text-blue-950 font-medium space-y-1">
-                                  <div className="flex items-center justify-between gap-2">
-                                    <span className="text-[9px] font-extrabold text-blue-700 uppercase tracking-wider flex items-center gap-1">
-                                      🏦 Cuenta / Método Destino:
-                                    </span>
-                                    <span className="font-black text-blue-900 bg-white px-2 py-0.5 rounded-md border border-blue-200 shadow-2xs">
-                                      {receipt.notes.includes('[Banco Destino:')
-                                        ? receipt.notes.replace('[Banco Destino: ', '').replace(']', '')
-                                        : (receipt.notes.includes('[Plataforma:')
-                                          ? receipt.notes.replace('[Plataforma: ', '').replace(']', '')
-                                          : receipt.notes)}
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Botones de acción y visualización */}
-                              <div className="space-y-2 pt-1 border-t border-zinc-100">
-                                <a
-                                  href={receipt.receipt_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center justify-center gap-1.5 w-full py-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 font-bold rounded-lg text-[11px] transition-colors cursor-pointer"
-                                >
-                                  <FileText size={12} />
-                                  <span>Ver Comprobante Subido ↗</span>
-                                </a>
-
-                                {isPending && userRole === 'admin' && (
-                                  <div className="space-y-2 pt-1.5">
-                                    <textarea
-                                      value={rejectionNotes[receipt.id] || ''}
-                                      onChange={(e) => setRejectionNotes(prev => ({ ...prev, [receipt.id]: e.target.value }))}
-                                      placeholder="Escribe notas o motivo si vas a rechazar el pago..."
-                                      className="w-full bg-white border border-zinc-200 rounded-lg p-2 text-zinc-800 text-[11px] outline-none focus:border-zinc-350 h-14 resize-none shadow-sm"
-                                    />
-                                    
-                                    <div className="flex gap-2">
-                                      <button
-                                        onClick={() => handleProcessTransferReceipt(receipt.id, receipt.booking_id.toString(), receipt.amount, 'reject')}
-                                        disabled={isProcessing}
-                                        className="flex-1 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold rounded-lg text-[11px] transition-colors disabled:opacity-55 cursor-pointer"
-                                      >
-                                        <span>❌ Rechazar</span>
-                                      </button>
-                                      <button
-                                        onClick={() => handleProcessTransferReceipt(receipt.id, receipt.booking_id.toString(), receipt.amount, 'approve')}
-                                        disabled={isProcessing}
-                                        className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-all disabled:opacity-55 flex justify-center items-center gap-1.5 shadow shadow-emerald-600/10 cursor-pointer"
-                                      >
-                                        {isProcessing ? (
-                                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        ) : (
-                                          <span>✅ Aprobar</span>
-                                        )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                 )}
-                                 {isPending && userRole !== 'admin' && (
-                                   <div className="bg-amber-50 border border-amber-200 text-amber-900 text-[11px] font-semibold p-2.5 rounded-lg text-center mt-2">
-                                     🔒 Pendiente de aprobación por Administrador
-                                   </div>
-                                 )}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
 
                   {/* Registrar Anticipo Button & Panel */}
                   {selectedRes.status !== 'cancelled' && !selectedRes.is_checked_out && (
