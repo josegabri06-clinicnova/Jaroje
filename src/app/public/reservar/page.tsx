@@ -47,6 +47,8 @@ interface QuoteItem {
   availableUnitsCount: number;
   isAvailable: boolean;
   nights: number;
+  basePricePerNight?: number;
+  taxMultiplier?: number;
   pricePerNight: number;
   totalPrice: number;
   depositRequired: number;
@@ -1078,8 +1080,11 @@ function ReservarContent() {
                               </span>
                               <span className="text-[10px] font-bold text-zinc-400">MXN / {t.night}</span>
                             </div>
-                            <span className="text-[11px] font-bold text-indigo-600">
+                            <span className="text-[11px] font-bold text-indigo-600 block">
                               Total: ${q.totalPrice.toLocaleString()} MXN ({q.nights} {q.nights === 1 ? t.night : t.nights})
+                            </span>
+                            <span className="text-[10px] font-semibold text-emerald-700 block mt-0.5">
+                              ✓ {lang === 'en' ? 'Taxes included (16% VAT + 3% ISH)' : 'Impuestos incluidos (16% IVA + 3% ISH)'}
                             </span>
                           </div>
 
@@ -1334,7 +1339,12 @@ function ReservarContent() {
               {/* Totales específicos para evitar dudas */}
               <div className="space-y-1.5 pt-0.5">
                 <div className="flex justify-between text-zinc-600 font-semibold text-xs">
-                  <span>{lang === 'en' ? 'Lodging Subtotal:' : 'Subtotal habitaciones:'}</span>
+                  <div>
+                    <span>{lang === 'en' ? 'Lodging Subtotal:' : 'Subtotal habitaciones:'}</span>
+                    <span className="text-[9.5px] text-zinc-400 block font-normal">
+                      {lang === 'en' ? '(Includes 16% VAT + 3% ISH)' : '(Incluye 16% IVA + 3% ISH)'}
+                    </span>
+                  </div>
                   <span className="font-bold text-zinc-900">${activeSummary.baseLodgingTotal.toLocaleString()} MXN</span>
                 </div>
                 {activeSummary.extraGuestsFee > 0 && (
@@ -1344,7 +1354,12 @@ function ReservarContent() {
                   </div>
                 )}
                 <div className="flex justify-between font-black text-sm text-zinc-900 pt-1.5 border-t border-zinc-200">
-                  <span>{lang === 'en' ? 'Total for Stay:' : 'Total de la estancia:'}</span>
+                  <div>
+                    <span>{lang === 'en' ? 'Total for Stay:' : 'Total de la estancia:'}</span>
+                    <span className="text-[9.5px] text-emerald-700 block font-semibold">
+                      {lang === 'en' ? 'All taxes included' : 'Impuestos totales incluidos'}
+                    </span>
+                  </div>
                   <span className="text-base text-indigo-900 font-black">${activeSummary.grandTotal.toLocaleString()} MXN</span>
                 </div>
                 <div className="flex justify-between font-black text-xs text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">

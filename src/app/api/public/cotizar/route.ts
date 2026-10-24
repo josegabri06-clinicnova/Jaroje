@@ -521,10 +521,10 @@ export async function GET(req: Request) {
       const occupiedCount = (stats?.assignedUnits.size || 0) + (stats?.unassignedCount || 0);
       const availableUnitsCount = Math.max(0, cat.units.length - occupiedCount);
 
-      // Calcular tarifa neta por noche (canal 'Directo')
+      // Calcular tarifa neta por noche (canal 'Directo') y aplicar multiplicador de impuestos (IVA 16% + ISH 3% = 1.19)
       const firstUnitId = cat.units[0]?.unitId || '1';
       const childId = getChildRoomId(cat.roomId, firstUnitId) || cat.roomId;
-      const pricePerNight = getAverageRatesForDates(
+      const basePricePerNight = getAverageRatesForDates(
         childId,
         checkIn,
         checkOut,
@@ -534,6 +534,8 @@ export async function GET(req: Request) {
         dynamicSettings
       );
 
+      const TAX_MULTIPLIER = 1.19;
+      const pricePerNight = Math.round(basePricePerNight * TAX_MULTIPLIER);
       const totalPrice = Math.round(pricePerNight * nights);
       const depositRequired = Math.round(totalPrice * 0.5);
 
@@ -555,6 +557,8 @@ export async function GET(req: Request) {
         availableUnitsCount,
         isAvailable: availableUnitsCount > 0,
         nights,
+        basePricePerNight,
+        taxMultiplier: TAX_MULTIPLIER,
         pricePerNight,
         totalPrice,
         depositRequired,

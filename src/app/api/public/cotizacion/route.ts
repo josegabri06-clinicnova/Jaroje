@@ -196,8 +196,8 @@ ${roomsText}
 👤 *Personas adicionales:* ${extraGuests > 0 ? `${extraGuests} adicionales ($500 MXN / noche × ${extraGuests} pers. × ${nights} noches = $${extraGuestsFee.toLocaleString()} MXN)` : '0 adicionales (incluidas en capacidad base sin costo)'}
 
 💰 *DESGLOSE TOTAL:*
-• Subtotal hospedaje: $${baseLodgingTotal.toLocaleString()} MXN
-${extraGuestsFee > 0 ? `• Suplemento adicionales: $${extraGuestsFee.toLocaleString()} MXN\n` : ''}• *Total de la estancia:* $${finalTotal.toLocaleString()} MXN
+• Subtotal hospedaje (IVA e ISH incluidos): $${baseLodgingTotal.toLocaleString()} MXN
+${extraGuestsFee > 0 ? `• Suplemento adicionales: $${extraGuestsFee.toLocaleString()} MXN\n` : ''}• *Total de la estancia (impuestos incluidos):* $${finalTotal.toLocaleString()} MXN
 • *Anticipo requerido para apartar (50%):* $${finalDeposit.toLocaleString()} MXN
 • Saldo restante al check-in (50%): $${balanceRemaining.toLocaleString()} MXN
 
