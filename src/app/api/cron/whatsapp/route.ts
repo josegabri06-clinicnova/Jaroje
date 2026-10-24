@@ -393,7 +393,7 @@ export async function GET(req: Request) {
         const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
         if (!guestPhone) continue;
 
-        // --- REGLA: Cancelación Automática 3h tras Último Aviso (Solo Reservas Directas/Locales/Expedia con anticipo pendiente, NUNCA OTAs prepagadas Airbnb/Booking) ---
+        // --- REGLA: Cancelación Automática 24h tras Último Aviso enviado desde la app (Solo Reservas Directas/Locales/Expedia con anticipo pendiente, NUNCA OTAs prepagadas Airbnb/Booking) ---
         const isCancelled = booking.status === 'cancelled' || String(booking.status) === '0';
         const hasDeposit = Number(booking.deposit || 0) > 0 || Number(booking.actualPaid || 0) > 0;
         const sentAtStr = getGroupNoticeSentAt(booking);
@@ -402,8 +402,8 @@ export async function GET(req: Request) {
 
         if (!isCancelled && !hasDeposit && sentAtStr && !isPrepaidOtaBooking) {
           const sentAt = new Date(sentAtStr);
-          // Margen de 3 horas (usando 2 horas y 50 minutos para tolerar la frecuencia del cron de 10 min)
-          const limitTime = new Date(sentAt.getTime() + 170 * 60 * 1000); 
+          // Margen de 24 horas desde que recepción envió el último aviso desde la app
+          const limitTime = new Date(sentAt.getTime() + 24 * 60 * 60 * 1000); 
           const now = new Date();
 
           // Registrar evaluación de cancelación en logs del sistema para diagnóstico y visibilidad
@@ -414,7 +414,7 @@ export async function GET(req: Request) {
               action: 'cron-cancel-eval',
               department: 'whatsapp',
               room: booking.room_name || `Habitación ${booking.room || ''}`,
-              details: `Evaluando reserva ${bookingIdStr} (${booking.guest_name}). Último aviso: ${sentAtStr}. Límite (3h): ${limitTime.toISOString()}. Ahora: ${now.toISOString()}.`
+              details: `Evaluando reserva ${bookingIdStr} (${booking.guest_name}). Último aviso: ${sentAtStr}. Límite (24h): ${limitTime.toISOString()}. Ahora: ${now.toISOString()}.`
             }]);
           } catch (e) {
             console.error("Error al registrar cron-cancel-eval:", e);
@@ -428,7 +428,7 @@ export async function GET(req: Request) {
               const groupMemberIds = Array.from(new Set(groupMembers.map(m => String(m.id))));
               const groupRoomsList = groupMembers.map(m => m.room_name || `Hab ${m.room || m.id}`).join(', ');
 
-              console.log(`[Cron Expiración 3h] Grupo de reservaciones [${groupMemberIds.join(', ')}] (${booking.guest_name} - ${groupRoomsList}) no cargó comprobante tras 3 horas. Cancelando grupo completo...`);
+              console.log(`[Cron Expiración 24h] Grupo de reservaciones [${groupMemberIds.join(', ')}] (${booking.guest_name} - ${groupRoomsList}) no cargó comprobante tras 24 horas de último aviso. Cancelando grupo completo...`);
 
               // Separar locales y Beds24
               const localMembers = groupMembers.filter(m => Boolean(m.isLocal) || String(m.id).startsWith('loc_') || String(m.id).startsWith('walkin_') || String(m.id).length < 7);
@@ -503,7 +503,7 @@ export async function GET(req: Request) {
                   action: 'cron-cancel-success',
                   department: 'whatsapp',
                   room: groupRoomsList,
-                  details: `Grupo de ${groupMembers.length} reserva(s) [${groupMemberIds.join(', ')}] (${booking.guest_name}) cancelado automáticamente con éxito por inactividad de pago (3h).`
+                  details: `Grupo de ${groupMembers.length} reserva(s) [${groupMemberIds.join(', ')}] (${booking.guest_name}) cancelado automáticamente con éxito por inactividad de pago (24h tras último aviso).`
                 }]);
               } catch (e) {
                 console.error("Error al registrar cron-cancel-success:", e);
@@ -522,9 +522,9 @@ export async function GET(req: Request) {
               }
 
               if (waRes.success) {
-                reports.push(`[Expirado 3h] Grupo [${groupMemberIds.join(', ')}] cancelado y notificado con Mensaje 4.`);
+                reports.push(`[Expirado 24h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado y notificado con Mensaje 4.`);
               } else {
-                reports.push(`[Expirado 3h] Grupo [${groupMemberIds.join(', ')}] cancelado en sistema, pero falló WhatsApp: ${waRes.error}`);
+                reports.push(`[Expirado 24h tras Último Aviso] Grupo [${groupMemberIds.join(', ')}] cancelado en sistema, pero falló WhatsApp: ${waRes.error}`);
               }
               continue; // Saltar el resto de verificaciones para esta reserva
             } else {
