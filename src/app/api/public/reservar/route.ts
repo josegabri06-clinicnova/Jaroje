@@ -212,6 +212,30 @@ export async function POST(req: Request) {
 
         roomSummaries.push(`${catConfig.name} (${assignedUnit.name})`);
 
+        const roomInvoiceItems = [
+          {
+            description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
+            type: 'charge',
+            amount: itemPrice,
+            qty: 1,
+            vatRate: 19
+          },
+          {
+            description: 'IVA 16% (Incluido en el precio)',
+            type: 'charge',
+            amount: 0,
+            qty: 1,
+            vatRate: 0
+          },
+          {
+            description: 'Tax Hospedaje 3% (Incluido en el precio)',
+            type: 'charge',
+            amount: 0,
+            qty: 1,
+            vatRate: 0
+          }
+        ];
+
         beds24Payload.push({
           roomId: Number(catConfig.roomId),
           unitId: Number(assignedUnit.unitId),
@@ -227,7 +251,8 @@ export async function POST(req: Request) {
           channel: 'Directo whatssap',
           price: itemPrice,
           deposit: 0,
-          comments: `Reserva directa creada desde Portal WhatsApp. Habitación: ${assignedUnit.name}. Notas: ${notes || 'Ninguna'}`
+          comments: `Reserva directa creada desde Portal WhatsApp. Habitación: ${assignedUnit.name}. Notas: ${notes || 'Ninguna'}`,
+          invoiceItems: roomInvoiceItems
         });
       }
     }
@@ -240,6 +265,15 @@ export async function POST(req: Request) {
     if (totalExtraGuestsFee > 0 && beds24Payload.length > 0) {
       beds24Payload[0].price += totalExtraGuestsFee;
       grandTotalPrice += totalExtraGuestsFee;
+      if (beds24Payload[0].invoiceItems) {
+        beds24Payload[0].invoiceItems.push({
+          description: 'Huéspedes adicionales | Cargo extra',
+          type: 'charge',
+          amount: totalExtraGuestsFee,
+          qty: 1,
+          vatRate: 19
+        });
+      }
     }
 
     const depositRequired = Math.round(grandTotalPrice * 0.5);
@@ -335,6 +369,7 @@ export async function POST(req: Request) {
           num_adult: payloadItem.numAdult,
           num_child: payloadItem.numChild,
           notes: payloadItem.comments,
+          invoice_items: payloadItem.invoiceItems || [],
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
