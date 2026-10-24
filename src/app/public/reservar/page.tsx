@@ -76,10 +76,10 @@ function ReservarContent() {
 
   const [lang, setLang] = useState<'es' | 'en'>(langParam === 'en' ? 'en' : 'es');
 
-  // Fechas por defecto: mañana a 3 días después
+  // Fechas por defecto: mañana a 1 día después (1 noche por defecto)
   const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
   const defaultCheckIn = useMemo(() => format(addDays(new Date(), 1), 'yyyy-MM-dd'), []);
-  const defaultCheckOut = useMemo(() => format(addDays(new Date(), 4), 'yyyy-MM-dd'), []);
+  const defaultCheckOut = useMemo(() => format(addDays(new Date(), 2), 'yyyy-MM-dd'), []);
 
   const [checkIn, setCheckIn] = useState(defaultCheckIn);
   const [checkOut, setCheckOut] = useState(defaultCheckOut);
@@ -104,16 +104,13 @@ function ReservarContent() {
     setCheckIn(newIn);
     if (!newIn) return;
 
-    // Si la nueva fecha de check-in es igual o posterior a la fecha de check-out actual:
-    // mover automáticamente check-out a newIn + 1 día para garantizar al menos 1 noche válida
-    if (!checkOut || newIn >= checkOut) {
-      try {
-        const dIn = new Date(newIn + 'T12:00:00');
-        const nextDay = format(addDays(dIn, 1), 'yyyy-MM-dd');
-        setCheckOut(nextDay);
-      } catch {
-        // fallback
-      }
+    // Rolando: Por default poner 1 día después de la fecha de check in
+    try {
+      const dIn = new Date(newIn + 'T12:00:00');
+      const nextDay = format(addDays(dIn, 1), 'yyyy-MM-dd');
+      setCheckOut(nextDay);
+    } catch {
+      // fallback
     }
   };
 
@@ -878,18 +875,11 @@ function ReservarContent() {
                   </div>
                 </div>
 
-                {/* Banner de error o badge de estancia */}
-                {isInvalidDateRange ? (
+                {/* Banner de error si el rango es inválido */}
+                {isInvalidDateRange && (
                   <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center justify-center gap-1.5 animate-in fade-in">
                     <AlertCircle size={13} className="shrink-0 text-rose-600" />
                     <span>{t.invalidDatesError}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center pt-0.5">
-                    <span className="text-[11px] font-extrabold text-indigo-700 bg-indigo-50/80 border border-indigo-100 px-3 py-1 rounded-full flex items-center gap-1.5 shadow-2xs">
-                      <Clock size={12} className="text-indigo-600" />
-                      <span>{lang === 'en' ? `Stay of ${stayNights} ${stayNights === 1 ? 'night' : 'nights'}` : `Estancia de ${stayNights} ${stayNights === 1 ? 'noche' : 'noches'}`}</span>
-                    </span>
                   </div>
                 )}
               </div>
@@ -904,15 +894,35 @@ function ReservarContent() {
                     <button
                       type="button"
                       onClick={() => setAdults(a => Math.max(1, a - 1))}
-                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer"
+                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Minus size={12} />
                     </button>
-                    <span className="text-xs font-black text-zinc-900">{adults}</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      min={1}
+                      max={200}
+                      value={adults}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          setAdults(1);
+                          return;
+                        }
+                        const val = parseInt(raw, 10);
+                        if (!isNaN(val)) {
+                          setAdults(Math.max(1, Math.min(200, val)));
+                        }
+                      }}
+                      onFocus={e => e.target.select()}
+                      className="w-14 text-center text-xs font-black text-zinc-900 bg-transparent border-0 outline-none p-0 focus:ring-0 appearance-none"
+                    />
                     <button
                       type="button"
-                      onClick={() => setAdults(a => Math.min(20, a + 1))}
-                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer"
+                      onClick={() => setAdults(a => Math.min(200, a + 1))}
+                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Plus size={12} />
                     </button>
@@ -927,15 +937,35 @@ function ReservarContent() {
                     <button
                       type="button"
                       onClick={() => setChildren(c => Math.max(0, c - 1))}
-                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer"
+                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Minus size={12} />
                     </button>
-                    <span className="text-xs font-black text-zinc-900">{children}</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      min={0}
+                      max={100}
+                      value={children}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          setChildren(0);
+                          return;
+                        }
+                        const val = parseInt(raw, 10);
+                        if (!isNaN(val)) {
+                          setChildren(Math.max(0, Math.min(100, val)));
+                        }
+                      }}
+                      onFocus={e => e.target.select()}
+                      className="w-14 text-center text-xs font-black text-zinc-900 bg-transparent border-0 outline-none p-0 focus:ring-0 appearance-none"
+                    />
                     <button
                       type="button"
-                      onClick={() => setChildren(c => Math.min(10, c + 1))}
-                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer"
+                      onClick={() => setChildren(c => Math.min(100, c + 1))}
+                      className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Plus size={12} />
                     </button>

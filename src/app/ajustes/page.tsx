@@ -9,7 +9,7 @@ import {
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
   Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench,
-  TrendingUp, RotateCcw, Bell, ExternalLink
+  TrendingUp, RotateCcw, Bell, ExternalLink, UserCheck, UploadCloud, Search
 } from 'lucide-react';
 import { RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 import { 
@@ -61,6 +61,16 @@ export default function AjustesPage() {
   const [savingReceptionWaGroupUrl, setSavingReceptionWaGroupUrl] = useState(false);
   const [maintenanceWaGroupUrl, setMaintenanceWaGroupUrl] = useState(MAINTENANCE_WA_GROUP_URL);
   const [savingMaintenanceWaGroupUrl, setSavingMaintenanceWaGroupUrl] = useState(false);
+
+  // Personal contacts exclusion states
+  const [personalContacts, setPersonalContacts] = useState<any[]>([]);
+  const [contactSearch, setContactSearch] = useState('');
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactNotes, setNewContactNotes] = useState('');
+  const [isSavingContact, setIsSavingContact] = useState(false);
+  const [isImportingContacts, setIsImportingContacts] = useState(false);
+  const contactFileInputRef = useRef<HTMLInputElement>(null);
 
   const toggleSection = (section: string) => {
     setExpandedSections(prev => ({
@@ -583,6 +593,149 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchPersonalContacts = async () => {
+    try {
+      const res = await fetch('/api/settings/contacts', { cache: 'no-store' });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.success && Array.isArray(body.contacts)) {
+          setPersonalContacts(body.contacts);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching personal contacts:', e);
+    }
+  };
+
+  const handleAddPersonalContact = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newContactPhone.trim()) {
+      alert('Ingresa un número de teléfono válido.');
+      return;
+    }
+    setIsSavingContact(true);
+    try {
+      const res = await fetch('/api/settings/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newContactName.trim() || 'Contacto Personal',
+          phone: newContactPhone.trim(),
+          notes: newContactNotes.trim()
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setNewContactName('');
+        setNewContactPhone('');
+        setNewContactNotes('');
+        setToastMessage('✅ Contacto personal agregado con éxito.');
+        setTimeout(() => setToastMessage(''), 3000);
+        await fetchPersonalContacts();
+      } else {
+        alert(data.error || 'Error al guardar contacto');
+      }
+    } catch (err: any) {
+      alert(`Error al guardar: ${err.message}`);
+    } finally {
+      setIsSavingContact(false);
+    }
+  };
+
+  const handleDeletePersonalContact = async (phone: string, name: string) => {
+    if (!confirm(`¿Eliminar a ${name} (${phone}) de la lista de exclusión?`)) return;
+    try {
+      const res = await fetch(`/api/settings/contacts?phone=${encodeURIComponent(phone)}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setToastMessage('✅ Contacto eliminado de la lista de exclusión.');
+        setTimeout(() => setToastMessage(''), 3000);
+        await fetchPersonalContacts();
+      } else {
+        alert(data.error || 'Error al eliminar');
+      }
+    } catch (err: any) {
+      alert(`Error: ${err.message}`);
+    }
+  };
+
+  const handleImportContactsFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImportingContacts(true);
+    try {
+      const text = await file.text();
+      const parsedContacts: Array<{ name: string; phone: string; notes?: string }> = [];
+
+      if (file.name.endsWith('.vcf') || file.name.endsWith('.vcard')) {
+        // Parsear vCard (.vcf)
+        const cards = text.split(/BEGIN:VCARD/i).filter(Boolean);
+        for (const card of cards) {
+          let name = '';
+          let phone = '';
+          const lines = card.split(/\r?\n/);
+          for (const line of lines) {
+            const clean = line.trim();
+            if (clean.startsWith('FN:') || clean.startsWith('FN;')) {
+              name = clean.replace(/^FN[^:]*:/i, '').trim();
+            } else if (!name && (clean.startsWith('N:') || clean.startsWith('N;'))) {
+              const parts = clean.replace(/^N[^:]*:/i, '').split(';').filter(Boolean);
+              name = parts.reverse().join(' ').trim();
+            } else if (clean.startsWith('TEL') && clean.includes(':')) {
+              phone = clean.split(':')[1]?.trim() || '';
+            }
+          }
+          if (phone) {
+            parsedContacts.push({
+              name: name || 'Contacto Importado',
+              phone,
+              notes: `Importado de ${file.name}`
+            });
+          }
+        }
+      } else {
+        // Parsear CSV
+        const lines = text.split(/\r?\n/).filter(Boolean);
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(',').map(s => s.replace(/^["']|["']$/g, '').trim());
+          if (parts.length >= 2) {
+            const name = parts[0];
+            const phone = parts[1];
+            if (phone) {
+              parsedContacts.push({ name, phone, notes: `Importado de CSV` });
+            }
+          }
+        }
+      }
+
+      if (parsedContacts.length === 0) {
+        alert('No se encontraron números telefónicos válidos en el archivo.');
+        return;
+      }
+
+      const res = await fetch('/api/settings/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contacts: parsedContacts })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✅ ¡Importación completada! Se agregaron ${data.added} contactos personales nuevos.`);
+        await fetchPersonalContacts();
+      } else {
+        alert(data.error || 'Error al importar contactos');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`Error al procesar el archivo: ${err.message}`);
+    } finally {
+      setIsImportingContacts(false);
+      if (contactFileInputRef.current) contactFileInputRef.current.value = '';
+    }
+  };
+
   const fetchPasskeys = async () => {
     try {
       const { data, error } = await supabase
@@ -659,6 +812,7 @@ export default function AjustesPage() {
         fetchAdminNotificationPhone(),
         fetchReceptionWaGroupUrl(),
         fetchMaintenanceWaGroupUrl(),
+        fetchPersonalContacts(),
         expandedSections.depuracion ? fetchDepurarData() : Promise.resolve()
       ]);
     } catch (e) {
@@ -680,6 +834,7 @@ export default function AjustesPage() {
     fetchAdminNotificationPhone();
     fetchReceptionWaGroupUrl();
     fetchMaintenanceWaGroupUrl();
+    fetchPersonalContacts();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
@@ -1417,6 +1572,141 @@ export default function AjustesPage() {
                 <ExternalLink size={13} />
                 <span>Abrir Grupo</span>
               </a>
+            </div>
+          </div>
+
+          {/* CONTACTOS PERSONALES Y EXCLUSIONES DEL BOT */}
+          <div className="pt-4 border-t border-zinc-100">
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-[14px] font-bold text-zinc-800 flex items-center gap-1.5">
+                  <UserCheck size={15} className="text-emerald-600" />
+                  Contactos Personales de Rolando (Excluidos del Asistente Virtual)
+                </span>
+                <span className="text-[11px] text-zinc-400 font-sans leading-normal">
+                  A los números registrados en esta lista <b>NUNCA</b> se les enviará la plantilla de bienvenida ni respuestas automáticas de WhatsApp para no interferir en sus conversaciones personales.
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  {personalContacts.length} contactos excluidos
+                </span>
+              </div>
+            </div>
+
+            {/* Formulario rápido para agregar contacto */}
+            <form onSubmit={handleAddPersonalContact} className="mt-3 p-3 bg-zinc-50 border border-zinc-200/80 rounded-xl space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <input
+                  type="text"
+                  value={newContactName}
+                  onChange={e => setNewContactName(e.target.value)}
+                  placeholder="Nombre (ej: Francisco San Martin)"
+                  className="sm:col-span-5 px-3 py-2 text-[12px] bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                />
+                <input
+                  type="text"
+                  value={newContactPhone}
+                  onChange={e => setNewContactPhone(e.target.value)}
+                  placeholder="Teléfono (ej: 2225509046 o +52...)"
+                  className="sm:col-span-4 px-3 py-2 text-[12px] bg-white border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-mono"
+                />
+                <button
+                  type="submit"
+                  disabled={isSavingContact}
+                  className="sm:col-span-3 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold rounded-lg shadow-2xs transition-all disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Plus size={13} />
+                  <span>{isSavingContact ? 'Guardando...' : 'Agregar'}</span>
+                </button>
+              </div>
+
+              {/* Importador de archivo (.vcf / .csv) */}
+              <div className="pt-2 border-t border-zinc-200/60 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={contactFileInputRef}
+                    type="file"
+                    accept=".vcf,.vcard,.csv"
+                    onChange={handleImportContactsFile}
+                    className="hidden"
+                    id="contact-file-input"
+                  />
+                  <label
+                    htmlFor="contact-file-input"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-bold text-zinc-700 bg-white border border-zinc-300 rounded-lg hover:bg-zinc-100 cursor-pointer transition-all shadow-2xs"
+                  >
+                    <UploadCloud size={13} className="text-zinc-500" />
+                    <span>{isImportingContacts ? 'Importando contactos...' : 'Importar contactos (.vcf de iPhone / .csv)'}</span>
+                  </label>
+                  <span className="text-[10px] text-zinc-400">
+                    Exporta tus contactos desde tu iPhone o Google y súbelos aquí con 1 clic.
+                  </span>
+                </div>
+              </div>
+            </form>
+
+            {/* Buscador y listado de contactos */}
+            <div className="mt-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="relative flex-1">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    type="text"
+                    value={contactSearch}
+                    onChange={e => setContactSearch(e.target.value)}
+                    placeholder="Buscar contacto o teléfono..."
+                    className="w-full pl-8 pr-3 py-1.5 text-[11px] bg-zinc-50 border border-zinc-200 rounded-lg text-zinc-800 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="max-h-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white divide-y divide-zinc-100">
+                {personalContacts
+                  .filter(c => {
+                    if (!contactSearch.trim()) return true;
+                    const q = contactSearch.toLowerCase();
+                    return (
+                      c.name?.toLowerCase().includes(q) ||
+                      c.phone?.includes(q) ||
+                      c.notes?.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((c, idx) => (
+                    <div key={`${c.phone}_${idx}`} className="p-2.5 flex items-center justify-between hover:bg-zinc-50/80 transition-colors">
+                      <div className="flex flex-col min-w-0 pr-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[12px] font-bold text-zinc-900 truncate">{c.name}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded-md ${
+                            c.source === 'employee' 
+                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                              : c.source === 'admin'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}>
+                            {c.source === 'employee' ? 'Staff' : c.source === 'admin' ? 'Gerencia' : 'Personal'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-zinc-500 font-mono mt-0.5">{c.phone}</span>
+                      </div>
+                      {c.source === 'personal' && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePersonalContact(c.phone, c.name)}
+                          className="p-1.5 text-zinc-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                          title="Eliminar de la lista de exclusión"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                {personalContacts.length === 0 && (
+                  <div className="p-4 text-center text-xs text-zinc-400">
+                    No hay contactos registrados todavía.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
