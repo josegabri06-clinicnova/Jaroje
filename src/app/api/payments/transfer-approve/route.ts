@@ -47,6 +47,7 @@ export async function POST(req: Request) {
       let groupTotalCount = 1;
       let groupTotalPrice = 0;
       let groupTotalDeposit = 0;
+      let groupMemberIds: string[] = [];
 
       if (localRes) {
         // Reserva local: Actualizar depósito y status en local_reservas
@@ -104,6 +105,7 @@ export async function POST(req: Request) {
                 groupTotalCount = grp.length;
                 groupTotalPrice = grp.reduce((sum, item) => sum + Number(item.price || 0), 0);
                 groupTotalDeposit = grp.reduce((sum, item) => sum + Number(item.deposit || 0), 0);
+                groupMemberIds = grp.map(item => String(item.id));
               }
             }
           }
@@ -193,6 +195,7 @@ export async function POST(req: Request) {
                       groupTotalCount = groupMembers.length + 1;
                       groupTotalPrice = Number(rawB.price || 0);
                       groupTotalDeposit = Number(rawB.deposit || 0);
+                      groupMemberIds = [String(bookingId), ...groupMembers.map((m: any) => String(m.id))];
                       console.log(`[Approve Transfer] Detectados ${groupMembers.length} hermanos en Beds24 para sincronizar y consolidar.`);
                       for (const member of groupMembers) {
                         groupTotalPrice += Number(member.price || 0);
@@ -434,33 +437,65 @@ export async function POST(req: Request) {
             : 1
         };
 
-        let waRes: { success: boolean; error?: string; data?: any };
+        let waRes: { success: boolean; error?: string; data?: any } | null = null;
         let templateLogged = '';
 
         const isMin50Met = effectivePrice > 0
           ? (effectiveDeposit >= (effectivePrice * 0.5 - 0.01))
           : true;
 
-        if (isMin50Met) {
-          console.log(`[Approve Transfer] Mínimo 50% cubierto ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${phone} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
-          waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
-          templateLogged = 'reservacion_confirmada';
-        } else {
-          console.log(`[Approve Transfer] Anticipo parcial inferior al 50% ($${effectiveDeposit}/$${effectivePrice}). Enviando pago_anticipo_recibido (Mensaje 11) a ${phone}`);
-          waRes = await sendTemplate11_PagoAnticipoRecibido(bookingForWA, true);
-          templateLogged = 'pago_anticipo_recibido';
+        // Calcular el depósito previo a este pago para detectar si el 50% ya estaba cubierto
+        const prevEffectiveDeposit = Math.max(0, effectiveDeposit - Number(amount));
+        const wasAlreadyCovered50 = effectivePrice > 0 && (prevEffectiveDeposit >= (effectivePrice * 0.5 - 0.01));
+
+        // Verificar si 'reservacion_confirmada' ya fue enviada a esta reserva o a algún miembro de su grupo
+        let wasAlreadyConfirmed = false;
+        try {
+          const checkIds = isGroupBooking && groupMemberIds.length > 0
+            ? [String(bookingId), ...groupMemberIds]
+            : [String(bookingId)];
+
+          const { data: existingConfirmLogs } = await supabase
+            .from('whatsapp_logs')
+            .select('id')
+            .in('reservation_id', checkIds)
+            .eq('template_name', 'reservacion_confirmada')
+            .neq('status', 'failed')
+            .limit(1);
+
+          if (existingConfirmLogs && existingConfirmLogs.length > 0) {
+            wasAlreadyConfirmed = true;
+          }
+        } catch (chkLogErr) {
+          console.warn("[Approve Transfer] Error verificando logs de reservacion_confirmada previa:", chkLogErr);
         }
 
-        if (waRes.success) {
-          // Registrar en whatsapp_logs para evitar que el cron reenvíe mensajes
-          await supabase.from('whatsapp_logs').insert([{
-            reservation_id: String(bookingId),
-            template_name: templateLogged,
-            phone: phone
-          }]);
-          console.log(`[Approve Transfer] WhatsApp ${templateLogged} enviado y registrado en logs (reserva ${bookingId})`);
+        const isAlreadyConfirmed = wasAlreadyConfirmed || wasAlreadyCovered50;
+
+        if (!isAlreadyConfirmed) {
+          if (isMin50Met) {
+            console.log(`[Approve Transfer] Mínimo 50% cubierto por primera vez ($${effectiveDeposit}/$${effectivePrice}). Enviando reservacion_confirmada (Mensaje 3) a ${phone} (grupo: ${isGroupBooking ? groupTotalCount : 'no'})`);
+            waRes = await sendTemplate3_ReservacionConfirmada(bookingForWA, true);
+            templateLogged = 'reservacion_confirmada';
+          } else {
+            console.log(`[Approve Transfer] Anticipo parcial inferior al 50% ($${effectiveDeposit}/$${effectivePrice}). Enviando pago_anticipo_recibido (Mensaje 11) a ${phone}`);
+            waRes = await sendTemplate11_PagoAnticipoRecibido(bookingForWA, true);
+            templateLogged = 'pago_anticipo_recibido';
+          }
+
+          if (waRes?.success) {
+            // Registrar en whatsapp_logs para evitar que el cron reenvíe mensajes
+            await supabase.from('whatsapp_logs').insert([{
+              reservation_id: String(bookingId),
+              template_name: templateLogged,
+              phone: phone
+            }]);
+            console.log(`[Approve Transfer] WhatsApp ${templateLogged} enviado y registrado en logs (reserva ${bookingId})`);
+          } else if (waRes) {
+            console.warn('[Approve Transfer] WhatsApp send template failed:', waRes.error);
+          }
         } else {
-          console.warn('[Approve Transfer] WhatsApp send template failed:', waRes.error);
+          console.log(`[Approve Transfer] Reserva #${bookingId} ya confirmada previamente (depósito previo: $${prevEffectiveDeposit}, logs: ${wasAlreadyConfirmed}). Omitiendo plantilla reservacion_confirmada en este 2do/subsecuente pago de liquidación.`);
         }
 
         // Enviar mensaje personalizado confirmando estado de pago (100% liquidado o anticipo aprobado)

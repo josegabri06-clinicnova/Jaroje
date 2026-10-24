@@ -99,7 +99,7 @@ export async function POST(req: Request) {
         res = await sendTemplate2_UltimoAviso(activeBooking, true);
         break;
       case 'reservacion_confirmada':
-        res = await sendTemplate3_ReservacionConfirmada(activeBooking, true);
+        res = await sendTemplate3_ReservacionConfirmada(activeBooking, true, true);
         break;
       case 'disponibilidad_liberada':
         res = await sendTemplate4_DisponibilidadLiberada(activeBooking, true);
@@ -142,7 +142,7 @@ export async function POST(req: Request) {
       case 'bienvenido_cliente_whatsaap': {
         // Fallback resiliente: Si es una reserva existente, enviar confirmación oficial con botones. Si es genérico, portal link.
         if (activeBooking.id && String(activeBooking.id) !== '0') {
-          res = await sendTemplate3_ReservacionConfirmada(activeBooking, true);
+          res = await sendTemplate3_ReservacionConfirmada(activeBooking, true, true);
         } else {
           const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
           const lang = detectLanguageFromPhone(ph);

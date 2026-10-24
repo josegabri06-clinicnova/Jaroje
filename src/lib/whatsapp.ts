@@ -415,7 +415,8 @@ export async function sendWhatsAppTemplate(
   bookingId?: string | number,
   buttonType?: 'url' | 'quick_reply',
   bypassPause: boolean = false,
-  languageOverride?: string
+  languageOverride?: string,
+  forceResend: boolean = false
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   let lockLogId: string | null = null;
   try {
@@ -542,8 +543,9 @@ export async function sendWhatsAppTemplate(
     }
 
     // B. Deduplicación estricta por reservation_id (ignorando envíos fallidos para permitir reintentos)
-    // NOTA: Si bypassPause === true (disparo manual explícito de usuario/recepción/check-in), se omite el bloqueo para permitir reenvíos
-    if (bIdStr && !bypassPause) {
+    // NOTA: 'reservacion_confirmada' nunca debe duplicarse por reserva salvo orden de reenvío explícito (forceResend: true)
+    const shouldCheckReservationDedup = bIdStr && (!bypassPause || (templateName === 'reservacion_confirmada' && !forceResend));
+    if (shouldCheckReservationDedup) {
       try {
         if (templateName === 'solicitud_recibida') {
           const { data: initialLogs } = await supabase
@@ -1610,7 +1612,7 @@ export async function sendTemplate_ComprobanteRechazado(booking: any, reason?: s
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
-export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPause: boolean = false) {
+export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPause: boolean = false, forceResend: boolean = false) {
   const phone = booking.phone || booking.mobile || booking.guest_phone;
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
@@ -1620,7 +1622,7 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPa
     name // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause, undefined, forceResend);
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)

@@ -95,6 +95,16 @@ export async function POST(req: Request) {
               num_child: Number(localRes.num_child || 0)
             };
 
+            // Si ya estaba cubierto al 50% antes de este pago, omitir reenvío de confirmación
+            const wasAlready50 = (Number(localRes.price || 0) > 0)
+              ? (Number(localRes.deposit || 0) >= (Number(localRes.price) * 0.5 - 0.01))
+              : false;
+
+            if (wasAlready50) {
+              console.log(`[Payment Local] Reserva local #${localRes.id} ya contaba con 50% previamente. Omitiendo reservacion_confirmada.`);
+              return;
+            }
+
             const tmplToSend = isMet50 ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
             const waRes = isMet50 
               ? await sendTemplate3_ReservacionConfirmada(bookingForWA)
@@ -221,6 +231,12 @@ export async function POST(req: Request) {
             const guestPhone = booking.phone || booking.mobile || booking.guest_phone;
             const bPrice = Number(booking.price || bookingPrice || 0);
             const is50Covered = bPrice > 0 ? (newDeposit >= (bPrice * 0.5 - 0.01)) : true;
+            const wasAlready50 = bPrice > 0 ? (currentDeposit >= (bPrice * 0.5 - 0.01)) : false;
+            if (wasAlready50) {
+              console.log(`[Payment Beds24] Reserva Beds24 #${bookId} ya contaba con 50% previamente. Omitiendo reservacion_confirmada.`);
+              return;
+            }
+
             const tmplToSend = is50Covered ? 'reservacion_confirmada' : 'pago_anticipo_recibido';
 
             const waRes = is50Covered
