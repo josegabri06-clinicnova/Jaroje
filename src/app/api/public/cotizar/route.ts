@@ -23,10 +23,10 @@ const CATEGORY_DEFINITIONS = [
     roomId: '679077',
     name: 'Habitación Doble',
     name_en: 'Standard Room (Habitación Doble)',
-    capacity: 2,
+    capacity: 4,
     maxCapacity: 4,
-    capacityText: 'Capacidad máx. 4 personas (Base 2 · hasta 2 adicionales con costo)',
-    capacityText_en: 'Max capacity 4 guests (Base 2 · up to 2 extra with fee)',
+    capacityText: 'Capacidad máx. 4 personas',
+    capacityText_en: 'Max capacity 4 guests',
     description: '',
     description_en: '',
     features: [

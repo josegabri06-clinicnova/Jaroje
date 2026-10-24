@@ -45,18 +45,18 @@ export async function POST(req: Request) {
 
     // Reglas de capacidad base y máxima por categoría
     const ROOM_BASE_CAPACITIES: Record<string, number> = {
-      'doble': 2,
+      'doble': 4,
       '1rec': 4,
       '2rec': 6,
-      '3rec': 6,
-      'casa': 10
+      '3rec': 10,
+      'casa': 12
     };
     const ROOM_MAX_CAPACITIES: Record<string, number> = {
       'doble': 4,
       '1rec': 4,
       '2rec': 8,
-      '3rec': 8,
-      'casa': 12
+      '3rec': 12,
+      'casa': 16
     };
 
     const totalGuests = Number(adults || 0) + Number(children || 0);
@@ -189,6 +189,8 @@ export async function POST(req: Request) {
 Santa Cruz Huatulco, Oaxaca
 Folio: *#${quoteId}*
 
+✅ *Tarifa de Miembro Jaroje aplicada*
+
 📅 *Fechas:* ${checkIn} al ${checkOut} (${nights} ${nights === 1 ? 'noche' : 'noches'})
 👥 *Huéspedes:* ${totalGuests} personas (${adults} adultos${children > 0 ? `, ${children} niños` : ''})
 
@@ -196,7 +198,7 @@ Folio: *#${quoteId}*
 ${roomsText}
 
 👤 *Personas adicionales:* ${extraGuests > 0 ? `${extraGuests} adicionales ($500 MXN / noche × ${extraGuests} pers. × ${nights} noches = $${extraGuestsFee.toLocaleString()} MXN)` : '0 adicionales (incluidas en capacidad base sin costo)'}
-
+${extraGuests > 0 ? `⚠️ *Nota importante:* No contamos con camas adicionales, el sillón de la sala NO cuenta con aire acondicionado.\n` : ''}
 💰 *DESGLOSE TOTAL:*
 • Subtotal hospedaje (IVA e ISH incluidos): $${baseLodgingTotal.toLocaleString()} MXN
 ${extraGuestsFee > 0 ? `• Suplemento adicionales: $${extraGuestsFee.toLocaleString()} MXN\n` : ''}• *Total de la estancia (impuestos incluidos):* $${finalTotal.toLocaleString()} MXN

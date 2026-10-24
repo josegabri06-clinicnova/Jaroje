@@ -49,13 +49,13 @@ export const JAROJE_PRICES: Record<string, Record<string, number>> = {
 // Nombres canónicos por roomId para el catálogo de display
 export const JAROJE_CATALOG: Record<string, any> = {
   // --- Habitación DOBLE (Antigua y nuevas 301-306) ---
-  '679077': { nombre: 'Habitación Doble', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '685531': { nombre: 'Habitación DOBLE 301', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '685532': { nombre: 'Habitación DOBLE 302', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '685533': { nombre: 'Habitación DOBLE 303', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '685534': { nombre: 'Habitación DOBLE 304', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '685535': { nombre: 'Habitación DOBLE 305', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
-  '685536': { nombre: 'Habitación DOBLE 306', capacidad: 2, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '679077': { nombre: 'Habitación Doble', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685531': { nombre: 'Habitación DOBLE 301', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685532': { nombre: 'Habitación DOBLE 302', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685533': { nombre: 'Habitación DOBLE 303', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685534': { nombre: 'Habitación DOBLE 304', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685535': { nombre: 'Habitación DOBLE 305', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  '685536': { nombre: 'Habitación DOBLE 306', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
 
   // --- Apartamento Premier de 1 dormitorio (402) ---
   '679087': { nombre: 'Apartamento de 1 dormitorio', capacidad: 4, camas: '1 King o 2 Matrimoniales', amenities: 'Cocina equipada, Terraza, Alberca, Jardín, WiFi, AC', categoria: 'Condominio' },

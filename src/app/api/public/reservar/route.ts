@@ -126,8 +126,8 @@ export async function POST(req: Request) {
       'doble': 4,
       '1rec': 4,
       '2rec': 8,
-      '3rec': 8,
-      'casa': 12
+      '3rec': 12,
+      'casa': 16
     };
     let totalMaxCapacity = 0;
     validRooms.forEach((r: any) => {
