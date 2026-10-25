@@ -470,13 +470,13 @@ function ReservarContent() {
 
     const nights = quotes[0]?.nights || selectedList[0]?.quote?.nights || stayNights;
     const maxAvailableExtras = Math.max(0, totalMaxCapacity - totalBaseCapacity);
-    const defaultCalculatedExtras = totalGuests > totalBaseCapacity
+    const minRequiredExtras = totalGuests > totalBaseCapacity
       ? Math.min(totalGuests - totalBaseCapacity, maxAvailableExtras)
       : 0;
 
     const extraGuests = selectedExtraGuests !== null
-      ? Math.min(Math.max(0, selectedExtraGuests), maxAvailableExtras)
-      : defaultCalculatedExtras;
+      ? Math.min(Math.max(minRequiredExtras, selectedExtraGuests), maxAvailableExtras)
+      : minRequiredExtras;
 
     const extraGuestsFee = extraGuests * 500 * nights;
     const grandTotal = baseLodgingTotal + extraGuestsFee;
@@ -488,6 +488,7 @@ function ReservarContent() {
       nights,
       baseLodgingTotal,
       extraGuests,
+      minRequiredExtras,
       maxAvailableExtras,
       extraGuestsFee,
       grandTotal,
@@ -552,13 +553,13 @@ function ReservarContent() {
       });
 
       const maxAvailableExtras = Math.max(0, totalMaxCapacity - totalBaseCapacity);
-      const defaultCalculatedExtras = totalGuests > totalBaseCapacity
+      const minRequiredExtras = totalGuests > totalBaseCapacity
         ? Math.min(totalGuests - totalBaseCapacity, maxAvailableExtras)
         : 0;
 
       const extraGuests = selectedExtraGuests !== null
-        ? Math.min(Math.max(0, selectedExtraGuests), maxAvailableExtras)
-        : (pendingQuote.extraGuests !== undefined ? Number(pendingQuote.extraGuests) : defaultCalculatedExtras);
+        ? Math.min(Math.max(minRequiredExtras, selectedExtraGuests), maxAvailableExtras)
+        : (pendingQuote.extraGuests !== undefined ? Math.max(minRequiredExtras, Number(pendingQuote.extraGuests)) : minRequiredExtras);
 
       const extraGuestsFee = extraGuests * 500 * nights;
       const grandTotal = pendingQuote.totalAmount ? Number(pendingQuote.totalAmount) : (baseLodgingTotal + extraGuestsFee);
@@ -570,6 +571,7 @@ function ReservarContent() {
         nights,
         baseLodgingTotal,
         extraGuests,
+        minRequiredExtras,
         maxAvailableExtras,
         extraGuestsFee,
         grandTotal,
@@ -583,7 +585,8 @@ function ReservarContent() {
     return selectionSummary;
   }, [selectionSummary, pendingQuote, quotes, totalGuests, stayNights, selectedExtraGuests]);
 
-  const isOverCapacity = activeSummary.totalRooms > 0 && totalGuests > activeSummary.totalMaxCapacity;
+  const coveredCapacity = activeSummary.totalRooms > 0 ? (activeSummary.totalBaseCapacity + (activeSummary.extraGuests || 0)) : 0;
+  const isOverCapacity = activeSummary.totalRooms > 0 && (totalGuests > activeSummary.totalMaxCapacity || totalGuests > coveredCapacity);
 
   // Enviar cotización por WhatsApp (Paso 1 del flujo)
   const handleRequestQuote = async () => {
@@ -605,8 +608,12 @@ function ReservarContent() {
 
     if (isOverCapacity) {
       alert(lang === 'en'
-        ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
-        : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`);
+        ? (totalGuests > activeSummary.totalMaxCapacity
+            ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
+            : `You have selected ${totalGuests} guests, but your selected accommodations and extras only cover ${coveredCapacity} guests.`)
+        : (totalGuests > activeSummary.totalMaxCapacity
+            ? `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`
+            : `Ha seleccionado ${totalGuests} huéspedes pero su selección de habitaciones y adicionales solo cubre ${coveredCapacity} personas.`));
       return;
     }
 
@@ -668,8 +675,12 @@ function ReservarContent() {
     }
     if (isOverCapacity) {
       setSubmitError(lang === 'en'
-        ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
-        : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`);
+        ? (totalGuests > activeSummary.totalMaxCapacity
+            ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
+            : `You have selected ${totalGuests} guests, but your selected accommodations and extras only cover ${coveredCapacity} guests.`)
+        : (totalGuests > activeSummary.totalMaxCapacity
+            ? `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`
+            : `Ha seleccionado ${totalGuests} huéspedes pero su selección de habitaciones y adicionales solo cubre ${coveredCapacity} personas.`));
       return;
     }
     if (!guestName.trim()) {
@@ -1297,10 +1308,10 @@ function ReservarContent() {
                   <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-amber-300 shadow-xs">
                     <button
                       type="button"
-                      disabled={activeSummary.extraGuests <= 0}
-                      onClick={() => setSelectedExtraGuests(Math.max(0, activeSummary.extraGuests - 1))}
+                      disabled={activeSummary.extraGuests <= activeSummary.minRequiredExtras}
+                      onClick={() => setSelectedExtraGuests(Math.max(activeSummary.minRequiredExtras, activeSummary.extraGuests - 1))}
                       className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${
-                        activeSummary.extraGuests > 0
+                        activeSummary.extraGuests > activeSummary.minRequiredExtras
                           ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer active:scale-95'
                           : 'text-zinc-300 cursor-not-allowed'
                       }`}
@@ -1324,6 +1335,14 @@ function ReservarContent() {
                     </button>
                   </div>
                 </div>
+
+                {activeSummary.minRequiredExtras > 0 && (
+                  <p className="text-[10px] text-amber-800 font-bold leading-tight">
+                    {lang === 'en'
+                      ? `* ${activeSummary.minRequiredExtras} extra guest(s) required for your group size (${totalGuests} people).`
+                      : `* ${activeSummary.minRequiredExtras} huésped(es) adicional(es) obligatorio(s) por el tamaño del grupo (${totalGuests} personas).`}
+                  </p>
+                )}
 
                 <p className="text-[10px] text-amber-900 font-semibold leading-tight flex items-start gap-1">
                   <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
@@ -1574,8 +1593,12 @@ function ReservarContent() {
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <p className="leading-snug">
                   {lang === 'en'
-                    ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
-                    : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`}
+                    ? (totalGuests > activeSummary.totalMaxCapacity
+                        ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
+                        : `You have selected ${totalGuests} guests, but your selected accommodations and extras only cover ${coveredCapacity} guests.`)
+                    : (totalGuests > activeSummary.totalMaxCapacity
+                        ? `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`
+                        : `Ha seleccionado ${totalGuests} huéspedes pero su selección de habitaciones y adicionales solo cubre ${coveredCapacity} personas.`)}
                 </p>
               </div>
             )}

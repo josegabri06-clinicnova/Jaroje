@@ -1786,7 +1786,6 @@ export default function PublicReservaPage() {
                     {booking.rooms_detail.map((room: any, idx: number) => {
                       const roomNights = booking.nights || 1;
                       const roomPrice = room.price || 0;
-                      const dailyRate = Math.round(roomPrice / roomNights);
 
                       // Calcular cargo por persona extra si aplica
                       const totalGuests = (room.num_adult || 0) + (room.num_child || 0);
@@ -1794,7 +1793,13 @@ export default function PublicReservaPage() {
                       const EXTRA_CHARGE = 500;
                       const extraGuests = Math.max(0, totalGuests - baseCapacity);
                       const roomExtraCharge = extraGuests * EXTRA_CHARGE * roomNights;
-                      const totalRoomWithExtras = roomPrice + roomExtraCharge;
+
+                      // Si el precio en Beds24 ya incluye el cargo extra, la tarifa base es (roomPrice - roomExtraCharge)
+                      const roomBasePrice = (roomExtraCharge > 0 && roomPrice > roomExtraCharge)
+                        ? (roomPrice - roomExtraCharge)
+                        : roomPrice;
+                      const dailyRate = Math.round(roomBasePrice / roomNights);
+                      const totalRoomWithExtras = roomBasePrice + roomExtraCharge;
 
                       const detailText = lang === 'en'
                         ? `${roomNights} ${roomNights === 1 ? 'night' : 'nights'} x $${dailyRate.toLocaleString('es-MX')}${roomExtraCharge > 0 ? ` + extra pax (${extraGuests} x $${EXTRA_GUEST_CHARGE} x ${roomNights} n.)` : ''}`

@@ -120,18 +120,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Debes seleccionar al menos una habitación.' }, { status: 400 });
     }
 
-    // Validación estricta de ocupación máxima de habitaciones
+    // Validación estricta de capacidades base y máxima de habitaciones
     const totalGuests = Number(adults || 0) + Number(children || 0);
-    const ROOM_CAPACITIES: Record<string, number> = {
+    const ROOM_BASE_CAPACITIES: Record<string, number> = {
+      'doble': 4,
+      '1rec': 4,
+      '2rec': 6,
+      '3rec': 10,
+      'casa': 12
+    };
+    const ROOM_MAX_CAPACITIES: Record<string, number> = {
       'doble': 4,
       '1rec': 4,
       '2rec': 8,
       '3rec': 12,
       'casa': 16
     };
+    let totalBaseCapacity = 0;
     let totalMaxCapacity = 0;
     validRooms.forEach((r: any) => {
-      totalMaxCapacity += (ROOM_CAPACITIES[r.key] || 4) * Number(r.quantity || 1);
+      const qty = Number(r.quantity || 1);
+      totalBaseCapacity += (ROOM_BASE_CAPACITIES[r.key] || 4) * qty;
+      totalMaxCapacity += (ROOM_MAX_CAPACITIES[r.key] || 4) * qty;
     });
 
     if (totalGuests > totalMaxCapacity) {
@@ -139,6 +149,20 @@ export async function POST(req: Request) {
         error: `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${totalMaxCapacity}.`
       }, { status: 400 });
     }
+
+    // Cálculo forzoso de huéspedes adicionales en el servidor (nunca confiar en manipulación del cliente)
+    const minRequiredExtras = Math.max(0, totalGuests - totalBaseCapacity);
+    const requestedExtras = Math.max(minRequiredExtras, Number(body.extraGuests || 0));
+
+    if (totalGuests > (totalBaseCapacity + requestedExtras)) {
+      return NextResponse.json({
+        error: `Ha seleccionado ${totalGuests} huéspedes pero su selección solo cubre ${totalBaseCapacity + requestedExtras} personas.`
+      }, { status: 400 });
+    }
+
+    // Tarifa obligatoria de personas extra: $500 MXN / noche / persona
+    const calculatedExtraFee = requestedExtras * 500 * nights;
+    const finalExtraGuestsFee = Math.max(calculatedExtraFee, Number(body.extraGuestsFee || 0));
 
     // 2. Candado anti-spam por teléfono (máximo 1 reserva creada cada 5 minutos por el mismo número)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -285,15 +309,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudieron asignar habitaciones válidas.' }, { status: 400 });
     }
 
-    const totalExtraGuestsFee = Number(body.extraGuestsFee || 0);
-    if (totalExtraGuestsFee > 0 && beds24Payload.length > 0) {
-      beds24Payload[0].price += totalExtraGuestsFee;
-      grandTotalPrice += totalExtraGuestsFee;
+    if (finalExtraGuestsFee > 0 && beds24Payload.length > 0) {
+      beds24Payload[0].price += finalExtraGuestsFee;
+      grandTotalPrice += finalExtraGuestsFee;
       if (beds24Payload[0].invoiceItems) {
         beds24Payload[0].invoiceItems.push({
-          description: 'Huéspedes adicionales | Cargo extra',
+          description: `Huéspedes adicionales | Cargo extra (${requestedExtras} pax x $500 x ${nights} n.)`,
           type: 'charge',
-          amount: totalExtraGuestsFee,
+          amount: finalExtraGuestsFee,
           qty: 1,
           vatRate: 19
         });
