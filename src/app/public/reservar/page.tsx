@@ -769,7 +769,11 @@ function ReservarContent() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 text-zinc-900 font-sans antialiased pb-32">
+    <div className={`min-h-screen bg-zinc-50 text-zinc-900 font-sans antialiased transition-all duration-200 ${
+      activeSummary.totalRooms > 0
+        ? (activeSummary.maxAvailableExtras > 0 ? 'pb-[460px] sm:pb-[420px]' : 'pb-[280px] sm:pb-[250px]')
+        : 'pb-24'
+    }`}>
       {/* ── HEADER SUPERIOR ELEGANTE ── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200/80 shadow-xs">
         <div className="max-w-xl mx-auto px-4 py-3.5 flex items-center justify-between">
@@ -1289,6 +1293,16 @@ function ReservarContent() {
                 })
               )}
             </div>
+
+            {/* Espaciador dinámico de seguridad para permitir scroll libre por encima de la barra flotante */}
+            {activeSummary.totalRooms > 0 && (
+              <div 
+                className={`w-full pointer-events-none transition-all duration-200 ${
+                  activeSummary.maxAvailableExtras > 0 ? 'h-36 sm:h-28' : 'h-20'
+                }`} 
+                aria-hidden="true" 
+              />
+            )}
           </div>
         )}
       </main>
