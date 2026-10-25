@@ -45,18 +45,18 @@ export async function POST(req: Request) {
 
     // Reglas de capacidad base y máxima por categoría
     const ROOM_BASE_CAPACITIES: Record<string, number> = {
-      'doble': 2,
+      'doble': 4,
       '1rec': 4,
       '2rec': 6,
-      '3rec': 6,
-      'casa': 10
+      '3rec': 10,
+      'casa': 12
     };
     const ROOM_MAX_CAPACITIES: Record<string, number> = {
       'doble': 4,
       '1rec': 4,
       '2rec': 8,
-      '3rec': 8,
-      'casa': 12
+      '3rec': 12,
+      'casa': 16
     };
 
     const totalGuests = Number(adults || 0) + Number(children || 0);
@@ -76,12 +76,14 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    const reqIn = new Date(checkIn + 'T12:00:00');
-    const reqOut = new Date(checkOut + 'T12:00:00');
-    const diffTime = reqOut.getTime() - reqIn.getTime();
+    const cleanCheckIn = String(checkIn || '').split('T')[0].split(' ')[0].trim();
+    const cleanCheckOut = String(checkOut || '').split('T')[0].split(' ')[0].trim();
+    const dIn = new Date(`${cleanCheckIn}T00:00:00Z`);
+    const dOut = new Date(`${cleanCheckOut}T00:00:00Z`);
+    const diffTime = dOut.getTime() - dIn.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
-    if (diffDays <= 0 || isNaN(diffDays) || checkIn >= checkOut) {
+    if (diffDays <= 0 || isNaN(diffDays) || cleanCheckIn >= cleanCheckOut) {
       return NextResponse.json({ success: false, error: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche).' }, { status: 400 });
     }
 
@@ -187,6 +189,8 @@ export async function POST(req: Request) {
 Santa Cruz Huatulco, Oaxaca
 Folio: *#${quoteId}*
 
+✅ *Tarifa de Miembro Jaroje aplicada*
+
 📅 *Fechas:* ${checkIn} al ${checkOut} (${nights} ${nights === 1 ? 'noche' : 'noches'})
 👥 *Huéspedes:* ${totalGuests} personas (${adults} adultos${children > 0 ? `, ${children} niños` : ''})
 
@@ -194,7 +198,7 @@ Folio: *#${quoteId}*
 ${roomsText}
 
 👤 *Personas adicionales:* ${extraGuests > 0 ? `${extraGuests} adicionales ($500 MXN / noche × ${extraGuests} pers. × ${nights} noches = $${extraGuestsFee.toLocaleString()} MXN)` : '0 adicionales (incluidas en capacidad base sin costo)'}
-
+${extraGuests > 0 ? `⚠️ *Nota importante:* No contamos con camas adicionales, el sillón de la sala NO cuenta con aire acondicionado.\n` : ''}
 💰 *DESGLOSE TOTAL:*
 • Subtotal hospedaje (IVA e ISH incluidos): $${baseLodgingTotal.toLocaleString()} MXN
 ${extraGuestsFee > 0 ? `• Suplemento adicionales: $${extraGuestsFee.toLocaleString()} MXN\n` : ''}• *Total de la estancia (impuestos incluidos):* $${finalTotal.toLocaleString()} MXN

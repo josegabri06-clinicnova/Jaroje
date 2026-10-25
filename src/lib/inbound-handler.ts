@@ -83,6 +83,61 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
+  // ── EXCLUSIÓN DE CONTACTOS PERSONALES DE ROLANDO Y STAFF ──
+  // Si el remitente es un contacto personal de Rolando (ej. Francisco San Martin) o empleado,
+  // NO enviar jamás plantilla de bienvenida ni respuestas automáticas del bot para no interferir en sus conversaciones personales.
+  const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
+  const personalCheck = await isExcludedPersonalContact(phone);
+  if (personalCheck.isExcluded) {
+    console.log(`[Inbound Handler] 🛑 Mensaje de contacto personal/staff (${phone} - ${personalCheck.contact?.name}): "${guestMsgText}". Omitiendo bot y plantilla de bienvenida.`);
+    
+    // Guardar el mensaje en el historial para visibilidad en el Inbox sin activar bot
+    if (guestMsgText || params.button_payload) {
+      try {
+        const newMsgItem = {
+          role_guest: guestMsgText || `[${params.button_payload}]`,
+          role_manager: null,
+          role_bot: null,
+          timestamp: timestamp || new Date().toISOString()
+        };
+
+        if (existing) {
+          const currentMsgs = Array.isArray(existing.messages) ? existing.messages : [];
+          await supabase
+            .from('conversations')
+            .update({
+              guest_name: personalCheck.contact?.name || existing.guest_name || params.guest_name || 'Contacto Personal',
+              messages: [...currentMsgs, newMsgItem],
+              timestamp: timestamp || new Date().toISOString(),
+              human_mode: true
+            })
+            .eq('id', existing.id);
+        } else {
+          await supabase
+            .from('conversations')
+            .insert([{
+              id: `wa_${Date.now()}`,
+              guest_phone: phone,
+              guest_name: personalCheck.contact?.name || params.guest_name || 'Contacto Personal',
+              messages: [newMsgItem],
+              timestamp: timestamp || new Date().toISOString(),
+              human_mode: true,
+              booking_created: false,
+              resolved: false
+            }]);
+        }
+      } catch (saveErr) {
+        console.warn("[Inbound Handler] Error guardando mensaje de contacto personal:", saveErr);
+      }
+    }
+
+    return {
+      success: true,
+      isPersonalContact: true,
+      message: 'Personal contact message recorded in human mode. Bot response skipped.'
+    };
+  }
+
   let forceHuman = existing ? existing.human_mode : false;
   let finalBotResponse = params.bot_response || null;
   let isAutoReplyTriggered = false;
