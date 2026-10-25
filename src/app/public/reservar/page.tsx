@@ -241,7 +241,7 @@ function ReservarContent() {
   const [pendingQuote, setPendingQuote] = useState<any | null>(null);
   const [hasRestoredPendingQuote, setHasRestoredPendingQuote] = useState(false);
   const [isConfirmStep, setIsConfirmStep] = useState<boolean>(() => isDirectReserveFlow);
-  const [showFullBreakdown, setShowFullBreakdown] = useState<boolean>(false);
+  const [showFullBreakdown, setShowFullBreakdown] = useState<boolean>(true);
   const [quoteSending, setQuoteSending] = useState(false);
   const [quoteSentToast, setQuoteSentToast] = useState(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
@@ -451,6 +451,7 @@ function ReservarContent() {
     fetchQuotes();
     if (isDirectReserveFlow) {
       setIsConfirmStep(true);
+      setShowFullBreakdown(true);
       setIsModalOpen(true);
     }
   }, [checkIn, checkOut, phoneParam, isDirectReserveFlow]);
@@ -1484,6 +1485,7 @@ function ReservarContent() {
                 onClick={() => {
                   if (isOverCapacity) return;
                   setIsConfirmStep(true);
+                  setShowFullBreakdown(true);
                   setIsModalOpen(true);
                 }}
                 className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
@@ -1591,9 +1593,11 @@ function ReservarContent() {
                       <span>🛏️</span>
                       <span>
                         {showFullBreakdown
-                          ? (lang === 'en' ? 'Hide details' : 'Ocultar desglose')
+                          ? (lang === 'en'
+                              ? `Accommodation & dates breakdown (${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'})`
+                              : `Desglose de habitaciones y fechas (${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'})`)
                           : (lang === 'en'
-                              ? `View accommodation & dates details (${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'})`
+                              ? `View accommodation & dates breakdown (${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'})`
                               : `Ver desglose de habitaciones y fechas (${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'})`)}
                       </span>
                     </span>
