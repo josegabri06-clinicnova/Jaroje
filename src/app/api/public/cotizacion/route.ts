@@ -202,8 +202,7 @@ export async function POST(req: Request) {
     const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${adults}&children=${children}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}&action=reserve&step=confirm`;
 
     const whatsappSummaryText =
-`🏨 *COTIZACIÓN Condominios Jaroje*
-*(Sujeta a disponibilidad a la hora de Reservar)*
+`*(Sujeta a disponibilidad a la hora de Reservar)*
 Folio: *#${quoteId}*
 
 ✅ *Tarifa de Miembro Jaroje aplicada*
