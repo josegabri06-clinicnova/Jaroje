@@ -3226,6 +3226,87 @@ function ReservasListInner() {
     }
   };
 
+  const handleCancelAndLiberate = async (targetRes: any) => {
+    if (userRole !== 'admin') {
+      alert('🔒 Acción no autorizada. Solo los administradores pueden cancelar y liberar habitaciones.');
+      return;
+    }
+    if (!targetRes) return;
+
+    const guestName = targetRes.guest_name || 'el huésped';
+    const roomName = targetRes.room_name || targetRes.room || 'la habitación';
+    const isGroup = targetRes.is_group_card && Array.isArray(targetRes.group_members) && targetRes.group_members.length > 0;
+    const members = isGroup ? targetRes.group_members : [targetRes];
+    const memberIds = members.map((m: any) => String(m.id));
+
+    const confirmed = window.confirm(
+      `❌ ¿Deseas CANCELAR y LIBERAR ${roomName} de ${guestName} ahora?\n\n` +
+      `⚠️ Esta acción cancelará permanentemente la reserva en Beds24 y liberará la habitación inmediatamente para que quede disponible.`
+    );
+    if (!confirmed) return;
+
+    try {
+      let successCount = 0;
+      let errorMsg = '';
+      for (const mId of memberIds) {
+        try {
+          const res = await fetch(`/api/reservas?id=${mId}&force=true`, {
+            method: 'DELETE'
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            successCount++;
+          } else {
+            errorMsg = data.error || `Error ${res.status}`;
+          }
+        } catch (fetchErr: any) {
+          errorMsg = fetchErr.message || 'Error de red';
+        }
+      }
+
+      if (successCount === 0) {
+        throw new Error(errorMsg || 'No se pudo cancelar la reserva en Beds24.');
+      }
+
+      // Registrar auditoría en employee_logs
+      try {
+        const emp = getOperatorForLog();
+        for (const member of members) {
+          await fetch('/api/employee-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              employee_num: emp.employee_num,
+              employee_name: emp.full_name,
+              department: emp.department,
+              module: 'recepcion',
+              action: 'reserva_cancelada',
+              room: member.room_name || member.room || 'General',
+              details: JSON.stringify({
+                text: `${member.guest_name} (ID: ${member.id}) de ${member.room_name || member.room} - Canceló y liberó habitación manualmente desde Sin Anticipo tras último aviso.`,
+                bookingId: member.id,
+                guestName: member.guest_name
+              })
+            })
+          });
+        }
+      } catch (logErr) {
+        console.error("Error registrando log de cancelación:", logErr);
+      }
+
+      // Actualizar estado en React para quitarla inmediatamente
+      const idSet = new Set(memberIds);
+      setReservas((prev: any[]) => prev.filter(r => !idSet.has(String(r.id))));
+      if (selectedRes && idSet.has(String(selectedRes.id))) {
+        setSelectedRes(null);
+      }
+
+      alert(`✅ ${successCount} habitación(es) cancelada(s) y liberada(s) con éxito en Beds24.`);
+    } catch (err: any) {
+      alert(`⚠️ Error al cancelar y liberar habitación: ${err.message || 'Error desconocido'}`);
+    }
+  };
+
   const handleReactivateReserva = async () => {
     if (!selectedRes) return;
     if (userRole !== 'admin') {
@@ -4046,20 +4127,35 @@ function ReservasListInner() {
                 )}
 
                 {userRole === 'admin' && activeTab === 'Sin Anticipo' && (
-                  <button
-                    disabled={r.last_notice_sent}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      await handleSendUltimoAviso(r);
-                    }}
-                    className={`w-full mt-2 py-2.5 text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer ${
-                      r.last_notice_sent
-                        ? 'bg-zinc-200 text-zinc-500 cursor-not-allowed border border-zinc-300/80 shadow-none'
-                        : 'bg-amber-600 hover:bg-amber-700 text-white active:scale-[0.98]'
-                    }`}
-                  >
-                    {r.last_notice_sent ? 'Último Aviso Enviado ✅' : '⚠️ Enviar Último Aviso (Mensaje 2)'}
-                  </button>
+                  <div className="mt-2 flex flex-col gap-1.5 w-full">
+                    {r.last_notice_sent ? (
+                      <>
+                        <div className="w-full py-2 bg-zinc-100 text-zinc-600 border border-zinc-200/90 rounded-xl font-bold text-[10.5px] uppercase tracking-wider flex items-center justify-center gap-1.5">
+                          <span>ÚLTIMO AVISO ENVIADO</span>
+                          <span className="text-emerald-600">✅</span>
+                        </div>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            await handleCancelAndLiberate(r);
+                          }}
+                          className="w-full py-2.5 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                        >
+                          ❌ CANCELAR Y LIBERAR HABITACIÓN
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          await handleSendUltimoAviso(r);
+                        }}
+                        className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 active:scale-[0.98] text-white font-extrabold text-[11px] uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                      >
+                        ⚠️ ENVIAR ÚLTIMO AVISO (MENSAJE 2)
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             );
