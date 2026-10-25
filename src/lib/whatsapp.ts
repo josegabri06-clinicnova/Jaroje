@@ -678,6 +678,21 @@ export async function sendWhatsAppTemplate(
       }
     }
 
+    const quoteAvailabilityTemplates = [
+      'disponibilidad_liberada',
+      'disponibilidad_liberada_v2',
+      'recibimiento_nuevamente',
+      'recibimiento_nuevamente_v2',
+      'recibimiento_nuevamente_5m',
+      'recibimiento_nuevamente_10m'
+    ];
+
+    if (quoteAvailabilityTemplates.includes(templateName)) {
+      resolvedButtonType = 'url';
+      const metaCleanPhone = cleanPhoneForMeta(cleanedPhone);
+      finalButtonParams = [metaCleanPhone];
+    }
+
     // Prioridad absoluta: Si existen credenciales de Meta Cloud API, usar 'meta'.
     // La cuenta de YCloud fue bloqueada por Meta (Error 131031) y no debe usarse bajo ninguna circunstancia.
     const isMetaConfigured = Boolean(getWhatsAppToken() && getWhatsAppPhoneId());
@@ -1199,7 +1214,8 @@ export async function sendWhatsAppTemplate(
             case 'confirmacion_reserva_util':
               return `🎉 Your reservation is confirmed!\n\nExcellent, ${name}!\n\nWe are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\nIn "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n[Button: Guest Portal] [Button: How to get there]`;
             case 'disponibilidad_liberada':
-              return `😔 Availability released\n\nHello, ${name}.\n\nWe regret to inform you that since we did not receive the deposit within the indicated period, the availability of your accommodation was released.\n\nIf you still wish to stay with us, press "Check availability" to see if we still have accommodation available for your travel dates and, if available, make a new reservation.\n\n👇 Check availability\n\n[Button: Check availability] [Button: Photos and Rates]`;
+            case 'disponibilidad_liberada_v2':
+              return `😔 Availability released\n\nHello, ${name}.\n\nWe regret to inform you that since we did not receive the deposit within the indicated period, the availability of your accommodation was released.\n\nIf you still wish to stay with us, press "Availability and Quote" to check if we still have accommodation available for your travel dates and make a new reservation.\n\n👇 Availability and Quote\n\n[Button: Availability and Quote] [Button: Photos and Rates]`;
             case 'preparacion_llegada':
             case 'preparacion_llegada_v2':
               return `🚗 Everything ready for your arrival\n\nHello, ${name}.\n\nVery soon we will welcome you to Condominios Jaroje! We want your arrival to be as comfortable as possible.\n\n👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\nIn "My reservation" you will find the gate code, location, directions, photos, description and services of your accommodation, as well as everything you need to prepare for your arrival.\n\nArriving after 8:00 p.m.? Let us know in advance to welcome you.\n\nWe wish you an excellent trip!\n\n[Button: My reservation] [Button: How to get there] [Button: Ver WiFi y claves]`;
@@ -1251,7 +1267,7 @@ export async function sendWhatsAppTemplate(
           case 'confirmacion_reserva_util':
             return `🎉 ¡Tu reservación está confirmada!\n\n¡Excelente, ${name}!\n\nNos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\nEn "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n[Botón: Portal del Huésped] [Botón: Cómo llegar]`;
           case 'disponibilidad_liberada':
-            return `😔 Disponibilidad liberada\n\nHola, ${name}.\n\nLamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad] [Botón: Fotos y Tarifas]`;
+            return `😔 Disponibilidad liberada\n\nHola, ${name}.\n\nLamentamos informarte que, al no recibir el anticipo dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\nSi aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad]`;
           case 'preparacion_llegada':
           case 'preparacion_llegada_v2':
             return `🚗 Todo listo para tu llegada\n\nHola, ${name}.\n\n¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\nEn "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n¡Te deseamos un excelente viaje!\n\n[Botón: Mi reservación] [Botón: Cómo llegar] [Botón: Ver WiFi y claves]`;
@@ -1266,7 +1282,7 @@ export async function sendWhatsAppTemplate(
           case 'comparte_experiencia':
             return `⭐ ¿Cómo estuvo tu experiencia?\n\nHola, ${name}.\n\nEsperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\n\nSi hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\nSi tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n👇 Calificar alojamiento\n\n[Botón: Califica tu alojamiento]`;
           case 'recibimiento_nuevamente':
-            return `🌴 ¡Nos encantará recibirte nuevamente!\n\nHola de nuevo, ${name}.\n\nHoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\nSi estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En "Verificar disponibilidad" podrás consultar disponibilidad y comenzar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad]`;
+            return `🌴 ¡Nos encantará recibirte nuevamente!\n\nHola de nuevo, ${name}.\n\nHoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\nSi estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En “Verificar disponibilidad” podrás consultar disponibilidad y comenzar una nueva reservación.\n\n👇 Verificar disponibilidad\n\n[Botón: Verificar disponibilidad]`;
           case 'wifi_informacion':
             return `📶 WiFi, Claves e Información Importante\n\nRed WiFi: JAROJE\nContraseña: HUXX2025\nPortón: 3456\nHorario alberca: 9:00 a 22:00 hrs.`;
           case 'pago_anticipo_recibido':
