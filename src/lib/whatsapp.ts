@@ -646,7 +646,8 @@ export async function sendWhatsAppTemplate(
       console.warn("[WhatsApp Pre-Send Lock] Error insertando candado previo:", lockErr);
     }
 
-    let languageCode = detectedLang === 'en' ? 'en' : 'es';
+    const spanishOnlyTemplates = ['pago_anticipo_recibido', 'alojamiento_listo', 'rechazo_solicitud', 'confirmar_reserva'];
+    let languageCode = (detectedLang === 'en' && !spanishOnlyTemplates.includes(templateName)) ? 'en' : 'es';
 
     const urlTemplates = [
       'solicitud_recibida',
@@ -1577,12 +1578,13 @@ export async function sendTemplate1_SolicitudRecibida(booking: any, bypassPause:
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const name = getFirstName(booking.guest_name || booking);
+  const lang = booking.lang || booking.language || undefined;
 
   const params = [
     name // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'solicitud_recibida', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // 2. Mensaje 2 - Último aviso para conservar la reservación (ultimo_aviso)
@@ -1591,12 +1593,13 @@ export async function sendTemplate2_UltimoAviso(booking: any, bypassPause: boole
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const name = getFirstName(booking.guest_name || booking);
+  const lang = booking.lang || booking.language || undefined;
 
   const params = [
     name // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'ultimo_aviso', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // Mensaje de Comprobante Rechazado con motivo personalizado de Roland y botones interactivos (Portal + Contacto)
@@ -1606,6 +1609,7 @@ export async function sendTemplate_ComprobanteRechazado(booking: any, reason?: s
 
   const rejectionReason = reason || booking.notes || 'El comprobante no pudo ser verificado. Por favor sube una imagen legible o contáctanos.';
   const name = getFirstName(booking.guest_name || booking);
+  const lang = booking.lang || booking.language || undefined;
 
   const params = [
     name,                             // {{1}} Nombre
@@ -1614,7 +1618,7 @@ export async function sendTemplate_ComprobanteRechazado(booking: any, reason?: s
   ];
 
   // Intenta enviar con plantilla específica 'rechazo_solicitud'
-  return sendWhatsAppTemplate(phone, 'rechazo_solicitud', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'rechazo_solicitud', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // 3. Mensaje 3 - Reservación confirmada (reservacion_confirmada)
@@ -1623,12 +1627,13 @@ export async function sendTemplate3_ReservacionConfirmada(booking: any, bypassPa
   if (!phone) return { success: false, error: 'Sin teléfono' };
 
   const name = getFirstName(booking.guest_name || booking);
+  const lang = booking.lang || booking.language || undefined;
 
   const params = [
     name // {{1}} Nombre
   ];
 
-  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause, undefined, forceResend);
+  return sendWhatsAppTemplate(phone, 'reservacion_confirmada', params, undefined, booking.id, 'url', bypassPause, lang, forceResend);
 }
 
 // 4. Mensaje 4 - Disponibilidad liberada (disponibilidad_liberada)
@@ -1640,12 +1645,13 @@ export async function sendTemplate4_DisponibilidadLiberada(booking: any, bypassP
     ? booking.guest_name
     : (`${booking.firstName || ''} ${booking.lastName || ''}`.trim() || booking.guestName || booking.name || 'Huésped');
   const name = getFirstName(rawGuestName);
+  const lang = booking.lang || booking.language || undefined;
 
   const params = [
     name // {{1}} Nombre en el cuerpo del mensaje
   ];
 
-  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, undefined, booking.id, undefined, bypassPause);
+  return sendWhatsAppTemplate(phone, 'disponibilidad_liberada', params, undefined, booking.id, undefined, bypassPause, lang);
 }
 
 // 5. Mensaje 5 - Preparación para tu llegada (preparacion_llegada)
@@ -1656,8 +1662,9 @@ export async function sendTemplate5_PreparacionLlegada(booking: any, bypassPause
   const params = [
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'preparacion_llegada', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // 6. Mensaje 6 - Bienvenida después del check-in (bienvenida_checkin)
@@ -1699,8 +1706,9 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any, bypassPause:
   const params = [
     getFirstName(guestName || 'Huésped') // {{1}} Nombre
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'bienvenida_checkin', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // 7. Mensaje 7 - Seguimiento de satisfacción (seguimiento_satisfaccion)
@@ -1711,8 +1719,9 @@ export async function sendTemplate7_SeguimientoSatisfaccion(booking: any, bypass
   const params = [
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'seguimiento_satisfaccion', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // 8. Mensaje 8 - Día de salida (salida_checkout)
@@ -1723,8 +1732,9 @@ export async function sendTemplate8_SalidaCheckout(booking: any, bypassPause: bo
   const params = [
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'salida_checkout', params, undefined, booking.id, undefined, bypassPause);
+  return sendWhatsAppTemplate(phone, 'salida_checkout', params, undefined, booking.id, undefined, bypassPause, lang);
 }
 
 // 9. Mensaje 9 - Comparte tu experiencia (comparte_experiencia)
@@ -1735,8 +1745,9 @@ export async function sendTemplate9_ComparteExperiencia(booking: any, bypassPaus
   const params = [
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'comparte_experiencia', params, undefined, booking.id, undefined, bypassPause);
+  return sendWhatsAppTemplate(phone, 'comparte_experiencia', params, undefined, booking.id, undefined, bypassPause, lang);
 }
 
 // 10. Mensaje 10 - ¡Nos encantaría recibirte nuevamente! (recibimiento_nuevamente)
@@ -1747,8 +1758,9 @@ export async function sendTemplate10_RecibimientoNuevamente(booking: any, bypass
   const params = [
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, undefined, booking.id, undefined, bypassPause);
+  return sendWhatsAppTemplate(phone, 'recibimiento_nuevamente', params, undefined, booking.id, undefined, bypassPause, lang);
 }
 
 // 11. Mensaje 11 - Confirmación de anticipo recibido (pago_anticipo_recibido)
@@ -1769,8 +1781,9 @@ export async function sendTemplate11_PagoAnticipoRecibido(booking: any, bypassPa
     formatCurrency(lastPayment) + suffix,  // {{2}} MontoAbonado
     formatCurrency(bal) + suffix           // {{3}} SaldoPendiente
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'pago_anticipo_recibido', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 // 12. Portal del Huésped - Enlace como botón CTA URL (portal_huesped_link)
@@ -1813,8 +1826,9 @@ export async function sendTemplate_AlojamientoListo(booking: any, bypassPause: b
   const params = [
     getFirstName(booking.guest_name) // {{1}} Nombre
   ];
+  const lang = booking.lang || booking.language || undefined;
 
-  return sendWhatsAppTemplate(phone, 'alojamiento_listo', params, undefined, booking.id, 'url', bypassPause);
+  return sendWhatsAppTemplate(phone, 'alojamiento_listo', params, undefined, booking.id, 'url', bypassPause, lang);
 }
 
 /**
@@ -1954,11 +1968,23 @@ export async function sendTemplate_ConfirmarReserva(
  * Se envía cuando el huésped pulsa "Ver WiFi y claves" o solicita información de acceso.
  */
 export async function sendTemplate_WiFiInformacion(
-  phone: string,
-  langOverride?: string
+  bookingOrPhone: any,
+  langOverrideOrBypass?: any
 ): Promise<{ success: boolean; error?: string; data?: any }> {
+  const phone = typeof bookingOrPhone === 'string' 
+    ? bookingOrPhone 
+    : (bookingOrPhone?.phone || bookingOrPhone?.mobile || bookingOrPhone?.guest_phone);
   if (!phone) return { success: false, error: 'Sin teléfono' };
-  const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
-  return sendWhatsAppTemplate(phone, 'wifi_informacion', [], undefined, undefined, undefined, false, lang);
+
+  let lang = typeof bookingOrPhone === 'object' 
+    ? (bookingOrPhone.lang || bookingOrPhone.language) 
+    : (typeof langOverrideOrBypass === 'string' ? langOverrideOrBypass : undefined);
+  if (!lang) {
+    lang = isSpanishOrLatamPhone(phone) ? 'es' : 'en';
+  }
+  const bookingId = typeof bookingOrPhone === 'object' ? bookingOrPhone.id : undefined;
+  const bypassPause = typeof langOverrideOrBypass === 'boolean' ? langOverrideOrBypass : false;
+
+  return sendWhatsAppTemplate(phone, 'wifi_informacion', [], undefined, bookingId, undefined, bypassPause, lang as 'es' | 'en');
 }
 

@@ -329,7 +329,7 @@ function ReservasListInner() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [userRole, setUserRole] = useState<string | null>(null);
-  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(100);
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number>(1);
   const [copiedManualSuccess, setCopiedManualSuccess] = useState<boolean>(false);
   const [sendingTemplate, setSendingTemplate] = useState<boolean>(false);
   const [showGuestPortalIframe, setShowGuestPortalIframe] = useState<string | null>(null);
@@ -515,10 +515,10 @@ function ReservasListInner() {
             setPortalLanguage(data.language || 'es');
             setPortalMuteNotifications(data.mute_notifications || false);
             const isEnglishGuest = (data.language === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US');
-            setSelectedMessageIndex(prev => (prev === 100 || prev === 101) ? (isEnglishGuest ? 101 : 100) : prev);
+            if (isEnglishGuest) setPortalLanguage('en');
           } else {
             const isEnglishGuest = (selectedRes.guest_country === 'US' || selectedRes.country === 'US');
-            setSelectedMessageIndex(prev => (prev === 100 || prev === 101) ? (isEnglishGuest ? 101 : 100) : prev);
+            if (isEnglishGuest) setPortalLanguage('en');
           }
         } catch (e) {
           console.error("Error loading portal settings:", e);
@@ -5863,651 +5863,6 @@ function ReservasListInner() {
                   )}
 
 
-                  {/* Copiar Mensaje de Bienvenida para OTA / WhatsApp (Solo para flujo de reservas nuevas y con selector multimensaje para Admin) */}
-                  {userRole === 'admin' && selectedRes.id !== 'walkin' && (
-                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-1">
-                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
-                          <svg className="w-3.5 h-3.5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                          </svg>
-                          Plantillas de Mensajes
-                        </span>
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="block text-[10px] font-black text-zinc-400 uppercase tracking-widest">Seleccionar Plantilla de Mensaje</label>
-                        <select 
-                          value={selectedMessageIndex}
-                          onChange={(e) => setSelectedMessageIndex(Number(e.target.value))}
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 outline-none text-[12px] font-bold text-zinc-900 focus:ring-2 focus:ring-zinc-900/10 cursor-pointer"
-                        >
-                          <option value={100}>📲 Aviso: Cambio de WhatsApp (Español)</option>
-                          <option value={101}>📲 Notice: WhatsApp Number Change (English)</option>
-                          <option value={0}>Mensaje Bienvenida OTA (Sin Enlaces para Booking/Airbnb)</option>
-                          <option value={1}>Mensaje 1: Solicitud de Reservación Recibida (24h)</option>
-                          <option value={2}>Mensaje 2: Último recordatorio (3h para confirmar)</option>
-                          <option value={3}>Mensaje 3: Confirmación de Pago y Reservación</option>
-                          <option value={4}>Mensaje 4: Disponibilidad Liberada (Español)</option>
-                          <option value={5}>Mensaje 4 (EN): Availability Released (English)</option>
-                          <option value={6}>Mensaje 5: Todo listo para tu llegada</option>
-                          <option value={7}>Mensaje 6: Bienvenido a Condominios Jaroje</option>
-                          <option value={8}>Mensaje 7: ¿Cómo va tu estancia?</option>
-                          <option value={9}>Mensaje 8: Check-out 12:00 p.m.</option>
-                          <option value={10}>Mensaje 9: ¿Cómo estuvo tu experiencia?</option>
-                          <option value={11}>Mensaje 10: Nos encantará recibirte nuevamente</option>
-                          <option value={12}>Mensaje: 📶 WiFi, Claves e Información Importante</option>
-                          <option value={13}>Mensaje: 🌴 Bienvenida Directa WhatsApp (Fotos y Cómo llegar)</option>
-                          <option value={14}>Mensaje: 🔗 Enlace al Portal del Huésped (Botón Oficial)</option>
-                        </select>
-                      </div>
-
-                      {(() => {
-                        const rawName = selectedRes.guest_name || selectedRes.name || selectedRes.guestName || '';
-                        const cleanName = rawName.trim();
-                        const isEn = (selectedMessageIndex === 5 || selectedMessageIndex === 101) || (selectedMessageIndex !== 4 && selectedMessageIndex !== 100 && portalLanguage === 'en');
-                        const guestFirstName = cleanName ? cleanName.split(' ')[0] : (isEn ? 'Guest' : 'Huésped');
-
-                        const langParam = isEn ? 'en' : 'es';
-                        const linkPortal = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}?lang=${langParam}`;
-                        const linkUbicacion = 'https://maps.app.goo.gl/ZEYCWntV2rdT48kK8';
-                        const linkComoLlegar = 'https://maps.app.goo.gl/1DzGMNAu5yeRJ5Qr6?g_st=ic';
-                        const linkDisponibilidad = isEn ? 'https://beds24.com/booking2.php?propid=327286&lang=en' : 'https://beds24.com/booking2.php?propid=327286';
-                        const linkFotos = 'https://condominiosjaroje.com/';
-                        const linkReview = 'https://g.page/r/CVL6xPUz98QaEAE/review';
-                        const linkMantenimiento = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}?lang=${langParam}#mantenimiento`;
-
-                        const wifiInfoBlock = isEn ? (
-                          `📶 *WiFi and Access*\n` +
-                          `WiFi: JAROJE\n` +
-                          `Password: HUXX2025\n` +
-                          `Gate: 3456\n\n` +
-                          `ℹ️ *Important Information*\n` +
-                          `• Clean dry towels available at reception.\n` +
-                          `• Exclusive access for registered guests.\n` +
-                          `• No pets allowed.\n` +
-                          `• 100% smoke-free property.\n` +
-                          `• Hotel is not responsible for valuables.\n` +
-                          `• Parking subject to availability.\n\n` +
-                          `⏰ *Schedules*\n` +
-                          `Pool: 9:00–22:00\n` +
-                          `Reception: 8:00–20:00\n` +
-                          `WhatsApp: 9:00–16:00\n\n` +
-                          `🌐 *Guest Portal:*\n` +
-                          `${linkPortal}`
-                        ) : (
-                          `📶 *WiFi y Claves*\n` +
-                          `WiFi: JAROJE\n` +
-                          `Contraseña: HUXX2025\n` +
-                          `Portón: 3456\n\n` +
-                          `ℹ️ *Información importante*\n` +
-                          `• Toallas secas disponibles en recepción.\n` +
-                          `• Acceso exclusivo para huéspedes registrados.\n` +
-                          `• No se admiten mascotas.\n` +
-                          `• Propiedad 100% libre de humo.\n` +
-                          `• El hotel no se hace responsable por objetos de valor.\n` +
-                          `• Estacionamiento sujeto a disponibilidad.\n\n` +
-                          `⏰ *Horarios*\n` +
-                          `Alberca: 9:00–22:00\n` +
-                          `Recepción: 8:00–20:00\n` +
-                          `WhatsApp: 9:00–16:00\n\n` +
-                          `🌐 *Portal del Huésped:*\n` +
-                          `${linkPortal}`
-                        );
-
-                        const templates: Record<number, string> = {
-                          // 100: Aviso Cambio de WhatsApp (Español)
-                          100: (
-                            `¡Hola! 👋\n\n` +
-                            `Soy Rolando Díaz Ceballos, de Condominios Jaroje Huatulco. 🌴\n\n` +
-                            `Te comparto mi nuevo número de WhatsApp:\n\n` +
-                            `📲 958 122 11 11\n\n` +
-                            `Mi número anterior, 958 116 86 98, ya no está disponible para WhatsApp y por el momento seguirá funcionando únicamente para llamadas. Más adelante será deshabilitado por completo.\n\n` +
-                            `Por favor, guarda mi nuevo número.\n\n` +
-                            `¡Gracias!\n\n` +
-                            `🌐 Portal del Huésped:\n` +
-                            `https://jaroje-app.vercel.app/public/reserva/${selectedRes?.id || ''}?lang=es`
-                          ),
-
-                          // 101: Notice: WhatsApp Number Change (English)
-                          101: (
-                            `Hi! 👋\n\n` +
-                            `This is Rolando from Condominios Jaroje Huatulco,\n\n` +
-                            `Just letting you know that I’ve changed my WhatsApp number.\n\n` +
-                            `📲 My new number is: +52 958 122 1111\n\n` +
-                            `My previous number, +52 958 116 8698, is temporarily unavailable on WhatsApp, but it still works for phone calls.\n\n` +
-                            `I’d appreciate it if you could update my contact information!\n\n` +
-                            `Best regards,\n` +
-                            `Rolando\n\n` +
-                            `🌐 Guest Portal:\n` +
-                            `https://jaroje-app.vercel.app/public/reserva/${selectedRes?.id || ''}?lang=en`
-                          ),
-                          // 0: Mensaje de Bienvenida OTA (Sin Enlaces para Booking / Airbnb)
-                          0: isEn ? (
-                            `🏖️ Thank you for choosing Condominios Jaroje!\n\n` +
-                            `Hello, ${guestFirstName}.\n\n` +
-                            `It will be a pleasure to welcome you to Huatulco.\n\n` +
-                            `📲 Guest Portal\n` +
-                            `We have prepared your Guest Portal, where you will find all your stay details:\n` +
-                            `•  📋 Reservation details\n` +
-                            `•  🏡 Accommodation photos and info\n` +
-                            `•  📍 Directions and arrival instructions\n` +
-                            `•  🚪 Gate access and check-in guide\n` +
-                            `•  📖 Accommodation policies\n` +
-                            `•  📶 WiFi network and stay data\n` +
-                            `•  🌴 Huatulco local recommendations\n\n` +
-                            `You will receive access shortly through our official channels.\n\n` +
-                            `📞 Official channels\n` +
-                            `We will communicate exclusively via WhatsApp from:\n` +
-                            `+52 958 116 8698\n` +
-                            `+52 958 587 8554\n\n` +
-                            `You might also receive messages directly inside Booking.com / Airbnb.\n\n` +
-                            `🔒 For your security: If you receive messages or links from other senders, do not interact and contact us first.\n\n` +
-                            `If you have any questions, we are glad to help.\n\n` +
-                            `We look forward to welcoming you!`
-                          ) : (
-                            `🏖️ ¡Gracias por elegir Condominios Jaroje!\n\n` +
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `Será un gusto darte la bienvenida en Huatulco.\n\n` +
-                            `📲 Portal del Huésped\n` +
-                            `Hemos preparado tu Portal del Huésped, donde encontrarás toda la información de tu estancia:\n` +
-                            `•  📋 Detalles de tu reservación\n` +
-                            `•  🏡 Información y fotos del alojamiento\n` +
-                            `•  📍 Indicaciones de llegada\n` +
-                            `•  🚪 Acceso y guía de entrada\n` +
-                            `•  📖 Políticas del alojamiento\n` +
-                            `•  📶 WiFi y datos de tu estancia\n` +
-                            `•  🌴 Recomendaciones en Huatulco\n\n` +
-                            `Recibirás el acceso en breve por nuestros canales oficiales.\n\n` +
-                            `📞 Canales oficiales\n` +
-                            `Nos comunicaremos únicamente por WhatsApp desde:\n` +
-                            `+52 958 116 8698\n` +
-                            `+52 958 587 8554\n\n` +
-                            `También podrías recibir mensajes dentro de Booking.com.\n\n` +
-                            `🔒 Por tu seguridad: Si recibes mensajes o enlaces de otros remitentes, no interactúes y contáctanos primero.\n\n` +
-                            `Si tienes dudas, con gusto te ayudamos.\n\n` +
-                            `¡Te esperamos!`
-                          ),
-
-                          // 1: Mensaje 1: Solicitud de reservación recibida (24h)
-                          1: isEn ? (
-                            `📋 Reservation request received (24 h to confirm)\n\n` +
-                            `Hello, ${guestFirstName}.\n\n` +
-                            `Thank you for choosing Condominios Jaroje for your next vacation in Huatulco! 🌴\n\n` +
-                            `In your "Guest Portal" you will find all the information about your reservation, including photos and description of your accommodation, reservation details, hotel and cancellation policies, as well as payment options, if you need them.\n\n` +
-                            `🌐 *Guest Portal:*\n` +
-                            `${linkPortal}\n\n` +
-                            `📍 *Location:*\n` +
-                            `${linkUbicacion}`
-                          ) : (
-                            `📋 Solicitud de reservación recibida (24 h para confirmar)\n\n` +
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\n` +
-                            `En tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n` +
-                            `🌐 *Portal del Huésped:*\n` +
-                            `${linkPortal}\n\n` +
-                            `📍 *Ubicación:*\n` +
-                            `${linkUbicacion}`
-                          ),
-
-                          // 2: Mensaje 2: Último recordatorio (3 horas)
-                          2: isEn ? (
-                            `⏳ Last reminder (3 hours left to confirm your reservation)\n\n` +
-                            `Hello, ${guestFirstName}.\n\n` +
-                            `We just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 3 hours.\n\n` +
-                            `In "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n` +
-                            `💳 *Make deposit:*\n` +
-                            `${linkPortal}`
-                          ) : (
-                            `⏳ Último recordatorio (queda 3 horas para confirmar tu reservación)\n\n` +
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\n` +
-                            `En "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n` +
-                            `💳 *Realizar depósito:*\n` +
-                            `${linkPortal}`
-                          ),
-
-                          // 3: Mensaje 3: Confirmación de Pago y Reservación
-                          3: isEn ? (
-                            `🎉 Your reservation is confirmed!\n\n` +
-                            `Excellent, ${guestFirstName}!\n\n` +
-                            `We are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\n` +
-                            `In "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n` +
-                            `👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n` +
-                            `🌐 *Guest Portal:*\n` +
-                            `${linkPortal}\n\n` +
-                            `📍 *How to get there:*\n` +
-                            `${linkComoLlegar}`
-                          ) : (
-                            `🎉 ¡Tu reservación está confirmada!\n\n` +
-                            `¡Excelente, ${guestFirstName}!\n\n` +
-                            `Nos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\n` +
-                            `En "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n` +
-                            `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
-                            `🌐 *Portal del Huésped:*\n` +
-                            `${linkPortal}\n\n` +
-                            `📍 *Cómo llegar:*\n` +
-                            `${linkComoLlegar}`
-                          ),
-
-                          // 4: Mensaje 4 (ES): Disponibilidad Liberada
-                          4: (
-                            `😔 Disponibilidad liberada\n\n` +
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `Lamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\n` +
-                            `Si aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n` +
-                            `🌐 *Verificar disponibilidad:*\n` +
-                            `${linkDisponibilidad}\n\n` +
-                            `📸 *Fotos y Tarifas:*\n` +
-                            `${linkFotos}`
-                          ),
-
-                          // 5: Mensaje 4 (EN): Availability Released
-                          5: (
-                            `😔 Availability Released\n\n` +
-                            `Hello, ${guestFirstName}.\n\n` +
-                            `We regret to inform you that, as we did not receive the deposit within the specified timeframe, the availability for your accommodation has been released.\n\n` +
-                            `If you still wish to stay with us, please press “Check Availability” to see if we still have accommodation available for your travel dates and make a new reservation.\n\n` +
-                            `🌐 *Check Availability:*\n` +
-                            `${linkDisponibilidad}\n\n` +
-                            `📸 *Photos and Rates:*\n` +
-                            `${linkFotos}`
-                          ),
-
-                          // 6: Mensaje 5: Todo listo para tu llegada
-                          6: isEn ? (
-                            `🚗 Everything ready for your arrival\n\n` +
-                            `Hello, ${guestFirstName}.\n\n` +
-                            `Very soon we will welcome you to Condominios Jaroje! We want your arrival to be as comfortable as possible.\n\n` +
-                            `👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n` +
-                            `In "My reservation" you will find the gate code, location, directions, photos, description and services of your accommodation, as well as everything you need to prepare for your arrival.\n\n` +
-                            `Arriving after 8:00 p.m.? Let us know in advance to welcome you.\n\n` +
-                            `We wish you an excellent trip!\n\n` +
-                            `🌐 *My reservation:*\n` +
-                            `${linkPortal}\n\n` +
-                            `📍 *How to get there:*\n` +
-                            `${linkComoLlegar}\n\n` +
-                            wifiInfoBlock
-                          ) : (
-                            `🚗 Todo listo para tu llegada\n\n` +
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n` +
-                            `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
-                            `En "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n` +
-                            `¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n` +
-                            `¡Te deseamos un excelente viaje!\n\n` +
-                            `🌐 *Mi reservación:*\n` +
-                            `${linkPortal}\n\n` +
-                            `📍 *Cómo llegar:*\n` +
-                            `CONDOMINIOS JAROJE 958 116 8698 ${linkComoLlegar}\n\n` +
-                            wifiInfoBlock
-                          ),
-
-                          // 7: Mensaje 6: Bienvenido a Condominios Jaroje
-                          7: isEn ? (
-                            `🏡 Welcome to Condominios Jaroje!\n\n` +
-                            `What a pleasure to welcome you, ${guestFirstName}!\n\n` +
-                            `We hope you had an excellent trip. We hope you enjoy an excellent stay and feel at home.\n\n` +
-                            `In "My stay" you will find the gate code, WiFi network and password, photos, description and services of your accommodation, as well as all the necessary information to enjoy your stay.\n\n` +
-                            `If during your stay you need to report any maintenance details, you can do so from "My stay".\n\n` +
-                            `We wish you a wonderful stay. If you need anything, we are here to help.\n\n` +
-                            `🌐 *My stay:*\n` +
-                            `${linkPortal}\n\n` +
-                            `🔧 *Maintenance Report:*\n` +
-                            `${linkMantenimiento}\n\n` +
-                            wifiInfoBlock
-                          ) : (
-                            `🏡 ¡Bienvenido a Condominios Jaroje!\n\n` +
-                            `¡Qué gusto recibirte, ${guestFirstName}!\n\n` +
-                            `Esperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\n\n` +
-                            `En "Mi estancia" encontrarás el código del portón, la red WiFi y su contraseña, las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\n\n` +
-                            `Si durante tu estancia necesitas reportar algún detalle de mantenimiento podrás hacerlo desde "Mi estancia".\n\n` +
-                            `Deseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n` +
-                            `🌐 *Mi estancia:*\n` +
-                            `${linkPortal}\n\n` +
-                            `🔧 *Reporte de Mantenimiento:*\n` +
-                            `${linkMantenimiento}\n\n` +
-                            wifiInfoBlock
-                          ),
-
-                          // 8: Mensaje 7: ¿Cómo va tu estancia?
-                          8: isEn ? (
-                            `😊 How is your stay going?\n\n` +
-                            `Good morning, ${guestFirstName}.\n\n` +
-                            `We want to make sure everything is going as expected.\n\n` +
-                            `If there is anything we can do to make you enjoy your stay even more, we will gladly be at your service.\n\n` +
-                            `🌐 *My stay:*\n` +
-                            `${linkPortal}\n\n` +
-                            `🔧 *Maintenance Report:*\n` +
-                            `${linkMantenimiento}\n\n` +
-                            wifiInfoBlock
-                          ) : (
-                            `😊 ¿Cómo va tu estancia?\n\n` +
-                            `Buenos días, ${guestFirstName}.\n\n` +
-                            `Queremos asegurarnos de que todo esté transcurriendo como esperabas.\n\n` +
-                            `Si hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n` +
-                            `🌐 *Mi estancia:*\n` +
-                            `${linkPortal}\n\n` +
-                            `🔧 *Reporte de Mantenimiento:*\n` +
-                            `${linkMantenimiento}\n\n` +
-                            wifiInfoBlock
-                          ),
-
-                          // 9: Mensaje 8: Check-out 12:00 p.m.
-                          9: isEn ? (
-                            `🚪 Check-out 12:00 p.m.\n\n` +
-                            `Very good morning, ${guestFirstName}.\n\n` +
-                            `Today your stay with us ends. Thank you very much for choosing us and we hope you enjoyed your stay.\n\n` +
-                            `If you need to store your luggage after check-out or require assistance with your departure, we will gladly be here to help.\n\n` +
-                            `If there was anything that did not meet your expectations, please let us know so we can help you.\n\n` +
-                            `If you feel your experience was ⭐⭐⭐⭐⭐, we would love for you to share your review.\n\n` +
-                            `⭐ *Write review:*\n` +
-                            `${linkReview}`
-                          ) : (
-                            `🚪 Check-out 12:00 p.m.\n\n` +
-                            `Muy buenos días, ${guestFirstName}.\n\n` +
-                            `Hoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n\n` +
-                            `Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.\n\n` +
-                            `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
-                            `Si consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.\n\n` +
-                            `⭐ *Escribir reseña:*\n` +
-                            `${linkReview}`
-                          ),
-
-                          // 10: Mensaje 9: ¿Cómo estuvo tu experiencia?
-                          10: isEn ? (
-                            `⭐ How was your experience?\n\n` +
-                            `Hello, ${guestFirstName}.\n\n` +
-                            `We hope you arrived home safely and keep an excellent memory of your stay with us.\n\n` +
-                            `If there was anything that did not meet your expectations, please let us know so we can help you.\n\n` +
-                            `If your experience was ⭐⭐⭐⭐⭐, it would make us very happy if you shared your review. Your review helps other travelers choose us with greater confidence and motivates us to keep improving.\n\n` +
-                            `⭐ *Rate accommodation:*\n` +
-                            `${linkReview}`
-                          ) : (
-                            `⭐ ¿Cómo estuvo tu experiencia?\n\n` +
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `Esperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\n\n` +
-                            `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
-                            `Si tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n` +
-                            `⭐ *Calificar alojamiento:*\n` +
-                            `${linkReview}`
-                          ),
-
-                          // 11: Mensaje 10: Nos encantará recibirte nuevamente
-                          11: isEn ? (
-                            `🌴 We would love to welcome you again!\n\n` +
-                            `Hello again, ${guestFirstName}.\n\n` +
-                            `Today we remembered your stay with us and wanted to say hello. We hope you keep a great memory of Huatulco and your stay with us.\n\n` +
-                            `If you are thinking of returning to Huatulco, it will be a pleasure to welcome you again. In "Check availability" you can consult availability and start a new reservation.\n\n` +
-                            `🌐 *Check availability:*\n` +
-                            `${linkDisponibilidad}\n\n` +
-                            `📸 *Photos and Rates:*\n` +
-                            `${linkFotos}`
-                          ) : (
-                            `🌴 ¡Nos encantará recibirte nuevamente!\n\n` +
-                            `Hola de nuevo, ${guestFirstName}.\n\n` +
-                            `Hoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\n` +
-                            `Si estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En "Verificar disponibilidad" podrás consultar disponibilidad y comenzar una nueva reservación.\n\n` +
-                            `🌐 *Verificar disponibilidad:*\n` +
-                            `${linkDisponibilidad}\n\n` +
-                            `📸 *Fotos y Tarifas:*\n` +
-                            `${linkFotos}`
-                          ),
-
-                          // 12: WiFi e Información Importante
-                          12: wifiInfoBlock,
-
-                          // 13: Bienvenida Directa WhatsApp (Con Fotos y Cómo llegar)
-                          13: isEn ? (
-                            `🌴 Hello! Welcome to Condominios Jaroje.\n\n` +
-                            `It will be a pleasure to assist you and provide you with the best experience for your stay in Huatulco.\n\n` +
-                            `📸 *Photos and Rates:*\n` +
-                            `${linkFotos}\n\n` +
-                            `📍 *How to get there:*\n` +
-                            `${linkComoLlegar}`
-                          ) : (
-                            `🌴 ¡Hola! Bienvenido a Condominios Jaroje.\n\n` +
-                            `Será un gusto atenderte y brindarte el mejor servicio para tu estancia en Huatulco.\n\n` +
-                            `📸 *Fotos y Tarifas:*\n` +
-                            `${linkFotos}\n\n` +
-                            `📍 *Cómo llegar:*\n` +
-                            `${linkComoLlegar}`
-                          ),
-
-                          // 14: Enlace al Portal del Huésped
-                          14: isEn ? (
-                            `Hello, ${guestFirstName}!\n\n` +
-                            `Here is your real-time access to your reservation.\n\n` +
-                            `From your Guest Portal you can check your room status, property rules, WiFi details, and make additional payments. ✅\n\n` +
-                            `🌐 *Guest Portal:*\n` +
-                            `${linkPortal}`
-                          ) : (
-                            `Hola, ${guestFirstName}.\n\n` +
-                            `Aquí tienes acceso a tu reservación en tiempo real.\n\n` +
-                            `Desde tu portal puedes ver el estado de tu habitación, reglamento, datos de WiFi y registrar pagos adicionales. ✅\n\n` +
-                            `🌐 *Portal del Huésped:*\n` +
-                            `${linkPortal}`
-                          )
-                        };
-
-                        const message = templates[selectedMessageIndex] || templates[0];
-
-                        const handleCopyAndSend = async () => {
-                          // 1. Copiar al portapapeles siempre de forma ultra-robusta con feedback
-                          try {
-                            await copyToClipboard(message);
-                            setCopiedManualSuccess(true);
-                            setTimeout(() => setCopiedManualSuccess(false), 3000);
-                          } catch (err) {
-                            console.error("Error al copiar al portapapeles:", err);
-                          }
-
-                          // 2. Extraer y sanitizar teléfono internacional
-                          const rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
-                          let cleanPhone = String(rawPhone).replace(/\D/g, '');
-
-                          if (!cleanPhone) {
-                            alert("✅ El texto de la plantilla con enlaces oficiales ha sido copiado al portapapeles.\n\nPuedes pegarlo directamente en el chat de Booking.com, Airbnb o WhatsApp Web.");
-                            return;
-                          }
-
-                          // Sanitización precisa de prefijos internacionales:
-                          // México: 521 obsoleto -> 52 estándar
-                          if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
-                            cleanPhone = '52' + cleanPhone.substring(3);
-                          } else if (cleanPhone.startsWith('52') && cleanPhone.length === 12) {
-                            // México estándar E.164 (52 + 10 dígitos)
-                          } else if (cleanPhone.startsWith('34') && cleanPhone.length === 11) {
-                            // España estándar E.164 (34 + 9 dígitos, ej: 34639367930)
-                          } else if (cleanPhone.length === 9 && ['6', '7', '8', '9'].includes(cleanPhone[0])) {
-                            // España local -> anteponer 34
-                            cleanPhone = '34' + cleanPhone;
-                          } else if (cleanPhone.startsWith('1') && cleanPhone.length === 11) {
-                            // EE.UU. / Canadá estándar E.164 (1 + 10 dígitos)
-                          } else if (cleanPhone.length === 10) {
-                            // Si la reserva o idioma es inglés, o hint US/CA -> EE.UU. (+1)
-                            if (portalLanguage === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US' || String(rawPhone).startsWith('+1')) {
-                              cleanPhone = '1' + cleanPhone;
-                            } else {
-                              // México nacional (10 dígitos) -> anteponer 52
-                              cleanPhone = '52' + cleanPhone;
-                            }
-                          }
-
-                          // 3. Registrar silenciosamente en whatsapp_logs para auditoría
-                          try {
-                            const { supabase } = await import('@/lib/supabase');
-                            supabase.from('whatsapp_logs').insert([{
-                              reservation_id: String(selectedRes.id),
-                              template_name: (apiTemplates[selectedMessageIndex] || 'plantilla') + '_manual',
-                              phone: cleanPhone,
-                              sent_at: new Date().toISOString(),
-                              status: 'manual_sent'
-                            }]).then(() => {});
-                          } catch (_) {}
-
-                          // 4. Abrir WhatsApp (Universal Link compatible con App nativa móvil y WhatsApp Web)
-                          const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
-                          const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
-                          if (isMobile) {
-                            window.location.href = waUrl;
-                          } else {
-                            window.open(waUrl, '_blank');
-                          }
-                        };
-
-                        const apiTemplates: Record<number, string> = {
-                          100: 'cambio_numero_whatsapp_es',
-                          101: 'cambio_numero_whatsapp_en',
-                          0: 'reservacion_confirmada',   // 0: Mensaje Bienvenida OTA -> Oficial: Confirmada con Botones
-                          1: 'solicitud_recibida',      // 1: Mensaje 1: Solicitud de Reservación Recibida (24h)
-                          2: 'ultimo_aviso',            // 2: Mensaje 2: Último recordatorio (1h / 3h)
-                          3: 'reservacion_confirmada',  // 3: Mensaje 3: Confirmación de Pago y Reservación
-                          4: 'disponibilidad_liberada', // 4: Mensaje 4: Disponibilidad Liberada (Español)
-                          5: 'disponibilidad_liberada', // 5: Mensaje 4 (EN): Availability Released (English)
-                          6: 'preparacion_llegada',     // 6: Mensaje 5: Todo listo para tu llegada
-                          7: 'bienvenida_checkin',      // 7: Mensaje 6: Bienvenido a Condominios Jaroje
-                          8: 'seguimiento_satisfaccion',// 8: Mensaje 7: ¿Cómo va tu estancia?
-                          9: 'salida_checkout',         // 9: Mensaje 8: Check-out 12:00 p.m.
-                          10: 'comparte_experiencia',    // 10: Mensaje 9: ¿Cómo estuvo tu experiencia?
-                          11: 'recibimiento_nuevamente', // 11: Mensaje 10: Nos encantará recibirte nuevamente
-                          12: 'bienvenida_checkin',      // 12: Mensaje: 📶 WiFi, Claves e Información Importante
-                          13: 'portal_huesped_link',     // 13: Mensaje: 🌴 Bienvenida Directa WhatsApp -> Portal del Huésped
-                          14: 'portal_huesped_link'      // 14: Mensaje: 🔗 Enlace al Portal del Huésped (Botón Interactivo)
-                        };
-                        const apiTemplateKey = apiTemplates[selectedMessageIndex] || 'reservacion_confirmada';
-
-                        const handleSendApiTemplate = async () => {
-                          if (selectedMessageIndex === 100 || selectedMessageIndex === 101) {
-                            alert("ℹ️ Esta plantilla de aviso de cambio de número debe enviarse manualmente usando el botón negro 'Copiar y Enviar Manual' desde tu nuevo número de WhatsApp.");
-                            return;
-                          }
-                          if (!apiTemplateKey) return;
-
-                          if (apiTemplateKey === 'ultimo_aviso') {
-                            const guestName = selectedRes.guest_name || 'el huésped';
-                            const hasConfirmed = window.confirm(
-                              `⚠️ ¿Estás seguro de que deseas enviar el ÚLTIMO AVISO a ${guestName}?\n\n` +
-                              `Esto notificará al cliente por WhatsApp y activará la cuenta regresiva de 3 horas para la cancelación automática de su reservación.`
-                            );
-                            if (!hasConfirmed) return;
-                          }
-                          
-                          let rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
-                          let cleanPhone = String(rawPhone).replace(/\D/g, '');
-
-                          // Si no tiene teléfono guardado, permitir ingresarlo en el momento
-                          if (!cleanPhone) {
-                            const inputPhone = window.prompt(
-                              "⚠️ Esta reservación no tiene un teléfono guardado.\n\n" +
-                              "Por favor ingresa el número de WhatsApp con código de país (ej: 529581168698) para enviar la plantilla oficial:"
-                            );
-                            if (!inputPhone) return;
-                            cleanPhone = inputPhone.replace(/\D/g, '');
-                            if (!cleanPhone || cleanPhone.length < 10) {
-                              alert("❌ El número ingresado no es válido.");
-                              return;
-                            }
-                            if (cleanPhone.length === 10) {
-                              cleanPhone = (portalLanguage === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US') ? '1' + cleanPhone : '52' + cleanPhone;
-                            }
-                            rawPhone = '+' + cleanPhone;
-                          }
-
-                          setSendingTemplate(true);
-                          try {
-                            const bookingPayload = {
-                              ...selectedRes,
-                              phone: rawPhone,
-                              guest_phone: rawPhone,
-                              mobile: rawPhone
-                            };
-
-                            const res = await fetch('/api/whatsapp/send-template', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                template: apiTemplateKey,
-                                booking: bookingPayload
-                              })
-                            });
-                            const data = await res.json();
-                            if (data.success) {
-                              alert(`✅ ¡Mensaje enviado con éxito por la API oficial (Meta Cloud API)!\nEl huésped recibirá el formato nativo con botones interactivos.`);
-                            } else {
-                              alert(`❌ Error al enviar la plantilla: ${data.error || 'Error desconocido'}`);
-                            }
-                          } catch (err: any) {
-                            console.error(err);
-                            alert(`❌ Error de red al enviar la plantilla: ${err.message || err}`);
-                          } finally {
-                            setSendingTemplate(false);
-                          }
-                        };
-
-                        return (
-                          <div className="flex flex-col gap-2.5">
-                            {/* Vista Previa del Mensaje con Enlace Dinámico */}
-                            <div className="p-3 bg-zinc-50 border border-zinc-200/90 rounded-xl text-[11px] text-zinc-700 whitespace-pre-line max-h-36 overflow-y-auto leading-relaxed select-all font-sans shadow-inner">
-                              {message}
-                            </div>
-
-                            {/* Botón Principal: Enviar Plantilla Oficial API con botones nativos */}
-                            <button
-                              onClick={handleSendApiTemplate}
-                              disabled={sendingTemplate}
-                              className="w-full bg-[#25D366] hover:bg-[#20ba59] disabled:bg-[#25D366]/65 active:scale-95 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm border border-[#25D366] disabled:cursor-not-allowed"
-                            >
-                              {sendingTemplate ? (
-                                <>
-                                  <svg className="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                  </svg>
-                                  <span>Enviando botones oficiales...</span>
-                                </>
-                              ) : (
-                                <>
-                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                                  </svg>
-                                  <span>Enviar Botones Oficiales (API Cloud)</span>
-                                </>
-                              )}
-                            </button>
-
-                            {/* Botón Secundario: Copiar y Enviar Manual */}
-                            <button
-                              onClick={handleCopyAndSend}
-                              className={`w-full active:scale-95 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm ${
-                                copiedManualSuccess 
-                                  ? 'bg-zinc-900 border border-emerald-500/50 ring-2 ring-emerald-500/20' 
-                                  : 'bg-zinc-800 hover:bg-zinc-900 border border-zinc-900'
-                              }`}
-                            >
-                              {copiedManualSuccess ? (
-                                <>
-                                  <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                                    <polyline points="20 6 9 17 4 12"></polyline>
-                                  </svg>
-                                  <span className="text-emerald-300 font-black">¡Copiado y Abriendo WhatsApp!</span>
-                                </>
-                              ) : (
-                                <>
-                                  <svg className="w-3.5 h-3.5 text-zinc-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                  </svg>
-                                  <span>Copiar y Enviar Manual</span>
-                                </>
-                              )}
-                            </button>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-
                   {/* Ajustes del Portal del Huésped (Solo locales y sin anticipo) */}
                   {userRole === 'admin' && 
                    selectedRes &&
@@ -7374,6 +6729,608 @@ function ReservasListInner() {
                     Ver en Beds24 🔗
                   </button>
                 </div>
+
+                  {/* PLANTILLAS DE MENSAJES (Manual de Comunicación Oficial) */}
+                  {userRole === 'admin' && selectedRes && selectedRes.id !== 'walkin' && (
+                    <div className="bg-white border border-zinc-200/80 p-4 rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.01)] space-y-3.5 mt-4">
+                      <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                            <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                            </svg>
+                          </span>
+                          <div>
+                            <span className="text-[11px] font-black text-zinc-900 uppercase tracking-wider block">
+                              {portalLanguage === 'en' ? 'WhatsApp Templates' : 'Plantillas de Mensajes'}
+                            </span>
+                            <span className="text-[9px] font-bold text-zinc-400">Manual de Comunicación Oficial</span>
+                          </div>
+                        </div>
+
+                        {/* Selector Rápido de Idioma Dinámico */}
+                        <div className="flex items-center gap-1 bg-zinc-100 p-0.5 rounded-lg border border-zinc-200">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortalLanguage('es');
+                              handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, 'es', portalMuteNotifications);
+                            }}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                              portalLanguage !== 'en' ? 'bg-white text-zinc-900 shadow-xs' : 'text-zinc-500 hover:text-zinc-800'
+                            }`}
+                          >
+                            🇲🇽 ES
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPortalLanguage('en');
+                              handleUpdatePortalSettings(portalShowCardPayment, portalTransferAccount, 'en', portalMuteNotifications);
+                            }}
+                            className={`px-2 py-0.5 text-[10px] font-bold rounded-md transition-all cursor-pointer ${
+                              portalLanguage === 'en' ? 'bg-white text-zinc-900 shadow-xs' : 'text-zinc-500 hover:text-zinc-800'
+                            }`}
+                          >
+                            🇺🇸 EN
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Selector de Plantilla (14 plantillas oficiales, sin duplicación de idiomas) */}
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest block">
+                          {portalLanguage === 'en' ? 'Select Template' : 'Seleccionar Plantilla Oficial'}
+                        </label>
+                        <select
+                          value={selectedMessageIndex}
+                          onChange={(e) => setSelectedMessageIndex(Number(e.target.value))}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-[12px] font-bold text-zinc-900 outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer shadow-xs"
+                        >
+                          <option value={1}>{portalLanguage === 'en' ? '1. Reservation Request Received (24h)' : '1. Solicitud de Reservación Recibida (24h)'}</option>
+                          <option value={2}>{portalLanguage === 'en' ? '2. Last Reminder (3h to confirm)' : '2. Último Aviso (3h para confirmar)'}</option>
+                          <option value={3}>{portalLanguage === 'en' ? '3. Payment & Reservation Confirmed' : '3. Confirmación de Pago y Reservación'}</option>
+                          <option value={4}>{portalLanguage === 'en' ? '4. Availability Released' : '4. Disponibilidad Liberada'}</option>
+                          <option value={5}>{portalLanguage === 'en' ? '5. Everything ready for your arrival' : '5. Todo listo para tu llegada'}</option>
+                          <option value={6}>{portalLanguage === 'en' ? '6. Welcome to Condominios Jaroje' : '6. Bienvenido a Condominios Jaroje'}</option>
+                          <option value={7}>{portalLanguage === 'en' ? '7. How is your stay going?' : '7. ¿Cómo va tu estancia?'}</option>
+                          <option value={8}>{portalLanguage === 'en' ? '8. Check-out 12:00 p.m.' : '8. Salida / Check-out 12:00 p.m.'}</option>
+                          <option value={9}>{portalLanguage === 'en' ? '9. How was your experience?' : '9. ¿Cómo estuvo tu experiencia?'}</option>
+                          <option value={10}>{portalLanguage === 'en' ? "10. We'd love to welcome you again!" : '10. ¡Nos encantará recibirte nuevamente!'}</option>
+                          <option value={11}>{portalLanguage === 'en' ? '11. Deposit Payment Received' : '11. Confirmación de Anticipo Recibido'}</option>
+                          <option value={12}>{portalLanguage === 'en' ? '12. 📶 WiFi, Access Codes & Stay Info' : '12. 📶 WiFi, Claves e Información Importante'}</option>
+                          <option value={13}>{portalLanguage === 'en' ? '13. ✨ Accommodation Ready / Cleaned' : '13. ✨ Alojamiento Listo / Limpieza Terminada'}</option>
+                          <option value={14}>{portalLanguage === 'en' ? '14. ❌ Payment Receipt Rejected' : '14. ❌ Comprobante de Pago Rechazado'}</option>
+                        </select>
+                      </div>
+
+                      {(() => {
+                        const isEn = portalLanguage === 'en';
+                        const guestFullName = selectedRes.guest_name || selectedRes.name || selectedRes.guestName || '';
+                        const cleanName = guestFullName.trim();
+                        const guestFirstName = cleanName ? cleanName.split(' ')[0] : (isEn ? 'Guest' : 'Huésped');
+                        const portalLink = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}?lang=${portalLanguage}`;
+                        const howToGetLink = "https://maps.app.goo.gl/95aU9N2YtE1mBwLh8";
+                        const reviewLink = "https://g.page/r/CVL6xPUz98QaEAE/review";
+                        const checkAvailabilityLink = isEn ? "https://beds24.com/booking2.php?propid=327286&lang=en" : "https://beds24.com/booking2.php?propid=327286";
+                        const photosLink = "https://condominiosjaroje.com/";
+                        const maintenanceLink = `https://jaroje-app.vercel.app/public/reserva/${selectedRes.id}?lang=${portalLanguage}#mantenimiento`;
+                        const total = Number(selectedRes.price || selectedRes.price_estimate || 0);
+                        const dep = Number(selectedRes.deposit || 0);
+                        const bal = Math.max(0, total - dep);
+                        const lastPayment = Number(selectedRes.last_payment_amount || dep || 0);
+                        const isUSD = guestFullName.toUpperCase().includes('(US DOLLARS)') || selectedRes.currency === 'USD';
+                        const suffix = isUSD ? ' USD' : ' MXN';
+
+                        const wifiInfoBlock = isEn
+                          ? `📶 *WiFi & Access Information:*\n• Gate Code: 1404\n• WiFi Network: Jaroje Huatulco\n• WiFi Password: Jaroje2024\n• Rules & Services: ${portalLink}`
+                          : `📶 *Información de WiFi y Acceso:*\n• Portón: 1404\n• Red WiFi: Jaroje Huatulco\n• Clave WiFi: Jaroje2024\n• Reglamento y servicios: ${portalLink}`;
+
+                        const templates: Record<number, string> = {
+                          // 1: Solicitud Recibida
+                          1: isEn ? (
+                            `📋 *Reservation request received (24 h to confirm)*\n\n` +
+                            `Hello, ${guestFirstName}.\n\n` +
+                            `Thank you for choosing Condominios Jaroje for your next vacation in Huatulco! 🌴\n\n` +
+                            `In your "Guest Portal" you will find all the information about your reservation, including photos and description of your accommodation, reservation details, hotel and cancellation policies, as well as payment options, if you need them.\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *Location:*\n` +
+                            `${howToGetLink}`
+                          ) : (
+                            `📋 *Solicitud de reservación recibida (24 h para confirmar)*\n\n` +
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `¡Gracias por elegir Condominios Jaroje para tus próximas vacaciones en Huatulco! 🌴\n\n` +
+                            `En tu "Portal del Huésped" encontrarás toda la información sobre tu reservación, incluyendo las fotos y la descripción de tu alojamiento, los datos de tu reservación, las políticas del hotel y de cancelación, así como las opciones de pago, si las necesitas.\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *Ubicación:*\n` +
+                            `${howToGetLink}`
+                          ),
+
+                          // 2: Último Aviso
+                          2: isEn ? (
+                            `⏳ *Last reminder (3 hours left to confirm your reservation)*\n\n` +
+                            `Hello, ${guestFirstName}.\n\n` +
+                            `We just need your deposit to confirm your reservation. Remember that the deadline to receive it expires in approximately 3 hours.\n\n` +
+                            `In "Make deposit" you will find the available payment options. If you have already made your deposit, please send us your receipt.\n\n` +
+                            `💳 *Make deposit:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `⏳ *Último recordatorio (quedan 3 horas para confirmar tu reservación)*\n\n` +
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `Solo falta realizar tu depósito para confirmar tu reservación. Recuerda que el plazo para recibirlo vence en aproximadamente 3 horas.\n\n` +
+                            `En "Realizar depósito" encontrarás las opciones de pago disponibles. Si ya realizaste tu depósito, por favor envíanos tu comprobante.\n\n` +
+                            `💳 *Realizar depósito:*\n` +
+                            `${portalLink}`
+                          ),
+
+                          // 3: Reservación Confirmada
+                          3: isEn ? (
+                            `🎉 *Your reservation is confirmed!*\n\n` +
+                            `Excellent, ${guestFirstName}!\n\n` +
+                            `We are very pleased to confirm that your reservation is ready. We are ready to welcome you.\n\n` +
+                            `In "Guest Portal" you will be able to check any updates to your reservation in real time, as well as the photos, description and services of your accommodation.\n\n` +
+                            `👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *How to get there:*\n` +
+                            `${howToGetLink}`
+                          ) : (
+                            `🎉 *¡Tu reservación está confirmada!*\n\n` +
+                            `¡Excelente, ${guestFirstName}!\n\n` +
+                            `Nos da mucho gusto confirmar que tu reservación ya quedó lista. Estamos listos para recibirte.\n\n` +
+                            `En "Portal del Huésped" podrás consultar cualquier actualización de tu reservación en tiempo real, así como las fotos, la descripción y los servicios de tu alojamiento.\n\n` +
+                            `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *Cómo llegar:*\n` +
+                            `${howToGetLink}`
+                          ),
+
+                          // 4: Disponibilidad Liberada
+                          4: isEn ? (
+                            `😔 *Availability Released*\n\n` +
+                            `Hello, ${guestFirstName}.\n\n` +
+                            `We regret to inform you that, as we did not receive the deposit within the specified timeframe, the availability for your accommodation has been released.\n\n` +
+                            `If you still wish to stay with us, please press “Check Availability” to see if we still have accommodation available for your travel dates and make a new reservation.\n\n` +
+                            `🌐 *Check Availability:*\n` +
+                            `${checkAvailabilityLink}\n\n` +
+                            `📸 *Photos and Rates:*\n` +
+                            `${photosLink}`
+                          ) : (
+                            `😔 *Disponibilidad liberada*\n\n` +
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `Lamentamos informarte que, al no recibir el depósito dentro del plazo indicado, la disponibilidad de tu alojamiento fue liberada.\n\n` +
+                            `Si aún deseas hospedarte con nosotros, presiona “Verificar disponibilidad” para consultar si todavía contamos con alojamiento disponible para las fechas de tu viaje y, en caso de haber disponibilidad, realizar una nueva reservación.\n\n` +
+                            `🌐 *Verificar disponibilidad:*\n` +
+                            `${checkAvailabilityLink}\n\n` +
+                            `📸 *Fotos y Tarifas:*\n` +
+                            `${photosLink}`
+                          ),
+
+                          // 5: Preparación para tu llegada
+                          5: isEn ? (
+                            `🚗 *Everything ready for your arrival*\n\n` +
+                            `Hello, ${guestFirstName}.\n\n` +
+                            `Very soon we will welcome you to Condominios Jaroje! We want your arrival to be as comfortable as possible.\n\n` +
+                            `👥 Did the number of guests change? Update it from "My reservation" before your arrival to avoid additional charges at check-in.\n\n` +
+                            `In "My reservation" you will find the gate code, location, directions, photos, description and services of your accommodation, as well as everything you need to prepare for your arrival.\n\n` +
+                            `Arriving after 8:00 p.m.? Let us know in advance to welcome you.\n\n` +
+                            `We wish you an excellent trip!\n\n` +
+                            `🌐 *My reservation:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *How to get there:*\n` +
+                            `${howToGetLink}\n\n` +
+                            wifiInfoBlock
+                          ) : (
+                            `🚗 *Todo listo para tu llegada*\n\n` +
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `¡Ya falta muy poco para recibirte en Condominios Jaroje! Queremos que tu llegada sea lo más cómoda posible.\n\n` +
+                            `👥 ¿Cambió el número de huéspedes? Actualízalo desde "Mi reservación" antes de tu llegada para evitar cargos adicionales al momento del check-in.\n\n` +
+                            `En "Mi reservación" encontrarás el código del portón, la ubicación, las indicaciones para llegar, las fotos, la descripción y los servicios de tu alojamiento, así como todo lo necesario para preparar tu llegada.\n\n` +
+                            `¿Llegarás después de las 8:00 p.m.? Avísanos con anticipación para recibirte.\n\n` +
+                            `¡Te deseamos un excelente viaje!\n\n` +
+                            `🌐 *Mi reservación:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *Cómo llegar:*\n` +
+                            `${howToGetLink}\n\n` +
+                            wifiInfoBlock
+                          ),
+
+                          // 6: Bienvenida Check-in
+                          6: isEn ? (
+                            `🏡 *Welcome to Condominios Jaroje!*\n\n` +
+                            `What a pleasure to welcome you, ${guestFirstName}!\n\n` +
+                            `We hope you had an excellent trip. We hope you enjoy an excellent stay and feel at home.\n\n` +
+                            `In "My stay" you will find the gate code, WiFi network and password, photos, description and services of your accommodation, as well as all the necessary information to enjoy your stay.\n\n` +
+                            `If during your stay you need to report any maintenance details, you can do so from "My stay".\n\n` +
+                            `We wish you a wonderful stay. If you need anything, we are here to help.\n\n` +
+                            `🌐 *My stay:*\n` +
+                            `${portalLink}\n\n` +
+                            `🔧 *Maintenance Report:*\n` +
+                            `${maintenanceLink}\n\n` +
+                            wifiInfoBlock
+                          ) : (
+                            `🏡 *¡Bienvenido a Condominios Jaroje!*\n\n` +
+                            `¡Qué gusto recibirte, ${guestFirstName}!\n\n` +
+                            `Esperamos que hayas tenido un excelente viaje. Deseamos que disfrutes una excelente estancia y que te sientas como en casa.\n\n` +
+                            `En "Mi estancia" encontrarás el código del portón, la red WiFi y su contraseña, las fotos, la descripción y los servicios de tu alojamiento, así como toda la información necesaria para disfrutar tu estancia.\n\n` +
+                            `Si durante tu estancia necesitas reportar algún detalle de mantenimiento podrás hacerlo desde "Mi estancia".\n\n` +
+                            `Deseamos que disfrutes tu estancia. Si necesitas cualquier cosa, aquí estamos para ayudarte.\n\n` +
+                            `🌐 *Mi estancia:*\n` +
+                            `${portalLink}\n\n` +
+                            `🔧 *Reporte de Mantenimiento:*\n` +
+                            `${maintenanceLink}\n\n` +
+                            wifiInfoBlock
+                          ),
+
+                          // 7: Seguimiento Satisfacción
+                          7: isEn ? (
+                            `😊 *How is your stay going?*\n\n` +
+                            `Good morning, ${guestFirstName}.\n\n` +
+                            `We want to make sure everything is going as expected.\n\n` +
+                            `If there is anything we can do to make you enjoy your stay even more, we will gladly be at your service.\n\n` +
+                            `🌐 *My stay:*\n` +
+                            `${portalLink}\n\n` +
+                            `🔧 *Maintenance Report:*\n` +
+                            `${maintenanceLink}\n\n` +
+                            wifiInfoBlock
+                          ) : (
+                            `😊 *¿Cómo va tu estancia?*\n\n` +
+                            `Buenos días, ${guestFirstName}.\n\n` +
+                            `Queremos asegurarnos de que todo esté transcurriendo como esperabas.\n\n` +
+                            `Si hay algo que podamos hacer para que disfrutes aún más tu estancia, con gusto estaremos para servirte.\n\n` +
+                            `🌐 *Mi estancia:*\n` +
+                            `${portalLink}\n\n` +
+                            `🔧 *Reporte de Mantenimiento:*\n` +
+                            `${maintenanceLink}\n\n` +
+                            wifiInfoBlock
+                          ),
+
+                          // 8: Check-out
+                          8: isEn ? (
+                            `🚪 *Check-out 12:00 p.m.*\n\n` +
+                            `Very good morning, ${guestFirstName}.\n\n` +
+                            `Today your stay with us ends. Thank you very much for choosing us and we hope you enjoyed your stay.\n\n` +
+                            `If you need to store your luggage after check-out or require assistance with your departure, we will gladly be here to help.\n\n` +
+                            `If there was anything that did not meet your expectations, please let us know so we can help you.\n\n` +
+                            `If you feel your experience was ⭐⭐⭐⭐⭐, we would love for you to share your review.\n\n` +
+                            `⭐ *Write review:*\n` +
+                            `${reviewLink}`
+                          ) : (
+                            `🚪 *Check-out 12:00 p.m.*\n\n` +
+                            `Muy buenos días, ${guestFirstName}.\n\n` +
+                            `Hoy finaliza tu estancia con nosotros. Muchas gracias por habernos elegido y esperamos que hayas disfrutado tu estancia.\n\n` +
+                            `Si necesitas resguardar tu equipaje después del check-out o requieres apoyo con tu salida, con gusto estaremos para ayudarte.\n\n` +
+                            `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
+                            `Si consideras que tu experiencia fue de ⭐⭐⭐⭐⭐, nos encantará que compartas tu opinión.\n\n` +
+                            `⭐ *Escribir reseña:*\n` +
+                            `${reviewLink}`
+                          ),
+
+                          // 9: Comparte Experiencia
+                          9: isEn ? (
+                            `⭐ *How was your experience?*\n\n` +
+                            `Hello, ${guestFirstName}.\n\n` +
+                            `We hope you arrived home safely and keep an excellent memory of your stay with us.\n\n` +
+                            `If there was anything that did not meet your expectations, please let us know so we can help you.\n\n` +
+                            `If your experience was ⭐⭐⭐⭐⭐, it would make us very happy if you shared your review. Your review helps other travelers choose us with greater confidence and motivates us to keep improving.\n\n` +
+                            `⭐ *Rate accommodation:*\n` +
+                            `${reviewLink}`
+                          ) : (
+                            `⭐ *¿Cómo estuvo tu experiencia?*\n\n` +
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `Esperamos que hayas llegado con bien a casa y que conserves un excelente recuerdo de tu estancia con nosotros.\n\n` +
+                            `Si hubo algo que no cumplió tus expectativas, por favor háznoslo saber para poder ayudarte.\n\n` +
+                            `Si tu experiencia fue de ⭐⭐⭐⭐⭐, nos haría muy feliz que compartieras tu reseña. Tu reseña ayuda a otros viajeros a elegirnos con mayor confianza y nos motiva a seguir mejorando.\n\n` +
+                            `⭐ *Calificar alojamiento:*\n` +
+                            `${reviewLink}`
+                          ),
+
+                          // 10: Recibimiento Nuevamente
+                          10: isEn ? (
+                            `🌴 *We'd love to welcome you again!*\n\n` +
+                            `Hello again, ${guestFirstName}.\n\n` +
+                            `Today we remembered your stay with us and wanted to say hello. We hope you keep a great memory of Huatulco and your stay with us.\n\n` +
+                            `If you are thinking of returning to Huatulco, it will be a pleasure to welcome you again. In "Check availability" you can consult availability and start a new reservation.\n\n` +
+                            `🌐 *Check availability:*\n` +
+                            `${checkAvailabilityLink}\n\n` +
+                            `📸 *Photos and Rates:*\n` +
+                            `${photosLink}`
+                          ) : (
+                            `🌴 *¡Nos encantará recibirte nuevamente!*\n\n` +
+                            `Hola de nuevo, ${guestFirstName}.\n\n` +
+                            `Hoy nos acordamos de tu estancia con nosotros y quisimos saludarte. Esperamos que guardes un excelente recuerdo de Huatulco y de tu estancia con nosotros.\n\n` +
+                            `Si estás pensando en regresar a Huatulco, será un placer recibirte nuevamente. En "Verificar disponibilidad" podrás consultar disponibilidad y comenzar una nueva reservación.\n\n` +
+                            `🌐 *Verificar disponibilidad:*\n` +
+                            `${checkAvailabilityLink}\n\n` +
+                            `📸 *Fotos y Tarifas:*\n` +
+                            `${photosLink}`
+                          ),
+
+                          // 11: Confirmación de Anticipo
+                          11: isEn ? (
+                            `💵 *Deposit payment received*\n\n` +
+                            `Hello ${guestFirstName}!\n\n` +
+                            `We have successfully recorded your deposit payment of *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}*.\n\n` +
+                            `Your current remaining balance is *${fmtCurrency(bal, selectedRes.guest_name)}${suffix}*.\n\n` +
+                            `You can view your updated reservation details in real time in your "Guest Portal".\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `💵 *Confirmación de anticipo recibido*\n\n` +
+                            `¡Hola ${guestFirstName}!\n\n` +
+                            `Hemos registrado con éxito tu pago de anticipo por la cantidad de *${fmtCurrency(lastPayment, selectedRes.guest_name)}${suffix}*.\n\n` +
+                            `Tu saldo pendiente actual es de *${fmtCurrency(bal, selectedRes.guest_name)}${suffix}*.\n\n` +
+                            `En tu "Portal del Huésped" puedes consultar los detalles actualizados de tu reservación en tiempo real.\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}`
+                          ),
+
+                          // 12: WiFi y Claves
+                          12: wifiInfoBlock,
+
+                          // 13: Alojamiento Listo
+                          13: isEn ? (
+                            `✨ *Great news, ${guestFirstName}!* 🏡\n\n` +
+                            `Your accommodation is now clean, sanitized, and ready for your arrival.\n\n` +
+                            `If you are already in Huatulco, feel free to head over anytime. In "My stay" you will find all your arrival details, gate codes, WiFi, and stay information.\n\n` +
+                            `We look forward to welcoming you! 🌴\n\n` +
+                            `🌐 *My stay:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *How to get there:*\n` +
+                            `${howToGetLink}`
+                          ) : (
+                            `✨ *¡Buenas noticias, ${guestFirstName}!* 🏡\n\n` +
+                            `Tu alojamiento ya está limpio, desinfectado y listo para recibirte.\n\n` +
+                            `Si ya te encuentras en Huatulco, puedes dirigirte cuando gustes. En "Mi estancia" encontrarás toda la información para tu llegada, incluyendo el acceso, la red WiFi y los detalles de tu estancia.\n\n` +
+                            `¡Te esperamos! 🌴\n\n` +
+                            `🌐 *Mi estancia:*\n` +
+                            `${portalLink}\n\n` +
+                            `📍 *Cómo llegar:*\n` +
+                            `${howToGetLink}`
+                          ),
+
+                          // 14: Comprobante Rechazado
+                          14: isEn ? (
+                            `❌ *Payment Receipt Not Approved*\n\n` +
+                            `Hello, ${guestFirstName}.\n\n` +
+                            `We would like to inform you that the payment receipt for reservation #${selectedRes.id} could not be approved.\n\n` +
+                            `Please visit your Guest Portal to review available payment options or upload a clear, valid receipt.\n\n` +
+                            `🌐 *Guest Portal:*\n` +
+                            `${portalLink}`
+                          ) : (
+                            `❌ *Solicitud / Comprobante de Pago No Aprobado*\n\n` +
+                            `Hola, ${guestFirstName}.\n\n` +
+                            `Te informamos que tu comprobante para la reservación #${selectedRes.id} no pudo ser aprobado.\n\n` +
+                            `Por favor ingresa a tu Portal del Huésped para verificar tus opciones de pago o subir un nuevo comprobante legible.\n\n` +
+                            `🌐 *Portal del Huésped:*\n` +
+                            `${portalLink}`
+                          )
+                        };
+
+                        const message = templates[selectedMessageIndex] || templates[1];
+
+                        // Mapeo directo a nombre de plantilla de la API Meta de WhatsApp
+                        const apiTemplates: Record<number, string> = {
+                          1: 'solicitud_recibida',
+                          2: 'ultimo_aviso',
+                          3: 'reservacion_confirmada',
+                          4: 'disponibilidad_liberada',
+                          5: 'preparacion_llegada',
+                          6: 'bienvenida_checkin',
+                          7: 'seguimiento_satisfaccion',
+                          8: 'salida_checkout',
+                          9: 'comparte_experiencia',
+                          10: 'recibimiento_nuevamente',
+                          11: 'pago_anticipo_recibido',
+                          12: 'wifi_informacion',
+                          13: 'alojamiento_listo',
+                          14: 'rechazo_solicitud'
+                        };
+
+                        const apiTemplateKey = apiTemplates[selectedMessageIndex];
+
+                        const handleSendApiTemplate = async () => {
+                          if (!apiTemplateKey) return;
+
+                          if (apiTemplateKey === 'ultimo_aviso') {
+                            const guestName = selectedRes.guest_name || 'el huésped';
+                            const hasConfirmed = window.confirm(
+                              `⚠️ ¿Estás seguro de que deseas enviar el ÚLTIMO AVISO a ${guestName}?\n\n` +
+                              `Esto notificará al cliente por WhatsApp y activará la cuenta regresiva de 3 horas para la cancelación automática de su reservación.`
+                            );
+                            if (!hasConfirmed) return;
+                          }
+
+                          let rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
+                          let cleanPhone = String(rawPhone).replace(/\D/g, '');
+
+                          if (!cleanPhone) {
+                            const inputPhone = window.prompt(
+                              "⚠️ Esta reservación no tiene un teléfono guardado.\n\n" +
+                              "Por favor ingresa el número de WhatsApp con código de país (ej: 529581168698) para enviar la plantilla oficial:"
+                            );
+                            if (!inputPhone) return;
+                            cleanPhone = inputPhone.replace(/\D/g, '');
+                            if (!cleanPhone || cleanPhone.length < 10) {
+                              alert("❌ El número ingresado no es válido.");
+                              return;
+                            }
+                          }
+
+                          if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+                            cleanPhone = '52' + cleanPhone.substring(3);
+                          } else if (cleanPhone.length === 10) {
+                            cleanPhone = (portalLanguage === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US') ? ('1' + cleanPhone) : ('52' + cleanPhone);
+                          }
+
+                          setSendingTemplate(true);
+                          try {
+                            const res = await fetch('/api/whatsapp/send-template', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                template: apiTemplateKey,
+                                booking: {
+                                  id: selectedRes.id,
+                                  guest_name: selectedRes.guest_name || selectedRes.name,
+                                  phone: cleanPhone,
+                                  price: selectedRes.price || selectedRes.price_estimate,
+                                  deposit: selectedRes.deposit,
+                                  last_payment_amount: selectedRes.last_payment_amount,
+                                  currency: selectedRes.currency,
+                                  lang: portalLanguage,
+                                  language: portalLanguage
+                                },
+                                lang: portalLanguage
+                              })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                              try {
+                                const { supabase } = await import('@/lib/supabase');
+                                await supabase.from('employee_logs').insert([{
+                                  employee_email: (await supabase.auth.getUser()).data.user?.email || 'admin',
+                                  action: `Envío plantilla oficial Meta WhatsApp: ${apiTemplateKey}`,
+                                  details: `Enviado a ${selectedRes.guest_name || 'Huésped'} (${cleanPhone}) para reserva #${selectedRes.id} [${portalLanguage.toUpperCase()}]`,
+                                  booking_id: String(selectedRes.id),
+                                  module: 'whatsapp'
+                                }]);
+                              } catch (_) {}
+
+                              alert(`✅ Plantilla oficial "${apiTemplateKey}" enviada exitosamente por WhatsApp Meta (${portalLanguage.toUpperCase()}).`);
+                            } else {
+                              alert(`⚠️ No se pudo enviar por API: ${data.error || 'Error desconocido'}.\n\nPuedes usar el botón "Copiar y Enviar Manual" abajo.`);
+                            }
+                          } catch (err: any) {
+                            alert(`❌ Error al conectar con el servidor: ${err.message}`);
+                          } finally {
+                            setSendingTemplate(false);
+                          }
+                        };
+
+                        const handleCopyAndSend = async () => {
+                          try {
+                            await copyToClipboard(message);
+                            setCopiedManualSuccess(true);
+                            setTimeout(() => setCopiedManualSuccess(false), 3000);
+                          } catch (err) {
+                            console.error("Error al copiar al portapapeles:", err);
+                          }
+
+                          const rawPhone = selectedRes.guest_phone || selectedRes.phone || selectedRes.mobile || selectedRes.guestPhone || '';
+                          let cleanPhone = String(rawPhone).replace(/\D/g, '');
+
+                          if (!cleanPhone) {
+                            alert("✅ El texto de la plantilla oficial ha sido copiado al portapapeles.\n\nPuedes pegarlo directamente en el chat de Booking.com, Airbnb o WhatsApp Web.");
+                            return;
+                          }
+
+                          if (cleanPhone.startsWith('521') && cleanPhone.length === 13) {
+                            cleanPhone = '52' + cleanPhone.substring(3);
+                          } else if (cleanPhone.startsWith('52') && cleanPhone.length === 12) {
+                            // Ok
+                          } else if (cleanPhone.startsWith('34') && cleanPhone.length === 11) {
+                            // Ok
+                          } else if (cleanPhone.length === 9 && ['6', '7', '8', '9'].includes(cleanPhone[0])) {
+                            cleanPhone = '34' + cleanPhone;
+                          } else if (cleanPhone.startsWith('1') && cleanPhone.length === 11) {
+                            // Ok
+                          } else if (cleanPhone.length === 10) {
+                            if (portalLanguage === 'en' || selectedRes.guest_country === 'US' || selectedRes.country === 'US' || String(rawPhone).startsWith('+1')) {
+                              cleanPhone = '1' + cleanPhone;
+                            } else {
+                              cleanPhone = '52' + cleanPhone;
+                            }
+                          }
+
+                          try {
+                            const { supabase } = await import('@/lib/supabase');
+                            await supabase.from('employee_logs').insert([{
+                              employee_email: (await supabase.auth.getUser()).data.user?.email || 'admin',
+                              action: `Copia manual plantilla WhatsApp #${selectedMessageIndex} (${apiTemplateKey || 'manual'})`,
+                              details: `Copiado para ${selectedRes.guest_name || 'Huésped'} (${cleanPhone}) para reserva #${selectedRes.id}`,
+                              booking_id: String(selectedRes.id),
+                              module: 'whatsapp'
+                            }]);
+                          } catch (_) {}
+
+                          const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+                          const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+                          if (isMobile) {
+                            window.location.href = waUrl;
+                          } else {
+                            window.open(waUrl, '_blank');
+                          }
+                        };
+
+                        return (
+                          <div className="space-y-3 pt-1">
+                            <div className="relative">
+                              <div className="bg-zinc-50 border border-zinc-200/80 rounded-xl p-3 text-[11px] leading-relaxed text-zinc-700 font-sans whitespace-pre-wrap select-all max-h-48 overflow-y-auto">
+                                {message}
+                              </div>
+                            </div>
+
+                            {/* Botón 1: Enviar por API oficial de WhatsApp Meta */}
+                            <button
+                              onClick={handleSendApiTemplate}
+                              disabled={sendingTemplate}
+                              className={`w-full active:scale-95 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm ${
+                                sendingTemplate
+                                  ? 'bg-zinc-400 cursor-not-allowed'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/20'
+                              }`}
+                            >
+                              {sendingTemplate ? (
+                                <>
+                                  <RefreshCw size={14} className="animate-spin text-white" />
+                                  <span>Enviando por WhatsApp Meta...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                                </svg>
+                                <span>Enviar Plantilla Oficial (API WhatsApp Meta)</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Botón 2: Copiar y Enviar Manual */}
+                          <button
+                            onClick={handleCopyAndSend}
+                            className={`w-full active:scale-95 text-white font-extrabold text-[12px] py-2.5 px-4 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all shadow-sm ${
+                              copiedManualSuccess 
+                                ? 'bg-zinc-900 border border-emerald-500/50 ring-2 ring-emerald-500/20' 
+                                : 'bg-zinc-800 hover:bg-zinc-900 border border-zinc-900'
+                            }`}
+                          >
+                            {copiedManualSuccess ? (
+                              <>
+                                <svg className="w-3.5 h-3.5 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                <span className="text-emerald-300 font-black">¡Copiado y Abriendo WhatsApp!</span>
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-3.5 h-3.5 text-zinc-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                <span>Copiar y Enviar Manual</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
               </div>
             </div>
             

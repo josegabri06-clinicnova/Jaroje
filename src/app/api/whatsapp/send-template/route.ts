@@ -11,6 +11,9 @@ import {
   sendTemplate9_ComparteExperiencia,
   sendTemplate10_RecibimientoNuevamente,
   sendTemplate11_PagoAnticipoRecibido,
+  sendTemplate_AlojamientoListo,
+  sendTemplate_WiFiInformacion,
+  sendTemplate_ComprobanteRechazado,
   sendTemplate_BienvenidoConmutador,
   sendTemplate_BienvenidoWhatsApp,
   sendTemplate_PortalHuespedLink,
@@ -21,7 +24,7 @@ import {
 
 export async function POST(req: Request) {
   try {
-    const { template, booking } = await req.json();
+    const { template, booking, lang } = await req.json();
 
     if (!template || !booking) {
       return NextResponse.json({
@@ -31,6 +34,10 @@ export async function POST(req: Request) {
     }
 
     let activeBooking = { ...booking };
+    if (lang) {
+      activeBooking.lang = lang;
+      activeBooking.language = lang;
+    }
     if (!activeBooking.phone && !activeBooking.mobile && !activeBooking.guest_phone && !activeBooking.guestPhone && activeBooking.id) {
       try {
         const { supabase } = require('@/lib/supabase');
@@ -128,10 +135,20 @@ export async function POST(req: Request) {
       case 'pago_anticipo_recibido':
         res = await sendTemplate11_PagoAnticipoRecibido(activeBooking, true);
         break;
+      case 'alojamiento_listo':
+        res = await sendTemplate_AlojamientoListo(activeBooking, true);
+        break;
+      case 'wifi_informacion':
+        res = await sendTemplate_WiFiInformacion(activeBooking, true);
+        break;
+      case 'rechazo_solicitud':
+      case 'comprobante_rechazado':
+        res = await sendTemplate_ComprobanteRechazado(activeBooking, undefined, true);
+        break;
       case 'portal_huesped_link': {
         const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
-        const lang = detectLanguageFromPhone(ph);
-        res = await sendTemplate_PortalHuespedLink(ph, activeBooking.id || 'general', activeBooking.guest_name, lang as 'es' | 'en');
+        const userLang = activeBooking.lang || activeBooking.language || detectLanguageFromPhone(ph);
+        res = await sendTemplate_PortalHuespedLink(ph, activeBooking.id || 'general', activeBooking.guest_name, userLang as 'es' | 'en');
         break;
       }
       case 'bienvenido_cliente_final_v2': {
@@ -145,8 +162,8 @@ export async function POST(req: Request) {
           res = await sendTemplate3_ReservacionConfirmada(activeBooking, true, true);
         } else {
           const ph = activeBooking.phone || activeBooking.mobile || activeBooking.guest_phone || '';
-          const lang = detectLanguageFromPhone(ph);
-          res = await sendTemplate_PortalHuespedLink(ph, 'general', activeBooking.guest_name, lang as 'es' | 'en');
+          const userLang = activeBooking.lang || activeBooking.language || detectLanguageFromPhone(ph);
+          res = await sendTemplate_PortalHuespedLink(ph, 'general', activeBooking.guest_name, userLang as 'es' | 'en');
         }
         break;
       }
