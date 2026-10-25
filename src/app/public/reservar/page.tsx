@@ -68,6 +68,21 @@ interface ExistingBooking {
   portal_url: string;
 }
 
+function formatMexicanDate(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      const m = parseInt(parts[1], 10) - 1;
+      return `${parseInt(parts[2], 10)} ${months[m] || parts[1]} ${parts[0]}`;
+    }
+    return dateStr;
+  } catch {
+    return dateStr;
+  }
+}
+
 function ReservarContent() {
   const searchParams = useSearchParams();
   const phoneParam = searchParams.get('phone') || searchParams.get('p') || '';
@@ -248,7 +263,7 @@ function ReservarContent() {
           summaryTitle: 'Booking Summary',
           confirmPendingQuoteTitle: 'Official Booking Confirmation',
           confirmPendingQuoteBadge: 'Step 2: Official Confirmation',
-          confirmPendingQuoteDesc: 'We received your WhatsApp quote. To formalize the 24-hour hold in our system, we need your full name.',
+          confirmPendingQuoteDesc: 'You will receive your Guest Portal via WhatsApp to review your reservation. You will have 24 hours to complete your deposit and upload your receipt to your Guest Portal. (After that time, you will have to check availability again).',
           guestDetailsTitle: 'Guest Details',
           fullName: 'Full Name',
           phone: 'WhatsApp Phone',
@@ -306,7 +321,7 @@ function ReservarContent() {
           summaryTitle: 'Resumen de tu Solicitud',
           confirmPendingQuoteTitle: 'Confirmar Reserva Oficial',
           confirmPendingQuoteBadge: 'Paso 2: Confirmación Oficial',
-          confirmPendingQuoteDesc: 'Recibimos tu cotización por WhatsApp. Para formalizar el bloqueo en nuestro sistema por 24 horas, necesitamos tu nombre completo.',
+          confirmPendingQuoteDesc: 'Recibirás por WhatsApp tu Portal del Huésped donde podrás revisar tu reservación. Tendrás 24 hrs para completar el depósito de tu anticipo y subir tu comprobante a tu Portal del Huésped. (Después de ese tiempo tendrás que verificar nuevamente disponibilidad).',
           guestDetailsTitle: 'Datos del Titular',
           fullName: 'Nombre y Apellidos completos',
           phone: 'Teléfono WhatsApp',
@@ -809,11 +824,11 @@ function ReservarContent() {
             <div className="bg-white rounded-2xl p-5 border border-zinc-200/70 shadow-xs space-y-3">
               <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                 <span className="text-zinc-500">{t.checkInLabel}:</span>
-                <span className="font-bold text-zinc-900">{bookingSuccess.checkIn}</span>
+                <span className="font-bold text-zinc-900">{formatMexicanDate(bookingSuccess.checkIn)}</span>
               </div>
               <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                 <span className="text-zinc-500">{t.checkOutLabel}:</span>
-                <span className="font-bold text-zinc-900">{bookingSuccess.checkOut}</span>
+                <span className="font-bold text-zinc-900">{formatMexicanDate(bookingSuccess.checkOut)}</span>
               </div>
               <div className="flex justify-between items-center text-xs border-b border-zinc-100 pb-2">
                 <span className="text-zinc-500">Alojamientos:</span>
@@ -827,19 +842,6 @@ function ReservarContent() {
                 <span className="font-black text-indigo-700">Anticipo Requerido (50%):</span>
                 <span className="font-black text-indigo-600 text-lg">${bookingSuccess.depositRequired.toLocaleString()} MXN</span>
               </div>
-            </div>
-
-            {/* Datos Bancarios para transferencia */}
-            <div className="bg-white rounded-2xl p-5 border border-zinc-200/70 shadow-xs space-y-2.5">
-              <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
-                {t.bankTransferTitle}
-              </h3>
-              <p className="text-xs font-bold text-zinc-800">{t.bankName}</p>
-              <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl font-mono text-sm font-black text-zinc-900 flex justify-between items-center">
-                <span>012610015523498762</span>
-                <span className="text-[10px] text-zinc-400 font-sans uppercase">CLABE Interbancaria</span>
-              </div>
-              <p className="text-xs text-zinc-600">{t.bankAccountHolder}</p>
             </div>
 
             {/* Acciones Finales: Volver a WhatsApp + Ir al Portal */}
@@ -881,7 +883,7 @@ function ReservarContent() {
                 </div>
 
                 <div className="flex justify-between text-xs text-zinc-600 border-t border-zinc-100 pt-2">
-                  <span>📅 {res.check_in} al {res.check_out}</span>
+                  <span>📅 {formatMexicanDate(res.check_in)} al {formatMexicanDate(res.check_out)}</span>
                   <span className="font-bold text-zinc-900">${res.price.toLocaleString()} MXN</span>
                 </div>
 
@@ -1457,7 +1459,7 @@ function ReservarContent() {
               {/* Fechas y noches */}
               <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
                 <span className="text-zinc-500 font-semibold">{lang === 'en' ? 'Dates:' : 'Fechas:'}</span>
-                <span className="text-zinc-900 font-extrabold">{checkIn} al {checkOut} ({activeSummary.nights} {activeSummary.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')})</span>
+                <span className="text-zinc-900 font-extrabold">{formatMexicanDate(checkIn)} al {formatMexicanDate(checkOut)} ({activeSummary.nights} {activeSummary.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')})</span>
               </div>
 
               {/* Número de huéspedes */}
@@ -1548,9 +1550,10 @@ function ReservarContent() {
                 <div className="flex justify-between font-black text-sm text-zinc-900 pt-1.5 border-t border-zinc-200">
                   <div>
                     <span>{lang === 'en' ? 'Total for Stay:' : 'Total de la estancia:'}</span>
-                    <span className="text-[9.5px] text-emerald-700 block font-semibold">
-                      {lang === 'en' ? 'All taxes included' : 'Impuestos totales incluidos'}
-                    </span>
+                    <div className="mt-0.5 space-y-0.5 text-[10px] font-bold text-emerald-700">
+                      <div>✅ {lang === 'en' ? 'Taxes included' : 'Impuestos incluidos'}</div>
+                      <div>✅ {lang === 'en' ? 'Jaroje Member Rate applied' : 'Tarifa de Miembro Jaroje aplicada'}</div>
+                    </div>
                   </div>
                   <span className="text-base text-indigo-900 font-black">${activeSummary.grandTotal.toLocaleString()} MXN</span>
                 </div>
