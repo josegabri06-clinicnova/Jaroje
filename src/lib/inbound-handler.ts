@@ -13,7 +13,97 @@ function phonesMatch(phoneA: string, phoneB: string): boolean {
   const normA = normalizePhone(phoneA);
   const normB = normalizePhone(phoneB);
   if (!normA || !normB) return false;
-  return normA === normB;
+  if (normA === normB) return true;
+  const lastA = normA.slice(-10);
+  const lastB = normB.slice(-10);
+  return lastA.length === 10 && lastA === lastB;
+}
+
+export async function findGuestBooking(phone: string): Promise<{
+  id: string;
+  guest_name: string;
+  status?: string;
+  check_in?: string;
+  check_out?: string;
+  source: 'beds24' | 'local' | 'logs';
+} | null> {
+  if (!phone) return null;
+  const rawSuffix = phone.length >= 10 ? phone.slice(-10) : phone;
+
+  try {
+    // 1. Beds24 reservations (columna real: guest_phone)
+    const { data: b24List } = await supabase
+      .from('beds24_reservations')
+      .select('id, guest_name, guest_phone, status, check_in, check_out')
+      .ilike('guest_phone', `%${rawSuffix}%`)
+      .neq('status', 'cancelled');
+
+    if (b24List && b24List.length > 0) {
+      const matched = b24List.filter(b => phonesMatch(b.guest_phone, phone));
+      if (matched.length > 0) {
+        matched.sort((a, b) => new Date(b.check_in || 0).getTime() - new Date(a.check_in || 0).getTime());
+        return {
+          id: String(matched[0].id),
+          guest_name: matched[0].guest_name || 'Huésped',
+          status: matched[0].status,
+          check_in: matched[0].check_in,
+          check_out: matched[0].check_out,
+          source: 'beds24'
+        };
+      }
+    }
+  } catch (err) {
+    console.error('[Inbound Handler] Error buscando en beds24_reservations:', err);
+  }
+
+  try {
+    // 2. Local reservations (columna: phone)
+    const { data: locList } = await supabase
+      .from('local_reservas')
+      .select('id, guest_name, phone, status, check_in, check_out')
+      .ilike('phone', `%${rawSuffix}%`)
+      .neq('status', 'cancelled');
+
+    if (locList && locList.length > 0) {
+      const matched = locList.filter(b => phonesMatch(b.phone, phone));
+      if (matched.length > 0) {
+        matched.sort((a, b) => new Date(b.check_in || 0).getTime() - new Date(a.check_in || 0).getTime());
+        return {
+          id: String(matched[0].id),
+          guest_name: matched[0].guest_name || 'Huésped',
+          status: matched[0].status,
+          check_in: matched[0].check_in,
+          check_out: matched[0].check_out,
+          source: 'local'
+        };
+      }
+    }
+  } catch (err) {
+    console.error('[Inbound Handler] Error buscando en local_reservas:', err);
+  }
+
+  try {
+    // 3. Fallback a whatsapp_logs con reservation_id numérico válido
+    const { data: logs } = await supabase
+      .from('whatsapp_logs')
+      .select('reservation_id, phone, sent_at')
+      .or(`phone.eq.${phone},phone.ilike.%${rawSuffix}%`)
+      .order('sent_at', { ascending: false })
+      .limit(10);
+
+    if (logs && logs.length > 0) {
+      for (const l of logs) {
+        const rId = String(l.reservation_id || '');
+        if (rId && rId !== 'system_manual' && rId !== 'general' && rId !== '0') {
+          return { id: rId, guest_name: 'Huésped', source: 'logs' };
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[Inbound Handler] Error buscando en whatsapp_logs:', err);
+  }
+
+  return null;
 }
 
 export interface InboundMessageParams {
@@ -145,6 +235,12 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   const rawPayload = String(params.button_payload || '').toLowerCase();
   const guestMsgClean = guestMsgText.toLowerCase();
 
+  // ── BUSCAR SI EL CLIENTE YA TIENE RESERVACIÓN EN EL HOTEL ──
+  const guestBooking = await findGuestBooking(phone);
+  if (guestBooking) {
+    console.log(`[Inbound Handler] 🏨 Huésped identificado con reserva #${guestBooking.id} (${guestBooking.guest_name})`);
+  }
+
   // ── AUTO-VINCULACIÓN INTELIGENTE DE RESERVAS SIN TELÉFONO (Booking.com / Expedia) ──
   try {
     const { data: unlinkedBookings } = await supabase
@@ -203,6 +299,65 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   } catch (linkErr) {
     console.warn("[Inbound Handler] Error en auto-vinculación de reserva:", linkErr);
+  }
+
+  // ── DETECCIÓN DE COMPROBANTES DE PAGO / TRANSFERENCIAS / IMÁGENES ──
+  const isImageOrReceipt = 
+    guestMsgClean.includes('[imagen recibida]') || 
+    guestMsgClean.includes('comprobante') || 
+    guestMsgClean.includes('transferencia') || 
+    guestMsgClean.includes('deposito') || 
+    guestMsgClean.includes('depósito') || 
+    guestMsgClean.includes('ficha') || 
+    guestMsgClean.includes('voucher') ||
+    guestMsgClean.includes('pago');
+
+  if (isImageOrReceipt && guestBooking) {
+    forceHuman = true;
+    const { isSpanishOrLatamPhone, sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
+    const isEnglish = !isSpanishOrLatamPhone(phone);
+    const lang = isEnglish ? 'en' : 'es';
+    console.log(`[Inbound Handler] 📸 Comprobante/imagen recibida de ${guestBooking.guest_name} (Reserva #${guestBooking.id}).`);
+
+    try {
+      await supabase.from('employee_logs').insert([{
+        employee_num: 'wa-bot',
+        employee_name: guestBooking.guest_name,
+        department: 'recepcion',
+        module: 'recepcion',
+        action: 'comprobante_recibido_inbound',
+        details: `Comprobante/imagen recibida en WhatsApp para la reservación #${guestBooking.id} (${guestBooking.guest_name}). Se envía plantilla Portal del Huésped.`,
+        created_at: new Date().toISOString()
+      }]);
+    } catch (_) {}
+
+    welcomeSentMemoryCache.set(phone, Date.now());
+    const portalRes = await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
+    if (!portalRes.success) {
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
+      finalBotResponse = lang === 'en'
+        ? `📸 *Payment receipt received!*\n\nThank you, ${guestBooking.guest_name}. Our reception desk is verifying your payment.\n\nYou can track your updated reservation and balance anytime in your Guest Portal:\n👉 ${siteUrl}/public/reserva/${guestBooking.id}?lang=en`
+        : `📸 *¡Comprobante de pago recibido!*\n\nMuchas gracias, ${guestBooking.guest_name}. Nuestro equipo de recepción está validando tu depósito.\n\nPuedes consultar tu saldo actualizado y los detalles de tu estancia en tu Portal del Huésped:\n👉 ${siteUrl}/public/reserva/${guestBooking.id}?lang=es`;
+      isAutoReplyTriggered = true;
+    } else {
+      isAutoReplyTriggered = false;
+      finalBotResponse = null;
+    }
+
+    const newMessage = {
+      role_guest: guestMsgText || '[Comprobante]',
+      role_bot: finalBotResponse,
+      role_manager: null,
+      timestamp,
+    };
+    if (existing) {
+      await supabase.from('conversations').update({
+        messages: [...(existing.messages || []), newMessage],
+        timestamp,
+        human_mode: true
+      }).eq('id', existing.id);
+    }
+    return { success: true, isAutoReplyTriggered, finalBotResponse };
   }
 
   // ── DETECCIÓN DE INTENCIONES AUTOMÁTICAS ────────────────────────────────────
@@ -294,51 +449,9 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       bookingId = payloadMatch[1];
     }
 
-    if (!bookingId) {
-      try {
-        const rawSuffix = phone.length > 9 ? phone.substring(phone.length - 9) : phone;
-        const { data: lastLog } = await supabase
-          .from('whatsapp_logs')
-          .select('reservation_id')
-          .or(`phone.eq.${phone},phone.eq.${rawSuffix},phone.like.%${rawSuffix}`)
-          .order('sent_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (lastLog?.reservation_id) {
-          bookingId = String(lastLog.reservation_id);
-        }
-      } catch (logErr) {
-        console.error("[Inbound Handler] Error buscando en whatsapp_logs:", logErr);
-      }
-
-      if (!bookingId) {
-        try {
-          const [b24Res, localRes] = await Promise.all([
-            supabase.from('beds24_reservations').select('id, guest_phone, phone, status, check_in, check_out, guest_name'),
-            supabase.from('local_reservas').select('id, phone, status, check_in, check_out, guest_name')
-          ]);
-
-          const allBookings = [
-            ...(b24Res.data || []).map((b: any) => ({ ...b, phone: b.guest_phone || b.phone || '' })),
-            ...(localRes.data || []).map((b: any) => ({ ...b, phone: b.phone || '' }))
-          ];
-
-          const matches = allBookings.filter((b: any) => phonesMatch(b.phone, phone));
-          if (matches.length > 0) {
-            const todayTime = new Date().setHours(0,0,0,0);
-            matches.sort((a: any, b: any) => {
-              const aIn = new Date(a.check_in || 0).getTime();
-              const bIn = new Date(b.check_in || 0).getTime();
-              return bIn - aIn;
-            });
-            bookingId = String(matches[0].id);
-            guestNameFromSearch = matches[0].guest_name || '';
-          }
-        } catch (bErr) {
-          console.error("[Inbound Handler] Error buscando reservas:", bErr);
-        }
-      }
+    if (!bookingId && guestBooking) {
+      bookingId = guestBooking.id;
+      guestNameFromSearch = guestBooking.guest_name;
     }
 
     if (bookingId) {
@@ -370,30 +483,42 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     guestMsgClean.includes('reserva ya') || 
     guestMsgClean.includes('¡reserva ya!') || 
     guestMsgClean.includes('reservar') || 
-    guestMsgClean.includes('reserva') || 
-    guestMsgClean.includes('disponibilidad') || 
+    (guestMsgClean.includes('reserva') && !guestMsgClean.includes('mi reserva') && !guestMsgClean.includes('mi reservacion') && !guestMsgClean.includes('mi reservación')) || 
     guestMsgClean.includes('quote & availability') || 
     guestMsgClean.includes('book now') || 
     guestMsgClean.includes('booking') || 
     rawPayload.includes('cotizar') || 
     rawPayload.includes('disponibilidad') || 
-    rawPayload.includes('reserva') || 
     rawPayload.includes('book_now')
   ) {
-    // Despachar exclusivamente la plantilla oficial de 3 botones aprobada en Meta (bienvenido_cliente_whatsaap_v4)
-    const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
-    try {
-      console.log(`[Inbound Handler] 🌟 Intención de reserva detectada. Despachando plantilla oficial de 3 botones 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
-      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
-      if (welcomeResult.success) {
+    if (guestBooking) {
+      // Si el cliente ya tiene una reservación, no ofrecerle cotizar desde cero, enviarle su Portal del Huésped
+      const { isSpanishOrLatamPhone, sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
+      const isEnglish = !isSpanishOrLatamPhone(phone);
+      const lang = isEnglish ? 'en' : 'es';
+      console.log(`[Inbound Handler] 🏨 Huésped con reserva existente #${guestBooking.id} (${guestBooking.guest_name}) consultó. Enviando 'portal_huesped_link'...`);
+      const portalResult = await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
+      if (portalResult.success) {
         welcomeSentMemoryCache.set(phone, Date.now());
         isAutoReplyTriggered = false;
         finalBotResponse = null;
-      } else {
-        console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
       }
-    } catch (err) {
-      console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
+    } else {
+      // Despachar exclusivamente la plantilla oficial de 3 botones aprobada en Meta (bienvenido_cliente_whatsaap_v4)
+      const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
+      try {
+        console.log(`[Inbound Handler] 🌟 Intención de reserva detectada. Despachando plantilla oficial de 3 botones 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
+        const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
+        if (welcomeResult.success) {
+          welcomeSentMemoryCache.set(phone, Date.now());
+          isAutoReplyTriggered = false;
+          finalBotResponse = null;
+        } else {
+          console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
+        }
+      } catch (err) {
+        console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
+      }
     }
   }
 
@@ -416,10 +541,10 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       : `📍 *Ubicación - Condominios Jaroje*\n\nEstamos ubicados en Santa María Huatulco, Oaxaca.\n\n👉 Cómo llegar en Google Maps: ${mapsUrl}`;
   }
 
-  // ── REGLA DE BIENVENIDA AUTOMÁTICA A WHATSAPP (1 VEZ POR SEMANA / 7 DÍAS) ──
-  // Plantilla: bienvenido_cliente_whatsaap_v4
-  // Cuando el cliente le habla por WhatsApp a Rolando y no había interactuado en 1 semana.
-  // Regla estricta: Solo le llega como máximo 1 vez cada 7 días.
+  // ── REGLA DE BIENVENIDA / PORTAL A WHATSAPP (1 VEZ POR SEMANA / 7 DÍAS) ──
+  // Si el cliente le habla por WhatsApp al hotel y no había interactuado en 1 semana:
+  // - Si YA TIENE RESERVA: Enviar plantilla oficial con link al Portal del Huésped (portal_huesped_link)
+  // - Si ES PROSPECTO NUEVO: Enviar plantilla oficial de ventas (bienvenido_cliente_whatsaap_v4)
   const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   const now = Date.now();
 
@@ -431,13 +556,13 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     lastWelcomeSentAt = Math.max(lastWelcomeSentAt, memSentTime);
   }
 
-  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida en los últimos 7 días
+  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida o de portal en los últimos 7 días
   try {
     const { data: lastWelcomeLog } = await supabase
       .from('whatsapp_logs')
       .select('sent_at, template_name')
       .eq('phone', phone)
-      .ilike('template_name', '%bienvenido%')
+      .or('template_name.ilike.%bienvenido%,template_name.eq.portal_huesped_link')
       .order('sent_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -449,7 +574,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       }
     }
   } catch (logChkErr) {
-    console.warn("[Inbound Handler] Error verificando whatsapp_logs para welcome template:", logChkErr);
+    console.warn("[Inbound Handler] Error verificando whatsapp_logs para welcome/portal template:", logChkErr);
   }
 
   // C. Revisar en historial de conversaciones si hay registro reciente en los últimos 7 días
@@ -457,7 +582,13 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     for (let i = existing.messages.length - 1; i >= 0; i--) {
       const msg = existing.messages[i];
       const botText = String(msg.role_bot || msg.role_manager || '');
-      if (botText.includes('bienvenido_cliente_whatsaap') || botText.includes('bienvenido_cliente_final_v4') || botText.includes('bienvenido_cliente')) {
+      if (
+        botText.includes('bienvenido_cliente_whatsaap') || 
+        botText.includes('bienvenido_cliente_final_v4') || 
+        botText.includes('bienvenido_cliente') ||
+        botText.includes('portal_huesped_link') ||
+        botText.includes('Portal del Huésped')
+      ) {
         const msgTime = new Date(msg.timestamp || 0).getTime();
         if (!isNaN(msgTime) && msgTime > lastWelcomeSentAt) {
           lastWelcomeSentAt = msgTime;
@@ -472,23 +603,37 @@ export async function handleInboundMessage(params: InboundMessageParams) {
 
   if (shouldSendWelcome) {
     try {
-      console.log(`[Inbound Handler] 🌟 Cliente escribió a WhatsApp (sin contacto en 1 semana). Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
       welcomeSentMemoryCache.set(phone, now);
       if (welcomeSentMemoryCache.size > 100) {
         const oldest = Array.from(welcomeSentMemoryCache.keys()).slice(0, 20);
         oldest.forEach(k => welcomeSentMemoryCache.delete(k));
       }
-      const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
-      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
-      console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
 
-      // Si se envió exitosamente la plantilla oficial con botones, no duplicar con texto plano
-      if (welcomeResult.success) {
-        isAutoReplyTriggered = false;
-        finalBotResponse = null;
+      if (guestBooking) {
+        // HUÉSPED CON RESERVACIÓN: Enviar plantilla oficial de Portal del Huésped
+        console.log(`[Inbound Handler] 🏨 Huésped con reserva #${guestBooking.id} (${guestBooking.guest_name}) escribió (sin contacto en 1 semana). Enviando 'portal_huesped_link'...`);
+        const { isSpanishOrLatamPhone, sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
+        const isEnglish = !isSpanishOrLatamPhone(phone);
+        const lang = isEnglish ? 'en' : 'es';
+        const portalResult = await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
+        console.log(`[Inbound Handler] Resultado envío Portal del Huésped WhatsApp:`, portalResult);
+        if (portalResult.success) {
+          isAutoReplyTriggered = false;
+          finalBotResponse = null;
+        }
+      } else {
+        // PROSPECTO NUEVO SIN RESERVA: Enviar bienvenida oficial con opciones de cotización
+        console.log(`[Inbound Handler] 🌟 Prospecto nuevo escribió a WhatsApp (sin contacto en 1 semana). Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
+        const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
+        const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
+        console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
+        if (welcomeResult.success) {
+          isAutoReplyTriggered = false;
+          finalBotResponse = null;
+        }
       }
     } catch (welcomeErr) {
-      console.error("[Inbound Handler] Error enviando bienvenida WhatsApp:", welcomeErr);
+      console.error("[Inbound Handler] Error enviando bienvenida/portal WhatsApp:", welcomeErr);
     }
   }
 
