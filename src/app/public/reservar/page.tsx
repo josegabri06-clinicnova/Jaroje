@@ -196,7 +196,7 @@ function ReservarContent() {
     if (clean === '3dorm' || clean === '3rec' || clean === '3hab') return '3rec';
     if (clean === '1dorm' || clean === '1rec' || clean === '1hab') return '1rec';
     if (clean === 'doble' || clean === 'std' || clean === 'estandar') return 'doble';
-    if (clean === 'villa' || clean === 'casa') return 'villa';
+    if (clean === 'villa' || clean === 'casa') return 'casa';
     return clean;
   };
 
@@ -416,12 +416,28 @@ function ReservarContent() {
           });
         }
 
-        // Si existe cotización pendiente previa asociada a este teléfono
-        if (data.pendingQuote && data.pendingQuote.status === 'pending_name') {
+        // Si existe cotización pendiente previa asociada a este teléfono SOLO si el usuario viene del botón de confirmar cotización
+        if (isDirectReserveFlow && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
           setPendingQuote(data.pendingQuote);
           if (data.pendingQuote.phone && !guestPhone) {
             setGuestPhone(data.pendingQuote.phone);
           }
+          // Sincronizar selectedRooms con los alojamientos del pendingQuote para que las tarjetas reflejen la cantidad
+          setSelectedRooms(prev => {
+            if (Object.keys(prev).length > 0) return prev;
+            if (Array.isArray(data.pendingQuote.rooms) && data.pendingQuote.rooms.length > 0) {
+              const mapped: Record<string, number> = {};
+              data.pendingQuote.rooms.forEach((r: any) => {
+                const k = normalizeRoomCategoryKey(r.key || '');
+                if (k) mapped[k] = Number(r.quantity || 1);
+              });
+              return mapped;
+            }
+            return prev;
+          });
+        } else if (!isDirectReserveFlow) {
+          // Si el usuario entra por navegación general al portal, no forzar ninguna cotización previa fantasma
+          setPendingQuote(null);
         }
       }
     } catch (err) {
@@ -446,6 +462,14 @@ function ReservarContent() {
       const next = Math.max(0, Math.min(maxAvailable, current + delta));
       return { ...prev, [key]: next };
     });
+  };
+
+  // Limpiar y resetear completamente la selección de habitaciones
+  const handleClearSelection = () => {
+    setSelectedRooms({});
+    setSelectedExtraGuests(null);
+    setPendingQuote(null);
+    setIsConfirmStep(false);
   };
 
   // Carrusel de fotos
@@ -532,7 +556,7 @@ function ReservarContent() {
     if (selectionSummary.totalRooms > 0) {
       return selectionSummary;
     }
-    if (pendingQuote && Array.isArray(pendingQuote.rooms) && pendingQuote.rooms.length > 0) {
+    if (isDirectReserveFlow && isConfirmStep && pendingQuote && Array.isArray(pendingQuote.rooms) && pendingQuote.rooms.length > 0) {
       let totalRooms = 0;
       let baseLodgingTotal = 0;
       let totalBaseCapacity = 0;
@@ -610,7 +634,7 @@ function ReservarContent() {
       };
     }
     return selectionSummary;
-  }, [selectionSummary, pendingQuote, quotes, totalGuests, stayNights, selectedExtraGuests]);
+  }, [selectionSummary, pendingQuote, quotes, totalGuests, stayNights, selectedExtraGuests, isDirectReserveFlow, isConfirmStep]);
 
   const coveredCapacity = activeSummary.totalRooms > 0 ? (activeSummary.totalBaseCapacity + (activeSummary.extraGuests || 0)) : 0;
   const isOverCapacity = activeSummary.totalRooms > 0 && (totalGuests > activeSummary.totalMaxCapacity || totalGuests > coveredCapacity);
@@ -1398,11 +1422,21 @@ function ReservarContent() {
 
             <div className="flex items-center justify-between gap-4">
               <div>
-                <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-500">
-                  <BedDouble size={14} className={isOverCapacity ? "text-rose-600" : "text-indigo-600"} />
-                  <span>
-                    {activeSummary.totalRooms} {t.selectedRoomsCount} (Base {activeSummary.totalBaseCapacity} · máx. {activeSummary.totalMaxCapacity} pers.)
-                  </span>
+                <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
+                  <div className="flex items-center gap-1.5">
+                    <BedDouble size={14} className={isOverCapacity ? "text-rose-600" : "text-indigo-600"} />
+                    <span>
+                      {activeSummary.totalRooms} {t.selectedRoomsCount} (Base {activeSummary.totalBaseCapacity} · máx. {activeSummary.totalMaxCapacity} pers.)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClearSelection}
+                    className="text-[10px] text-rose-600 hover:text-rose-800 font-extrabold underline cursor-pointer bg-rose-50 hover:bg-rose-100 px-1.5 py-0.5 rounded-md transition-all active:scale-95"
+                    title={lang === 'en' ? 'Remove all selected rooms' : 'Vaciar selección de habitaciones'}
+                  >
+                    {lang === 'en' ? '✕ Clear' : '✕ Quitar'}
+                  </button>
                 </div>
                 <div className="text-base font-black text-zinc-900">
                   ${activeSummary.grandTotal.toLocaleString()} MXN
@@ -1486,7 +1520,10 @@ function ReservarContent() {
                 </div>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setIsConfirmStep(false);
+                }}
                 className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center cursor-pointer"
               >
                 <X size={16} />
