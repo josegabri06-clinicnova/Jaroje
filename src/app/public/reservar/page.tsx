@@ -10,6 +10,7 @@ import {
   Minus,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Clock,
   Sparkles,
   ShieldCheck,
@@ -87,7 +88,8 @@ function ReservarContent() {
   const searchParams = useSearchParams();
   const phoneParam = searchParams.get('phone') || searchParams.get('p') || '';
   const langParam = searchParams.get('lang') || 'es';
-  const stepParam = searchParams.get('step') || searchParams.get('action') || '';
+  const actionParam = searchParams.get('action') || '';
+  const stepParam = searchParams.get('step') || '';
   const checkInParam = searchParams.get('checkIn') || searchParams.get('in') || '';
   const checkOutParam = searchParams.get('checkOut') || searchParams.get('out') || '';
   const adultsParam = searchParams.get('adults') || searchParams.get('a') || '';
@@ -95,6 +97,14 @@ function ReservarContent() {
   const roomsParam = searchParams.get('rooms') || searchParams.get('r') || '';
   const extrasParam = searchParams.get('extras') || searchParams.get('extra') || '';
   const quoteIdParam = searchParams.get('quoteId') || searchParams.get('q') || '';
+
+  const isDirectReserveFlow = Boolean(
+    actionParam === 'reserve' ||
+    stepParam === 'reserve' ||
+    stepParam === 'confirm' ||
+    quoteIdParam ||
+    (roomsParam && (phoneParam || quoteIdParam))
+  );
 
   const [lang, setLang] = useState<'es' | 'en'>(langParam === 'en' ? 'en' : 'es');
 
@@ -179,6 +189,17 @@ function ReservarContent() {
   const [existingReservations, setExistingReservations] = useState<ExistingBooking[]>([]);
   const [activeTab, setActiveTab] = useState<'booking' | 'existing'>('booking');
 
+  // Función de normalización de claves de habitaciones para compatibilidad total con parámetros de URL y Bed24
+  const normalizeRoomCategoryKey = (k: string): string => {
+    const clean = k.toLowerCase().trim();
+    if (clean === '2dorm' || clean === '2rec' || clean === '2hab') return '2rec';
+    if (clean === '3dorm' || clean === '3rec' || clean === '3hab') return '3rec';
+    if (clean === '1dorm' || clean === '1rec' || clean === '1hab') return '1rec';
+    if (clean === 'doble' || clean === 'std' || clean === 'estandar') return 'doble';
+    if (clean === 'villa' || clean === 'casa') return 'villa';
+    return clean;
+  };
+
   // Selección de habitaciones: { [categoryKey]: quantity }
   const [selectedRooms, setSelectedRooms] = useState<Record<string, number>>(() => {
     const initial: Record<string, number> = {};
@@ -187,7 +208,8 @@ function ReservarContent() {
         const [k, q] = item.split(':');
         if (k && q) {
           const qty = parseInt(q, 10);
-          if (!isNaN(qty) && qty > 0) initial[k.trim()] = qty;
+          const normKey = normalizeRoomCategoryKey(k);
+          if (!isNaN(qty) && qty > 0) initial[normKey] = qty;
         }
       });
     }
@@ -207,7 +229,7 @@ function ReservarContent() {
   const [activePhotoIdx, setActivePhotoIdx] = useState<Record<string, number>>({});
 
   // Modal de reserva y estado de confirmación
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(() => isDirectReserveFlow);
   const [guestName, setGuestName] = useState('');
   const [guestPhone, setGuestPhone] = useState(phoneParam);
   const [guestEmail, setGuestEmail] = useState('');
@@ -218,7 +240,8 @@ function ReservarContent() {
   // ── Flujo de Cotización y Confirmación de 2 Pasos con WhatsApp ──
   const [pendingQuote, setPendingQuote] = useState<any | null>(null);
   const [hasRestoredPendingQuote, setHasRestoredPendingQuote] = useState(false);
-  const [isConfirmStep, setIsConfirmStep] = useState(false);
+  const [isConfirmStep, setIsConfirmStep] = useState<boolean>(() => isDirectReserveFlow);
+  const [showFullBreakdown, setShowFullBreakdown] = useState<boolean>(false);
   const [quoteSending, setQuoteSending] = useState(false);
   const [quoteSentToast, setQuoteSentToast] = useState(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
@@ -410,7 +433,11 @@ function ReservarContent() {
 
   useEffect(() => {
     fetchQuotes();
-  }, [checkIn, checkOut, phoneParam]);
+    if (isDirectReserveFlow) {
+      setIsConfirmStep(true);
+      setIsModalOpen(true);
+    }
+  }, [checkIn, checkOut, phoneParam, isDirectReserveFlow]);
 
   // Manejo de contadores + / - para habitaciones
   const handleUpdateQuantity = (key: string, delta: number, maxAvailable: number) => {
@@ -1466,126 +1493,162 @@ function ReservarContent() {
             )}
 
             {/* Resumen detallado de la cotización con desglose completo */}
-            <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-200/80 text-xs shadow-xs">
-              {/* Tarifa de Miembro Jaroje aplicada */}
-              <div className="bg-emerald-50 border border-emerald-200/90 rounded-xl px-3 py-1.5 flex items-center justify-between text-xs font-black text-emerald-800">
-                <span>✅ {lang === 'en' ? 'Jaroje Member Rate applied' : 'Tarifa de Miembro Jaroje aplicada'}</span>
-                <span className="text-[10px] font-bold text-emerald-600 bg-white px-2 py-0.5 rounded-md border border-emerald-200">
-                  {lang === 'en' ? 'Official Discount' : 'Descuento Oficial'}
+            {loading ? (
+              <div className="py-10 px-4 flex flex-col items-center justify-center gap-3 text-zinc-600 bg-zinc-50 rounded-2xl border border-zinc-200/80">
+                <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+                <span className="text-xs font-black text-zinc-800">
+                  {lang === 'en' ? 'Verifying quote & real-time rates...' : 'Verificando cotización y tarifas en tiempo real...'}
+                </span>
+                <span className="text-[11px] text-zinc-500 font-medium">
+                  {lang === 'en' ? 'Checking real-time availability in Beds24' : 'Comprobando disponibilidad en tiempo real en Beds24'}
                 </span>
               </div>
-
-              {/* Fechas y noches */}
-              <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
-                <span className="text-zinc-500 font-semibold">{lang === 'en' ? 'Dates:' : 'Fechas:'}</span>
-                <span className="text-zinc-900 font-extrabold">{formatMexicanDate(checkIn)} al {formatMexicanDate(checkOut)} ({activeSummary.nights} {activeSummary.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')})</span>
-              </div>
-
-              {/* Número de huéspedes */}
-              <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
-                <span className="text-zinc-500 font-semibold">{lang === 'en' ? 'Guests:' : 'Huéspedes:'}</span>
-                <span className="text-zinc-900 font-bold">
-                  {totalGuests} {lang === 'en' ? 'guests' : 'personas'} ({adults} {lang === 'en' ? 'adults' : 'adultos'}{children > 0 ? `, ${children} ${lang === 'en' ? 'children' : 'niños'}` : ''})
-                </span>
-              </div>
-
-              {/* Desglose de cada alojamiento con costo por noche */}
-              <div className="space-y-2 border-b border-zinc-200/60 pb-2.5">
-                <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400 block">
-                  {lang === 'en' ? 'Selected Accommodations:' : 'Alojamientos seleccionados:'}
-                </span>
-                {activeSummary.selectedList.map(item => (
-                  <div key={item.quote.key} className="flex justify-between items-start text-zinc-700">
+            ) : (
+              <div className="bg-zinc-50 rounded-2xl p-4 space-y-3 border border-zinc-200/80 text-xs shadow-xs">
+                {/* Totales principales: Total de la estancia y Anticipo */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-start font-black text-sm text-zinc-900">
                     <div>
-                      <div className="font-bold text-zinc-900">
-                        {item.quantity}x {lang === 'en' ? item.quote.name_en : item.quote.name}
+                      <span className="text-zinc-900 font-bold">{lang === 'en' ? 'Total for Stay:' : 'Total de la estancia:'}</span>
+                      <div className="mt-1 space-y-0.5 text-[10.5px] font-bold text-emerald-700">
+                        <div>✅ {lang === 'en' ? 'Taxes included' : 'Impuestos incluidos'}</div>
+                        <div>✅ {lang === 'en' ? 'Jaroje Member Rate applied' : 'Tarifa de Miembro Jaroje aplicada'}</div>
                       </div>
-                      <div className="text-[10px] text-zinc-500">
-                        ${item.quote.pricePerNight.toLocaleString()} MXN / {lang === 'en' ? 'night' : 'noche'} × {item.quote.nights} {item.quote.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')}
+                    </div>
+                    <span className="text-base text-indigo-950 font-black">${activeSummary.grandTotal.toLocaleString()} MXN</span>
+                  </div>
+
+                  <div className="flex justify-between font-black text-xs text-emerald-900 bg-emerald-50/90 p-3 rounded-xl border border-emerald-200/90">
+                    <span>{lang === 'en' ? '50% Required Deposit to Lock:' : 'Anticipo requerido para bloquear (50%):'}</span>
+                    <span className="text-sm font-black text-emerald-800">${activeSummary.deposit.toLocaleString()} MXN</span>
+                  </div>
+
+                  <div className="flex justify-between text-[11px] font-bold text-zinc-500 px-1 pt-0.5">
+                    <span>{lang === 'en' ? 'Remaining Balance at Check-in (50%):' : 'Saldo restante a liquidar al check-in (50%):'}</span>
+                    <span>${activeSummary.balanceRemaining.toLocaleString()} MXN</span>
+                  </div>
+                </div>
+
+                {/* Desplegable para ver habitaciones, fechas y amenidades */}
+                <div className="pt-1 border-t border-zinc-200/70">
+                  <button
+                    type="button"
+                    onClick={() => setShowFullBreakdown(prev => !prev)}
+                    className="w-full py-2 px-3 bg-white hover:bg-zinc-100 rounded-xl text-zinc-700 text-xs font-bold flex items-center justify-between border border-zinc-200/80 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span>🛏️</span>
+                      <span>
+                        {showFullBreakdown
+                          ? (lang === 'en' ? 'Hide details' : 'Ocultar desglose')
+                          : (lang === 'en'
+                              ? `View accommodation & dates details (${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'})`
+                              : `Ver desglose de habitaciones y fechas (${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'})`)}
+                      </span>
+                    </span>
+                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${showFullBreakdown ? 'rotate-180' : ''}`} />
+                  </button>
+
+                  {/* Detalle expandible con fechas, habitaciones y personas adicionales */}
+                  {showFullBreakdown && (
+                    <div className="mt-3 pt-3 border-t border-zinc-200/60 space-y-3 animate-in fade-in duration-200">
+                      {/* Fechas y noches */}
+                      <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
+                        <span className="text-zinc-500 font-semibold">{lang === 'en' ? 'Dates:' : 'Fechas:'}</span>
+                        <span className="text-zinc-900 font-extrabold">{formatMexicanDate(checkIn)} al {formatMexicanDate(checkOut)} ({activeSummary.nights} {activeSummary.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')})</span>
+                      </div>
+
+                      {/* Número de huéspedes */}
+                      <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
+                        <span className="text-zinc-500 font-semibold">{lang === 'en' ? 'Guests:' : 'Huéspedes:'}</span>
+                        <span className="text-zinc-900 font-bold">
+                          {totalGuests} {lang === 'en' ? 'guests' : 'personas'} ({adults} {lang === 'en' ? 'adults' : 'adultos'}{children > 0 ? `, ${children} ${lang === 'en' ? 'children' : 'niños'}` : ''})
+                        </span>
+                      </div>
+
+                      {/* Desglose de cada alojamiento con costo por noche */}
+                      <div className="space-y-2 border-b border-zinc-200/60 pb-2.5">
+                        <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400 block">
+                          {lang === 'en' ? 'Selected Accommodations:' : 'Alojamientos seleccionados:'}
+                        </span>
+                        {activeSummary.selectedList.map(item => (
+                          <div key={item.quote.key} className="flex justify-between items-start text-zinc-700">
+                            <div>
+                              <div className="font-bold text-zinc-900">
+                                {item.quantity}x {lang === 'en' ? item.quote.name_en : item.quote.name}
+                              </div>
+                              <div className="text-[10px] text-zinc-500">
+                                ${item.quote.pricePerNight.toLocaleString()} MXN / {lang === 'en' ? 'night' : 'noche'} × {item.quote.nights} {item.quote.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')}
+                              </div>
+                            </div>
+                            <span className="font-black text-zinc-900 text-sm">
+                              ${(item.quote.totalPrice * item.quantity).toLocaleString()} MXN
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Número de personas adicionales */}
+                      <div className="border-b border-zinc-200/60 pb-2.5 space-y-2">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-bold text-zinc-900">
+                              {lang === 'en' ? 'Extra Guests:' : 'Personas adicionales:'} {activeSummary.extraGuests}
+                            </div>
+                            <div className="text-[10px] text-zinc-500">
+                              {activeSummary.extraGuests > 0 ? (
+                                lang === 'en'
+                                  ? `$500 MXN / night × ${activeSummary.extraGuests} extra guests × ${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'}`
+                                  : `$500 MXN / noche × ${activeSummary.extraGuests} pers. adicionales × ${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'}`
+                              ) : (
+                                lang === 'en'
+                                  ? 'Included in base capacity (no extra charge)'
+                                  : 'Incluidas en capacidad base (sin cargo extra)'
+                              )}
+                            </div>
+                          </div>
+                          <span className={`font-black text-xs ${activeSummary.extraGuestsFee > 0 ? 'text-amber-800' : 'text-zinc-500'}`}>
+                            {activeSummary.extraGuestsFee > 0
+                              ? `+$${activeSummary.extraGuestsFee.toLocaleString()} MXN`
+                              : '$0 MXN'}
+                          </span>
+                        </div>
+
+                        {activeSummary.maxAvailableExtras > 0 && (
+                          <div className="bg-amber-50 border border-amber-200/70 p-2 rounded-xl text-[10.5px] font-semibold text-amber-900 flex items-start gap-1.5 leading-snug">
+                            <AlertCircle size={13} className="text-amber-600 shrink-0 mt-0.5" />
+                            <span>
+                              {lang === 'en'
+                                ? 'Note: We do not have extra beds. The living room sofa does NOT have air conditioning.'
+                                : 'Nota: No contamos con camas adicionales, sillón de la sala NO cuenta con aire acondicionado.'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Subtotales */}
+                      <div className="space-y-1.5 pt-0.5">
+                        <div className="flex justify-between text-zinc-600 font-semibold text-xs">
+                          <div>
+                            <span>{lang === 'en' ? 'Lodging Subtotal:' : 'Subtotal habitaciones:'}</span>
+                            <span className="text-[9.5px] text-zinc-400 block font-normal">
+                              {lang === 'en' ? '(Includes 16% VAT + 3% ISH)' : '(Incluye 16% IVA + 3% ISH)'}
+                            </span>
+                          </div>
+                          <span className="font-bold text-zinc-900">${activeSummary.baseLodgingTotal.toLocaleString()} MXN</span>
+                        </div>
+                        {activeSummary.extraGuestsFee > 0 && (
+                          <div className="flex justify-between text-amber-900 font-semibold text-xs">
+                            <span>{lang === 'en' ? 'Extra Guests Surcharge:' : 'Suplemento personas adicionales:'}</span>
+                            <span className="font-bold">+${activeSummary.extraGuestsFee.toLocaleString()} MXN</span>
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <span className="font-black text-zinc-900 text-sm">
-                      ${(item.quote.totalPrice * item.quantity).toLocaleString()} MXN
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Número de personas adicionales con costo desglosado y nota de A/C */}
-              <div className="border-b border-zinc-200/60 pb-2.5 space-y-2">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-bold text-zinc-900">
-                      {lang === 'en' ? 'Extra Guests:' : 'Personas adicionales:'} {activeSummary.extraGuests}
-                    </div>
-                    <div className="text-[10px] text-zinc-500">
-                      {activeSummary.extraGuests > 0 ? (
-                        lang === 'en'
-                          ? `$500 MXN / night × ${activeSummary.extraGuests} extra guests × ${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'}`
-                          : `$500 MXN / noche × ${activeSummary.extraGuests} pers. adicionales × ${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'}`
-                      ) : (
-                        lang === 'en'
-                          ? 'Included in base capacity (no extra charge)'
-                          : 'Incluidas en capacidad base (sin cargo extra)'
-                      )}
-                    </div>
-                  </div>
-                  <span className={`font-black text-xs ${activeSummary.extraGuestsFee > 0 ? 'text-amber-800' : 'text-zinc-500'}`}>
-                    {activeSummary.extraGuestsFee > 0
-                      ? `+$${activeSummary.extraGuestsFee.toLocaleString()} MXN`
-                      : '$0 MXN'}
-                  </span>
-                </div>
-
-                {activeSummary.maxAvailableExtras > 0 && (
-                  <div className="bg-amber-50 border border-amber-200/70 p-2 rounded-xl text-[10.5px] font-semibold text-amber-900 flex items-start gap-1.5 leading-snug">
-                    <AlertCircle size={13} className="text-amber-600 shrink-0 mt-0.5" />
-                    <span>
-                      {lang === 'en'
-                        ? 'Note: We do not have extra beds. The living room sofa does NOT have air conditioning.'
-                        : 'Nota: No contamos con camas adicionales, sillón de la sala NO cuenta con aire acondicionado.'}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Totales específicos para evitar dudas */}
-              <div className="space-y-1.5 pt-0.5">
-                <div className="flex justify-between text-zinc-600 font-semibold text-xs">
-                  <div>
-                    <span>{lang === 'en' ? 'Lodging Subtotal:' : 'Subtotal habitaciones:'}</span>
-                    <span className="text-[9.5px] text-zinc-400 block font-normal">
-                      {lang === 'en' ? '(Includes 16% VAT + 3% ISH)' : '(Incluye 16% IVA + 3% ISH)'}
-                    </span>
-                  </div>
-                  <span className="font-bold text-zinc-900">${activeSummary.baseLodgingTotal.toLocaleString()} MXN</span>
-                </div>
-                {activeSummary.extraGuestsFee > 0 && (
-                  <div className="flex justify-between text-amber-900 font-semibold text-xs">
-                    <span>{lang === 'en' ? 'Extra Guests Surcharge:' : 'Suplemento personas adicionales:'}</span>
-                    <span className="font-bold">+${activeSummary.extraGuestsFee.toLocaleString()} MXN</span>
-                  </div>
-                )}
-                <div className="flex justify-between font-black text-sm text-zinc-900 pt-1.5 border-t border-zinc-200">
-                  <div>
-                    <span>{lang === 'en' ? 'Total for Stay:' : 'Total de la estancia:'}</span>
-                    <div className="mt-0.5 space-y-0.5 text-[10px] font-bold text-emerald-700">
-                      <div>✅ {lang === 'en' ? 'Taxes included' : 'Impuestos incluidos'}</div>
-                      <div>✅ {lang === 'en' ? 'Jaroje Member Rate applied' : 'Tarifa de Miembro Jaroje aplicada'}</div>
-                    </div>
-                  </div>
-                  <span className="text-base text-indigo-900 font-black">${activeSummary.grandTotal.toLocaleString()} MXN</span>
-                </div>
-                <div className="flex justify-between font-black text-xs text-emerald-800 bg-emerald-50/80 p-2.5 rounded-xl border border-emerald-200/80">
-                  <span>{lang === 'en' ? '50% Required Deposit to Lock:' : 'Anticipo requerido para bloquear (50%):'}</span>
-                  <span className="text-sm font-black">${activeSummary.deposit.toLocaleString()} MXN</span>
-                </div>
-                <div className="flex justify-between text-[11px] font-bold text-zinc-500 px-1 pt-0.5">
-                  <span>{lang === 'en' ? 'Remaining Balance at Check-in (50%):' : 'Saldo restante a liquidar al check-in (50%):'}</span>
-                  <span>${activeSummary.balanceRemaining.toLocaleString()} MXN</span>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Aviso de sobrecapacidad dentro del modal */}
             {isOverCapacity && (

@@ -199,7 +199,7 @@ export async function POST(req: Request) {
     const checkOutFormatted = formatSpanishDate(cleanCheckOut);
     const roomsParam = rooms.map((r: any) => `${r.key}:${r.quantity}`).join(',');
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-    const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${adults}&children=${children}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}`;
+    const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${adults}&children=${children}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}&action=reserve&step=confirm`;
 
     const whatsappSummaryText =
 `🏨 *COTIZACIÓN Condominios Jaroje*
