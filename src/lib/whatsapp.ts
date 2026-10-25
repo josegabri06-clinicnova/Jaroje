@@ -998,9 +998,6 @@ export async function sendWhatsAppTemplate(
       const SPANISH_ONLY_TEMPLATES = new Set([
         'confirmar_reserva',
         'portal_huesped_link',
-        'rechazo_solicitud',
-        'alojamiento_listo',
-        'pago_anticipo_recibido',
         'bienvenido_cliente_whatsaap_v4',
         'test_mixed_buttons_no_emoji'
       ]);
@@ -1046,6 +1043,40 @@ export async function sendWhatsAppTemplate(
 
       status = response.status;
       resBody = await response.json();
+
+      // Auto-retry with Spanish if language is 'en' and it fails (e.g., translation pending approval in Meta)
+      if (status !== 200 && metaLanguage === 'en') {
+        console.warn(`Meta API failed with ${status} for template ${templateName} in English. Retrying with approved Spanish fallback 'es'...`);
+        const retryEsPayload = {
+          ...payload,
+          template: {
+            ...payload.template,
+            language: { code: 'es' }
+          }
+        };
+
+        try {
+          const retryRes = await fetch(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(retryEsPayload)
+          });
+
+          if (retryRes.ok) {
+            response = retryRes;
+            status = retryRes.status;
+            resBody = await retryRes.json();
+            console.log(`✅ Success retrying template ${templateName} with Spanish fallback ('es')`);
+          } else {
+            console.warn(`Fallback to Spanish 'es' also failed for ${templateName}:`, await retryRes.clone().json());
+          }
+        } catch (retryErr) {
+          console.error(`Error during Spanish fallback retry for template ${templateName}:`, retryErr);
+        }
+      }
 
       // Auto-retry with alternative Spanish code if language is 'es_MX' or 'es' and it fails
       if (status !== 200 && (languageCode === 'es_MX' || languageCode === 'es')) {
