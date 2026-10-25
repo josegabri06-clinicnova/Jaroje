@@ -1909,6 +1909,12 @@ export async function sendTemplate_BienvenidoWhatsApp(
   bookingId?: string | number
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
+  // DESACTIVADO TEMPORALMENTE: fallo en el portal de reservas. Poner en false para reactivar.
+  const BIENVENIDO_WHATSAPP_DISABLED = true;
+  if (BIENVENIDO_WHATSAPP_DISABLED) {
+    console.warn(`[WhatsApp] bienvenido_cliente_whatsaap_v4 desactivada: no se envía a ${phone}`);
+    return { success: false, error: 'disabled', data: { status: 'disabled' } };
+  }
   const cleanPhone = cleanPhoneForMeta(phone);
   const lang = (langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en')) as 'es' | 'en';
   const name = guestName ? getFirstName(guestName) : 'Huésped';

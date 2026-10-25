@@ -402,7 +402,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     for (let i = existing.messages.length - 1; i >= 0; i--) {
       const msg = existing.messages[i];
       const botText = String(msg.role_bot || msg.role_manager || '');
-      if (botText.includes('bienvenido_cliente_whatsaap') || botText.includes('bienvenido_cliente_final_v2') || botText.includes('bienvenido_cliente')) {
+      if (botText.includes('bienvenido_cliente_whatsaap') || botText.includes('bienvenido_cliente_final_v4') || botText.includes('bienvenido_cliente')) {
         const msgTime = new Date(msg.timestamp || 0).getTime();
         if (!isNaN(msgTime) && msgTime > lastWelcomeSentAt) {
           lastWelcomeSentAt = msgTime;
