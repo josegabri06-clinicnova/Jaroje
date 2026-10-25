@@ -1530,10 +1530,16 @@ export async function sendWhatsAppCTAButtonMessage(
     }
 
     // Fallback si no hay token de Meta o si falló la interacción
-    return sendWhatsAppTextMessage(phone, `${bodyText}\n\n👉 ${url}`);
+    const fallbackFormatted = bodyText.includes(url)
+      ? bodyText
+      : `${bodyText}\n\n*BOTÓN*\n👉 *${buttonText}*:\n${url}`;
+    return sendWhatsAppTextMessage(phone, fallbackFormatted);
   } catch (err: any) {
     console.error(`Error en sendWhatsAppCTAButtonMessage para ${phone}:`, err);
-    return sendWhatsAppTextMessage(phone, `${bodyText}\n\n👉 ${url}`);
+    const fallbackFormatted = bodyText.includes(url)
+      ? bodyText
+      : `${bodyText}\n\n*BOTÓN*\n👉 *${buttonText}*:\n${url}`;
+    return sendWhatsAppTextMessage(phone, fallbackFormatted);
   }
 }
 

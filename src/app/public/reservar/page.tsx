@@ -73,6 +73,13 @@ function ReservarContent() {
   const phoneParam = searchParams.get('phone') || searchParams.get('p') || '';
   const langParam = searchParams.get('lang') || 'es';
   const stepParam = searchParams.get('step') || searchParams.get('action') || '';
+  const checkInParam = searchParams.get('checkIn') || searchParams.get('in') || '';
+  const checkOutParam = searchParams.get('checkOut') || searchParams.get('out') || '';
+  const adultsParam = searchParams.get('adults') || searchParams.get('a') || '';
+  const childrenParam = searchParams.get('children') || searchParams.get('c') || '';
+  const roomsParam = searchParams.get('rooms') || searchParams.get('r') || '';
+  const extrasParam = searchParams.get('extras') || searchParams.get('extra') || '';
+  const quoteIdParam = searchParams.get('quoteId') || searchParams.get('q') || '';
 
   const [lang, setLang] = useState<'es' | 'en'>(langParam === 'en' ? 'en' : 'es');
 
@@ -81,8 +88,18 @@ function ReservarContent() {
   const defaultCheckIn = useMemo(() => format(addDays(new Date(), 1), 'yyyy-MM-dd'), []);
   const defaultCheckOut = useMemo(() => format(addDays(new Date(), 2), 'yyyy-MM-dd'), []);
 
-  const [checkIn, setCheckIn] = useState(defaultCheckIn);
-  const [checkOut, setCheckOut] = useState(defaultCheckOut);
+  const [checkIn, setCheckIn] = useState(() => checkInParam || defaultCheckIn);
+  const [checkOut, setCheckOut] = useState(() => {
+    if (checkOutParam) return checkOutParam;
+    if (checkInParam) {
+      try {
+        return format(addDays(new Date(checkInParam + 'T12:00:00'), 1), 'yyyy-MM-dd');
+      } catch {
+        return defaultCheckOut;
+      }
+    }
+    return defaultCheckOut;
+  });
 
   // Fecha mínima permitida de check-out (al menos 1 día después de check-in)
   const minCheckOut = useMemo(() => {
@@ -133,8 +150,14 @@ function ReservarContent() {
       setCheckOut(newOut);
     }
   };
-  const [adults, setAdults] = useState(2);
-  const [children, setChildren] = useState(0);
+  const [adults, setAdults] = useState(() => {
+    const p = parseInt(adultsParam, 10);
+    return !isNaN(p) && p > 0 ? p : 2;
+  });
+  const [children, setChildren] = useState(() => {
+    const p = parseInt(childrenParam, 10);
+    return !isNaN(p) && p >= 0 ? p : 0;
+  });
 
   const [loading, setLoading] = useState(true);
   const [quotes, setQuotes] = useState<QuoteItem[]>([]);
@@ -142,8 +165,28 @@ function ReservarContent() {
   const [activeTab, setActiveTab] = useState<'booking' | 'existing'>('booking');
 
   // Selección de habitaciones: { [categoryKey]: quantity }
-  const [selectedRooms, setSelectedRooms] = useState<Record<string, number>>({});
-  const [selectedExtraGuests, setSelectedExtraGuests] = useState<number | null>(null);
+  const [selectedRooms, setSelectedRooms] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    if (roomsParam) {
+      roomsParam.split(',').forEach(item => {
+        const [k, q] = item.split(':');
+        if (k && q) {
+          const qty = parseInt(q, 10);
+          if (!isNaN(qty) && qty > 0) initial[k.trim()] = qty;
+        }
+      });
+    }
+    return initial;
+  });
+  const [selectedExtraGuests, setSelectedExtraGuests] = useState<number | null>(() => {
+    if (extrasParam) {
+      const p = parseInt(extrasParam, 10);
+      return !isNaN(p) ? p : null;
+    }
+    return null;
+  });
+
+  const [availabilityNotice, setAvailabilityNotice] = useState<string>('');
 
   // Fotos activas por categoría para los carruseles
   const [activePhotoIdx, setActivePhotoIdx] = useState<Record<string, number>>({});
@@ -308,30 +351,38 @@ function ReservarContent() {
           setExistingReservations(data.existingReservations);
         }
 
-        // Solo restaurar la cotización si el usuario viene EXPLÍCITAMENTE de pulsar "Confirmar Reserva" (&step=confirm)
-        const isConfirmStepRequested = stepParam === 'confirm';
+        // Validar y sanitizar la disponibilidad en vivo de las habitaciones preseleccionadas
+        if (data.quotes && Array.isArray(data.quotes)) {
+          setSelectedRooms(prev => {
+            if (Object.keys(prev).length === 0) return prev;
+            const updated: Record<string, number> = {};
+            let changed = false;
+            Object.entries(prev).forEach(([key, qty]) => {
+              const matchedQuote = data.quotes.find((q: any) => q.key === key);
+              const maxAvailable = matchedQuote?.availableUnitsCount || 0;
+              if (maxAvailable < qty) {
+                changed = true;
+                if (maxAvailable > 0) updated[key] = maxAvailable;
+              } else {
+                updated[key] = qty;
+              }
+            });
+            if (changed) {
+              setAvailabilityNotice(
+                lang === 'en'
+                  ? '⚠️ One or more previously selected accommodations are no longer fully available for these dates.'
+                  : '⚠️ Uno o más alojamientos seleccionados previamente ya no tienen disponibilidad completa para estas fechas. Por favor verifique las opciones disponibles.'
+              );
+            }
+            return updated;
+          });
+        }
 
-        if (isConfirmStepRequested && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
+        // Si existe cotización pendiente previa asociada a este teléfono
+        if (data.pendingQuote && data.pendingQuote.status === 'pending_name') {
           setPendingQuote(data.pendingQuote);
-          if (!hasRestoredPendingQuote) {
-            setHasRestoredPendingQuote(true);
-            if (data.pendingQuote.checkIn) setCheckIn(data.pendingQuote.checkIn);
-            if (data.pendingQuote.checkOut) setCheckOut(data.pendingQuote.checkOut);
-            if (data.pendingQuote.adults) setAdults(Number(data.pendingQuote.adults));
-            if (data.pendingQuote.children) setChildren(Number(data.pendingQuote.children));
-            if (Array.isArray(data.pendingQuote.rooms)) {
-              const restoredRooms: Record<string, number> = {};
-              data.pendingQuote.rooms.forEach((r: any) => {
-                if (r.key && r.quantity) restoredRooms[r.key] = Number(r.quantity);
-              });
-              setSelectedRooms(restoredRooms);
-            }
-            if (data.pendingQuote.phone) {
-              setGuestPhone(data.pendingQuote.phone);
-            }
-            // "se abrirá una ventana que les exigirá pedir el nombre completo"
-            setIsConfirmStep(true);
-            setIsModalOpen(true);
+          if (data.pendingQuote.phone && !guestPhone) {
+            setGuestPhone(data.pendingQuote.phone);
           }
         }
       }
@@ -993,6 +1044,23 @@ function ReservarContent() {
 
             {/* LISTADO DE HABITACIONES */}
             <div className="space-y-4">
+              {/* Aviso de cambio en disponibilidad si alguna unidad preseleccionada ya no está libre */}
+              {availabilityNotice && (
+                <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                    <span className="leading-snug">{availabilityNotice}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAvailabilityNotice('')}
+                    className="text-amber-700 hover:text-amber-950 font-black p-1 text-xs shrink-0 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div className="flex items-center justify-between px-1">
                 <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
                   {t.availableRooms}
