@@ -231,14 +231,16 @@ export async function POST(req: Request) {
           } else {
             await supabase.from('beds24_reservations').upsert({ id: mId, last_notice_sent: true, is_acknowledged: true });
           }
-          // Insertar en whatsapp_logs para cada miembro del grupo
-          await supabase.from('whatsapp_logs').insert([{
-            reservation_id: mId,
-            template_name: 'ultimo_aviso',
-            phone: booking.phone || booking.mobile || booking.guest_phone || '',
-            sent_at: new Date().toISOString(),
-            status: 'sent'
-          }]);
+          // Insertar en whatsapp_logs solo para miembros adicionales del grupo (el principal ya fue registrado en sendWhatsAppTemplate)
+          if (mId !== String(activeBooking.id)) {
+            await supabase.from('whatsapp_logs').insert([{
+              reservation_id: mId,
+              template_name: 'ultimo_aviso',
+              phone: booking.phone || booking.mobile || booking.guest_phone || '',
+              sent_at: new Date().toISOString(),
+              status: 'sent'
+            }]);
+          }
         }
       }
     } catch (dbUpdateErr: any) {
