@@ -6,7 +6,9 @@ import {
   fetchAllRawBeds24Bookings,
   getParentMapping,
   getChildRoomId,
-  syncBeds24BookingLocal
+  syncBeds24BookingLocal,
+  fetchBeds24RatesMap,
+  getAverageRatesForDates
 } from '@/lib/beds24';
 import { normalizePhone, cleanPhoneForMeta, sendTemplate1_SolicitudRecibida } from '@/lib/whatsapp';
 
@@ -103,6 +105,11 @@ export async function POST(req: Request) {
     const cleanCheckIn = String(checkIn || '').split('T')[0].split(' ')[0].trim();
     const cleanCheckOut = String(checkOut || '').split('T')[0].split(' ')[0].trim();
 
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (cleanCheckIn < todayStr) {
+      return NextResponse.json({ error: 'La fecha de check-in no puede ser anterior a hoy.' }, { status: 400 });
+    }
+
     const dIn = new Date(`${cleanCheckIn}T00:00:00Z`);
     const dOut = new Date(`${cleanCheckOut}T00:00:00Z`);
     const diffTime = dOut.getTime() - dIn.getTime();
@@ -112,16 +119,30 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche).' }, { status: 400 });
     }
 
+    if (diffDays > 45) {
+      return NextResponse.json({ error: 'Para estancias mayores a 45 noches, por favor contacta a administración directamente.' }, { status: 400 });
+    }
+
     const nights = diffDays;
 
-    // Filtrar habitaciones solicitadas con cantidad > 0
-    const validRooms = rooms.filter((r: any) => Number(r.quantity || 0) > 0);
+    // Sanitización estricta de huéspedes
+    const cleanAdults = Math.max(1, Math.min(30, parseInt(String(adults || 2), 10) || 2));
+    const cleanChildren = Math.max(0, Math.min(20, parseInt(String(children || 0), 10) || 0));
+    const totalGuests = cleanAdults + cleanChildren;
+
+    // Filtrar y validar habitaciones solicitadas con cantidad entera > 0
+    const validRooms = (Array.isArray(rooms) ? rooms : [])
+      .map((r: any) => ({
+        key: String(r.key || '').trim(),
+        quantity: Math.max(0, Math.min(10, parseInt(String(r.quantity || 0), 10) || 0))
+      }))
+      .filter((r: any) => r.quantity > 0 && Boolean(ROOM_MAP[r.key]));
+
     if (validRooms.length === 0) {
-      return NextResponse.json({ error: 'Debes seleccionar al menos una habitación.' }, { status: 400 });
+      return NextResponse.json({ error: 'Debes seleccionar al menos una habitación válida.' }, { status: 400 });
     }
 
     // Validación estricta de capacidades base y máxima de habitaciones
-    const totalGuests = Number(adults || 0) + Number(children || 0);
     const ROOM_BASE_CAPACITIES: Record<string, number> = {
       'doble': 4,
       '1rec': 4,
@@ -139,9 +160,8 @@ export async function POST(req: Request) {
     let totalBaseCapacity = 0;
     let totalMaxCapacity = 0;
     validRooms.forEach((r: any) => {
-      const qty = Number(r.quantity || 1);
-      totalBaseCapacity += (ROOM_BASE_CAPACITIES[r.key] || 4) * qty;
-      totalMaxCapacity += (ROOM_MAX_CAPACITIES[r.key] || 4) * qty;
+      totalBaseCapacity += (ROOM_BASE_CAPACITIES[r.key] || 4) * r.quantity;
+      totalMaxCapacity += (ROOM_MAX_CAPACITIES[r.key] || 4) * r.quantity;
     });
 
     if (totalGuests > totalMaxCapacity) {
@@ -152,7 +172,7 @@ export async function POST(req: Request) {
 
     // Cálculo forzoso de huéspedes adicionales en el servidor (nunca confiar en manipulación del cliente)
     const minRequiredExtras = Math.max(0, totalGuests - totalBaseCapacity);
-    const requestedExtras = Math.max(minRequiredExtras, Number(body.extraGuests || 0));
+    const requestedExtras = Math.max(minRequiredExtras, Math.max(0, parseInt(String(body.extraGuests || 0), 10) || 0));
 
     if (totalGuests > (totalBaseCapacity + requestedExtras)) {
       return NextResponse.json({
@@ -160,9 +180,8 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // Tarifa obligatoria de personas extra: $500 MXN / noche / persona
-    const calculatedExtraFee = requestedExtras * 500 * nights;
-    const finalExtraGuestsFee = Math.max(calculatedExtraFee, Number(body.extraGuestsFee || 0));
+    // Tarifa obligatoria de personas extra: $500 MXN / noche / persona calculada en el servidor
+    const finalExtraGuestsFee = requestedExtras * 500 * nights;
 
     // 2. Candado anti-spam por teléfono (máximo 1 reserva creada cada 5 minutos por el mismo número)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
@@ -180,7 +199,31 @@ export async function POST(req: Request) {
       }, { status: 429 });
     }
 
-    // 3. Verificar disponibilidad física en tiempo real en Beds24
+    // 3. Obtener token y mapa oficial de tarifas de Beds24 para el canal 'Directo'
+    const BEDS24_TOKEN = await getBeds24Token();
+    let beds24RatesMap: Record<string, Record<string, number>> = {};
+    try {
+      beds24RatesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, cleanCheckIn, cleanCheckOut);
+    } catch (tokenErr) {
+      console.warn("[Reservar API] Failed to fetch Beds24 calendar rates:", tokenErr);
+    }
+
+    // Cargar pricing_unit_settings de Supabase si existen
+    let dynamicSettings: any = null;
+    try {
+      const { data: settingsData } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'pricing_unit_settings')
+        .maybeSingle();
+      if (settingsData?.value) {
+        dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+      }
+    } catch (errSettings) {
+      console.warn("[Reservar API] Error loading pricing_unit_settings:", errSettings);
+    }
+
+    // 3.1. Verificar disponibilidad física en tiempo real en Beds24
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - 30);
     const toDate = new Date();
@@ -231,16 +274,25 @@ export async function POST(req: Request) {
     const firstName = nameParts[0] || 'Huésped';
     const lastName = nameParts.slice(1).join(' ') || '';
 
-    // 4. Preparar payload para Beds24 API v2
+    // 4. Preparar payload para Beds24 API v2 con TARIFAS OFICIALES CALCULADAS EN EL SERVIDOR
     const beds24Payload: any[] = [];
     let grandTotalPrice = 0;
     const roomSummaries: string[] = [];
+
+    // Pisos mínimos de seguridad por categoría (evita cualquier fallo por precio 0 o menor al coste)
+    const MINIMUM_FLOOR_PRICES: Record<string, number> = {
+      'doble': 900,
+      '1rec': 900,
+      '2rec': 1800,
+      '3rec': 2500,
+      'casa': 3500
+    };
 
     for (const r of validRooms) {
       const catConfig = ROOM_MAP[r.key];
       if (!catConfig) continue;
 
-      const qty = Number(r.quantity);
+      const qty = r.quantity;
       // Buscar unidades físicas libres de esta categoría
       const freeUnits = catConfig.units.filter(u => !occupiedUnitIds.has(`${catConfig.roomId}_${u.unitId}`));
 
@@ -250,14 +302,31 @@ export async function POST(req: Request) {
         }, { status: 409 });
       }
 
+      // CÁLCULO SEGURO EN EL SERVIDOR (ignora cualquier precio manipulado desde el cliente)
+      const firstUnitId = catConfig.units[0]?.unitId || '1';
+      const childId = getChildRoomId(catConfig.roomId, firstUnitId) || catConfig.roomId;
+      const basePricePerNight = getAverageRatesForDates(
+        childId,
+        cleanCheckIn,
+        cleanCheckOut,
+        'Directo',
+        beds24RatesMap,
+        firstUnitId,
+        dynamicSettings
+      );
+
+      const TAX_MULTIPLIER = 1.19; // IVA 16% + ISH 3%
+      const officialPricePerNight = Math.round(basePricePerNight * TAX_MULTIPLIER);
+      const minFloor = MINIMUM_FLOOR_PRICES[r.key] || 900;
+      const verifiedPricePerNight = Math.max(officialPricePerNight, minFloor);
+      const itemPrice = Math.round(verifiedPricePerNight * nights);
+
       // Asignar unidades libres
       for (let i = 0; i < qty; i++) {
         const assignedUnit = freeUnits[i];
         occupiedUnitIds.add(`${catConfig.roomId}_${assignedUnit.unitId}`);
 
-        const itemPrice = Math.round(Number(r.pricePerNight || 0) * nights);
         grandTotalPrice += itemPrice;
-
         roomSummaries.push(`${catConfig.name} (${assignedUnit.name})`);
 
         const roomInvoiceItems = [
@@ -287,10 +356,10 @@ export async function POST(req: Request) {
         beds24Payload.push({
           roomId: Number(catConfig.roomId),
           unitId: Number(assignedUnit.unitId),
-          arrival: checkIn,
-          departure: checkOut,
-          numAdult: Math.max(1, Math.round(Number(adults) / validRooms.length)),
-          numChild: Number(children) > 0 ? 1 : 0,
+          arrival: cleanCheckIn,
+          departure: cleanCheckOut,
+          numAdult: Math.max(1, Math.round(cleanAdults / validRooms.length)),
+          numChild: cleanChildren > 0 ? 1 : 0,
           firstName: firstName,
           lastName: lastName,
           phone: `+${cleanPhoneForMeta(cleanPhone)}`,
@@ -323,10 +392,13 @@ export async function POST(req: Request) {
       }
     }
 
+    if (grandTotalPrice <= 0 || isNaN(grandTotalPrice)) {
+      return NextResponse.json({ error: 'Error calculando la tarifa oficial de la estancia.' }, { status: 500 });
+    }
+
     const depositRequired = Math.round(grandTotalPrice * 0.5);
 
     // 5. Enviar creación a Beds24 API v2
-    const BEDS24_TOKEN = await getBeds24Token();
     const beds24Res = await fetch('https://api.beds24.com/v2/bookings', {
       method: 'POST',
       headers: {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizePhone, sendWhatsAppCTAButtonMessage } from '@/lib/whatsapp';
+import { getBeds24Token, fetchBeds24RatesMap, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Formato de teléfono no válido' }, { status: 400 });
     }
 
+    // Mapeo oficial de habitaciones
+    const ROOM_CAT_MAP: Record<string, { roomId: string; name: string }> = {
+      'doble': { roomId: '679077', name: 'Habitación Doble' },
+      '1rec': { roomId: '679087', name: 'Condominio de 1 dormitorio' },
+      '2rec': { roomId: '679091', name: 'Condominio de 2 dormitorios' },
+      '3rec': { roomId: '679092', name: 'Condominio de 3 dormitorios' },
+      'casa': { roomId: '679093', name: 'Casa de Lujo' }
+    };
+
     // Reglas de capacidad base y máxima por categoría
     const ROOM_BASE_CAPACITIES: Record<string, number> = {
       'doble': 4,
@@ -70,14 +80,29 @@ export async function POST(req: Request) {
       'casa': 16
     };
 
-    const totalGuests = Number(adults || 0) + Number(children || 0);
+    // Sanitización estricta de huéspedes
+    const cleanAdults = Math.max(1, Math.min(30, parseInt(String(adults || 2), 10) || 2));
+    const cleanChildren = Math.max(0, Math.min(20, parseInt(String(children || 0), 10) || 0));
+    const totalGuests = cleanAdults + cleanChildren;
+
+    // Filtrar habitaciones con cantidad entera válida
+    const validRooms = (Array.isArray(rooms) ? rooms : [])
+      .map((r: any) => ({
+        key: String(r.key || '').trim(),
+        quantity: Math.max(0, Math.min(10, parseInt(String(r.quantity || 0), 10) || 0))
+      }))
+      .filter((r: any) => r.quantity > 0 && Boolean(ROOM_CAT_MAP[r.key]));
+
+    if (validRooms.length === 0) {
+      return NextResponse.json({ success: false, error: 'Debes seleccionar al menos una habitación válida' }, { status: 400 });
+    }
+
     let totalBaseCapacity = 0;
     let totalMaxCapacity = 0;
 
-    rooms.forEach((r: any) => {
-      const qty = Number(r.quantity || 1);
-      totalBaseCapacity += (ROOM_BASE_CAPACITIES[r.key] || 2) * qty;
-      totalMaxCapacity += (ROOM_MAX_CAPACITIES[r.key] || 4) * qty;
+    validRooms.forEach((r: any) => {
+      totalBaseCapacity += (ROOM_BASE_CAPACITIES[r.key] || 2) * r.quantity;
+      totalMaxCapacity += (ROOM_MAX_CAPACITIES[r.key] || 4) * r.quantity;
     });
 
     if (totalGuests > totalMaxCapacity) {
@@ -89,6 +114,12 @@ export async function POST(req: Request) {
 
     const cleanCheckIn = String(checkIn || '').split('T')[0].split(' ')[0].trim();
     const cleanCheckOut = String(checkOut || '').split('T')[0].split(' ')[0].trim();
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (cleanCheckIn < todayStr) {
+      return NextResponse.json({ success: false, error: 'La fecha de check-in no puede ser anterior a hoy' }, { status: 400 });
+    }
+
     const dIn = new Date(`${cleanCheckIn}T00:00:00Z`);
     const dOut = new Date(`${cleanCheckOut}T00:00:00Z`);
     const diffTime = dOut.getTime() - dIn.getTime();
@@ -98,25 +129,81 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'La fecha de check-out debe ser posterior a la fecha de check-in (mínimo 1 noche).' }, { status: 400 });
     }
 
+    if (diffDays > 45) {
+      return NextResponse.json({ success: false, error: 'Para estancias mayores a 45 noches, por favor contacta a administración directamente.' }, { status: 400 });
+    }
+
     const nights = diffDays;
 
-    // Cálculo exacto de personas adicionales ($500 MXN / noche)
+    // Cálculo exacto de personas adicionales ($500 MXN / noche) en servidor
     const extraGuests = totalGuests > totalBaseCapacity
       ? Math.min(totalGuests - totalBaseCapacity, Math.max(0, totalMaxCapacity - totalBaseCapacity))
       : 0;
     const extraGuestsFee = extraGuests * 500 * nights;
 
+    // Obtener token y mapa oficial de tarifas de Beds24
+    let beds24RatesMap: Record<string, Record<string, number>> = {};
+    try {
+      const token = await getBeds24Token();
+      beds24RatesMap = await fetchBeds24RatesMap(token, cleanCheckIn, cleanCheckOut);
+    } catch (tokenErr) {
+      console.warn("[Cotizacion API] Failed to fetch Beds24 calendar rates:", tokenErr);
+    }
+
+    let dynamicSettings: any = null;
+    try {
+      const { data: settingsData } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'pricing_unit_settings')
+        .maybeSingle();
+      if (settingsData?.value) {
+        dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+      }
+    } catch (errSettings) {
+      console.warn("[Cotizacion API] Error loading pricing_unit_settings:", errSettings);
+    }
+
+    const MINIMUM_FLOOR_PRICES: Record<string, number> = {
+      'doble': 900,
+      '1rec': 900,
+      '2rec': 1800,
+      '3rec': 2500,
+      'casa': 3500
+    };
+
     let baseLodgingTotal = 0;
-    rooms.forEach((r: any) => {
-      const pNight = Number(r.pricePerNight || 0);
-      const qty = Number(r.quantity || 1);
-      const itemSubtotal = r.totalPrice ? Number(r.totalPrice) * qty : (pNight * nights * qty);
+    const sanitizedRooms = validRooms.map(r => {
+      const cat = ROOM_CAT_MAP[r.key];
+      const childId = getChildRoomId(cat.roomId, '1') || cat.roomId;
+      const basePricePerNight = getAverageRatesForDates(
+        childId,
+        cleanCheckIn,
+        cleanCheckOut,
+        'Directo',
+        beds24RatesMap,
+        '1',
+        dynamicSettings
+      );
+      const TAX_MULTIPLIER = 1.19; // IVA 16% + ISH 3%
+      const officialPricePerNight = Math.round(basePricePerNight * TAX_MULTIPLIER);
+      const minFloor = MINIMUM_FLOOR_PRICES[r.key] || 900;
+      const verifiedPricePerNight = Math.max(officialPricePerNight, minFloor);
+      const itemSubtotal = verifiedPricePerNight * nights * r.quantity;
       baseLodgingTotal += itemSubtotal;
+
+      return {
+        key: r.key,
+        name: cat.name,
+        quantity: r.quantity,
+        pricePerNight: verifiedPricePerNight,
+        totalPrice: verifiedPricePerNight * nights
+      };
     });
 
     const calculatedGrandTotal = baseLodgingTotal + extraGuestsFee;
-    const finalTotal = totalAmount && Number(totalAmount) > 0 ? Number(totalAmount) : calculatedGrandTotal;
-    const finalDeposit = depositRequired && Number(depositRequired) > 0 ? Number(depositRequired) : Math.round(finalTotal * 0.5);
+    const finalTotal = calculatedGrandTotal;
+    const finalDeposit = Math.round(finalTotal * 0.5);
     const balanceRemaining = finalTotal - finalDeposit;
 
     const quoteId = `Q_${Date.now()}`;
@@ -125,13 +212,13 @@ export async function POST(req: Request) {
     const quoteData = {
       quoteId,
       phone: cleanPhone,
-      checkIn,
-      checkOut,
+      checkIn: cleanCheckIn,
+      checkOut: cleanCheckOut,
       nights,
-      adults: Number(adults),
-      children: Number(children),
+      adults: cleanAdults,
+      children: cleanChildren,
       totalGuests,
-      rooms,
+      rooms: sanitizedRooms,
       baseLodgingTotal,
       extraGuests,
       extraGuestsFee,
@@ -188,18 +275,16 @@ export async function POST(req: Request) {
     }
 
     // 2. Enviar por WhatsApp el resumen completo con desglose detallado y botón interactivo CTA
-    const roomsText = rooms.map((r: any) => {
-      const pNight = Number(r.pricePerNight || 0);
-      const qty = Number(r.quantity || 1);
-      const itemSub = (pNight * nights * qty);
-      return `• *${qty}x ${r.name}*\n  $${pNight.toLocaleString()} MXN / noche × ${nights} ${nights === 1 ? 'noche' : 'noches'} = $${itemSub.toLocaleString()} MXN`;
+    const roomsText = sanitizedRooms.map((r: any) => {
+      const itemSub = (r.pricePerNight * nights * r.quantity);
+      return `• *${r.quantity}x ${r.name}*\n  $${r.pricePerNight.toLocaleString()} MXN / noche × ${nights} ${nights === 1 ? 'noche' : 'noches'} = $${itemSub.toLocaleString()} MXN`;
     }).join('\n');
 
     const checkInFormatted = formatSpanishDate(cleanCheckIn);
     const checkOutFormatted = formatSpanishDate(cleanCheckOut);
-    const roomsParam = rooms.map((r: any) => `${r.key}:${r.quantity}`).join(',');
+    const roomsParam = sanitizedRooms.map((r: any) => `${r.key}:${r.quantity}`).join(',');
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-    const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${adults}&children=${children}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}&action=reserve&step=confirm`;
+    const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${cleanAdults}&children=${cleanChildren}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}&action=reserve&step=confirm`;
 
     const whatsappSummaryText =
 `*(Sujeta a disponibilidad a la hora de Reservar)*
