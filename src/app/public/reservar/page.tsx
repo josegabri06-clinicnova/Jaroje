@@ -10,7 +10,6 @@ import {
   Minus,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Clock,
   Sparkles,
   ShieldCheck,
@@ -25,7 +24,8 @@ import {
   BedDouble,
   Compass,
   AlertCircle,
-  MessageCircle
+  MessageCircle,
+  ArrowLeft
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -215,12 +215,25 @@ function ReservarContent() {
     }
     return initial;
   });
-  const [selectedExtraGuests, setSelectedExtraGuests] = useState<number | null>(() => {
-    if (extrasParam) {
-      const p = parseInt(extrasParam, 10);
-      return !isNaN(p) ? p : null;
-    }
-    return null;
+  // Huéspedes adicionales por tipo de habitación: { [categoryKey]: cantidad } (siempre 0 por defecto)
+  const [extraByRoom, setExtraByRoom] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    const total = extrasParam ? parseInt(extrasParam, 10) : 0;
+    if (!roomsParam || isNaN(total) || total <= 0) return initial;
+    const fallbackExtraPerRoom: Record<string, number> = { doble: 0, '1rec': 0, '2rec': 2, '3rec': 2, casa: 4 };
+    let remaining = total;
+    roomsParam.split(',').forEach(item => {
+      const [k, q] = item.split(':');
+      const qty = parseInt(q, 10);
+      if (!k || isNaN(qty) || qty <= 0 || remaining <= 0) return;
+      const normKey = normalizeRoomCategoryKey(k);
+      const give = Math.min(remaining, (fallbackExtraPerRoom[normKey] || 0) * qty);
+      if (give > 0) {
+        initial[normKey] = give;
+        remaining -= give;
+      }
+    });
+    return initial;
   });
 
   const [availabilityNotice, setAvailabilityNotice] = useState<string>('');
@@ -231,6 +244,8 @@ function ReservarContent() {
   // Modal de reserva y estado de confirmación
   const [isModalOpen, setIsModalOpen] = useState<boolean>(() => isDirectReserveFlow);
   const [guestName, setGuestName] = useState('');
+  const [guestLastName, setGuestLastName] = useState('');
+  const [showContactFields, setShowContactFields] = useState(false);
   const [guestPhone, setGuestPhone] = useState(phoneParam);
   const [guestEmail, setGuestEmail] = useState('');
   const [notes, setNotes] = useState('');
@@ -241,7 +256,6 @@ function ReservarContent() {
   const [pendingQuote, setPendingQuote] = useState<any | null>(null);
   const [hasRestoredPendingQuote, setHasRestoredPendingQuote] = useState(false);
   const [isConfirmStep, setIsConfirmStep] = useState<boolean>(() => isDirectReserveFlow);
-  const [showFullBreakdown, setShowFullBreakdown] = useState<boolean>(true);
   const [quoteSending, setQuoteSending] = useState(false);
   const [quoteSentToast, setQuoteSentToast] = useState(false);
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
@@ -451,7 +465,6 @@ function ReservarContent() {
     fetchQuotes();
     if (isDirectReserveFlow) {
       setIsConfirmStep(true);
-      setShowFullBreakdown(true);
       setIsModalOpen(true);
     }
   }, [checkIn, checkOut, phoneParam, isDirectReserveFlow]);
@@ -463,12 +476,24 @@ function ReservarContent() {
       const next = Math.max(0, Math.min(maxAvailable, current + delta));
       return { ...prev, [key]: next };
     });
+    if (selectedRooms[key] !== undefined && Math.max(0, (selectedRooms[key] || 0) + delta) === 0) {
+      setExtraByRoom(prev => ({ ...prev, [key]: 0 }));
+    }
+  };
+
+  // Cambiar huéspedes adicionales de un tipo de habitación (sin forzar nunca)
+  const handleUpdateExtra = (key: string, delta: number, maxForKey: number) => {
+    setExtraByRoom(prev => {
+      const current = prev[key] || 0;
+      const next = Math.max(0, Math.min(maxForKey, current + delta));
+      return { ...prev, [key]: next };
+    });
   };
 
   // Limpiar y resetear completamente la selección de habitaciones
   const handleClearSelection = () => {
     setSelectedRooms({});
-    setSelectedExtraGuests(null);
+    setExtraByRoom({});
     setPendingQuote(null);
     setIsConfirmStep(false);
   };
@@ -507,6 +532,7 @@ function ReservarContent() {
     let baseLodgingTotal = 0;
     let totalBaseCapacity = 0;
     let totalMaxCapacity = 0;
+    let extraGuests = 0;
     const selectedList: { quote: QuoteItem; quantity: number }[] = [];
 
     quotes.forEach(q => {
@@ -516,19 +542,14 @@ function ReservarContent() {
         baseLodgingTotal += q.totalPrice * qty;
         totalBaseCapacity += (q.capacity || 4) * qty;
         totalMaxCapacity += (q.maxCapacity || q.capacity || 4) * qty;
+        const maxExtraForKey = Math.max(0, (q.maxCapacity || q.capacity || 4) - (q.capacity || 4)) * qty;
+        extraGuests += Math.min(Math.max(0, extraByRoom[q.key] || 0), maxExtraForKey);
         selectedList.push({ quote: q, quantity: qty });
       }
     });
 
     const nights = quotes[0]?.nights || selectedList[0]?.quote?.nights || stayNights;
     const maxAvailableExtras = Math.max(0, totalMaxCapacity - totalBaseCapacity);
-    const minRequiredExtras = totalGuests > totalBaseCapacity
-      ? Math.min(totalGuests - totalBaseCapacity, maxAvailableExtras)
-      : 0;
-
-    const extraGuests = selectedExtraGuests !== null
-      ? Math.min(Math.max(minRequiredExtras, selectedExtraGuests), maxAvailableExtras)
-      : minRequiredExtras;
 
     const extraGuestsFee = extraGuests * 500 * nights;
     const grandTotal = baseLodgingTotal + extraGuestsFee;
@@ -540,7 +561,6 @@ function ReservarContent() {
       nights,
       baseLodgingTotal,
       extraGuests,
-      minRequiredExtras,
       maxAvailableExtras,
       extraGuestsFee,
       grandTotal,
@@ -550,7 +570,7 @@ function ReservarContent() {
       totalMaxCapacity,
       selectedList
     };
-  }, [quotes, selectedRooms, totalGuests, stayNights, selectedExtraGuests]);
+  }, [quotes, selectedRooms, stayNights, extraByRoom]);
 
   // Resumen activo que respalda pendingQuote si fue restaurado antes de que carguen las cotizaciones
   const activeSummary = useMemo(() => {
@@ -605,13 +625,9 @@ function ReservarContent() {
       });
 
       const maxAvailableExtras = Math.max(0, totalMaxCapacity - totalBaseCapacity);
-      const minRequiredExtras = totalGuests > totalBaseCapacity
-        ? Math.min(totalGuests - totalBaseCapacity, maxAvailableExtras)
+      const extraGuests = pendingQuote.extraGuests !== undefined
+        ? Math.min(Math.max(0, Number(pendingQuote.extraGuests) || 0), maxAvailableExtras)
         : 0;
-
-      const extraGuests = selectedExtraGuests !== null
-        ? Math.min(Math.max(minRequiredExtras, selectedExtraGuests), maxAvailableExtras)
-        : (pendingQuote.extraGuests !== undefined ? Math.max(minRequiredExtras, Number(pendingQuote.extraGuests)) : minRequiredExtras);
 
       const extraGuestsFee = extraGuests * 500 * nights;
       const grandTotal = pendingQuote.totalAmount ? Number(pendingQuote.totalAmount) : (baseLodgingTotal + extraGuestsFee);
@@ -623,7 +639,6 @@ function ReservarContent() {
         nights,
         baseLodgingTotal,
         extraGuests,
-        minRequiredExtras,
         maxAvailableExtras,
         extraGuestsFee,
         grandTotal,
@@ -635,10 +650,11 @@ function ReservarContent() {
       };
     }
     return selectionSummary;
-  }, [selectionSummary, pendingQuote, quotes, totalGuests, stayNights, selectedExtraGuests, isDirectReserveFlow, isConfirmStep]);
+  }, [selectionSummary, pendingQuote, quotes, stayNights, isDirectReserveFlow, isConfirmStep]);
 
   const coveredCapacity = activeSummary.totalRooms > 0 ? (activeSummary.totalBaseCapacity + (activeSummary.extraGuests || 0)) : 0;
-  const isOverCapacity = activeSummary.totalRooms > 0 && (totalGuests > activeSummary.totalMaxCapacity || totalGuests > coveredCapacity);
+  const pendingGuests = activeSummary.totalRooms > 0 ? Math.max(0, totalGuests - coveredCapacity) : 0;
+  const isOverCapacity = pendingGuests > 0;
 
   // Enviar cotización por WhatsApp (Paso 1 del flujo)
   const handleRequestQuote = async () => {
@@ -735,8 +751,8 @@ function ReservarContent() {
             : `Ha seleccionado ${totalGuests} huéspedes pero su selección de habitaciones y adicionales solo cubre ${coveredCapacity} personas.`));
       return;
     }
-    if (!guestName.trim()) {
-      setSubmitError(lang === 'en' ? 'Please enter your full name.' : 'Por favor ingresa tu nombre completo.');
+    if (!guestName.trim() || !guestLastName.trim()) {
+      setSubmitError(lang === 'en' ? 'Please enter your first name and last names.' : 'Por favor ingresa tu nombre y apellidos.');
       return;
     }
     if (!guestPhone.trim()) {
@@ -759,7 +775,7 @@ function ReservarContent() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          guestName: guestName.trim(),
+          guestName: `${guestName.trim()} ${guestLastName.trim()}`,
           guestPhone: guestPhone.trim(),
           guestEmail: guestEmail.trim(),
           checkIn,
@@ -795,9 +811,7 @@ function ReservarContent() {
 
   return (
     <div className={`min-h-screen bg-zinc-50 text-zinc-900 font-sans antialiased transition-all duration-200 ${
-      activeSummary.totalRooms > 0
-        ? (activeSummary.maxAvailableExtras > 0 ? 'pb-[460px] sm:pb-[420px]' : 'pb-[280px] sm:pb-[250px]')
-        : 'pb-24'
+      activeSummary.totalRooms > 0 ? 'pb-32' : 'pb-24'
     }`}>
       {/* ── HEADER SUPERIOR ELEGANTE ── */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-200/80 shadow-xs">
@@ -1153,6 +1167,8 @@ function ReservarContent() {
               ) : (
                 quotes.map(q => {
                   const qtySelected = selectedRooms[q.key] || 0;
+                  const cardExtraGuests = Math.min(extraByRoom[q.key] || 0, Math.max(0, q.maxCapacity - q.capacity) * qtySelected);
+                  const cardTotal = q.totalPrice * Math.max(1, qtySelected) + cardExtraGuests * 500 * q.nights;
                   const activeImgIdx = activePhotoIdx[q.key] || 0;
                   const currentPhoto = q.photos[activeImgIdx] || q.photos[0] || '/images/general/1.jpg';
 
@@ -1255,6 +1271,74 @@ function ReservarContent() {
                           ))}
                         </div>
 
+                        {/* Huéspedes adicionales de este tipo de habitación (por defecto 0, nunca forzado) */}
+                        {q.maxCapacity > q.capacity && q.availableUnitsCount > 0 && qtySelected > 0 && (() => {
+                          const maxExtraForKey = (q.maxCapacity - q.capacity) * qtySelected;
+                          const extraSelected = Math.min(extraByRoom[q.key] || 0, maxExtraForKey);
+                          return (
+                            <div className="bg-amber-50/95 border border-amber-200/90 rounded-2xl p-2.5 space-y-1.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <div className="text-xs font-black text-amber-950 flex items-center gap-1">
+                                    <Users size={13} className="text-amber-700 shrink-0" />
+                                    <span>
+                                      {lang === 'en'
+                                        ? `Extra guests (max. ${q.maxCapacity - q.capacity} per room)`
+                                        : `Huéspedes adicionales (máx. ${q.maxCapacity - q.capacity} por habitación)`}
+                                    </span>
+                                  </div>
+                                  <div className="text-[11px] font-bold text-amber-800">
+                                    +$500 MXN / {lang === 'en' ? 'night each' : 'noche c/u'}
+                                    {extraSelected > 0 && (
+                                      <span className="text-amber-950 font-black ml-1">
+                                        (+${(extraSelected * 500 * q.nights).toLocaleString()} MXN)
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-amber-300 shadow-xs">
+                                  <button
+                                    type="button"
+                                    disabled={extraSelected <= 0}
+                                    onClick={() => handleUpdateExtra(q.key, -1, maxExtraForKey)}
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${
+                                      extraSelected > 0
+                                        ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer active:scale-95'
+                                        : 'text-zinc-300 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <Minus size={13} />
+                                  </button>
+                                  <span className="w-5 text-center text-sm font-black text-zinc-900">
+                                    {extraSelected}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={extraSelected >= maxExtraForKey}
+                                    onClick={() => handleUpdateExtra(q.key, 1, maxExtraForKey)}
+                                    className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${
+                                      extraSelected < maxExtraForKey
+                                        ? 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-95'
+                                        : 'text-zinc-300 bg-zinc-200 cursor-not-allowed'
+                                    }`}
+                                  >
+                                    <Plus size={13} />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-[10px] text-amber-900 font-semibold leading-tight flex items-start gap-1">
+                                <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
+                                <span>
+                                  {lang === 'en'
+                                    ? 'Note: We do not have extra beds. The living room sofa does NOT have air conditioning.'
+                                    : 'Nota: No contamos con camas adicionales, sillón de la sala NO cuenta con aire acondicionado.'}
+                                </span>
+                              </p>
+                            </div>
+                          );
+                        })()}
+
                         {/* Fila de Precio y Contador Multi-Habitación */}
                         <div className="flex items-center justify-between pt-2 border-t border-zinc-100">
                           <div>
@@ -1265,7 +1349,7 @@ function ReservarContent() {
                               <span className="text-[10px] font-bold text-zinc-400">MXN / {t.night}</span>
                             </div>
                             <span className="text-[11px] font-bold text-indigo-600 block">
-                              Total: ${q.totalPrice.toLocaleString()} MXN ({q.nights} {q.nights === 1 ? t.night : t.nights})
+                              Total: ${cardTotal.toLocaleString()} MXN ({q.nights} {q.nights === 1 ? t.night : t.nights}{qtySelected > 1 ? ` · ${qtySelected} ${lang === 'en' ? 'rooms' : 'habitaciones'}` : ''}{cardExtraGuests > 0 ? ` · +${cardExtraGuests} ${lang === 'en' ? 'extra' : 'adic.'}` : ''})
                             </span>
                             <span className="text-[10px] font-semibold text-emerald-700 block mt-0.5">
                               ✓ {lang === 'en' ? 'Taxes included (16% VAT + 3% ISH)' : 'Impuestos incluidos (16% IVA + 3% ISH)'}
@@ -1319,196 +1403,60 @@ function ReservarContent() {
               )}
             </div>
 
-            {/* Espaciador dinámico de seguridad para permitir scroll libre por encima de la barra flotante */}
-            {activeSummary.totalRooms > 0 && (
-              <div 
-                className={`w-full pointer-events-none transition-all duration-200 ${
-                  activeSummary.maxAvailableExtras > 0 ? 'h-36 sm:h-28' : 'h-20'
-                }`} 
-                aria-hidden="true" 
-              />
-            )}
           </div>
         )}
       </main>
 
-      {/* ── BARRA FLOTANTE STICKY INFERIOR (CARRITO DE RESERVA) ── */}
+      {/* ── BARRA INFERIOR: SIGUIENTE + HUÉSPEDES POR ACOMODAR + LIMPIAR ── */}
       {activeSummary.totalRooms > 0 && !bookingSuccess && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-zinc-200/80 p-4 shadow-xl animate-in slide-in-from-bottom-5">
-          <div className="max-w-xl mx-auto space-y-2.5">
-            {/* Mensaje de error de sobrecapacidad */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-zinc-200/80 p-3 shadow-xl">
+          <div className="max-w-xl mx-auto flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="shrink-0 py-3.5 px-3 rounded-2xl border border-zinc-300 bg-white text-zinc-600 hover:bg-zinc-100 font-bold text-xs transition-all cursor-pointer active:scale-95"
+              title={lang === 'en' ? 'Remove all selected rooms' : 'Vaciar selección de habitaciones'}
+            >
+              {lang === 'en' ? 'Clear' : 'Limpiar'}
+            </button>
+
+            <button
+              type="button"
+              disabled={isOverCapacity || isInvalidDateRange || stayNights <= 0}
+              onClick={() => {
+                if (isOverCapacity || isInvalidDateRange || stayNights <= 0) return;
+                setIsConfirmStep(true);
+                setIsModalOpen(true);
+              }}
+              className={`flex-1 py-3.5 px-4 rounded-2xl font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 ${
+                isOverCapacity || isInvalidDateRange || stayNights <= 0
+                  ? 'bg-zinc-300 text-zinc-500 cursor-not-allowed'
+                  : 'bg-linear-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-600/20 cursor-pointer active:scale-98'
+              }`}
+            >
+              <span>{lang === 'en' ? 'NEXT' : 'SIGUIENTE'}</span>
+              <ArrowRight size={16} />
+            </button>
+
             {isOverCapacity && (
-              <div className="bg-rose-50 border border-rose-200/90 text-rose-800 px-3.5 py-2.5 rounded-2xl text-xs font-bold flex items-start gap-2.5 shadow-xs animate-in fade-in slide-in-from-bottom-2">
-                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <p className="leading-snug">
-                  {lang === 'en'
-                    ? `You have selected ${totalGuests} guests, but the maximum occupancy of your selected accommodations is ${activeSummary.totalMaxCapacity}.`
-                    : `Ha seleccionado ${totalGuests} huéspedes pero la ocupación máxima de las habitaciones que ha seleccionado es ${activeSummary.totalMaxCapacity}.`}
-                </p>
-              </div>
+              <span className="shrink-0 max-w-[110px] text-xs font-extrabold text-amber-700 leading-tight text-right">
+                {lang === 'en' ? 'Guests to accommodate' : 'Huéspedes por acomodar'} {pendingGuests}
+              </span>
             )}
-
-            {/* Selector de personas adicionales si el alojamiento seleccionado lo permite */}
-            {activeSummary.maxAvailableExtras > 0 && (
-              <div className="bg-amber-50/95 border border-amber-200/90 rounded-2xl p-2.5 space-y-1.5 shadow-xs">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="text-xs font-black text-amber-950 flex items-center gap-1">
-                      <Users size={13} className="text-amber-700 shrink-0" />
-                      <span>
-                        {lang === 'en'
-                          ? `Extra guests with fee (max. ${activeSummary.maxAvailableExtras}):`
-                          : `Adicionales con costo (máx. ${activeSummary.maxAvailableExtras}):`}
-                      </span>
-                    </div>
-                    <div className="text-[11px] font-bold text-amber-800">
-                      +$500 MXN / {lang === 'en' ? 'night each' : 'noche c/u'}
-                      {activeSummary.extraGuestsFee > 0 && (
-                        <span className="text-amber-950 font-black ml-1">
-                          (+${activeSummary.extraGuestsFee.toLocaleString()} MXN)
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-amber-300 shadow-xs">
-                    <button
-                      type="button"
-                      disabled={activeSummary.extraGuests <= activeSummary.minRequiredExtras}
-                      onClick={() => setSelectedExtraGuests(Math.max(activeSummary.minRequiredExtras, activeSummary.extraGuests - 1))}
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${
-                        activeSummary.extraGuests > activeSummary.minRequiredExtras
-                          ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 cursor-pointer active:scale-95'
-                          : 'text-zinc-300 cursor-not-allowed'
-                      }`}
-                    >
-                      <Minus size={13} />
-                    </button>
-                    <span className="w-5 text-center text-sm font-black text-zinc-900">
-                      {activeSummary.extraGuests}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={activeSummary.extraGuests >= activeSummary.maxAvailableExtras}
-                      onClick={() => setSelectedExtraGuests(Math.min(activeSummary.maxAvailableExtras, activeSummary.extraGuests + 1))}
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-black transition-all ${
-                        activeSummary.extraGuests < activeSummary.maxAvailableExtras
-                          ? 'bg-amber-600 hover:bg-amber-700 text-white cursor-pointer active:scale-95'
-                          : 'text-zinc-300 bg-zinc-200 cursor-not-allowed'
-                      }`}
-                    >
-                      <Plus size={13} />
-                    </button>
-                  </div>
-                </div>
-
-                {activeSummary.minRequiredExtras > 0 && (
-                  <p className="text-[10px] text-amber-800 font-bold leading-tight">
-                    {lang === 'en'
-                      ? `* ${activeSummary.minRequiredExtras} extra guest(s) required for your group size (${totalGuests} people).`
-                      : `* ${activeSummary.minRequiredExtras} huésped(es) adicional(es) obligatorio(s) por el tamaño del grupo (${totalGuests} personas).`}
-                  </p>
-                )}
-
-                <p className="text-[10px] text-amber-900 font-semibold leading-tight flex items-start gap-1">
-                  <AlertCircle size={12} className="text-amber-600 shrink-0 mt-0.5" />
-                  <span>
-                    {lang === 'en'
-                      ? 'Note: We do not have extra beds. The living room sofa does NOT have air conditioning.'
-                      : 'Nota: No contamos con camas adicionales, sillón de la sala NO cuenta con aire acondicionado.'}
-                  </span>
-                </p>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
-                  <div className="flex items-center gap-1.5">
-                    <BedDouble size={14} className={isOverCapacity ? "text-rose-600" : "text-indigo-600"} />
-                    <span>
-                      {activeSummary.totalRooms} {t.selectedRoomsCount} (Base {activeSummary.totalBaseCapacity} · máx. {activeSummary.totalMaxCapacity} pers.)
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleClearSelection}
-                    className="text-[10px] text-rose-600 hover:text-rose-800 font-extrabold underline cursor-pointer bg-rose-50 hover:bg-rose-100 px-1.5 py-0.5 rounded-md transition-all active:scale-95"
-                    title={lang === 'en' ? 'Remove all selected rooms' : 'Vaciar selección de habitaciones'}
-                  >
-                    {lang === 'en' ? '✕ Clear' : '✕ Quitar'}
-                  </button>
-                </div>
-                <div className="text-base font-black text-zinc-900">
-                  ${activeSummary.grandTotal.toLocaleString()} MXN
-                </div>
-                <div className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
-                  <span>50% Anticipo: ${activeSummary.deposit.toLocaleString()} MXN</span>
-                  <span>· ✅ Tarifa Miembro</span>
-                </div>
-              </div>
-
-              {/* Botón 1: Cotizar (Sin bloqueo) */}
-              <button
-                type="button"
-                disabled={quoteSending || isOverCapacity || isInvalidDateRange || stayNights <= 0}
-                onClick={() => {
-                  if (isOverCapacity || isInvalidDateRange || stayNights <= 0) return;
-                  handleRequestQuote();
-                }}
-                className={`py-3.5 px-5 rounded-2xl text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 ${
-                  isOverCapacity || isInvalidDateRange || stayNights <= 0
-                    ? 'bg-zinc-300 text-zinc-500 cursor-not-allowed shadow-none'
-                    : 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer active:scale-95'
-                }`}
-              >
-                {quoteSending ? (
-                  <>
-                    <Loader2 size={14} className="animate-spin" />
-                    <span>{t.quoteSending}</span>
-                  </>
-                ) : (
-                  <>
-                    <MessageCircle size={15} className="stroke-[2.5]" />
-                    <span>{t.requestQuoteBtn}</span>
-                    <ArrowRight size={14} />
-                  </>
-                )}
-              </button>
-            </div>
-
-            {/* Botón 2: ¡¡¡ RESERVA YA !!! (Bloqueo 24 horas en nuestro sistema) */}
-            <div className="pt-2 border-t border-zinc-100 flex items-center justify-center">
-              <button
-                type="button"
-                disabled={isOverCapacity}
-                onClick={() => {
-                  if (isOverCapacity) return;
-                  setIsConfirmStep(true);
-                  setShowFullBreakdown(true);
-                  setIsModalOpen(true);
-                }}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-              >
-                <Sparkles size={16} className="text-emerald-200 shrink-0" />
-                <span>{t.directLockBtn}</span>
-                <ArrowRight size={16} />
-              </button>
-            </div>
           </div>
         </div>
       )}
 
       {/* ── MODAL / BOTTOM SHEET DE CONFIRMACIÓN Y CONTACTO (DEMANDA NOMBRE COMPLETO) ── */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-lg rounded-t-3xl sm:rounded-3xl max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-white overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg mx-auto p-6 space-y-5">
             <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
               <div className="flex items-center gap-2.5">
-                <img 
-                  src="/logo-jaroje.png" 
-                  alt="Condominios Jaroje" 
-                  className="h-6 w-auto object-contain" 
+                <img
+                  src="/logo-jaroje.png"
+                  alt="Condominios Jaroje"
+                  className="h-6 w-auto object-contain"
                 />
                 <div>
                   <h3 className="text-base font-black text-zinc-900 leading-tight">
@@ -1525,12 +1473,26 @@ function ReservarContent() {
                 onClick={() => {
                   setIsModalOpen(false);
                   setIsConfirmStep(false);
+                  setShowContactFields(false);
                 }}
                 className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-zinc-200 text-zinc-500 flex items-center justify-center cursor-pointer"
               >
                 <X size={16} />
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setIsModalOpen(false);
+                setIsConfirmStep(false);
+                setShowContactFields(false);
+              }}
+              className="w-full py-3 rounded-2xl border-2 border-zinc-300 bg-white hover:bg-zinc-100 text-zinc-800 font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            >
+              <ArrowLeft size={16} />
+              <span>{lang === 'en' ? 'Modify booking' : 'Modificar Reserva'}</span>
+            </button>
 
             {/* Aviso de confirmación o garantía */}
             {isConfirmStep ? (
@@ -1584,28 +1546,17 @@ function ReservarContent() {
 
                 {/* Desplegable para ver habitaciones, fechas y amenidades */}
                 <div className="pt-1 border-t border-zinc-200/70">
-                  <button
-                    type="button"
-                    onClick={() => setShowFullBreakdown(prev => !prev)}
-                    className="w-full py-2 px-3 bg-white hover:bg-zinc-100 rounded-xl text-zinc-700 text-xs font-bold flex items-center justify-between border border-zinc-200/80 transition-colors cursor-pointer"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <span>🛏️</span>
-                      <span>
-                        {showFullBreakdown
-                          ? (lang === 'en'
-                              ? `Accommodation & dates breakdown (${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'})`
-                              : `Desglose de habitaciones y fechas (${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'})`)
-                          : (lang === 'en'
-                              ? `View accommodation & dates breakdown (${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'})`
-                              : `Ver desglose de habitaciones y fechas (${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'})`)}
-                      </span>
+                  <div className="w-full py-2 px-3 bg-white rounded-xl text-zinc-700 text-xs font-bold flex items-center gap-1.5 border border-zinc-200/80">
+                    <span>🛏️</span>
+                    <span>
+                      {lang === 'en'
+                        ? `Accommodation & dates breakdown (${activeSummary.nights} ${activeSummary.nights === 1 ? 'night' : 'nights'})`
+                        : `Desglose de habitaciones y fechas (${activeSummary.nights} ${activeSummary.nights === 1 ? 'noche' : 'noches'})`}
                     </span>
-                    <ChevronDown className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${showFullBreakdown ? 'rotate-180' : ''}`} />
-                  </button>
+                  </div>
 
-                  {/* Detalle expandible con fechas, habitaciones y personas adicionales */}
-                  {showFullBreakdown && (
+                  {/* Detalle siempre visible con fechas, habitaciones y personas adicionales */}
+                  {(
                     <div className="mt-3 pt-3 border-t border-zinc-200/60 space-y-3 animate-in fade-in duration-200">
                       {/* Fechas y noches */}
                       <div className="flex justify-between items-center font-bold text-zinc-700 border-b border-zinc-200/60 pb-2">
@@ -1722,17 +1673,21 @@ function ReservarContent() {
             )}
 
             {/* Formulario de contacto con exigencia de Nombre Completo */}
-            <form onSubmit={handleConfirmBooking} className="space-y-4">
+            <form onSubmit={handleConfirmBooking} noValidate className="space-y-4">
+              {/* Campos de contacto: se muestran al pulsar RESERVA YA */}
+              <div id="contact-fields" className={showContactFields ? 'space-y-4' : 'hidden'}>
               <div className="p-3.5 bg-indigo-50/50 border-2 border-indigo-200 rounded-2xl space-y-1.5">
                 <label className="text-[12px] font-black text-zinc-900 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
                     <User className="w-4 h-4 text-indigo-600" />
-                    {t.fullName} *
+                    {lang === 'en' ? 'First name' : 'Nombre'} *
                   </span>
-                  <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">Obligatorio</span>
+                  <span className="text-[10px] font-bold text-rose-500 uppercase tracking-wider">{lang === 'en' ? 'Required' : 'Obligatorio'}</span>
                 </label>
                 <p className="text-[11px] text-zinc-600">
-                  Ingresa tu nombre y apellidos tal como aparecen en tu identificación oficial.
+                  {lang === 'en'
+                    ? 'Enter your name and last names as they appear on your official ID.'
+                    : 'Ingresa tu nombre y apellidos tal como aparecen en tu identificación oficial.'}
                 </p>
                 <input
                   type="text"
@@ -1740,7 +1695,18 @@ function ReservarContent() {
                   autoFocus
                   value={guestName}
                   onChange={e => setGuestName(e.target.value)}
-                  placeholder="Ej. Juan Carlos Pérez Morales"
+                  placeholder={lang === 'en' ? 'e.g. John Charles' : 'Ej. Juan Carlos'}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 text-xs font-bold text-zinc-900 bg-white outline-none transition-all shadow-xs"
+                />
+                <label className="text-[12px] font-black text-zinc-900 block pt-1">
+                  {lang === 'en' ? 'Last names' : 'Apellidos'} *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={guestLastName}
+                  onChange={e => setGuestLastName(e.target.value)}
+                  placeholder={lang === 'en' ? 'e.g. Smith Brown' : 'Ej. Pérez Morales'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-zinc-300 focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 text-xs font-bold text-zinc-900 bg-white outline-none transition-all shadow-xs"
                 />
               </div>
@@ -1790,6 +1756,7 @@ function ReservarContent() {
                   className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none"
                 />
               </div>
+              </div>
 
               {submitError && (
                 <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs font-bold text-rose-700 flex items-center gap-2">
@@ -1799,23 +1766,58 @@ function ReservarContent() {
               )}
 
               <button
-                type="submit"
-                disabled={submitting || !guestName.trim() || isOverCapacity || isInvalidDateRange || stayNights <= 0}
-                className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-zinc-300 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                type="button"
+                disabled={quoteSending || isOverCapacity || isInvalidDateRange || stayNights <= 0}
+                onClick={handleRequestQuote}
+                className="w-full py-3.5 rounded-2xl border-2 border-indigo-600 bg-indigo-600 hover:bg-indigo-700 disabled:border-zinc-300 disabled:bg-zinc-300 disabled:text-zinc-500 text-white font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                {submitting ? (
+                {quoteSending ? (
                   <>
                     <Loader2 size={16} className="animate-spin" />
-                    <span>Bloqueando en el sistema...</span>
+                    <span>{t.quoteSending}</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles size={16} className="text-emerald-200" />
-                    <span>{t.confirmLockBtn}</span>
-                    <ArrowRight size={16} />
+                    <MessageCircle size={16} />
+                    <span>{lang === 'en' ? 'Quote without holding' : 'Cotizar sin bloquear'}</span>
                   </>
                 )}
               </button>
+
+              {!showContactFields ? (
+                <button
+                  type="button"
+                  disabled={isOverCapacity || isInvalidDateRange || stayNights <= 0}
+                  onClick={() => {
+                    setShowContactFields(true);
+                    setTimeout(() => document.getElementById('contact-fields')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+                  }}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-zinc-300 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles size={16} className="text-emerald-200" />
+                  <span>{t.directLockBtn.replace(/\s*→\s*$/, '')}</span>
+                  <ArrowRight size={16} />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={submitting || !guestName.trim() || !guestLastName.trim() || isOverCapacity || isInvalidDateRange || stayNights <= 0}
+                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-zinc-300 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Bloqueando en el sistema...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles size={16} className="text-emerald-200" />
+                      <span>{t.confirmLockBtn}</span>
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
+              )}
             </form>
           </div>
         </div>
