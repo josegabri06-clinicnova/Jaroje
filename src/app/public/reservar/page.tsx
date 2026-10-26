@@ -322,7 +322,12 @@ function ReservarContent() {
           viewPortalLink: 'View Guest Portal',
           phoneModalTitle: 'Where should we send your quote?',
           phoneModalDesc: 'Enter your WhatsApp number so we can send you the official breakdown and confirmation button:',
-          sendQuoteBtn: 'Send Quote to WhatsApp'
+          sendQuoteBtn: 'Send Quote to WhatsApp',
+          availabilityModalTitle: '⚠️ Selected accommodation is no longer available',
+          availabilityModalDesc: 'The accommodation previously selected for these dates was recently booked or blocked in the system. Please click "Modify booking" to choose from our other available rooms.',
+          chooseAvailableBtn: 'Choose Available Accommodation',
+          noRoomsSelectedTitle: 'No accommodations selected',
+          selectRoomAction: 'Select room'
         }
       : {
           portalTitle: 'Portal Oficial de Reservas',
@@ -380,7 +385,12 @@ function ReservarContent() {
           viewPortalLink: 'Ver Portal del Huésped',
           phoneModalTitle: '¿A qué WhatsApp enviamos tu cotización?',
           phoneModalDesc: 'Ingresa tu número de WhatsApp para enviarte el desglose oficial y el botón de confirmación directa:',
-          sendQuoteBtn: 'Enviar Cotización a mi WhatsApp'
+          sendQuoteBtn: 'Enviar Cotización a mi WhatsApp',
+          availabilityModalTitle: '⚠️ El alojamiento seleccionado ya no tiene disponibilidad',
+          availabilityModalDesc: 'El alojamiento seleccionado previamente para estas fechas acaba de ser apartado o bloqueado en el sistema. Por favor pulsa "Modificar Reserva" para elegir otra de las opciones disponibles.',
+          chooseAvailableBtn: 'Elegir Alojamiento Disponible',
+          noRoomsSelectedTitle: 'Ningún alojamiento seleccionado',
+          selectRoomAction: 'Seleccionar habitación'
         };
   }, [lang]);
 
@@ -405,53 +415,63 @@ function ReservarContent() {
 
         // Validar y sanitizar la disponibilidad en vivo de las habitaciones preseleccionadas
         if (data.quotes && Array.isArray(data.quotes)) {
+          let availabilityChanged = false;
+
           setSelectedRooms(prev => {
             if (Object.keys(prev).length === 0) return prev;
             const updated: Record<string, number> = {};
-            let changed = false;
             Object.entries(prev).forEach(([key, qty]) => {
               const matchedQuote = data.quotes.find((q: any) => q.key === key);
               const maxAvailable = matchedQuote?.availableUnitsCount || 0;
               if (maxAvailable < qty) {
-                changed = true;
+                availabilityChanged = true;
                 if (maxAvailable > 0) updated[key] = maxAvailable;
               } else {
                 updated[key] = qty;
               }
             });
-            if (changed) {
-              setAvailabilityNotice(
-                lang === 'en'
-                  ? '⚠️ One or more previously selected accommodations are no longer fully available for these dates.'
-                  : '⚠️ Uno o más alojamientos seleccionados previamente ya no tienen disponibilidad completa para estas fechas. Por favor verifique las opciones disponibles.'
-              );
-            }
             return updated;
           });
-        }
 
-        // Si existe cotización pendiente previa asociada a este teléfono SOLO si el usuario viene del botón de confirmar cotización
-        if (isDirectReserveFlow && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
-          setPendingQuote(data.pendingQuote);
-          if (data.pendingQuote.phone && !guestPhone) {
-            setGuestPhone(data.pendingQuote.phone);
-          }
-          // Sincronizar selectedRooms con los alojamientos del pendingQuote para que las tarjetas reflejen la cantidad
-          setSelectedRooms(prev => {
-            if (Object.keys(prev).length > 0) return prev;
-            if (Array.isArray(data.pendingQuote.rooms) && data.pendingQuote.rooms.length > 0) {
-              const mapped: Record<string, number> = {};
-              data.pendingQuote.rooms.forEach((r: any) => {
-                const k = normalizeRoomCategoryKey(r.key || '');
-                if (k) mapped[k] = Number(r.quantity || 1);
-              });
-              return mapped;
+          // Si existe cotización pendiente previa asociada a este teléfono SOLO si el usuario viene del botón de confirmar cotización
+          if (isDirectReserveFlow && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
+            setPendingQuote(data.pendingQuote);
+            if (data.pendingQuote.phone && !guestPhone) {
+              setGuestPhone(data.pendingQuote.phone);
             }
-            return prev;
-          });
-        } else if (!isDirectReserveFlow) {
-          // Si el usuario entra por navegación general al portal, no forzar ninguna cotización previa fantasma
-          setPendingQuote(null);
+            // Sincronizar selectedRooms con los alojamientos del pendingQuote respetando la disponibilidad real
+            setSelectedRooms(prev => {
+              if (Object.keys(prev).length > 0) return prev;
+              if (Array.isArray(data.pendingQuote.rooms) && data.pendingQuote.rooms.length > 0) {
+                const mapped: Record<string, number> = {};
+                data.pendingQuote.rooms.forEach((r: any) => {
+                  const k = normalizeRoomCategoryKey(r.key || '');
+                  const qty = Number(r.quantity || 1);
+                  const matchedQuote = data.quotes.find((q: any) => q.key === k);
+                  const maxAvailable = matchedQuote?.availableUnitsCount || 0;
+                  if (maxAvailable < qty) {
+                    availabilityChanged = true;
+                    if (maxAvailable > 0) mapped[k] = maxAvailable;
+                  } else {
+                    mapped[k] = qty;
+                  }
+                });
+                return mapped;
+              }
+              return prev;
+            });
+          } else if (!isDirectReserveFlow) {
+            // Si el usuario entra por navegación general al portal, no forzar ninguna cotización previa fantasma
+            setPendingQuote(null);
+          }
+
+          if (availabilityChanged) {
+            setAvailabilityNotice(
+              lang === 'en'
+                ? '⚠️ One or more previously selected accommodations are no longer fully available for these dates.'
+                : '⚠️ Uno o más alojamientos seleccionados previamente ya no tienen disponibilidad completa para estas fechas. Por favor verifique las opciones disponibles.'
+            );
+          }
         }
       }
     } catch (err) {
@@ -586,9 +606,18 @@ function ReservarContent() {
       const nights = Number(pendingQuote.nights || stayNights);
 
       pendingQuote.rooms.forEach((r: any) => {
-        const qty = Number(r.quantity || 1);
-        totalRooms += qty;
+        const requestedQty = Number(r.quantity || 1);
         const matchingCat = quotes.find(q => q.key === r.key);
+        // Si las cotizaciones en tiempo real ya cargaron y no hay unidades disponibles, no considerarla
+        if (quotes.length > 0 && matchingCat && (matchingCat.availableUnitsCount || 0) < requestedQty) {
+          const avail = Math.max(0, matchingCat.availableUnitsCount || 0);
+          if (avail === 0) return;
+        }
+        const qty = quotes.length > 0 && matchingCat
+          ? Math.min(requestedQty, matchingCat.availableUnitsCount || 0)
+          : requestedQty;
+
+        totalRooms += qty;
         const baseCap = matchingCat?.capacity || (r.key === 'doble' ? 4 : r.key === '1rec' ? 4 : r.key === '2rec' ? 6 : r.key === '3rec' ? 10 : 12);
         const maxCap = matchingCat?.maxCapacity || (r.key === 'doble' ? 4 : r.key === '1rec' ? 4 : r.key === '2rec' ? 8 : r.key === '3rec' ? 12 : 16);
         totalBaseCapacity += baseCap * qty;
@@ -655,6 +684,20 @@ function ReservarContent() {
   const coveredCapacity = activeSummary.totalRooms > 0 ? (activeSummary.totalBaseCapacity + (activeSummary.extraGuests || 0)) : 0;
   const pendingGuests = activeSummary.totalRooms > 0 ? Math.max(0, totalGuests - coveredCapacity) : 0;
   const isOverCapacity = pendingGuests > 0;
+
+  // Limpiar automáticamente la alerta de indisponibilidad cuando el cliente seleccione otra opción viable
+  useEffect(() => {
+    if (!availabilityNotice) return;
+    if (selectionSummary.totalRooms > 0 && !isOverCapacity) {
+      // Verificar que todas las habitaciones elegidas cuenten con disponibilidad real confirmada
+      const allAvailable = selectionSummary.selectedList.every(
+        item => item.quantity > 0 && (item.quote.availableUnitsCount || 0) >= item.quantity
+      );
+      if (allAvailable) {
+        setAvailabilityNotice('');
+      }
+    }
+  }, [selectionSummary.totalRooms, isOverCapacity, selectionSummary.selectedList, availabilityNotice]);
 
   // Enviar cotización por WhatsApp (Paso 1 del flujo)
   const handleRequestQuote = async () => {
@@ -739,6 +782,10 @@ function ReservarContent() {
     e.preventDefault();
     if (isInvalidDateRange || stayNights <= 0) {
       setSubmitError(t.invalidDatesError);
+      return;
+    }
+    if (activeSummary.totalRooms === 0) {
+      setSubmitError(lang === 'en' ? 'Please select at least one available accommodation.' : 'Por favor selecciona al menos un alojamiento disponible.');
       return;
     }
     if (isOverCapacity) {
@@ -1126,7 +1173,7 @@ function ReservarContent() {
             </div>
 
             {/* LISTADO DE HABITACIONES */}
-            <div className="space-y-4">
+            <div id="accommodations-section" className="space-y-4">
               {/* Aviso de cambio en disponibilidad si alguna unidad preseleccionada ya no está libre */}
               {availabilityNotice && (
                 <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
@@ -1494,6 +1541,36 @@ function ReservarContent() {
               <span>{lang === 'en' ? 'Modify booking' : 'Modificar Reserva'}</span>
             </button>
 
+            {/* Aviso destacado de indisponibilidad dentro del Modal de Confirmación */}
+            {(availabilityNotice || (!loading && activeSummary.totalRooms === 0)) && (
+              <div className="bg-amber-50 border-2 border-amber-300 text-amber-950 p-4 rounded-2xl text-xs font-semibold flex items-start gap-3 shadow-xs animate-in fade-in">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1.5 flex-1">
+                  <p className="font-extrabold text-amber-900 text-sm leading-tight">
+                    {t.availabilityModalTitle}
+                  </p>
+                  <p className="leading-relaxed text-amber-800 text-[11.5px]">
+                    {t.availabilityModalDesc}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setIsConfirmStep(false);
+                      setShowContactFields(false);
+                      setTimeout(() => {
+                        document.getElementById('accommodations-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      }, 100);
+                    }}
+                    className="inline-flex items-center gap-1.5 mt-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <span>{t.chooseAvailableBtn}</span>
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Resumen detallado de la cotización con desglose completo */}
             {loading ? (
               <div className="py-10 px-4 flex flex-col items-center justify-center gap-3 text-zinc-600 bg-zinc-50 rounded-2xl border border-zinc-200/80">
@@ -1517,7 +1594,14 @@ function ReservarContent() {
                         <div>✅ {lang === 'en' ? 'Jaroje Member Rate applied' : 'Tarifa de Miembro Jaroje aplicada'}</div>
                       </div>
                     </div>
-                    <span className="text-base text-indigo-950 font-black">${activeSummary.grandTotal.toLocaleString()} MXN</span>
+                    <span className="text-base text-indigo-950 font-black">
+                      ${activeSummary.grandTotal.toLocaleString()} MXN
+                      {activeSummary.totalRooms === 0 && (
+                        <span className="block text-[10px] text-amber-700 font-bold">
+                          {lang === 'en' ? '(No rooms selected)' : '(Sin habitaciones)'}
+                        </span>
+                      )}
+                    </span>
                   </div>
 
                   <div className="flex justify-between font-black text-xs text-emerald-900 bg-emerald-50/90 p-3 rounded-xl border border-emerald-200/90">
@@ -1559,21 +1643,41 @@ function ReservarContent() {
                         <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400 block">
                           {lang === 'en' ? 'Selected Accommodations:' : 'Alojamientos seleccionados:'}
                         </span>
-                        {activeSummary.selectedList.map(item => (
-                          <div key={item.quote.key} className="flex justify-between items-start text-zinc-700">
-                            <div>
-                              <div className="font-bold text-zinc-900">
-                                {item.quantity}x {lang === 'en' ? item.quote.name_en : item.quote.name}
-                              </div>
-                              <div className="text-[10px] text-zinc-500">
-                                ${item.quote.pricePerNight.toLocaleString()} MXN / {lang === 'en' ? 'night' : 'noche'} × {item.quote.nights} {item.quote.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')}
-                              </div>
-                            </div>
-                            <span className="font-black text-zinc-900 text-sm">
-                              ${(item.quote.totalPrice * item.quantity).toLocaleString()} MXN
-                            </span>
+                        {activeSummary.selectedList.length === 0 ? (
+                          <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-xl text-amber-900 text-xs font-bold flex items-center justify-between">
+                            <span>{t.noRoomsSelectedTitle}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsModalOpen(false);
+                                setIsConfirmStep(false);
+                                setShowContactFields(false);
+                                setTimeout(() => {
+                                  document.getElementById('accommodations-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                }, 100);
+                              }}
+                              className="text-xs text-indigo-700 underline font-black cursor-pointer hover:text-indigo-900"
+                            >
+                              {t.selectRoomAction}
+                            </button>
                           </div>
-                        ))}
+                        ) : (
+                          activeSummary.selectedList.map(item => (
+                            <div key={item.quote.key} className="flex justify-between items-start text-zinc-700">
+                              <div>
+                                <div className="font-bold text-zinc-900">
+                                  {item.quantity}x {lang === 'en' ? item.quote.name_en : item.quote.name}
+                                </div>
+                                <div className="text-[10px] text-zinc-500">
+                                  ${item.quote.pricePerNight.toLocaleString()} MXN / {lang === 'en' ? 'night' : 'noche'} × {item.quote.nights} {item.quote.nights === 1 ? (lang === 'en' ? 'night' : 'noche') : (lang === 'en' ? 'nights' : 'noches')}
+                                </div>
+                              </div>
+                              <span className="font-black text-zinc-900 text-sm">
+                                ${(item.quote.totalPrice * item.quantity).toLocaleString()} MXN
+                              </span>
+                            </div>
+                          ))
+                        )}
                       </div>
 
                       {/* Número de personas adicionales */}
@@ -1747,58 +1851,78 @@ function ReservarContent() {
                 </div>
               )}
 
-              <button
-                type="button"
-                disabled={quoteSending || isOverCapacity || isInvalidDateRange || stayNights <= 0}
-                onClick={handleRequestQuote}
-                className="w-full py-3.5 rounded-2xl border-2 border-indigo-600 bg-indigo-600 hover:bg-indigo-700 disabled:border-zinc-300 disabled:bg-zinc-300 disabled:text-zinc-500 text-white font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                {quoteSending ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    <span>{t.quoteSending}</span>
-                  </>
-                ) : (
-                  <>
-                    <MessageCircle size={16} />
-                    <span>{lang === 'en' ? 'Quote without holding' : 'Cotizar sin bloquear'}</span>
-                  </>
-                )}
-              </button>
-
-              {!showContactFields ? (
+              {activeSummary.totalRooms === 0 ? (
                 <button
                   type="button"
-                  disabled={isOverCapacity || isInvalidDateRange || stayNights <= 0}
                   onClick={() => {
-                    setShowContactFields(true);
-                    setTimeout(() => document.getElementById('contact-fields')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+                    setIsModalOpen(false);
+                    setIsConfirmStep(false);
+                    setShowContactFields(false);
+                    setTimeout(() => {
+                      document.getElementById('accommodations-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 100);
                   }}
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-zinc-300 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full py-4 rounded-2xl bg-linear-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-black text-sm tracking-wide shadow-lg shadow-amber-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
                 >
-                  <Sparkles size={16} className="text-emerald-200" />
-                  <span>{t.directLockBtn.replace(/\s*→\s*$/, '')}</span>
-                  <ArrowRight size={16} />
+                  <ArrowLeft size={16} />
+                  <span>{t.chooseAvailableBtn}</span>
                 </button>
               ) : (
-                <button
-                  type="submit"
-                  disabled={submitting || !guestName.trim() || !guestLastName.trim() || isOverCapacity || isInvalidDateRange || stayNights <= 0}
-                  className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-zinc-300 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      <span>Bloqueando en el sistema...</span>
-                    </>
-                  ) : (
-                    <>
+                <>
+                  <button
+                    type="button"
+                    disabled={quoteSending || isOverCapacity || isInvalidDateRange || stayNights <= 0 || activeSummary.totalRooms === 0}
+                    onClick={handleRequestQuote}
+                    className="w-full py-3.5 rounded-2xl border-2 border-indigo-600 bg-indigo-600 hover:bg-indigo-700 disabled:border-zinc-300 disabled:bg-zinc-300 disabled:text-zinc-500 text-white font-black text-sm tracking-wide transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {quoteSending ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        <span>{t.quoteSending}</span>
+                      </>
+                    ) : (
+                      <>
+                        <MessageCircle size={16} />
+                        <span>{lang === 'en' ? 'Quote without holding' : 'Cotizar sin bloquear'}</span>
+                      </>
+                    )}
+                  </button>
+
+                  {!showContactFields ? (
+                    <button
+                      type="button"
+                      disabled={isOverCapacity || isInvalidDateRange || stayNights <= 0 || activeSummary.totalRooms === 0}
+                      onClick={() => {
+                        setShowContactFields(true);
+                        setTimeout(() => document.getElementById('contact-fields')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+                      }}
+                      className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-zinc-300 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
                       <Sparkles size={16} className="text-emerald-200" />
-                      <span>{t.confirmLockBtn}</span>
+                      <span>{t.directLockBtn.replace(/\s*→\s*$/, '')}</span>
                       <ArrowRight size={16} />
-                    </>
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={submitting || !guestName.trim() || !guestLastName.trim() || isOverCapacity || isInvalidDateRange || stayNights <= 0 || activeSummary.totalRooms === 0}
+                      className="w-full py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-zinc-300 text-white font-black text-sm tracking-wide shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          <span>Bloqueando en el sistema...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={16} className="text-emerald-200" />
+                          <span>{t.confirmLockBtn}</span>
+                          <ArrowRight size={16} />
+                        </>
+                      )}
+                    </button>
                   )}
-                </button>
+                </>
               )}
 
               {/* Aviso de confirmación o garantía colocado abajo de los botones de reserva */}
