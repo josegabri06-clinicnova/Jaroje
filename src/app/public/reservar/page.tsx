@@ -1494,19 +1494,6 @@ function ReservarContent() {
               <span>{lang === 'en' ? 'Modify booking' : 'Modificar Reserva'}</span>
             </button>
 
-            {/* Aviso de confirmación o garantía */}
-            {isConfirmStep ? (
-              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-emerald-950 font-medium">
-                <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <p className="leading-snug">{t.confirmPendingQuoteDesc}</p>
-              </div>
-            ) : (
-              <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-indigo-950 font-medium">
-                <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
-                <p className="leading-snug">{t.guaranteeDesc}</p>
-              </div>
-            )}
-
             {/* Resumen detallado de la cotización con desglose completo */}
             {loading ? (
               <div className="py-10 px-4 flex flex-col items-center justify-center gap-3 text-zinc-600 bg-zinc-50 rounded-2xl border border-zinc-200/80">
@@ -1536,11 +1523,6 @@ function ReservarContent() {
                   <div className="flex justify-between font-black text-xs text-emerald-900 bg-emerald-50/90 p-3 rounded-xl border border-emerald-200/90">
                     <span>{lang === 'en' ? '50% Required Deposit to Lock:' : 'Anticipo requerido para bloquear (50%):'}</span>
                     <span className="text-sm font-black text-emerald-800">${activeSummary.deposit.toLocaleString()} MXN</span>
-                  </div>
-
-                  <div className="flex justify-between text-[11px] font-bold text-zinc-500 px-1 pt-0.5">
-                    <span>{lang === 'en' ? 'Remaining Balance at Check-in (50%):' : 'Saldo restante a liquidar al check-in (50%):'}</span>
-                    <span>${activeSummary.balanceRemaining.toLocaleString()} MXN</span>
                   </div>
                 </div>
 
@@ -1817,6 +1799,19 @@ function ReservarContent() {
                     </>
                   )}
                 </button>
+              )}
+
+              {/* Aviso de confirmación o garantía colocado abajo de los botones de reserva */}
+              {isConfirmStep ? (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-emerald-950 font-medium">
+                  <Sparkles className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="leading-snug">{t.confirmPendingQuoteDesc}</p>
+                </div>
+              ) : (
+                <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-2xl p-3.5 flex items-start gap-2.5 text-xs text-indigo-950 font-medium">
+                  <ShieldCheck className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                  <p className="leading-snug">{t.guaranteeDesc}</p>
+                </div>
               )}
             </form>
           </div>
