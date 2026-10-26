@@ -646,7 +646,7 @@ export async function sendWhatsAppTemplate(
       console.warn("[WhatsApp Pre-Send Lock] Error insertando candado previo:", lockErr);
     }
 
-    const spanishOnlyTemplates = ['pago_anticipo_recibido', 'alojamiento_listo', 'rechazo_solicitud', 'confirmar_reserva'];
+    const spanishOnlyTemplates = ['confirmar_reserva', 'portal_huesped_link'];
     let languageCode = (detectedLang === 'en' && !spanishOnlyTemplates.includes(templateName)) ? 'en' : 'es';
 
     const urlTemplates = [
@@ -939,6 +939,8 @@ export async function sendWhatsAppTemplate(
         'preparacion_llegada': 'preparacion_llegada_v2',
         'bienvenida_checkin': 'bienvenida_checkin_v2',
         'seguimiento_satisfaccion': 'seguimiento_satisfaccion_v2',
+        'disponibilidad_liberada': 'disponibilidad_liberada_v2',
+        'recibimiento_nuevamente': 'recibimiento_nuevamente_v2',
         'bienvenido_cliente_final_v2': 'bienvenido_cliente_llamada_v4',
         'bienvenido_cliente_llamada': 'bienvenido_cliente_llamada_v4',
         'bienvenido_cliente_llamada_v2': 'bienvenido_cliente_llamada_v4',
@@ -1013,14 +1015,11 @@ export async function sendWhatsAppTemplate(
       const SPANISH_ONLY_TEMPLATES = new Set([
         'confirmar_reserva',
         'portal_huesped_link',
-        'bienvenido_cliente_whatsaap_v4',
         'test_mixed_buttons_no_emoji'
       ]);
 
-      // Plantillas que fueron registradas con código de idioma 'en' en Meta WhatsApp Business
-      const ENGLISH_CODE_TEMPLATES = new Set([
-        'bienvenido_cliente_llamada_v4'
-      ]);
+      // Plantillas que fueron registradas con código de idioma 'en' exclusivamente
+      const ENGLISH_CODE_TEMPLATES = new Set<string>([]);
 
       // Resolución estricta de idioma según el catálogo oficial aprobado en Meta
       let metaLanguage: string;
@@ -1890,8 +1889,8 @@ export async function sendTemplate_BienvenidoConmutador(
 ): Promise<{ success: boolean; error?: string; data?: any }> {
   if (!phone) return { success: false, error: 'Sin teléfono' };
   const cleanPhone = cleanPhoneForMeta(phone);
-  // En Meta WABA, bienvenido_cliente_llamada_v4 está aprobada bajo código de idioma 'en'
-  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada_v4', [], [cleanPhone], undefined, 'url', false, 'en');
+  const lang = langOverride || (isSpanishOrLatamPhone(phone) ? 'es' : 'en');
+  return sendWhatsAppTemplate(phone, 'bienvenido_cliente_llamada_v4', [], [cleanPhone], undefined, 'url', false, lang);
 }
 
 /**
