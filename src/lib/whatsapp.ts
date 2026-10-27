@@ -966,7 +966,7 @@ export async function sendWhatsAppTemplate(
             {
               type: 'image',
               image: {
-                link: 'https://jaroje-app.vercel.app/images/general/1.jpg'
+                link: 'https://jaroje-app.vercel.app/images/general/2.jpg'
               }
             }
           ]
