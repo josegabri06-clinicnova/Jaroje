@@ -182,6 +182,21 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     guestMsgClean.includes('cotización') || 
     guestMsgClean.includes('cotizacion') || 
     guestMsgClean.includes('cotizar') || 
+    guestMsgClean.includes('cotiz') || 
+    guestMsgClean.includes('tarifa') || 
+    guestMsgClean.includes('tarifas') || 
+    guestMsgClean.includes('precio') || 
+    guestMsgClean.includes('precios') || 
+    guestMsgClean.includes('costo') || 
+    guestMsgClean.includes('costos') || 
+    guestMsgClean.includes('presupuesto') || 
+    guestMsgClean.includes('habitacion') || 
+    guestMsgClean.includes('habitación') || 
+    guestMsgClean.includes('habitaciones') || 
+    guestMsgClean.includes('cuartos') || 
+    guestMsgClean.includes('cuarto') || 
+    guestMsgClean.includes('hospedaje') || 
+    guestMsgClean.includes('alojamiento') || 
     guestMsgClean.includes('reserva ya') || 
     guestMsgClean.includes('¡reserva ya!') || 
     guestMsgClean.includes('reservar') || 
@@ -576,12 +591,12 @@ export async function handleInboundMessage(params: InboundMessageParams) {
 
   const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
 
-  // D. Intenciones de Cotización, Disponibilidad y Reserva explícitas ("cotizar", "disponibilidad", etc.)
+  // D. Intenciones de Cotización, Disponibilidad y Reserva explícitas ("cotizar", "disponibilidad", "reservar", etc.)
   if (isExplicitBookingIntent) {
-    // Si NO tiene reservación activa (es prospecto) y no se le envió una plantilla hace menos de 10 minutos
-    const TEN_MINUTES_MS = 10 * 60 * 1000;
-    const isRecentSend = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < TEN_MINUTES_MS);
-    if (!guestBooking && !isRecentSend) {
+    // Debounce rápido de 15 segundos para evitar duplicados concurrentes de webhook
+    const FIFTEEN_SEC_MS = 15 * 1000;
+    const isRapidDuplicate = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < FIFTEEN_SEC_MS);
+    if (!isRapidDuplicate) {
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
       try {
         console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${phone}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
