@@ -435,22 +435,13 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       console.error("Error logging human_mode_activated:", logErr);
     }
   } 
-  // B. Botón / Consulta de WiFi, Claves y Reglas
+  // B. Botón de WiFi, Claves y Reglas (solo por payload del botón; nunca por texto libre del cliente)
   else if (
-    guestMsgClean.includes('wifi') || 
-    guestMsgClean.includes('wi-fi') || 
-    guestMsgClean.includes('clave') || 
-    guestMsgClean.includes('claves') || 
-    guestMsgClean.includes('porton') || 
-    guestMsgClean.includes('portón') || 
-    guestMsgClean.includes('contraseña') || 
-    guestMsgClean.includes('password') || 
-    guestMsgClean.includes('reglas') ||
     rawPayload.includes('wifi') ||
     rawPayload.includes('claves')
   ) {
     const { isSpanishOrLatamPhone, sendTemplate_WiFiInformacion } = await import('@/lib/whatsapp');
-    const isEnglish = guestMsgClean.includes('password') || rawPayload.includes('wifi_en') || !isSpanishOrLatamPhone(phone);
+    const isEnglish = rawPayload.includes('wifi_en') || !isSpanishOrLatamPhone(phone);
     const lang = isEnglish ? 'en' : 'es';
     try {
       const wifiRes = await sendTemplate_WiFiInformacion(phone, lang);
