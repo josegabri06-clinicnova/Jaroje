@@ -173,12 +173,37 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
+  const rawPayload = String(params.button_payload || '').toLowerCase();
+  const guestMsgClean = guestMsgText.toLowerCase();
+
+  // Detección de intenciones explícitas de cotización, disponibilidad y reserva
+  const isExplicitBookingIntent = 
+    guestMsgClean.includes('disponibili') || 
+    guestMsgClean.includes('cotización') || 
+    guestMsgClean.includes('cotizacion') || 
+    guestMsgClean.includes('cotizar') || 
+    guestMsgClean.includes('reserva ya') || 
+    guestMsgClean.includes('¡reserva ya!') || 
+    guestMsgClean.includes('reservar') || 
+    (guestMsgClean.includes('reserva') && !guestMsgClean.includes('mi reserva') && !guestMsgClean.includes('mi reservacion') && !guestMsgClean.includes('mi reservación')) || 
+    guestMsgClean.includes('quote & availability') || 
+    guestMsgClean.includes('book now') || 
+    guestMsgClean.includes('booking') || 
+    rawPayload.includes('cotizar') || 
+    rawPayload.includes('disponibilidad') || 
+    rawPayload.includes('book_now');
+
+  // Comprobar si es número de fundadores / socios para pruebas
+  const cleanTenDigits = phone.replace(/\D/g, '').slice(-10);
+  const isFounderOrTester = cleanTenDigits === '639367930' || cleanTenDigits === '608290664';
+
   // ── EXCLUSIÓN DE CONTACTOS PERSONALES DE ROLANDO Y STAFF ──
   // Si el remitente es un contacto personal de Rolando (ej. Francisco San Martin) o empleado,
   // NO enviar jamás plantilla de bienvenida ni respuestas automáticas del bot para no interferir en sus conversaciones personales.
+  // EXCEPCIÓN: Si solicita explícitamente cotizar/reservar o es un número de prueba de socios, permitir el flujo comercial.
   const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
   const personalCheck = await isExcludedPersonalContact(phone);
-  if (personalCheck.isExcluded) {
+  if (personalCheck.isExcluded && !isExplicitBookingIntent && !isFounderOrTester) {
     console.log(`[Inbound Handler] 🛑 Mensaje de contacto personal/staff (${phone} - ${personalCheck.contact?.name}): "${guestMsgText}". Omitiendo bot y plantilla de bienvenida.`);
     
     // Guardar el mensaje en el historial para visibilidad en el Inbox sin activar bot
@@ -231,9 +256,6 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   let forceHuman = existing ? existing.human_mode : false;
   let finalBotResponse = params.bot_response || null;
   let isAutoReplyTriggered = false;
-
-  const rawPayload = String(params.button_payload || '').toLowerCase();
-  const guestMsgClean = guestMsgText.toLowerCase();
 
   // ── BUSCAR SI EL CLIENTE YA TIENE RESERVACIÓN EN EL HOTEL ──
   const guestBooking = await findGuestBooking(phone);
@@ -475,50 +497,21 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
   // D. Intenciones de Cotización, Disponibilidad y Reserva ("Hola quiero hacer una reserva", "cotizar", etc.)
-  else if (
-    guestMsgClean.includes('disponibili') || 
-    guestMsgClean.includes('cotización') || 
-    guestMsgClean.includes('cotizacion') || 
-    guestMsgClean.includes('cotizar') || 
-    guestMsgClean.includes('reserva ya') || 
-    guestMsgClean.includes('¡reserva ya!') || 
-    guestMsgClean.includes('reservar') || 
-    (guestMsgClean.includes('reserva') && !guestMsgClean.includes('mi reserva') && !guestMsgClean.includes('mi reservacion') && !guestMsgClean.includes('mi reservación')) || 
-    guestMsgClean.includes('quote & availability') || 
-    guestMsgClean.includes('book now') || 
-    guestMsgClean.includes('booking') || 
-    rawPayload.includes('cotizar') || 
-    rawPayload.includes('disponibilidad') || 
-    rawPayload.includes('book_now')
-  ) {
-    if (guestBooking) {
-      // Si el cliente ya tiene una reservación, no ofrecerle cotizar desde cero, enviarle su Portal del Huésped
-      const { isSpanishOrLatamPhone, sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
-      const isEnglish = !isSpanishOrLatamPhone(phone);
-      const lang = isEnglish ? 'en' : 'es';
-      console.log(`[Inbound Handler] 🏨 Huésped con reserva existente #${guestBooking.id} (${guestBooking.guest_name}) consultó. Enviando 'portal_huesped_link'...`);
-      const portalResult = await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
-      if (portalResult.success) {
+  else if (isExplicitBookingIntent) {
+    // Despachar exclusivamente la plantilla oficial de 3 botones aprobada en Meta (bienvenido_cliente_whatsaap_v4)
+    const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
+    try {
+      console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${phone}. Despachando plantilla oficial de 3 botones 'bienvenido_cliente_whatsaap_v4'...`);
+      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
+      if (welcomeResult.success) {
         welcomeSentMemoryCache.set(phone, Date.now());
         isAutoReplyTriggered = false;
         finalBotResponse = null;
+      } else {
+        console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
       }
-    } else {
-      // Despachar exclusivamente la plantilla oficial de 3 botones aprobada en Meta (bienvenido_cliente_whatsaap_v4)
-      const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
-      try {
-        console.log(`[Inbound Handler] 🌟 Intención de reserva detectada. Despachando plantilla oficial de 3 botones 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
-        const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
-        if (welcomeResult.success) {
-          welcomeSentMemoryCache.set(phone, Date.now());
-          isAutoReplyTriggered = false;
-          finalBotResponse = null;
-        } else {
-          console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
-        }
-      } catch (err) {
-        console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
-      }
+    } catch (err) {
+      console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
     }
   }
 
@@ -599,7 +592,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   }
 
   const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
-  const shouldSendWelcome = !isWelcomeCoolingDown;
+  const shouldSendWelcome = !isWelcomeCoolingDown && !isExplicitBookingIntent;
 
   if (shouldSendWelcome) {
     try {
