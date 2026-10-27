@@ -511,18 +511,17 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       finalBotResponse = `Hola. No logramos encontrar una reservación activa vinculada a tu número en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de inmediato. 🌴`;
     }
   }
-  // ── VERIFICACIÓN DE ENFRIAMIENTO (7 DÍAS) PARA PLANTILLAS DE BIENVENIDA ──
-  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  // ── VERIFICACIÓN DE ÚLTIMO ENVÍO DE PLANTILLA DE BIENVENIDA ──
   const now = Date.now();
   let lastWelcomeSentAt = 0;
 
   // A. Revisar en memoria para evitar colisiones rápidas
   const memSentTime = welcomeSentMemoryCache.get(phone);
-  if (memSentTime && now - memSentTime < ONE_WEEK_MS) {
+  if (memSentTime) {
     lastWelcomeSentAt = Math.max(lastWelcomeSentAt, memSentTime);
   }
 
-  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida en los últimos 7 días
+  // B. Revisar en whatsapp_logs si se le envió alguna vez la plantilla de bienvenida
   try {
     const { data: lastWelcomeLog } = await supabase
       .from('whatsapp_logs')
@@ -543,7 +542,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     console.warn("[Inbound Handler] Error verificando whatsapp_logs para welcome template:", logChkErr);
   }
 
-  // C. Revisar en historial de conversaciones si hay registro reciente en los últimos 7 días
+  // C. Revisar en historial de conversaciones si hay registro de una bienvenida previa
   if (existing && Array.isArray(existing.messages)) {
     for (let i = existing.messages.length - 1; i >= 0; i--) {
       const msg = existing.messages[i];
@@ -558,14 +557,13 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
-  const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
-
   // D. Intenciones de Cotización, Disponibilidad y Reserva explícitas ("cotizar", "disponibilidad", "reservar", etc.)
   if (isExplicitBookingIntent) {
-    // Debounce rápido de 15 segundos para evitar duplicados concurrentes de webhook
-    const FIFTEEN_SEC_MS = 15 * 1000;
-    const isRapidDuplicate = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < FIFTEEN_SEC_MS);
-    if (!isRapidDuplicate) {
+    // Tras enviar la plantilla de bienvenida, no se reenvía hasta pasadas 24h.
+    // Pasadas las 24h, solo se reenvía si el cliente vuelve a escribir con palabras clave (este bloque).
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const isWithin24h = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_DAY_MS);
+    if (!isWithin24h) {
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
       try {
         console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${phone}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
@@ -605,7 +603,9 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   // ── REGLA DE BIENVENIDA A WHATSAPP (MÁXIMO 1 VEZ CADA 7 DÍAS) ──
   // Aplica a prospectos nuevos SIN reservación activa previa que inician conversación
   // Huéspedes con reservación activa NUNCA reciben plantillas automáticas al hablar (se atienden por recepción o comandos específicos)
-  const shouldSendWelcome = !guestBooking && !isWelcomeCoolingDown && !isExplicitBookingIntent;
+  // Una vez enviada la bienvenida, NO se reenvía nunca más por mensajes normales.
+  // Solo se reenvía pasadas 24h y con palabras clave (bloque D).
+  const shouldSendWelcome = !guestBooking && lastWelcomeSentAt === 0 && !isExplicitBookingIntent;
 
   if (shouldSendWelcome) {
     try {
