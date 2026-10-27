@@ -194,8 +194,35 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     rawPayload.includes('book_now');
 
   // Comprobar si es número de fundadores / socios para pruebas
-  const cleanTenDigits = phone.replace(/\D/g, '').slice(-10);
-  const isFounderOrTester = cleanTenDigits === '639367930' || cleanTenDigits === '608290664';
+  const cleanDigits = phone.replace(/\D/g, '');
+  const isFounderOrTester = 
+    cleanDigits.endsWith('639367930') || 
+    cleanDigits.endsWith('608290664') ||
+    cleanDigits.endsWith('636961103');
+
+  // Detección de saludos iniciales de prospectos
+  const isGreeting = 
+    guestMsgClean === 'hola' ||
+    guestMsgClean.startsWith('hola ') ||
+    guestMsgClean.startsWith('hola,') ||
+    guestMsgClean.startsWith('hola!') ||
+    guestMsgClean.startsWith('hola.') ||
+    guestMsgClean.startsWith('hola qué tal') ||
+    guestMsgClean.startsWith('hola que tal') ||
+    guestMsgClean === 'buenas' ||
+    guestMsgClean.startsWith('buenas ') ||
+    guestMsgClean.startsWith('buen dia') ||
+    guestMsgClean.startsWith('buen día') ||
+    guestMsgClean.startsWith('buenos dias') ||
+    guestMsgClean.startsWith('buenos días') ||
+    guestMsgClean.startsWith('buenas tardes') ||
+    guestMsgClean.startsWith('buenas noches') ||
+    guestMsgClean === 'info' ||
+    guestMsgClean.startsWith('info ') ||
+    guestMsgClean === 'informacion' ||
+    guestMsgClean === 'información' ||
+    guestMsgClean === 'hi' ||
+    guestMsgClean === 'hello';
 
   // ── EXCLUSIÓN DE CONTACTOS PERSONALES DE ROLANDO Y STAFF ──
   // Si el remitente es un contacto personal de Rolando (ej. Francisco San Martin) o empleado,
@@ -496,12 +523,12 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       finalBotResponse = `Hola. No logramos encontrar una reservación activa vinculada a tu número en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de inmediato. 🌴`;
     }
   }
-  // D. Intenciones de Cotización, Disponibilidad y Reserva ("Hola quiero hacer una reserva", "cotizar", etc.)
-  else if (isExplicitBookingIntent) {
+  // D. Intenciones de Cotización, Disponibilidad, Reserva o Saludos de Prospectos ("Hola qué tal", "cotizar", etc.)
+  else if (isExplicitBookingIntent || (isGreeting && !guestBooking)) {
     // Despachar exclusivamente la plantilla oficial de 3 botones aprobada en Meta (bienvenido_cliente_whatsaap_v4)
     const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
     try {
-      console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${phone}. Despachando plantilla oficial de 3 botones 'bienvenido_cliente_whatsaap_v4'...`);
+      console.log(`[Inbound Handler] 🌟 Intención comercial o saludo de prospecto detectado para ${phone}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
       const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
       if (welcomeResult.success) {
         welcomeSentMemoryCache.set(phone, Date.now());
@@ -591,8 +618,8 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     }
   }
 
-  const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
-  const shouldSendWelcome = !isWelcomeCoolingDown && !isExplicitBookingIntent;
+  const isWelcomeCoolingDown = !isFounderOrTester && lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
+  const shouldSendWelcome = !isWelcomeCoolingDown && !isExplicitBookingIntent && !(isGreeting && !guestBooking);
 
   if (shouldSendWelcome) {
     try {
