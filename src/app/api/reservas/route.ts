@@ -44,10 +44,10 @@ export async function GET(req: Request) {
         day: '2-digit'
       });
       const fortyEightHoursAgoStr = formatter.format(new Date(Date.now() - 48 * 60 * 60 * 1000));
-      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+      const oneMonthAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       // Traer las no canceladas operativas (checkout en últimas 48h o futuro)
-      // y únicamente las canceladas recientes (< 48 horas y checkout en ventana operativa)
-      query = query.or(`and(status.neq.cancelled,check_out.gte.${fortyEightHoursAgoStr}),and(status.eq.cancelled,check_out.gte.${fortyEightHoursAgoStr},updated_at.gte.${fortyEightHoursAgo})`);
+      // y las canceladas del último mes (hasta 30 días)
+      query = query.or(`and(status.neq.cancelled,check_out.gte.${fortyEightHoursAgoStr}),and(status.eq.cancelled,updated_at.gte.${oneMonthAgoIso})`);
     }
     // Excluir la categoría virtual 500 (room_id 685542) para evitar duplicados, ya que se asigna localmente
     query = query.neq('room_id', '685542');
@@ -129,10 +129,10 @@ export async function GET(req: Request) {
           day: '2-digit'
         });
         const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
-        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        const oneMonthAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         // Traer las no canceladas que tengan checkout ayer o posterior (activas y completadas recientes < 24h),
-        // y además las canceladas de las últimas 48 horas (probando updated_at primero).
-        localQuery = localQuery.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,updated_at.gte.${fortyEightHoursAgo})`);
+        // y además las canceladas de hasta 1 mes (30 días).
+        localQuery = localQuery.or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,updated_at.gte.${oneMonthAgoIso})`);
       }
       let { data, error } = await localQuery;
 
@@ -145,9 +145,9 @@ export async function GET(req: Request) {
           day: '2-digit'
         });
         const yesterdayStr = formatter.format(new Date(Date.now() - 24 * 60 * 60 * 1000));
-        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        const oneMonthAgoIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const fallbackRes = await supabase.from('local_reservas').select('*')
-          .or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,created_at.gte.${fortyEightHoursAgo})`);
+          .or(`and(status.neq.cancelled,check_out.gte.${yesterdayStr}),and(status.eq.cancelled,created_at.gte.${oneMonthAgoIso})`);
         data = fallbackRes.data;
         error = fallbackRes.error;
       }

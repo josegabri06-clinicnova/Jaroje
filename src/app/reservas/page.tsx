@@ -3604,18 +3604,18 @@ function ReservasListInner() {
       if (compareOut !== 0) return compareOut;
       return (b.check_in || '').localeCompare(a.check_in || '');
     });
-  // Reservas canceladas: tienen estatus cancelado y se cancelaron hace menos de 48 horas
+  // Reservas canceladas: tienen estatus cancelado y se cancelaron en el último mes (30 días)
   const cancelledReservas = reservas
     .filter(r => {
       if (r.status !== 'cancelled') return false;
-      const cancelDateStr = r.cancelled_at || r.updated_at;
-      if (!cancelDateStr) return false;
+      const cancelDateStr = r.cancelled_at || r.updated_at || r.booking_time || r.check_in;
+      if (!cancelDateStr) return true;
       const cancelledDate = new Date(cancelDateStr);
-      if (isNaN(cancelledDate.getTime())) return false;
+      if (isNaN(cancelledDate.getTime())) return true;
       const now = new Date();
       const diffMs = now.getTime() - cancelledDate.getTime();
-      const diffHours = diffMs / (1000 * 60 * 60);
-      return diffHours >= 0 && diffHours <= 48;
+      const diffDays = diffMs / (1000 * 60 * 60 * 24);
+      return diffDays >= -1 && diffDays <= 30;
     })
     .sort((a, b) => {
       const dateA = a.cancelled_at || a.updated_at || a.booking_time || a.check_in || '';
