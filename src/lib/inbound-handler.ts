@@ -25,18 +25,20 @@ export async function findGuestBooking(phone: string): Promise<{
   status?: string;
   check_in?: string;
   check_out?: string;
-  source: 'beds24' | 'local' | 'logs';
+  source: 'beds24' | 'local';
 } | null> {
   if (!phone) return null;
   const rawSuffix = phone.length >= 10 ? phone.slice(-10) : phone;
+  const todayStr = new Date().toISOString().split('T')[0];
 
   try {
-    // 1. Beds24 reservations (columna real: guest_phone)
+    // 1. Beds24 reservations activas (check_out hoy o futuro)
     const { data: b24List } = await supabase
       .from('beds24_reservations')
       .select('id, guest_name, guest_phone, status, check_in, check_out')
       .ilike('guest_phone', `%${rawSuffix}%`)
-      .neq('status', 'cancelled');
+      .neq('status', 'cancelled')
+      .gte('check_out', todayStr);
 
     if (b24List && b24List.length > 0) {
       const matched = b24List.filter(b => phonesMatch(b.guest_phone, phone));
@@ -57,12 +59,13 @@ export async function findGuestBooking(phone: string): Promise<{
   }
 
   try {
-    // 2. Local reservations (columna: phone)
+    // 2. Local reservations activas (check_out hoy o futuro)
     const { data: locList } = await supabase
       .from('local_reservas')
       .select('id, guest_name, phone, status, check_in, check_out')
       .ilike('phone', `%${rawSuffix}%`)
-      .neq('status', 'cancelled');
+      .neq('status', 'cancelled')
+      .gte('check_out', todayStr);
 
     if (locList && locList.length > 0) {
       const matched = locList.filter(b => phonesMatch(b.phone, phone));
@@ -80,27 +83,6 @@ export async function findGuestBooking(phone: string): Promise<{
     }
   } catch (err) {
     console.error('[Inbound Handler] Error buscando en local_reservas:', err);
-  }
-
-  try {
-    // 3. Fallback a whatsapp_logs con reservation_id numérico válido
-    const { data: logs } = await supabase
-      .from('whatsapp_logs')
-      .select('reservation_id, phone, sent_at')
-      .or(`phone.eq.${phone},phone.ilike.%${rawSuffix}%`)
-      .order('sent_at', { ascending: false })
-      .limit(10);
-
-    if (logs && logs.length > 0) {
-      for (const l of logs) {
-        const rId = String(l.reservation_id || '');
-        if (rId && rId !== 'system_manual' && rId !== 'general' && rId !== '0') {
-          return { id: rId, guest_name: 'Huésped', source: 'logs' };
-        }
-      }
-    }
-  } catch (err) {
-    console.error('[Inbound Handler] Error buscando en whatsapp_logs:', err);
   }
 
   return null;
@@ -549,13 +531,13 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     lastWelcomeSentAt = Math.max(lastWelcomeSentAt, memSentTime);
   }
 
-  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida o portal en los últimos 7 días
+  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida en los últimos 7 días
   try {
     const { data: lastWelcomeLog } = await supabase
       .from('whatsapp_logs')
       .select('sent_at, template_name')
       .eq('phone', phone)
-      .or('template_name.ilike.%bienvenido%,template_name.eq.portal_huesped_link')
+      .ilike('template_name', '%bienvenido%')
       .order('sent_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -575,11 +557,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     for (let i = existing.messages.length - 1; i >= 0; i--) {
       const msg = existing.messages[i];
       const botText = String(msg.role_bot || msg.role_manager || '');
-      if (
-        botText.includes('bienvenido_cliente') || 
-        botText.includes('portal_huesped') ||
-        botText.includes('Portal del Huésped')
-      ) {
+      if (botText.includes('bienvenido_cliente')) {
         const msgTime = new Date(msg.timestamp || 0).getTime();
         if (!isNaN(msgTime) && msgTime > lastWelcomeSentAt) {
           lastWelcomeSentAt = msgTime;
@@ -634,9 +612,9 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   }
 
   // ── REGLA DE BIENVENIDA A WHATSAPP (MÁXIMO 1 VEZ CADA 7 DÍAS) ──
-  // Aplica ÚNICAMENTE a prospectos nuevos SIN reservación previa que inician conversación con un saludo
-  // Huéspedes con reservación NUNCA reciben plantillas automáticas al hablar (se atienden por recepción o comandos específicos)
-  const shouldSendWelcome = !guestBooking && isGreeting && !isWelcomeCoolingDown && !isExplicitBookingIntent;
+  // Aplica a prospectos nuevos SIN reservación activa previa que inician conversación
+  // Huéspedes con reservación activa NUNCA reciben plantillas automáticas al hablar (se atienden por recepción o comandos específicos)
+  const shouldSendWelcome = !guestBooking && !isWelcomeCoolingDown && !isExplicitBookingIntent;
 
   if (shouldSendWelcome) {
     try {
