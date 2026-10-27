@@ -523,22 +523,79 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       finalBotResponse = `Hola. No logramos encontrar una reservación activa vinculada a tu número en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de inmediato. 🌴`;
     }
   }
-  // D. Intenciones de Cotización, Disponibilidad, Reserva o Saludos de Prospectos ("Hola qué tal", "cotizar", etc.)
-  else if (isExplicitBookingIntent || (isGreeting && !guestBooking)) {
-    // Despachar exclusivamente la plantilla oficial de 3 botones aprobada en Meta (bienvenido_cliente_whatsaap_v4)
-    const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
-    try {
-      console.log(`[Inbound Handler] 🌟 Intención comercial o saludo de prospecto detectado para ${phone}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
-      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
-      if (welcomeResult.success) {
-        welcomeSentMemoryCache.set(phone, Date.now());
-        isAutoReplyTriggered = false;
-        finalBotResponse = null;
-      } else {
-        console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
+  // ── VERIFICACIÓN DE ENFRIAMIENTO (7 DÍAS) PARA PLANTILLAS DE BIENVENIDA ──
+  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  let lastWelcomeSentAt = 0;
+
+  // A. Revisar en memoria para evitar colisiones rápidas
+  const memSentTime = welcomeSentMemoryCache.get(phone);
+  if (memSentTime && now - memSentTime < ONE_WEEK_MS) {
+    lastWelcomeSentAt = Math.max(lastWelcomeSentAt, memSentTime);
+  }
+
+  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida o portal en los últimos 7 días
+  try {
+    const { data: lastWelcomeLog } = await supabase
+      .from('whatsapp_logs')
+      .select('sent_at, template_name')
+      .eq('phone', phone)
+      .or('template_name.ilike.%bienvenido%,template_name.eq.portal_huesped_link')
+      .order('sent_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (lastWelcomeLog?.sent_at) {
+      const logTime = new Date(lastWelcomeLog.sent_at).getTime();
+      if (!isNaN(logTime) && logTime > lastWelcomeSentAt) {
+        lastWelcomeSentAt = logTime;
       }
-    } catch (err) {
-      console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
+    }
+  } catch (logChkErr) {
+    console.warn("[Inbound Handler] Error verificando whatsapp_logs para welcome template:", logChkErr);
+  }
+
+  // C. Revisar en historial de conversaciones si hay registro reciente en los últimos 7 días
+  if (existing && Array.isArray(existing.messages)) {
+    for (let i = existing.messages.length - 1; i >= 0; i--) {
+      const msg = existing.messages[i];
+      const botText = String(msg.role_bot || msg.role_manager || '');
+      if (
+        botText.includes('bienvenido_cliente') || 
+        botText.includes('portal_huesped') ||
+        botText.includes('Portal del Huésped')
+      ) {
+        const msgTime = new Date(msg.timestamp || 0).getTime();
+        if (!isNaN(msgTime) && msgTime > lastWelcomeSentAt) {
+          lastWelcomeSentAt = msgTime;
+        }
+        break;
+      }
+    }
+  }
+
+  const isWelcomeCoolingDown = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
+
+  // D. Intenciones de Cotización, Disponibilidad y Reserva explícitas ("cotizar", "disponibilidad", etc.)
+  if (isExplicitBookingIntent) {
+    // Si NO tiene reservación activa (es prospecto) y no se le envió una plantilla hace menos de 10 minutos
+    const TEN_MINUTES_MS = 10 * 60 * 1000;
+    const isRecentSend = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < TEN_MINUTES_MS);
+    if (!guestBooking && !isRecentSend) {
+      const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
+      try {
+        console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${phone}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
+        const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
+        if (welcomeResult.success) {
+          welcomeSentMemoryCache.set(phone, Date.now());
+          isAutoReplyTriggered = false;
+          finalBotResponse = null;
+        } else {
+          console.error('[Inbound Handler] Error enviando plantilla oficial bienvenido_cliente_whatsaap_v4:', welcomeResult.error);
+        }
+      } catch (err) {
+        console.error('[Inbound Handler] Excepción enviando plantilla oficial:', err);
+      }
     }
   }
 
@@ -561,65 +618,10 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       : `📍 *Ubicación - Condominios Jaroje*\n\nEstamos ubicados en Santa María Huatulco, Oaxaca.\n\n👉 Cómo llegar en Google Maps: ${mapsUrl}`;
   }
 
-  // ── REGLA DE BIENVENIDA / PORTAL A WHATSAPP (1 VEZ POR SEMANA / 7 DÍAS) ──
-  // Si el cliente le habla por WhatsApp al hotel y no había interactuado en 1 semana:
-  // - Si YA TIENE RESERVA: Enviar plantilla oficial con link al Portal del Huésped (portal_huesped_link)
-  // - Si ES PROSPECTO NUEVO: Enviar plantilla oficial de ventas (bienvenido_cliente_whatsaap_v4)
-  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-  const now = Date.now();
-
-  let lastWelcomeSentAt = 0;
-
-  // A. Revisar en memoria para evitar colisiones rápidas
-  const memSentTime = welcomeSentMemoryCache.get(phone);
-  if (memSentTime && now - memSentTime < ONE_WEEK_MS) {
-    lastWelcomeSentAt = Math.max(lastWelcomeSentAt, memSentTime);
-  }
-
-  // B. Revisar en whatsapp_logs si se le envió plantilla de bienvenida o de portal en los últimos 7 días
-  try {
-    const { data: lastWelcomeLog } = await supabase
-      .from('whatsapp_logs')
-      .select('sent_at, template_name')
-      .eq('phone', phone)
-      .or('template_name.ilike.%bienvenido%,template_name.eq.portal_huesped_link')
-      .order('sent_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (lastWelcomeLog?.sent_at) {
-      const logTime = new Date(lastWelcomeLog.sent_at).getTime();
-      if (!isNaN(logTime) && logTime > lastWelcomeSentAt) {
-        lastWelcomeSentAt = logTime;
-      }
-    }
-  } catch (logChkErr) {
-    console.warn("[Inbound Handler] Error verificando whatsapp_logs para welcome/portal template:", logChkErr);
-  }
-
-  // C. Revisar en historial de conversaciones si hay registro reciente en los últimos 7 días
-  if (existing && Array.isArray(existing.messages)) {
-    for (let i = existing.messages.length - 1; i >= 0; i--) {
-      const msg = existing.messages[i];
-      const botText = String(msg.role_bot || msg.role_manager || '');
-      if (
-        botText.includes('bienvenido_cliente_whatsaap') || 
-        botText.includes('bienvenido_cliente_final_v4') || 
-        botText.includes('bienvenido_cliente') ||
-        botText.includes('portal_huesped_link') ||
-        botText.includes('Portal del Huésped')
-      ) {
-        const msgTime = new Date(msg.timestamp || 0).getTime();
-        if (!isNaN(msgTime) && msgTime > lastWelcomeSentAt) {
-          lastWelcomeSentAt = msgTime;
-        }
-        break;
-      }
-    }
-  }
-
-  const isWelcomeCoolingDown = !isFounderOrTester && lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_WEEK_MS);
-  const shouldSendWelcome = !isWelcomeCoolingDown && !isExplicitBookingIntent && !(isGreeting && !guestBooking);
+  // ── REGLA DE BIENVENIDA A WHATSAPP (MÁXIMO 1 VEZ CADA 7 DÍAS) ──
+  // Aplica ÚNICAMENTE a prospectos nuevos SIN reservación previa que inician conversación con un saludo
+  // Huéspedes con reservación NUNCA reciben plantillas automáticas al hablar (se atienden por recepción o comandos específicos)
+  const shouldSendWelcome = !guestBooking && isGreeting && !isWelcomeCoolingDown && !isExplicitBookingIntent;
 
   if (shouldSendWelcome) {
     try {
@@ -629,31 +631,16 @@ export async function handleInboundMessage(params: InboundMessageParams) {
         oldest.forEach(k => welcomeSentMemoryCache.delete(k));
       }
 
-      if (guestBooking) {
-        // HUÉSPED CON RESERVACIÓN: Enviar plantilla oficial de Portal del Huésped
-        console.log(`[Inbound Handler] 🏨 Huésped con reserva #${guestBooking.id} (${guestBooking.guest_name}) escribió (sin contacto en 1 semana). Enviando 'portal_huesped_link'...`);
-        const { isSpanishOrLatamPhone, sendTemplate_PortalHuespedLink } = await import('@/lib/whatsapp');
-        const isEnglish = !isSpanishOrLatamPhone(phone);
-        const lang = isEnglish ? 'en' : 'es';
-        const portalResult = await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
-        console.log(`[Inbound Handler] Resultado envío Portal del Huésped WhatsApp:`, portalResult);
-        if (portalResult.success) {
-          isAutoReplyTriggered = false;
-          finalBotResponse = null;
-        }
-      } else {
-        // PROSPECTO NUEVO SIN RESERVA: Enviar bienvenida oficial con opciones de cotización
-        console.log(`[Inbound Handler] 🌟 Prospecto nuevo escribió a WhatsApp (sin contacto en 1 semana). Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
-        const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
-        const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
-        console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
-        if (welcomeResult.success) {
-          isAutoReplyTriggered = false;
-          finalBotResponse = null;
-        }
+      console.log(`[Inbound Handler] 🌟 Prospecto nuevo escribió a WhatsApp (sin contacto en 1 semana). Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
+      const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
+      const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
+      console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
+      if (welcomeResult.success) {
+        isAutoReplyTriggered = false;
+        finalBotResponse = null;
       }
     } catch (welcomeErr) {
-      console.error("[Inbound Handler] Error enviando bienvenida/portal WhatsApp:", welcomeErr);
+      console.error("[Inbound Handler] Error enviando bienvenida WhatsApp:", welcomeErr);
     }
   }
 
