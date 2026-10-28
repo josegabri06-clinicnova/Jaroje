@@ -227,7 +227,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   // EXCEPCIÓN: Si solicita explícitamente cotizar/reservar o es un número de prueba de socios, permitir el flujo comercial.
   const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
   const personalCheck = await isExcludedPersonalContact(phone);
-  if (personalCheck.isExcluded && !isExplicitBookingIntent && !isFounderOrTester) {
+  if (personalCheck.isExcluded && !isFounderOrTester) {
     console.log(`[Inbound Handler] 🛑 Mensaje de contacto personal/staff (${phone} - ${personalCheck.contact?.name}): "${guestMsgText}". Omitiendo bot y plantilla de bienvenida.`);
     
     // Guardar el mensaje en el historial para visibilidad en el Inbox sin activar bot
@@ -563,7 +563,8 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     // Pasadas las 24h, solo se reenvía si el cliente vuelve a escribir con palabras clave (este bloque).
     const ONE_DAY_MS = 24 * 60 * 60 * 1000;
     const isWithin24h = lastWelcomeSentAt > 0 && (now - lastWelcomeSentAt < ONE_DAY_MS);
-    if (!isWithin24h) {
+    // Con reservación activa nunca se envía la plantilla.
+    if (!guestBooking && !isWithin24h) {
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
       try {
         console.log(`[Inbound Handler] 🌟 Intención de cotización/reserva detectada para ${phone}. Despachando plantilla oficial 'bienvenido_cliente_whatsaap_v4'...`);
@@ -600,7 +601,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       : `📍 *Ubicación - Condominios Jaroje*\n\nEstamos ubicados en Santa María Huatulco, Oaxaca.\n\n👉 Cómo llegar en Google Maps: ${mapsUrl}`;
   }
 
-  // ── REGLA DE BIENVENIDA A WHATSAPP (MÁXIMO 1 VEZ CADA 7 DÍAS) ──
+  // ── REGLA DE BIENVENIDA A WHATSAPP (PRIMER CONTACTO) ──
   // Aplica a prospectos nuevos SIN reservación activa previa que inician conversación
   // Huéspedes con reservación activa NUNCA reciben plantillas automáticas al hablar (se atienden por recepción o comandos específicos)
   // Una vez enviada la bienvenida, NO se reenvía nunca más por mensajes normales.
@@ -615,7 +616,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
         oldest.forEach(k => welcomeSentMemoryCache.delete(k));
       }
 
-      console.log(`[Inbound Handler] 🌟 Prospecto nuevo escribió a WhatsApp (sin contacto en 1 semana). Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
+      console.log(`[Inbound Handler] 🌟 Primer contacto sin bienvenida previa. Enviando 'bienvenido_cliente_whatsaap_v4' a ${phone}...`);
       const { sendTemplate_BienvenidoWhatsApp } = await import('@/lib/whatsapp');
       const welcomeResult = await sendTemplate_BienvenidoWhatsApp(phone);
       console.log(`[Inbound Handler] Resultado envío bienvenida WhatsApp:`, welcomeResult);
