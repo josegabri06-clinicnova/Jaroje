@@ -5,13 +5,6 @@ import { createSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS, Sess
 
 export const dynamic = 'force-dynamic';
 
-const DEFAULT_PINS: Record<string, string> = {
-  admin: '1234',
-  staff_limpieza: '5678',
-  staff_mantenimiento: '8765',
-  recepcion: '0000',
-};
-
 const DB_KEY_MAP: Record<string, string> = {
   admin: 'pin_admin',
   staff_limpieza: 'pin_limpieza',
@@ -19,8 +12,42 @@ const DB_KEY_MAP: Record<string, string> = {
   recepcion: 'pin_recepcion',
 };
 
+// Control de fuerza bruta en memoria por IP (máx 5 intentos fallidos cada 15 minutos)
+const loginRateLimitMap = new Map<string, { attempts: number; resetAt: number }>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const record = loginRateLimitMap.get(ip);
+  if (!record) return false;
+  if (now > record.resetAt) {
+    loginRateLimitMap.delete(ip);
+    return false;
+  }
+  return record.attempts >= 5;
+}
+
+function recordFailedAttempt(ip: string) {
+  const now = Date.now();
+  const record = loginRateLimitMap.get(ip) || { attempts: 0, resetAt: now + 15 * 60 * 1000 };
+  record.attempts += 1;
+  loginRateLimitMap.set(ip, record);
+}
+
+function clearRateLimit(ip: string) {
+  loginRateLimitMap.delete(ip);
+}
+
 export async function POST(req: Request) {
   try {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'unknown';
+
+    if (isRateLimited(ip)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Demasiados intentos fallidos. Acceso bloqueado temporalmente por 15 minutos.'
+      }, { status: 429 });
+    }
+
     const body = await req.json().catch(() => ({}));
     const { pin, role } = body;
 
@@ -35,7 +62,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Rol inválido especificado.' }, { status: 400 });
     }
 
-    // 1. Obtener el PIN activo desde Supabase settings
+    // 1. Obtener el PIN activo estrictamente desde Supabase settings (Fail-Closed, sin defaults en código)
     const dbKey = DB_KEY_MAP[cleanRole];
     const { data: row } = await supabaseAdmin
       .from('settings')
@@ -43,24 +70,35 @@ export async function POST(req: Request) {
       .eq('key', dbKey)
       .maybeSingle();
 
-    const expectedPin = (row?.value || DEFAULT_PINS[cleanRole] || '').trim();
+    if (!row?.value || !String(row.value).trim()) {
+      console.error(`[API Auth Login] ⚠️ El PIN para '${cleanRole}' no está configurado en settings (${dbKey}).`);
+      return NextResponse.json({
+        success: false,
+        error: 'Credenciales del sistema no configuradas en el servidor.'
+      }, { status: 500 });
+    }
+
+    const expectedPin = String(row.value).trim();
 
     // 2. Comparación en tiempo constante para mitigar ataques de temporización
     const expectedHash = crypto.createHash('sha256').update(expectedPin).digest();
     const providedHash = crypto.createHash('sha256').update(cleanPin).digest();
 
     if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
+      recordFailedAttempt(ip);
       return NextResponse.json({ success: false, error: 'PIN incorrecto.' }, { status: 401 });
     }
+
+    // Limpiar intentos fallidos tras login exitoso
+    clearRateLimit(ip);
 
     // 3. Generar token de sesión firmado criptográficamente
     const sessionToken = await createSessionToken(cleanRole);
 
-    // 4. Crear respuesta con Cookie HttpOnly segura
+    // 4. Crear respuesta con Cookie HttpOnly segura (NUNCA devolviendo el PIN en el JSON)
     const res = NextResponse.json({
       success: true,
       role: cleanRole,
-      pin: cleanPin, // Para compatibilidad con sessionStorage en modales internos
     });
 
     res.cookies.set({

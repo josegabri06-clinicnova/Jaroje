@@ -13,8 +13,11 @@ export const SESSION_COOKIE_NAME = 'jaroje_session';
 export const SESSION_DURATION_SECONDS = 7 * 24 * 60 * 60; // 7 días
 
 function getSecretKey(): string {
-  const secret = process.env.SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || 'jaroje_production_secure_session_secret_2026';
-  return secret.trim();
+  const secret = process.env.SESSION_SECRET?.trim() || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (!secret) {
+    throw new Error('[Security Exception] Ni SESSION_SECRET ni SUPABASE_SERVICE_ROLE_KEY están configurados en el servidor. Fallando por seguridad.');
+  }
+  return secret;
 }
 
 // Codificación base64url segura

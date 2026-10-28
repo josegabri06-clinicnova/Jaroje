@@ -20,13 +20,19 @@ function isPublicPath(pathname: string, req?: NextRequest): boolean {
     return true;
   }
 
-  // Rutas de autenticación
+  // Rutas de autenticación pública (login únicamente)
   if (
     pathname === '/api/auth/login' ||
     pathname === '/api/auth/logout' ||
     pathname === '/api/auth/verify-recovery-key' ||
-    pathname.startsWith('/api/auth/webauthn')
+    pathname === '/api/auth/webauthn/login/options' ||
+    pathname === '/api/auth/webauthn/login/verify'
   ) {
+    return true;
+  }
+
+  // Rutas públicas de pagos para huéspedes (subida de comprobantes)
+  if (pathname === '/api/payments/transfer-submit') {
     return true;
   }
 
@@ -82,6 +88,16 @@ export async function middleware(req: NextRequest) {
   // 4. Control de Acceso Basado en Roles (RBAC) en el Servidor
   const role = session.role;
 
+  // Registro de Passkeys: Exclusivo para Administrador autenticado
+  if (pathname.startsWith('/api/auth/webauthn/register')) {
+    if (role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: Se requieren privilegios de administrador para registrar passkeys.' },
+        { status: 403 }
+      );
+    }
+  }
+
   // Módulo de Finanzas: Exclusivo para Administrador
   if (pathname.startsWith('/finanzas') || pathname.startsWith('/api/finances')) {
     if (role !== 'admin') {
@@ -95,22 +111,67 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // Módulos de Ajustes y Panel: Exclusivos para Administrador
-  if (pathname.startsWith('/ajustes') || pathname.startsWith('/panel')) {
+  // Gestión de Empleados: Exclusivo para Administrador
+  if (pathname.startsWith('/api/employees')) {
     if (role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: Solo administradores pueden gestionar empleados.' },
+        { status: 403 }
+      );
+    }
+  }
+
+  // Módulos de Ajustes y Panel: Exclusivos para Administrador
+  if (pathname.startsWith('/ajustes') || pathname.startsWith('/panel') || pathname.startsWith('/api/beds24-auth')) {
+    if (role !== 'admin') {
+      if (pathname.startsWith('/api/')) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Se requieren privilegios de administrador.' },
+          { status: 403 }
+        );
+      }
       return NextResponse.redirect(new URL('/calendario', req.url));
     }
   }
 
-  // Staff de Limpieza y Mantenimiento: Solo acceso a /staff y /calendario
-  if (role === 'staff_limpieza' || role === 'staff_mantenimiento') {
-    const isAllowedStaffPage = pathname === '/staff' || pathname.startsWith('/staff') || pathname === '/calendario' || pathname.startsWith('/calendario');
-    if (!pathname.startsWith('/api/') && !isAllowedStaffPage) {
-      return NextResponse.redirect(new URL('/staff', req.url));
+  // Operaciones de Cobros y Aprobación de Transferencias: Solo Admin y Recepción
+  if (
+    pathname === '/api/payments/transfer-approve' ||
+    pathname === '/api/reservas/payment' ||
+    pathname === '/api/reservas/rebalance-group'
+  ) {
+    if (role !== 'admin' && role !== 'recepcion') {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: No autorizado para gestionar pagos o transferencias.' },
+        { status: 403 }
+      );
     }
   }
 
-  // Recepción: no puede entrar a /staff ni a /finanzas ni a /ajustes
+  // Staff de Limpieza y Mantenimiento: Restringido a /staff, /calendario y sus APIs asociadas
+  if (role === 'staff_limpieza' || role === 'staff_mantenimiento') {
+    if (pathname.startsWith('/api/')) {
+      const allowedStaffApis = [
+        '/api/tasks',
+        '/api/reservas',
+        '/api/auth/logout'
+      ];
+      const isAllowed = allowedStaffApis.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
+      if (!isAllowed) {
+        return NextResponse.json(
+          { success: false, error: 'Forbidden: Permisos insuficientes para este recurso.' },
+          { status: 403 }
+        );
+      }
+    } else {
+      const isAllowedStaffPage = pathname === '/staff' || pathname.startsWith('/staff') || pathname === '/calendario' || pathname.startsWith('/calendario');
+      if (!isAllowedStaffPage) {
+        return NextResponse.redirect(new URL('/staff', req.url));
+      }
+    }
+  }
+
+  // Recepción: no puede entrar a /staff
   if (role === 'recepcion') {
     if (pathname.startsWith('/staff')) {
       return NextResponse.redirect(new URL('/calendario', req.url));
@@ -121,6 +182,10 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
+// Compatibilidad Next.js 16 (proxy) y versiones anteriores (middleware)
+export const proxy = middleware;
+export default middleware;
+
 export const config = {
   matcher: [
     /*
@@ -129,3 +194,4 @@ export const config = {
     '/((?!_next/static|_next/image).*)',
   ],
 };
+

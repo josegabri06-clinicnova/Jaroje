@@ -5,21 +5,25 @@ import { normalizePhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || 'jaroje_wa_webhook_secure_2026';
-
 /**
  * GET: Handshake de verificación de Meta Cloud API Webhooks.
  * Meta envía hub.mode, hub.challenge y hub.verify_token para validar el endpoint.
  */
 export async function GET(req: Request) {
   try {
+    const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN?.trim();
+    if (!verifyToken) {
+      console.error('[Meta Webhook GET] ❌ WHATSAPP_VERIFY_TOKEN no está configurado en el servidor.');
+      return new Response('Server configuration error: missing verify token', { status: 500 });
+    }
+
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get('hub.mode');
     const token = (searchParams.get('hub.verify_token') || '').trim();
     const challenge = searchParams.get('hub.challenge');
 
     if (mode === 'subscribe' && token) {
-      const expectedHash = crypto.createHash('sha256').update(VERIFY_TOKEN).digest();
+      const expectedHash = crypto.createHash('sha256').update(verifyToken).digest();
       const providedHash = crypto.createHash('sha256').update(token).digest();
 
       if (crypto.timingSafeEqual(expectedHash, providedHash)) {

@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server';
 // @ts-ignore
 import { verifyRegistrationResponse } from '@simplewebauthn/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { getSessionFromRequest } from '@/lib/session';
 
 export async function POST(request: Request) {
   try {
+    const session = await getSessionFromRequest(request);
+    if (!session || session.role !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Forbidden: Se requieren privilegios de administrador para registrar passkeys.' }, { status: 403 });
+    }
+
     const body = await request.json();
     const { registrationResponse, deviceName } = body;
 

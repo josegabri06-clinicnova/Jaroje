@@ -23,7 +23,49 @@ export async function GET() {
 // POST para recibir eventos en tiempo real de YCloud
 export async function POST(req: Request) {
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+    const webhookSecret = process.env.YCLOUD_WEBHOOK_SECRET?.trim();
+    if (webhookSecret) {
+      const sigHeader = (req.headers.get('ycloud-signature') || req.headers.get('x-ycloud-signature') || req.headers.get('x-webhook-secret') || '').trim();
+      const url = new URL(req.url);
+      const queryToken = (url.searchParams.get('token') || '').trim();
+
+      let isValid = false;
+      if (queryToken) {
+        const expHash = crypto.createHash('sha256').update(webhookSecret).digest();
+        const provHash = crypto.createHash('sha256').update(queryToken).digest();
+        isValid = crypto.timingSafeEqual(expHash, provHash);
+      } else if (sigHeader) {
+        if (sigHeader.includes('t=') && sigHeader.includes('s=')) {
+          const parts = Object.fromEntries(sigHeader.split(',').map(p => p.trim().split('=')));
+          const timestamp = parts.t;
+          const signature = parts.s;
+          if (timestamp && signature) {
+            const expectedSig = crypto.createHmac('sha256', webhookSecret).update(`${timestamp}.${rawBody}`).digest('hex');
+            const expHash = crypto.createHash('sha256').update(expectedSig).digest();
+            const provHash = crypto.createHash('sha256').update(signature).digest();
+            isValid = crypto.timingSafeEqual(expHash, provHash);
+          }
+        } else {
+          const expHash = crypto.createHash('sha256').update(webhookSecret).digest();
+          const provHash = crypto.createHash('sha256').update(sigHeader).digest();
+          isValid = crypto.timingSafeEqual(expHash, provHash);
+        }
+      }
+
+      if (!isValid) {
+        console.warn('[YCloud Webhook] ❌ Rechazado: Firma o token inválido.');
+        return NextResponse.json({ error: 'Unauthorized: Invalid signature' }, { status: 401 });
+      }
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ error: 'JSON malformado' }, { status: 400 });
+    }
+
     const eventType = String(payload.type || '');
 
     // ── 1. MENSAJE ENTRANTE DEL HUÉSPED (whatsapp.inbound_message.received / whatsapp.inbound_message) ─
