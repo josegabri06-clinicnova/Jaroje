@@ -879,15 +879,26 @@ export default function FinanzasPage() {
       alert("Por favor, escribe RESET en mayúsculas para confirmar.");
       return;
     }
+
+    let activePin = sessionStorage.getItem('jaroje_session_pin') || '';
+    if (!activePin) {
+      const prompted = prompt("Por seguridad administrativa, ingresa tu PIN de Administrador para confirmar el reseteo contable:");
+      if (!prompted) return;
+      activePin = prompted.trim();
+    }
     
     setIsResetting(true);
     try {
-      // 1. Ejecutar la limpieza en backend primero
+      // 1. Ejecutar la limpieza en backend primero con autenticación
       const response = await fetch('/api/finances/reset', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-pin': activePin
+        },
         body: JSON.stringify({
           confirm_text: 'RESET',
+          admin_pin: activePin,
           employee_num: '999',
           employee_name: 'Administrador Principal'
         })

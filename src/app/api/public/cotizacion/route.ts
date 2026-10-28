@@ -1,14 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { normalizePhone, sendWhatsAppCTAButtonMessage } from '@/lib/whatsapp';
 import { getBeds24Token, fetchBeds24RatesMap, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 function formatSpanishDate(dateStr: string): string {
   try {

@@ -34,7 +34,7 @@ async function ensureLogsTable() {
   `;
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !key) return;
     
     await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {

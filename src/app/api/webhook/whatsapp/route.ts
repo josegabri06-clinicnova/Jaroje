@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { handleInboundMessage } from '@/lib/inbound-handler';
 import { normalizePhone } from '@/lib/whatsapp';
 
@@ -14,20 +15,23 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const mode = searchParams.get('hub.mode');
-    const token = searchParams.get('hub.verify_token');
+    const token = (searchParams.get('hub.verify_token') || '').trim();
     const challenge = searchParams.get('hub.challenge');
 
-    console.log(`[Meta Webhook GET] Verificando webhook: mode=${mode}, token=${token}`);
+    if (mode === 'subscribe' && token) {
+      const expectedHash = crypto.createHash('sha256').update(VERIFY_TOKEN).digest();
+      const providedHash = crypto.createHash('sha256').update(token).digest();
 
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-      console.log('[Meta Webhook GET] ✅ Handshake de Meta aprobado con éxito.');
-      return new Response(challenge, {
-        status: 200,
-        headers: { 'Content-Type': 'text/plain' }
-      });
+      if (crypto.timingSafeEqual(expectedHash, providedHash)) {
+        console.log('[Meta Webhook GET] ✅ Handshake de Meta aprobado con éxito.');
+        return new Response(challenge, {
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }
     }
 
-    console.warn(`[Meta Webhook GET] ❌ Token de verificación inválido: esperado "${VERIFY_TOKEN}", recibido "${token}"`);
+    console.warn('[Meta Webhook GET] ❌ Token de verificación inválido recibido durante handshake.');
     return new Response('Forbidden', { status: 403 });
   } catch (err: any) {
     console.error('[Meta Webhook GET] Error en verificación:', err);
@@ -37,11 +41,38 @@ export async function GET(req: Request) {
 
 /**
  * POST: Receptor de eventos en tiempo real de Meta WhatsApp Cloud API.
+ * Valida la firma criptográfica X-Hub-Signature-256 de Meta para garantizar autenticidad.
  * Procesa mensajes entrantes, clics de botones quick_reply y URLs interactivas.
  */
 export async function POST(req: Request) {
   try {
-    const payload = await req.json();
+    const rawBody = await req.text();
+    const appSecret = process.env.WHATSAPP_APP_SECRET?.trim();
+    const signatureHeader = req.headers.get('x-hub-signature-256') || '';
+
+    // Si WHATSAPP_APP_SECRET está configurado, validar obligatoriamente la firma HMAC
+    if (appSecret) {
+      if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
+        console.warn('[Meta Webhook POST] ❌ Rechazado: Cabecera x-hub-signature-256 ausente o con formato incorrecto.');
+        return new Response('Unauthorized', { status: 401 });
+      }
+
+      const expectedSignature = 'sha256=' + crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex');
+      const expectedBuf = crypto.createHash('sha256').update(expectedSignature).digest();
+      const providedBuf = crypto.createHash('sha256').update(signatureHeader).digest();
+
+      if (!crypto.timingSafeEqual(expectedBuf, providedBuf)) {
+        console.warn('[Meta Webhook POST] ❌ Rechazado: Firma HMAC de Meta no coincide.');
+        return new Response('Unauthorized: Invalid webhook signature', { status: 401 });
+      }
+    }
+
+    let payload: any;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch (e) {
+      return NextResponse.json({ error: 'JSON malformado' }, { status: 400 });
+    }
 
     // Confirmación inmediata a Meta (debe responder 200 rápido para evitar reintentos)
     if (payload.object !== 'whatsapp_business_account' && !payload.entry) {
@@ -114,7 +145,6 @@ export async function POST(req: Request) {
         // 2. Estados de entrega (sent, delivered, read, failed)
         if (Array.isArray(val.statuses) && val.statuses.length > 0) {
           for (const st of val.statuses) {
-            // Logs de entrega opcionales
             if (st.status === 'failed') {
               console.error(`[Meta Webhook POST] ⚠️ Fallo de entrega a ${st.recipient_id}:`, JSON.stringify(st.errors || []));
             }

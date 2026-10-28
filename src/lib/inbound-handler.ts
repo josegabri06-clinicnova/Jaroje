@@ -1,10 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendWhatsAppTextMessage, sendWhatsAppTemplate, normalizePhone, cleanPhoneForMeta } from '@/lib/whatsapp';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 const requestCache = new Map<string, number>();
 const welcomeSentMemoryCache = new Map<string, number>();

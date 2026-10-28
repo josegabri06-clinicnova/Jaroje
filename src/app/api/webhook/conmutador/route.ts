@@ -1,13 +1,9 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { sendTemplate_BienvenidoConmutador, normalizePhone, isSpanishOrLatamPhone } from '@/lib/whatsapp';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 /**
  * Webhook del Conmutador / PBX Telefónico.
@@ -18,10 +14,19 @@ const supabase = createClient(
  */
 async function processConmutadorCall(req: Request) {
   try {
+    const url = new URL(req.url);
+    const expectedSecret = process.env.CONMUTADOR_WEBHOOK_SECRET?.trim();
+    if (expectedSecret) {
+      const incomingSecret = (url.searchParams.get('token') || req.headers.get('x-webhook-secret') || '').trim();
+      const expectedHash = crypto.createHash('sha256').update(expectedSecret).digest();
+      const incomingHash = crypto.createHash('sha256').update(incomingSecret).digest();
+      if (!incomingSecret || !crypto.timingSafeEqual(expectedHash, incomingHash)) {
+        return NextResponse.json({ error: 'Unauthorized conmutador webhook' }, { status: 401 });
+      }
+    }
+
     let rawPhone = '';
     let callerName = '';
-
-    const url = new URL(req.url);
     const qPhone = url.searchParams.get('phone') || 
                    url.searchParams.get('from') || 
                    url.searchParams.get('caller') || 

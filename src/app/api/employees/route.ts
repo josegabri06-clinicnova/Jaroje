@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { OFFICIAL_EMPLOYEES } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 // GET — Obtener lista de empleados desde Supabase settings (con fallback estático robusto)
 export async function GET() {

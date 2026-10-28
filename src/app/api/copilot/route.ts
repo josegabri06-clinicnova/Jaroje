@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import OpenAI from "openai";
 import { getBeds24Bookings } from "@/lib/beds24";
 
@@ -7,10 +7,6 @@ export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-    );
 
     if (!process.env.OPENAI_API_KEY) {
       return new Response(

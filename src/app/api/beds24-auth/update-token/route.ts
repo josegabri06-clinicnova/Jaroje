@@ -1,27 +1,68 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
+import { supabaseAdmin } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 /**
  * POST /api/beds24-auth/update-token
  *
- * Recibe un nuevo refreshToken desde la UI (admin que lo pega desde Beds24 Marketplace > API),
- * lo usa inmediatamente para obtener un nuevo tempToken de Beds24,
- * y si tiene éxito guarda ambos en Supabase (tabla beds24_auth).
+ * Recibe un nuevo refreshToken desde la UI (admin verificado),
+ * lo valida inmediatamente contra Beds24 para obtener un tempToken,
+ * y lo guarda en la tabla beds24_auth de Supabase.
  *
- * Body: { refreshToken: string }
+ * Requiere autenticación de administrador (PIN en body o cabecera x-admin-pin).
  */
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { refreshToken } = body;
+    const body = await req.json().catch(() => ({}));
+    const { refreshToken, admin_pin } = body;
 
+    // 1. Verificación de permisos de administrador (PIN o API Key)
+    const headerPin = req.headers.get('x-admin-pin') || '';
+    const providedPin = (admin_pin || headerPin || '').trim();
+
+    if (!providedPin) {
+      return NextResponse.json(
+        { success: false, error: 'Acceso no autorizado: Se requiere el PIN de administrador para modificar las credenciales de Beds24.' },
+        { status: 401 }
+      );
+    }
+
+    // Consultar el PIN de admin esperado en settings
+    const { data: adminPinRow, error: pinFetchError } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', 'pin_admin')
+      .maybeSingle();
+
+    if (pinFetchError) {
+      console.error('[beds24 update-token] Error al validar PIN de admin:', pinFetchError.message);
+      return NextResponse.json(
+        { success: false, error: 'Error interno verificando credenciales.' },
+        { status: 500 }
+      );
+    }
+
+    const expectedPin = (process.env.ADMIN_PIN || adminPinRow?.value || '').trim();
+    if (!expectedPin) {
+      return NextResponse.json(
+        { success: false, error: 'PIN de administrador no configurado en el sistema.' },
+        { status: 500 }
+      );
+    }
+
+    const expectedHash = crypto.createHash('sha256').update(expectedPin).digest();
+    const providedHash = crypto.createHash('sha256').update(providedPin).digest();
+
+    if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
+      return NextResponse.json(
+        { success: false, error: 'PIN de administrador incorrecto. Acción denegada.' },
+        { status: 403 }
+      );
+    }
+
+    // 2. Validar payload del refresh token
     if (!refreshToken || typeof refreshToken !== 'string' || refreshToken.trim().length < 10) {
       return NextResponse.json(
         { success: false, error: 'refreshToken inválido o demasiado corto.' },
@@ -31,7 +72,7 @@ export async function POST(req: Request) {
 
     const cleanRefreshToken = refreshToken.trim();
 
-    // 1. Intentar obtener un nuevo temp token con el refresh token proporcionado
+    // 3. Intentar obtener un nuevo temp token con el refresh token proporcionado
     const tokenRes = await fetch('https://api.beds24.com/v2/authentication/token', {
       method: 'GET',
       headers: { 'refreshToken': cleanRefreshToken },
@@ -58,11 +99,10 @@ export async function POST(req: Request) {
     }
 
     const newTempToken = tokenData.token as string;
-    // Beds24 puede devolver un nuevo refreshToken rotado — usar ese si viene, si no usar el que nos pasaron
     const newRefreshToken = (tokenData.refreshToken || tokenData.refresh_token || cleanRefreshToken) as string;
 
-    // 2. Guardar en Supabase
-    const { error: upsertError } = await supabase
+    // 4. Guardar en Supabase usando cliente administrativo
+    const { error: upsertError } = await supabaseAdmin
       .from('beds24_auth')
       .upsert({
         id: 1,
@@ -79,7 +119,7 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log('[beds24 update-token] ✅ Token actualizado y guardado en Supabase.');
+    console.log('[beds24 update-token] ✅ Token de Beds24 actualizado con éxito.');
 
     return NextResponse.json({
       success: true,

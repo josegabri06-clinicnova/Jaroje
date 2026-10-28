@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { supabase } from '@/lib/supabase';
 import { 
   normalizePhone, 
@@ -13,6 +14,19 @@ import { deleteCancelledReservationFinances } from '@/lib/finances';
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
 export async function POST(req: Request) {
   try {
+    // Verificación de secreto de webhook de Beds24 si está configurado
+    const expectedSecret = process.env.BEDS24_WEBHOOK_SECRET?.trim();
+    if (expectedSecret) {
+      const { searchParams } = new URL(req.url);
+      const incomingSecret = (searchParams.get('token') || req.headers.get('x-webhook-secret') || '').trim();
+      const expectedHash = crypto.createHash('sha256').update(expectedSecret).digest();
+      const incomingHash = crypto.createHash('sha256').update(incomingSecret).digest();
+      if (!incomingSecret || !crypto.timingSafeEqual(expectedHash, incomingHash)) {
+        console.warn('[Beds24 Webhook] ❌ Petición no autorizada: secreto de webhook inválido.');
+        return NextResponse.json({ error: 'Unauthorized webhook' }, { status: 401 });
+      }
+    }
+
     clearBeds24Cache();
 
     const payload = await req.json();
