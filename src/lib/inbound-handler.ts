@@ -190,13 +190,6 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     rawPayload.includes('disponibilidad') || 
     rawPayload.includes('book_now');
 
-  // Comprobar si es número de fundadores / socios para pruebas
-  const cleanDigits = phone.replace(/\D/g, '');
-  const isFounderOrTester = 
-    cleanDigits.endsWith('639367930') || 
-    cleanDigits.endsWith('608290664') ||
-    cleanDigits.endsWith('636961103');
-
   // Detección de saludos iniciales de prospectos
   const isGreeting = 
     guestMsgClean === 'hola' ||
@@ -227,7 +220,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   // EXCEPCIÓN: Si solicita explícitamente cotizar/reservar o es un número de prueba de socios, permitir el flujo comercial.
   const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
   const personalCheck = await isExcludedPersonalContact(phone);
-  if (personalCheck.isExcluded && !isFounderOrTester) {
+  if (personalCheck.isExcluded) {
     console.log(`[Inbound Handler] 🛑 Mensaje de contacto personal/staff (${phone} - ${personalCheck.contact?.name}): "${guestMsgText}". Omitiendo bot y plantilla de bienvenida.`);
     
     // Guardar el mensaje en el historial para visibilidad en el Inbox sin activar bot
