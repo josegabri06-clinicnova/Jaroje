@@ -62,7 +62,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Rol inválido especificado.' }, { status: 400 });
     }
 
-    // 1. Obtener el PIN activo desde Supabase settings (con auto-seed si no existe en BD)
+    // 1. Obtener el PIN activo estrictamente desde Supabase settings o variable de entorno (Fail-Closed)
     const dbKey = DB_KEY_MAP[cleanRole];
     let expectedPin = '';
 
@@ -75,25 +75,26 @@ export async function POST(req: Request) {
     if (row?.value && String(row.value).trim()) {
       expectedPin = String(row.value).trim();
     } else {
-      // Si la fila no existe aún en settings, usar variable de entorno o seed inicial seguro
-      const envPin = cleanRole === 'admin' ? process.env.ADMIN_PIN : undefined;
-      const seedDefaults: Record<string, string> = {
-        admin: '1234',
-        recepcion: '0000',
-        staff_limpieza: '5678',
-        staff_mantenimiento: '8765'
-      };
-      expectedPin = envPin?.trim() || seedDefaults[cleanRole] || '1234';
+      // Si la fila no existe aún en settings, consultar variable de entorno correspondiente
+      const envPin = cleanRole === 'admin' 
+        ? process.env.ADMIN_PIN 
+        : cleanRole === 'recepcion' 
+        ? process.env.RECEPCION_PIN 
+        : cleanRole === 'staff_limpieza' 
+        ? process.env.STAFF_LIMPIEZA_PIN 
+        : process.env.STAFF_MANTENIMIENTO_PIN;
 
-      // Auto-inicializar en Supabase settings para persistencia futura
-      try {
-        await supabaseAdmin
-          .from('settings')
-          .upsert({ key: dbKey, value: expectedPin });
-        console.log(`[API Auth Login] Inicializado PIN en settings: ${dbKey}`);
-      } catch (err: any) {
-        console.warn(`[API Auth Login] Error inicializando PIN en settings:`, err);
+      if (envPin && envPin.trim()) {
+        expectedPin = envPin.trim();
       }
+    }
+
+    if (!expectedPin) {
+      console.error(`[API Auth Login] ❌ El PIN para el rol '${cleanRole}' no está configurado en settings (${dbKey}) ni en variables de entorno.`);
+      return NextResponse.json({
+        success: false,
+        error: 'Credenciales del sistema no configuradas en el servidor.'
+      }, { status: 500 });
     }
 
     // 2. Comparación en tiempo constante para mitigar ataques de temporización
