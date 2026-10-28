@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameGroup, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 import {
   sendTemplate1_SolicitudRecibida,

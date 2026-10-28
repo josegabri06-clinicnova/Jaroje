@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 const FALLBACK_WHATSAPP_TOKEN = 'EAAbMZBnocDPcBQXZAAa1jEiOoQJSTWaLTLzyWoAaERAjarPbviSjYXWCitQvX6CnhHNCEcNUnAWuiZAIU4VY7NjG7m8ZA9HwJzM6s8k29v4BxvfitmKkNdFTcQhMnPEcOUZCZBiNnA6ZACZCFRZBOyNJgK8XEwJa0UWqSxaTb9rosgMVtZC1ZBX4tMpNTZBU2ytZCjwZDZD';
 const FALLBACK_WHATSAPP_PHONE_ID = '1378816458649407';
@@ -1720,7 +1720,6 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any, bypassPause:
 
   if (!phone && booking.id) {
     try {
-      const { supabase } = require('@/lib/supabase');
       const bIdStr = String(booking.id).trim();
       const { data: dbRes } = await supabase
         .from('beds24_reservations')

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 // @ts-ignore
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 export async function POST(request: Request) {
   try {
