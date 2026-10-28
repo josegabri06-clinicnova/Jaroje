@@ -42,9 +42,15 @@ next-env.d.ts
 
 # scratch/temporary files
 /scratch/
-
-# large inventory data files
-/inventario_temp.csv
+scratch_*
+test_*
+logs_*.txt
+logs_output.txt
+/capturas/
+*.sql
 
 # separate standalone projects
 /bahias-guest-services/
+
+# large data files
+/inventario_temp.csv
