@@ -139,3 +139,84 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     return null;
   }
 }
+
+/**
+ * Extrae la cookie jaroje_session de una Request y verifica su validez.
+ */
+export async function getSessionFromRequest(req: Request): Promise<SessionPayload | null> {
+  try {
+    const cookieHeader = req.headers.get('cookie') || '';
+    const cookies = Object.fromEntries(
+      cookieHeader.split(';').map(c => {
+        const [k, ...v] = c.trim().split('=');
+        return [k, v.join('=')];
+      })
+    );
+    const token = cookies[SESSION_COOKIE_NAME];
+    if (!token) return null;
+    return await verifySessionToken(token);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Compara dos cadenas de forma segura en tiempo constante usando Web Crypto API.
+ */
+export async function timingSafeEqualString(a: string, b: string): Promise<boolean> {
+  if (!a || !b) return false;
+  const enc = new TextEncoder();
+  const hashA = await crypto.subtle.digest('SHA-256', enc.encode(a));
+  const hashB = await crypto.subtle.digest('SHA-256', enc.encode(b));
+  const bufA = new Uint8Array(hashA);
+  const bufB = new Uint8Array(hashB);
+  if (bufA.length !== bufB.length) return false;
+  let diff = 0;
+  for (let i = 0; i < bufA.length; i++) {
+    diff |= bufA[i] ^ bufB[i];
+  }
+  return diff === 0;
+}
+
+/**
+ * Valida si una petición tiene autorización para exportar datos.
+ * Acepta:
+ * 1. Sesión activa en cookie con rol permitido (ej. 'admin' o 'recepcion')
+ * 2. Token de exportación o PIN de admin en query string (?token=...) o header Authorization: Bearer
+ */
+export async function authorizeExportRequest(
+  req: Request,
+  allowedRoles: Array<SessionPayload['role']> = ['admin', 'recepcion']
+): Promise<{ authorized: boolean; role?: SessionPayload['role']; reason?: string }> {
+  // 1. Verificar sesión por cookie
+  const session = await getSessionFromRequest(req);
+  if (session && allowedRoles.includes(session.role)) {
+    return { authorized: true, role: session.role };
+  }
+
+  // 2. Si no hay cookie de sesión, verificar token/PIN en header o query param
+  const url = new URL(req.url);
+  const authHeader = req.headers.get('authorization') || '';
+  const providedToken = (
+    url.searchParams.get('token') ||
+    req.headers.get('x-export-token') ||
+    req.headers.get('x-admin-pin') ||
+    authHeader.replace(/^bearer\s+/i, '').trim()
+  )?.trim();
+
+  if (providedToken) {
+    const validTokens = [
+      process.env.EXPORT_TOKEN,
+      process.env.CRON_SECRET,
+      process.env.ADMIN_PIN
+    ].filter(Boolean) as string[];
+
+    for (const secret of validTokens) {
+      if (await timingSafeEqualString(providedToken, secret.trim())) {
+        return { authorized: true, role: 'admin' };
+      }
+    }
+  }
+
+  return { authorized: false, reason: session ? 'Rol insuficiente' : 'No autenticado' };
+}

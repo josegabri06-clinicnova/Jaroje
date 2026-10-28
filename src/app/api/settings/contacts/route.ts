@@ -6,14 +6,20 @@ import {
   bulkImportPersonalContacts,
   extract10Digits
 } from '@/lib/personal-contacts';
+import { getSessionFromRequest } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * GET: Devuelve la lista completa de contactos excluidos del bot
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const session = await getSessionFromRequest(req);
+    if (!session || session.role !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Privilegios de administrador requeridos.' }, { status: 403 });
+    }
+
     const contacts = await getExcludedContacts(true);
     return NextResponse.json({
       success: true,
@@ -30,6 +36,11 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
+    const session = await getSessionFromRequest(req);
+    if (!session || session.role !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Privilegios de administrador requeridos.' }, { status: 403 });
+    }
+
     const body = await req.json();
 
     // Importación masiva (array de contactos)
@@ -76,6 +87,11 @@ export async function POST(req: Request) {
  */
 export async function DELETE(req: Request) {
   try {
+    const session = await getSessionFromRequest(req);
+    if (!session || session.role !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Privilegios de administrador requeridos.' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(req.url);
     const phone = searchParams.get('phone');
     if (!phone) {

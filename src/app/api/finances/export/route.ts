@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { format } from 'date-fns';
+import { authorizeExportRequest } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
+    // 1. Control estricto de acceso financiero: Solo Administrador
+    const auth = await authorizeExportRequest(req, ['admin']);
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Se requieren privilegios de administrador para exportar contabilidad.' },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const timeFilter = searchParams.get('time') || 'todo'; // 'hoy' | 'semana' | 'mes' | 'todo'
     const startDate = searchParams.get('startDate') || '';
@@ -114,7 +124,6 @@ export async function GET(req: Request) {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'no-store',
       }
     });

@@ -4,7 +4,7 @@ import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session';
 // Rutas públicas que no requieren sesión
 const PUBLIC_FILE_EXTENSIONS = /\.(png|jpg|jpeg|gif|webp|svg|ico|css|js|map|txt|pdf)$/i;
 
-function isPublicPath(pathname: string): boolean {
+function isPublicPath(pathname: string, req?: NextRequest): boolean {
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/public') ||
@@ -30,6 +30,13 @@ function isPublicPath(pathname: string): boolean {
     return true;
   }
 
+  // Delegar autenticación por token en exportación si viene con parámetro token o header de autorización
+  if (pathname === '/api/export' && req) {
+    if (req.nextUrl.searchParams.has('token') || req.headers.has('authorization') || req.headers.has('x-export-token')) {
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -37,7 +44,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // 1. Omitir recursos públicos, estáticos y webhooks
-  if (isPublicPath(pathname)) {
+  if (isPublicPath(pathname, req)) {
     // Si ya tiene sesión activa e intenta entrar a /login, redirigir a su panel
     if (pathname === '/login') {
       const sessionCookie = req.cookies.get(SESSION_COOKIE_NAME)?.value;
