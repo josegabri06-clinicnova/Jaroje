@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getSessionFromRequest } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,49 +18,54 @@ export async function POST(req: Request) {
       }, { status: 400 });
     }
 
-    // 2. Autenticación estricta en servidor: verificación de credencial de administrador
+    // 2. Autenticación en servidor: Sesión activa de admin o PIN de administrador
+    const session = await getSessionFromRequest(req);
+    const isAdminSession = session?.role === 'admin';
+
     const headerPin = req.headers.get('x-admin-pin') || '';
     const providedPin = (admin_pin || headerPin || '').trim();
 
-    if (!providedPin) {
+    if (!isAdminSession && !providedPin) {
       return NextResponse.json({
         success: false,
-        error: 'Acción no autorizada: Se requiere el PIN de administrador para ejecutar el restablecimiento contable.'
+        error: 'Acción no autorizada: Se requiere sesión activa de administrador o PIN de administrador.'
       }, { status: 401 });
     }
 
-    // Consultar el PIN de admin esperado en settings
-    const { data: adminPinRow, error: pinFetchError } = await supabaseAdmin
-      .from('settings')
-      .select('value')
-      .eq('key', 'pin_admin')
-      .maybeSingle();
+    if (!isAdminSession && providedPin) {
+      // Consultar el PIN de admin esperado en settings
+      const { data: adminPinRow, error: pinFetchError } = await supabaseAdmin
+        .from('settings')
+        .select('value')
+        .eq('key', 'pin_admin')
+        .maybeSingle();
 
-    if (pinFetchError) {
-      console.error("API Reset Contable: Error consultando PIN de admin:", pinFetchError.message);
-      return NextResponse.json({
-        success: false,
-        error: 'Error de servidor verificando credenciales administrativas.'
-      }, { status: 500 });
-    }
+      if (pinFetchError) {
+        console.error("API Reset Contable: Error consultando PIN de admin:", pinFetchError.message);
+        return NextResponse.json({
+          success: false,
+          error: 'Error de servidor verificando credenciales administrativas.'
+        }, { status: 500 });
+      }
 
-    const expectedPin = (process.env.ADMIN_PIN || adminPinRow?.value || '').trim();
-    if (!expectedPin) {
-      return NextResponse.json({
-        success: false,
-        error: 'Error de configuración: PIN de administrador no definido en el sistema.'
-      }, { status: 500 });
-    }
+      const expectedPin = (process.env.ADMIN_PIN || adminPinRow?.value || '').trim();
+      if (!expectedPin) {
+        return NextResponse.json({
+          success: false,
+          error: 'Error de configuración: PIN de administrador no definido en el sistema.'
+        }, { status: 500 });
+      }
 
-    // Comparación segura en tiempo constante para evitar filtración por temporización
-    const expectedHash = crypto.createHash('sha256').update(expectedPin).digest();
-    const providedHash = crypto.createHash('sha256').update(providedPin).digest();
+      // Comparación segura en tiempo constante para evitar filtración por temporización
+      const expectedHash = crypto.createHash('sha256').update(expectedPin).digest();
+      const providedHash = crypto.createHash('sha256').update(providedPin).digest();
 
-    if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
-      return NextResponse.json({
-        success: false,
-        error: 'PIN de administrador incorrecto. Acción denegada.'
-      }, { status: 403 });
+      if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
+        return NextResponse.json({
+          success: false,
+          error: 'PIN de administrador incorrecto. Acción denegada.'
+        }, { status: 401 });
+      }
     }
 
     // 3. Eliminar permanentemente todos los registros contables en Supabase

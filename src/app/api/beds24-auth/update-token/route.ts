@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getSessionFromRequest } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,55 +12,60 @@ export const dynamic = 'force-dynamic';
  * lo valida inmediatamente contra Beds24 para obtener un tempToken,
  * y lo guarda en la tabla beds24_auth de Supabase.
  *
- * Requiere autenticación de administrador (PIN en body o cabecera x-admin-pin).
+ * Requiere autenticación de administrador (sesión activa o PIN en body/cabecera).
  */
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const { refreshToken, admin_pin } = body;
 
-    // 1. Verificación de permisos de administrador (PIN o API Key)
+    // 1. Verificación de permisos de administrador (Sesión activa de admin o PIN)
+    const session = await getSessionFromRequest(req);
+    const isAdminSession = session?.role === 'admin';
+
     const headerPin = req.headers.get('x-admin-pin') || '';
     const providedPin = (admin_pin || headerPin || '').trim();
 
-    if (!providedPin) {
+    if (!isAdminSession && !providedPin) {
       return NextResponse.json(
-        { success: false, error: 'Acceso no autorizado: Se requiere el PIN de administrador para modificar las credenciales de Beds24.' },
+        { success: false, error: 'Acceso no autorizado: Se requiere sesión activa de administrador o PIN de administrador.' },
         { status: 401 }
       );
     }
 
-    // Consultar el PIN de admin esperado en settings
-    const { data: adminPinRow, error: pinFetchError } = await supabaseAdmin
-      .from('settings')
-      .select('value')
-      .eq('key', 'pin_admin')
-      .maybeSingle();
+    if (!isAdminSession && providedPin) {
+      // Consultar el PIN de admin esperado en settings
+      const { data: adminPinRow, error: pinFetchError } = await supabaseAdmin
+        .from('settings')
+        .select('value')
+        .eq('key', 'pin_admin')
+        .maybeSingle();
 
-    if (pinFetchError) {
-      console.error('[beds24 update-token] Error al validar PIN de admin:', pinFetchError.message);
-      return NextResponse.json(
-        { success: false, error: 'Error interno verificando credenciales.' },
-        { status: 500 }
-      );
-    }
+      if (pinFetchError) {
+        console.error('[beds24 update-token] Error al validar PIN de admin:', pinFetchError.message);
+        return NextResponse.json(
+          { success: false, error: 'Error interno verificando credenciales.' },
+          { status: 500 }
+        );
+      }
 
-    const expectedPin = (process.env.ADMIN_PIN || adminPinRow?.value || '').trim();
-    if (!expectedPin) {
-      return NextResponse.json(
-        { success: false, error: 'PIN de administrador no configurado en el sistema.' },
-        { status: 500 }
-      );
-    }
+      const expectedPin = (process.env.ADMIN_PIN || adminPinRow?.value || '').trim();
+      if (!expectedPin) {
+        return NextResponse.json(
+          { success: false, error: 'PIN de administrador no configurado en el sistema.' },
+          { status: 500 }
+        );
+      }
 
-    const expectedHash = crypto.createHash('sha256').update(expectedPin).digest();
-    const providedHash = crypto.createHash('sha256').update(providedPin).digest();
+      const expectedHash = crypto.createHash('sha256').update(expectedPin).digest();
+      const providedHash = crypto.createHash('sha256').update(providedPin).digest();
 
-    if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
-      return NextResponse.json(
-        { success: false, error: 'PIN de administrador incorrecto. Acción denegada.' },
-        { status: 403 }
-      );
+      if (!crypto.timingSafeEqual(expectedHash, providedHash)) {
+        return NextResponse.json(
+          { success: false, error: 'PIN de administrador incorrecto. Acción denegada.' },
+          { status: 403 }
+        );
+      }
     }
 
     // 2. Validar payload del refresh token

@@ -154,7 +154,9 @@ export async function middleware(req: NextRequest) {
       const allowedStaffApis = [
         '/api/tasks',
         '/api/reservas',
-        '/api/auth/logout'
+        '/api/auth/logout',
+        '/api/employee-logs',
+        '/api/room-status'
       ];
       const isAllowed = allowedStaffApis.some(prefix => pathname === prefix || pathname.startsWith(prefix + '/'));
       if (!isAllowed) {
