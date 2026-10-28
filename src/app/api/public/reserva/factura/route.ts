@@ -32,9 +32,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
     }
 
-    const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(fileName);
-    const url = publicUrlData?.publicUrl;
+    let finalDocUrl = '';
+    const { data: signedData } = await supabase.storage
+      .from('dni_images')
+      .createSignedUrl(fileName, 60 * 60 * 24 * 180); // 180 días de vigencia
 
+    if (signedData?.signedUrl) {
+      finalDocUrl = signedData.signedUrl;
+    } else {
+      const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(fileName);
+      finalDocUrl = publicUrlData?.publicUrl || '';
+    }
+
+    const url = finalDocUrl;
     return NextResponse.json({ success: true, url });
   } catch (err: any) {
     console.error('[Factura POST] Error:', err);

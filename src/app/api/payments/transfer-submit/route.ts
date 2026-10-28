@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -34,12 +34,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Error al guardar el comprobante en almacenamiento.' }, { status: 500 });
     }
 
-    // 2. Obtener la URL pública del archivo
-    const { data: urlData } = supabase.storage
+    // 2. Generar URL de acceso segura (firmada para privacidad de comprobantes de pago)
+    let finalReceiptUrl = '';
+    const { data: signedData } = await supabase.storage
       .from('transfer-receipts')
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 60 * 60 * 24 * 180); // 180 días de vigencia
 
-    const publicUrl = urlData.publicUrl;
+    if (signedData?.signedUrl) {
+      finalReceiptUrl = signedData.signedUrl;
+    } else {
+      const { data: urlData } = supabase.storage
+        .from('transfer-receipts')
+        .getPublicUrl(filePath);
+      finalReceiptUrl = urlData.publicUrl;
+    }
+
+    const publicUrl = finalReceiptUrl;
 
     // 3. Registrar en la tabla "transfer_receipts" de Supabase
     const { data: dbData, error: dbError } = await supabase

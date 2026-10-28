@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings } from '@/lib/beds24';
 import { sendWhatsAppTemplate } from '@/lib/whatsapp';
 

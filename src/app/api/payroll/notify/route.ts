@@ -158,10 +158,18 @@ Este documento sirve como desglose quincenal de n√≥mina generado de forma autom√
           });
 
         if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage
+          const { data: signedData } = await supabase.storage
             .from('payroll_documents')
-            .getPublicUrl(fileName);
-          finalDocumentUrl = publicUrlData.publicUrl;
+            .createSignedUrl(fileName, 60 * 60 * 24 * 180);
+
+          if (signedData?.signedUrl) {
+            finalDocumentUrl = signedData.signedUrl;
+          } else {
+            const { data: publicUrlData } = supabase.storage
+              .from('payroll_documents')
+              .getPublicUrl(fileName);
+            finalDocumentUrl = publicUrlData.publicUrl;
+          }
         } else {
           console.error("Error subiendo recibo txt autogenerado a Supabase Storage:", uploadError);
         }

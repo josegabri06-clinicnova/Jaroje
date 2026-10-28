@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
 
 export const dynamic = 'force-dynamic';
@@ -90,12 +90,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al subir identificación a storage: ' + uploadError.message }, { status: 500 });
     }
 
-    // 4. Obtener URL pública
-    const { data: urlData } = supabase.storage
+    // 4. Generar URL de acceso segura (firmada para privacidad de documentos personales)
+    let finalDocUrl = '';
+    const { data: signedData } = await supabase.storage
       .from('dni_images')
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 60 * 60 * 24 * 180); // 180 días de vigencia
 
-    const publicUrl = urlData.publicUrl;
+    if (signedData?.signedUrl) {
+      finalDocUrl = signedData.signedUrl;
+    } else {
+      const { data: urlData } = supabase.storage
+        .from('dni_images')
+        .getPublicUrl(filePath);
+      finalDocUrl = urlData.publicUrl;
+    }
+
+    const publicUrl = finalDocUrl;
 
     // 5. Upsert en la tabla 'checkins' de Supabase
     const { error: dbError } = await supabase

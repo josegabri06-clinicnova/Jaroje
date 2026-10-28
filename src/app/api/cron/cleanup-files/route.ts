@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 
-function getStoragePath(publicUrl: string) {
-  if (!publicUrl) return null;
-  const parts = publicUrl.split('/public/');
+function getStoragePath(url: string) {
+  if (!url) return null;
+  // Quitar query params si es URL firmada (?token=...)
+  const cleanUrl = url.split('?')[0];
+  let parts = cleanUrl.split('/public/');
+  if (parts.length < 2) {
+    parts = cleanUrl.split('/sign/');
+  }
   if (parts.length < 2) return null;
   const bucketAndPath = parts[1];
   const slashIdx = bucketAndPath.indexOf('/');
