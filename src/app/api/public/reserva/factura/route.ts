@@ -62,6 +62,17 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Datos incompletos.' }, { status: 400 });
     }
 
+    // Validar que pdfUrl pertenece exclusivamente a nuestro almacenamiento oficial de Supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const isSupabaseStorageUrl = typeof pdfUrl === 'string' && (
+      (supabaseUrl && pdfUrl.startsWith(supabaseUrl)) ||
+      pdfUrl.includes('.supabase.co/storage/v1/')
+    );
+
+    if (!isSupabaseStorageUrl) {
+      return NextResponse.json({ success: false, error: 'URL de constancia fiscal no autorizada o inválida.' }, { status: 400 });
+    }
+
     const { error: insertError } = await supabase.from('billing_requests').insert([{
       reservation_id: String(reservationId),
       guest_name: guestName || '',

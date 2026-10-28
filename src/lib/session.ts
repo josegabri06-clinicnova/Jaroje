@@ -197,27 +197,19 @@ export async function authorizeExportRequest(
     return { authorized: true, role: session.role };
   }
 
-  // 2. Si no hay cookie de sesión, verificar token/PIN en header o query param
+  // 2. Si no hay cookie de sesión, verificar exclusivamente token de exportación dedicado
   const url = new URL(req.url);
   const authHeader = req.headers.get('authorization') || '';
   const providedToken = (
     url.searchParams.get('token') ||
     req.headers.get('x-export-token') ||
-    req.headers.get('x-admin-pin') ||
     authHeader.replace(/^bearer\s+/i, '').trim()
   )?.trim();
 
-  if (providedToken) {
-    const validTokens = [
-      process.env.EXPORT_TOKEN,
-      process.env.CRON_SECRET,
-      process.env.ADMIN_PIN
-    ].filter(Boolean) as string[];
-
-    for (const secret of validTokens) {
-      if (await timingSafeEqualString(providedToken, secret.trim())) {
-        return { authorized: true, role: 'admin' };
-      }
+  const exportSecret = process.env.EXPORT_TOKEN?.trim();
+  if (providedToken && exportSecret) {
+    if (await timingSafeEqualString(providedToken, exportSecret)) {
+      return { authorized: true, role: 'admin' };
     }
   }
 

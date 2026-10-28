@@ -73,16 +73,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Debes completar el pago de tu anticipo antes de subir tu identificación.' }, { status: 400 });
     }
 
-    // 2. Extensión del archivo y ruta en Storage
-    const fileExt = file.name.split('.').pop() || 'jpg';
-    const filePath = `guest_dni_${id}_${Date.now()}.${fileExt}`;
+    // 2. Validaciones de seguridad en archivo (tamaño máx 10MB y MIME permitido)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'El archivo excede el tamaño máximo permitido (10 MB).' }, { status: 400 });
+    }
+
+    const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf'];
+    if (file.type && !ALLOWED_MIMES.includes(file.type.toLowerCase())) {
+      return NextResponse.json({ error: 'Formato no permitido. Solo se aceptan imágenes (JPG, PNG, WEBP) o PDF.' }, { status: 400 });
+    }
+
+    // Extensión segura y nombre aleatorio único para evitar sobrescrituras de documentos de otros huéspedes
+    const rawExt = file.name ? file.name.split('.').pop()?.toLowerCase() : 'jpg';
+    const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'heic'].includes(rawExt || '') ? rawExt : 'jpg';
+    const randomSuffix = crypto.randomUUID ? crypto.randomUUID().slice(0, 12) : Date.now();
+    const filePath = `guest_dni_${cleanId}_${Date.now()}_${randomSuffix}.${safeExt}`;
 
     // 3. Subir a Supabase Storage (bucket: 'dni_images')
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('dni_images')
       .upload(filePath, file, {
-        contentType: file.type,
-        upsert: true
+        contentType: file.type || 'image/jpeg',
+        upsert: false
       });
 
     if (uploadError) {

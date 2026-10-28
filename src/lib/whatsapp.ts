@@ -2,15 +2,22 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
-const FALLBACK_WHATSAPP_TOKEN = 'EAAbMZBnocDPcBQXZAAa1jEiOoQJSTWaLTLzyWoAaERAjarPbviSjYXWCitQvX6CnhHNCEcNUnAWuiZAIU4VY7NjG7m8ZA9HwJzM6s8k29v4BxvfitmKkNdFTcQhMnPEcOUZCZBiNnA6ZACZCFRZBOyNJgK8XEwJa0UWqSxaTb9rosgMVtZC1ZBX4tMpNTZBU2ytZCjwZDZD';
-const FALLBACK_WHATSAPP_PHONE_ID = '1378816458649407';
-
 export function getWhatsAppToken(): string {
-  return process.env.WHATSAPP_TOKEN || FALLBACK_WHATSAPP_TOKEN;
+  const token = process.env.WHATSAPP_TOKEN?.trim();
+  if (!token) {
+    console.warn('[WhatsApp] ⚠️ WHATSAPP_TOKEN no está configurado en las variables de entorno.');
+    return '';
+  }
+  return token;
 }
 
 export function getWhatsAppPhoneId(): string {
-  return process.env.WHATSAPP_PHONE_ID || FALLBACK_WHATSAPP_PHONE_ID;
+  const phoneId = process.env.WHATSAPP_PHONE_ID?.trim();
+  if (!phoneId) {
+    console.warn('[WhatsApp] ⚠️ WHATSAPP_PHONE_ID no está configurado en las variables de entorno.');
+    return '';
+  }
+  return phoneId;
 }
 
 /**

@@ -1,13 +1,13 @@
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import OpenAI from "openai";
 import { getBeds24Bookings } from "@/lib/beds24";
+import { getSessionFromRequest } from "@/lib/session";
 
 export const maxDuration = 30;
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
   try {
-
     if (!process.env.OPENAI_API_KEY) {
       return new Response(
         JSON.stringify({ error: "OPENAI_API_KEY no configurada en Vercel." }),
@@ -15,39 +15,19 @@ export async function POST(req: Request) {
       );
     }
 
+    // 1. Autenticación estricta basada en cookie de sesión del servidor
+    const session = await getSessionFromRequest(req);
+    if (!session || (session.role !== 'admin' && session.role !== 'recepcion')) {
+      return new Response(
+        JSON.stringify({ error: "Acceso no autorizado al Copiloto de IA. Se requiere sesión activa." }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const body = await req.json();
     const messages: { role: string; content: string }[] = body.messages || [];
-    let role = body.role || req.headers.get("x-user-role") || "recepcion";
-    
-    // Obtener PIN de Administrador enviado por la cabecera o el cuerpo
-    const adminPinHeader = req.headers.get("x-admin-pin") || body.pin || null;
-
-    let isAdmin = false;
-
-    // VALIDACIÓN HERMÉTICA DE SEGURIDAD EN EL SERVIDOR (OPCIÓN A)
-    if (role === "admin") {
-      try {
-        const { data: pinSetting } = await supabase
-          .from("settings")
-          .select("value")
-          .eq("key", "pin_admin")
-          .single();
-        
-        const dbAdminPin = pinSetting?.value || "1234"; // fallback por defecto si está vacío
-        
-        if (adminPinHeader && adminPinHeader === dbAdminPin) {
-          isAdmin = true;
-        } else {
-          console.warn("Jaroje AI Copilot: Acceso Admin denegado. PIN incorrecto o ausente.");
-          role = "recepcion"; // Degradación forzada por seguridad
-          isAdmin = false;
-        }
-      } catch (dbErr) {
-        console.error("Error validando PIN de Admin en base de datos, degradando a recepcion:", dbErr);
-        role = "recepcion";
-        isAdmin = false;
-      }
-    }
+    const role = session.role;
+    const isAdmin = role === 'admin';
 
     // Fetch context data — Beds24 is the SOURCE OF TRUTH for reservations
     let contextData = "";
