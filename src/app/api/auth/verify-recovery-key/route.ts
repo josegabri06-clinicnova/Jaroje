@@ -96,11 +96,26 @@ export async function POST(request: Request) {
 
     const adminPin = adminPinRow?.value || '1234';
 
-    return NextResponse.json({
+    const { createSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } = await import('@/lib/session');
+    const sessionToken = await createSessionToken('admin');
+
+    const res = NextResponse.json({
       success: true,
       role: 'admin',
       pin: adminPin
     });
+
+    res.cookies.set({
+      name: SESSION_COOKIE_NAME,
+      value: sessionToken,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: SESSION_DURATION_SECONDS,
+    });
+
+    return res;
   } catch (error: any) {
     console.error('Error verifying master recovery key:', error);
     return NextResponse.json({ success: false, error: error.message || 'Error interno del servidor' }, { status: 500 });
