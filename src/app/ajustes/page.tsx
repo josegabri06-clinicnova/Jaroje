@@ -9,7 +9,7 @@ import {
   Star, Key, X, Check, Eye, EyeOff, LogOut,
   Users, Plus, Trash2, Edit2, ArrowUp, ArrowDown,
   Database, Sparkles, History, AlertTriangle, CheckCircle2, Download, Wrench,
-  TrendingUp, RotateCcw, Bell, ExternalLink, UserCheck, UploadCloud, Search
+  TrendingUp, RotateCcw, Bell, ExternalLink, UserCheck, UploadCloud, Search, Landmark
 } from 'lucide-react';
 import { RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
 import { 
@@ -38,6 +38,52 @@ interface Account {
   sort_index?: number | null;
 }
 
+const TRANSFER_ACCOUNTS_LIST = [
+  {
+    id: 'santander',
+    bank: 'SANTANDER',
+    holder: 'Laura Isabel Corral Dovalina',
+    clabe: '014060606283511403',
+    account: '60628351140',
+    currency: 'MXN',
+    badge: 'Cuenta principal recomendada para depósitos y transferencias SPEI'
+  },
+  {
+    id: 'banamex',
+    bank: 'BANAMEX',
+    holder: 'Rolando Diaz Ceballos',
+    clabe: '002634700420022141',
+    account: '70042002214',
+    currency: 'MXN',
+    badge: 'Transferencias nacionales SPEI Banamex'
+  },
+  {
+    id: 'hsbc',
+    bank: 'HSBC',
+    holder: 'Rolando Diaz Ceballos',
+    clabe: '021634063945799923',
+    account: '6394579992',
+    currency: 'MXN',
+    badge: 'Transferencias nacionales SPEI HSBC'
+  },
+  {
+    id: 'wise',
+    bank: 'WISE USD',
+    holder: 'Rolando Diaz Ceballos',
+    url: 'https://wise.com/pay/me/rolandod148',
+    currency: 'USD',
+    badge: 'Recomendada para huéspedes extranjeros en dólares americanos (USD)'
+  },
+  {
+    id: 'paypal',
+    bank: 'PAYPAL USD',
+    holder: 'Live Huatulco',
+    url: 'https://www.paypal.me/livehuatulco',
+    currency: 'USD',
+    badge: 'Cobros PayPal con tarjeta de crédito/débito en dólares (+5% comisión)'
+  }
+];
+
 export default function AjustesPage() {
   const router = useRouter();
 
@@ -46,11 +92,15 @@ export default function AjustesPage() {
     perfil: false,
     seguridad: false,
     whatsapp: false,
+    portal_pagos: false,
     contable: false,
     tarifas: false,
     empleados: false,
     depuracion: false,
   });
+
+  const [defaultTransferAccount, setDefaultTransferAccount] = useState<'santander' | 'banamex' | 'hsbc' | 'wise' | 'paypal'>('santander');
+  const [savingTransferAccount, setSavingTransferAccount] = useState(false);
 
   const [disableAutoWA, setDisableAutoWA] = useState(false);
   const [savingAutoWA, setSavingAutoWA] = useState(false);
@@ -593,6 +643,52 @@ export default function AjustesPage() {
     }
   };
 
+  const fetchDefaultTransferAccount = async () => {
+    try {
+      const res = await fetch('/api/settings/transfer-account', { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.account) {
+          setDefaultTransferAccount(data.account);
+          return;
+        }
+      }
+      const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'default_transfer_account')
+        .maybeSingle();
+      if (!error && data?.value) {
+        setDefaultTransferAccount(String(data.value).toLowerCase() as any);
+      }
+    } catch (e) {
+      console.error('Error fetching default transfer account setting:', e);
+    }
+  };
+
+  const handleSelectDefaultTransferAccount = async (account: 'santander' | 'banamex' | 'hsbc' | 'wise' | 'paypal') => {
+    setDefaultTransferAccount(account);
+    setSavingTransferAccount(true);
+    try {
+      const res = await fetch('/api/settings/transfer-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Error al guardar');
+      }
+      setToastMessage(`✅ Cuenta bancaria por defecto actualizada a: ${account.toUpperCase()}`);
+      setTimeout(() => setToastMessage(''), 4000);
+    } catch (err: any) {
+      console.error(err);
+      alert(`Error al guardar cuenta por defecto: ${err.message}`);
+    } finally {
+      setSavingTransferAccount(false);
+    }
+  };
+
   const fetchPersonalContacts = async () => {
     try {
       const res = await fetch('/api/settings/contacts', { cache: 'no-store' });
@@ -813,6 +909,7 @@ export default function AjustesPage() {
         fetchReceptionWaGroupUrl(),
         fetchMaintenanceWaGroupUrl(),
         fetchPersonalContacts(),
+        fetchDefaultTransferAccount(),
         expandedSections.depuracion ? fetchDepurarData() : Promise.resolve()
       ]);
     } catch (e) {
@@ -835,12 +932,13 @@ export default function AjustesPage() {
     fetchReceptionWaGroupUrl();
     fetchMaintenanceWaGroupUrl();
     fetchPersonalContacts();
+    fetchDefaultTransferAccount();
 
     // Check section parameter on load
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const section = params.get('section');
-      if (section && ['perfil', 'seguridad', 'contable', 'tarifas', 'empleados', 'depuracion'].includes(section)) {
+      if (section && ['perfil', 'seguridad', 'whatsapp', 'portal_pagos', 'contable', 'tarifas', 'empleados', 'depuracion'].includes(section)) {
         setExpandedSections(prev => ({
           ...prev,
           [section]: true
@@ -1708,6 +1806,94 @@ export default function AjustesPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      </CollapsibleSection>
+
+      {/* 2.8. PORTAL DE VENTAS Y PAGOS */}
+      <CollapsibleSection
+        id="portal_pagos"
+        icon={<Landmark size={15} strokeWidth={2.5} />}
+        title="Portal de Ventas y Transferencias"
+        isOpen={expandedSections.portal_pagos}
+        onToggle={() => toggleSection('portal_pagos')}
+      >
+        <div className="space-y-4 py-1">
+          <div className="flex flex-col gap-1">
+            <span className="text-[13px] font-bold text-zinc-900">Cuenta de Transferencia por Defecto</span>
+            <p className="text-[11.5px] text-zinc-500 font-sans leading-normal">
+              Esta es la cuenta bancaria que se asigna automáticamente a las reservaciones creadas desde el Portal de Ventas (<span className="font-mono text-zinc-700 bg-zinc-100 px-1.5 py-0.5 rounded text-[11px]">/public/reservar</span>) y webhooks directos. El huésped verá los datos de esta cuenta en su ficha oficial de transferencia.
+            </p>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            {TRANSFER_ACCOUNTS_LIST.map((acc) => {
+              const isSelected = defaultTransferAccount === acc.id;
+              return (
+                <div
+                  key={acc.id}
+                  onClick={() => !savingTransferAccount && handleSelectDefaultTransferAccount(acc.id as any)}
+                  className={`p-3.5 rounded-2xl border transition-all cursor-pointer select-none flex items-start justify-between gap-3 ${
+                    isSelected
+                      ? 'bg-emerald-50/50 border-emerald-500 ring-1 ring-emerald-500/30 shadow-sm'
+                      : 'bg-zinc-50/70 border-zinc-200/80 hover:bg-white hover:border-zinc-300'
+                  } ${savingTransferAccount ? 'opacity-60 pointer-events-none' : ''}`}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
+                      isSelected ? 'bg-emerald-600 text-white shadow-sm' : 'bg-zinc-200/70 text-zinc-650'
+                    }`}>
+                      <Landmark size={17} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[13.5px] font-bold text-zinc-900">{acc.bank}</span>
+                        <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-zinc-100 text-zinc-650 border-zinc-200">
+                          {acc.currency}
+                        </span>
+                        {isSelected && (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300/50 flex items-center gap-1">
+                            <Check size={11} strokeWidth={3} /> Activa por Defecto
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] font-medium text-zinc-700 mt-0.5 truncate">
+                        Titular: <span className="font-semibold text-zinc-900">{acc.holder}</span>
+                      </p>
+                      {acc.clabe && (
+                        <p className="text-[11.5px] font-mono text-zinc-600 mt-0.5">
+                          CLABE: <span className="tracking-wider font-semibold text-zinc-900">{acc.clabe}</span>
+                          {acc.account && <span className="ml-2 font-sans text-zinc-500">· Cuenta: <span className="font-mono text-zinc-800">{acc.account}</span></span>}
+                        </p>
+                      )}
+                      {acc.url && (
+                        <p className="text-[11px] font-mono text-zinc-500 mt-0.5 truncate">
+                          Enlace: <span className="text-indigo-650 underline">{acc.url}</span>
+                        </p>
+                      )}
+                      <p className="text-[10.5px] text-zinc-400 mt-1 italic">
+                        {acc.badge}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 pt-1">
+                    <div className={`w-5 h-5 rounded-full border flex items-center justify-center transition-all ${
+                      isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-zinc-300 bg-white'
+                    }`}>
+                      {isSelected && <Check size={12} strokeWidth={3} />}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 flex items-start gap-2.5 mt-2">
+            <span className="text-sm">💡</span>
+            <p className="text-[11px] text-amber-900 leading-relaxed font-sans">
+              <strong className="font-semibold">Nota operativa:</strong> Esta selección define la cuenta predeterminada para nuevas reservas directas. Si para una reserva específica necesitas cambiar la cuenta (por ejemplo de Santander a Wise para un huésped extranjero), puedes cambiarla en cualquier momento desde <strong>Reservaciones</strong> o <strong>Recepción</strong> en el cajón lateral de la reserva (sección <em>Portal de Huésped</em>).
+            </p>
           </div>
         </div>
       </CollapsibleSection>

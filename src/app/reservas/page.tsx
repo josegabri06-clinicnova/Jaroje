@@ -349,7 +349,7 @@ function ReservasListInner() {
   const [approvingReceiptId, setApprovingReceiptId] = useState<string | null>(null);
   const [rejectionNotes, setRejectionNotes] = useState<Record<string, string>>({});
   const [portalShowCardPayment, setPortalShowCardPayment] = useState(true);
-  const [portalTransferAccount, setPortalTransferAccount] = useState('hsbc');
+  const [portalTransferAccount, setPortalTransferAccount] = useState('santander');
   const [portalLanguage, setPortalLanguage] = useState('es');
   const [portalMuteNotifications, setPortalMuteNotifications] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -499,7 +499,7 @@ function ReservasListInner() {
 
       // Cargar ajustes de portal para la reserva seleccionada
       setPortalShowCardPayment(true);
-      setPortalTransferAccount('hsbc');
+      setPortalTransferAccount('santander');
       setPortalLanguage('es');
       setPortalMuteNotifications(false);
       (async () => {

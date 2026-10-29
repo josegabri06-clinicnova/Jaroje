@@ -462,7 +462,21 @@ export async function POST(req: Request) {
       }
     }
 
-    // 7. Sincronizar de inmediato a Supabase 'beds24_reservations' y 'local_reservas'
+    // 7. Sincronizar de inmediato a Supabase 'beds24_reservations' y 'booking_portal_settings'
+    let defaultTransferAcc = 'santander';
+    try {
+      const { data: setAcc } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'default_transfer_account')
+        .maybeSingle();
+      if (setAcc?.value) {
+        defaultTransferAcc = String(setAcc.value).toLowerCase();
+      }
+    } catch (accErr) {
+      console.warn("[Reservar API] Error leyendo default_transfer_account de settings:", accErr);
+    }
+
     for (let i = 0; i < successfulBookingIds.length; i++) {
       const bId = successfulBookingIds[i];
       const payloadItem = beds24Payload[i];
@@ -492,6 +506,14 @@ export async function POST(req: Request) {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
+
+        // Configurar portal de pagos para el huésped con la cuenta por defecto
+        await supabase.from('booking_portal_settings').upsert({
+          booking_id: bId,
+          transfer_account: defaultTransferAcc,
+          show_card_payment: true,
+          language: 'es'
+        }, { onConflict: 'booking_id' });
       } catch (dbErr) {
         console.error(`[Reservar API] Error guardando reserva ${bId} en Supabase:`, dbErr);
       }

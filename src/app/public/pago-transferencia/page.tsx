@@ -116,7 +116,7 @@ export default function PagoTransferenciaPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   
-  const [transferAccount, setTransferAccount] = useState<string>(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : 'hsbc'));
+  const [transferAccount, setTransferAccount] = useState<string>(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : 'santander'));
   const [loadingAccount, setLoadingAccount] = useState<boolean>(true);
   const curr = (transferAccount === 'wise' || transferAccount === 'paypal' || isWiseMethod || isPaypalMethod) ? 'USD' : 'MXN';
 
@@ -134,20 +134,35 @@ export default function PagoTransferenciaPage() {
   }, [rawAmount]);
 
   useEffect(() => {
-    if (!bookingId) {
-      setLoadingAccount(false);
-      return;
-    }
     (async () => {
       try {
-        const { data, error } = await supabase
-          .from('booking_portal_settings')
-          .select('transfer_account')
-          .eq('booking_id', String(bookingId))
-          .maybeSingle();
-        if (!error && data) {
-          setTransferAccount(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : (data.transfer_account || 'hsbc')));
+        let chosenAccount: string | null = null;
+
+        if (bookingId) {
+          const { data, error } = await supabase
+            .from('booking_portal_settings')
+            .select('transfer_account')
+            .eq('booking_id', String(bookingId))
+            .maybeSingle();
+          if (!error && data?.transfer_account) {
+            chosenAccount = data.transfer_account;
+          }
         }
+
+        // Si no se encontró cuenta específica para la reserva, consultar la cuenta por defecto global
+        if (!chosenAccount) {
+          const { data: setAcc } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('key', 'default_transfer_account')
+            .maybeSingle();
+          if (setAcc?.value) {
+            chosenAccount = String(setAcc.value).toLowerCase();
+          }
+        }
+
+        const finalAcc = chosenAccount || 'santander';
+        setTransferAccount(isWiseMethod ? 'wise' : (isPaypalMethod ? 'paypal' : finalAcc));
       } catch (err) {
         console.error("Error loading transfer settings:", err);
       } finally {
@@ -246,7 +261,7 @@ export default function PagoTransferenciaPage() {
     }
   };
 
-  const activeAccount = allAccounts[transferAccount] || allAccounts.hsbc;
+  const activeAccount = allAccounts[transferAccount] || allAccounts.santander;
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {

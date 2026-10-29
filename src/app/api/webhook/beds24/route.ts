@@ -208,12 +208,26 @@ export async function POST(req: Request) {
               .maybeSingle();
               
             if (!existingSettings) {
+              let defTransfer = 'santander';
+              try {
+                const { data: setAcc } = await supabase
+                  .from('settings')
+                  .select('value')
+                  .eq('key', 'default_transfer_account')
+                  .maybeSingle();
+                if (setAcc?.value) {
+                  defTransfer = String(setAcc.value).toLowerCase();
+                }
+              } catch (accErr) {
+                console.warn("[Webhook Beds24] Error leyendo default_transfer_account:", accErr);
+              }
+
               await supabase
                 .from('booking_portal_settings')
                 .insert({
                   booking_id: bookingIdStr,
                   show_card_payment: true,
-                  transfer_account: 'hsbc',
+                  transfer_account: defTransfer,
                   language: autoLang
                 });
             }
