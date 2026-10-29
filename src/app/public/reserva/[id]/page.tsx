@@ -1335,9 +1335,25 @@ export default function PublicReservaPage() {
   const rawName = (booking.guest_name || '').toLowerCase();
   const rawNotes = (booking.notes || '').toLowerCase();
   const rawSource = ((booking as any).source || (booking as any).apiSource || (booking as any).referer || '').toLowerCase();
-  const isOta = ['airbnb', 'booking', 'vrbo'].some(c => 
-    rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c) || rawSource.includes(c)
-  ) || rawName.includes('pagado a') || rawName.includes('pagado b');
+
+  // Es OTA únicamente si el canal oficial o la fuente es una agencia de viajes externa (Airbnb, Booking.com, VRBO, Expedia, etc.)
+  // IMPORTANTE: NO buscar la subcadena genérica 'booking' dentro del nombre del huésped ni en notas genéricas,
+  // porque palabras como 'overbooking', 'booking engine' o 'direct booking' no son de la plataforma Booking.com.
+  const isOta = (
+    rawChannel.includes('airbnb') ||
+    rawChannel.includes('vrbo') ||
+    rawChannel.includes('expedia') ||
+    rawChannel.includes('homeaway') ||
+    rawChannel.includes('agoda') ||
+    (rawChannel.includes('booking') && !rawChannel.includes('overbooking') && !rawChannel.includes('direct')) ||
+    rawSource.includes('airbnb') ||
+    rawSource.includes('vrbo') ||
+    rawSource.includes('expedia') ||
+    rawSource.includes('booking.com') ||
+    rawName.includes('pagado a') ||
+    rawName.includes('pagado b') ||
+    rawName.includes('booking.com')
+  ) && !rawName.includes('overbooking') && !rawChannel.includes('google');
 
   // Solo se considera confirmada si:
   // 1. Es OTA (prepagada / garantizada por canal), O

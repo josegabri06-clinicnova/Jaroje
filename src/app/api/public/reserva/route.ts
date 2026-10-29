@@ -323,7 +323,7 @@ export async function GET(req: Request) {
               num_adult: Number(rawB.numAdult || 1),
               num_child: Number(rawB.numChild || 0),
               guest_phone: rawB.phone || rawB.mobile || rawB.guestPhone || rawB.guestMobile || null,
-              status: isCancelled ? 'cancelled' : 'confirmed',
+              status: isCancelled ? 'cancelled' : (String(rawB.status || '').toLowerCase() === 'request' ? 'request' : (rawB.status || 'confirmed')),
               booking_time: rawB.bookingTime || rawB.arrival || null,
               channel: channel
             };

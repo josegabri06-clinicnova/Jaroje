@@ -46,7 +46,14 @@ export async function POST(req: Request) {
         const rawChannel = String(booking.channel || '').toLowerCase();
         const rawName = String(booking.guest_name || '').toUpperCase();
         const rawNotes = String(booking.notes || '').toLowerCase();
-        const isOta = ['airbnb', 'booking', 'expedia'].some(c => rawChannel.includes(c) || rawName.includes(c) || rawNotes.includes(c));
+        const isOta = (
+          rawChannel.includes('airbnb') ||
+          rawChannel.includes('expedia') ||
+          rawChannel.includes('vrbo') ||
+          (rawChannel.includes('booking') && !rawChannel.includes('overbooking') && !rawChannel.includes('direct')) ||
+          rawName.includes('BOOKING.COM') ||
+          rawNotes.includes('booking.com')
+        ) && !rawName.includes('OVERBOOKING') && !rawChannel.includes('google');
         
         if (isOta) {
           isPaidOrOta = true;
