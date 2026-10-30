@@ -84,6 +84,64 @@ const TRANSFER_ACCOUNTS_LIST = [
   }
 ];
 
+interface CollapsibleSectionProps {
+  id: string;
+  icon: React.ReactNode;
+  title: string;
+  isOpen: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+  headerAddon?: React.ReactNode;
+}
+
+const CollapsibleSection = ({
+  id,
+  icon,
+  title,
+  isOpen,
+  onToggle,
+  children,
+  headerAddon
+}: CollapsibleSectionProps) => (
+  <div id={`section-${id}`} className="border border-zinc-200/80 rounded-2xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden mb-4 transition-all duration-300">
+    <div 
+      onClick={onToggle}
+      className="flex items-center justify-between p-4.5 cursor-pointer hover:bg-zinc-50/50 select-none"
+    >
+      <div className="flex items-center gap-2.5">
+        <div className="w-7 h-7 bg-zinc-100 rounded-lg flex items-center justify-center text-zinc-650 shrink-0">
+          {icon}
+        </div>
+        <h2 className="text-[12.5px] font-black text-zinc-900 uppercase tracking-wider leading-none">
+          {title}
+        </h2>
+      </div>
+      <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+        {headerAddon}
+        <button onClick={onToggle} className="p-1.5 rounded-lg hover:bg-zinc-200 text-zinc-400 hover:text-zinc-600 transition-colors">
+          {isOpen ? <ChevronUp size={16} strokeWidth={2.5} /> : <ChevronDown size={16} strokeWidth={2.5} />}
+        </button>
+      </div>
+    </div>
+    
+    {isOpen && (
+      <div className="border-t border-zinc-150 p-4 bg-white animate-in fade-in duration-200">
+        {children}
+      </div>
+    )}
+  </div>
+);
+
+const Row = ({ label, value, onPress }: { label: string; value?: string; onPress?: () => void }) => (
+  <div onClick={onPress} className={`flex items-center justify-between py-3.5 border-b border-zinc-100 last:border-none ${onPress ? 'cursor-pointer active:bg-zinc-50' : ''}`}>
+    <span className="text-[15px] font-medium text-zinc-800">{label}</span>
+    <div className="flex items-center gap-2">
+      {value && <span className="text-[13px] font-medium text-zinc-400">{value}</span>}
+      {onPress && <ChevronRight size={16} className="text-zinc-300" strokeWidth={2.5} />}
+    </div>
+  </div>
+);
+
 export default function AjustesPage() {
   const router = useRouter();
 
@@ -1301,62 +1359,6 @@ export default function AjustesPage() {
   };
 
   const handleLogout = () => { logout(); router.replace('/login'); };
-
-  const CollapsibleSection = ({ 
-    id,
-    icon, 
-    title, 
-    isOpen, 
-    onToggle, 
-    children,
-    headerAddon
-  }: { 
-    id: string;
-    icon: React.ReactNode; 
-    title: string; 
-    isOpen: boolean; 
-    onToggle: () => void; 
-    children: React.ReactNode;
-    headerAddon?: React.ReactNode;
-  }) => (
-    <div id={`section-${id}`} className="border border-zinc-200/80 rounded-2xl bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden mb-4 transition-all duration-300">
-      <div 
-        onClick={onToggle}
-        className="flex items-center justify-between p-4.5 cursor-pointer hover:bg-zinc-50/50 select-none"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-zinc-100 rounded-lg flex items-center justify-center text-zinc-650 shrink-0">
-            {icon}
-          </div>
-          <h2 className="text-[12.5px] font-black text-zinc-900 uppercase tracking-wider leading-none">
-            {title}
-          </h2>
-        </div>
-        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-          {headerAddon}
-          <button onClick={onToggle} className="p-1.5 rounded-lg hover:bg-zinc-200 text-zinc-400 hover:text-zinc-600 transition-colors">
-            {isOpen ? <ChevronUp size={16} strokeWidth={2.5} /> : <ChevronDown size={16} strokeWidth={2.5} />}
-          </button>
-        </div>
-      </div>
-      
-      {isOpen && (
-        <div className="border-t border-zinc-150 p-4 bg-white animate-in fade-in duration-200">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-
-  const Row = ({ label, value, onPress }: { label: string; value?: string; onPress?: () => void }) => (
-    <div onClick={onPress} className={`flex items-center justify-between py-3.5 border-b border-zinc-100 last:border-none ${onPress ? 'cursor-pointer active:bg-zinc-50' : ''}`}>
-      <span className="text-[15px] font-medium text-zinc-800">{label}</span>
-      <div className="flex items-center gap-2">
-        {value && <span className="text-[13px] font-medium text-zinc-400">{value}</span>}
-        {onPress && <ChevronRight size={16} className="text-zinc-300" strokeWidth={2.5} />}
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-1 pb-24 bg-[#fafafa] px-4 sm:px-6">
