@@ -174,24 +174,6 @@ export async function getExcludedContacts(forceRefresh = false): Promise<Persona
       }
     } catch (_) {}
 
-    // Fallback asegurado para contactos clave / administración (Francisco San Martin y Floren)
-    const adminFallbacks = [
-      { phone: '+522225509046', name: 'Francisco San Martin', digits: '2225509046', notes: 'Contacto personal de Rolando' },
-      { phone: '+34608290664', name: 'Floren', digits: '608290664', notes: 'Socio / Administrador' },
-      { phone: '+34608290664', name: 'Floren', digits: '34608290664', notes: 'Socio / Administrador' },
-      { phone: '+346560796376', name: 'Floren (Móvil 2)', digits: '6560796376', notes: 'Socio / Administrador' },
-    ];
-    for (const fb of adminFallbacks) {
-      if (!contactsMap.has(fb.digits)) {
-        contactsMap.set(fb.digits, {
-          phone: fb.phone,
-          name: fb.name,
-          notes: fb.notes,
-          source: 'personal'
-        });
-      }
-    }
-
     const merged = Array.from(contactsMap.values());
     memoryCache = {
       contacts: merged,
@@ -251,8 +233,8 @@ export async function savePersonalContact(contact: { phone: string; name: string
       source: 'personal'
     };
 
-    // Actualizar si existe o agregar nuevo
-    const existingIdx = personalOnly.findIndex(c => extract10Digits(c.phone) === rawDigits);
+    // Actualizar si existe o agregar nuevo con comparación elástica de teléfono
+    const existingIdx = personalOnly.findIndex(c => matchesPhone(c.phone, contact.phone));
     if (existingIdx >= 0) {
       personalOnly[existingIdx] = newEntry;
     } else {
@@ -269,6 +251,7 @@ export async function savePersonalContact(contact: { phone: string; name: string
     if (error) throw error;
 
     // Invalidar cache
+    memoryCache.contacts = [];
     memoryCache.lastFetched = 0;
     return true;
   } catch (err) {
@@ -282,11 +265,11 @@ export async function savePersonalContact(contact: { phone: string; name: string
  */
 export async function removePersonalContact(phone: string): Promise<boolean> {
   try {
-    const rawDigits = extract10Digits(phone);
+    const rawDigits = cleanDigits(phone);
     if (!rawDigits) return false;
 
     const currentContacts = await getExcludedContacts(true);
-    const personalOnly = currentContacts.filter(c => c.source === 'personal' && extract10Digits(c.phone) !== rawDigits);
+    const personalOnly = currentContacts.filter(c => c.source === 'personal' && !matchesPhone(c.phone, phone));
 
     const { error } = await supabase
       .from('settings')
@@ -297,6 +280,7 @@ export async function removePersonalContact(phone: string): Promise<boolean> {
 
     if (error) throw error;
 
+    memoryCache.contacts = [];
     memoryCache.lastFetched = 0;
     return true;
   } catch (err) {

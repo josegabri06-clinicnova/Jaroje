@@ -4,7 +4,7 @@ import {
   savePersonalContact,
   removePersonalContact,
   bulkImportPersonalContacts,
-  extract10Digits
+  cleanDigits
 } from '@/lib/personal-contacts';
 
 export const dynamic = 'force-dynamic';
@@ -45,10 +45,11 @@ export async function POST(req: Request) {
 
     // Contacto individual
     const { phone, name, notes } = body;
-    if (!phone || extract10Digits(phone).length < 10) {
+    const digits = cleanDigits(phone);
+    if (!phone || digits.length < 8) {
       return NextResponse.json({
         success: false,
-        error: 'El teléfono debe contener al menos 10 dígitos.'
+        error: 'El teléfono debe contener al menos 8 dígitos.'
       }, { status: 400 });
     }
 
