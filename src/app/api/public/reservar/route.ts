@@ -73,6 +73,173 @@ const ROOM_MAP: Record<string, { roomId: string; name: string; units: { unitId: 
   }
 };
 
+export const ROOM_BASE_CAPACITIES: Record<string, number> = {
+  'doble': 4,
+  '1rec': 4,
+  '2rec': 6,
+  '3rec': 10,
+  'casa': 12
+};
+
+export const ROOM_MAX_CAPACITIES: Record<string, number> = {
+  'doble': 4,
+  '1rec': 4,
+  '2rec': 8,
+  '3rec': 12,
+  'casa': 16
+};
+
+/**
+ * Distribuye de manera proporcional y estricta adultos y niños entre múltiples unidades de hotel.
+ * Garantiza:
+ * 1. Cada habitación con huéspedes tenga al menos 1 adulto responsable (si totalAdults >= numRooms).
+ * 2. Ninguna habitación supere su capacidad máxima legal.
+ * 3. La suma total de adultos entre todas las habitaciones coincida EXACTAMENTE con totalAdults.
+ * 4. La suma total de niños entre todas las habitaciones coincida EXACTAMENTE con totalChildren.
+ * 5. Se evite duplicar conteos globales idénticos que disparen heurísticas de replicación errónea.
+ */
+function distributeGuestsAcrossUnits(
+  units: { key: string; baseCap: number; maxCap: number }[],
+  totalAdults: number,
+  totalChildren: number
+): { adults: number; children: number }[] {
+  const n = units.length;
+  if (n === 0) return [];
+  if (n === 1) {
+    return [{ adults: totalAdults, children: totalChildren }];
+  }
+
+  const totalGuests = totalAdults + totalChildren;
+  const totalBase = units.reduce((sum, u) => sum + u.baseCap, 0);
+
+  // 1. Asignar cupos totales por unidad
+  const alloc = units.map(() => 0);
+  let remainingGuests = totalGuests;
+
+  // Asignar mínimo 1 huésped a cada habitación
+  for (let i = 0; i < n; i++) {
+    if (remainingGuests > 0) {
+      alloc[i] = 1;
+      remainingGuests--;
+    }
+  }
+
+  if (totalGuests <= totalBase) {
+    // Distribuir proporcionalmente hasta alcanzar baseCap
+    while (remainingGuests > 0) {
+      let bestIdx = -1;
+      let lowestRatio = Infinity;
+      for (let i = 0; i < n; i++) {
+        if (alloc[i] < units[i].baseCap) {
+          const ratio = alloc[i] / units[i].baseCap;
+          if (ratio < lowestRatio) {
+            lowestRatio = ratio;
+            bestIdx = i;
+          }
+        }
+      }
+      if (bestIdx === -1) break;
+      alloc[bestIdx]++;
+      remainingGuests--;
+    }
+  } else {
+    // totalGuests > totalBase: primero llenar cada unidad a su baseCap
+    for (let i = 0; i < n; i++) {
+      const needed = units[i].baseCap - alloc[i];
+      if (needed > 0 && remainingGuests > 0) {
+        const take = Math.min(needed, remainingGuests);
+        alloc[i] += take;
+        remainingGuests -= take;
+      }
+    }
+
+    // Distribuir huéspedes extra restantes en unidades con espacio hacia maxCap
+    while (remainingGuests > 0) {
+      let bestIdx = -1;
+      let lowestRatio = Infinity;
+      for (let i = 0; i < n; i++) {
+        if (alloc[i] < units[i].maxCap) {
+          const ratio = alloc[i] / units[i].maxCap;
+          if (ratio < lowestRatio) {
+            lowestRatio = ratio;
+            bestIdx = i;
+          }
+        }
+      }
+      if (bestIdx === -1) {
+        let maxCapIdx = 0;
+        for (let i = 1; i < n; i++) {
+          if (units[i].maxCap > units[maxCapIdx].maxCap) maxCapIdx = i;
+        }
+        alloc[maxCapIdx] += remainingGuests;
+        remainingGuests = 0;
+        break;
+      }
+      alloc[bestIdx]++;
+      remainingGuests--;
+    }
+  }
+
+  // 2. Desglosar alloc en adultos y niños
+  let remainingAdults = totalAdults;
+  const unitAdults = units.map(() => 0);
+  const unitChildren = units.map(() => 0);
+
+  // Cada habitación con huéspedes debe tener al menos 1 adulto responsable si hay adultos disponibles
+  for (let i = 0; i < n; i++) {
+    if (alloc[i] > 0 && remainingAdults > 0) {
+      unitAdults[i] = 1;
+      remainingAdults--;
+    }
+  }
+
+  // Llenar los cupos de cada habitación prioritariamente con adultos
+  for (let i = 0; i < n; i++) {
+    const space = alloc[i] - unitAdults[i];
+    if (space > 0 && remainingAdults > 0) {
+      const take = Math.min(space, remainingAdults);
+      unitAdults[i] += take;
+      remainingAdults -= take;
+    }
+  }
+
+  // Si aún sobran adultos, colocarlos en la habitación más grande
+  if (remainingAdults > 0) {
+    let maxIdx = 0;
+    for (let i = 1; i < n; i++) {
+      if (units[i].maxCap > units[maxIdx].maxCap) maxIdx = i;
+    }
+    unitAdults[maxIdx] += remainingAdults;
+    remainingAdults = 0;
+  }
+
+  // Los cupos restantes de cada habitación son niños
+  let remainingChildren = totalChildren;
+  for (let i = 0; i < n; i++) {
+    const space = alloc[i] - unitAdults[i];
+    if (space > 0 && remainingChildren > 0) {
+      const take = Math.min(space, remainingChildren);
+      unitChildren[i] = take;
+      remainingChildren -= take;
+    }
+  }
+
+  // Si aún sobran niños, colocarlos en la habitación con mayor capacidad
+  if (remainingChildren > 0) {
+    let maxIdx = 0;
+    for (let i = 1; i < n; i++) {
+      if (units[i].maxCap > units[maxIdx].maxCap) maxIdx = i;
+    }
+    unitChildren[maxIdx] += remainingChildren;
+    remainingChildren = 0;
+  }
+
+  return units.map((_, i) => ({
+    adults: unitAdults[i],
+    children: unitChildren[i]
+  }));
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -143,20 +310,6 @@ export async function POST(req: Request) {
     }
 
     // Validación estricta de capacidades base y máxima de habitaciones
-    const ROOM_BASE_CAPACITIES: Record<string, number> = {
-      'doble': 4,
-      '1rec': 4,
-      '2rec': 6,
-      '3rec': 10,
-      'casa': 12
-    };
-    const ROOM_MAX_CAPACITIES: Record<string, number> = {
-      'doble': 4,
-      '1rec': 4,
-      '2rec': 8,
-      '3rec': 12,
-      'casa': 16
-    };
     let totalBaseCapacity = 0;
     let totalMaxCapacity = 0;
     validRooms.forEach((r: any) => {
@@ -288,6 +441,16 @@ export async function POST(req: Request) {
       'casa': 3500
     };
 
+    // Pre-asignar y validar unidades físicas disponibles
+    const allocatedUnits: {
+      key: string;
+      catConfig: any;
+      assignedUnit: { unitId: string; name: string };
+      itemPrice: number;
+      baseCap: number;
+      maxCap: number;
+    }[] = [];
+
     for (const r of validRooms) {
       const catConfig = ROOM_MAP[r.key];
       if (!catConfig) continue;
@@ -321,57 +484,82 @@ export async function POST(req: Request) {
       const verifiedPricePerNight = Math.max(officialPricePerNight, minFloor);
       const itemPrice = Math.round(verifiedPricePerNight * nights);
 
-      // Asignar unidades libres
+      // Asignar unidades libres y marcarlas como ocupadas
       for (let i = 0; i < qty; i++) {
         const assignedUnit = freeUnits[i];
         occupiedUnitIds.add(`${catConfig.roomId}_${assignedUnit.unitId}`);
 
-        grandTotalPrice += itemPrice;
-        roomSummaries.push(`${catConfig.name} (${assignedUnit.name})`);
-
-        const roomInvoiceItems = [
-          {
-            description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
-            type: 'charge',
-            amount: itemPrice,
-            qty: 1,
-            vatRate: 19
-          },
-          {
-            description: 'IVA 16% (Incluido en el precio)',
-            type: 'charge',
-            amount: 0,
-            qty: 1,
-            vatRate: 0
-          },
-          {
-            description: 'Tax Hospedaje 3% (Incluido en el precio)',
-            type: 'charge',
-            amount: 0,
-            qty: 1,
-            vatRate: 0
-          }
-        ];
-
-        beds24Payload.push({
-          roomId: Number(catConfig.roomId),
-          unitId: Number(assignedUnit.unitId),
-          arrival: cleanCheckIn,
-          departure: cleanCheckOut,
-          numAdult: Math.max(1, Math.round(cleanAdults / validRooms.length)),
-          numChild: cleanChildren > 0 ? 1 : 0,
-          firstName: firstName,
-          lastName: lastName,
-          phone: `+${cleanPhoneForMeta(cleanPhone)}`,
-          email: guestEmail || '',
-          status: 'request', // Solicitud provisional pendiente de anticipo 50% (bloquea unidad en Beds24 por 24h)
-          channel: 'Directo whatssap',
-          price: itemPrice,
-          deposit: 0,
-          comments: `Reserva directa creada desde Portal WhatsApp. Habitación: ${assignedUnit.name}. Notas: ${notes || 'Ninguna'}`,
-          invoiceItems: roomInvoiceItems
+        allocatedUnits.push({
+          key: r.key,
+          catConfig,
+          assignedUnit,
+          itemPrice,
+          baseCap: ROOM_BASE_CAPACITIES[r.key] || 4,
+          maxCap: ROOM_MAX_CAPACITIES[r.key] || 4
         });
       }
+    }
+
+    if (allocatedUnits.length === 0) {
+      return NextResponse.json({ error: 'No se pudieron asignar habitaciones válidas.' }, { status: 400 });
+    }
+
+    // Distribuir huéspedes de manera proporcional y respetando capacidades legales
+    const guestDistribution = distributeGuestsAcrossUnits(
+      allocatedUnits.map(u => ({ key: u.key, baseCap: u.baseCap, maxCap: u.maxCap })),
+      cleanAdults,
+      cleanChildren
+    );
+
+    for (let i = 0; i < allocatedUnits.length; i++) {
+      const u = allocatedUnits[i];
+      const dist = guestDistribution[i] || { adults: 1, children: 0 };
+
+      grandTotalPrice += u.itemPrice;
+      roomSummaries.push(`${u.catConfig.name} (${u.assignedUnit.name})`);
+
+      const roomInvoiceItems = [
+        {
+          description: '[ROOMNAME1] | [FIRSTNIGHT] - [LEAVINGDAY]',
+          type: 'charge',
+          amount: u.itemPrice,
+          qty: 1,
+          vatRate: 19
+        },
+        {
+          description: 'IVA 16% (Incluido en el precio)',
+          type: 'charge',
+          amount: 0,
+          qty: 1,
+          vatRate: 0
+        },
+        {
+          description: 'Tax Hospedaje 3% (Incluido en el precio)',
+          type: 'charge',
+          amount: 0,
+          qty: 1,
+          vatRate: 0
+        }
+      ];
+
+      beds24Payload.push({
+        roomId: Number(u.catConfig.roomId),
+        unitId: Number(u.assignedUnit.unitId),
+        arrival: cleanCheckIn,
+        departure: cleanCheckOut,
+        numAdult: dist.adults,
+        numChild: dist.children,
+        firstName: firstName,
+        lastName: lastName,
+        phone: `+${cleanPhoneForMeta(cleanPhone)}`,
+        email: guestEmail || '',
+        status: 'request', // Solicitud provisional pendiente de anticipo 50% (bloquea unidad en Beds24 por 24h)
+        channel: 'Directo whatssap',
+        price: u.itemPrice,
+        deposit: 0,
+        comments: `Reserva directa creada desde Portal WhatsApp. Habitación: ${u.assignedUnit.name}. Notas: ${notes || 'Ninguna'}`,
+        invoiceItems: roomInvoiceItems
+      });
     }
 
     if (beds24Payload.length === 0) {
