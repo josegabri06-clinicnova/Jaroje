@@ -1684,7 +1684,7 @@ export default function AjustesPage() {
                   Contactos Personales de Rolando (Excluidos del Asistente Virtual)
                 </span>
                 <span className="text-[11px] text-zinc-400 font-sans leading-normal">
-                  A los números registrados en esta lista <b>NUNCA</b> se les enviará la plantilla de bienvenida ni respuestas automáticas de WhatsApp para no interferir en sus conversaciones personales.
+                  A los números registrados en esta lista <b>NUNCA</b> se les enviará ninguna plantilla de WhatsApp ni respuestas automáticas bajo ninguna circunstancia.
                 </span>
               </div>
               <div className="flex items-center gap-2">

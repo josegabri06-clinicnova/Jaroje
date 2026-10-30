@@ -432,34 +432,23 @@ export async function sendWhatsAppTemplate(
       return { success: false, error: 'Formato de teléfono no válido' };
     }
 
-    // ── GUARDIA DE EXCLUSIÓN: Regla para números en lista 'excluded_person' ──
-    // Regla de Floren:
-    // 1) Si una persona en la lista 'excluded_person' (contactos personales / staff) escribe palabras clave en WhatsApp,
-    //    NO se le deben enviar plantillas conversacionales automáticas (bienvenida, conmutador, wifi, confirmación de chat).
-    // 2) SIN EMBARGO, cuando esa persona RESERVA una habitación y durante todo el flujo de su estancia (solicitud recibida,
-    //    último aviso, confirmación de reserva, pago de anticipo, preparación de llegada, check-in, seguimiento, check-out, etc.),
-    //    las plantillas del ciclo de vida de la reserva SÍ DEBEN LLEGARLE con total normalidad.
-    const isConversationalKeywordTemplate = 
-      templateName.startsWith('bienvenido_cliente_') ||
-      templateName === 'confirmar_reserva' ||
-      templateName === 'wifi_informacion' ||
-      templateName === 'portal_huesped_link' ||
-      templateName === 'portal_huesped_link_en' ||
-      templateName === 'presentacion_cliente_jaroje_2';
-
-    if (!forceResend && isConversationalKeywordTemplate) {
+    // ── GUARDIA DE EXCLUSIÓN TOTAL: Regla absoluta para números en lista 'excluded_person' ──
+    // Regla de Floren: A los números registrados en esta sección (contactos personales / staff / excluded_person),
+    // NUNCA les va a llegar NINGUNA plantilla automática bajo ninguna circunstancia.
+    // Solo un administrador puede forzar un reenvío manual explícito (forceResend: true).
+    if (!forceResend) {
       try {
         const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
         const excludedCheck = await isExcludedPersonalContact(cleanedPhone);
         if (excludedCheck.isExcluded) {
           const name = excludedCheck.contact?.name || 'Contacto Excluido';
-          console.log(`[WhatsApp API] 🛑 Omitiendo plantilla conversacional '${templateName}' para ${cleanedPhone} (${name}): número registrado en lista 'excluded_person'.`);
+          console.log(`[WhatsApp API] 🛑 Omitiendo plantilla '${templateName}' para ${cleanedPhone} (${name}): número registrado en lista 'excluded_person' (Regla: Cero plantillas automáticas).`);
           return {
             success: false,
             error: 'excluded_person',
             data: {
               status: 'skipped_excluded_person',
-              message: `Envío de plantilla conversacional cancelado: el número ${cleanedPhone} pertenece a la lista 'excluded_person' (${name}).`
+              message: `Envío de plantilla cancelado: el número ${cleanedPhone} pertenece a la lista 'excluded_person' (${name}). Regla activa: Cero plantillas automáticas.`
             }
           };
         }
