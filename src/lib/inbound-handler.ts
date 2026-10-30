@@ -537,6 +537,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       .select('sent_at, template_name')
       .eq('phone', phone)
       .ilike('template_name', '%bienvenido%')
+      .or('status.is.null,status.neq.failed')
       .order('sent_at', { ascending: false })
       .limit(1)
       .maybeSingle();
