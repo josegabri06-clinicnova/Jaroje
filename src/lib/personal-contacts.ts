@@ -26,11 +26,18 @@ let memoryCache: {
 const CACHE_TTL_MS = 3 * 60 * 1000;
 
 /**
+ * Limpia y extrae exclusivamente los dígitos de cualquier formato de teléfono
+ */
+export function cleanDigits(phone: string): string {
+  return String(phone || '').replace(/\D/g, '');
+}
+
+/**
  * Normaliza cualquier formato de teléfono a sus últimos 10 dígitos para comparación segura
  */
 export function extract10Digits(phone: string): string {
   if (!phone) return '';
-  const clean = phone.replace(/\D/g, '');
+  const clean = cleanDigits(phone);
   if (clean.length >= 10) {
     return clean.slice(-10);
   }
@@ -38,10 +45,29 @@ export function extract10Digits(phone: string): string {
 }
 
 /**
+ * Compara dos números telefónicos con tolerancia a prefijos internacionales (+52, +34, etc.)
+ */
+export function matchesPhone(rawA: string, rawB: string): boolean {
+  const a = cleanDigits(rawA);
+  const b = cleanDigits(rawB);
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const minLen = Math.min(a.length, b.length);
+  if (minLen >= 8) {
+    if (a.endsWith(b) || b.endsWith(a)) return true;
+  }
+  if (a.length >= 10 && b.length >= 10) {
+    if (a.slice(-10) === b.slice(-10)) return true;
+  }
+  return false;
+}
+
+/**
  * Obtiene la lista completa de contactos excluidos de la tabla `settings`:
- * 1. Contactos personales guardados por Rolando (clave: 'excluded_personal_contacts')
+ * 1. Claves directas: 'excluded_person', 'excluded_persons', 'excluded_personal_contacts'
  * 2. Empleados oficiales (clave: 'official_employees')
  * 3. Teléfono de gerencia / alertas (clave: 'admin_notification_phone')
+ * 4. Tabla 'excluded_person' (si existe en Supabase)
  */
 export async function getExcludedContacts(forceRefresh = false): Promise<PersonalContact[]> {
   const now = Date.now();
@@ -53,7 +79,13 @@ export async function getExcludedContacts(forceRefresh = false): Promise<Persona
     const { data: rows, error } = await supabase
       .from('settings')
       .select('key, value')
-      .in('key', ['excluded_personal_contacts', 'official_employees', 'admin_notification_phone']);
+      .in('key', [
+        'excluded_person',
+        'excluded_persons',
+        'excluded_personal_contacts',
+        'official_employees',
+        'admin_notification_phone'
+      ]);
 
     if (error) {
       console.warn('[Personal Contacts] Error consultando settings en Supabase:', error.message);
@@ -62,76 +94,90 @@ export async function getExcludedContacts(forceRefresh = false): Promise<Persona
 
     const contactsMap = new Map<string, PersonalContact>();
 
-    // A. Contactos personales guardados explícitamente
-    const personalRow = rows?.find(r => r.key === 'excluded_personal_contacts');
-    if (personalRow?.value) {
+    // Helper para parsear cualquier formato de lista de contactos
+    const parseAndAddContacts = (value: any, source: string) => {
+      if (!value) return;
       try {
-        const parsed: PersonalContact[] = typeof personalRow.value === 'string'
-          ? JSON.parse(personalRow.value)
-          : personalRow.value;
-        if (Array.isArray(parsed)) {
-          parsed.forEach(c => {
-            const ten = extract10Digits(c.phone);
-            if (ten) {
-              contactsMap.set(ten, {
-                phone: c.phone,
-                name: c.name || 'Contacto Personal',
-                notes: c.notes || '',
-                added_at: c.added_at,
-                source: 'personal'
-              });
-            }
-          });
+        let items: any[] = [];
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+            const parsed = JSON.parse(trimmed);
+            items = Array.isArray(parsed) ? parsed : [parsed];
+          } else {
+            items = trimmed.split(/[\n,]+/).map(p => ({ phone: p.trim() })).filter(x => x.phone);
+          }
+        } else if (Array.isArray(value)) {
+          items = value;
         }
-      } catch (parseErr) {
-        console.error('[Personal Contacts] Error parseando excluded_personal_contacts:', parseErr);
+
+        items.forEach(c => {
+          const rawPhone = typeof c === 'string' ? c : (c.phone || c.telefono || c.number || '');
+          const rawDigits = cleanDigits(rawPhone);
+          if (rawDigits && rawDigits.length >= 7) {
+            const contactName = (typeof c === 'object' && c?.name) ? c.name : (source === 'employee' ? 'Empleado Staff' : 'Contacto Personal');
+            const contactNotes = (typeof c === 'object' && c?.notes) ? c.notes : '';
+            contactsMap.set(rawDigits, {
+              phone: rawPhone,
+              name: contactName,
+              notes: contactNotes,
+              added_at: typeof c === 'object' ? c.added_at : undefined,
+              source
+            });
+          }
+        });
+      } catch (err) {
+        console.error('[Personal Contacts] Error parseando lista de contactos:', err);
       }
+    };
+
+    // A. Contactos personales guardados bajo cualquier clave de exclusión
+    const excludedRows = (rows || []).filter(r => 
+      r.key === 'excluded_person' || 
+      r.key === 'excluded_persons' || 
+      r.key === 'excluded_personal_contacts'
+    );
+    for (const r of excludedRows) {
+      parseAndAddContacts(r.value, 'personal');
     }
 
     // B. Empleados oficiales (Staff)
     const empRow = rows?.find(r => r.key === 'official_employees');
     if (empRow?.value) {
-      try {
-        const emps: any[] = typeof empRow.value === 'string' ? JSON.parse(empRow.value) : empRow.value;
-        if (Array.isArray(emps)) {
-          emps.forEach(e => {
-            const ten = extract10Digits(e.phone || '');
-            if (ten && !contactsMap.has(ten)) {
-              contactsMap.set(ten, {
-                phone: e.phone,
-                name: `${e.full_name || 'Empleado'} (${e.department || 'Staff'})`,
-                notes: `Empleado #${e.employee_num}`,
-                source: 'employee'
-              });
-            }
-          });
-        }
-      } catch (empErr) {
-        console.error('[Personal Contacts] Error parseando official_employees:', empErr);
-      }
+      parseAndAddContacts(empRow.value, 'employee');
     }
 
     // C. Teléfono de Alertas de Gerencia
     const adminPhoneRow = rows?.find(r => r.key === 'admin_notification_phone');
     if (adminPhoneRow?.value) {
-      const phones = String(adminPhoneRow.value).split(',').map(p => p.trim());
-      phones.forEach(p => {
-        const ten = extract10Digits(p);
-        if (ten && !contactsMap.has(ten)) {
-          contactsMap.set(ten, {
-            phone: p,
-            name: 'Gerencia / Alertas',
-            notes: 'Teléfono administrador',
-            source: 'admin'
-          });
-        }
-      });
+      parseAndAddContacts(adminPhoneRow.value, 'admin');
     }
 
+    // D. Tabla 'excluded_person' si existe en la base de datos
+    try {
+      const { data: tableRows } = await supabase
+        .from('excluded_person')
+        .select('*');
+      if (tableRows && Array.isArray(tableRows)) {
+        tableRows.forEach((row: any) => {
+          const rawPhone = row.phone || row.telefono || row.number || '';
+          const rawDigits = cleanDigits(rawPhone);
+          if (rawDigits && rawDigits.length >= 7) {
+            contactsMap.set(rawDigits, {
+              phone: rawPhone,
+              name: row.name || row.nombre || 'Contacto Excluido',
+              notes: row.notes || row.notas || '',
+              source: 'personal'
+            });
+          }
+        });
+      }
+    } catch (_) {}
+
     // Fallback asegurado para Francisco San Martin (caso reportado por Rolando)
-    const fsmTen = '2225509046';
-    if (!contactsMap.has(fsmTen)) {
-      contactsMap.set(fsmTen, {
+    const fsmDigits = '2225509046';
+    if (!contactsMap.has(fsmDigits)) {
+      contactsMap.set(fsmDigits, {
         phone: '+522225509046',
         name: 'Francisco San Martin',
         notes: 'Contacto personal de Rolando',
@@ -152,7 +198,7 @@ export async function getExcludedContacts(forceRefresh = false): Promise<Persona
 }
 
 /**
- * Determina si un número de teléfono pertenece a los contactos personales de Rolando o a empleados
+ * Determina si un número de teléfono pertenece a la lista "excluded_person", contactos personales o empleados
  */
 export async function isExcludedPersonalContact(rawPhone: string): Promise<{
   isExcluded: boolean;
@@ -160,11 +206,11 @@ export async function isExcludedPersonalContact(rawPhone: string): Promise<{
 }> {
   if (!rawPhone) return { isExcluded: false };
 
-  const targetDigits = extract10Digits(rawPhone);
-  if (!targetDigits || targetDigits.length < 10) return { isExcluded: false };
+  const targetDigits = cleanDigits(rawPhone);
+  if (!targetDigits || targetDigits.length < 7) return { isExcluded: false };
 
   const contacts = await getExcludedContacts();
-  const match = contacts.find(c => extract10Digits(c.phone) === targetDigits);
+  const match = contacts.find(c => matchesPhone(c.phone, rawPhone));
 
   if (match) {
     return {

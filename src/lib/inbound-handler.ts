@@ -214,16 +214,31 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     guestMsgClean === 'hi' ||
     guestMsgClean === 'hello';
 
-  // ── EXCLUSIÓN DE CONTACTOS PERSONALES DE ROLANDO Y STAFF ──
-  // Si el remitente es un contacto personal de Rolando (ej. Francisco San Martin) o empleado,
-  // NO enviar jamás plantilla de bienvenida ni respuestas automáticas del bot para no interferir en sus conversaciones personales.
-  // EXCEPCIÓN: Si solicita explícitamente cotizar/reservar o es un número de prueba de socios, permitir el flujo comercial.
+  // ── REGLA ESTRICTA DE EXCLUSIÓN: LISTA "excluded_person" / CONTACTOS PERSONALES / STAFF ──
+  // Si el remitente está dentro de la lista "excluded_person" (contactos personales de Rolando o staff):
+  // Aunque escriba palabras clave (cotizar, tarifas, disponibilidad, precios, habitaciones, wifi, claves,
+  // comprobante, portal del huésped, etc.), NUNCA se le debe enviar ninguna plantilla relacionada con esas palabras clave.
+  // La conversación se registra en modo humano para que recepción / Rolando atiendan manualmente sin interferencias del bot.
   const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
   const personalCheck = await isExcludedPersonalContact(phone);
   if (personalCheck.isExcluded) {
-    console.log(`[Inbound Handler] 🛑 Mensaje de contacto personal/staff (${phone} - ${personalCheck.contact?.name}): "${guestMsgText}". Omitiendo bot y plantilla de bienvenida.`);
-    
-    // Guardar el mensaje en el historial para visibilidad en el Inbox sin activar bot
+    const contactName = personalCheck.contact?.name || 'Contacto Personal';
+    console.log(`[Inbound Handler] 🛑 Contacto en lista 'excluded_person' (${phone} - ${contactName}): "${guestMsgText}". Se cancela el envío de cualquier plantilla relacionada con palabras clave.`);
+
+    // Registrar en auditoría de employee_logs
+    try {
+      await supabase.from('employee_logs').insert([{
+        employee_num: 'wa-bot',
+        employee_name: contactName,
+        department: 'recepcion',
+        module: 'recepcion',
+        action: 'plantilla_omitida_persona_excluida',
+        details: `Teléfono ${phone} en lista 'excluded_person' escribió "${guestMsgText}". Envío de plantillas automáticas cancelado por regla de exclusión.`,
+        created_at: new Date().toISOString()
+      }]);
+    } catch (_) {}
+
+    // Guardar el mensaje en el historial para visibilidad en el Inbox en modo humano
     if (guestMsgText || params.button_payload) {
       try {
         const newMsgItem = {
@@ -238,7 +253,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
           await supabase
             .from('conversations')
             .update({
-              guest_name: personalCheck.contact?.name || existing.guest_name || params.guest_name || 'Contacto Personal',
+              guest_name: contactName || existing.guest_name || params.guest_name || 'Contacto Personal',
               messages: [...currentMsgs, newMsgItem],
               timestamp: timestamp || new Date().toISOString(),
               human_mode: true
@@ -250,7 +265,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
             .insert([{
               id: `wa_${Date.now()}`,
               guest_phone: phone,
-              guest_name: personalCheck.contact?.name || params.guest_name || 'Contacto Personal',
+              guest_name: contactName || params.guest_name || 'Contacto Personal',
               messages: [newMsgItem],
               timestamp: timestamp || new Date().toISOString(),
               human_mode: true,
@@ -259,14 +274,15 @@ export async function handleInboundMessage(params: InboundMessageParams) {
             }]);
         }
       } catch (saveErr) {
-        console.warn("[Inbound Handler] Error guardando mensaje de contacto personal:", saveErr);
+        console.warn("[Inbound Handler] Error guardando mensaje de contacto excluido:", saveErr);
       }
     }
 
     return {
       success: true,
       isPersonalContact: true,
-      message: 'Personal contact message recorded in human mode. Bot response skipped.'
+      isExcludedPerson: true,
+      message: 'Excluded person message recorded in human mode. Template delivery and bot response skipped.'
     };
   }
 

@@ -432,6 +432,30 @@ export async function sendWhatsAppTemplate(
       return { success: false, error: 'Formato de teléfono no válido' };
     }
 
+    // ── GUARDIA DE EXCLUSIÓN: Regla para números en lista 'excluded_person' ──
+    // Si el número pertenece a la lista de personas excluidas ('excluded_person' / agenda personal / staff),
+    // y no es un reenvío forzado explícito de un administrador (forceResend), no se envía ninguna plantilla automática.
+    if (!forceResend) {
+      try {
+        const { isExcludedPersonalContact } = await import('@/lib/personal-contacts');
+        const excludedCheck = await isExcludedPersonalContact(cleanedPhone);
+        if (excludedCheck.isExcluded) {
+          const name = excludedCheck.contact?.name || 'Contacto Excluido';
+          console.log(`[WhatsApp API] 🛑 Omitiendo plantilla '${templateName}' para ${cleanedPhone} (${name}): número registrado en lista 'excluded_person'.`);
+          return {
+            success: false,
+            error: 'excluded_person',
+            data: {
+              status: 'skipped_excluded_person',
+              message: `Envío de plantilla cancelado: el número ${cleanedPhone} pertenece a la lista 'excluded_person' (${name}).`
+            }
+          };
+        }
+      } catch (exErr) {
+        console.warn("[WhatsApp API] Error verificando regla excluded_person:", exErr);
+      }
+    }
+
     // Verificar si los envíos automáticos de WhatsApp están deshabilitados en la base de datos (solo si no es un envío manual)
     if (!bypassPause) {
       const isPaused = await isWhatsAppAutomationsPaused();
