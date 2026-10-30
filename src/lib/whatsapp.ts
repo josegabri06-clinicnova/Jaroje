@@ -443,6 +443,8 @@ export async function sendWhatsAppTemplate(
       templateName.startsWith('bienvenido_cliente_') ||
       templateName === 'confirmar_reserva' ||
       templateName === 'wifi_informacion' ||
+      templateName === 'portal_huesped_link' ||
+      templateName === 'portal_huesped_link_en' ||
       templateName === 'presentacion_cliente_jaroje_2';
 
     if (!forceResend && isConversationalKeywordTemplate) {

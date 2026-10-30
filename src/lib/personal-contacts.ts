@@ -174,15 +174,22 @@ export async function getExcludedContacts(forceRefresh = false): Promise<Persona
       }
     } catch (_) {}
 
-    // Fallback asegurado para Francisco San Martin (caso reportado por Rolando)
-    const fsmDigits = '2225509046';
-    if (!contactsMap.has(fsmDigits)) {
-      contactsMap.set(fsmDigits, {
-        phone: '+522225509046',
-        name: 'Francisco San Martin',
-        notes: 'Contacto personal de Rolando',
-        source: 'personal'
-      });
+    // Fallback asegurado para contactos clave / administración (Francisco San Martin y Floren)
+    const adminFallbacks = [
+      { phone: '+522225509046', name: 'Francisco San Martin', digits: '2225509046', notes: 'Contacto personal de Rolando' },
+      { phone: '+34608290664', name: 'Floren', digits: '608290664', notes: 'Socio / Administrador' },
+      { phone: '+34608290664', name: 'Floren', digits: '34608290664', notes: 'Socio / Administrador' },
+      { phone: '+346560796376', name: 'Floren (Móvil 2)', digits: '6560796376', notes: 'Socio / Administrador' },
+    ];
+    for (const fb of adminFallbacks) {
+      if (!contactsMap.has(fb.digits)) {
+        contactsMap.set(fb.digits, {
+          phone: fb.phone,
+          name: fb.name,
+          notes: fb.notes,
+          source: 'personal'
+        });
+      }
     }
 
     const merged = Array.from(contactsMap.values());
