@@ -27,33 +27,6 @@ export async function POST(req: Request) {
 
     const bookingIdStr = bookingId.toString();
 
-    // Registrar log de auditoría 360 automatizado
-    try {
-      await supabase.from('employee_logs').insert([{
-        employee_num: '000',
-        employee_name: 'Beds24 Sync',
-        department: 'recepcion',
-        module: 'recepcion',
-        action: 'reserva_creada_webhook',
-        room: guestName || 'Desconocido',
-        details: JSON.stringify({
-          text: `${guestName || 'Desconocido'} (ID: ${bookingId}) - Webhook recibido por ${source || 'Beds24'} para fechas ${checkIn} a ${checkOut} (Habitación Beds24: ${roomId}).`,
-          reserva: {
-            guestName: guestName || 'Desconocido',
-            roomId: roomId,
-            bookingId: bookingId,
-            checkIn: checkIn,
-            checkOut: checkOut,
-            channel: source || 'Beds24 Webhook',
-            isOTA: true
-          }
-        }),
-        created_at: new Date().toISOString()
-      }]);
-    } catch (logErr) {
-      console.error("Error al registrar log de webhook Beds24:", logErr);
-    }
-
     // Consultar detalles completos de la reserva a Beds24 (incluyendo canceladas e ítems de factura)
     try {
       const BEDS24_TOKEN = await getBeds24Token();

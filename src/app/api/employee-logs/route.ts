@@ -81,8 +81,13 @@ export async function GET(req: Request) {
       .neq('action', 'whatsapp-warning')
       .neq('action', 'whatsapp-error')
       .neq('action', 'whatsapp-text-warning')
+      .neq('action', 'plantilla_omitida_persona_excluida')
+      .neq('action', 'cron-execution-success')
+      .neq('action', 'cron_analytics_sync_success')
       .neq('employee_num', 'ycloud-webhook')
-      .neq('employee_num', 'webhook-debug');
+      .neq('employee_num', 'webhook-debug')
+      .neq('employee_num', 'wa-bot')
+      .neq('employee_num', 'wa-guest');
 
     if (moduleParam) {
       query = query.eq('module', moduleParam);

@@ -22,6 +22,66 @@ interface ActiveNotification {
 
 import { usePathname } from 'next/navigation';
 
+function shouldIgnoreLogForNotifications(log: any): boolean {
+  if (!log) return true;
+  const action = String(log.action || '').toLowerCase();
+  const module = String(log.module || '').toLowerCase();
+  const dept = String(log.department || '').toLowerCase();
+  const empNum = String(log.employee_num || '').toLowerCase();
+  const empName = String(log.employee_name || '').toLowerCase();
+
+  // 1. Mensajería / WhatsApp / Bots / Plantillas
+  if (
+    dept === 'whatsapp' ||
+    module === 'whatsapp' ||
+    action.includes('whatsapp') ||
+    action.includes('plantilla') ||
+    action.includes('inbound') ||
+    action.includes('message') ||
+    action.includes('chat') ||
+    action === 'webhook_received' ||
+    action === 'human_mode_activated' ||
+    action === 'guest_message_received' ||
+    empNum === 'wa-bot' ||
+    empNum === 'wa-guest' ||
+    empNum === 'ycloud-webhook' ||
+    empNum === 'webhook-debug' ||
+    empName.includes('ycloud') ||
+    empName.includes('whatsapp')
+  ) {
+    return true;
+  }
+
+  // 2. Cron jobs automáticos / Heartbeats de sincronización
+  if (
+    action.startsWith('cron') ||
+    action.includes('sync_success') ||
+    empName.includes('system cron') ||
+    empName.includes('cron') ||
+    empName.includes('beds24 sync')
+  ) {
+    return true;
+  }
+
+  // 3. Nuevas reservas (redundantes con el módulo /reservas)
+  if (
+    action === 'reserva_creada' ||
+    action === 'reserva_creada_webhook'
+  ) {
+    return true;
+  }
+
+  // 4. Inicios de turno o sesión
+  if (
+    action === 'inicio_sesion_turno' ||
+    action === 'inicio_sesion'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export default function RealtimeLogNotifier() {
   const pathname = usePathname();
   const [notification, setNotification] = useState<ActiveNotification | null>(null);
@@ -68,26 +128,8 @@ export default function RealtimeLogNotifier() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'employee_logs' },
         (payload) => {
-          console.log('Nuevo log de empleado detectado en tiempo real:', payload.new);
-          
           const newLog = payload.new;
-          if (
-            !newLog ||
-            newLog.action === 'inicio_sesion_turno' ||
-            newLog.action === 'webhook_received' ||
-            newLog.action === 'whatsapp-warning' ||
-            newLog.action === 'whatsapp-error' ||
-            newLog.action === 'whatsapp-text-warning' ||
-            newLog.action === 'guest_message_received' ||
-            newLog.action === 'human_mode_activated' ||
-            newLog.action === 'start_new_chat' ||
-            newLog.module === 'whatsapp' ||
-            newLog.employee_num === 'ycloud-webhook' ||
-            newLog.employee_num === 'webhook-debug' ||
-            newLog.employee_num === 'wa-guest' ||
-            String(newLog.employee_name || '').toLowerCase().includes('ycloud') ||
-            String(newLog.department || '').toLowerCase() === 'whatsapp'
-          ) return;
+          if (!newLog || shouldIgnoreLogForNotifications(newLog)) return;
           
           const logKey = `log_${newLog.id}`;
 

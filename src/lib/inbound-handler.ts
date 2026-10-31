@@ -225,19 +225,6 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     const contactName = personalCheck.contact?.name || 'Contacto Personal';
     console.log(`[Inbound Handler] 🛑 Contacto en lista 'excluded_person' (${phone} - ${contactName}): "${guestMsgText}". Se cancela el envío de cualquier plantilla relacionada con palabras clave.`);
 
-    // Registrar en auditoría de employee_logs
-    try {
-      await supabase.from('employee_logs').insert([{
-        employee_num: 'wa-bot',
-        employee_name: contactName,
-        department: 'recepcion',
-        module: 'recepcion',
-        action: 'plantilla_omitida_persona_excluida',
-        details: `Teléfono ${phone} en lista 'excluded_person' escribió "${guestMsgText}". Envío de plantillas automáticas cancelado por regla de exclusión.`,
-        created_at: new Date().toISOString()
-      }]);
-    } catch (_) {}
-
     // Guardar el mensaje en el historial para visibilidad en el Inbox en modo humano
     if (guestMsgText || params.button_payload) {
       try {
@@ -340,16 +327,6 @@ export async function handleInboundMessage(params: InboundMessageParams) {
 
         const { updateBeds24BookingPhone } = await import('@/lib/beds24');
         updateBeds24BookingPhone(matchedBooking.id, phone).catch(console.error);
-
-        await supabase.from('employee_logs').insert([{
-          employee_num: 'wa-bot',
-          employee_name: 'WhatsApp Auto-Linker',
-          department: 'recepcion',
-          module: 'recepcion',
-          action: 'telefono_vinculado_inbound',
-          details: `Teléfono ${phone} vinculado automáticamente a la reserva ${matchedBooking.id} (${matchedBooking.guest_name}) por mensaje entrante de WhatsApp.`,
-          created_at: new Date().toISOString()
-        }]);
       }
     }
   } catch (linkErr) {
@@ -373,18 +350,6 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     const isEnglish = !isSpanishOrLatamPhone(phone);
     const lang = isEnglish ? 'en' : 'es';
     console.log(`[Inbound Handler] 📸 Comprobante/imagen recibida de ${guestBooking.guest_name} (Reserva #${guestBooking.id}).`);
-
-    try {
-      await supabase.from('employee_logs').insert([{
-        employee_num: 'wa-bot',
-        employee_name: guestBooking.guest_name,
-        department: 'recepcion',
-        module: 'recepcion',
-        action: 'comprobante_recibido_inbound',
-        details: `Comprobante/imagen recibida en WhatsApp para la reservación #${guestBooking.id} (${guestBooking.guest_name}). Se envía plantilla Portal del Huésped.`,
-        created_at: new Date().toISOString()
-      }]);
-    } catch (_) {}
 
     welcomeSentMemoryCache.set(phone, Date.now());
     const portalRes = await sendTemplate_PortalHuespedLink(phone, guestBooking.id, guestBooking.guest_name, lang);
@@ -429,20 +394,6 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     forceHuman = true;
     finalBotResponse = "Entendido. He pausado el asistente virtual. En un momento, un agente de nuestra recepción continuará la conversación contigo por este medio.";
     isAutoReplyTriggered = true;
-
-    try {
-      await supabase.from('employee_logs').insert([{
-        employee_num: 'wa-guest',
-        employee_name: String(existing?.guest_name || params.guest_name || phone).slice(0, 50),
-        department: 'recepcion',
-        module: 'recepcion',
-        action: 'human_mode_activated',
-        details: `Huésped solicitó hablar con el administrador. Asistente IA pausado. Teléfono: ${phone}`,
-        created_at: new Date().toISOString()
-      }]);
-    } catch (logErr) {
-      console.error("Error logging human_mode_activated:", logErr);
-    }
   } 
   // B. Botón de WiFi, Claves y Reglas (solo por payload del botón; nunca por texto libre del cliente)
   else if (

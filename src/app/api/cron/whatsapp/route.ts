@@ -497,20 +497,6 @@ export async function GET(req: Request) {
               }
 
               // 5. Registrar éxito de la cancelación grupal en los logs de auditoría
-              try {
-                await supabase.from('employee_logs').insert([{
-                  employee_num: '000',
-                  employee_name: 'System Cron',
-                  action: 'cron-cancel-success',
-                  department: 'whatsapp',
-                  module: 'whatsapp',
-                  room: groupRoomsList,
-                  details: `Grupo de ${groupMembers.length} reserva(s) [${groupMemberIds.join(', ')}] (${booking.guest_name}) cancelado automáticamente con éxito por inactividad de pago (3h tras último aviso).`
-                }]);
-              } catch (e) {
-                console.error("Error al registrar cron-cancel-success:", e);
-              }
-
               // 6. Enviar WhatsApp de disponibilidad liberada una sola vez para todo el grupo (respetando freno de emergencia)
               const waRes = await sendTemplate4_DisponibilidadLiberada(booking, false);
               
@@ -531,19 +517,7 @@ export async function GET(req: Request) {
               continue; // Saltar el resto de verificaciones para esta reserva
             } else {
               // Omitido por tener transferencia pendiente o aprobada en el grupo
-              try {
-                await supabase.from('employee_logs').insert([{
-                  employee_num: '000',
-                  employee_name: 'System Cron',
-                  action: 'cron-cancel-skipped',
-                  department: 'whatsapp',
-                  module: 'whatsapp',
-                  room: booking.room_name || `Habitación ${booking.room || ''}`,
-                  details: `Se omitió la cancelación automática de la reserva ${bookingIdStr} (${booking.guest_name}) porque tiene un comprobante de transferencia pendiente o aprobado en Supabase (evaluación a nivel de grupo).`
-                }]);
-              } catch (e) {
-                console.error("Error al registrar cron-cancel-skipped:", e);
-              }
+              console.log(`[Cron WhatsApp] Se omitió cancelación de reserva ${bookingIdStr} (${booking.guest_name}) por transferencia en revisión.`);
             }
           }
         }
@@ -782,35 +756,7 @@ export async function GET(req: Request) {
         }
       } catch (bookingErr: any) {
         console.error(`[Cron WhatsApp] Error procesando reserva ${booking.id}:`, bookingErr);
-        try {
-          await supabase.from('employee_logs').insert([{
-            employee_num: '000',
-            employee_name: 'System Cron',
-            action: 'cron-booking-error',
-            department: 'whatsapp',
-            module: 'whatsapp',
-            room: booking.room_name || `Habitación ${booking.room || ''}`,
-            details: `Error procesando la reserva ${booking.id} en el cron: ${bookingErr.message || JSON.stringify(bookingErr)}`
-          }]);
-        } catch (logErr) {
-          console.error("Error al registrar error del cron en employee_logs:", logErr);
-        }
       }
-    }
-
-    // Registrar ejecución exitosa general del cron en los logs de auditoría
-    try {
-      await supabase.from('employee_logs').insert([{
-        employee_num: '000',
-        employee_name: 'System Cron',
-        action: 'cron-execution-success',
-        department: 'whatsapp',
-        module: 'whatsapp',
-        room: 'Sistema / Cron',
-        details: `Cron ejecutado con éxito. Reservas procesadas: ${allBookings.length}. Acciones tomadas: ${reports.join(', ') || 'Ninguna'}`
-      }]);
-    } catch (e) {
-      console.error("Error al registrar cron-execution-success:", e);
     }
 
     return NextResponse.json({

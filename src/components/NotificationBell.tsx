@@ -381,6 +381,66 @@ function unlockBody() {
   document.body.style.width = '';
 }
 
+function shouldIgnoreLogForNotifications(log: any): boolean {
+  if (!log) return true;
+  const action = String(log.action || '').toLowerCase();
+  const module = String(log.module || '').toLowerCase();
+  const dept = String(log.department || '').toLowerCase();
+  const empNum = String(log.employee_num || '').toLowerCase();
+  const empName = String(log.employee_name || '').toLowerCase();
+
+  // 1. Mensajería / WhatsApp / Bots / Plantillas (nunca deben generar notificación)
+  if (
+    dept === 'whatsapp' ||
+    module === 'whatsapp' ||
+    action.includes('whatsapp') ||
+    action.includes('plantilla') ||
+    action.includes('inbound') ||
+    action.includes('message') ||
+    action.includes('chat') ||
+    action === 'webhook_received' ||
+    action === 'human_mode_activated' ||
+    action === 'guest_message_received' ||
+    empNum === 'wa-bot' ||
+    empNum === 'wa-guest' ||
+    empNum === 'ycloud-webhook' ||
+    empNum === 'webhook-debug' ||
+    empName.includes('ycloud') ||
+    empName.includes('whatsapp')
+  ) {
+    return true;
+  }
+
+  // 2. Tareas automáticas en segundo plano / Cron jobs / Syncs
+  if (
+    action.startsWith('cron') ||
+    action.includes('sync_success') ||
+    empName.includes('system cron') ||
+    empName.includes('cron') ||
+    empName.includes('beds24 sync')
+  ) {
+    return true;
+  }
+
+  // 3. Nuevas reservas (redundantes con el módulo /reservas)
+  if (
+    action === 'reserva_creada' ||
+    action === 'reserva_creada_webhook'
+  ) {
+    return true;
+  }
+
+  // 4. Inicios de turno o sesión
+  if (
+    action === 'inicio_sesion_turno' ||
+    action === 'inicio_sesion'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function NotificationBell() {
   const router = useRouter();
   const [open, setOpen]           = useState(false);
@@ -457,21 +517,7 @@ export function NotificationBell() {
       const res = await fetch('/api/employee-logs?limit=100');
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
-        const filtered = json.data.filter((log: any) => {
-          return (
-            log &&
-            log.action !== 'inicio_sesion_turno' &&
-            log.action !== 'webhook_received' &&
-            log.action !== 'whatsapp-warning' &&
-            log.action !== 'whatsapp-error' &&
-            log.action !== 'whatsapp-text-warning' &&
-            log.employee_num !== 'ycloud-webhook' &&
-            log.employee_num !== 'webhook-debug' &&
-            log.employee_num !== 'wa-guest' &&
-            !String(log.employee_name || '').toLowerCase().includes('ycloud') &&
-            String(log.department || '').toLowerCase() !== 'whatsapp'
-          );
-        });
+        const filtered = json.data.filter((log: any) => !shouldIgnoreLogForNotifications(log));
         setLogs(filtered);
         setEvents(mapLogsToEvents(filtered));
       }
@@ -500,19 +546,7 @@ export function NotificationBell() {
         { event: 'INSERT', schema: 'public', table: 'employee_logs' },
         (payload: any) => {
           const newLog = payload.new;
-          if (
-            !newLog ||
-            newLog.action === 'inicio_sesion_turno' ||
-            newLog.action === 'webhook_received' ||
-            newLog.action === 'whatsapp-warning' ||
-            newLog.action === 'whatsapp-error' ||
-            newLog.action === 'whatsapp-text-warning' ||
-            newLog.employee_num === 'ycloud-webhook' ||
-            newLog.employee_num === 'webhook-debug' ||
-            newLog.employee_num === 'wa-guest' ||
-            String(newLog.employee_name || '').toLowerCase().includes('ycloud') ||
-            String(newLog.department || '').toLowerCase() === 'whatsapp'
-          ) return;
+          if (!newLog || shouldIgnoreLogForNotifications(newLog)) return;
           
           setLogs(prev => {
             if (prev.some(item => String(item.id) === String(newLog.id))) return prev;
