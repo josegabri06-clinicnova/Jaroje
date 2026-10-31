@@ -399,7 +399,9 @@ function ReservarContent() {
   }, [lang]);
 
   // Caché en memoria para cotizaciones y cancelador de peticiones en vuelo (stale requests)
-  const quotesCacheRef = useRef<Map<string, any>>(new Map());
+  // La caché caduca a los 60 s: precios y disponibilidad no deben mostrarse viejos si el cliente deja la pestaña abierta
+  const QUOTES_CACHE_TTL_MS = 60 * 1000;
+  const quotesCacheRef = useRef<Map<string, { data: any; ts: number }>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Aplica los datos de cotización en el estado local de forma coherente
@@ -479,17 +481,22 @@ function ReservarContent() {
       return;
     }
 
+    // Cancelar siempre la petición en curso (también si ahora se sirve desde caché), para que una respuesta
+    // vieja de otras fechas no pise los resultados actuales
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+
     const cacheKey = `${checkIn}_${checkOut}_${phoneParam}`;
-    if (quotesCacheRef.current.has(cacheKey)) {
-      const cached = quotesCacheRef.current.get(cacheKey);
-      applyQuoteData(cached);
+    const cached = quotesCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.ts < QUOTES_CACHE_TTL_MS) {
+      applyQuoteData(cached.data);
       setLoading(false);
       return;
     }
+    quotesCacheRef.current.delete(cacheKey);
 
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
@@ -500,7 +507,7 @@ function ReservarContent() {
       const data = await res.json();
 
       if (data.success) {
-        quotesCacheRef.current.set(cacheKey, data);
+        quotesCacheRef.current.set(cacheKey, { data, ts: Date.now() });
         applyQuoteData(data);
       } else {
         setQuotes([]);
@@ -917,6 +924,8 @@ function ReservarContent() {
         throw new Error(data.error || 'Error al procesar la reservación');
       }
 
+      // La disponibilidad cambió con esta reserva: descartar las cotizaciones guardadas
+      quotesCacheRef.current.clear();
       setBookingSuccess(data);
       setIsModalOpen(false);
       setIsConfirmStep(false);
@@ -924,6 +933,9 @@ function ReservarContent() {
     } catch (err: any) {
       console.error("Error submitting booking:", err);
       setSubmitError(err.message || 'Error al procesar la reserva. Por favor intenta de nuevo.');
+      // Tras un fallo (p. ej. habitación ya ocupada) se vuelve a consultar la disponibilidad real
+      quotesCacheRef.current.clear();
+      fetchQuotes();
     } finally {
       setSubmitting(false);
     }
