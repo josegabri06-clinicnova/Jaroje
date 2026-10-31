@@ -331,14 +331,11 @@ export async function POST(req: Request) {
     }
 
     // Cálculo forzoso de huéspedes adicionales en el servidor (nunca confiar en manipulación del cliente)
-    // Extras = máx(personas que exceden la capacidad base, extras elegidos por el cliente), con tope en el máximo permitido.
-    // Los extras elegidos implican personas reales: si hay más extras que huéspedes declarados, se suman a los adultos.
-    const minRequiredExtras = Math.max(0, totalGuests - totalBaseCapacity);
+    // Los extras NO suman personas: son los huéspedes declarados que exceden la capacidad estándar de las habitaciones
+    // elegidas (huéspedes - capacidad base), con tope en el máximo permitido. El valor enviado por el navegador se ignora.
     const maxExtrasAllowed = Math.max(0, totalMaxCapacity - totalBaseCapacity);
-    const clientExtras = Math.max(0, parseInt(String(body.extraGuests || 0), 10) || 0);
-    const requestedExtras = Math.min(Math.max(minRequiredExtras, clientExtras), maxExtrasAllowed);
-    const guestsDeficit = Math.max(0, totalBaseCapacity + requestedExtras - totalGuests);
-    const effectiveAdults = cleanAdults + guestsDeficit;
+    const requestedExtras = Math.min(Math.max(0, totalGuests - totalBaseCapacity), maxExtrasAllowed);
+    const effectiveAdults = cleanAdults;
 
     // Tarifa obligatoria de personas extra: $500 MXN / noche / persona calculada en el servidor
     const finalExtraGuestsFee = requestedExtras * 500 * nights;

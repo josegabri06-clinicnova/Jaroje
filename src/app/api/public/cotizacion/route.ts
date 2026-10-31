@@ -143,15 +143,12 @@ export async function POST(req: Request) {
     }
 
     // Cálculo exacto de personas adicionales ($500 MXN / noche) en servidor
-    // Extras = máx(personas que exceden la capacidad base, extras elegidos por el cliente), con tope en el máximo permitido.
-    // Los extras elegidos implican personas reales: si hay más extras que huéspedes declarados, se suman a los adultos.
-    const minRequiredExtras = Math.max(0, totalGuests - totalBaseCapacity);
+    // Los extras NO suman personas: son los huéspedes declarados que exceden la capacidad estándar de las habitaciones
+    // elegidas (huéspedes - capacidad base), con tope en el máximo permitido. El valor enviado por el navegador se ignora.
     const maxExtrasAllowed = Math.max(0, totalMaxCapacity - totalBaseCapacity);
-    const clientExtras = Math.max(0, parseInt(String(body.extraGuests || 0), 10) || 0);
-    const extraGuests = Math.min(Math.max(minRequiredExtras, clientExtras), maxExtrasAllowed);
-    const guestsDeficit = Math.max(0, totalBaseCapacity + extraGuests - totalGuests);
-    const effectiveAdults = cleanAdults + guestsDeficit;
-    const effectiveGuests = totalGuests + guestsDeficit;
+    const extraGuests = Math.min(Math.max(0, totalGuests - totalBaseCapacity), maxExtrasAllowed);
+    const effectiveAdults = cleanAdults;
+    const effectiveGuests = totalGuests;
     const extraGuestsFee = extraGuests * 500 * nights;
 
     // Obtener token y mapa oficial de tarifas de Beds24

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Calendar,
@@ -575,10 +575,19 @@ function ReservarContent() {
         baseLodgingTotal += q.totalPrice * qty;
         totalBaseCapacity += (q.capacity || 4) * qty;
         totalMaxCapacity += (q.maxCapacity || q.capacity || 4) * qty;
-        const maxExtraForKey = Math.max(0, (q.maxCapacity || q.capacity || 4) - (q.capacity || 4)) * qty;
-        extraGuests += Math.min(Math.max(0, extraByRoom[q.key] || 0), maxExtraForKey);
         selectedList.push({ quote: q, quantity: qty });
       }
+    });
+
+    // Huéspedes que no caben en la capacidad estándar de lo seleccionado: solo entonces se permite alojarlos como adicionales.
+    // Los adicionales NO suman personas al total de arriba: son parte de ellas y nunca pueden superar este número.
+    const neededExtras = Math.max(0, totalGuests - totalBaseCapacity);
+    let remainingExtras = neededExtras;
+    selectedList.forEach(({ quote: q, quantity: qty }) => {
+      const maxExtraForKey = Math.max(0, (q.maxCapacity || q.capacity || 4) - (q.capacity || 4)) * qty;
+      const give = Math.min(Math.max(0, extraByRoom[q.key] || 0), maxExtraForKey, remainingExtras);
+      extraGuests += give;
+      remainingExtras -= give;
     });
 
     const nights = quotes[0]?.nights || selectedList[0]?.quote?.nights || stayNights;
@@ -594,6 +603,7 @@ function ReservarContent() {
       nights,
       baseLodgingTotal,
       extraGuests,
+      neededExtras,
       maxAvailableExtras,
       extraGuestsFee,
       grandTotal,
@@ -603,7 +613,25 @@ function ReservarContent() {
       totalMaxCapacity,
       selectedList
     };
-  }, [quotes, selectedRooms, stayNights, extraByRoom]);
+  }, [quotes, selectedRooms, stayNights, extraByRoom, totalGuests]);
+
+  // Si ya no sobra gente (cambió el nº de huéspedes o se añadió otra habitación), los adicionales vuelven a 0 / se recortan
+  useEffect(() => {
+    const assigned = Object.values(extraByRoom).reduce((sum, n) => sum + (n || 0), 0);
+    if (assigned === 0) return;
+    if (selectionSummary.totalRooms === 0) return;
+    if (assigned <= selectionSummary.neededExtras) return;
+    let remaining = selectionSummary.neededExtras;
+    setExtraByRoom(prev => {
+      const next: Record<string, number> = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const keep = Math.min(v || 0, remaining);
+        remaining -= keep;
+        if (keep > 0) next[k] = keep;
+      });
+      return next;
+    });
+  }, [selectionSummary.neededExtras, selectionSummary.totalRooms, extraByRoom]);
 
   // Resumen activo que respalda pendingQuote si fue restaurado antes de que carguen las cotizaciones
   const activeSummary = useMemo(() => {
@@ -681,6 +709,7 @@ function ReservarContent() {
         nights,
         baseLodgingTotal,
         extraGuests,
+        neededExtras: Math.max(0, totalGuests - totalBaseCapacity),
         maxAvailableExtras,
         extraGuestsFee,
         grandTotal,
@@ -697,36 +726,6 @@ function ReservarContent() {
   const coveredCapacity = activeSummary.totalRooms > 0 ? (activeSummary.totalBaseCapacity + (activeSummary.extraGuests || 0)) : 0;
   const pendingGuests = activeSummary.totalRooms > 0 ? Math.max(0, totalGuests - coveredCapacity) : 0;
   const isOverCapacity = pendingGuests > 0;
-
-  // Al elegir huéspedes adicionales con costo, el total de huéspedes sube en tiempo real
-  // (base + extras) y vuelve a su valor al quitarlos. Si el cliente edita el contador, deja de autoajustarse.
-  const autoAddedGuestsRef = useRef(0);
-  const setAdultsManual = (v: React.SetStateAction<number>) => {
-    autoAddedGuestsRef.current = 0;
-    setAdults(v);
-  };
-  const setChildrenManual = (v: React.SetStateAction<number>) => {
-    autoAddedGuestsRef.current = 0;
-    setChildren(v);
-  };
-  useEffect(() => {
-    if (selectionSummary.totalRooms === 0) return;
-    const required = selectionSummary.extraGuests > 0
-      ? selectionSummary.totalBaseCapacity + selectionSummary.extraGuests
-      : 0;
-    const current = Number(adults || 0) + Number(children || 0);
-    if (current < required) {
-      const deficit = required - current;
-      autoAddedGuestsRef.current += deficit;
-      setAdults(a => a + deficit);
-    } else if (autoAddedGuestsRef.current > 0 && current > required) {
-      const reduce = Math.min(autoAddedGuestsRef.current, current - Math.max(required, 1), Math.max(0, Number(adults || 1) - 1));
-      if (reduce > 0) {
-        autoAddedGuestsRef.current -= reduce;
-        setAdults(a => a - reduce);
-      }
-    }
-  }, [selectionSummary.totalRooms, selectionSummary.totalBaseCapacity, selectionSummary.extraGuests]);
 
   // Limpiar automáticamente la alerta de indisponibilidad cuando el cliente seleccione otra opción viable
   useEffect(() => {
@@ -1136,7 +1135,7 @@ function ReservarContent() {
                   <div className="flex items-center justify-between p-2 rounded-xl border border-zinc-200 bg-zinc-50">
                     <button
                       type="button"
-                      onClick={() => setAdultsManual(a => Math.max(1, a - 1))}
+                      onClick={() => setAdults(a => Math.max(1, a - 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Minus size={12} />
@@ -1151,12 +1150,12 @@ function ReservarContent() {
                       onChange={e => {
                         const raw = e.target.value;
                         if (raw === '') {
-                          setAdultsManual(1);
+                          setAdults(1);
                           return;
                         }
                         const val = parseInt(raw, 10);
                         if (!isNaN(val)) {
-                          setAdultsManual(Math.max(1, Math.min(200, val)));
+                          setAdults(Math.max(1, Math.min(200, val)));
                         }
                       }}
                       onFocus={e => e.target.select()}
@@ -1164,7 +1163,7 @@ function ReservarContent() {
                     />
                     <button
                       type="button"
-                      onClick={() => setAdultsManual(a => Math.min(200, a + 1))}
+                      onClick={() => setAdults(a => Math.min(200, a + 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Plus size={12} />
@@ -1179,7 +1178,7 @@ function ReservarContent() {
                   <div className="flex items-center justify-between p-2 rounded-xl border border-zinc-200 bg-zinc-50">
                     <button
                       type="button"
-                      onClick={() => setChildrenManual(c => Math.max(0, c - 1))}
+                      onClick={() => setChildren(c => Math.max(0, c - 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Minus size={12} />
@@ -1194,12 +1193,12 @@ function ReservarContent() {
                       onChange={e => {
                         const raw = e.target.value;
                         if (raw === '') {
-                          setChildrenManual(0);
+                          setChildren(0);
                           return;
                         }
                         const val = parseInt(raw, 10);
                         if (!isNaN(val)) {
-                          setChildrenManual(Math.max(0, Math.min(100, val)));
+                          setChildren(Math.max(0, Math.min(100, val)));
                         }
                       }}
                       onFocus={e => e.target.select()}
@@ -1207,7 +1206,7 @@ function ReservarContent() {
                     />
                     <button
                       type="button"
-                      onClick={() => setChildrenManual(c => Math.min(100, c + 1))}
+                      onClick={() => setChildren(c => Math.min(100, c + 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Plus size={12} />
@@ -1259,7 +1258,7 @@ function ReservarContent() {
               ) : (
                 quotes.map(q => {
                   const qtySelected = selectedRooms[q.key] || 0;
-                  const cardExtraGuests = Math.min(extraByRoom[q.key] || 0, Math.max(0, q.maxCapacity - q.capacity) * qtySelected);
+                  const cardExtraGuests = selectionSummary.neededExtras > 0 ? Math.min(extraByRoom[q.key] || 0, Math.max(0, q.maxCapacity - q.capacity) * qtySelected, selectionSummary.extraGuests) : 0;
                   const cardTotal = q.totalPrice * Math.max(1, qtySelected) + cardExtraGuests * 500 * q.nights;
                   const activeImgIdx = activePhotoIdx[q.key] || 0;
                   const currentPhoto = q.photos[activeImgIdx] || q.photos[0] || '/images/general/1.jpg';
@@ -1364,8 +1363,11 @@ function ReservarContent() {
                         </div>
 
                         {/* Huéspedes adicionales de este tipo de habitación (por defecto 0, nunca forzado) */}
-                        {q.maxCapacity > q.capacity && q.availableUnitsCount > 0 && qtySelected > 0 && (() => {
-                          const maxExtraForKey = (q.maxCapacity - q.capacity) * qtySelected;
+                        {q.maxCapacity > q.capacity && q.availableUnitsCount > 0 && qtySelected > 0 && selectionSummary.neededExtras > 0 && (() => {
+                          const roomMaxExtra = (q.maxCapacity - q.capacity) * qtySelected;
+                          const otherExtras = Math.max(0, selectionSummary.extraGuests - Math.min(extraByRoom[q.key] || 0, roomMaxExtra));
+                          // Tope: lo que cabe en este tipo de habitación y lo que realmente falta alojar (sin sumar personas nuevas)
+                          const maxExtraForKey = Math.min(roomMaxExtra, Math.max(0, selectionSummary.neededExtras - otherExtras));
                           const extraSelected = Math.min(extraByRoom[q.key] || 0, maxExtraForKey);
                           return (
                             <div className="bg-amber-50/95 border border-amber-200/90 rounded-2xl p-2.5 space-y-1.5">
