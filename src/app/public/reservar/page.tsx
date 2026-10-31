@@ -241,6 +241,11 @@ function ReservarContent() {
   });
 
   const [availabilityNotice, setAvailabilityNotice] = useState<string>('');
+  // Habitaciones de la cotización que ya no tienen disponibilidad (se nombran en el aviso para que el cliente lo entienda)
+  const [lostRooms, setLostRooms] = useState<string[]>([]);
+  // Copia de la selección actual para poder evaluarla fuera de las funciones de actualización de React
+  const selectedRoomsRef = useRef<Record<string, number>>(selectedRooms);
+  useEffect(() => { selectedRoomsRef.current = selectedRooms; }, [selectedRooms]);
 
   // Fotos activas por categoría para los carruseles
   const [activePhotoIdx, setActivePhotoIdx] = useState<Record<string, number>>({});
@@ -411,25 +416,44 @@ function ReservarContent() {
       setExistingReservations(data.existingReservations);
     }
 
-    // Validar y sanitizar la disponibilidad en vivo de las habitaciones preseleccionadas
+    // Validar la disponibilidad en vivo de las habitaciones preseleccionadas (se evalúa aquí, no dentro de un
+    // setState, para saber con certeza qué habitaciones se perdieron y poder avisar al cliente)
     if (data.quotes && Array.isArray(data.quotes)) {
-      let availabilityChanged = false;
-
-      setSelectedRooms(prev => {
-        if (Object.keys(prev).length === 0) return prev;
-        const updated: Record<string, number> = {};
-        Object.entries(prev).forEach(([key, qty]) => {
-          const matchedQuote = data.quotes.find((q: any) => q.key === key);
-          const maxAvailable = matchedQuote?.availableUnitsCount || 0;
-          if (maxAvailable < qty) {
-            availabilityChanged = true;
-            if (maxAvailable > 0) updated[key] = maxAvailable;
+      const fallbackNames: Record<string, [string, string]> = {
+        doble: ['Habitación Doble', 'Standard Room'],
+        '1rec': ['Condominio de 1 dormitorio', '1-Bedroom Condo'],
+        '2rec': ['Condominio de 2 dormitorios', '2-Bedroom Condo'],
+        '3rec': ['Condominio de 3 dormitorios', '3-Bedroom Condo'],
+        casa: ['Casa de Lujo', 'Luxury House']
+      };
+      const roomLabel = (key: string): string => {
+        const q = data.quotes.find((x: any) => x.key === key);
+        const fb = fallbackNames[key];
+        return (lang === 'en' ? (q?.name_en || fb?.[1]) : (q?.name || fb?.[0])) || key;
+      };
+      const lost: string[] = [];
+      const keepAvailable = (wanted: Record<string, number>): Record<string, number> => {
+        const kept: Record<string, number> = {};
+        Object.entries(wanted).forEach(([key, qty]) => {
+          const available = data.quotes.find((x: any) => x.key === key)?.availableUnitsCount || 0;
+          if (available >= qty) {
+            kept[key] = qty;
           } else {
-            updated[key] = qty;
+            if (available > 0) kept[key] = available;
+            lost.push(available > 0
+              ? `${roomLabel(key)} (${lang === 'en' ? `only ${available} left` : `solo quedan ${available}`})`
+              : roomLabel(key));
           }
         });
-        return updated;
-      });
+        return kept;
+      };
+
+      const currentSelection = selectedRoomsRef.current;
+      if (Object.keys(currentSelection).length > 0) {
+        const kept = keepAvailable(currentSelection);
+        selectedRoomsRef.current = kept;
+        setSelectedRooms(kept);
+      }
 
       // Si existe cotización pendiente previa asociada a este teléfono SOLO si el usuario viene del botón de confirmar cotización
       if (isDirectReserveFlow && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
@@ -438,32 +462,23 @@ function ReservarContent() {
           setGuestPhone(data.pendingQuote.phone);
         }
         // Sincronizar selectedRooms con los alojamientos del pendingQuote respetando la disponibilidad real
-        setSelectedRooms(prev => {
-          if (Object.keys(prev).length > 0) return prev;
-          if (Array.isArray(data.pendingQuote.rooms) && data.pendingQuote.rooms.length > 0) {
-            const mapped: Record<string, number> = {};
-            data.pendingQuote.rooms.forEach((r: any) => {
-              const k = normalizeRoomCategoryKey(r.key || '');
-              const qty = Number(r.quantity || 1);
-              const matchedQuote = data.quotes.find((q: any) => q.key === k);
-              const maxAvailable = matchedQuote?.availableUnitsCount || 0;
-              if (maxAvailable < qty) {
-                availabilityChanged = true;
-                if (maxAvailable > 0) mapped[k] = maxAvailable;
-              } else {
-                mapped[k] = qty;
-              }
-            });
-            return mapped;
-          }
-          return prev;
-        });
+        if (Object.keys(currentSelection).length === 0 && Array.isArray(data.pendingQuote.rooms) && data.pendingQuote.rooms.length > 0) {
+          const wanted: Record<string, number> = {};
+          data.pendingQuote.rooms.forEach((r: any) => {
+            const k = normalizeRoomCategoryKey(r.key || '');
+            wanted[k] = (wanted[k] || 0) + Number(r.quantity || 1);
+          });
+          const kept = keepAvailable(wanted);
+          selectedRoomsRef.current = kept;
+          setSelectedRooms(kept);
+        }
       } else if (!isDirectReserveFlow) {
         // Si el usuario entra por navegación general al portal, no forzar ninguna cotización previa fantasma
         setPendingQuote(null);
       }
 
-      if (availabilityChanged) {
+      setLostRooms(lost);
+      if (lost.length > 0) {
         setAvailabilityNotice(
           lang === 'en'
             ? '⚠️ One or more previously selected accommodations are no longer fully available for these dates.'
@@ -542,6 +557,7 @@ function ReservarContent() {
 
   // Manejo de contadores + / - para habitaciones
   const handleUpdateQuantity = (key: string, delta: number, maxAvailable: number) => {
+    setLostRooms([]);
     setSelectedRooms(prev => {
       const current = prev[key] || 0;
       const next = Math.max(0, Math.min(maxAvailable, current + delta));
@@ -563,6 +579,7 @@ function ReservarContent() {
 
   // Limpiar y resetear completamente la selección de habitaciones
   const handleClearSelection = () => {
+    setLostRooms([]);
     setSelectedRooms({});
     setExtraByRoom({});
     setPendingQuote(null);
@@ -768,6 +785,7 @@ function ReservarContent() {
   // Limpiar automáticamente la alerta de indisponibilidad cuando el cliente seleccione otra opción viable
   useEffect(() => {
     if (!availabilityNotice) return;
+    if (lostRooms.length > 0) return; // hay habitaciones perdidas: el aviso se mantiene hasta que el cliente modifique su selección
     if (selectionSummary.totalRooms > 0 && !isOverCapacity) {
       // Verificar que todas las habitaciones elegidas cuenten con disponibilidad real confirmada
       const allAvailable = selectionSummary.selectedList.every(
@@ -777,7 +795,7 @@ function ReservarContent() {
         setAvailabilityNotice('');
       }
     }
-  }, [selectionSummary.totalRooms, isOverCapacity, selectionSummary.selectedList, availabilityNotice]);
+  }, [selectionSummary.totalRooms, isOverCapacity, selectionSummary.selectedList, availabilityNotice, lostRooms]);
 
   // Enviar cotización por WhatsApp (Paso 1 del flujo)
   const handleRequestQuote = async () => {
@@ -1266,11 +1284,18 @@ function ReservarContent() {
                 <div className="bg-amber-50 border border-amber-300 text-amber-900 px-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-                    <span className="leading-snug">{availabilityNotice}</span>
+                    <span className="leading-snug">
+                      {availabilityNotice}
+                      {lostRooms.length > 0 && (
+                        <span className="block mt-1 font-extrabold">
+                          {lang === 'en' ? 'No longer available: ' : 'Ya no hay disponibilidad de: '}{lostRooms.join(', ')}.
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setAvailabilityNotice('')}
+                    onClick={() => { setAvailabilityNotice(''); setLostRooms([]); }}
                     className="text-amber-700 hover:text-amber-950 font-black p-1 text-xs shrink-0 cursor-pointer"
                   >
                     ✕
@@ -1661,6 +1686,11 @@ function ReservarContent() {
                   <p className="leading-relaxed text-amber-800 text-[11.5px]">
                     {t.availabilityModalDesc}
                   </p>
+                  {lostRooms.length > 0 && (
+                    <p className="leading-relaxed text-amber-950 text-[12px] font-extrabold">
+                      {lang === 'en' ? 'No longer available: ' : 'Ya no hay disponibilidad de: '}{lostRooms.join(', ')}.
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => {
@@ -1851,8 +1881,8 @@ function ReservarContent() {
               </div>
             )}
 
-            {/* Aviso de sobrecapacidad dentro del modal */}
-            {isOverCapacity && (
+            {/* Aviso de sobrecapacidad dentro del modal (si el motivo es que se ocuparon habitaciones, ya lo explica el aviso de disponibilidad) */}
+            {isOverCapacity && lostRooms.length === 0 && (
               <div className="bg-rose-50 border border-rose-200 text-rose-800 px-3.5 py-2.5 rounded-2xl text-xs font-bold flex items-start gap-2.5 shadow-xs">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <p className="leading-snug">
