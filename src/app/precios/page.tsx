@@ -20,7 +20,7 @@ export default function PreciosPage() {
   // Beds24 direct pricing state
   const [beds24Rooms, setBeds24Rooms] = useState<any[]>([]);
   const [beds24Loading, setBeds24Loading] = useState(false);
-  const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.622565 });
+  const [beds24Multipliers, setBeds24Multipliers] = useState({ airbnb: 1.20, booking: 1.35, google: 1.4024745, expedia: 1.446 });
   const [beds24Error, setBeds24Error] = useState<string | null>(null);
 
   // Key format: `${roomId}_${seasonId}` — permite editar cada bloque de temporada por separado
@@ -202,7 +202,7 @@ export default function PreciosPage() {
     const precioAirbnb  = Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21).toLocaleString('es-MX');
     const precioBooking = Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90).toLocaleString('es-MX');
     const precioGoogle  = Math.round(newPriceRaw * (beds24Multipliers.google || 1.4024745)).toLocaleString('es-MX');
-    const precioExpedia = Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.622565) * 0.90).toLocaleString('es-MX');
+    const precioExpedia = Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.446)).toLocaleString('es-MX');
 
     const confirmed = window.confirm(
       `⚠️ CONFIRMAR CAMBIO MASIVO EN BEDS24\n\n` +
@@ -213,9 +213,9 @@ export default function PreciosPage() {
       `Los huéspedes verán (1-6 noches):\n` +
       `  · Directo:    $${precioDirecto} (* 1.19 TAX)\n` +
       `  · Airbnb:     $${precioAirbnb} (* 1.20 MUL * 1.21 TAX)\n` +
-      `  · Booking:    $${precioBooking} (* 1.35 * 1.19 - 10% Promoción)\n` +
+      `  · Booking:    $${precioBooking} (* 1.35 MUL * 1.19 TAX - 10% Promoción)\n` +
       `  · Google Ads: $${precioGoogle} (* 1.4024745 MUL)\n` +
-      `  · Expedia:    $${precioExpedia} (* 1.622565 - 10% Promoción)\n\n` +
+      `  · Expedia:    $${precioExpedia} (* 1.446 MUL)\n\n` +
       `Se modificarán los periodos no descontados de esta temporada en Beds24.\n` +
       `Las reservas ya confirmadas NO se ven afectadas.\n\n` +
       `¿Continuar?`
@@ -266,7 +266,7 @@ export default function PreciosPage() {
               priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
               priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90),
               priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.4024745)),
-              priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.622565) * 0.90),
+              priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.446)),
             };
           })
         };
@@ -354,7 +354,7 @@ export default function PreciosPage() {
                 priceAirbnb: Math.round(newPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21),
                 priceBooking: Math.round(newPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90),
                 priceGoogle: Math.round(newPriceRaw * (beds24Multipliers.google || 1.4024745)),
-                priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.622565) * 0.90),
+                priceExpedia: Math.round(newPriceRaw * (beds24Multipliers.expedia || 1.446)),
               };
             })
           };
@@ -572,7 +572,7 @@ export default function PreciosPage() {
   const tdPriceAirbnb = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.airbnb || 1.20) * 1.21) : 0;
   const tdPriceBooking = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90) : 0;
   const tdPriceGoogle = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.google || 1.4024745)) : 0;
-  const tdPriceExpedia = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.expedia || 1.622565) * 0.90) : 0;
+  const tdPriceExpedia = tdPriceRaw > 0 ? Math.round(tdPriceRaw * (beds24Multipliers.expedia || 1.446)) : 0;
 
   const loadTempDiscounts = async () => {
     try {
@@ -837,7 +837,7 @@ export default function PreciosPage() {
                     </div>
                   </div>
                   <p className="text-[9.5px] text-zinc-500 italic">
-                    Airbnb ×{beds24Multipliers.airbnb || 1.20} (IVA 21%) · Booking (* 1.35 * 1.19 - 10% Promoción) · Google ×{beds24Multipliers.google || 1.4024745} · Expedia (* 1.622565 - 10% Promoción) · impuestos incluidos
+                    Airbnb ×{beds24Multipliers.airbnb || 1.20} MUL (IVA 21%) · Booking (* 1.35 MUL * 1.19 TAX - 10% Promoción) · Google ×{beds24Multipliers.google || 1.4024745} MUL · Expedia (* 1.446 MUL) · impuestos incluidos
                   </p>
                 </div>
               )}
@@ -1134,9 +1134,9 @@ export default function PreciosPage() {
             <div className="flex items-center gap-2 flex-wrap text-[11px] font-bold">
               <span className="px-2.5 py-1.5 bg-blue-950/80 border border-blue-800/40 text-blue-300 rounded-lg">Directo: Base × 1.19 TAX</span>
               <span className="px-2.5 py-1.5 bg-rose-950/80 border border-rose-800/40 text-rose-300 rounded-lg">Airbnb: Base × 1.20 MUL × 1.21 TAX</span>
-              <span className="px-2.5 py-1.5 bg-sky-950/80 border border-sky-800/40 text-sky-300 rounded-lg">Booking: Base × 1.35 × 1.19 - 10% Promoción</span>
+              <span className="px-2.5 py-1.5 bg-sky-950/80 border border-sky-800/40 text-sky-300 rounded-lg">Booking: Base × 1.35 MUL × 1.19 TAX - 10% Promoción</span>
               <span className="px-2.5 py-1.5 bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 rounded-lg">Google Ads: Base × 1.4024745 MUL</span>
-              <span className="px-2.5 py-1.5 bg-amber-950/80 border border-amber-800/40 text-amber-300 rounded-lg">Expedia: Base × 1.622565 - 10% Promoción</span>
+              <span className="px-2.5 py-1.5 bg-amber-950/80 border border-amber-800/40 text-amber-300 rounded-lg">Expedia: Base × 1.446 MUL</span>
             </div>
           </div>
 
@@ -1278,7 +1278,7 @@ export default function PreciosPage() {
                               const pAirbnb  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.airbnb || 1.20) * 1.21) : 0;
                               const pBooking = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.booking || 1.35) * 1.19 * 0.90) : 0;
                               const pGoogle  = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.google || 1.4024745)) : 0;
-                              const pExpedia = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.expedia || 1.622565) * 0.90) : 0;
+                              const pExpedia = currentPriceNum > 0 ? Math.round(currentPriceNum * (beds24Multipliers.expedia || 1.446)) : 0;
 
                               return (
                                 <div key={room.id} className={`pt-4 ${rIdx === 0 ? 'pt-0' : ''} flex flex-col xl:flex-row xl:items-center justify-between gap-4`}>
@@ -1328,7 +1328,7 @@ export default function PreciosPage() {
 
                                     {/* Booking */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking (* 1.35 * 1.19 - 10% Promoción)</span>
+                                      <span className="text-[9px] font-bold text-sky-500 uppercase tracking-wider">Booking (* 1.35 MUL * 1.19 TAX - 10% Promoción)</span>
                                       <span className="text-[12px] font-black text-sky-600 mt-1">${pBooking > 0 ? pBooking.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
@@ -1340,7 +1340,7 @@ export default function PreciosPage() {
 
                                     {/* Expedia */}
                                     <div className="flex flex-col pl-1">
-                                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Expedia (* 1.622565 - 10% Promoción)</span>
+                                      <span className="text-[9px] font-bold text-amber-600 uppercase tracking-wider">Expedia (* 1.446 MUL)</span>
                                       <span className="text-[12px] font-black text-amber-600 mt-1">${pExpedia > 0 ? pExpedia.toLocaleString('es-MX') : '—'}</span>
                                     </div>
 
