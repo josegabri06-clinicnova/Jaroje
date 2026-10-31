@@ -660,7 +660,7 @@ async function _doRefresh(force: boolean = false): Promise<string> {
 
 
 // Obtener todas las reservas de Beds24 consumiendo su paginación de forma iterativa y segura (SaaS B2B)
-export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false, includeInvoiceItems: boolean = true): Promise<any[]> {
+export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: string, includeCancelled: boolean = false): Promise<any[]> {
   let beds24Token = await getBeds24Token();
 
   const doFetchAttempt = async (token: string) => {
@@ -712,7 +712,7 @@ export async function fetchAllRawBeds24Bookings(arrivalFrom: string, arrivalTo: 
       return bookings;
     };
 
-    const baseUrl = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99${includeInvoiceItems ? '&includeInvoiceItems=true' : ''}`;
+    const baseUrl = `https://api.beds24.com/v2/bookings?arrivalFrom=${arrivalFrom}&arrivalTo=${arrivalTo}&limit=99&includeInvoiceItems=true`;
     if (includeCancelled) {
       // Llamadas en paralelo con tolerancia a fallos
       const [activeBookings, cancelledBookings] = await Promise.all([

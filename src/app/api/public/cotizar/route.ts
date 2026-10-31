@@ -328,8 +328,6 @@ export async function GET(req: Request) {
       const cleanPhone = normalizePhone(rawPhone);
       const last10 = cleanPhone.slice(-10);
 
-      // Las dos búsquedas por teléfono son independientes: se lanzan a la vez
-      const lookupBookings = (async () => {
       try {
         const { data: dbBookings } = await supabase
           .from('beds24_reservations')
@@ -356,10 +354,8 @@ export async function GET(req: Request) {
       } catch (errDb) {
         console.warn("[Cotizar API] Error buscando reservas previas:", errDb);
       }
-      })();
 
       // 1.1. Buscar si hay una cotización pendiente reciente (últimas 24 horas) para este teléfono
-      const lookupQuote = (async () => {
       try {
         const { data: conv } = await supabase
           .from('conversations')
@@ -383,9 +379,6 @@ export async function GET(req: Request) {
       } catch (qErr) {
         console.warn("[Cotizar API] Error buscando pendingQuote:", qErr);
       }
-      })();
-
-      await Promise.all([lookupBookings, lookupQuote]);
     }
 
     // Si no se pasaron fechas, retornar información general de categorías y reservas existentes
@@ -431,61 +424,41 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: windowCheck.error, code: 'OUT_OF_BOOKING_WINDOW' }, { status: 400 });
     }
 
-    // 2-3. Consultar en paralelo: reservas reales de Beds24, tarifas de Beds24 (canal 'Directo'),
-    // pricing_unit_settings y reservas locales de Supabase (antes se pedían una tras otra).
-    // Solo hacen falta las reservas que puedan solaparse con la estancia pedida: llegada hasta 180 días antes del check-in
-    // y antes del check-out (sin detalle de facturación, que aquí no se usa).
-    const bookingsFrom = new Date(Date.parse(`${cleanCheckIn}T00:00:00Z`) - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // 2. Consultar inventario real de Beds24
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 30);
+    const toDate = new Date();
+    toDate.setDate(toDate.getDate() + 400);
 
-    let beds24Token: string | null = null;
+    const bookingsRaw = await fetchAllRawBeds24Bookings(
+      fromDate.toISOString().split('T')[0],
+      toDate.toISOString().split('T')[0]
+    );
+
+    // 3. Obtener tarifas de Beds24 para el canal 'Directo'
+    let beds24RatesMap: Record<string, Record<string, number>> = {};
     try {
-      beds24Token = await getBeds24Token();
+      const BEDS24_TOKEN = await getBeds24Token();
+      beds24RatesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, checkIn, checkOut);
     } catch (tokenErr) {
-      console.warn("[Cotizar API] Failed to get Beds24 token:", tokenErr);
+      console.warn("[Cotizar API] Failed to fetch Beds24 calendar rates:", tokenErr);
     }
-
-    const [bookingsRaw, ratesResult, dynamicSettings, localBookings] = await Promise.all([
-      fetchAllRawBeds24Bookings(bookingsFrom, cleanCheckOut, false, false),
-      (async () => {
-        if (!beds24Token) return {} as Record<string, Record<string, number>>;
-        try {
-          return await fetchBeds24RatesMap(beds24Token, checkIn, checkOut);
-        } catch (ratesErr) {
-          console.warn("[Cotizar API] Failed to fetch Beds24 calendar rates:", ratesErr);
-          return {} as Record<string, Record<string, number>>;
-        }
-      })(),
-      (async () => {
-        try {
-          const { data: settingsData } = await supabase
-            .from('settings')
-            .select('value')
-            .eq('key', 'pricing_unit_settings')
-            .maybeSingle();
-          if (settingsData?.value) {
-            return typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
-          }
-        } catch (errSettings) {
-          console.warn("[Cotizar API] Error loading pricing_unit_settings:", errSettings);
-        }
-        return null as any;
-      })(),
-      (async () => {
-        try {
-          const { data } = await supabase
-            .from('local_reservas')
-            .select('check_in, check_out, room_id, unit_id')
-            .neq('status', 'cancelled');
-          return data || [];
-        } catch (localDbErr) {
-          console.warn("[Cotizar API] Error reading local_reservas:", localDbErr);
-          return [] as any[];
-        }
-      })()
-    ]);
-
-    const beds24RatesMap = ratesResult;
     assertRatesLoaded(beds24RatesMap);
+
+    // Cargar pricing_unit_settings de Supabase si existen
+    let dynamicSettings: any = null;
+    try {
+      const { data: settingsData } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'pricing_unit_settings')
+        .maybeSingle();
+      if (settingsData?.value) {
+        dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+      }
+    } catch (errSettings) {
+      console.warn("[Cotizar API] Error loading pricing_unit_settings:", errSettings);
+    }
 
     // 4. Calcular ocupación real por categoría
     const categoryStats: Record<string, {
@@ -527,23 +500,32 @@ export async function GET(req: Request) {
       }
     });
 
-    // Reservas locales de Supabase (ya cargadas arriba)
-    localBookings.forEach((b: any) => {
-      const bIn = String(b.check_in || '').split('T')[0].split(' ')[0].trim();
-      const bOut = String(b.check_out || '').split('T')[0].split(' ')[0].trim();
-      if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
-        const parent = getParentMapping(b.room_id, b.unit_id);
-        const stats = categoryStats[parent.roomId];
-        if (stats) {
-          const uId = String(b.unit_id ?? '').trim();
-          if (uId && uId !== '0') {
-            stats.assignedUnits.add(parent.unitId);
-          } else {
-            stats.unassignedCount++;
+    // Cargar también reservas locales de Supabase
+    try {
+      const { data: localBookings } = await supabase
+        .from('local_reservas')
+        .select('*')
+        .neq('status', 'cancelled');
+
+      (localBookings || []).forEach((b: any) => {
+        const bIn = String(b.check_in || '').split('T')[0].split(' ')[0].trim();
+        const bOut = String(b.check_out || '').split('T')[0].split(' ')[0].trim();
+        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
+          const parent = getParentMapping(b.room_id, b.unit_id);
+          const stats = categoryStats[parent.roomId];
+          if (stats) {
+            const uId = String(b.unit_id ?? '').trim();
+            if (uId && uId !== '0') {
+              stats.assignedUnits.add(parent.unitId);
+            } else {
+              stats.unassignedCount++;
+            }
           }
         }
-      }
-    });
+      });
+    } catch (localDbErr) {
+      console.warn("[Cotizar API] Error reading local_reservas:", localDbErr);
+    }
 
     // 5. Construir respuesta detallada con tarifas netas directas y disponibilidad
     const quotes = CATEGORY_DEFINITIONS.flatMap(cat => {
