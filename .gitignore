@@ -46,5 +46,8 @@ next-env.d.ts
 # large inventory data files
 /inventario_temp.csv
 
+# static raw images (now hosted in Supabase Storage 'room-photos')
+/public/images/
+
 # separate standalone projects
 /bahias-guest-services/

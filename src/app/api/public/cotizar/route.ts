@@ -11,6 +11,7 @@ import {
 import { normalizePhone } from '@/lib/whatsapp';
 import { checkBookingWindow } from '@/lib/booking-window';
 import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
+import { getRoomPhotos } from '@/lib/room-photos';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,17 +48,7 @@ const CATEGORY_DEFINITIONS = [
       '1 full bathroom with hot water',
       'Minibar - Microwave - Coffee maker (No kitchen)'
     ],
-    photos: [
-      '/images/doble/1.jpg',
-      '/images/doble/2.jpg',
-      '/images/doble/3.jpg',
-      '/images/doble/4.jpg',
-      '/images/doble/5.jpg',
-      '/images/doble/6.jpg',
-      '/images/doble/7.jpg',
-      '/images/doble/8.jpg',
-      '/images/doble/9.jpg'
-    ],
+    photos: getRoomPhotos('doble', 9),
     units: [
       { unitId: '1', name: '301' },
       { unitId: '2', name: '302' },
@@ -94,19 +85,7 @@ const CATEGORY_DEFINITIONS = [
       '1 full bathroom with hot water',
       'Dining room for 4 people, equipped kitchen and private terrace'
     ],
-    photos: [
-      '/images/1rec/1.jpg',
-      '/images/1rec/2.jpg',
-      '/images/1rec/3.jpg',
-      '/images/1rec/4.jpg',
-      '/images/1rec/5.jpg',
-      '/images/1rec/6.jpg',
-      '/images/1rec/7.jpg',
-      '/images/1rec/8.jpg',
-      '/images/1rec/9.jpg',
-      '/images/1rec/10.jpg',
-      '/images/1rec/11.jpg'
-    ],
+    photos: getRoomPhotos('1rec', 11),
     units: [
       { unitId: '1', name: '402' }
     ]
@@ -146,25 +125,7 @@ const CATEGORY_DEFINITIONS = [
       'Fully equipped kitchen with breakfast bar',
       'Laundry area (without washer/dryer)'
     ],
-    photos: [
-      '/images/2rec/1.jpg',
-      '/images/2rec/2.jpg',
-      '/images/2rec/3.jpg',
-      '/images/2rec/4.jpg',
-      '/images/2rec/5.jpg',
-      '/images/2rec/6.jpg',
-      '/images/2rec/7.jpg',
-      '/images/2rec/8.jpg',
-      '/images/2rec/9.jpg',
-      '/images/2rec/10.jpg',
-      '/images/2rec/11.jpg',
-      '/images/2rec/12.jpg',
-      '/images/2rec/13.jpg',
-      '/images/2rec/14.jpg',
-      '/images/2rec/15.jpg',
-      '/images/2rec/16.jpg',
-      '/images/2rec/17.jpg'
-    ],
+    photos: getRoomPhotos('2rec', 17),
     units: [
       { unitId: '1', name: '201' },
       { unitId: '2', name: '202' },
@@ -209,29 +170,7 @@ const CATEGORY_DEFINITIONS = [
       'Fully equipped kitchen with breakfast bar',
       'Laundry area (without washer/dryer)'
     ],
-    photos: [
-      '/images/3rec/1.jpg',
-      '/images/3rec/2.jpg',
-      '/images/3rec/3.jpg',
-      '/images/3rec/4.jpg',
-      '/images/3rec/5.jpg',
-      '/images/3rec/6.jpg',
-      '/images/3rec/7.jpg',
-      '/images/3rec/8.jpg',
-      '/images/3rec/9.jpg',
-      '/images/3rec/10.jpg',
-      '/images/3rec/11.jpg',
-      '/images/3rec/12.jpg',
-      '/images/3rec/13.jpg',
-      '/images/3rec/14.jpg',
-      '/images/3rec/15.jpg',
-      '/images/3rec/16.jpg',
-      '/images/3rec/17.jpg',
-      '/images/3rec/18.jpg',
-      '/images/3rec/19.jpg',
-      '/images/3rec/20.jpg',
-      '/images/3rec/21.jpg'
-    ],
+    photos: getRoomPhotos('3rec', 21),
     units: [
       { unitId: '1', name: '101' },
       { unitId: '2', name: '102' },
@@ -281,31 +220,7 @@ const CATEGORY_DEFINITIONS = [
       '1/2 bathroom on ground floor',
       'Laundry area (without washer/dryer)'
     ],
-    photos: [
-      '/images/casa/1.jpg',
-      '/images/casa/2.jpg',
-      '/images/casa/3.jpg',
-      '/images/casa/4.jpg',
-      '/images/casa/5.jpg',
-      '/images/casa/6.jpg',
-      '/images/casa/7.jpg',
-      '/images/casa/8.jpg',
-      '/images/casa/9.jpg',
-      '/images/casa/10.jpg',
-      '/images/casa/11.jpg',
-      '/images/casa/12.jpg',
-      '/images/casa/13.jpg',
-      '/images/casa/14.jpg',
-      '/images/casa/15.jpg',
-      '/images/casa/16.jpg',
-      '/images/casa/17.jpg',
-      '/images/casa/18.jpg',
-      '/images/casa/19.jpg',
-      '/images/casa/20.jpg',
-      '/images/casa/21.jpg',
-      '/images/casa/22.jpg',
-      '/images/casa/23.jpg'
-    ],
+    photos: getRoomPhotos('casa', 23),
     units: [
       { unitId: '1', name: '401' }
     ]

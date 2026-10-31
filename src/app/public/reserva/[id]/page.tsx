@@ -28,6 +28,7 @@ import {
   ReceiptText,
   Lock
 } from 'lucide-react';
+import { COMMON_PHOTOS, getRoomPhotos } from '@/lib/room-photos';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -111,96 +112,12 @@ const ROOM_FEATURES: Record<string, { title: string; capacity: number; features:
   }
 };
 
-const COMMON_PHOTOS = [
-  "/images/general/1.jpg",
-  "/images/general/2.jpg",
-  "/images/general/3.jpg",
-  "/images/general/4.jpg",
-  "/images/general/5.jpg",
-  "/images/general/6.jpg",
-  "/images/general/7.jpg",
-  "/images/general/8.jpg",
-  "/images/general/9.jpg",
-  "/images/general/10.jpg",
-  "/images/general/11.jpg",
-  "/images/general/12.jpg",
-  "/images/general/13.jpg",
-  "/images/general/14.jpg",
-  "/images/general/15.jpg",
-  "/images/general/16.jpg",
-  "/images/general/17.jpg",
-  "/images/general/18.jpg",
-  "/images/general/19.jpg",
-  "/images/general/20.jpg"
-];
-
 const ROOM_PHOTOS: Record<string, string[]> = {
-  'doble': [
-    "/images/doble/1.jpg",
-    "/images/doble/2.jpg",
-    "/images/doble/3.jpg",
-    "/images/doble/4.jpg",
-    "/images/doble/5.jpg"
-  ],
-  '1rec': [
-    "/images/1rec/1.jpg",
-    "/images/1rec/2.jpg",
-    "/images/1rec/3.jpg",
-    "/images/1rec/4.jpg",
-    "/images/1rec/5.jpg",
-    "/images/1rec/6.jpg",
-    "/images/1rec/7.jpg"
-  ],
-  '2rec': [
-    "/images/2rec/1.jpg",
-    "/images/2rec/2.jpg",
-    "/images/2rec/3.jpg",
-    "/images/2rec/4.jpg",
-    "/images/2rec/5.jpg",
-    "/images/2rec/6.jpg",
-    "/images/2rec/7.jpg",
-    "/images/2rec/8.jpg",
-    "/images/2rec/9.jpg",
-    "/images/2rec/10.jpg",
-    "/images/2rec/11.jpg"
-  ],
-  '3rec': [
-    "/images/3rec/1.jpg",
-    "/images/3rec/2.jpg",
-    "/images/3rec/3.jpg",
-    "/images/3rec/4.jpg",
-    "/images/3rec/5.jpg",
-    "/images/3rec/6.jpg",
-    "/images/3rec/7.jpg",
-    "/images/3rec/8.jpg",
-    "/images/3rec/9.jpg",
-    "/images/3rec/10.jpg",
-    "/images/3rec/11.jpg",
-    "/images/3rec/12.jpg",
-    "/images/3rec/13.jpg",
-    "/images/3rec/14.jpg",
-    "/images/3rec/15.jpg"
-  ],
-  'casa': [
-    "/images/casa/1.jpg",
-    "/images/casa/2.jpg",
-    "/images/casa/3.jpg",
-    "/images/casa/4.jpg",
-    "/images/casa/5.jpg",
-    "/images/casa/6.jpg",
-    "/images/casa/7.jpg",
-    "/images/casa/8.jpg",
-    "/images/casa/9.jpg",
-    "/images/casa/10.jpg",
-    "/images/casa/11.jpg",
-    "/images/casa/12.jpg",
-    "/images/casa/13.jpg",
-    "/images/casa/14.jpg",
-    "/images/casa/15.jpg",
-    "/images/casa/16.jpg",
-    "/images/casa/17.jpg",
-    "/images/casa/18.jpg"
-  ]
+  'doble': getRoomPhotos('doble', 5),
+  '1rec': getRoomPhotos('1rec', 7),
+  '2rec': getRoomPhotos('2rec', 11),
+  '3rec': getRoomPhotos('3rec', 15),
+  'casa': getRoomPhotos('casa', 18)
 };
 
 const PHOTO_CAPTIONS: Record<string, string[]> = {

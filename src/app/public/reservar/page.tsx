@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { DEFAULT_FALLBACK_PHOTO } from '@/lib/room-photos';
 
 interface QuoteItem {
   key: string;
@@ -1308,7 +1309,7 @@ function ReservarContent() {
                   const cardExtraGuests = selectionSummary.neededExtras > 0 ? Math.min(extraByRoom[q.key] || 0, Math.max(0, q.maxCapacity - q.capacity) * qtySelected, selectionSummary.extraGuests) : 0;
                   const cardTotal = q.totalPrice * Math.max(1, qtySelected) + cardExtraGuests * 500 * q.nights;
                   const activeImgIdx = activePhotoIdx[q.key] || 0;
-                  const currentPhoto = q.photos[activeImgIdx] || q.photos[0] || '/images/general/1.jpg';
+                  const currentPhoto = q.photos[activeImgIdx] || q.photos[0] || DEFAULT_FALLBACK_PHOTO;
 
                   return (
                     <div
