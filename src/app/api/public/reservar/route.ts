@@ -337,9 +337,6 @@ export async function POST(req: Request) {
     const requestedExtras = Math.min(Math.max(0, totalGuests - totalBaseCapacity), maxExtrasAllowed);
     const effectiveAdults = cleanAdults;
 
-    // Tarifa obligatoria de personas extra: $500 MXN / noche / persona calculada en el servidor
-    const finalExtraGuestsFee = requestedExtras * 500 * nights;
-
     // 2. Candado anti-spam por teléfono (máximo 1 reserva creada cada 5 minutos por el mismo número)
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
     const last10 = cleanPhone.slice(-10);
@@ -568,18 +565,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'No se pudieron asignar habitaciones válidas.' }, { status: 400 });
     }
 
-    if (finalExtraGuestsFee > 0 && beds24Payload.length > 0) {
-      beds24Payload[0].price += finalExtraGuestsFee;
-      grandTotalPrice += finalExtraGuestsFee;
-      if (beds24Payload[0].invoiceItems) {
-        beds24Payload[0].invoiceItems.push({
-          description: `Huéspedes adicionales | Cargo extra (${requestedExtras} pax x $500 x ${nights} n.)`,
+    if (requestedExtras > 0 && beds24Payload.length === allocatedUnits.length) {
+      // Cada habitación cobra solo los huéspedes que aloja por encima de su capacidad estándar (con tope en su máximo).
+      const extrasPerRoom = allocatedUnits.map((u, i) => {
+        const guestsInRoom = (beds24Payload[i].numAdult || 0) + (beds24Payload[i].numChild || 0);
+        return Math.min(Math.max(0, guestsInRoom - u.baseCap), Math.max(0, u.maxCap - u.baseCap));
+      });
+      // El total cobrado debe ser siempre el calculado arriba (huéspedes - capacidad base): se ajusta cualquier diferencia
+      let diff = requestedExtras - extrasPerRoom.reduce((a, b) => a + b, 0);
+      for (let i = 0; i < extrasPerRoom.length && diff !== 0; i++) {
+        const room = allocatedUnits[i];
+        const spare = diff > 0 ? (room.maxCap - room.baseCap) - extrasPerRoom[i] : -extrasPerRoom[i];
+        const step = diff > 0 ? Math.min(diff, Math.max(0, spare)) : Math.max(diff, spare);
+        extrasPerRoom[i] += step;
+        diff -= step;
+      }
+
+      extrasPerRoom.forEach((extras, i) => {
+        if (extras <= 0) return;
+        const fee = extras * 500 * nights;
+        beds24Payload[i].price += fee;
+        grandTotalPrice += fee;
+        beds24Payload[i].invoiceItems?.push({
+          description: `Huéspedes adicionales | Cargo extra (${extras} pax x $500 x ${nights} n.)`,
           type: 'charge',
-          amount: finalExtraGuestsFee,
+          amount: fee,
           qty: 1,
           vatRate: 19
         });
-      }
+      });
     }
 
     if (grandTotalPrice <= 0 || isNaN(grandTotalPrice)) {
