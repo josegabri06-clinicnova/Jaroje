@@ -9,6 +9,8 @@ import {
   getChildRoomId
 } from '@/lib/beds24';
 import { normalizePhone } from '@/lib/whatsapp';
+import { checkBookingWindow } from '@/lib/booking-window';
+import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -417,6 +419,11 @@ export async function GET(req: Request) {
 
     const nights = diffDays;
 
+    const windowCheck = checkBookingWindow(cleanCheckIn, cleanCheckOut);
+    if (!windowCheck.ok) {
+      return NextResponse.json({ error: windowCheck.error, code: 'OUT_OF_BOOKING_WINDOW' }, { status: 400 });
+    }
+
     // 2. Consultar inventario real de Beds24
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - 30);
@@ -436,6 +443,7 @@ export async function GET(req: Request) {
     } catch (tokenErr) {
       console.warn("[Cotizar API] Failed to fetch Beds24 calendar rates:", tokenErr);
     }
+    assertRatesLoaded(beds24RatesMap);
 
     // Cargar pricing_unit_settings de Supabase si existen
     let dynamicSettings: any = null;
@@ -520,13 +528,18 @@ export async function GET(req: Request) {
     }
 
     // 5. Construir respuesta detallada con tarifas netas directas y disponibilidad
-    const quotes = CATEGORY_DEFINITIONS.map(cat => {
+    const quotes = CATEGORY_DEFINITIONS.flatMap(cat => {
       const stats = categoryStats[cat.roomId];
       const occupiedCount = (stats?.assignedUnits.size || 0) + (stats?.unassignedCount || 0);
       const availableUnitsCount = Math.max(0, cat.units.length - occupiedCount);
 
       // Calcular tarifa neta por noche (canal 'Directo') y aplicar multiplicador de impuestos (IVA 16% + ISH 3% = 1.19)
       const firstUnitId = cat.units[0]?.unitId || '1';
+      const missingNights = getMissingRateNights(beds24RatesMap, cat.roomId, firstUnitId, cleanCheckIn, cleanCheckOut);
+      if (missingNights.length > 0) {
+        console.error(`[Cotizar API] Sin tarifa en Beds24 para ${cat.name} en: ${missingNights.join(', ')}. Categoría omitida para no mostrar un precio incorrecto.`);
+        return [];
+      }
       const childId = getChildRoomId(cat.roomId, firstUnitId) || cat.roomId;
       const basePricePerNight = getAverageRatesForDates(
         childId,
@@ -543,7 +556,7 @@ export async function GET(req: Request) {
       const totalPrice = Math.round(pricePerNight * nights);
       const depositRequired = Math.round(totalPrice * 0.5);
 
-      return {
+      return [{
         key: cat.key,
         roomId: cat.roomId,
         name: cat.name,
@@ -567,7 +580,7 @@ export async function GET(req: Request) {
         totalPrice,
         depositRequired,
         currency: 'MXN'
-      };
+      }];
     });
 
     return NextResponse.json({
@@ -581,6 +594,9 @@ export async function GET(req: Request) {
     });
 
   } catch (error: any) {
+    if (error instanceof RatesUnavailableError) {
+      return NextResponse.json({ error: error.message, code: 'RATES_UNAVAILABLE' }, { status: 503 });
+    }
     console.error("[Cotizar API] Error general:", error);
     return NextResponse.json({ error: error.message || 'Error calculando cotización' }, { status: 500 });
   }

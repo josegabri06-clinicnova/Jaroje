@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { normalizePhone, sendWhatsAppCTAButtonMessage } from '@/lib/whatsapp';
+import { checkBookingWindow } from '@/lib/booking-window';
 import { getBeds24Token, fetchBeds24RatesMap, getAverageRatesForDates, getChildRoomId } from '@/lib/beds24';
+import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -135,6 +137,11 @@ export async function POST(req: Request) {
 
     const nights = diffDays;
 
+    const windowCheck = checkBookingWindow(cleanCheckIn, cleanCheckOut);
+    if (!windowCheck.ok) {
+      return NextResponse.json({ success: false, error: windowCheck.error, code: 'OUT_OF_BOOKING_WINDOW' }, { status: 400 });
+    }
+
     // Cálculo exacto de personas adicionales ($500 MXN / noche) en servidor
     const extraGuests = totalGuests > totalBaseCapacity
       ? Math.min(totalGuests - totalBaseCapacity, Math.max(0, totalMaxCapacity - totalBaseCapacity))
@@ -149,6 +156,7 @@ export async function POST(req: Request) {
     } catch (tokenErr) {
       console.warn("[Cotizacion API] Failed to fetch Beds24 calendar rates:", tokenErr);
     }
+    assertRatesLoaded(beds24RatesMap);
 
     let dynamicSettings: any = null;
     try {
@@ -175,6 +183,11 @@ export async function POST(req: Request) {
     let baseLodgingTotal = 0;
     const sanitizedRooms = validRooms.map(r => {
       const cat = ROOM_CAT_MAP[r.key];
+      const missingNights = getMissingRateNights(beds24RatesMap, cat.roomId, '1', cleanCheckIn, cleanCheckOut);
+      if (missingNights.length > 0) {
+        console.error(`[Cotizacion API] Sin tarifa en Beds24 para ${cat.name} en: ${missingNights.join(', ')}. Cotización rechazada para evitar precio incorrecto.`);
+        throw new RatesUnavailableError();
+      }
       const childId = getChildRoomId(cat.roomId, '1') || cat.roomId;
       const basePricePerNight = getAverageRatesForDates(
         childId,
@@ -333,6 +346,9 @@ ${extraGuestsFee > 0 ? `• Suplemento adicionales: $${extraGuestsFee.toLocaleSt
     });
 
   } catch (err: any) {
+    if (err instanceof RatesUnavailableError) {
+      return NextResponse.json({ success: false, error: err.message, code: 'RATES_UNAVAILABLE' }, { status: 503 });
+    }
     console.error("[Cotizacion API] Excepción no controlada:", err);
     return NextResponse.json(
       { success: false, error: err.message || 'Error procesando la cotización' },
