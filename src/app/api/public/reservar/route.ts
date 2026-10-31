@@ -11,6 +11,8 @@ import {
   getAverageRatesForDates
 } from '@/lib/beds24';
 import { normalizePhone, cleanPhoneForMeta, sendTemplate1_SolicitudRecibida } from '@/lib/whatsapp';
+import { checkBookingWindow } from '@/lib/booking-window';
+import { RatesUnavailableError, assertRatesLoaded, getMissingRateNights } from '@/lib/rates-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -292,6 +294,11 @@ export async function POST(req: Request) {
 
     const nights = diffDays;
 
+    const windowCheck = checkBookingWindow(cleanCheckIn, cleanCheckOut);
+    if (!windowCheck.ok) {
+      return NextResponse.json({ error: windowCheck.error, code: 'OUT_OF_BOOKING_WINDOW' }, { status: 400 });
+    }
+
     // Sanitización estricta de huéspedes
     const cleanAdults = Math.max(1, Math.min(30, parseInt(String(adults || 2), 10) || 2));
     const cleanChildren = Math.max(0, Math.min(20, parseInt(String(children || 0), 10) || 0));
@@ -324,14 +331,9 @@ export async function POST(req: Request) {
     }
 
     // Cálculo forzoso de huéspedes adicionales en el servidor (nunca confiar en manipulación del cliente)
-    const minRequiredExtras = Math.max(0, totalGuests - totalBaseCapacity);
-    const requestedExtras = Math.max(minRequiredExtras, Math.max(0, parseInt(String(body.extraGuests || 0), 10) || 0));
-
-    if (totalGuests > (totalBaseCapacity + requestedExtras)) {
-      return NextResponse.json({
-        error: `Ha seleccionado ${totalGuests} huéspedes pero su selección solo cubre ${totalBaseCapacity + requestedExtras} personas.`
-      }, { status: 400 });
-    }
+    // Solo se cobran las personas que exceden la capacidad base; el valor enviado por el navegador se ignora.
+    // (totalGuests <= totalMaxCapacity ya se validó arriba, así que nunca excede el máximo de extras)
+    const requestedExtras = Math.max(0, totalGuests - totalBaseCapacity);
 
     // Tarifa obligatoria de personas extra: $500 MXN / noche / persona calculada en el servidor
     const finalExtraGuestsFee = requestedExtras * 500 * nights;
@@ -360,6 +362,7 @@ export async function POST(req: Request) {
     } catch (tokenErr) {
       console.warn("[Reservar API] Failed to fetch Beds24 calendar rates:", tokenErr);
     }
+    assertRatesLoaded(beds24RatesMap);
 
     // Cargar pricing_unit_settings de Supabase si existen
     let dynamicSettings: any = null;
@@ -467,6 +470,11 @@ export async function POST(req: Request) {
 
       // CÁLCULO SEGURO EN EL SERVIDOR (ignora cualquier precio manipulado desde el cliente)
       const firstUnitId = catConfig.units[0]?.unitId || '1';
+      const missingNights = getMissingRateNights(beds24RatesMap, catConfig.roomId, firstUnitId, cleanCheckIn, cleanCheckOut);
+      if (missingNights.length > 0) {
+        console.error(`[Reservar API] Sin tarifa en Beds24 para ${catConfig.name} en: ${missingNights.join(', ')}. Reserva rechazada para evitar precio incorrecto.`);
+        throw new RatesUnavailableError();
+      }
       const childId = getChildRoomId(catConfig.roomId, firstUnitId) || catConfig.roomId;
       const basePricePerNight = getAverageRatesForDates(
         childId,
@@ -785,6 +793,9 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
+    if (error instanceof RatesUnavailableError) {
+      return NextResponse.json({ error: error.message, code: 'RATES_UNAVAILABLE' }, { status: 503 });
+    }
     console.error("[Reservar API] Error general al procesar la reserva:", error);
     return NextResponse.json({ error: error.message || 'Error procesando la reservación' }, { status: 500 });
   }

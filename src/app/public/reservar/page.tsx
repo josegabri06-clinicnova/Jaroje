@@ -112,6 +112,9 @@ function ReservarContent() {
   const todayStr = useMemo(() => format(new Date(), 'yyyy-MM-dd'), []);
   const defaultCheckIn = useMemo(() => format(addDays(new Date(), 1), 'yyyy-MM-dd'), []);
   const defaultCheckOut = useMemo(() => format(addDays(new Date(), 2), 'yyyy-MM-dd'), []);
+  // Beds24 solo permite reservar noches hasta 365 días desde hoy (última noche: hoy+365, salida: hoy+366)
+  const maxCheckInStr = useMemo(() => format(addDays(new Date(), 365), 'yyyy-MM-dd'), []);
+  const maxCheckOutStr = useMemo(() => format(addDays(new Date(), 366), 'yyyy-MM-dd'), []);
 
   const [checkIn, setCheckIn] = useState(() => checkInParam || defaultCheckIn);
   const [checkOut, setCheckOut] = useState(() => {
@@ -473,9 +476,19 @@ function ReservarContent() {
             );
           }
         }
+      } else {
+        setQuotes([]);
+        setAvailabilityNotice(
+          data.code === 'RATES_UNAVAILABLE'
+            ? (lang === 'en'
+                ? '⚠️ We could not load up-to-date rates. Please try again in a few minutes.'
+                : '⚠️ No pudimos cargar las tarifas actualizadas. Por favor intenta de nuevo en unos minutos.')
+            : (data.error || (lang === 'en' ? '⚠️ Could not load rates.' : '⚠️ No se pudieron cargar las tarifas.'))
+        );
       }
     } catch (err) {
       console.error("Error fetching quotes:", err);
+      setQuotes([]);
     } finally {
       setLoading(false);
     }
@@ -1054,6 +1067,7 @@ function ReservarContent() {
                     <input
                       type="date"
                       min={todayStr}
+                      max={maxCheckInStr}
                       value={checkIn}
                       onChange={e => handleCheckInChange(e.target.value)}
                       className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
@@ -1066,6 +1080,7 @@ function ReservarContent() {
                     <input
                       type="date"
                       min={minCheckOut}
+                      max={maxCheckOutStr}
                       value={checkOut}
                       onChange={e => handleCheckOutChange(e.target.value)}
                       className="w-full p-2.5 rounded-xl border border-zinc-200 text-xs font-bold text-zinc-900 bg-zinc-50 focus:bg-white focus:border-indigo-600 outline-none transition-all cursor-pointer"
