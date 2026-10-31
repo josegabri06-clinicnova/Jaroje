@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Calendar,
@@ -698,6 +698,36 @@ function ReservarContent() {
   const pendingGuests = activeSummary.totalRooms > 0 ? Math.max(0, totalGuests - coveredCapacity) : 0;
   const isOverCapacity = pendingGuests > 0;
 
+  // Al elegir huéspedes adicionales con costo, el total de huéspedes sube en tiempo real
+  // (base + extras) y vuelve a su valor al quitarlos. Si el cliente edita el contador, deja de autoajustarse.
+  const autoAddedGuestsRef = useRef(0);
+  const setAdultsManual = (v: React.SetStateAction<number>) => {
+    autoAddedGuestsRef.current = 0;
+    setAdults(v);
+  };
+  const setChildrenManual = (v: React.SetStateAction<number>) => {
+    autoAddedGuestsRef.current = 0;
+    setChildren(v);
+  };
+  useEffect(() => {
+    if (selectionSummary.totalRooms === 0) return;
+    const required = selectionSummary.extraGuests > 0
+      ? selectionSummary.totalBaseCapacity + selectionSummary.extraGuests
+      : 0;
+    const current = Number(adults || 0) + Number(children || 0);
+    if (current < required) {
+      const deficit = required - current;
+      autoAddedGuestsRef.current += deficit;
+      setAdults(a => a + deficit);
+    } else if (autoAddedGuestsRef.current > 0 && current > required) {
+      const reduce = Math.min(autoAddedGuestsRef.current, current - Math.max(required, 1), Math.max(0, Number(adults || 1) - 1));
+      if (reduce > 0) {
+        autoAddedGuestsRef.current -= reduce;
+        setAdults(a => a - reduce);
+      }
+    }
+  }, [selectionSummary.totalRooms, selectionSummary.totalBaseCapacity, selectionSummary.extraGuests]);
+
   // Limpiar automáticamente la alerta de indisponibilidad cuando el cliente seleccione otra opción viable
   useEffect(() => {
     if (!availabilityNotice) return;
@@ -1106,7 +1136,7 @@ function ReservarContent() {
                   <div className="flex items-center justify-between p-2 rounded-xl border border-zinc-200 bg-zinc-50">
                     <button
                       type="button"
-                      onClick={() => setAdults(a => Math.max(1, a - 1))}
+                      onClick={() => setAdultsManual(a => Math.max(1, a - 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Minus size={12} />
@@ -1121,12 +1151,12 @@ function ReservarContent() {
                       onChange={e => {
                         const raw = e.target.value;
                         if (raw === '') {
-                          setAdults(1);
+                          setAdultsManual(1);
                           return;
                         }
                         const val = parseInt(raw, 10);
                         if (!isNaN(val)) {
-                          setAdults(Math.max(1, Math.min(200, val)));
+                          setAdultsManual(Math.max(1, Math.min(200, val)));
                         }
                       }}
                       onFocus={e => e.target.select()}
@@ -1134,7 +1164,7 @@ function ReservarContent() {
                     />
                     <button
                       type="button"
-                      onClick={() => setAdults(a => Math.min(200, a + 1))}
+                      onClick={() => setAdultsManual(a => Math.min(200, a + 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Plus size={12} />
@@ -1149,7 +1179,7 @@ function ReservarContent() {
                   <div className="flex items-center justify-between p-2 rounded-xl border border-zinc-200 bg-zinc-50">
                     <button
                       type="button"
-                      onClick={() => setChildren(c => Math.max(0, c - 1))}
+                      onClick={() => setChildrenManual(c => Math.max(0, c - 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Minus size={12} />
@@ -1164,12 +1194,12 @@ function ReservarContent() {
                       onChange={e => {
                         const raw = e.target.value;
                         if (raw === '') {
-                          setChildren(0);
+                          setChildrenManual(0);
                           return;
                         }
                         const val = parseInt(raw, 10);
                         if (!isNaN(val)) {
-                          setChildren(Math.max(0, Math.min(100, val)));
+                          setChildrenManual(Math.max(0, Math.min(100, val)));
                         }
                       }}
                       onFocus={e => e.target.select()}
@@ -1177,7 +1207,7 @@ function ReservarContent() {
                     />
                     <button
                       type="button"
-                      onClick={() => setChildren(c => Math.min(100, c + 1))}
+                      onClick={() => setChildrenManual(c => Math.min(100, c + 1))}
                       className="w-7 h-7 rounded-lg bg-white border border-zinc-200 flex items-center justify-center font-black text-xs hover:bg-zinc-100 cursor-pointer shrink-0"
                     >
                       <Plus size={12} />

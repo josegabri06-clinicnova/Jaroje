@@ -143,9 +143,15 @@ export async function POST(req: Request) {
     }
 
     // Cálculo exacto de personas adicionales ($500 MXN / noche) en servidor
-    const extraGuests = totalGuests > totalBaseCapacity
-      ? Math.min(totalGuests - totalBaseCapacity, Math.max(0, totalMaxCapacity - totalBaseCapacity))
-      : 0;
+    // Extras = máx(personas que exceden la capacidad base, extras elegidos por el cliente), con tope en el máximo permitido.
+    // Los extras elegidos implican personas reales: si hay más extras que huéspedes declarados, se suman a los adultos.
+    const minRequiredExtras = Math.max(0, totalGuests - totalBaseCapacity);
+    const maxExtrasAllowed = Math.max(0, totalMaxCapacity - totalBaseCapacity);
+    const clientExtras = Math.max(0, parseInt(String(body.extraGuests || 0), 10) || 0);
+    const extraGuests = Math.min(Math.max(minRequiredExtras, clientExtras), maxExtrasAllowed);
+    const guestsDeficit = Math.max(0, totalBaseCapacity + extraGuests - totalGuests);
+    const effectiveAdults = cleanAdults + guestsDeficit;
+    const effectiveGuests = totalGuests + guestsDeficit;
     const extraGuestsFee = extraGuests * 500 * nights;
 
     // Obtener token y mapa oficial de tarifas de Beds24
@@ -172,14 +178,6 @@ export async function POST(req: Request) {
       console.warn("[Cotizacion API] Error loading pricing_unit_settings:", errSettings);
     }
 
-    const MINIMUM_FLOOR_PRICES: Record<string, number> = {
-      'doble': 900,
-      '1rec': 900,
-      '2rec': 1800,
-      '3rec': 2500,
-      'casa': 3500
-    };
-
     let baseLodgingTotal = 0;
     const sanitizedRooms = validRooms.map(r => {
       const cat = ROOM_CAT_MAP[r.key];
@@ -200,8 +198,9 @@ export async function POST(req: Request) {
       );
       const TAX_MULTIPLIER = 1.19; // IVA 16% + ISH 3%
       const officialPricePerNight = Math.round(basePricePerNight * TAX_MULTIPLIER);
-      const minFloor = MINIMUM_FLOOR_PRICES[r.key] || 900;
-      const verifiedPricePerNight = Math.max(officialPricePerNight, minFloor);
+      // Se cotiza siempre el precio vigente (Beds24/Supabase, con descuentos); solo se rechaza un precio inválido
+      if (!(officialPricePerNight > 0)) throw new RatesUnavailableError();
+      const verifiedPricePerNight = officialPricePerNight;
       const itemSubtotal = verifiedPricePerNight * nights * r.quantity;
       baseLodgingTotal += itemSubtotal;
 
@@ -228,9 +227,9 @@ export async function POST(req: Request) {
       checkIn: cleanCheckIn,
       checkOut: cleanCheckOut,
       nights,
-      adults: cleanAdults,
+      adults: effectiveAdults,
       children: cleanChildren,
-      totalGuests,
+      totalGuests: effectiveGuests,
       rooms: sanitizedRooms,
       baseLodgingTotal,
       extraGuests,
@@ -297,7 +296,7 @@ export async function POST(req: Request) {
     const checkOutFormatted = formatSpanishDate(cleanCheckOut);
     const roomsParam = sanitizedRooms.map((r: any) => `${r.key}:${r.quantity}`).join(',');
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app';
-    const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${cleanAdults}&children=${cleanChildren}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}&action=reserve&step=confirm`;
+    const reserveUrl = `${siteUrl}/public/reservar?phone=${cleanPhone}&checkIn=${cleanCheckIn}&checkOut=${cleanCheckOut}&adults=${effectiveAdults}&children=${cleanChildren}&rooms=${encodeURIComponent(roomsParam)}&extras=${extraGuests}&quoteId=${quoteId}&action=reserve&step=confirm`;
 
     const whatsappSummaryText =
 `*(Sujeta a disponibilidad a la hora de Reservar)*
@@ -308,7 +307,7 @@ Folio: *#${quoteId}*
 📅 *Check in:* ${checkInFormatted}
 	*Check out:* ${checkOutFormatted} (${nights} ${nights === 1 ? 'noche' : 'noches'})
 
-👥 *Huéspedes:* ${totalGuests} personas (${adults} adultos${children > 0 ? `, ${children} niños` : ''})
+👥 *Huéspedes:* ${effectiveGuests} personas (${effectiveAdults} adultos${cleanChildren > 0 ? `, ${cleanChildren} niños` : ''})
 
 🛏️ *Alojamientos seleccionados:*
 ${roomsText}
