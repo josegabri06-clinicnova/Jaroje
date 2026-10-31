@@ -353,41 +353,51 @@ export async function POST(req: Request) {
       }, { status: 429 });
     }
 
-    // 3. Obtener token y mapa oficial de tarifas de Beds24 para el canal 'Directo'
+    // 3. Obtener token y consultar concurrentemente en paralelo: tarifas Beds24, pricing_unit_settings,
+    // reservas reales de Beds24 (sin invoice items y con rango acotado) y reservas locales de Supabase.
     const BEDS24_TOKEN = await getBeds24Token();
-    let beds24RatesMap: Record<string, Record<string, number>> = {};
-    try {
-      beds24RatesMap = await fetchBeds24RatesMap(BEDS24_TOKEN, cleanCheckIn, cleanCheckOut);
-    } catch (tokenErr) {
-      console.warn("[Reservar API] Failed to fetch Beds24 calendar rates:", tokenErr);
-    }
+    const bookingsFrom = new Date(Date.parse(`${cleanCheckIn}T00:00:00Z`) - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const [beds24RatesMap, dynamicSettings, bookingsRaw, localBookings] = await Promise.all([
+      (async () => {
+        try {
+          return await fetchBeds24RatesMap(BEDS24_TOKEN, cleanCheckIn, cleanCheckOut);
+        } catch (tokenErr) {
+          console.warn("[Reservar API] Failed to fetch Beds24 calendar rates:", tokenErr);
+          return {} as Record<string, Record<string, number>>;
+        }
+      })(),
+      (async () => {
+        try {
+          const { data: settingsData } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('key', 'pricing_unit_settings')
+            .maybeSingle();
+          if (settingsData?.value) {
+            return typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+          }
+        } catch (errSettings) {
+          console.warn("[Reservar API] Error loading pricing_unit_settings:", errSettings);
+        }
+        return null as any;
+      })(),
+      fetchAllRawBeds24Bookings(bookingsFrom, cleanCheckOut, false, false),
+      (async () => {
+        try {
+          const { data } = await supabase
+            .from('local_reservas')
+            .select('check_in, check_out, room_id, unit_id')
+            .neq('status', 'cancelled');
+          return data || [];
+        } catch (lErr) {
+          console.warn("[Reservar API] Error checking local_reservas:", lErr);
+          return [] as any[];
+        }
+      })()
+    ]);
+
     assertRatesLoaded(beds24RatesMap);
-
-    // Cargar pricing_unit_settings de Supabase si existen
-    let dynamicSettings: any = null;
-    try {
-      const { data: settingsData } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'pricing_unit_settings')
-        .maybeSingle();
-      if (settingsData?.value) {
-        dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
-      }
-    } catch (errSettings) {
-      console.warn("[Reservar API] Error loading pricing_unit_settings:", errSettings);
-    }
-
-    // 3.1. Verificar disponibilidad física en tiempo real en Beds24
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - 30);
-    const toDate = new Date();
-    toDate.setDate(toDate.getDate() + 400);
-
-    const bookingsRaw = await fetchAllRawBeds24Bookings(
-      fromDate.toISOString().split('T')[0],
-      toDate.toISOString().split('T')[0]
-    );
 
     const occupiedUnitIds = new Set<string>();
     (bookingsRaw || []).forEach((b: any) => {
@@ -403,26 +413,17 @@ export async function POST(req: Request) {
       }
     });
 
-    // Cargar también reservas locales activas de Supabase
-    try {
-      const { data: localBookings } = await supabase
-        .from('local_reservas')
-        .select('*')
-        .neq('status', 'cancelled');
-
-      (localBookings || []).forEach((b: any) => {
-        const bIn = String(b.check_in || '').split('T')[0].split(' ')[0].trim();
-        const bOut = String(b.check_out || '').split('T')[0].split(' ')[0].trim();
-        if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
-          const parent = getParentMapping(b.room_id, b.unit_id);
-          if (parent.roomId && parent.unitId) {
-            occupiedUnitIds.add(`${parent.roomId}_${parent.unitId}`);
-          }
+    // Procesar reservas locales de Supabase (cargadas concurrentemente arriba)
+    (localBookings || []).forEach((b: any) => {
+      const bIn = String(b.check_in || '').split('T')[0].split(' ')[0].trim();
+      const bOut = String(b.check_out || '').split('T')[0].split(' ')[0].trim();
+      if (bIn && bOut && bIn < cleanCheckOut && bOut > cleanCheckIn) {
+        const parent = getParentMapping(b.room_id, b.unit_id);
+        if (parent.roomId && parent.unitId) {
+          occupiedUnitIds.add(`${parent.roomId}_${parent.unitId}`);
         }
-      });
-    } catch (lErr) {
-      console.warn("[Reservar API] Error checking local_reservas:", lErr);
-    }
+      }
+    });
 
     // Separar nombre y apellido
     const nameParts = guestName.trim().split(' ');

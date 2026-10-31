@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Calendar,
@@ -397,85 +397,110 @@ function ReservarContent() {
         };
   }, [lang]);
 
-  // Consultar cotización y reservas existentes
+  // Caché en memoria para cotizaciones y cancelador de peticiones en vuelo (stale requests)
+  const quotesCacheRef = useRef<Map<string, any>>(new Map());
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Aplica los datos de cotización en el estado local de forma coherente
+  const applyQuoteData = (data: any) => {
+    setQuotes(data.quotes || []);
+    if (data.existingReservations && data.existingReservations.length > 0) {
+      setExistingReservations(data.existingReservations);
+    }
+
+    // Validar y sanitizar la disponibilidad en vivo de las habitaciones preseleccionadas
+    if (data.quotes && Array.isArray(data.quotes)) {
+      let availabilityChanged = false;
+
+      setSelectedRooms(prev => {
+        if (Object.keys(prev).length === 0) return prev;
+        const updated: Record<string, number> = {};
+        Object.entries(prev).forEach(([key, qty]) => {
+          const matchedQuote = data.quotes.find((q: any) => q.key === key);
+          const maxAvailable = matchedQuote?.availableUnitsCount || 0;
+          if (maxAvailable < qty) {
+            availabilityChanged = true;
+            if (maxAvailable > 0) updated[key] = maxAvailable;
+          } else {
+            updated[key] = qty;
+          }
+        });
+        return updated;
+      });
+
+      // Si existe cotización pendiente previa asociada a este teléfono SOLO si el usuario viene del botón de confirmar cotización
+      if (isDirectReserveFlow && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
+        setPendingQuote(data.pendingQuote);
+        if (data.pendingQuote.phone && !guestPhone) {
+          setGuestPhone(data.pendingQuote.phone);
+        }
+        // Sincronizar selectedRooms con los alojamientos del pendingQuote respetando la disponibilidad real
+        setSelectedRooms(prev => {
+          if (Object.keys(prev).length > 0) return prev;
+          if (Array.isArray(data.pendingQuote.rooms) && data.pendingQuote.rooms.length > 0) {
+            const mapped: Record<string, number> = {};
+            data.pendingQuote.rooms.forEach((r: any) => {
+              const k = normalizeRoomCategoryKey(r.key || '');
+              const qty = Number(r.quantity || 1);
+              const matchedQuote = data.quotes.find((q: any) => q.key === k);
+              const maxAvailable = matchedQuote?.availableUnitsCount || 0;
+              if (maxAvailable < qty) {
+                availabilityChanged = true;
+                if (maxAvailable > 0) mapped[k] = maxAvailable;
+              } else {
+                mapped[k] = qty;
+              }
+            });
+            return mapped;
+          }
+          return prev;
+        });
+      } else if (!isDirectReserveFlow) {
+        // Si el usuario entra por navegación general al portal, no forzar ninguna cotización previa fantasma
+        setPendingQuote(null);
+      }
+
+      if (availabilityChanged) {
+        setAvailabilityNotice(
+          lang === 'en'
+            ? '⚠️ One or more previously selected accommodations are no longer fully available for these dates.'
+            : '⚠️ Uno o más alojamientos seleccionados previamente ya no tienen disponibilidad completa para estas fechas. Por favor verifique las opciones disponibles.'
+        );
+      }
+    }
+  };
+
+  // Consultar cotización y reservas existentes con caché en memoria y cancelación de carreras
   const fetchQuotes = async () => {
     if (!checkIn || !checkOut || checkIn >= checkOut) {
       setQuotes([]);
       setLoading(false);
       return;
     }
+
+    const cacheKey = `${checkIn}_${checkOut}_${phoneParam}`;
+    if (quotesCacheRef.current.has(cacheKey)) {
+      const cached = quotesCacheRef.current.get(cacheKey);
+      applyQuoteData(cached);
+      setLoading(false);
+      return;
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     setLoading(true);
     try {
       const url = `/api/public/cotizar?checkIn=${checkIn}&checkOut=${checkOut}&phone=${encodeURIComponent(phoneParam)}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: controller.signal });
       const data = await res.json();
 
       if (data.success) {
-        setQuotes(data.quotes || []);
-        if (data.existingReservations && data.existingReservations.length > 0) {
-          setExistingReservations(data.existingReservations);
-        }
-
-        // Validar y sanitizar la disponibilidad en vivo de las habitaciones preseleccionadas
-        if (data.quotes && Array.isArray(data.quotes)) {
-          let availabilityChanged = false;
-
-          setSelectedRooms(prev => {
-            if (Object.keys(prev).length === 0) return prev;
-            const updated: Record<string, number> = {};
-            Object.entries(prev).forEach(([key, qty]) => {
-              const matchedQuote = data.quotes.find((q: any) => q.key === key);
-              const maxAvailable = matchedQuote?.availableUnitsCount || 0;
-              if (maxAvailable < qty) {
-                availabilityChanged = true;
-                if (maxAvailable > 0) updated[key] = maxAvailable;
-              } else {
-                updated[key] = qty;
-              }
-            });
-            return updated;
-          });
-
-          // Si existe cotización pendiente previa asociada a este teléfono SOLO si el usuario viene del botón de confirmar cotización
-          if (isDirectReserveFlow && data.pendingQuote && data.pendingQuote.status === 'pending_name') {
-            setPendingQuote(data.pendingQuote);
-            if (data.pendingQuote.phone && !guestPhone) {
-              setGuestPhone(data.pendingQuote.phone);
-            }
-            // Sincronizar selectedRooms con los alojamientos del pendingQuote respetando la disponibilidad real
-            setSelectedRooms(prev => {
-              if (Object.keys(prev).length > 0) return prev;
-              if (Array.isArray(data.pendingQuote.rooms) && data.pendingQuote.rooms.length > 0) {
-                const mapped: Record<string, number> = {};
-                data.pendingQuote.rooms.forEach((r: any) => {
-                  const k = normalizeRoomCategoryKey(r.key || '');
-                  const qty = Number(r.quantity || 1);
-                  const matchedQuote = data.quotes.find((q: any) => q.key === k);
-                  const maxAvailable = matchedQuote?.availableUnitsCount || 0;
-                  if (maxAvailable < qty) {
-                    availabilityChanged = true;
-                    if (maxAvailable > 0) mapped[k] = maxAvailable;
-                  } else {
-                    mapped[k] = qty;
-                  }
-                });
-                return mapped;
-              }
-              return prev;
-            });
-          } else if (!isDirectReserveFlow) {
-            // Si el usuario entra por navegación general al portal, no forzar ninguna cotización previa fantasma
-            setPendingQuote(null);
-          }
-
-          if (availabilityChanged) {
-            setAvailabilityNotice(
-              lang === 'en'
-                ? '⚠️ One or more previously selected accommodations are no longer fully available for these dates.'
-                : '⚠️ Uno o más alojamientos seleccionados previamente ya no tienen disponibilidad completa para estas fechas. Por favor verifique las opciones disponibles.'
-            );
-          }
-        }
+        quotesCacheRef.current.set(cacheKey, data);
+        applyQuoteData(data);
       } else {
         setQuotes([]);
         setAvailabilityNotice(
@@ -486,11 +511,16 @@ function ReservarContent() {
             : (data.error || (lang === 'en' ? '⚠️ Could not load rates.' : '⚠️ No se pudieron cargar las tarifas.'))
         );
       }
-    } catch (err) {
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        return; // Petición cancelada porque el usuario cambió de fecha rápidamente
+      }
       console.error("Error fetching quotes:", err);
       setQuotes([]);
     } finally {
-      setLoading(false);
+      if (abortControllerRef.current === controller) {
+        setLoading(false);
+      }
     }
   };
 
@@ -1236,9 +1266,17 @@ function ReservarContent() {
               )}
 
               <div className="flex items-center justify-between px-1">
-                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
-                  {t.availableRooms}
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-zinc-400">
+                    {t.availableRooms}
+                  </h3>
+                  {loading && quotes.length > 0 && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full animate-pulse">
+                      <Loader2 size={11} className="animate-spin" />
+                      <span>{lang === 'en' ? 'Updating...' : 'Actualizando...'}</span>
+                    </span>
+                  )}
+                </div>
                 {stayNights > 0 && (
                   <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
                     {stayNights} {stayNights === 1 ? t.night : t.nights}
@@ -1246,17 +1284,26 @@ function ReservarContent() {
                 )}
               </div>
 
-              {loading ? (
-                <div className="bg-white rounded-3xl p-12 border border-zinc-200/80 text-center space-y-3">
-                  <Loader2 className="w-7 h-7 text-indigo-600 animate-spin mx-auto" />
-                  <p className="text-xs text-zinc-500 font-medium">{t.searching}</p>
+              {loading && quotes.length === 0 ? (
+                <div className="space-y-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="bg-white rounded-3xl overflow-hidden border border-zinc-200/80 animate-pulse">
+                      <div className="h-52 bg-zinc-100" />
+                      <div className="p-5 space-y-3">
+                        <div className="h-5 bg-zinc-200 rounded-md w-2/3" />
+                        <div className="h-4 bg-zinc-100 rounded-md w-1/3" />
+                        <div className="h-10 bg-zinc-100 rounded-2xl w-full mt-4" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : quotes.length === 0 ? (
                 <div className="bg-white rounded-3xl p-8 border border-zinc-200/80 text-center text-xs text-zinc-500">
                   {t.soldOut}
                 </div>
               ) : (
-                quotes.map(q => {
+                <div className={`space-y-4 transition-opacity duration-200 ${loading ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+                {quotes.map(q => {
                   const qtySelected = selectedRooms[q.key] || 0;
                   const cardExtraGuests = selectionSummary.neededExtras > 0 ? Math.min(extraByRoom[q.key] || 0, Math.max(0, q.maxCapacity - q.capacity) * qtySelected, selectionSummary.extraGuests) : 0;
                   const cardTotal = q.totalPrice * Math.max(1, qtySelected) + cardExtraGuests * 500 * q.nights;
@@ -1279,6 +1326,7 @@ function ReservarContent() {
                           alt={q.name}
                           className="w-full h-full object-cover"
                           loading="lazy"
+                          decoding="async"
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20" />
 
@@ -1493,7 +1541,8 @@ function ReservarContent() {
                       </div>
                     </div>
                   );
-                })
+                })}
+                </div>
               )}
             </div>
 

@@ -151,29 +151,36 @@ export async function POST(req: Request) {
     const effectiveGuests = totalGuests;
     const extraGuestsFee = extraGuests * 500 * nights;
 
-    // Obtener token y mapa oficial de tarifas de Beds24
-    let beds24RatesMap: Record<string, Record<string, number>> = {};
-    try {
-      const token = await getBeds24Token();
-      beds24RatesMap = await fetchBeds24RatesMap(token, cleanCheckIn, cleanCheckOut);
-    } catch (tokenErr) {
-      console.warn("[Cotizacion API] Failed to fetch Beds24 calendar rates:", tokenErr);
-    }
-    assertRatesLoaded(beds24RatesMap);
+    // Obtener token y mapa oficial de tarifas de Beds24 junto con pricing_unit_settings en paralelo
+    const token = await getBeds24Token();
 
-    let dynamicSettings: any = null;
-    try {
-      const { data: settingsData } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'pricing_unit_settings')
-        .maybeSingle();
-      if (settingsData?.value) {
-        dynamicSettings = typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
-      }
-    } catch (errSettings) {
-      console.warn("[Cotizacion API] Error loading pricing_unit_settings:", errSettings);
-    }
+    const [beds24RatesMap, dynamicSettings] = await Promise.all([
+      (async () => {
+        try {
+          return await fetchBeds24RatesMap(token, cleanCheckIn, cleanCheckOut);
+        } catch (tokenErr) {
+          console.warn("[Cotizacion API] Failed to fetch Beds24 calendar rates:", tokenErr);
+          return {} as Record<string, Record<string, number>>;
+        }
+      })(),
+      (async () => {
+        try {
+          const { data: settingsData } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('key', 'pricing_unit_settings')
+            .maybeSingle();
+          if (settingsData?.value) {
+            return typeof settingsData.value === 'string' ? JSON.parse(settingsData.value) : settingsData.value;
+          }
+        } catch (errSettings) {
+          console.warn("[Cotizacion API] Error loading pricing_unit_settings:", errSettings);
+        }
+        return null as any;
+      })()
+    ]);
+
+    assertRatesLoaded(beds24RatesMap);
 
     let baseLodgingTotal = 0;
     const sanitizedRooms = validRooms.map(r => {
