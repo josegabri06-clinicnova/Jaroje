@@ -83,8 +83,10 @@ export async function POST(req: Request) {
     };
 
     // Sanitización estricta de huéspedes
-    const cleanAdults = Math.max(1, Math.min(30, parseInt(String(adults || 2), 10) || 2));
-    const cleanChildren = Math.max(0, Math.min(20, parseInt(String(children || 0), 10) || 0));
+    // Mismos límites que la página (200 adultos / 100 niños): un tope menor recortaba huéspedes y con ello los extras cobrados.
+    // Lo que supere la capacidad máxima de las habitaciones elegidas se rechaza más abajo.
+    const cleanAdults = Math.max(1, Math.min(200, parseInt(String(adults || 2), 10) || 2));
+    const cleanChildren = Math.max(0, Math.min(100, parseInt(String(children || 0), 10) || 0));
     const totalGuests = cleanAdults + cleanChildren;
 
     // Filtrar habitaciones con cantidad entera válida
