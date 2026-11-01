@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { normalizePhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -22,8 +22,11 @@ export async function GET(req: Request) {
     }
 
     if (search) {
-      const s = search.trim();
-      query = query.or(`phone.ilike.%${s}%,caller_name.ilike.%${s}%,notes.ilike.%${s}%`);
+      // Sanear caracteres reservados de PostgREST para prevenir inyección de filtros
+      const sanitized = search.replace(/[,()\\%]/g, '').trim();
+      if (sanitized) {
+        query = query.or(`phone.ilike.%${sanitized}%,caller_name.ilike.%${sanitized}%,notes.ilike.%${sanitized}%`);
+      }
     }
 
     const { data: calls, error } = await query;

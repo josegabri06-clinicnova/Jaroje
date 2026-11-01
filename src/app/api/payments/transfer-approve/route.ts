@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { addBeds24Payment, addBeds24GroupPayment, getBeds24Token } from '@/lib/beds24';
 import { sendTemplate11_PagoAnticipoRecibido, sendTemplate3_ReservacionConfirmada, sendTemplate2_UltimoAviso, sendTemplate_ComprobanteRechazado, getFirstName, sendWhatsAppTextMessage } from '@/lib/whatsapp';
 

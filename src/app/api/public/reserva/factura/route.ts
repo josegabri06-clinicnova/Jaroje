@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 // POST: Upload the constancia PDF to Supabase Storage
 export async function POST(req: NextRequest) {
@@ -37,9 +32,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
     }
 
-    const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(fileName);
-    const url = publicUrlData?.publicUrl;
+    let finalDocUrl = '';
+    const { data: signedData } = await supabase.storage
+      .from('dni_images')
+      .createSignedUrl(fileName, 60 * 60 * 24 * 180); // 180 días de vigencia
 
+    if (signedData?.signedUrl) {
+      finalDocUrl = signedData.signedUrl;
+    } else {
+      const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(fileName);
+      finalDocUrl = publicUrlData?.publicUrl || '';
+    }
+
+    const url = finalDocUrl;
     return NextResponse.json({ success: true, url });
   } catch (err: any) {
     console.error('[Factura POST] Error:', err);
@@ -55,6 +60,17 @@ export async function PUT(req: NextRequest) {
 
     if (!reservationId || !email || !cfdiUse || !pdfUrl) {
       return NextResponse.json({ success: false, error: 'Datos incompletos.' }, { status: 400 });
+    }
+
+    // Validar que pdfUrl pertenece exclusivamente a nuestro almacenamiento oficial de Supabase
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const isSupabaseStorageUrl = typeof pdfUrl === 'string' && (
+      (supabaseUrl && pdfUrl.startsWith(supabaseUrl)) ||
+      pdfUrl.includes('.supabase.co/storage/v1/')
+    );
+
+    if (!isSupabaseStorageUrl) {
+      return NextResponse.json({ success: false, error: 'URL de constancia fiscal no autorizada o inválida.' }, { status: 400 });
     }
 
     const { error: insertError } = await supabase.from('billing_requests').insert([{

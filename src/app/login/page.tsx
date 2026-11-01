@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { validatePinAsync, setRole, resetAllPinsToDefault, loadPinsFromSupabase } from '@/lib/auth';
+import { validatePinAsync, setRole, resetAllPinsToDefault } from '@/lib/auth';
 import { Shield, Wrench, Sparkles, KeyRound, RotateCcw, AlertTriangle, Fingerprint } from 'lucide-react';
 // @ts-ignore
 import { startAuthentication } from '@simplewebauthn/browser';
@@ -49,7 +49,7 @@ export default function LoginPage() {
 
       setRole('admin');
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('jaroje_session_pin', verifyResult.pin || '1234');
+        sessionStorage.removeItem('jaroje_session_pin');
       }
       router.replace('/');
     } catch (err: any) {
@@ -80,7 +80,7 @@ export default function LoginPage() {
 
       setRole('admin');
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('jaroje_session_pin', data.pin || '1234');
+        sessionStorage.removeItem('jaroje_session_pin');
       }
       router.replace('/ajustes?section=seguridad');
     } catch (err: any) {
@@ -96,11 +96,6 @@ export default function LoginPage() {
       handleBiometricLogin();
     }
   }, [mode, showRecoveryInput]);
-
-  // Precargar PINs desde Supabase al iniciar
-  useEffect(() => {
-    loadPinsFromSupabase().catch(() => {});
-  }, []);
 
   // Si ya hay sesión, redirigir
   useEffect(() => {

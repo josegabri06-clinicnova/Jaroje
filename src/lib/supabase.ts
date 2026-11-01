@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Usamos las variables de entorno para conectar con Supabase.
-// Para el backend, lo ideal es usar SUPABASE_SERVICE_ROLE_KEY si se requiere bypass de RLS,
-// pero por defecto usamos ANON_KEY para el MVP.
+// Cliente de Supabase para el frontend (browser) y suscripciones en tiempo real.
+// Utiliza exclusivamente la clave anónima pública sujeta a RLS.
+// Para el backend (API routes, crons, webhooks), use siempre `supabaseAdmin` desde `@/lib/supabase-admin`.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
   global: {
