@@ -97,13 +97,7 @@ export default function LoginPage() {
     }
   }, [mode, showRecoveryInput]);
 
-  // Si ya hay sesión, redirigir
-  useEffect(() => {
-    const role = localStorage.getItem('jaroje_role');
-    if (role === 'admin') router.replace('/calendario');
-    if (role === 'staff_limpieza' || role === 'staff_mantenimiento') router.replace('/staff');
-    if (role === 'recepcion') router.replace('/calendario');
-  }, [router]);
+  // La redirección "si ya hay sesión" la decide AuthGuard con la cookie del servidor (no con localStorage, que puede ser antigua)
 
   // Tap en el logo 5 veces → mostrar reset de emergencia
   const handleLogoTap = () => {

@@ -24,6 +24,7 @@ function isPublicPath(pathname: string, req?: NextRequest): boolean {
   if (
     pathname === '/api/auth/login' ||
     pathname === '/api/auth/logout' ||
+    pathname === '/api/auth/session' ||
     pathname === '/api/auth/verify-recovery-key' ||
     pathname === '/api/auth/webauthn/login/options' ||
     pathname === '/api/auth/webauthn/login/verify'

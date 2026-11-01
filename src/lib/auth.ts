@@ -128,12 +128,46 @@ export function getRole(): Role {
 export function setRole(role: Role) {
   if (!role) localStorage.removeItem(ROLE_KEY);
   else localStorage.setItem(ROLE_KEY, role);
+  // Al iniciar sesión se vacía la caché de la consulta de sesión para no usar un "no hay sesión" anterior al login
+  clearServerSessionCache();
 }
-export function logout() {
+// Consulta al servidor si hay sesión válida (cookie HttpOnly). Es la fuente de verdad; localStorage es solo una copia.
+// 'error' = no se pudo consultar (sin red): en ese caso no se borra nada.
+export type ServerSession = { status: 'ok'; role: Role } | { status: 'none' } | { status: 'error' };
+let _serverSessionCache: { value: ServerSession; ts: number } | null = null;
+
+export function clearServerSessionCache() {
+  _serverSessionCache = null;
+}
+
+export async function fetchServerSession(): Promise<ServerSession> {
+  if (_serverSessionCache && Date.now() - _serverSessionCache.ts < 10_000) return _serverSessionCache.value;
+  let value: ServerSession;
+  try {
+    const res = await fetch('/api/auth/session', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      value = data?.role ? { status: 'ok', role: data.role as Role } : { status: 'none' };
+    } else if (res.status === 401) {
+      value = { status: 'none' };
+    } else {
+      return { status: 'error' };
+    }
+  } catch {
+    return { status: 'error' };
+  }
+  // Solo se cachea el "sí hay sesión"; un "no hay sesión" puede cambiar al instante con el login
+  if (value.status === 'ok') _serverSessionCache = { value, ts: Date.now() };
+  return value;
+}
+
+export async function logout() {
   localStorage.removeItem(ROLE_KEY);
+  clearServerSessionCache();
   if (typeof window !== 'undefined') {
     sessionStorage.removeItem('jaroje_session_pin');
-    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    // Se espera a que el servidor borre la cookie antes de navegar, para no rebotar de /login a /calendario
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* sin red: la cookie caduca sola */ }
   }
 }
 
