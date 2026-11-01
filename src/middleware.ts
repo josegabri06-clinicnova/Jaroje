@@ -141,6 +141,24 @@ export async function middleware(req: NextRequest) {
     }
   }
 
+  // Precios y cuenta bancaria: Recepción puede consultarlos (GET), pero solo el Administrador puede modificarlos
+  const isReadMethod = req.method === 'GET' || req.method === 'HEAD';
+  if (
+    pathname === '/api/precios/sync' ||
+    (!isReadMethod && (
+      pathname === '/api/beds24-prices' ||
+      pathname === '/api/precios/save-ranges' ||
+      pathname === '/api/settings/transfer-account'
+    ))
+  ) {
+    if (role !== 'admin') {
+      return NextResponse.json(
+        { success: false, error: 'Forbidden: Se requieren privilegios de administrador para modificar precios o la cuenta bancaria.' },
+        { status: 403 }
+      );
+    }
+  }
+
   // Operaciones de Cobros y Aprobación de Transferencias: Solo Admin y Recepción
   if (
     pathname === '/api/payments/transfer-approve' ||
