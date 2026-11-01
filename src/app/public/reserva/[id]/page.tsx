@@ -405,7 +405,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     locationDesc: 'Hotel y Condominios Jaroje\nCalle Mixie, Manzana 3, Lote 4 Sector M, Bahía de Santa Cruz Huatulco\nSanta María Huatulco, Oaxaca, C.P. 70987.',
     talkReception: 'Hablar con nosotros',
     footerRights: '© 2026 Condominios Jaroje. Todos los derechos reservados.',
-    footerHelp: '¿Necesitas ayuda? Escríbenos a nuestro WhatsApp oficial: +52 958 116 8698',
+    footerHelp: '¿Necesitas ayuda? Escríbenos a nuestro WhatsApp oficial: 958 587 8554',
     lightboxOf: 'of',
     lightboxControls: 'Toca a los lados para navegar • Condominios Jaroje',
 
@@ -528,7 +528,7 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     locationDesc: 'Hotel & Condominios Jaroje\nCalle Mixie, Manzana 3, Lote 4 Sector M, Bahía de Santa Cruz Huatulco\nSanta María Huatulco, Oaxaca, C.P. 70987.',
     talkReception: 'Talk with us',
     footerRights: '© 2026 Condominios Jaroje. All rights reserved.',
-    footerHelp: 'Need help? Write to our official WhatsApp: +52 958 116 8698',
+    footerHelp: 'Need help? Write to our official WhatsApp: +52 958 587 8554',
     lightboxOf: 'of',
     lightboxControls: 'Tap the sides to navigate • Condominios Jaroje',
 
