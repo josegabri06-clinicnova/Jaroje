@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { getSessionFromRequest } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 export async function POST(request: Request) {
   try {
+    const session = await getSessionFromRequest(request);
+    if (!session || session.role !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Forbidden: Se requieren privilegios de administrador para eliminar passkeys.' }, { status: 403 });
+    }
+
     const { id } = await request.json();
 
     if (!id) {

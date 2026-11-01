@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchAllRawBeds24Bookings, getUnitName, getRealPrice, getRoomMetadata } from '@/lib/beds24';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { authorizeExportRequest } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +86,15 @@ function mapBooking(b: any, dynamicSettings?: any) {
 // ── GET ─────────────────────────────────────────────────────────────────────
 export async function GET(req: Request) {
   try {
+    // 1. Control de acceso: Verificar sesión (admin/recepcion) o token de exportación
+    const auth = await authorizeExportRequest(req, ['admin', 'recepcion']);
+    if (!auth.authorized) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized: Se requiere sesión de administrador o token de exportación válido.' },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(req.url);
     const format = searchParams.get('format') ?? 'json'; // 'json' | 'csv'
 
@@ -119,7 +129,6 @@ export async function GET(req: Request) {
         },
         {
           headers: {
-            'Access-Control-Allow-Origin': '*', // Permite que Power Query lo consuma sin CORS
             'Cache-Control': 'no-store',
           }
         }
@@ -149,7 +158,6 @@ export async function GET(req: Request) {
         headers: {
           'Content-Type':        'text/csv; charset=utf-8',
           'Content-Disposition': `attachment; filename="${filename}"`,
-          'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'no-store',
         }
       });
@@ -201,7 +209,6 @@ export async function GET(req: Request) {
         headers: {
           'Content-Type': 'application/sql; charset=utf-8',
           'Content-Disposition': `attachment; filename="${filename}"`,
-          'Access-Control-Allow-Origin': '*',
           'Cache-Control': 'no-store',
         }
       });

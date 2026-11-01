@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -18,9 +18,43 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Faltan datos obligatorios (bookingId, amount, file)' }, { status: 400 });
     }
 
+    // Validación de monto
+    const numericAmount = Number(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0 || numericAmount > 500000) {
+      return NextResponse.json({ error: 'El monto ingresado es inválido.' }, { status: 400 });
+    }
+
+    // Validación de ID de reserva
+    const cleanBookingId = String(bookingId).trim();
+    if (cleanBookingId.length > 60 || !/^[a-zA-Z0-9_\-\.]+$/.test(cleanBookingId)) {
+      return NextResponse.json({ error: 'Identificador de reserva con formato inválido.' }, { status: 400 });
+    }
+
+    // Validación de tamaño de archivo (máx 10 MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'El comprobante excede el tamaño máximo permitido (10 MB).' }, { status: 400 });
+    }
+
+    // Validación de tipo de archivo permitido
+    const ALLOWED_MIME_TYPES = [
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+      'application/pdf'
+    ];
+    if (file.type && !ALLOWED_MIME_TYPES.includes(file.type.toLowerCase())) {
+      return NextResponse.json({ 
+        error: 'Formato no permitido. Solo se aceptan imágenes (JPG, PNG, WEBP) o documentos PDF.' 
+      }, { status: 400 });
+    }
+
     // 1. Subir el archivo a Supabase Storage en el bucket "transfer-receipts"
-    const fileExt = file.name.split('.').pop() || 'jpg';
-    const filePath = `${bookingId}_${Date.now()}.${fileExt}`;
+    const rawExt = file.name ? file.name.split('.').pop()?.toLowerCase() : 'jpg';
+    const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'heic'].includes(rawExt || '') ? rawExt : 'jpg';
+    const filePath = `${cleanBookingId}_${Date.now()}.${safeExt}`;
 
     const { data: uploadData, error: uploadError } = await supabase.storage
       .from('transfer-receipts')
@@ -34,12 +68,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Error al guardar el comprobante en almacenamiento.' }, { status: 500 });
     }
 
-    // 2. Obtener la URL pública del archivo
-    const { data: urlData } = supabase.storage
+    // 2. Generar URL de acceso segura (firmada para privacidad de comprobantes de pago)
+    let finalReceiptUrl = '';
+    const { data: signedData } = await supabase.storage
       .from('transfer-receipts')
-      .getPublicUrl(filePath);
+      .createSignedUrl(filePath, 60 * 60 * 24 * 180); // 180 días de vigencia
 
-    const publicUrl = urlData.publicUrl;
+    if (signedData?.signedUrl) {
+      finalReceiptUrl = signedData.signedUrl;
+    } else {
+      const { data: urlData } = supabase.storage
+        .from('transfer-receipts')
+        .getPublicUrl(filePath);
+      finalReceiptUrl = urlData.publicUrl;
+    }
+
+    const publicUrl = finalReceiptUrl;
 
     // 3. Registrar en la tabla "transfer_receipts" de Supabase
     const { data: dbData, error: dbError } = await supabase

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Token, getBeds24Bookings, clearBeds24Cache } from '@/lib/beds24';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendTemplate3_ReservacionConfirmada, sendTemplate11_PagoAnticipoRecibido, sendTemplate6_BienvenidaCheckin } from '@/lib/whatsapp';
 
 // POST: Registrar un cobro/pago en Beds24 asociado a una reserva o localmente en Supabase

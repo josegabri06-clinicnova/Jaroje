@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import crypto from 'crypto';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 
-function getStoragePath(publicUrl: string) {
-  if (!publicUrl) return null;
-  const parts = publicUrl.split('/public/');
+function getStoragePath(url: string) {
+  if (!url) return null;
+  // Quitar query params si es URL firmada (?token=...)
+  const cleanUrl = url.split('?')[0];
+  let parts = cleanUrl.split('/public/');
+  if (parts.length < 2) {
+    parts = cleanUrl.split('/sign/');
+  }
   if (parts.length < 2) return null;
   const bucketAndPath = parts[1];
   const slashIdx = bucketAndPath.indexOf('/');
@@ -15,15 +21,26 @@ function getStoragePath(publicUrl: string) {
 
 export async function GET(req: Request) {
   try {
-    // 1. Autenticación básica de cron mediante token o cabecera x-cron-secret
+    // 1. Autenticación estricta de cron (Fail-Closed con comparación timing-safe)
+    const expectedToken = process.env.CRON_SECRET?.trim();
+    if (!expectedToken) {
+      console.error("[Cron Cleanup] ⚠️ CRON_SECRET no está configurado en el servidor. Rechazando por seguridad.");
+      return NextResponse.json({ success: false, error: 'Server configuration error: CRON_SECRET is required' }, { status: 500 });
+    }
+
     const { searchParams } = new URL(req.url);
     const authHeader = req.headers.get('authorization') || '';
-    const cronToken = searchParams.get('token') || 
-                      req.headers.get('x-cron-secret') || 
-                      authHeader.replace(/^bearer\s+/i, '').trim();
-    const expectedToken = process.env.CRON_SECRET;
+    const cronToken = (
+      req.headers.get('x-cron-secret') || 
+      authHeader.replace(/^bearer\s+/i, '').trim() ||
+      searchParams.get('token') ||
+      ''
+    ).trim();
 
-    if (expectedToken && cronToken !== expectedToken) {
+    const expectedHash = crypto.createHash('sha256').update(expectedToken).digest();
+    const providedHash = crypto.createHash('sha256').update(cronToken).digest();
+
+    if (!cronToken || !crypto.timingSafeEqual(expectedHash, providedHash)) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
