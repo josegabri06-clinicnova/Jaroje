@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getSessionFromRequest } from '@/lib/session';
+import { getExpectedPin, safeEqual } from '@/lib/server-pins';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,17 +58,11 @@ export async function POST(req: Request) {
 
     // Validar el PIN de Administrador contra la base de datos con comparación en tiempo constante
     try {
-      const { data: pinSetting } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "pin_admin")
-        .maybeSingle();
-      
-      const dbAdminPin = String(pinSetting?.value || "1234").trim();
-      const expectedHash = crypto.createHash('sha256').update(dbAdminPin).digest();
-      const providedHash = crypto.createHash('sha256').update((adminPin || '').trim()).digest();
-
-      if (!adminPin || !crypto.timingSafeEqual(expectedHash, providedHash)) {
+      const dbAdminPin = await getExpectedPin('admin');
+      if (!dbAdminPin) {
+        return NextResponse.json({ error: "PIN de administrador no configurado en el servidor." }, { status: 500 });
+      }
+      if (!adminPin || !safeEqual((adminPin || '').trim(), dbAdminPin)) {
         return NextResponse.json({ error: "PIN de administrador incorrecto o ausente." }, { status: 401 });
       }
     } catch (dbErr: any) {

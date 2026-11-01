@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ShieldAlert, CheckCircle2, Lock, Unlock, X, Wallet, BedDouble, Send, Minus, Plus } from 'lucide-react';
-import { getActiveEmployee, getAdminPin } from '@/lib/auth';
+import { getActiveEmployee, verifyAdminPin } from '@/lib/auth';
 import { getUnitName, getRoomMetadata, getParentMapping, getCapacityRules } from '@/lib/beds24';
 import { format, parseISO, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -642,8 +642,8 @@ export default function VercelActionForm() {
     }
   }, [formPaymentMethod, accounts, form.guestName]);
 
-  const handleUnlockPrice = () => {
-    if (pinInput === getAdminPin()) {
+  const handleUnlockPrice = async () => {
+    if (await verifyAdminPin(pinInput)) {
       setIsPriceUnlocked(true);
       setShowPinModal(false);
       setPinInput('');

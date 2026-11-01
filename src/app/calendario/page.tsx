@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import { getActiveEmployee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
+import { getActiveEmployee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
@@ -835,8 +835,8 @@ export default function CalendarPage() {
     }
   }, [showCheckInModal, selectedReserva]);
 
-  const handleUnlockPrice = () => {
-    if (pinInput === getAdminPin()) {
+  const handleUnlockPrice = async () => {
+    if (await verifyAdminPin(pinInput)) {
       setIsPriceUnlocked(true);
       setShowPinModal(false);
       setPinInput('');

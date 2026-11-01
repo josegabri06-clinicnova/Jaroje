@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Package, Search, Plus, Minus, AlertTriangle, Edit2, Trash2, X, History, Settings, Download, ArrowUp, ArrowDown, Eye, Share2 } from 'lucide-react';
-import { getActiveEmployee } from '@/lib/auth';
+import { getActiveEmployee, verifyAdminPin } from '@/lib/auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -152,22 +152,13 @@ export default function InventarioPage() {
     
     try {
       setIsLoading(true);
-      // Validar PIN
-      const { data: pinSetting, error: pinErr } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'pin_admin')
-        .maybeSingle();
-      
-      if (pinErr) throw pinErr;
-      const dbAdminPin = pinSetting?.value || '1234';
-      
-      if (pin !== dbAdminPin) {
+      // Validar PIN en el servidor
+      if (!(await verifyAdminPin(pin))) {
         alert("❌ PIN incorrecto. Operación cancelada.");
         setIsLoading(false);
         return;
       }
-      
+
       const { error: deleteErr } = await supabase
         .from('inventory')
         .delete()

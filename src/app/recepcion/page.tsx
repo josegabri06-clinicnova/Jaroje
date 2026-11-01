@@ -12,7 +12,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { getActiveEmployee, clearActiveEmployee, Employee, getAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
+import { getActiveEmployee, clearActiveEmployee, Employee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
 import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
@@ -2795,8 +2795,8 @@ export default function RecepcionPage() {
     isSplitPayment
   ]);
 
-  const handleUnlockPrice = () => {
-    if (pinInput === getAdminPin()) {
+  const handleUnlockPrice = async () => {
+    if (await verifyAdminPin(pinInput)) {
       setIsPriceUnlocked(true);
       setShowPinModal(false);
       setPinInput('');
