@@ -79,6 +79,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      // Las páginas públicas (portal de venta, reserva del huésped…) abren para cualquier rol: un móvil con sesión
+      // de personal abierta no debe ser redirigido a su panel al abrir el enlace de una plantilla de WhatsApp
+      if ((pathname || '').startsWith('/public')) {
+        setChecked(true);
+        return;
+      }
+
       // Validar acceso a la ruta según el rol
       if (stored === 'admin') {
         setChecked(true);
