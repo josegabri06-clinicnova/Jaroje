@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { validatePinAsync, setRole, resetAllPinsToDefault, loadPinsFromSupabase } from '@/lib/auth';
-import { Shield, Wrench, Sparkles, KeyRound, RotateCcw, AlertTriangle, Fingerprint } from 'lucide-react';
+import { validatePinAsync, setRole } from '@/lib/auth';
+import { Shield, Wrench, Sparkles, KeyRound, Fingerprint } from 'lucide-react';
 // @ts-ignore
 import { startAuthentication } from '@simplewebauthn/browser';
 
@@ -16,9 +16,6 @@ export default function LoginPage() {
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [logoTaps, setLogoTaps] = useState(0);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetDone, setResetDone] = useState(false);
 
   // Estados de recuperación para Admin
   const [showRecoveryInput, setShowRecoveryInput] = useState(false);
@@ -49,7 +46,7 @@ export default function LoginPage() {
 
       setRole('admin');
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('jaroje_session_pin', verifyResult.pin || '1234');
+        sessionStorage.removeItem('jaroje_session_pin');
       }
       router.replace('/');
     } catch (err: any) {
@@ -80,7 +77,7 @@ export default function LoginPage() {
 
       setRole('admin');
       if (typeof window !== 'undefined') {
-        sessionStorage.setItem('jaroje_session_pin', data.pin || '1234');
+        sessionStorage.removeItem('jaroje_session_pin');
       }
       router.replace('/ajustes?section=seguridad');
     } catch (err: any) {
@@ -97,37 +94,10 @@ export default function LoginPage() {
     }
   }, [mode, showRecoveryInput]);
 
-  // Precargar PINs desde Supabase al iniciar
-  useEffect(() => {
-    loadPinsFromSupabase().catch(() => {});
-  }, []);
+  // La redirección "si ya hay sesión" la decide AuthGuard con la cookie del servidor (no con localStorage, que puede ser antigua)
 
-  // Si ya hay sesión, redirigir
-  useEffect(() => {
-    const role = localStorage.getItem('jaroje_role');
-    if (role === 'admin') router.replace('/calendario');
-    if (role === 'staff_limpieza' || role === 'staff_mantenimiento') router.replace('/staff');
-    if (role === 'recepcion') router.replace('/calendario');
-  }, [router]);
-
-  // Tap en el logo 5 veces → mostrar reset de emergencia
-  const handleLogoTap = () => {
-    const next = logoTaps + 1;
-    setLogoTaps(next);
-    if (next >= 5) {
-      setLogoTaps(0);
-      setShowResetConfirm(true);
-    }
-  };
-
-  const handleEmergencyReset = async () => {
-    await resetAllPinsToDefault();
-    setShowResetConfirm(false);
-    setResetDone(true);
-    setMode('select');
-    setPin('');
-    setTimeout(() => setResetDone(false), 4000);
-  };
+  // El reset de emergencia de PINs (5 toques en el logo) se eliminó: escribía en `settings` desde el navegador
+  // sin autenticación. La recuperación del administrador se hace con la llave de recuperación.
 
   const handleDigit = async (d: string) => {
     if (pin.length >= 4 || loading) return;
@@ -180,58 +150,9 @@ export default function LoginPage() {
   return (
     <div className="fixed inset-0 bg-[#fafafa] flex flex-col items-center justify-center z-[100] select-none">
 
-      {/* Reset de emergencia: confirmación */}
-      {showResetConfirm && (
-        <div className="fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-6">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl">
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="w-12 h-12 rounded-2xl bg-amber-100 flex items-center justify-center">
-                <AlertTriangle size={24} className="text-amber-600" />
-              </div>
-              <div>
-                <p className="font-bold text-zinc-900 text-base">Restablecer todos los PINs</p>
-                <p className="text-zinc-500 text-sm mt-1 leading-relaxed">
-                  Esto volverá todos los PINs a los valores por defecto:<br />
-                  <strong>Admin: 1234 · Recepción: 0000</strong><br />
-                  Limpieza: 5678 · Mtto: 8765
-                </p>
-              </div>
-              <div className="flex gap-3 w-full">
-                <button
-                  onClick={() => setShowResetConfirm(false)}
-                  className="flex-1 py-3 rounded-xl border border-zinc-200 text-zinc-650 font-semibold text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleEmergencyReset}
-                  className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-bold text-sm"
-                >
-                  Restablecer
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Banner reset exitoso */}
-      {resetDone && (
-        <div className="fixed top-6 left-4 right-4 z-[200] bg-emerald-500 text-white rounded-2xl px-4 py-3 text-center font-semibold text-sm shadow-lg">
-          ✅ PINs restablecidos — Admin: 1234 · Recepción: 0000
-        </div>
-      )}
-
-      {/* Logo — tap 5 veces para reset */}
+      {/* Logo */}
       <div className="mb-8 flex flex-col items-center gap-3">
-        <button onClick={handleLogoTap} className="focus:outline-none active:scale-95 transition-transform">
-          <img src="/logo-jaroje.png" alt="Jaroje OS" className="h-10 w-auto object-contain opacity-90" />
-        </button>
-        {logoTaps >= 2 && logoTaps < 5 && (
-          <p className="text-[11px] text-zinc-400 font-medium animate-pulse">
-            Toca {5 - logoTaps} veces más para restablecer PINs
-          </p>
-        )}
+        <img src="/logo-jaroje.png" alt="Jaroje OS" className="h-10 w-auto object-contain opacity-90" />
       </div>
 
       {/* Selector de rol */}

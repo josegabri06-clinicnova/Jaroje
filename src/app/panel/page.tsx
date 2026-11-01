@@ -855,12 +855,25 @@ export default function AdminDashboard() {
               <button
                 disabled={!newRefreshToken.trim() || savingToken}
                 onClick={async () => {
+                  let pin = (typeof window !== 'undefined' ? sessionStorage.getItem('jaroje_session_pin') : '') || '';
+                  if (!pin) {
+                    const entered = prompt('Por seguridad, ingresa el PIN de Administrador para actualizar el token de Beds24:');
+                    if (!entered) return;
+                    pin = entered.trim();
+                  }
+
                   setSavingToken(true);
                   try {
                     const res = await fetch('/api/beds24-auth/update-token', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ refreshToken: newRefreshToken.trim() }),
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-pin': pin
+                      },
+                      body: JSON.stringify({
+                        refreshToken: newRefreshToken.trim(),
+                        admin_pin: pin
+                      }),
                     });
                     const json = await res.json();
                     if (json.success) {

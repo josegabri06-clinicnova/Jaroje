@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getBeds24Token, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
-import { supabase } from '@/lib/supabase';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 
 export const dynamic = 'force-dynamic';
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { logout } from '@/lib/auth';
+import { logout, fetchServerSession, clearServerSessionCache } from '@/lib/auth';
 import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer, RefreshCw, Settings } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 
@@ -40,51 +40,73 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    const stored = localStorage.getItem('jaroje_role') as Role;
-    setRole(stored);
+    let cancelled = false;
 
-    const isPublicRoute = PUBLIC_ROUTES.includes(pathname || '') || (pathname || '').startsWith('/public');
+    (async () => {
+      // La fuente de verdad es la cookie de sesión del servidor; localStorage solo es una copia para pintar la interfaz.
+      // Si el servidor no reconoce la sesión (p. ej. sesión antigua anterior a la cookie), se borra la copia: así nunca
+      // queda una pantalla en blanco ni un bucle entre /login y el panel.
+      const server = await fetchServerSession();
+      if (cancelled) return;
 
-    if (!stored) {
-      if (!isPublicRoute) {
-        router.replace('/login');
-      } else {
+      let stored = localStorage.getItem('jaroje_role') as Role;
+      if (server.status === 'ok') {
+        if (stored !== server.role) {
+          localStorage.setItem('jaroje_role', server.role as string);
+          stored = server.role;
+        }
+      } else if (server.status === 'none' && stored) {
+        localStorage.removeItem('jaroje_role');
+        stored = null;
+      }
+      setRole(stored);
+
+      const isPublicRoute = PUBLIC_ROUTES.includes(pathname || '') || (pathname || '').startsWith('/public');
+
+      if (!stored) {
+        if (!isPublicRoute) {
+          router.replace('/login');
+        } else {
+          setChecked(true);
+        }
+        return;
+      }
+
+      // Si está autenticado e intenta ir a /login, redirigir a su panel por defecto
+      if (pathname === '/login') {
+        if (stored === 'admin' || stored === 'recepcion') router.replace('/calendario');
+        else router.replace('/staff');
+        return;
+      }
+
+      // Validar acceso a la ruta según el rol
+      if (stored === 'admin') {
         setChecked(true);
+        return;
       }
-      return;
-    }
 
-    // Si está autenticado e intenta ir a /login, redirigir a su panel por defecto
-    if (pathname === '/login') {
-      if (stored === 'admin' || stored === 'recepcion') router.replace('/calendario');
-      else router.replace('/staff');
-      return;
-    }
+      const allowed = PERMITTED_ROUTES[stored] || [];
+      const isAllowed = allowed.some(prefix => (pathname || '').startsWith(prefix));
 
-    // Validar acceso a la ruta según el rol
-    if (stored === 'admin') {
+      if (!isAllowed) {
+        console.warn(`Acceso denegado a ${pathname} para el rol ${stored}. Redirigiendo...`);
+        if (stored === 'recepcion') {
+          router.replace('/calendario');
+        } else {
+          router.replace('/staff');
+        }
+        return;
+      }
+
       setChecked(true);
-      return;
-    }
+    })();
 
-    const allowed = PERMITTED_ROUTES[stored] || [];
-    const isAllowed = allowed.some(prefix => (pathname || '').startsWith(prefix));
-
-    if (!isAllowed) {
-      console.warn(`Acceso denegado a ${pathname} para el rol ${stored}. Redirigiendo...`);
-      if (stored === 'recepcion') {
-        router.replace('/calendario');
-      } else {
-        router.replace('/staff');
-      }
-      return;
-    }
-
-    setChecked(true);
+    return () => { cancelled = true; };
   }, [pathname, router]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
+    clearServerSessionCache();
     router.replace('/login');
   };
 

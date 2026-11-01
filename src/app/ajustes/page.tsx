@@ -1358,7 +1358,7 @@ export default function AjustesPage() {
     }
   };
 
-  const handleLogout = () => { logout(); router.replace('/login'); };
+  const handleLogout = async () => { await logout(); router.replace('/login'); };
 
   return (
     <div className="space-y-1 pb-24 bg-[#fafafa] px-4 sm:px-6">

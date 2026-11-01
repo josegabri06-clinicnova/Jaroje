@@ -79,23 +79,6 @@ export async function savePinToSupabase(key: string, value: string): Promise<boo
   return false;
 }
 
-// ── Reset de emergencia: restaura todos los PINs a defaults ──────────────────
-export async function resetAllPinsToDefault(): Promise<void> {
-  _cache = null;
-  const defaults = [
-    { key: 'pin_admin',         value: DEFAULT_ADMIN_PIN },
-    { key: 'pin_limpieza',      value: DEFAULT_STAFF_LIMPIEZA_PIN },
-    { key: 'pin_mantenimiento', value: DEFAULT_STAFF_MANTENIMIENTO_PIN },
-    { key: 'pin_recepcion',     value: DEFAULT_RECEPCION_PIN },
-  ];
-  for (const { key, value } of defaults) {
-    await savePinToSupabase(key, value);
-  }
-  // También limpiar localStorage
-  ['jaroje_admin_pin','jaroje_staff_limpieza_pin','jaroje_staff_mantenimiento_pin','jaroje_recepcion_pin']
-    .forEach(k => localStorage.removeItem(k));
-}
-
 // ── Getters síncronos (para compatibilidad) ──────────────────────────────────
 export function getAdminPin(): string {
   if (typeof window === 'undefined') return DEFAULT_ADMIN_PIN;
@@ -128,21 +111,67 @@ export function getRole(): Role {
 export function setRole(role: Role) {
   if (!role) localStorage.removeItem(ROLE_KEY);
   else localStorage.setItem(ROLE_KEY, role);
+  // Al iniciar sesión se vacía la caché de la consulta de sesión para no usar un "no hay sesión" anterior al login
+  clearServerSessionCache();
 }
-export function logout() {
-  localStorage.removeItem(ROLE_KEY);
+// Consulta al servidor si hay sesión válida (cookie HttpOnly). Es la fuente de verdad; localStorage es solo una copia.
+// 'error' = no se pudo consultar (sin red): en ese caso no se borra nada.
+export type ServerSession = { status: 'ok'; role: Role } | { status: 'none' } | { status: 'error' };
+let _serverSessionCache: { value: ServerSession; ts: number } | null = null;
+
+export function clearServerSessionCache() {
+  _serverSessionCache = null;
 }
 
-// ── Validación de PIN (async — carga desde Supabase) ──────────────────────────
+export async function fetchServerSession(): Promise<ServerSession> {
+  if (_serverSessionCache && Date.now() - _serverSessionCache.ts < 10_000) return _serverSessionCache.value;
+  let value: ServerSession;
+  try {
+    const res = await fetch('/api/auth/session', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      value = data?.role ? { status: 'ok', role: data.role as Role } : { status: 'none' };
+    } else if (res.status === 401) {
+      value = { status: 'none' };
+    } else {
+      return { status: 'error' };
+    }
+  } catch {
+    return { status: 'error' };
+  }
+  // Solo se cachea el "sí hay sesión"; un "no hay sesión" puede cambiar al instante con el login
+  if (value.status === 'ok') _serverSessionCache = { value, ts: Date.now() };
+  return value;
+}
+
+export async function logout() {
+  localStorage.removeItem(ROLE_KEY);
+  clearServerSessionCache();
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('jaroje_session_pin');
+    // Se espera a que el servidor borre la cookie antes de navegar, para no rebotar de /login a /calendario
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* sin red: la cookie caduca sola */ }
+  }
+}
+
+// ── Validación de PIN (servidor seguro con emisión de cookie HttpOnly) ────────
 export async function validatePinAsync(pin: string, expectedRole: Role): Promise<boolean> {
-  const pins = await loadPinsFromSupabase();
-  const roleMap: Record<string, string> = {
-    admin:               pins.pin_admin         || DEFAULT_ADMIN_PIN,
-    staff_limpieza:      pins.pin_limpieza      || DEFAULT_STAFF_LIMPIEZA_PIN,
-    staff_mantenimiento: pins.pin_mantenimiento || DEFAULT_STAFF_MANTENIMIENTO_PIN,
-    recepcion:           pins.pin_recepcion     || DEFAULT_RECEPCION_PIN,
-  };
-  return expectedRole ? pin === roleMap[expectedRole] : false;
+  if (!expectedRole || !pin) return false;
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin, role: expectedRole })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return Boolean(data.success);
+    }
+    return false;
+  } catch (e) {
+    console.error('Error validando PIN contra el servidor:', e);
+    return false;
+  }
 }
 
 // ── Validación síncrona (legacy, usa cache) ───────────────────────────────────
