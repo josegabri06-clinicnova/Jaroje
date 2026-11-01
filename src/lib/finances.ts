@@ -1,4 +1,4 @@
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 
 /**
  * Normaliza y escapa un string para su uso seguro en expresiones regulares.

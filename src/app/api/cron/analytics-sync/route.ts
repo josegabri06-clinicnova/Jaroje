@@ -1,32 +1,20 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { syncBeds24ReservationsRange } from '@/lib/beds24';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    // 1. Autenticación estricta de cron (Fail-Closed con comparación timing-safe)
-    const expectedToken = process.env.CRON_SECRET?.trim();
-    if (!expectedToken) {
-      console.error("[Cron Analytics Sync] ⚠️ CRON_SECRET no está configurado en el servidor. Rechazando por seguridad.");
-      return NextResponse.json({ success: false, error: 'Server configuration error: CRON_SECRET is required' }, { status: 500 });
-    }
-
+    // 1. Autenticación básica de cron mediante token secreto (URL, x-cron-secret, o Authorization Bearer)
     const { searchParams } = new URL(req.url);
     const authHeader = req.headers.get('authorization') || '';
-    const cronToken = (
-      req.headers.get('x-cron-secret') || 
-      authHeader.replace(/^bearer\s+/i, '').trim() ||
-      searchParams.get('token') ||
-      ''
-    ).trim();
+    const cronToken = searchParams.get('token') || 
+                      req.headers.get('x-cron-secret') || 
+                      authHeader.replace(/^bearer\s+/i, '').trim();
+    const expectedToken = process.env.CRON_SECRET;
 
-    const expectedHash = crypto.createHash('sha256').update(expectedToken).digest();
-    const providedHash = crypto.createHash('sha256').update(cronToken).digest();
-
-    if (!cronToken || !crypto.timingSafeEqual(expectedHash, providedHash)) {
+    if (expectedToken && cronToken !== expectedToken) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 

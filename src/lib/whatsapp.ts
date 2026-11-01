@@ -1,23 +1,16 @@
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
+
+const FALLBACK_WHATSAPP_TOKEN = 'EAAbMZBnocDPcBQXZAAa1jEiOoQJSTWaLTLzyWoAaERAjarPbviSjYXWCitQvX6CnhHNCEcNUnAWuiZAIU4VY7NjG7m8ZA9HwJzM6s8k29v4BxvfitmKkNdFTcQhMnPEcOUZCZBiNnA6ZACZCFRZBOyNJgK8XEwJa0UWqSxaTb9rosgMVtZC1ZBX4tMpNTZBU2ytZCjwZDZD';
+const FALLBACK_WHATSAPP_PHONE_ID = '1378816458649407';
 
 export function getWhatsAppToken(): string {
-  const token = process.env.WHATSAPP_TOKEN?.trim();
-  if (!token) {
-    console.warn('[WhatsApp] ⚠️ WHATSAPP_TOKEN no está configurado en las variables de entorno.');
-    return '';
-  }
-  return token;
+  return process.env.WHATSAPP_TOKEN || FALLBACK_WHATSAPP_TOKEN;
 }
 
 export function getWhatsAppPhoneId(): string {
-  const phoneId = process.env.WHATSAPP_PHONE_ID?.trim();
-  if (!phoneId) {
-    console.warn('[WhatsApp] ⚠️ WHATSAPP_PHONE_ID no está configurado en las variables de entorno.');
-    return '';
-  }
-  return phoneId;
+  return process.env.WHATSAPP_PHONE_ID || FALLBACK_WHATSAPP_PHONE_ID;
 }
 
 /**
@@ -1752,6 +1745,7 @@ export async function sendTemplate6_BienvenidaCheckin(booking: any, bypassPause:
 
   if (!phone && booking.id) {
     try {
+      const { supabase } = require('@/lib/supabase');
       const bIdStr = String(booking.id).trim();
       const { data: dbRes } = await supabase
         .from('beds24_reservations')

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 // @ts-ignore
 import { verifyAuthenticationResponse } from '@simplewebauthn/server';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 
 export async function POST(request: Request) {
   try {
@@ -77,23 +77,10 @@ export async function POST(request: Request) {
     
     const adminPin = adminPinRow?.value || '1234';
 
-    const { createSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } = await import('@/lib/session');
-    const sessionToken = await createSessionToken('admin');
-
     const response = NextResponse.json({
       success: true,
       role: 'admin',
       pin: adminPin
-    });
-
-    response.cookies.set({
-      name: SESSION_COOKIE_NAME,
-      value: sessionToken,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: SESSION_DURATION_SECONDS,
     });
 
     // Limpiar la cookie del challenge

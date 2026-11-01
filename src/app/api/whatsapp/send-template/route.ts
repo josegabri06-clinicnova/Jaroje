@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import {
   sendTemplate1_SolicitudRecibida,
   sendTemplate2_UltimoAviso,
@@ -41,6 +40,7 @@ export async function POST(req: Request) {
     }
     if (!activeBooking.phone && !activeBooking.mobile && !activeBooking.guest_phone && !activeBooking.guestPhone && activeBooking.id) {
       try {
+        const { supabase } = require('@/lib/supabase');
         const { normalizePhone } = await import('@/lib/whatsapp');
         const bIdStr = String(activeBooking.id).trim();
         
@@ -184,6 +184,7 @@ export async function POST(req: Request) {
 
     // Persistir banderas de estado en Supabase al enviar plantillas clave
     try {
+      const { supabase } = require('@/lib/supabase');
       const bookingIdStr = String(booking.id || '');
       
       // Heurística inicial de si es local

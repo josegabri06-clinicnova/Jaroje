@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
@@ -89,6 +89,11 @@ export async function GET(req: Request) {
         .select('show_card_payment, transfer_account, language')
         .eq('booking_id', String(bookingId))
         .maybeSingle();
+
+      try {
+        const fs = require('fs');
+        fs.appendFileSync('/Users/josegabriel/Desktop/hotel condominio/scratch/api_debug.log', `[GET PUBLIC LOCAL] bookingId=${bookingId} db_show_card_payment=${portalSettings?.show_card_payment} (typeof=${typeof portalSettings?.show_card_payment}) map_value=${portalSettings?.show_card_payment !== false} time=${new Date().toISOString()}\n`);
+      } catch (logErr) {}
 
       let siblingLocal: any[] = [];
       try {
@@ -526,22 +531,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al subir comprobante a storage: ' + uploadError.message }, { status: 500 });
     }
 
-    // 4. Generar URL de acceso segura (firmada para privacidad de comprobantes de pago)
-    let finalReceiptUrl = '';
-    const { data: signedData } = await supabase.storage
+    // 4. Obtener URL pública del archivo
+    const { data: urlData } = supabase.storage
       .from('payment_receipts')
-      .createSignedUrl(filePath, 60 * 60 * 24 * 180); // 180 días de vigencia
+      .getPublicUrl(filePath);
 
-    if (signedData?.signedUrl) {
-      finalReceiptUrl = signedData.signedUrl;
-    } else {
-      const { data: urlData } = supabase.storage
-        .from('payment_receipts')
-        .getPublicUrl(filePath);
-      finalReceiptUrl = urlData.publicUrl;
-    }
-
-    const publicUrl = finalReceiptUrl;
+    const publicUrl = urlData.publicUrl;
 
     // 5. Actualizar o insertar en la tabla 'checkins' de Supabase
     const cleanId = String(id).toLowerCase().trim();

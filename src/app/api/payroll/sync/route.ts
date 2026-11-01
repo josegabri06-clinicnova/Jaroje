@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { getSessionFromRequest } from '@/lib/session';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
@@ -48,15 +50,14 @@ function parseCSV(text: string) {
 
 export async function POST(req: Request) {
   try {
-    const session = await getSessionFromRequest(req);
-    const role = session?.role || req.headers.get("x-user-role") || "";
+    const role = req.headers.get("x-user-role") || "";
     const adminPin = req.headers.get("x-admin-pin") || "";
 
     if (role !== "admin") {
       return NextResponse.json({ error: "Acceso no autorizado. Se requieren permisos de administrador." }, { status: 403 });
     }
 
-    // Validar el PIN de Administrador contra la base de datos con comparación en tiempo constante
+    // Validar el PIN de Administrador contra la base de datos
     try {
       const { data: pinSetting } = await supabase
         .from("settings")
@@ -64,11 +65,8 @@ export async function POST(req: Request) {
         .eq("key", "pin_admin")
         .maybeSingle();
       
-      const dbAdminPin = String(pinSetting?.value || "1234").trim();
-      const expectedHash = crypto.createHash('sha256').update(dbAdminPin).digest();
-      const providedHash = crypto.createHash('sha256').update((adminPin || '').trim()).digest();
-
-      if (!adminPin || !crypto.timingSafeEqual(expectedHash, providedHash)) {
+      const dbAdminPin = pinSetting?.value || "1234";
+      if (!adminPin || adminPin !== dbAdminPin) {
         return NextResponse.json({ error: "PIN de administrador incorrecto o ausente." }, { status: 401 });
       }
     } catch (dbErr: any) {

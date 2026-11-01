@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { createClient } from '@supabase/supabase-js';
 import { getWhatsAppToken, getWhatsAppPhoneId } from '@/lib/whatsapp';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 function getCompactNotesFlat(text: string): string {
   if (!text) return "Sin desglose detallado.";
@@ -158,18 +162,10 @@ Este documento sirve como desglose quincenal de n√≥mina generado de forma autom√
           });
 
         if (!uploadError) {
-          const { data: signedData } = await supabase.storage
+          const { data: publicUrlData } = supabase.storage
             .from('payroll_documents')
-            .createSignedUrl(fileName, 60 * 60 * 24 * 180);
-
-          if (signedData?.signedUrl) {
-            finalDocumentUrl = signedData.signedUrl;
-          } else {
-            const { data: publicUrlData } = supabase.storage
-              .from('payroll_documents')
-              .getPublicUrl(fileName);
-            finalDocumentUrl = publicUrlData.publicUrl;
-          }
+            .getPublicUrl(fileName);
+          finalDocumentUrl = publicUrlData.publicUrl;
         } else {
           console.error("Error subiendo recibo txt autogenerado a Supabase Storage:", uploadError);
         }

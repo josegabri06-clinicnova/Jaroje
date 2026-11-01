@@ -131,30 +131,18 @@ export function setRole(role: Role) {
 }
 export function logout() {
   localStorage.removeItem(ROLE_KEY);
-  if (typeof window !== 'undefined') {
-    sessionStorage.removeItem('jaroje_session_pin');
-    fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-  }
 }
 
-// ── Validación de PIN (servidor seguro con emisión de cookie HttpOnly) ────────
+// ── Validación de PIN (async — carga desde Supabase) ──────────────────────────
 export async function validatePinAsync(pin: string, expectedRole: Role): Promise<boolean> {
-  if (!expectedRole || !pin) return false;
-  try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin, role: expectedRole })
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return Boolean(data.success);
-    }
-    return false;
-  } catch (e) {
-    console.error('Error validando PIN contra el servidor:', e);
-    return false;
-  }
+  const pins = await loadPinsFromSupabase();
+  const roleMap: Record<string, string> = {
+    admin:               pins.pin_admin         || DEFAULT_ADMIN_PIN,
+    staff_limpieza:      pins.pin_limpieza      || DEFAULT_STAFF_LIMPIEZA_PIN,
+    staff_mantenimiento: pins.pin_mantenimiento || DEFAULT_STAFF_MANTENIMIENTO_PIN,
+    recepcion:           pins.pin_recepcion     || DEFAULT_RECEPCION_PIN,
+  };
+  return expectedRole ? pin === roleMap[expectedRole] : false;
 }
 
 // ── Validación síncrona (legacy, usa cache) ───────────────────────────────────

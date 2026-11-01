@@ -1,4 +1,4 @@
-import { supabaseAdmin as supabase } from './supabase-admin';
+import { supabase } from './supabase';
 import { normalizePhone } from './whatsapp';
 
 // ─── SERVICIO CENTRALIZADO DE BEDS24 JAROJE ─────────────────────────────────────

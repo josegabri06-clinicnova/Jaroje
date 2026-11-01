@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { syncBeds24ReservationsRange } from '@/lib/beds24';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60; // Allow up to 60s for full sync

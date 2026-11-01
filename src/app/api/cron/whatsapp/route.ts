@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import crypto from 'crypto';
 import { getBeds24Bookings, getBeds24Token, clearBeds24Cache, areBookingsInSameGroup, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
 import {
   sendTemplate1_SolicitudRecibida,
@@ -34,7 +33,7 @@ async function ensureLogsTable() {
   `;
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !key) return;
     
     await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
@@ -91,26 +90,15 @@ function getMexicoDateStr(offsetDays = 0): string {
 
 export async function GET(req: Request) {
   try {
-    // 0. Autenticación estricta de cron (Fail-Closed con comparación timing-safe)
-    const expectedToken = process.env.CRON_SECRET?.trim();
-    if (!expectedToken) {
-      console.error("[Cron WhatsApp] ⚠️ CRON_SECRET no está configurado en el servidor. Rechazando por seguridad.");
-      return NextResponse.json({ success: false, error: 'Server configuration error: CRON_SECRET is required' }, { status: 500 });
-    }
-
+    // 0. Autenticación básica de cron (URL token, x-cron-secret, o Authorization Bearer)
     const { searchParams } = new URL(req.url);
     const authHeader = req.headers.get('authorization') || '';
-    const cronToken = (
-      req.headers.get('x-cron-secret') || 
-      authHeader.replace(/^bearer\s+/i, '').trim() ||
-      searchParams.get('token') ||
-      ''
-    ).trim();
+    const cronToken = searchParams.get('token') || 
+                      req.headers.get('x-cron-secret') || 
+                      authHeader.replace(/^bearer\s+/i, '').trim();
+    const expectedToken = process.env.CRON_SECRET;
 
-    const expectedHash = crypto.createHash('sha256').update(expectedToken).digest();
-    const providedHash = crypto.createHash('sha256').update(cronToken).digest();
-
-    if (!cronToken || !crypto.timingSafeEqual(expectedHash, providedHash)) {
+    if (expectedToken && cronToken !== expectedToken) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 

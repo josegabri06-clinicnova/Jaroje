@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 // @ts-ignore
 import { generateAuthenticationOptions } from '@simplewebauthn/server';
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: Request) {
   try {
