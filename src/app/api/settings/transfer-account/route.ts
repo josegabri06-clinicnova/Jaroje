@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { getSessionFromRequest } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 const VALID_ACCOUNTS = ['santander', 'banamex', 'hsbc', 'wise', 'paypal'];
 
@@ -44,6 +40,12 @@ export async function GET() {
  */
 export async function POST(req: Request) {
   try {
+    // La cuenta que ven los huéspedes para pagar solo la cambia el administrador
+    const session = await getSessionFromRequest(req);
+    if (session?.role !== 'admin') {
+      return NextResponse.json({ success: false, error: 'Se requieren privilegios de administrador.' }, { status: 403 });
+    }
+
     const body = await req.json();
     const account = String(body.account || '').toLowerCase().trim();
 
