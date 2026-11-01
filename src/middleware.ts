@@ -123,7 +123,13 @@ export async function middleware(req: NextRequest) {
   }
 
   // Módulos de Ajustes y Panel: Exclusivos para Administrador
-  if (pathname.startsWith('/ajustes') || pathname.startsWith('/panel') || pathname.startsWith('/api/beds24-auth')) {
+  if (
+    pathname.startsWith('/ajustes') ||
+    pathname.startsWith('/panel') ||
+    pathname.startsWith('/api/beds24-auth') ||
+    pathname === '/api/settings/pins' ||
+    pathname === '/api/settings/recovery-key'
+  ) {
     if (role !== 'admin') {
       if (pathname.startsWith('/api/')) {
         return NextResponse.json(

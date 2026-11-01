@@ -87,22 +87,13 @@ export async function POST(request: Request) {
     // Clave correcta -> limpiar intentos fallidos
     clearRateLimit(clientIp);
 
-    // 3. Obtener el PIN administrador activo para sincronizar el estado
-    const { data: adminPinRow } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'pin_admin')
-      .maybeSingle();
-
-    const adminPin = adminPinRow?.value || '1234';
-
+    // 3. Emitir la sesión de administrador (el PIN nunca se devuelve al navegador)
     const { createSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } = await import('@/lib/session');
     const sessionToken = await createSessionToken('admin');
 
     const res = NextResponse.json({
       success: true,
       role: 'admin',
-      pin: adminPin
     });
 
     res.cookies.set({

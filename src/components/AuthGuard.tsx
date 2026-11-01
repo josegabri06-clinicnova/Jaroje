@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { logout, fetchServerSession, clearServerSessionCache } from '@/lib/auth';
+import { logout, fetchServerSession, clearServerSessionCache, clearLegacyPinCopies } from '@/lib/auth';
 import { LogOut, Shield, Wrench, Sparkles, KeyRound, Hammer, RefreshCw, Settings } from 'lucide-react';
 import { NotificationBell } from '@/components/NotificationBell';
 
@@ -41,6 +41,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    clearLegacyPinCopies();
 
     (async () => {
       // La fuente de verdad es la cookie de sesión del servidor; localStorage solo es una copia para pintar la interfaz.

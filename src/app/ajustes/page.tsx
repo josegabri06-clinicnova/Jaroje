@@ -12,11 +12,7 @@ import {
   TrendingUp, RotateCcw, Bell, ExternalLink, UserCheck, UploadCloud, Search, Landmark
 } from 'lucide-react';
 import { RECEPTION_WA_GROUP_URL, MAINTENANCE_WA_GROUP_URL } from '@/lib/checkin-summary';
-import { 
-  getAdminPin, getStaffLimpiezaPin, getStaffMantenimientoPin, getRecepcionPin, 
-  saveAdminPin, saveStaffLimpiezaPin, saveStaffMantenimientoPin, saveRecepcionPin, 
-  logout 
-} from '@/lib/auth';
+import { changePin, logout } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { format, subDays, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -200,7 +196,6 @@ export default function AjustesPage() {
 
   // PIN states
   const [pinModal, setPinModal]     = useState<PinTarget>(null);
-  const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin]         = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [showPins, setShowPins]     = useState(false);
@@ -449,29 +444,13 @@ export default function AjustesPage() {
   const [showRecoveryKey, setShowRecoveryKey] = useState(false);
   const [isRegeneratingKey, setIsRegeneratingKey] = useState(false);
 
-  const generateRandomKey = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    const segment = (len: number) => {
-      let str = '';
-      for (let i = 0; i < len; i++) {
-        str += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return str;
-    };
-    return `JRJ-SEC-${segment(4)}-${segment(4)}-${segment(4)}`;
-  };
-
+  // La llave de recuperación se lee y se regenera en el servidor (solo administrador); el navegador no accede a `settings`
   const fetchRecoveryKey = async () => {
     try {
-      const { data, error } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'admin_recovery_key')
-        .maybeSingle();
-      if (!error && data) {
-        setRecoveryKey(data.value);
-      } else {
-        setRecoveryKey('JRJ-SEC-9X2P-7QLK-4M1Z');
+      const res = await fetch('/api/settings/recovery-key', { cache: 'no-store' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setRecoveryKey(data.key || 'No configurada');
       }
     } catch (e) {
       console.error('Error fetching recovery key:', e);
@@ -483,15 +462,12 @@ export default function AjustesPage() {
       return;
     }
     setIsRegeneratingKey(true);
-    const newKey = generateRandomKey();
     try {
-      const { error } = await supabase
-        .from('settings')
-        .upsert({ key: 'admin_recovery_key', value: newKey }, { onConflict: 'key' });
-      
-      if (error) throw error;
-      
-      setRecoveryKey(newKey);
+      const res = await fetch('/api/settings/recovery-key', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success) throw new Error(data.error || 'No se pudo regenerar la llave.');
+
+      setRecoveryKey(data.key);
       alert('✅ Llave de Recuperación Maestra regenerada con éxito. Asegúrate de guardarla en un lugar seguro.');
     } catch (err: any) {
       console.error(err);
@@ -1019,29 +995,19 @@ export default function AjustesPage() {
 
   const openPinModal = (target: PinTarget) => {
     setPinModal(target);
-    setCurrentPin(''); setNewPin(''); setConfirmPin('');
+    setNewPin(''); setConfirmPin('');
     setPinError(''); setPinSuccess('');
   };
 
-  const savePinChange = () => {
-    const currentCorrect = 
-      pinModal === 'admin' 
-        ? getAdminPin() 
-        : pinModal === 'recepcion'
-        ? getRecepcionPin()
-        : pinModal === 'staff_limpieza' 
-        ? getStaffLimpiezaPin() 
-        : getStaffMantenimientoPin();
-
-    if (currentPin !== currentCorrect) { setPinError('El PIN actual no es correcto.'); return; }
-    if (newPin.length < 4)             { setPinError('El PIN nuevo debe tener al menos 4 dígitos.'); return; }
+  const savePinChange = async () => {
+    if (!pinModal) return;
     if (!/^\d+$/.test(newPin))         { setPinError('El PIN solo puede contener números.'); return; }
+    if (newPin.length !== 4)           { setPinError('El PIN nuevo debe tener exactamente 4 dígitos.'); return; }
     if (newPin !== confirmPin)         { setPinError('Los PINs nuevos no coinciden.'); return; }
-    
-    if (pinModal === 'admin') saveAdminPin(newPin);
-    else if (pinModal === 'recepcion') saveRecepcionPin(newPin);
-    else if (pinModal === 'staff_limpieza') saveStaffLimpiezaPin(newPin);
-    else saveStaffMantenimientoPin(newPin);
+
+    // El servidor guarda el nuevo PIN (solo con sesión de administrador): el navegador ya no lee ni escribe PIN
+    const result = await changePin(pinModal, newPin);
+    if (!result.success) { setPinError(result.error || 'No se pudo cambiar el PIN.'); return; }
 
     // Disparar sincronización silenciosa del Copiloto en caliente
     if (typeof window !== 'undefined') {
@@ -2232,27 +2198,15 @@ export default function AjustesPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5 block">PIN Actual</label>
-                <input
-                  type={showPins ? 'text' : 'password'}
-                  inputMode="numeric"
-                  maxLength={8}
-                  value={currentPin}
-                  onChange={e => setCurrentPin(e.target.value.replace(/\D/g,''))}
-                  placeholder="Introduce el PIN actual"
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm font-mono text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-800 placeholder:text-zinc-300"
-                />
-              </div>
-              <div>
                 <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5 block">Nuevo PIN</label>
                 <div className="relative">
                   <input
                     type={showPins ? 'text' : 'password'}
                     inputMode="numeric"
-                    maxLength={8}
+                    maxLength={4}
                     value={newPin}
                     onChange={e => setNewPin(e.target.value.replace(/\D/g,''))}
-                    placeholder="Mínimo 4 dígitos"
+                    placeholder="4 dígitos"
                     className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-sm font-mono text-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-800 placeholder:text-zinc-300 pr-12"
                   />
                   <button onClick={() => setShowPins(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-650">
@@ -2265,7 +2219,7 @@ export default function AjustesPage() {
                 <input
                   type={showPins ? 'text' : 'password'}
                   inputMode="numeric"
-                  maxLength={8}
+                  maxLength={4}
                   value={confirmPin}
                   onChange={e => setConfirmPin(e.target.value.replace(/\D/g,''))}
                   placeholder="Repite el nuevo PIN"

@@ -68,22 +68,13 @@ export async function POST(request: Request) {
       .update({ counter: Number(authenticationInfo.newCounter) })
       .eq('credential_id', credentialId);
 
-    // Obtener el PIN administrador de respaldo para la sesión del frontend
-    const { data: adminPinRow } = await supabase
-      .from('settings')
-      .select('value')
-      .eq('key', 'pin_admin')
-      .maybeSingle();
-    
-    const adminPin = adminPinRow?.value || '1234';
 
     const { createSessionToken, SESSION_COOKIE_NAME, SESSION_DURATION_SECONDS } = await import('@/lib/session');
     const sessionToken = await createSessionToken('admin');
 
     const response = NextResponse.json({
       success: true,
-      role: 'admin',
-      pin: adminPin
+      role: 'admin'
     });
 
     response.cookies.set({

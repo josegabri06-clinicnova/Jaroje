@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Plus, Users, Send, CheckCircle2, AlertCircle, Download, Paperclip, Receipt, FileText, PiggyBank, Clock, Calendar, X, Trash2, MessageSquare, Camera } from 'lucide-react';
 import Link from 'next/link';
-import { getRole, getAdminPin } from '@/lib/auth';
+import { getRole } from '@/lib/auth';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -496,7 +496,13 @@ export default function EquipoPage() {
     setIsSyncing(true);
     try {
       const role = getRole() || 'admin';
-      const pin = getAdminPin();
+      // El PIN de administrador ya no se guarda en el navegador: se usa el de esta sesión o se pide
+      let pin = sessionStorage.getItem('jaroje_session_pin') || '';
+      if (!pin) {
+        const entered = prompt('Por seguridad, ingresa el PIN de Administrador para sincronizar el personal:');
+        if (!entered) { setIsSyncing(false); return; }
+        pin = entered.trim();
+      }
 
       const res = await fetch('/api/payroll/sync', {
         method: 'POST',

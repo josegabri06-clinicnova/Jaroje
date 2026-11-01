@@ -1,107 +1,55 @@
 // ─── Sistema de Autenticación por Roles ──────────────────────────────────────
-// PINs almacenados en Supabase (tabla settings) + fallback a defaults
-// Así funcionan en TODOS los dispositivos, no solo en el que se cambiaron
-
-export const DEFAULT_ADMIN_PIN                 = '1234';
-export const DEFAULT_STAFF_LIMPIEZA_PIN        = '5678';
-export const DEFAULT_STAFF_MANTENIMIENTO_PIN   = '8765';
-export const DEFAULT_RECEPCION_PIN             = '0000';
+// Los PIN viven solo en el servidor (tabla settings, accesible únicamente con la clave de servicio).
+// El navegador nunca lee ni guarda un PIN: valida y cambia PIN a través de las rutas /api.
 
 export type Role = 'admin' | 'staff_limpieza' | 'staff_mantenimiento' | 'recepcion' | null;
 
 const ROLE_KEY = 'jaroje_role';
 
-// ── Cache local de PINs (se sincroniza con Supabase) ──────────────────────────
-let _cache: Record<string, string> | null = null;
-
-function supabaseHeaders() {
-  return {
-    'Content-Type': 'application/json',
-    'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-    'Authorization': `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''}`,
-  };
+// Copias de PIN que versiones anteriores guardaban en este navegador; se borran para no dejar PIN en claro
+export function clearLegacyPinCopies() {
+  if (typeof window === 'undefined') return;
+  try {
+    ['jaroje_admin_pin', 'jaroje_staff_limpieza_pin', 'jaroje_staff_mantenimiento_pin', 'jaroje_recepcion_pin']
+      .forEach(k => localStorage.removeItem(k));
+  } catch { /* almacenamiento no disponible */ }
 }
 
-const SUPABASE_URL = typeof window !== 'undefined'
-  ? (window as any).__ENV__?.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  : process.env.NEXT_PUBLIC_SUPABASE_URL;
-
-// ── Cargar PINs desde Supabase (o localStorage como fallback) ─────────────────
-export async function loadPinsFromSupabase(): Promise<Record<string, string>> {
-  if (_cache) return _cache;
-
+// Comprueba el PIN de administrador en el servidor sin cambiar la sesión (desbloqueos de precio, borrados…)
+export async function verifyAdminPin(pin: string): Promise<boolean> {
+  if (!pin) return false;
   try {
-    const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/settings?key=in.(pin_admin,pin_limpieza,pin_mantenimiento,pin_recepcion)&select=key,value`;
-    const res = await fetch(url, { headers: supabaseHeaders(), cache: 'no-store' });
-    if (res.ok) {
-      const rows: { key: string; value: string }[] = await res.json();
-      const map: Record<string, string> = {};
-      rows.forEach(r => { map[r.key] = r.value; });
-      _cache = map;
-      return map;
-    }
-  } catch (e) {
-    console.warn('No se pudo cargar PINs desde Supabase, usando defaults');
-  }
-
-  // Fallback: localStorage
-  _cache = {
-    pin_admin:          localStorage.getItem('jaroje_admin_pin')          || DEFAULT_ADMIN_PIN,
-    pin_limpieza:       localStorage.getItem('jaroje_staff_limpieza_pin') || DEFAULT_STAFF_LIMPIEZA_PIN,
-    pin_mantenimiento:  localStorage.getItem('jaroje_staff_mantenimiento_pin') || DEFAULT_STAFF_MANTENIMIENTO_PIN,
-    pin_recepcion:      localStorage.getItem('jaroje_recepcion_pin')      || DEFAULT_RECEPCION_PIN,
-  };
-  return _cache;
-}
-
-// ── Guardar PIN en Supabase ───────────────────────────────────────────────────
-export async function savePinToSupabase(key: string, value: string): Promise<boolean> {
-  _cache = null; // invalidar cache
-  try {
-    const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/settings`;
-    const res = await fetch(url, {
+    const res = await fetch('/api/auth/verify-admin-pin', {
       method: 'POST',
-      headers: { ...supabaseHeaders(), 'Prefer': 'resolution=merge-duplicates' },
-      body: JSON.stringify({ key, value }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
     });
-    if (res.ok || res.status === 201 || res.status === 204) return true;
-  } catch (e) {
-    console.warn('Error guardando PIN en Supabase, usando localStorage');
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data.success);
+  } catch {
+    return false;
   }
-  // Fallback: localStorage
-  const lsMap: Record<string, string> = {
-    pin_admin: 'jaroje_admin_pin',
-    pin_limpieza: 'jaroje_staff_limpieza_pin',
-    pin_mantenimiento: 'jaroje_staff_mantenimiento_pin',
-    pin_recepcion: 'jaroje_recepcion_pin',
-  };
-  if (lsMap[key]) localStorage.setItem(lsMap[key], value);
-  return false;
 }
 
-// ── Getters síncronos (para compatibilidad) ──────────────────────────────────
-export function getAdminPin(): string {
-  if (typeof window === 'undefined') return DEFAULT_ADMIN_PIN;
-  return _cache?.pin_admin || localStorage.getItem('jaroje_admin_pin') || DEFAULT_ADMIN_PIN;
+// Cambia el PIN de un rol (solo administrador con sesión). Devuelve el error del servidor para mostrarlo en pantalla
+export async function changePin(
+  role: Exclude<Role, null>,
+  newPin: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/settings/pins', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role, newPin }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) return { success: true };
+    return { success: false, error: data.error || 'No se pudo cambiar el PIN.' };
+  } catch {
+    return { success: false, error: 'Error de red al cambiar el PIN.' };
+  }
 }
-export function getStaffLimpiezaPin(): string {
-  if (typeof window === 'undefined') return DEFAULT_STAFF_LIMPIEZA_PIN;
-  return _cache?.pin_limpieza || localStorage.getItem('jaroje_staff_limpieza_pin') || DEFAULT_STAFF_LIMPIEZA_PIN;
-}
-export function getStaffMantenimientoPin(): string {
-  if (typeof window === 'undefined') return DEFAULT_STAFF_MANTENIMIENTO_PIN;
-  return _cache?.pin_mantenimiento || localStorage.getItem('jaroje_staff_mantenimiento_pin') || DEFAULT_STAFF_MANTENIMIENTO_PIN;
-}
-export function getRecepcionPin(): string {
-  if (typeof window === 'undefined') return DEFAULT_RECEPCION_PIN;
-  return _cache?.pin_recepcion || localStorage.getItem('jaroje_recepcion_pin') || DEFAULT_RECEPCION_PIN;
-}
-
-// Setters (guardan en Supabase + localStorage)
-export function saveAdminPin(pin: string)               { savePinToSupabase('pin_admin', pin); localStorage.setItem('jaroje_admin_pin', pin); _cache = null; }
-export function saveStaffLimpiezaPin(pin: string)       { savePinToSupabase('pin_limpieza', pin); localStorage.setItem('jaroje_staff_limpieza_pin', pin); _cache = null; }
-export function saveStaffMantenimientoPin(pin: string)  { savePinToSupabase('pin_mantenimiento', pin); localStorage.setItem('jaroje_staff_mantenimiento_pin', pin); _cache = null; }
-export function saveRecepcionPin(pin: string)           { savePinToSupabase('pin_recepcion', pin); localStorage.setItem('jaroje_recepcion_pin', pin); _cache = null; }
 
 // ── Rol activo ────────────────────────────────────────────────────────────────
 export function getRole(): Role {
@@ -146,6 +94,7 @@ export async function fetchServerSession(): Promise<ServerSession> {
 
 export async function logout() {
   localStorage.removeItem(ROLE_KEY);
+  clearLegacyPinCopies();
   clearServerSessionCache();
   if (typeof window !== 'undefined') {
     sessionStorage.removeItem('jaroje_session_pin');
@@ -172,15 +121,6 @@ export async function validatePinAsync(pin: string, expectedRole: Role): Promise
     console.error('Error validando PIN contra el servidor:', e);
     return false;
   }
-}
-
-// ── Validación síncrona (legacy, usa cache) ───────────────────────────────────
-export function validatePin(pin: string): Role {
-  if (pin === (getAdminPin()))               return 'admin';
-  if (pin === (getStaffLimpiezaPin()))       return 'staff_limpieza';
-  if (pin === (getStaffMantenimientoPin()))  return 'staff_mantenimiento';
-  if (pin === (getRecepcionPin()))           return 'recepcion';
-  return null;
 }
 
 // ─── Sistema de Seguimiento de Empleados (Auditoría de 3 Dígitos) ─────────────
