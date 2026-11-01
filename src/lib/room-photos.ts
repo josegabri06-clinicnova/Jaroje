@@ -17,3 +17,4 @@ export function getRoomPhotos(category: string, count: number): string[] {
 export const COMMON_PHOTOS = getRoomPhotos('general', 20);
 
 export const DEFAULT_FALLBACK_PHOTO = getRoomPhotoUrl('general', 1);
+
