@@ -79,23 +79,6 @@ export async function savePinToSupabase(key: string, value: string): Promise<boo
   return false;
 }
 
-// ── Reset de emergencia: restaura todos los PINs a defaults ──────────────────
-export async function resetAllPinsToDefault(): Promise<void> {
-  _cache = null;
-  const defaults = [
-    { key: 'pin_admin',         value: DEFAULT_ADMIN_PIN },
-    { key: 'pin_limpieza',      value: DEFAULT_STAFF_LIMPIEZA_PIN },
-    { key: 'pin_mantenimiento', value: DEFAULT_STAFF_MANTENIMIENTO_PIN },
-    { key: 'pin_recepcion',     value: DEFAULT_RECEPCION_PIN },
-  ];
-  for (const { key, value } of defaults) {
-    await savePinToSupabase(key, value);
-  }
-  // También limpiar localStorage
-  ['jaroje_admin_pin','jaroje_staff_limpieza_pin','jaroje_staff_mantenimiento_pin','jaroje_recepcion_pin']
-    .forEach(k => localStorage.removeItem(k));
-}
-
 // ── Getters síncronos (para compatibilidad) ──────────────────────────────────
 export function getAdminPin(): string {
   if (typeof window === 'undefined') return DEFAULT_ADMIN_PIN;
