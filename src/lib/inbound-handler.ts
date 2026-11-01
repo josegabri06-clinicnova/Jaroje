@@ -8,6 +8,7 @@ const supabase = createClient(
 
 const requestCache = new Map<string, number>();
 const welcomeSentMemoryCache = new Map<string, number>();
+const wifiSentMemoryCache = new Map<string, number>();
 
 function phonesMatch(phoneA: string, phoneB: string): boolean {
   const normA = normalizePhone(phoneA);
@@ -395,7 +396,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     finalBotResponse = "Entendido. He pausado el asistente virtual. En un momento, un agente de nuestra recepción continuará la conversación contigo por este medio.";
     isAutoReplyTriggered = true;
   } 
-  // B. Botón de WiFi, Claves y Reglas (solo por payload del botón; nunca por texto libre del cliente)
+  // B. Botón de WiFi, Claves y Reglas (por payload del botón; el texto libre "wifi"/"claves" se atiende más abajo, con su propio periodo de 24 h)
   else if (
     rawPayload.includes('wifi') ||
     rawPayload.includes('claves')
@@ -429,7 +430,7 @@ export async function handleInboundMessage(params: InboundMessageParams) {
     guestMsgClean.includes('portal del huesped') || 
     guestMsgClean.includes('portal del huésped') || 
     guestMsgClean.includes('view my reservation') || 
-    guestMsgClean.includes('view_booking_') ||
+    guestMsgClean.includes('view booking ') ||
     rawPayload.includes('view_booking_') ||
     rawPayload.includes('portal')
   ) {
@@ -471,6 +472,75 @@ export async function handleInboundMessage(params: InboundMessageParams) {
       finalBotResponse = `Hola. No logramos encontrar una reservación activa vinculada a tu número en nuestro sistema.\n\nPor favor, indícanos tu nombre completo o tu código de reservación para que nuestro equipo de recepción te asista de inmediato. 🌴`;
     }
   }
+  // ── WIFI / CLAVES POR PALABRA CLAVE (excepción exclusiva de esta plantilla) ──
+  // Cualquier persona que escriba "wifi" o "claves" recibe 'wifi_informacion', con o sin reservación activa
+  // (quien pide la contraseña suele ser un familiar cuyo número no está registrado). Los números de la lista
+  // 'excluded_person' ya se descartaron más arriba y la pausa global de envíos automáticos se respeta al enviar.
+  // Periodo propio: como máximo una vez cada 24 h por persona; no depende de la bienvenida ni la bloquea.
+  // (El botón "Ver WiFi y claves" se sigue atendiendo en el bloque B, sin cambios.)
+  const isWifiKeywordText =
+    guestMsgClean.includes('wifi') ||
+    guestMsgClean.includes('wi-fi') ||
+    guestMsgClean.includes('claves');
+  const isWifiButton = rawPayload.includes('wifi') || rawPayload.includes('claves');
+
+  if (isWifiKeywordText && !isWifiButton) {
+    const WIFI_WINDOW_MS = 24 * 60 * 60 * 1000;
+    let lastWifiSentAt = wifiSentMemoryCache.get(phone) || 0;
+
+    try {
+      const { data: lastWifiLog } = await supabase
+        .from('whatsapp_logs')
+        .select('sent_at')
+        .eq('phone', phone)
+        .eq('template_name', 'wifi_informacion')
+        .or('status.is.null,status.neq.failed')
+        .order('sent_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (lastWifiLog?.sent_at) {
+        const logTime = new Date(lastWifiLog.sent_at).getTime();
+        if (!isNaN(logTime) && logTime > lastWifiSentAt) {
+          lastWifiSentAt = logTime;
+        }
+      }
+    } catch (wifiLogErr) {
+      console.warn("[Inbound Handler] Error verificando whatsapp_logs para wifi_informacion:", wifiLogErr);
+    }
+
+    if (Date.now() - lastWifiSentAt < WIFI_WINDOW_MS) {
+      console.log(`[Inbound Handler] 📶 ${phone} pidió WiFi/claves pero ya recibió 'wifi_informacion' hace menos de 24 h. No se reenvía.`);
+    } else {
+      wifiSentMemoryCache.set(phone, Date.now());
+      if (wifiSentMemoryCache.size > 100) {
+        const oldest = Array.from(wifiSentMemoryCache.keys()).slice(0, 20);
+        oldest.forEach(k => wifiSentMemoryCache.delete(k));
+      }
+
+      try {
+        const { isSpanishOrLatamPhone, sendTemplate_WiFiInformacion } = await import('@/lib/whatsapp');
+        const wifiLang = isSpanishOrLatamPhone(phone) ? 'es' : 'en';
+        console.log(`[Inbound Handler] 📶 Palabra clave wifi/claves de ${phone}. Enviando 'wifi_informacion'...`);
+        const wifiRes = await sendTemplate_WiFiInformacion(phone, wifiLang);
+        if (!wifiRes.success) {
+          wifiSentMemoryCache.delete(phone);
+          // Si el envío se omitió a propósito (pausa global o lista excluded_person) no se manda el texto de respaldo
+          const skippedOnPurpose = wifiRes.error === 'paused' || wifiRes.error === 'excluded_person';
+          if (!skippedOnPurpose && !finalBotResponse) {
+            finalBotResponse = wifiLang === 'en'
+              ? "📶 *WiFi, Access Codes & Important Info - Condominios Jaroje*\n\n• *WiFi Network:* JAROJE\n• *Password:* HUXX2025\n• *Gate Code:* 3456\n• *Pool Hours:* 9:00 AM – 10:00 PM\n\nIf you need anything else, feel free to reply directly here! 😊"
+              : "📶 *WiFi, Claves e Información Importante - Condominios Jaroje*\n\n• *Red WiFi:* JAROJE\n• *Contraseña:* HUXX2025\n• *Portón:* 3456\n• *Horario alberca:* 9:00 a 22:00 hrs.\n\n¿Necesitas algo más? Con gusto estamos para servirte. 😊";
+            isAutoReplyTriggered = true;
+          }
+        }
+      } catch (wifiErr) {
+        wifiSentMemoryCache.delete(phone);
+        console.error("[Inbound Handler] Excepción enviando wifi_informacion:", wifiErr);
+      }
+    }
+  }
+
   // ── VERIFICACIÓN DE ÚLTIMO ENVÍO DE PLANTILLA DE BIENVENIDA ──
   const now = Date.now();
   let lastWelcomeSentAt = 0;
@@ -567,7 +637,10 @@ export async function handleInboundMessage(params: InboundMessageParams) {
   // Huéspedes con reservación activa NUNCA reciben plantillas automáticas al hablar (se atienden por recepción o comandos específicos)
   // Una vez enviada la bienvenida, NO se reenvía nunca más por mensajes normales.
   // Solo se reenvía pasadas 24h y con palabras clave (bloque D).
-  const shouldSendWelcome = !guestBooking && lastWelcomeSentAt === 0 && !isExplicitBookingIntent;
+  // Excepción: un mensaje que solo pide WiFi/claves (texto o botón) NO dispara la bienvenida de primer contacto
+  // (suele ser un familiar del huésped). Si además trae palabras clave de reserva, la bienvenida la envía el bloque D.
+  const isWifiRequest = isWifiKeywordText || isWifiButton;
+  const shouldSendWelcome = !guestBooking && lastWelcomeSentAt === 0 && !isExplicitBookingIntent && !isWifiRequest;
 
   if (shouldSendWelcome) {
     try {
