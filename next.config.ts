@@ -34,7 +34,8 @@ const nextConfig: NextConfig = {
           },
           {
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            // La cámara se permite solo a la propia aplicación (Recepción y Mantenimiento toman fotos); terceros siguen bloqueados
+            value: 'camera=(self), microphone=(), geolocation=()',
           },
         ],
       },
