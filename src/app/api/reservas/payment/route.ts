@@ -80,12 +80,20 @@ export async function POST(req: Request) {
               '1': '500', '2': '501', '3': '502', '4': '503',
               '5': '504', '6': '505', '7': '506', '8': '507'
             };
-            const physicalName = localRes.unit_id ? (UNIT_TO_ROOM[String(localRes.unit_id)] || String(localRes.unit_id)) : '';
+            const UNIT_TO_ROOM_600: Record<string, string> = {
+              '1': '601', '2': '602', '3': '603', '4': '604',
+              '5': '605', '6': '606', '7': '607'
+            };
+            const is600 = String(localRes.room_id) === '685543';
+            const physicalName = localRes.unit_id 
+              ? (is600 ? (UNIT_TO_ROOM_600[String(localRes.unit_id)] || String(localRes.unit_id)) : (UNIT_TO_ROOM[String(localRes.unit_id)] || String(localRes.unit_id)))
+              : '';
+            const roomLabel = is600 ? 'Condominio' : 'Habitación';
             const bookingForWA = {
               id: localRes.id,
               guest_name: localRes.guest_name,
               phone: localRes.phone,
-              room_name: `Habitación ${physicalName}`,
+              room_name: `${roomLabel} ${physicalName}`,
               check_in: localRes.check_in,
               check_out: localRes.check_out,
               price: Number(localRes.price || 0),

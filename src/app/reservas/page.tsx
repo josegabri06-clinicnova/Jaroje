@@ -58,6 +58,10 @@ const PHYSICAL_ROOM_GROUPS = [
   {
     category: 'Apartamentos Nuevos (500-507)',
     rooms: ['500', '501', '502', '503', '504', '505', '506', '507']
+  },
+  {
+    category: 'Condominios 2 Dormitorios (601-607)',
+    rooms: ['601', '602', '603', '604', '605', '606', '607']
   }
 ];
 

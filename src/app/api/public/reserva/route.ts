@@ -68,7 +68,14 @@ export async function GET(req: Request) {
         '1': '500', '2': '501', '3': '502', '4': '503',
         '5': '504', '6': '505', '7': '506', '8': '507'
       };
-      const physicalName = localRes.unit_id ? (UNIT_TO_ROOM[localRes.unit_id] || localRes.unit_id) : '';
+      const UNIT_TO_ROOM_600: Record<string, string> = {
+        '1': '601', '2': '602', '3': '603', '4': '604',
+        '5': '605', '6': '606', '7': '607'
+      };
+      const is600 = String(localRes.room_id) === '685543';
+      const physicalName = localRes.unit_id 
+        ? (is600 ? (UNIT_TO_ROOM_600[String(localRes.unit_id)] || localRes.unit_id) : (UNIT_TO_ROOM[String(localRes.unit_id)] || localRes.unit_id))
+        : '';
       const arrivalDate = localRes.check_in ? new Date(localRes.check_in) : null;
       const departureDate = localRes.check_out ? new Date(localRes.check_out) : null;
       const nights = (arrivalDate && departureDate)
@@ -127,7 +134,10 @@ export async function GET(req: Request) {
       };
       
       const siblingLocalMapped = siblingLocal.map(s => {
-        const siblingPhysicalName = s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : '';
+        const isSibling600 = String(s.room_id) === '685543';
+        const siblingPhysicalName = s.unit_id 
+          ? (isSibling600 ? (UNIT_TO_ROOM_600[String(s.unit_id)] || s.unit_id) : (UNIT_TO_ROOM[String(s.unit_id)] || s.unit_id))
+          : '';
         return {
           ...s,
           room: siblingPhysicalName

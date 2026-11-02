@@ -17,6 +17,11 @@ const UNIT_TO_ROOM: Record<string, string> = {
   '1': '500', '2': '501', '3': '502', '4': '503',
   '5': '504', '6': '505', '7': '506', '8': '507'
 };
+// Mapeo unitId → nombre físico para las habitaciones locales 601-607
+const UNIT_TO_ROOM_600: Record<string, string> = {
+  '1': '601', '2': '602', '3': '603', '4': '604',
+  '5': '605', '6': '606', '7': '607'
+};
 // unitIds disponibles para auto-asignación OTA (501-507 = unitId 2-8)
 const OTA_ASSIGNABLE_UNITS = ['2', '3', '4', '5', '6', '7', '8'];
 
@@ -49,8 +54,8 @@ export async function GET(req: Request) {
       // y las canceladas del último mes (hasta 30 días)
       query = query.or(`and(status.neq.cancelled,check_out.gte.${fortyEightHoursAgoStr}),and(status.eq.cancelled,updated_at.gte.${oneMonthAgoIso})`);
     }
-    // Excluir la categoría virtual 500 (room_id 685542) para evitar duplicados, ya que se asigna localmente
-    query = query.neq('room_id', '685542');
+    // Excluir las categorías virtuales locales (500-507: 685542, 601-607: 685543) para evitar duplicados, ya que se asignan localmente
+    query = query.neq('room_id', '685542').neq('room_id', '685543');
     const { data: dbB24Reservations, error: dbB24Error } = await query;
     if (dbB24Error) {
       console.error("[Reservas GET] Error al leer beds24_reservations de Supabase:", dbB24Error);
@@ -161,14 +166,18 @@ export async function GET(req: Request) {
             ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
             : 1;
 
-          const physicalName = b.unit_id ? (UNIT_TO_ROOM[b.unit_id] || b.unit_id) : '';
+          const is600 = String(b.room_id) === '685543';
+          const physicalName = b.unit_id 
+            ? (is600 ? (UNIT_TO_ROOM_600[String(b.unit_id)] || String(b.unit_id)) : (UNIT_TO_ROOM[String(b.unit_id)] || String(b.unit_id)))
+            : '';
+          const roomLabel = is600 ? 'Condominio' : 'Habitación';
 
           return {
             id: b.id,
             roomId: Number(b.room_id),
             unitId: Number(b.unit_id),
-            roomName: `Habitación ${physicalName}`,
-            room_name: `Habitación ${physicalName}`,
+            roomName: `${roomLabel} ${physicalName}`,
+            room_name: `${roomLabel} ${physicalName}`,
             room: physicalName || '',
             arrival: b.check_in,
             departure: b.check_out,
@@ -441,7 +450,7 @@ export async function POST(req: Request) {
     const finalRoomId = Number(roomId);
     const finalUnitId = Number(unitId);
 
-    if (finalRoomId === 685542) {
+    if (finalRoomId === 685542 || finalRoomId === 685543) {
       // Es local! Guardar en local_reservas de Supabase
       const { data, error } = await supabase
         .from('local_reservas')
@@ -486,13 +495,17 @@ export async function POST(req: Request) {
       if (!isBlock && phone && sendWhatsApp) {
         (async () => {
           try {
-            const physicalName = unitId ? (UNIT_TO_ROOM[String(unitId)] || String(unitId)) : '';
+            const is600 = finalRoomId === 685543;
+            const physicalName = unitId 
+              ? (is600 ? (UNIT_TO_ROOM_600[String(unitId)] || String(unitId)) : (UNIT_TO_ROOM[String(unitId)] || String(unitId)))
+              : '';
+            const roomLabel = is600 ? 'Condominio' : 'Habitación';
             const bookingIdStr = String(data.id);
             const bookingForWA = {
               id: bookingIdStr,
               guest_name: data.guest_name,
               phone: data.phone,
-              room_name: `Habitación ${physicalName}`,
+              room_name: `${roomLabel} ${physicalName}`,
               check_in: data.check_in,
               check_out: data.check_out,
               price: Number(data.price || 0),
@@ -1798,10 +1811,10 @@ export async function PUT(req: Request) {
         return NextResponse.json({ error: `La habitación ${roomName} no es una habitación física válida en staySync.` }, { status: 400 });
       }
 
-      // Bloquear reasignación de reservas Beds24 a habitaciones locales (500-507 = roomId 685542)
-      if (mapping.roomId === '685542') {
+      // Bloquear reasignación de reservas Beds24 a habitaciones locales (500-507 = 685542, 601-607 = 685543)
+      if (mapping.roomId === '685542' || mapping.roomId === '685543') {
         return NextResponse.json({ 
-          error: `Las habitaciones 500-507 son locales y no están conectadas a Beds24. No se puede reasignar una reserva de Beds24 a una habitación local. Crea la reserva manualmente en la app para las habitaciones 500-507.` 
+          error: `Las habitaciones locales (500-507 y 601-607) son locales y no están conectadas a Beds24. No se puede reasignar una reserva de Beds24 a una habitación local. Crea la reserva manualmente en la app para estas habitaciones.` 
         }, { status: 400 });
       }
 

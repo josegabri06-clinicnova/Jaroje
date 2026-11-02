@@ -146,6 +146,7 @@ export default function PreciosPage() {
           '679093': { base: 12, max: 16 },
           '685542': { base: 2, max: 2 },
           '685542_501': { base: 4, max: 4 },
+          '685543': { base: 6, max: 8 },
           'extra_guest_price': 500,
         });
       }
@@ -1501,6 +1502,7 @@ export default function PreciosPage() {
                 { id: '679093', name: 'Casa Vacacional 3 dorm. (401)', icon: '🏖️' },
                 { id: '685542', name: 'Habitación Sencilla (500)', icon: '🛏️' },
                 { id: '685542_501', name: 'Habitaciones Dobles (501-507)', icon: '✨' },
+                { id: '685543', name: 'Condominios 2 Dormitorios (601-607)', icon: '🏢' },
               ].map(item => {
                 const config = capacitySettings[item.id] || { base: 4, max: 4 };
                 return (

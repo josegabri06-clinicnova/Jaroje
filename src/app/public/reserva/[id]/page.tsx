@@ -711,6 +711,10 @@ function getCapacityRulesForSingle(roomNameOrId: string) {
   if (/\b(501|502|503|504|505|506|507)\b/.test(r) || r.includes('685542')) {
     return { base: 4, max: 4 };
   }
+  // Unidades 601-607 (Condominios 2 dormitorios)
+  if (/\b(601|602|603|604|605|606|607)\b/.test(r) || r.includes('685543')) {
+    return { base: 6, max: 8 };
+  }
   // Fallback: tratar como 2 dormitorios
   return { base: 6, max: 8 };
 }

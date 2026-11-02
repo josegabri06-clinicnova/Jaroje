@@ -142,9 +142,17 @@ export async function GET(req: Request) {
       '1': '500', '2': '501', '3': '502', '4': '503',
       '5': '504', '6': '505', '7': '506', '8': '507'
     };
+    const UNIT_TO_ROOM_600: Record<string, string> = {
+      '1': '601', '2': '602', '3': '603', '4': '604',
+      '5': '605', '6': '606', '7': '607'
+    };
 
     const mappedLocal = (localRes || []).map((b: any) => {
-      const physicalName = b.unit_id ? (UNIT_TO_ROOM[b.unit_id] || b.unit_id) : '';
+      const is600 = String(b.room_id) === '685543';
+      const physicalName = b.unit_id 
+        ? (is600 ? (UNIT_TO_ROOM_600[String(b.unit_id)] || String(b.unit_id)) : (UNIT_TO_ROOM[String(b.unit_id)] || String(b.unit_id)))
+        : '';
+      const roomLabel = is600 ? 'Condominio' : 'Habitación';
       const arrivalDate = b.check_in ? new Date(b.check_in) : null;
       const departureDate = b.check_out ? new Date(b.check_out) : null;
       const nights = (arrivalDate && departureDate)
@@ -155,7 +163,7 @@ export async function GET(req: Request) {
         id: b.id,
         guest_name: b.guest_name,
         phone: b.phone || '',
-        room_name: `Habitación ${physicalName}`,
+        room_name: `${roomLabel} ${physicalName}`,
         check_in: b.check_in,
         check_out: b.check_out,
         price: Number(b.price || 0),

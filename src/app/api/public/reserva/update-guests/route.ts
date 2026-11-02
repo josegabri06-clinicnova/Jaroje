@@ -77,29 +77,37 @@ export async function POST(req: Request) {
 
       const UNIT_TO_ROOM: Record<string, string> = {
         '685542-1': '500', '685542-2': '501', '685542-3': '502', '685542-4': '503',
-        '685542-5': '504', '685542-6': '505', '685542-7': '506', '685542-8': '507'
+        '685542-5': '504', '685542-6': '505', '685542-7': '506', '685542-8': '507',
+        '685543-1': '601', '685543-2': '602', '685543-3': '603', '685543-4': '604',
+        '685543-5': '605', '685543-6': '606', '685543-7': '607',
+        '1': '500', '2': '501', '3': '502', '4': '503',
+        '5': '504', '6': '505', '7': '506', '8': '507'
+      };
+
+      const getLocalRoomName = (rId: string, uId: string) => {
+        return UNIT_TO_ROOM[`${rId}-${uId}`] || (rId === '685543' ? String(Number(uId) + 600) : UNIT_TO_ROOM[uId] || uId);
       };
 
       const localResMapped = {
         id: localRes.id,
-        roomId: '685542',
+        roomId: String(localRes.room_id || '685542'),
         unitId: localRes.unit_id || '',
         num_adult: Number(localRes.num_adult || 1),
         num_child: Number(localRes.num_child || 0),
         price: Number(localRes.price || 0),
         deposit: Number(localRes.deposit || 0),
-        room: localRes.unit_id ? (UNIT_TO_ROOM[localRes.unit_id] || localRes.unit_id) : ''
+        room: localRes.unit_id ? getLocalRoomName(String(localRes.room_id || '685542'), String(localRes.unit_id)) : ''
       };
 
       const siblingLocalMapped = siblingLocal.map(s => ({
         id: s.id,
-        roomId: '685542',
+        roomId: String(s.room_id || '685542'),
         unitId: s.unit_id || '',
         num_adult: Number(s.num_adult || 1),
         num_child: Number(s.num_child || 0),
         price: Number(s.price || 0),
         deposit: Number(s.deposit || 0),
-        room: s.unit_id ? (UNIT_TO_ROOM[s.unit_id] || s.unit_id) : ''
+        room: s.unit_id ? getLocalRoomName(String(s.room_id || '685542'), String(s.unit_id)) : ''
       }));
 
       const allLocalMembers = [localResMapped, ...siblingLocalMapped];

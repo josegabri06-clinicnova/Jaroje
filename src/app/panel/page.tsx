@@ -25,7 +25,8 @@ const ROOMS = [
   '201', '202', '203', '204', '205', '206',
   '301', '302', '303', '304', '305', '306',
   '401', '402',
-  '500', '501', '502', '503', '504', '505', '506', '507'
+  '500', '501', '502', '503', '504', '505', '506', '507',
+  '601', '602', '603', '604', '605', '606', '607'
 ];
 
 const ROOM_ROWS = [
@@ -33,7 +34,8 @@ const ROOM_ROWS = [
   { label: 'Apartamentos de 2 dormitorios (201-206)', rooms: ['201', '202', '203', '204', '205', '206'] },
   { label: 'Unidades Especiales (401-402)', rooms: ['401', '402'] },
   { label: 'Habitaciones Dobles (301-306)', rooms: ['301', '302', '303', '304', '305', '306'] },
-  { label: 'Apartamentos Nuevos (500-507)', rooms: ['500', '501', '502', '503', '504', '505', '506', '507'], isLocal: true }
+  { label: 'Apartamentos Nuevos (500-507)', rooms: ['500', '501', '502', '503', '504', '505', '506', '507'], isLocal: true },
+  { label: 'Condominios 2 Dormitorios (601-607)', rooms: ['601', '602', '603', '604', '605', '606', '607'], isLocal: true }
 ];
 
 
@@ -92,6 +94,11 @@ const LOCAL_UNIT_MAP: Record<string, string> = {
   '5': '504', '6': '505', '7': '506', '8': '507'
 };
 
+const LOCAL_UNIT_MAP_600: Record<string, string> = {
+  '1': '601', '2': '602', '3': '603', '4': '604',
+  '5': '605', '6': '606', '7': '607'
+};
+
 function matchesRoomNumber(r: any, roomNum: string): boolean {
   if (!r || !roomNum) return false;
 
@@ -108,12 +115,16 @@ function matchesRoomNumber(r: any, roomNum: string): boolean {
     if (BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum) return true;
   }
 
-  // 3. Mapeo habitaciones locales 500-507 (unitId) - Solo si la reserva es local o del roomId de locales
-  const isLocalRes = r.isLocal || roomIdStr === '685542';
-  if (isLocalRes && unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
+  // 3. Mapeo habitaciones locales 500-507 y 601-607 (unitId)
+  const isLocal600 = roomIdStr === '685543';
+  if (isLocal600 && unitIdStr && LOCAL_UNIT_MAP_600[unitIdStr]) {
+    if (LOCAL_UNIT_MAP_600[unitIdStr] === roomNum) return true;
+  }
+  const isLocal500 = (r.isLocal && !isLocal600) || roomIdStr === '685542';
+  if (isLocal500 && unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
     if (LOCAL_UNIT_MAP[unitIdStr] === roomNum) return true;
   }
-  if (isLocalRes && unitIdStr && unitIdStr === roomNum) return true;
+  if ((isLocal500 || isLocal600) && unitIdStr && unitIdStr === roomNum) return true;
 
   // 4. Evaluar campos room o room_name limpiando rangos de categoría como 500-507, 301-306, (101-107)
   const cleanStr = (str: string) => str.replace(/\(?\d{3}\s*-\s*\d{3}\)?/g, '');
@@ -293,7 +304,7 @@ function isRoomStayoverServiceScheduled(roomNum: string, activeReservations: any
   const tDate = new Date(todayStr + 'T12:00:00');
   const diffDays = Math.round((tDate.getTime() - cInDate.getTime()) / (1000 * 60 * 60 * 24));
 
-  const isTwoDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402'].includes(roomNum);
+  const isTwoDayRoom = ['101','102','103','104','105','106','107','201','202','203','204','205','206','401','402','601','602','603','604','605','606','607'].includes(roomNum);
   const isDailyRoom = ['301','302','303','304','305','306','500','501','502','503','504','505','506','507'].includes(roomNum);
 
   if (isTwoDayRoom) {
@@ -1297,7 +1308,7 @@ export default function AdminDashboard() {
               <span className="text-[15px] font-black text-emerald-700">
                 {ROOMS.filter(r => {
                   const num = parseInt(r, 10);
-                  if (num >= 500 && num <= 507) return false;
+                  if ((num >= 500 && num <= 507) || (num >= 601 && num <= 607)) return false;
                   const hasResTonight = reservas.some(res => {
                     if (res.status === 'cancelled' || res.status === 'cancelado') return false;
                     const cIn = (res.check_in || res.arrival || '').split('T')[0].split(' ')[0];
@@ -1763,7 +1774,7 @@ export default function AdminDashboard() {
           isCleaningKpi = true;
           roomFiltered = ROOMS.filter(r => {
             const num = parseInt(r, 10);
-            if (num >= 500 && num <= 507) return false;
+            if ((num >= 500 && num <= 507) || (num >= 601 && num <= 607)) return false;
             const hasResTonight = reservas.some(res => {
               if (res.status === 'cancelled' || res.status === 'cancelado') return false;
               const cIn = (res.check_in || res.arrival || '').split('T')[0].split(' ')[0];

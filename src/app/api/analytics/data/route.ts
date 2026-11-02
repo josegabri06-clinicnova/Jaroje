@@ -40,8 +40,8 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const forceSync = searchParams.get('sync') === 'true';
 
-    // 1. Obtener todas las reservas de Beds24 (excluyendo categoría virtual 500 para evitar duplicados)
-    const dbB24Reservations = await fetchAllRows('beds24_reservations', '*', (q) => q.neq('room_id', '685542'));
+    // 1. Obtener todas las reservas de Beds24 (excluyendo categorías virtuales locales para evitar duplicados)
+    const dbB24Reservations = await fetchAllRows('beds24_reservations', '*', (q) => q.neq('room_id', '685542').neq('room_id', '685543'));
 
     // 2. Obtener todas las reservas locales
     const localReservas = await fetchAllRows('local_reservas', '*');

@@ -58,7 +58,8 @@ export async function POST(req: Request) {
           .select('*')
           .neq('status', 'cancelled')
           .neq('status', 'cancelado')
-          .neq('room_id', '685542');
+          .neq('room_id', '685542')
+          .neq('room_id', '685543');
 
         const b24Bookings = (dbB24Data || []).map((b: any) => ({
           ...b,
@@ -123,6 +124,11 @@ export async function POST(req: Request) {
           '5': '504', '6': '505', '7': '506', '8': '507',
         };
 
+        const LOCAL_UNIT_MAP_600: Record<string, string> = {
+          '1': '601', '2': '602', '3': '603', '4': '604',
+          '5': '605', '6': '606', '7': '607',
+        };
+
         const matchesRoom = (r: any, roomNum: string): boolean => {
           if (!r || !roomNum) return false;
           const roomIdStr = String(r.roomId || r.room_id || '');
@@ -134,7 +140,10 @@ export async function POST(req: Request) {
           if (roomIdStr && unitIdStr && BEDS24_UNIT_MAP[roomIdStr]?.[unitIdStr]) {
             return BEDS24_UNIT_MAP[roomIdStr][unitIdStr] === roomNum;
           }
-          if (unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
+          if (roomIdStr === '685543' && unitIdStr && LOCAL_UNIT_MAP_600[unitIdStr]) {
+            if (LOCAL_UNIT_MAP_600[unitIdStr] === roomNum) return true;
+          }
+          if ((roomIdStr === '685542' || !roomIdStr) && unitIdStr && LOCAL_UNIT_MAP[unitIdStr]) {
             if (LOCAL_UNIT_MAP[unitIdStr] === roomNum) return true;
           }
           if (unitIdStr && unitIdStr === roomNum) return true;

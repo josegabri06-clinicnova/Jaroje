@@ -52,14 +52,18 @@ export async function POST(req: Request) {
               ? Math.max(1, Math.round((departureDate.getTime() - arrivalDate.getTime()) / (1000 * 60 * 60 * 24)))
               : 1;
 
-            const physicalName = b.unit_id ? (b.unit_id === '1' ? '500' : b.unit_id === '2' ? '501' : b.unit_id === '3' ? '502' : b.unit_id === '4' ? '503' : b.unit_id === '5' ? '504' : b.unit_id === '6' ? '505' : b.unit_id === '7' ? '506' : b.unit_id === '8' ? '507' : b.unit_id) : '';
+            const is600 = String(b.room_id) === '685543';
+            const unitMap600: Record<string, string> = { '1': '601', '2': '602', '3': '603', '4': '604', '5': '605', '6': '606', '7': '607' };
+            const unitMap500: Record<string, string> = { '1': '500', '2': '501', '3': '502', '4': '503', '5': '504', '6': '505', '7': '506', '8': '507' };
+            const physicalName = b.unit_id ? (is600 ? (unitMap600[String(b.unit_id)] || b.unit_id) : (unitMap500[String(b.unit_id)] || b.unit_id)) : '';
+            const roomLabel = is600 ? 'Condominio' : 'Habitación';
 
             return {
               id: b.id.toString(),
               roomId: b.room_id,
               unitId: b.unit_id,
-              room_name: `Habitación ${physicalName}`,
-              roomName: `Habitación ${physicalName}`,
+              room_name: `${roomLabel} ${physicalName}`,
+              roomName: `${roomLabel} ${physicalName}`,
               arrival: b.check_in,
               departure: b.check_out,
               check_in: b.check_in,

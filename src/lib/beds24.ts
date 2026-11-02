@@ -44,6 +44,9 @@ export const JAROJE_PRICES: Record<string, Record<string, number>> = {
 
   // --- Habitación 500 (tarifa fija: $672.50 base, +19% impuestos se aplica después) ---
   '685542': { baja: 672.50, media: 672.50, media_alta: 672.50, alta: 672.50 },
+
+  // --- Condominio 2 Dormitorios (601-607) ---
+  '685543': { baja: 2689, media: 3193, media_alta: 3361, alta: 3697 },
 };
 
 // Nombres canónicos por roomId para el catálogo de display
@@ -86,6 +89,8 @@ export const JAROJE_CATALOG: Record<string, any> = {
   '685542': { nombre: 'Habitación Sencilla (500)', capacidad: 2, camas: '2 camas individuales tipo litera', amenities: 'Baño privado, Mini split, Smart TV, WiFi. Planta baja.', categoria: 'Estándar' },
   // Habitaciones 501-507 – Dobles (unitId 2-8)
   '685542_501': { nombre: 'Habitación Doble (501-507)', capacidad: 4, camas: '2 camas dobles', amenities: 'WiFi, AC, Alberca, 5min playa', categoria: 'Estándar' },
+  // Condominios 601-607 – 2 Dormitorios (unitId 1-7)
+  '685543': { nombre: 'Condominio 2 Dormitorios (601-607)', capacidad: 6, camas: '1 King, 2 Matrimoniales', amenities: 'Cocina completa, Alberca, 5min playa, 2min plaza, 2 Baños', categoria: 'Condominio' },
 
   // Fallbacks genéricos
   'default_1': { nombre: 'Habitación Doble', capacidad: 2, camas: '2 Dobles', amenities: 'WiFi, AC', categoria: 'Estándar' },
@@ -121,7 +126,8 @@ export function getUnitName(roomId: string | null | undefined, unitId: string | 
     '679091': { '1': '201', '2': '202', '3': '203', '4': '204', '5': '205', '6': '206' },
     '679092': { '1': '101', '2': '102', '3': '103', '4': '104', '5': '105', '6': '106', '7': '107' },
     '679093': { '1': '401' },
-    '685542': { '1': '500', '2': '501', '3': '502', '4': '503', '5': '504', '6': '505', '7': '506', '8': '507' }
+    '685542': { '1': '500', '2': '501', '3': '502', '4': '503', '5': '504', '6': '505', '7': '506', '8': '507' },
+    '685543': { '1': '601', '2': '602', '3': '603', '4': '604', '5': '605', '6': '606', '7': '607' }
   };
 
   return oldUnitMap[id]?.[uId] || null;
@@ -160,6 +166,13 @@ export function getBeds24RoomIdAndUnit(physicalRoomName: string | null | undefin
     '505': { roomId: '685542', unitId: '6' },
     '506': { roomId: '685542', unitId: '7' },
     '507': { roomId: '685542', unitId: '8' },
+    '601': { roomId: '685543', unitId: '1' },
+    '602': { roomId: '685543', unitId: '2' },
+    '603': { roomId: '685543', unitId: '3' },
+    '604': { roomId: '685543', unitId: '4' },
+    '605': { roomId: '685543', unitId: '5' },
+    '606': { roomId: '685543', unitId: '6' },
+    '607': { roomId: '685543', unitId: '7' },
   };
   return map[name] || null;
 }
@@ -236,6 +249,10 @@ export function getChildRoomId(parentId: string | null | undefined, unitId: stri
     // --- 500 -> Padre: 685542 ---
     '685542': {
       '1': '685542', '2': '685542', '3': '685542', '4': '685542', '5': '685542', '6': '685542', '7': '685542', '8': '685542'
+    },
+    // --- 600 -> Padre: 685543 ---
+    '685543': {
+      '1': '685543', '2': '685543', '3': '685543', '4': '685543', '5': '685543', '6': '685543', '7': '685543'
     }
   };
 
@@ -263,6 +280,9 @@ export function getAllChildRoomIds(parentId: string | null | undefined): string[
     },
     '685542': {
       '1': '685542', '2': '685542', '3': '685542', '4': '685542', '5': '685542', '6': '685542', '7': '685542', '8': '685542'
+    },
+    '685543': {
+      '1': '685543', '2': '685543', '3': '685543', '4': '685543', '5': '685543', '6': '685543', '7': '685543'
     }
   };
   const mapping = parentToChild[pId];
@@ -417,6 +437,11 @@ export function getRealPrice(
     id = '679077';
   }
 
+  // Mapear 685543 (Condominios 601-607) a 679091 (Apartamento 2 dormitorios)
+  if (id === '685543') {
+    id = '679091';
+  }
+
   // Si nos pasan un ID padre y un unitId, intentar resolver al ID hijo específico
   if (unitId) {
     const childId = getChildRoomId(id, unitId);
@@ -488,6 +513,10 @@ export function getRoomMetadata(roomId: string | null | undefined, roomName: str
       return JAROJE_CATALOG['685542_501'];
     }
     return JAROJE_CATALOG['685542'];
+  }
+
+  if (id === '685543') {
+    return JAROJE_CATALOG['685543'];
   }
 
   if (JAROJE_CATALOG[id]) return JAROJE_CATALOG[id];
@@ -1332,8 +1361,8 @@ async function doFetchAndMapBeds24Bookings(fast: boolean = false, includeCancell
         return false;
       }
       const rId = String(b.roomId || '').trim();
-      // Excluir habitaciones locales 500-507 que Beds24 no gestiona
-      if (rId === LOCAL_ROOM_ID) return false;
+      // Excluir habitaciones locales 500-507 y 601-607 que Beds24 no gestiona
+      if (rId === LOCAL_ROOM_ID || rId === '685543') return false;
       return true;
     });
 
@@ -1912,12 +1941,15 @@ export function getCapacityRules(
       }
     }
   }
-  // Soporte para IDs virtuales de las locales 500-507
+  // Soporte para IDs virtuales de las locales 500-507 y 601-607
   if (r === '685542_500') {
     return { base: 2, max: 2 };
   }
   if (r === '685542_501' || r === '685542_501_507') {
     return { base: 4, max: 4 };
+  }
+  if (r === '685543') {
+    return { base: 6, max: 8 };
   }
   // 500 es de 2 huéspedes únicamente
   if (r.includes('500')) {
@@ -1926,6 +1958,10 @@ export function getCapacityRules(
   // 501-507 o el tipo 685542 es de 4 huéspedes (sin opción a adicionales)
   if (r === '685542' || r.includes('501') || r.includes('502') || r.includes('503') || r.includes('504') || r.includes('505') || r.includes('506') || r.includes('507')) {
     return { base: 4, max: 4 };
+  }
+  // 601-607 o el tipo 685543 es de 6 a 8 huéspedes (Condominios 2 dormitorios)
+  if (r === '685543' || r.includes('601') || r.includes('602') || r.includes('603') || r.includes('604') || r.includes('605') || r.includes('606') || r.includes('607')) {
+    return { base: 6, max: 8 };
   }
   if (r === '679077' || r.includes('doble') || r.includes('301') || r.includes('302') || r.includes('303') || r.includes('304') || r.includes('305') || r.includes('306')) {
     return { base: 4, max: 4 };
@@ -2849,7 +2885,7 @@ export async function syncBeds24ReservationsRange(
   const filteredBookings = bookingsArray
     .filter((b: any) => {
       const rId = String(b.roomId || '').trim();
-      if (rId === LOCAL_ROOM_ID) return false;
+      if (rId === LOCAL_ROOM_ID || rId === '685543') return false;
       return true;
     });
 

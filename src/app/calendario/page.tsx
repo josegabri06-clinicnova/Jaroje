@@ -30,6 +30,7 @@ const ROOM_GROUPS = [
   { label: 'Especial', color: '#10b981', bg: '#f0fdf4', rooms: ['401','402'] },
   { label: 'Estándar', color: '#6366f1', bg: '#eef2ff', rooms: ['301','302','303','304','305','306'] },
   { label: 'Nuevos', color: '#a855f7', bg: '#faf5ff', rooms: ['500','501','502','503','504','505','506','507'], isLocal: true },
+  { label: 'Condo 2R (600)', color: '#0284c7', bg: '#e0f2fe', rooms: ['601','602','603','604','605','606','607'], isLocal: true },
 ];
 
 const PHYSICAL_ROOM_GROUPS = [
@@ -52,6 +53,10 @@ const PHYSICAL_ROOM_GROUPS = [
   {
     category: 'Apartamentos Nuevos (500-507)',
     rooms: ['500', '501', '502', '503', '504', '505', '506', '507']
+  },
+  {
+    category: 'Condominios 2 Dormitorios (601-607)',
+    rooms: ['601', '602', '603', '604', '605', '606', '607']
   }
 ];
 
@@ -107,6 +112,14 @@ const ROOM_TO_BEDS24: Record<string, { roomId: string; unitId: string }> = {
   '505': { roomId: '685542', unitId: '6' },
   '506': { roomId: '685542', unitId: '7' },
   '507': { roomId: '685542', unitId: '8' },
+  // --- Condominio 2 Dormitorios (601-607) ---
+  '601': { roomId: '685543', unitId: '1' },
+  '602': { roomId: '685543', unitId: '2' },
+  '603': { roomId: '685543', unitId: '3' },
+  '604': { roomId: '685543', unitId: '4' },
+  '605': { roomId: '685543', unitId: '5' },
+  '606': { roomId: '685543', unitId: '6' },
+  '607': { roomId: '685543', unitId: '7' },
 };
 
 const COLS = 10; // days to show
@@ -2783,7 +2796,7 @@ export default function CalendarPage() {
                     </div>
 
                     {isReassigning && (() => {
-                      const LOCAL_ROOMS = ['500','501','502','503','504','505','506','507'];
+                      const LOCAL_ROOMS = ['500','501','502','503','504','505','506','507','601','602','603','604','605','606','607'];
                       const isLocalBooking = LOCAL_ROOMS.some(lr => (selectedReserva.room || '').includes(lr));
                       const filteredGroups = PHYSICAL_ROOM_GROUPS
                         .map(group => ({

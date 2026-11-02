@@ -76,6 +76,19 @@ const ROOM_MAP = [
       { unitId: '7', name: '506' },
       { unitId: '8', name: '507' }
     ]
+  },
+  {
+    roomId: '685543',
+    name: 'Condominios 2 Dormitorios (601-607)',
+    units: [
+      { unitId: '1', name: '601' },
+      { unitId: '2', name: '602' },
+      { unitId: '3', name: '603' },
+      { unitId: '4', name: '604' },
+      { unitId: '5', name: '605' },
+      { unitId: '6', name: '606' },
+      { unitId: '7', name: '607' }
+    ]
   }
 ];
 
