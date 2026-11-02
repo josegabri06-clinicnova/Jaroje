@@ -7,6 +7,15 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  async redirects() {
+    return [
+      {
+        source: '/llamadas',
+        destination: '/reservas',
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     return [
       {

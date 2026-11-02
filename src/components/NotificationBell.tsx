@@ -355,7 +355,7 @@ const resolveDeepLink = (log: any) => {
   }
 
   if (moduleLower === 'llamadas' || actionLower.includes('conmutador') || actionLower.includes('llamada')) {
-    return '/llamadas';
+    return '/reservas';
   }
 
   if (moduleLower === 'bot' || actionLower.includes('bot') || actionLower.includes('whatsapp')) {
