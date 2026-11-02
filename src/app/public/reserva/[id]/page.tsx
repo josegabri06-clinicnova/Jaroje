@@ -1851,6 +1851,10 @@ export default function PublicReservaPage() {
           const targetAmount = booking.deposit === 0
             ? (paymentSplit === '50' ? Math.ceil(booking.price * 0.5 * 100) / 100 : Number(booking.price.toFixed(2)))
             : Number(booking.balance.toFixed(2));
+          const paymentType = booking.deposit === 0
+            ? (paymentSplit === '50' ? 'anticipo' : 'total')
+            : 'saldo';
+          const totalBookingPrice = Number(booking.price || 0);
 
           return (
             <div className="bg-white rounded-2xl p-5 border border-zinc-200/60 shadow-sm space-y-4">
@@ -1979,7 +1983,7 @@ export default function PublicReservaPage() {
                             {lang === 'en' ? 'Pay via Wise (USD) ↗' : 'Pagar vía Wise (USD) ↗'}
                           </a>
                           <a
-                            href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}&method=wise`}
+                            href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&total=${totalBookingPrice}&paymentType=${paymentType}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}&method=wise`}
                             className="w-full mt-2 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                           >
                             <Upload size={14} className="text-zinc-200" />
@@ -2127,7 +2131,7 @@ export default function PublicReservaPage() {
 
                           {/* Botón de Subir Comprobante PayPal */}
                           <a
-                            href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&fee=${paypalFee}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}&method=paypal`}
+                            href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&total=${totalBookingPrice}&paymentType=${paymentType}&fee=${paypalFee}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}&method=paypal`}
                             className="w-full mt-2 bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
                           >
                             <Upload size={14} className="text-zinc-200" />
@@ -2195,7 +2199,7 @@ export default function PublicReservaPage() {
                           {t.payWithCard}
                         </a>
                         <a
-                          href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}&method=mercadopago`}
+                          href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&total=${totalBookingPrice}&paymentType=${paymentType}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}&method=mercadopago`}
                           className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                         >
                           <Upload size={14} className="text-zinc-600" />
@@ -2215,14 +2219,14 @@ export default function PublicReservaPage() {
                   <div className="space-y-2 pt-2">
                     <span className="text-[10px] font-extrabold uppercase text-zinc-650 tracking-wider block">{t.optionTransfer}</span>
                     <a
-                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}`}
+                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&total=${totalBookingPrice}&paymentType=${paymentType}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}`}
                       className="w-full bg-[#18181b] hover:bg-[#27272a] text-white font-bold text-sm py-3.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                     >
                       <FileText size={18} />
                       {t.payWithTransfer}
                     </a>
                     <a
-                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}#subir-comprobante`}
+                      href={`/public/pago-transferencia?id=${booking.id}&amount=${targetAmount}&total=${totalBookingPrice}&paymentType=${paymentType}&name=${encodeURIComponent(booking.guest_name || '')}&phone=${encodeURIComponent(booking.phone || booking.guest_phone || booking.mobile || '')}&lang=${lang}#subir-comprobante`}
                       className="w-full mt-2 bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-800 font-bold text-xs py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
                     >
                       <Upload size={14} className="text-zinc-600" />

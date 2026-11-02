@@ -97,6 +97,8 @@ export default function PagoTransferenciaPage() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get('bookingId') || searchParams.get('id') || '';
   const rawAmount = searchParams.get('amount') || '';
+  const paymentType = (searchParams.get('paymentType') || searchParams.get('type') || '').toLowerCase().trim();
+  const rawTotal = searchParams.get('total') || '';
   const name = searchParams.get('name') || '';
   const email = searchParams.get('email') || '';
   const phone = searchParams.get('phone') || '';
@@ -276,18 +278,30 @@ export default function PagoTransferenciaPage() {
         const formData = new FormData();
         formData.append('bookingId', String(bookingId));
         formData.append('amount', String(amount));
+        if (paymentType) formData.append('paymentType', paymentType);
+        if (rawTotal) formData.append('total', rawTotal);
+        formData.append('lang', lang);
         formData.append('name', String(name));
         formData.append('email', String(email));
         formData.append('phone', String(phone));
+
+        const typeTag = paymentType === 'anticipo'
+          ? '[Tipo: Anticipo (50%)]'
+          : (paymentType === 'total'
+            ? '[Tipo: Pago Total (100%)]'
+            : (paymentType === 'saldo' ? '[Tipo: Saldo Restante]' : ''));
+
+        const methodTag = method === 'mercadopago'
+          ? '[Plataforma: Mercado Pago]'
+          : (isWiseMethod
+            ? '[Plataforma: Wise]'
+            : (isPaypalActive
+              ? `[Plataforma: PayPal] [Abono Reserva: $${amount.toFixed(2)} USD] [Comisión 5%: $${paypalFee.toFixed(2)} USD] [Total Pagado: $${totalWithFee.toFixed(2)} USD]`
+              : `[Banco Destino: ${activeAccount.banco}]`));
+
         formData.append(
           'notes',
-          method === 'mercadopago'
-            ? '[Plataforma: Mercado Pago]'
-            : (isWiseMethod
-              ? '[Plataforma: Wise]'
-              : (isPaypalActive
-                ? `[Plataforma: PayPal] [Abono Reserva: $${amount.toFixed(2)} USD] [Comisión 5%: $${paypalFee.toFixed(2)} USD] [Total Pagado: $${totalWithFee.toFixed(2)} USD]`
-                : `[Banco Destino: ${activeAccount.banco}]`))
+          [methodTag, typeTag].filter(Boolean).join(' ')
         );
         formData.append('file', fileToUpload);
 
@@ -386,9 +400,24 @@ export default function PagoTransferenciaPage() {
               {/* Payment Summary (Editable Input) */}
               <div className="bg-zinc-50 border border-zinc-100 rounded-2xl p-5 flex items-center justify-between gap-4">
                 <div className="flex-1 text-left">
-                  <label htmlFor="amount-input" className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block mb-1">
-                    {lang === 'en' ? `Booking Declared Amount (${curr})` : `Monto Declarado a la Reserva (${curr})`}
-                  </label>
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <label htmlFor="amount-input" className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-400 block">
+                      {lang === 'en' ? `Booking Declared Amount (${curr})` : `Monto Declarado a la Reserva (${curr})`}
+                    </label>
+                    {paymentType && (
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        paymentType === 'anticipo'
+                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}>
+                        {paymentType === 'anticipo'
+                          ? (lang === 'en' ? 'Deposit (50%)' : 'Anticipo (50%)')
+                          : (paymentType === 'total'
+                            ? (lang === 'en' ? 'Total (100%)' : 'Pago Total (100%)')
+                            : (lang === 'en' ? 'Balance Settlement' : 'Liquidación de Saldo'))}
+                      </span>
+                    )}
+                  </div>
                   <div className="relative flex items-center">
                     <span className="text-base font-black text-zinc-550 absolute left-2 select-none">$</span>
                     <input
