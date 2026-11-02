@@ -2623,14 +2623,25 @@ export default function FinanzasPage() {
                 </select>
               </div>
 
-              {/* DESCRIPCIÓN */}
+              {/* DESCRIPCIÓN (EXPANDIBLE / MULTILÍNEA) */}
               <div>
-                <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción (Opcional)</label>
-                <input 
-                  type="text"
-                  value={formDescription} onChange={e => setFormDescription(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-base focus:ring-2 focus:ring-zinc-900/10 text-zinc-900 font-bold"
-                  placeholder="Ej. Traspaso, Pago a proveedor..."
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[10px] font-extrabold text-zinc-400 uppercase tracking-widest">Descripción (Opcional)</label>
+                  <span className="text-[9px] text-zinc-400 font-bold tracking-wider uppercase">
+                    {formDescription.length > 0 ? `${formDescription.length} car.` : 'Multilínea'}
+                  </span>
+                </div>
+                <textarea 
+                  rows={3}
+                  value={formDescription} 
+                  onChange={e => setFormDescription(e.target.value)}
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = `${Math.min(Math.max(target.scrollHeight, 84), 220)}px`;
+                  }}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 outline-none text-base focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 focus:bg-white text-zinc-900 font-bold transition-all placeholder:text-zinc-400 placeholder:font-normal leading-relaxed resize-y min-h-[84px] max-h-[240px]"
+                  placeholder="Ej. S47 (USD$4,500) S48 (USD$5,171), Traspaso, Pago a proveedor..."
                 />
               </div>
 
@@ -3136,12 +3147,17 @@ export default function FinanzasPage() {
 
               <div>
                 <label className="block text-[9px] font-extrabold text-zinc-400 uppercase tracking-widest mb-1.5">Descripción o Comentario (Opcional)</label>
-                <input 
-                  type="text"
+                <textarea 
+                  rows={2}
                   placeholder="Ej. Reubicación de efectivo, fondeo..."
                   value={transferDescription}
                   onChange={e => setTransferDescription(e.target.value)}
-                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 transition-all duration-300"
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = `${Math.min(Math.max(target.scrollHeight, 68), 180)}px`;
+                  }}
+                  className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2.5 outline-none text-[13px] focus:ring-4 focus:ring-zinc-950/5 focus:border-zinc-900 focus:bg-white text-zinc-900 placeholder:text-zinc-400 font-medium leading-relaxed resize-y min-h-[68px] max-h-[180px] transition-all duration-300"
                 />
               </div>
 
