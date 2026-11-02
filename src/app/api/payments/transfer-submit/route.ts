@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { grantGuestAccess, normalizeBookingId } from '@/lib/guest-auth';
 import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -302,7 +303,10 @@ export async function POST(req: Request) {
       await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
     }
 
-    return NextResponse.json({ success: true, receiptUrl: publicUrl, record: dbData });
+    const okRes = NextResponse.json({ success: true, receiptUrl: publicUrl, record: dbData });
+    const guestId = normalizeBookingId(cleanBookingId);
+    if (guestId) await grantGuestAccess(okRes, guestId); // quien sube su comprobante queda autorizado en este dispositivo
+    return okRes;
 
   } catch (err: any) {
     console.error("[Submit Transfer] Exception handler:", err);

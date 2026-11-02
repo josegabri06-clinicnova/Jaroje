@@ -438,6 +438,14 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     dniSuccessDesc: 'Hemos recibido tu identificación. Tu check-in digital está completo.',
     dniError: 'No se pudo subir la identificación. Inténtalo de nuevo.',
     dniChangeButton: 'Cambiar Identificación 🔄',
+    verifyTitle: 'Verifica que eres tú',
+    verifyDesc: 'Para ver o cambiar tus documentos, escribe los últimos 4 dígitos del teléfono de tu reserva.',
+    verifyButton: 'Verificar',
+    verifying: 'Verificando…',
+    verifyWrong: 'Los dígitos no coinciden.',
+    verifyLocked: 'Demasiados intentos. Inténtalo de nuevo más tarde.',
+    verifyNoPhone: 'Para ver o cambiar tus documentos usa el mismo dispositivo con el que los subiste.',
+    verifyNeeded: 'Verifica tu identidad para cambiar este documento.',
   },
   en: {
     title: 'CONDOMINIOS JAROJE',
@@ -561,6 +569,14 @@ const TRANSLATIONS: Record<'es' | 'en', any> = {
     dniSuccessDesc: 'We have received your ID. Your digital check-in is complete.',
     dniError: 'Failed to upload your ID. Please try again.',
     dniChangeButton: 'Change ID 🔄',
+    verifyTitle: 'Verify it is you',
+    verifyDesc: 'To view or change your documents, enter the last 4 digits of the phone number on your booking.',
+    verifyButton: 'Verify',
+    verifying: 'Verifying…',
+    verifyWrong: 'The digits do not match.',
+    verifyLocked: 'Too many attempts. Please try again later.',
+    verifyNoPhone: 'To view or change your documents, use the same device you uploaded them from.',
+    verifyNeeded: 'Verify your identity to change this document.',
   }
 };
 
@@ -1019,6 +1035,70 @@ export default function PublicReservaPage() {
   const [dniUploadError, setDniUploadError] = useState<string | null>(null);
   const [zoomImage, setZoomImage] = useState<string | null>(null);
 
+  // Verificación del huésped con los últimos 4 dígitos de su teléfono (da una cookie firmada de esta reserva)
+  const [reloadKey, setReloadKey] = useState(0);
+  const [verifyLast4, setVerifyLast4] = useState('');
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+
+  const handleVerify = async () => {
+    if (verifyLast4.length !== 4 || !id) return;
+    setVerifying(true);
+    setVerifyError(null);
+    try {
+      const res = await fetch('/api/public/reserva/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: String(id), last4: verifyLast4 })
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.success) {
+        setVerifyLast4('');
+        setReloadKey(k => k + 1); // se vuelve a pedir la reserva: ya llega con sus archivos
+      } else {
+        setVerifyError(json.code === 'locked' ? t.verifyLocked : json.code === 'no_phone' ? t.verifyNoPhone : t.verifyWrong);
+      }
+    } catch {
+      setVerifyError(t.verifyWrong);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const renderVerifyBox = () => {
+    if (!booking?.needs_verification) return null;
+    if (!booking.verify_available) {
+      return <p className="text-[11px] text-zinc-500 leading-relaxed font-medium">{t.verifyNoPhone}</p>;
+    }
+    return (
+      <div className="bg-indigo-50/60 border border-indigo-100 rounded-xl p-4 space-y-2.5">
+        <h4 className="text-[12px] font-extrabold text-indigo-900 uppercase tracking-wide">{t.verifyTitle}</h4>
+        <p className="text-[11.5px] text-zinc-600 leading-relaxed">{t.verifyDesc}</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            maxLength={4}
+            value={verifyLast4}
+            onChange={e => { setVerifyLast4(e.target.value.replace(/\D/g, '')); setVerifyError(null); }}
+            placeholder="0000"
+            className="w-24 text-center tracking-[0.3em] font-mono text-sm bg-white border border-indigo-200 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-indigo-300"
+          />
+          <button
+            type="button"
+            onClick={handleVerify}
+            disabled={verifying || verifyLast4.length !== 4}
+            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors"
+          >
+            {verifying ? t.verifying : t.verifyButton}
+          </button>
+        </div>
+        {verifyError && <p className="text-[11px] text-red-600 font-semibold">{verifyError}</p>}
+      </div>
+    );
+  };
+
   const handleDniChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0 && id) {
       const file = e.target.files[0];
@@ -1039,8 +1119,10 @@ export default function PublicReservaPage() {
         const json = await res.json();
         if (res.ok && json.success) {
           setUploadedDniUrl(json.url);
+          setReloadKey(k => k + 1); // la cookie de este dispositivo ya autoriza: se recarga para ver y cambiar su archivo
         } else {
-          setDniUploadError(json.error || (lang === 'en' ? 'An error occurred uploading your ID.' : 'Ocurrió un error al subir la identificación.'));
+          setDniUploadError(json.code === 'verification_required' ? t.verifyNeeded : (json.error || (lang === 'en' ? 'An error occurred uploading your ID.' : 'Ocurrió un error al subir la identificación.')));
+          if (json.code === 'verification_required') setReloadKey(k => k + 1);
         }
       } catch (err) {
         setDniUploadError(lang === 'en' ? 'Network error uploading ID.' : 'Error de red al intentar subir la identificación.');
@@ -1075,8 +1157,10 @@ export default function PublicReservaPage() {
         const json = await res.json();
         if (res.ok && json.success) {
           setUploadedUrl(json.receiptUrl);
+          setReloadKey(k => k + 1);
         } else {
-          setUploadError(json.error || 'Ocurrió un error al subir el comprobante.');
+          setUploadError(json.code === 'verification_required' ? t.verifyNeeded : (json.error || 'Ocurrió un error al subir el comprobante.'));
+          if (json.code === 'verification_required') setReloadKey(k => k + 1);
         }
       } catch (err) {
         setUploadError('Error de red al intentar subir el archivo.');
@@ -1134,7 +1218,7 @@ export default function PublicReservaPage() {
     return () => {
       isMounted = false;
     };
-  }, [id, rawId]);
+  }, [id, rawId, reloadKey]);
 
   // Auto-abrir modal de mantenimiento si viene con ?action=maintenance
   useEffect(() => {
@@ -2245,6 +2329,7 @@ export default function PublicReservaPage() {
                 {lang === 'en' ? 'Payment Receipts History' : 'Historial de Comprobantes'}
               </h3>
             </div>
+            {renderVerifyBox()}
 
             <div className="space-y-3">
               {booking.transfer_receipts.map((r: any) => {
@@ -2380,7 +2465,7 @@ export default function PublicReservaPage() {
                 <p className="text-[11px] text-zinc-600 leading-relaxed">
                   {t.dniSuccessDesc}
                 </p>
-                {!/^(https?:|blob:|data:)/i.test(uploadedDniUrl) ? null : (uploadedDniUrl.toLowerCase().endsWith('.pdf') || uploadedDniUrl.toLowerCase().includes('.pdf')) ? (
+                {!/^(https?:|blob:|data:|\/api\/)/i.test(uploadedDniUrl) ? null : (uploadedDniUrl.toLowerCase().endsWith('.pdf') || uploadedDniUrl.toLowerCase().includes('.pdf')) ? (
                   <div className="flex flex-col items-center justify-center p-5 bg-zinc-50 border border-zinc-200 rounded-xl space-y-2 max-w-xs mx-auto">
                     <FileText size={36} className="text-zinc-400" />
                     <span className="text-[11px] font-bold text-zinc-700">{lang === 'en' ? 'PDF Document' : 'Documento PDF'}</span>
@@ -2405,6 +2490,7 @@ export default function PublicReservaPage() {
                     />
                   </div>
                 )}
+                {booking?.needs_verification ? renderVerifyBox() : (
                 <div className="pt-1 text-center">
                   <label className="inline-flex items-center gap-1.5 px-4 py-2 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-900 font-bold rounded-xl text-xs transition-all border border-zinc-200 cursor-pointer shadow-xs">
                     <Upload size={13} className="text-zinc-500" />
@@ -2418,6 +2504,7 @@ export default function PublicReservaPage() {
                     />
                   </label>
                 </div>
+                )}
               </div>
             ) : (booking.is_checked_in || booking.is_checked_out) ? (
               <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 space-y-2">

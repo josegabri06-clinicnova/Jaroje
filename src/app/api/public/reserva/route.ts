@@ -2,15 +2,20 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
+import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
 
 export const dynamic = 'force-dynamic';
 
-// Esta ruta es pública (basta el número de reserva): nunca debe devolver enlaces a los documentos de los huéspedes
-// (DNI, comprobantes). Solo indica si existe un archivo; la página del huésped únicamente necesita saberlo.
-const FILE_MARKER = 'uploaded';
-
-function publicTransferReceipts(list: any[] | null | undefined) {
-  return (list || []).map(({ receipt_url, ...rest }: any) => ({ ...rest, has_file: Boolean(receipt_url) }));
+// Esta ruta es pública (basta el número de reserva): nunca devuelve enlaces de almacenamiento. Indica si hay archivo y,
+// solo si el huésped está autorizado (cookie de su reserva), un enlace propio que pasa por /api/public/reserva/file.
+function publicTransferReceipts(list: any[] | null | undefined, bookingId: string, authorized: boolean) {
+  return (list || []).map(({ receipt_url, booking_id, ...rest }: any) => ({
+    ...rest,
+    has_file: Boolean(receipt_url),
+    ...(authorized && receipt_url && String(booking_id) === bookingId
+      ? { receipt_url: guestFileUrl(bookingId, 'transfer', receipt_url, String(rest.id)) }
+      : {}),
+  }));
 }
 
 export async function GET(req: Request) {
@@ -34,6 +39,10 @@ export async function GET(req: Request) {
     if (isNaN(bookingId) || !Number.isInteger(bookingId)) {
       return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
     }
+
+    // ¿Este dispositivo está autorizado a ver los archivos de esta reserva? (cookie firmada, no el simple número)
+    const guestId = String(bookingId);
+    const guestAuthorized = await isGuestAuthorized(req, guestId);
 
     // Obtener el listado de comprobantes de transferencia de la reserva
     const { data: transferReceipts } = await supabase
@@ -177,7 +186,7 @@ export async function GET(req: Request) {
       const localGroupIds = localGroupBookings.map(b => b.id);
       const { data: groupTransferReceipts } = await supabase
         .from('transfer_receipts')
-        .select('id, amount, status, receipt_url, notes, created_at')
+        .select('id, booking_id, amount, status, receipt_url, notes, created_at')
         .in('booking_id', localGroupIds)
         .order('created_at', { ascending: false });
 
@@ -203,12 +212,14 @@ export async function GET(req: Request) {
           is_checked_in: checkinData?.status === 'checked_in',
           is_checked_out: checkinData?.status === 'checked_out',
           is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
-          document_url: checkinData?.document_url ? FILE_MARKER : null,
-          receipt_url: finalReceiptUrl ? FILE_MARKER : null,
+          document_url: guestFileRef(guestId, 'dni', checkinData?.document_url, guestAuthorized),
+          receipt_url: guestFileRef(guestId, 'receipt', finalReceiptUrl, guestAuthorized),
           status: localRes.status || 'confirmed',
           booking_time: localRes.created_at || null,
           channel: 'Directo',
-          transfer_receipts: publicTransferReceipts(groupTransferReceipts),
+          transfer_receipts: publicTransferReceipts(groupTransferReceipts, guestId, guestAuthorized),
+          needs_verification: Boolean((checkinData?.document_url || finalReceiptUrl || (groupTransferReceipts || []).some((r: any) => r.receipt_url)) && !guestAuthorized),
+          verify_available: hasUsablePhone(localRes.phone),
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment !== false,
             transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
@@ -430,7 +441,7 @@ export async function GET(req: Request) {
         const b24GroupIds = beds24GroupBookings.map(b => Number(b.id));
         const { data: groupTransferReceipts } = await supabase
           .from('transfer_receipts')
-          .select('id, amount, status, receipt_url, notes, created_at')
+          .select('id, booking_id, amount, status, receipt_url, notes, created_at')
           .in('booking_id', b24GroupIds)
           .order('created_at', { ascending: false });
 
@@ -456,12 +467,14 @@ export async function GET(req: Request) {
             is_checked_in: checkinData?.status === 'checked_in',
             is_checked_out: checkinData?.status === 'checked_out',
             is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
-            document_url: checkinData?.document_url ? FILE_MARKER : null,
-            receipt_url: finalReceiptUrl ? FILE_MARKER : null,
+            document_url: guestFileRef(guestId, 'dni', checkinData?.document_url, guestAuthorized),
+            receipt_url: guestFileRef(guestId, 'receipt', finalReceiptUrl, guestAuthorized),
             status: booking.status || 'confirmed',
             booking_time: booking.booking_time || null,
             channel: booking.channel || 'Directo',
-            transfer_receipts: publicTransferReceipts(groupTransferReceipts),
+            transfer_receipts: publicTransferReceipts(groupTransferReceipts, guestId, guestAuthorized),
+          needs_verification: Boolean((checkinData?.document_url || finalReceiptUrl || (groupTransferReceipts || []).some((r: any) => r.receipt_url)) && !guestAuthorized),
+          verify_available: hasUsablePhone(booking.guest_phone || booking.phone || booking.mobile),
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment !== false,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
@@ -491,6 +504,20 @@ export async function POST(req: Request) {
     }
 
     const bookingId = Number(id);
+    const guestId = normalizeBookingId(id);
+    if (!guestId) {
+      return NextResponse.json({ error: 'ID de reserva no válido' }, { status: 400 });
+    }
+
+    // Sustituir un comprobante ya subido solo lo puede hacer quien está autorizado en esta reserva; la primera subida es libre
+    const { data: priorCheckin } = await supabase
+      .from('checkins')
+      .select('receipt_url')
+      .eq('reservation_id', String(id).toLowerCase().trim())
+      .maybeSingle();
+    if (priorCheckin?.receipt_url && !(await isGuestAuthorized(req, guestId))) {
+      return NextResponse.json({ error: 'Verifica tu identidad para cambiar tu comprobante.', code: 'verification_required' }, { status: 403 });
+    }
 
     // 1. Buscar detalles de la reservación para evitar violar restricciones NOT NULL de la base de datos
     let checkInDate = null;
@@ -576,7 +603,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al registrar en base de datos: ' + dbError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, receiptUrl: publicUrl });
+    const okRes = NextResponse.json({ success: true, receiptUrl: publicUrl });
+    await grantGuestAccess(okRes, guestId); // quien sube su comprobante queda autorizado en este dispositivo
+    return okRes;
 
   } catch (err: any) {
     console.error("Error en POST de public/reserva:", err);
