@@ -868,13 +868,10 @@ export default function AjustesPage() {
 
   const fetchPasskeys = async () => {
     try {
-      const { data, error } = await supabase
-        .from('user_passkeys')
-        .select('id, device_name, created_at')
-        .eq('role', 'admin')
-        .order('created_at', { ascending: false });
-      if (!error && data) {
-        setPasskeys(data);
+      const res = await fetch('/api/auth/webauthn/register/list', { cache: 'no-store' });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPasskeys(json.passkeys || []);
       }
     } catch (err) {
       console.error('Error fetching passkeys:', err);

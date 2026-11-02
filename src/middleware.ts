@@ -113,7 +113,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // Gestión de Empleados: Exclusivo para Administrador
-  if (pathname.startsWith('/api/employees')) {
+  if (pathname.startsWith('/api/employees') || pathname.startsWith('/api/payroll')) {
     if (role !== 'admin') {
       return NextResponse.json(
         { success: false, error: 'Forbidden: Solo administradores pueden gestionar empleados.' },

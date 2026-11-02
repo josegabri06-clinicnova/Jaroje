@@ -30,6 +30,17 @@ type PayrollRecord = {
   comprobante_sent?: boolean;
 };
 
+// La tabla payroll solo la toca el servidor (/api/payroll/records, solo administrador)
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+async function updatePayrollFlags(id: string, flags: { whatsapp_sent?: boolean; comprobante_sent?: boolean }) {
+  try {
+    await fetch('/api/payroll/records', { method: 'PATCH', headers: JSON_HEADERS, body: JSON.stringify({ id, ...flags }) });
+  } catch (err) {
+    console.error('Error actualizando el estado del aviso de nómina:', err);
+  }
+}
+
 function parseAttendanceLogs(text: string) {
   if (!text) return [];
   const lines = text.split('\n');
@@ -390,7 +401,7 @@ export default function EquipoPage() {
       });
       
       if (waRes.ok) {
-        await supabase.from('payroll').update({ whatsapp_sent: true }).eq('id', record.id);
+        await updatePayrollFlags(record.id, { whatsapp_sent: true });
         alert("¡WhatsApp enviado con éxito!");
         setSelectedRecordForDetails(prev => prev && prev.id === record.id ? { ...prev, whatsapp_sent: true } : prev);
         fetchRecords();
@@ -424,11 +435,7 @@ export default function EquipoPage() {
       });
       
       if (waRes.ok) {
-        try {
-          await supabase.from('payroll').update({ comprobante_sent: true }).eq('id', record.id);
-        } catch (dbErr) {
-          console.error("Error actualizando comprobante_sent en Supabase:", dbErr);
-        }
+        await updatePayrollFlags(record.id, { comprobante_sent: true });
         alert("¡Recibo detallado y asistencia enviados con éxito!");
         fetchRecords();
       } else {
@@ -537,13 +544,14 @@ export default function EquipoPage() {
 
   const fetchRecords = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('payroll')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) console.error("Error fetching payroll:", error);
-    else setRecords(data || []);
+    try {
+      const res = await fetch('/api/payroll/records', { cache: 'no-store' });
+      const json = await res.json();
+      if (res.ok && json.success) setRecords(json.records || []);
+      else console.error("Error fetching payroll:", json.error);
+    } catch (error) {
+      console.error("Error fetching payroll:", error);
+    }
     setIsLoading(false);
   };
 
@@ -575,8 +583,9 @@ export default function EquipoPage() {
       }
 
       // 2. Eliminar el registro en payroll
-      const { error } = await supabase.from('payroll').delete().eq('id', id);
-      if (error) throw error;
+      const delRes = await fetch('/api/payroll/records', { method: 'DELETE', headers: JSON_HEADERS, body: JSON.stringify({ id }) });
+      const delJson = await delRes.json().catch(() => ({}));
+      if (!delRes.ok || !delJson.success) throw new Error(delJson.error || 'No se pudo eliminar el registro de nómina');
 
       alert("Registro de nómina eliminado y saldo contable restaurado con éxito.");
       fetchRecords();
@@ -654,11 +663,16 @@ export default function EquipoPage() {
       whatsapp_sent: false
     };
 
-    const { data: inserted, error: dbError } = await supabase
-      .from('payroll')
-      .insert([newRecord])
-      .select()
-      .single();
+    let inserted: any = null;
+    let dbError: any = null;
+    try {
+      const insRes = await fetch('/api/payroll/records', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(newRecord) });
+      const insJson = await insRes.json().catch(() => ({}));
+      if (insRes.ok && insJson.success) inserted = insJson.record;
+      else dbError = insJson.error || 'Error al guardar la nómina';
+    } catch (err) {
+      dbError = err;
+    }
     
     if (dbError) {
       console.error(dbError);
@@ -757,7 +771,7 @@ export default function EquipoPage() {
         });
         
         if (waRes.ok) {
-          await supabase.from('payroll').update({ whatsapp_sent: true }).eq('id', inserted.id);
+          await updatePayrollFlags(inserted.id, { whatsapp_sent: true });
         } else {
           const errData = await waRes.json();
           alert(`Guardado en base de datos, pero falló WhatsApp: ${errData.error || 'Error de API'}`);
