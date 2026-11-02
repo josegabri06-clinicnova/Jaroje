@@ -2318,6 +2318,8 @@ export default function PublicReservaPage() {
                       </p>
                     )}
 
+                    {r.receipt_url && (
+
                     <div className="pt-1.5 flex items-center justify-between border-t border-zinc-150/40 mt-1">
                       <a
                         href={r.receipt_url}
@@ -2329,6 +2331,8 @@ export default function PublicReservaPage() {
                         {lang === 'en' ? 'View Document' : 'Ver Comprobante'}
                       </a>
                     </div>
+
+                    )}
                   </div>
                 );
               })}
@@ -2376,7 +2380,7 @@ export default function PublicReservaPage() {
                 <p className="text-[11px] text-zinc-600 leading-relaxed">
                   {t.dniSuccessDesc}
                 </p>
-                {(uploadedDniUrl.toLowerCase().endsWith('.pdf') || uploadedDniUrl.toLowerCase().includes('.pdf')) ? (
+                {!/^(https?:|blob:|data:)/i.test(uploadedDniUrl) ? null : (uploadedDniUrl.toLowerCase().endsWith('.pdf') || uploadedDniUrl.toLowerCase().includes('.pdf')) ? (
                   <div className="flex flex-col items-center justify-center p-5 bg-zinc-50 border border-zinc-200 rounded-xl space-y-2 max-w-xs mx-auto">
                     <FileText size={36} className="text-zinc-400" />
                     <span className="text-[11px] font-bold text-zinc-700">{lang === 'en' ? 'PDF Document' : 'Documento PDF'}</span>

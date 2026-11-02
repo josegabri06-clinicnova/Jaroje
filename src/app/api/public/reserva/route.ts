@@ -5,6 +5,14 @@ import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
 
+// Esta ruta es pública (basta el número de reserva): nunca debe devolver enlaces a los documentos de los huéspedes
+// (DNI, comprobantes). Solo indica si existe un archivo; la página del huésped únicamente necesita saberlo.
+const FILE_MARKER = 'uploaded';
+
+function publicTransferReceipts(list: any[] | null | undefined) {
+  return (list || []).map(({ receipt_url, ...rest }: any) => ({ ...rest, has_file: Boolean(receipt_url) }));
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -195,12 +203,12 @@ export async function GET(req: Request) {
           is_checked_in: checkinData?.status === 'checked_in',
           is_checked_out: checkinData?.status === 'checked_out',
           is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
-          document_url: checkinData?.document_url || null,
-          receipt_url: finalReceiptUrl,
+          document_url: checkinData?.document_url ? FILE_MARKER : null,
+          receipt_url: finalReceiptUrl ? FILE_MARKER : null,
           status: localRes.status || 'confirmed',
           booking_time: localRes.created_at || null,
           channel: 'Directo',
-          transfer_receipts: groupTransferReceipts || [],
+          transfer_receipts: publicTransferReceipts(groupTransferReceipts),
           portal_settings: {
             show_card_payment: portalSettings?.show_card_payment !== false,
             transfer_account: portalSettings?.transfer_account ?? (localRes.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
@@ -448,12 +456,12 @@ export async function GET(req: Request) {
             is_checked_in: checkinData?.status === 'checked_in',
             is_checked_out: checkinData?.status === 'checked_out',
             is_acknowledged: checkinData?.status === 'acknowledged' || checkinData?.status === 'checked_in' || checkinData?.status === 'checked_out',
-            document_url: checkinData?.document_url || null,
-            receipt_url: finalReceiptUrl,
+            document_url: checkinData?.document_url ? FILE_MARKER : null,
+            receipt_url: finalReceiptUrl ? FILE_MARKER : null,
             status: booking.status || 'confirmed',
             booking_time: booking.booking_time || null,
             channel: booking.channel || 'Directo',
-            transfer_receipts: groupTransferReceipts || [],
+            transfer_receipts: publicTransferReceipts(groupTransferReceipts),
             portal_settings: {
               show_card_payment: portalSettings?.show_card_payment !== false,
               transfer_account: portalSettings?.transfer_account ?? (booking.guest_name?.toUpperCase().includes('(US DOLLARS)') ? 'wise' : 'santander'),
