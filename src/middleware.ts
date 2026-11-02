@@ -15,7 +15,9 @@ function isPublicPath(pathname: string, req?: NextRequest): boolean {
     pathname === '/login' ||
     pathname === '/favicon.ico' ||
     pathname === '/api/health' ||
-    PUBLIC_FILE_EXTENSIONS.test(pathname)
+    // Archivos estáticos (imágenes, css, js…): nunca dentro de /api, donde una ruta puede terminar en .jpg o .pdf
+    // y aun así servir datos privados (p. ej. /api/files/dni_images/x.jpg)
+    (PUBLIC_FILE_EXTENSIONS.test(pathname) && !pathname.startsWith('/api/'))
   ) {
     return true;
   }
