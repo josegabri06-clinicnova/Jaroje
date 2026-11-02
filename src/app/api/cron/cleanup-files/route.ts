@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { parseStoredFileUrl } from '@/lib/storage-files';
 
 export const dynamic = 'force-dynamic';
 
 function getStoragePath(url: string) {
   if (!url) return null;
+  // Enlaces del servidor (/api/files/<almacén>/<ruta>): la ruta es lo que va después del almacén
+  const viaServer = parseStoredFileUrl(url);
+  if (viaServer && url.includes('/api/files/')) return viaServer.path;
   // Quitar query params si es URL firmada (?token=...)
   const cleanUrl = url.split('?')[0];
   let parts = cleanUrl.split('/public/');

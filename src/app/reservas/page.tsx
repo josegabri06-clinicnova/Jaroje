@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'rea
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, RefreshCw, User, Users, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Lock, Download, BedDouble, LogIn, FileText, UploadCloud, Camera, Upload, Wallet, Send, X, Plus, Minus, Edit, Loader2, Trash2, XCircle, AlertTriangle, Check, LogOut, CreditCard, Sparkles, MessageCircle, Copy, Phone } from 'lucide-react';
 import { getActiveEmployee, getRole, getOperatorForLog } from '@/lib/auth';
+import { uploadGuestFile } from '@/lib/files-client';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { createClient } from '@supabase/supabase-js';
@@ -1044,34 +1045,18 @@ function ReservasListInner() {
 
       // 0. Subir DNI/Pasaporte si existe
       if (documentFile) {
-        const fileExt = documentFile.name.split('.').pop();
-        const fileName = `${selectedRes.id}_dni_${Date.now()}.${fileExt}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('dni_images')
-          .upload(fileName, documentFile);
-          
-        if (uploadError) {
+        try {
+          document_url = await uploadGuestFile(documentFile, `${selectedRes.id}_dni`);
+        } catch (uploadError) {
           console.error("Error subiendo documento:", uploadError);
           alert("Hubo un error subiendo el DNI. Se guardará el Check-in sin adjunto.");
-        } else {
-          const { data: publicUrlData } = supabase.storage
-            .from('dni_images')
-            .getPublicUrl(fileName);
-          document_url = publicUrlData.publicUrl;
         }
       }
 
       // 0.1 Subir Voucher TPV / Comprobante si existe
       if (voucherFile) {
         try {
-          const fileExt = voucherFile.name.split('.').pop() || 'jpg';
-          const fileName = `voucher_${selectedRes.id}_${Date.now()}.${fileExt}`;
-          const { data, error: vErr } = await supabase.storage.from('dni_images').upload(fileName, voucherFile);
-          if (!vErr && data) {
-            const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-            voucher_url = publicUrlData.publicUrl;
-          }
+          voucher_url = await uploadGuestFile(voucherFile, `voucher_${selectedRes.id}`);
         } catch (vErr) {
           console.error('Error al subir voucher en reservas:', vErr);
         }

@@ -13,6 +13,7 @@ import { createClient } from '@supabase/supabase-js';
 import LiveAvailabilityWidget from '@/components/LiveAvailabilityWidget';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { getActiveEmployee, clearActiveEmployee, Employee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
+import { uploadGuestFile } from '@/lib/files-client';
 import EmployeeModal from '@/components/EmployeeModal';
 import CameraModal from '@/components/CameraModal';
 import InventarioPage from '../inventario/page';
@@ -366,8 +367,8 @@ function dataUrlToFile(dataUrl: string, filename = `img_${Date.now()}.jpg`): Fil
 }
 
 async function uploadImageToStorage(
-  supabaseClient: any,
-  bucket: string,
+  _supabaseClient: any,
+  _bucket: string,
   fileName: string,
   fileOrBlobOrDataUrl: File | Blob | string
 ): Promise<string> {
@@ -382,23 +383,8 @@ async function uploadImageToStorage(
     blobToUpload = fileOrBlobOrDataUrl;
   }
 
-  const { data, error } = await supabaseClient.storage
-    .from(bucket)
-    .upload(fileName, blobToUpload, {
-      contentType: blobToUpload.type || 'image/jpeg',
-      upsert: true
-    });
-
-  if (error) {
-    console.error(`Error subiendo imagen a ${bucket}/${fileName}:`, error);
-    throw error;
-  }
-
-  const { data: publicUrlData } = supabaseClient.storage
-    .from(bucket)
-    .getPublicUrl(data.path);
-
-  return publicUrlData.publicUrl;
+  // Los archivos ya no se suben a Supabase con la clave pública: se envían al servidor (solo administrador y Recepción)
+  return uploadGuestFile(blobToUpload, fileName.replace(/\.[^.]+$/, ''));
 }
 
 async function compressImage(file: File): Promise<string> {
