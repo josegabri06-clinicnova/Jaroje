@@ -1,6 +1,13 @@
 export const RECEPTION_WA_GROUP_URL = 'https://chat.whatsapp.com/CaqLF4tScJRJ1BeUx7ANUy?s=cl&p=i&ilr=4&iam=0';
 export const MAINTENANCE_WA_GROUP_URL = 'https://chat.whatsapp.com/K2u4HU8kxVmGREYaZSkuZ6?s=cl&p=i&ilr=4&iam=0';
 
+// Los enlaces de archivos del servidor son relativos (/api/files/...): en un mensaje de WhatsApp deben ir completos
+function absoluteFileUrl(url: string): string {
+  if (!url.startsWith('/')) return url;
+  const origin = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'https://jaroje-app.vercel.app');
+  return `${origin}${url}`;
+}
+
 export interface CheckInSummaryParams {
   guestName: string;
   rooms: string;
@@ -280,10 +287,10 @@ export function buildCheckInSummaryMessage(p: CheckInSummaryParams): string {
     obsList.push(p.notes.trim());
   }
   if (p.voucherUrl) {
-    obsList.push(`🔗 Foto Voucher TPV / Comprobante: ${p.voucherUrl}`);
+    obsList.push(`🔗 Foto Voucher TPV / Comprobante: ${absoluteFileUrl(p.voucherUrl)}`);
   }
   if (p.dniUrl) {
-    obsList.push(`🔗 Foto Identificación DNI: ${p.dniUrl}`);
+    obsList.push(`🔗 Foto Identificación DNI: ${absoluteFileUrl(p.dniUrl)}`);
   }
 
   if (obsList.length > 0) {

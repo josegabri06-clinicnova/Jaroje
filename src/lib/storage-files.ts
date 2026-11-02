@@ -45,6 +45,25 @@ export function parseStoredFileUrl(url: string | null | undefined): { bucket: Fi
   return { bucket, path };
 }
 
+// Tipo REAL de un archivo subido, por sus primeros bytes (no por el nombre ni por el tipo que declare el navegador)
+const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(...Array.from(b.slice(from, to)));
+const HEIC_BRANDS = ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'];
+
+export function sniffFileType(b: Uint8Array): { ext: string; mime: string } | null {
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return { ext: 'jpg', mime: 'image/jpeg' };
+  if (b.length >= 8 && b[0] === 0x89 && ascii(b, 1, 4) === 'PNG') return { ext: 'png', mime: 'image/png' };
+  if (b.length >= 5 && ascii(b, 0, 5) === '%PDF-') return { ext: 'pdf', mime: 'application/pdf' };
+  if (b.length >= 12 && ascii(b, 0, 4) === 'RIFF' && ascii(b, 8, 12) === 'WEBP') return { ext: 'webp', mime: 'image/webp' };
+  if (b.length >= 12 && ascii(b, 4, 8) === 'ftyp' && HEIC_BRANDS.includes(ascii(b, 8, 12))) return { ext: 'heic', mime: 'image/heic' };
+  return null;
+}
+
+// Prefijo del nombre de archivo que sugiere quien sube (p. ej. "dni_95584793"): solo letras, números, _ y -
+export function sanitizeFilePrefix(raw: unknown): string {
+  const clean = String(raw ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 40);
+  return clean.replace(/^[^a-z0-9]+/, '') || 'doc';
+}
+
 // Tipo de contenido por extensión: solo imágenes y PDF se muestran en el navegador; el resto se descarga
 const CONTENT_TYPES: Record<string, string> = {
   jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp',

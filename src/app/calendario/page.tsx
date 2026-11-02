@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { getActiveEmployee, verifyAdminPin, getRole, getOperatorForLog } from '@/lib/auth';
+import { uploadGuestFile } from '@/lib/files-client';
 import { getBeds24RoomIdAndUnit, getDirectTotalForStay, computeOtaSplit, getCapacityRules, areBookingsInSameGroup } from '@/lib/beds24';
 import { getChannelBadge } from '@/lib/channels';
 import { buildCheckInSummaryMessage, RECEPTION_WA_GROUP_URL, copyToClipboard, openWhatsAppUrl } from '@/lib/checkin-summary';
@@ -856,13 +857,7 @@ export default function CalendarPage() {
     if (selectedReserva && selectedReserva.checked_in) {
       setDniUploadLoading(true);
       try {
-        const fileExt = file.name.split('.').pop() || 'jpg';
-        const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
-        const { data, error: uploadErr } = await supabase.storage.from('dni_images').upload(fileName, file);
-        if (uploadErr) throw uploadErr;
-
-        const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-        const newDniUrl = publicUrlData.publicUrl;
+        const newDniUrl = await uploadGuestFile(file, `dni_${selectedReserva.id}`);
 
         const cleanId = String(selectedReserva.id).toLowerCase().trim();
         const { data: existingCheckin } = await supabase
@@ -1470,25 +1465,17 @@ export default function CalendarPage() {
 
     let finalDniUrl = null;
     if (dniFile) {
-      const fileExt = dniFile.name.split('.').pop() || 'jpg';
-      const fileName = `dni_${selectedReserva.id}_${Date.now()}.${fileExt}`;
-      const { data, error } = await supabase.storage.from('dni_images').upload(fileName, dniFile);
-      if (!error && data) {
-        const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-        finalDniUrl = publicUrlData.publicUrl;
+      try {
+        finalDniUrl = await uploadGuestFile(dniFile, `dni_${selectedReserva.id}`);
+      } catch (dErr) {
+        console.error('Error al subir DNI en calendario:', dErr);
       }
     }
 
     let finalVoucherUrl = null;
     if (voucherFile) {
       try {
-        const fileExt = voucherFile.name.split('.').pop() || 'jpg';
-        const fileName = `voucher_${selectedReserva.id}_${Date.now()}.${fileExt}`;
-        const { data, error: vErr } = await supabase.storage.from('dni_images').upload(fileName, voucherFile);
-        if (!vErr && data) {
-          const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(data.path);
-          finalVoucherUrl = publicUrlData.publicUrl;
-        }
+        finalVoucherUrl = await uploadGuestFile(voucherFile, `voucher_${selectedReserva.id}`);
       } catch (vErr) {
         console.error('Error al subir voucher en calendario:', vErr);
       }
