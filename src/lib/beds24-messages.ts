@@ -327,6 +327,18 @@ export function extractPhoneFromMessages(messages: any[], country?: string, book
 }
 
 /**
+ * Detecta si un teléfono es ficticio, dummy o inválido (común en OTAs como Expedia)
+ */
+export function isDummyOrInvalidPhone(phone?: string | null): boolean {
+  if (!phone) return true;
+  const digits = String(phone).replace(/\D/g, '');
+  if (digits.length < 10) return true;
+  if (/^(\d)\1+$/.test(digits)) return true; // ej: 11111111111, 0000000000
+  if (digits === '1234567890' || digits === '0123456789') return true;
+  return false;
+}
+
+/**
  * Procesa respuestas pendientes de huéspedes en OTAs:
  * Revisa reservas OTA recientes sin teléfono, consulta mensajes entrantes, extrae teléfono y dispara WhatsApp
  */
@@ -339,7 +351,23 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
   let upgradedCount = 0;
 
   try {
-    // Buscar reservas de OTAs activas de los últimos 45 días sin teléfono registrado
+    // 1. Obtener IDs de reservas que ya tuvieron su respuesta de teléfono capturada para no repetir
+    const { data: capturedLogs } = await supabase
+      .from('ota_messages_log')
+      .select('booking_id')
+      .eq('template_type', 'ota_guest_reply_captured');
+
+    const alreadyCapturedSet = new Set((capturedLogs || []).map(l => String(l.booking_id)));
+
+    // 2. Obtener reservas a las que se les envió la solicitud de WhatsApp
+    const { data: requestedLogs } = await supabase
+      .from('ota_messages_log')
+      .select('booking_id')
+      .eq('template_type', 'ota_welcome_request_phone');
+
+    const requestedSet = new Set((requestedLogs || []).map(l => String(l.booking_id)));
+
+    // 3. Buscar reservas de OTAs activas de los últimos 45 días
     const thirtyDaysAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
     const { data: otaBookings, error } = await supabase
@@ -350,17 +378,22 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
       .neq('status', '0')
       .gte('check_in', thirtyDaysAgo)
       .order('created_at', { ascending: false })
-      .limit(25);
+      .limit(30);
 
     if (error || !otaBookings) {
       console.error('[OTA Replies Worker] Error consultando beds24_reservations:', error);
       return { processedCount: 0, upgradedCount: 0, details };
     }
 
-    // Filtrar aquellas que realmente no tienen teléfono
+    // 4. Filtrar candidatas: aquellas sin teléfono válido O a las que se les pidió WhatsApp y aún no capturamos respuesta
     const pendingBookings = otaBookings.filter(b => {
-      const p = String(b.guest_phone || '').trim();
-      return !p || p === 'null' || p === 'undefined';
+      const bId = String(b.id);
+      if (alreadyCapturedSet.has(bId)) return false;
+
+      const hasInvalidPhone = isDummyOrInvalidPhone(b.guest_phone);
+      const wasRequested = requestedSet.has(bId);
+
+      return hasInvalidPhone || wasRequested;
     });
 
     for (const b of pendingBookings) {
@@ -391,7 +424,18 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
           console.warn(`[OTA Replies Worker] No se pudo guardar teléfono en Beds24 para ${bId}:`, err);
         });
 
-        // 4. Disparar WhatsApp oficial con portal del huésped
+        // 4. Registrar captura en ota_messages_log para evitar reprocesamiento
+        await recordOtaMessageLog({
+          bookingId: bId,
+          channel: b.channel,
+          guestName: b.guest_name,
+          message: `Teléfono capturado del chat de la OTA: ${detectedPhone}`,
+          templateType: 'ota_guest_reply_captured',
+          status: 'captured',
+          responsePayload: { detectedPhone }
+        });
+
+        // 5. Disparar WhatsApp oficial con portal del huésped
         const bookingForWA = {
           id: bId,
           guest_name: b.guest_name,
@@ -436,3 +480,4 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
     return { processedCount: 0, upgradedCount, details };
   }
 }
+
