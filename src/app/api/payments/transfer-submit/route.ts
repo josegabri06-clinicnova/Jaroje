@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
-import { grantGuestAccess, normalizeBookingId } from '@/lib/guest-auth';
+import { grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
+import { filesProxyUrl } from '@/lib/storage-files';
 import { sendWhatsAppTextMessage } from '@/lib/whatsapp';
 
 export const dynamic = 'force-dynamic';
@@ -69,22 +70,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Error al guardar el comprobante en almacenamiento.' }, { status: 500 });
     }
 
-    // 2. Generar URL de acceso segura (firmada para privacidad de comprobantes de pago)
-    let finalReceiptUrl = '';
-    const { data: signedData } = await supabase.storage
-      .from('transfer-receipts')
-      .createSignedUrl(filePath, 60 * 60 * 24 * 180); // 180 días de vigencia
-
-    if (signedData?.signedUrl) {
-      finalReceiptUrl = signedData.signedUrl;
-    } else {
-      const { data: urlData } = supabase.storage
-        .from('transfer-receipts')
-        .getPublicUrl(filePath);
-      finalReceiptUrl = urlData.publicUrl;
-    }
-
-    const publicUrl = finalReceiptUrl;
+    // 2. Enlace que se guarda en la base de datos: el del servidor (/api/files), nunca uno público o firmado de almacenamiento
+    const publicUrl = filesProxyUrl('transfer-receipts', filePath);
 
     // 3. Registrar en la tabla "transfer_receipts" de Supabase
     const { data: dbData, error: dbError } = await supabase
@@ -348,8 +335,14 @@ export async function POST(req: Request) {
       await sendWhatsAppTextMessage(guestPhone, guestNotificationBody);
     }
 
-    const okRes = NextResponse.json({ success: true, receiptUrl: publicUrl, record: dbData });
+    // Al huésped solo se le devuelve el enlace propio de su reserva; el registro se devuelve sin el enlace de almacenamiento
     const guestId = normalizeBookingId(cleanBookingId);
+    const { receipt_url: _storedUrl, ...safeRecord } = (dbData || {}) as any;
+    const okRes = NextResponse.json({
+      success: true,
+      receiptUrl: guestId ? guestFileUrl(guestId, 'transfer', publicUrl, String(dbData?.id ?? '')) : null,
+      record: safeRecord
+    });
     if (guestId) await grantGuestAccess(okRes, guestId); // quien sube su comprobante queda autorizado en este dispositivo
     return okRes;
 

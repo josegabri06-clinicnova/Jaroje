@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token } from '@/lib/beds24';
-import { isGuestAuthorized, grantGuestAccess, normalizeBookingId } from '@/lib/guest-auth';
+import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileUrl } from '@/lib/guest-auth';
+import { filesProxyUrl } from '@/lib/storage-files';
 
 export const dynamic = 'force-dynamic';
 
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
     const rawExt = file.name ? file.name.split('.').pop()?.toLowerCase() : 'jpg';
     const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'heic'].includes(rawExt || '') ? rawExt : 'jpg';
     const randomSuffix = crypto.randomUUID ? crypto.randomUUID().slice(0, 12) : Date.now();
-    const filePath = `guest_dni_${cleanId}_${Date.now()}_${randomSuffix}.${safeExt}`;
+    const filePath = `guest_dni_${guestId}_${Date.now()}_${randomSuffix}.${safeExt}`;
 
     // 3. Subir a Supabase Storage (bucket: 'dni_images')
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -120,22 +121,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al subir identificación a storage: ' + uploadError.message }, { status: 500 });
     }
 
-    // 4. Generar URL de acceso segura (firmada para privacidad de documentos personales)
-    let finalDocUrl = '';
-    const { data: signedData } = await supabase.storage
-      .from('dni_images')
-      .createSignedUrl(filePath, 60 * 60 * 24 * 180); // 180 días de vigencia
-
-    if (signedData?.signedUrl) {
-      finalDocUrl = signedData.signedUrl;
-    } else {
-      const { data: urlData } = supabase.storage
-        .from('dni_images')
-        .getPublicUrl(filePath);
-      finalDocUrl = urlData.publicUrl;
-    }
-
-    const publicUrl = finalDocUrl;
+    // 4. Enlace que se guarda en la base de datos: el del servidor (/api/files). Nunca un enlace público o firmado de
+    // almacenamiento: las tablas son legibles con la clave pública y ese enlace abriría el archivo a cualquiera.
+    const storedUrl = filesProxyUrl('dni_images', filePath);
 
     // 5. Upsert en la tabla 'checkins' de Supabase
     const { error: dbError } = await supabase
@@ -145,7 +133,7 @@ export async function POST(req: Request) {
         guest_name: existingCheckin?.guest_name || guestName,
         check_in_date: existingCheckin?.check_in_date || checkInDate || new Date().toISOString().split('T')[0],
         check_out_date: existingCheckin?.check_out_date || checkOutDate || new Date().toISOString().split('T')[0],
-        document_url: publicUrl,
+        document_url: storedUrl,
         receipt_url: existingCheckin?.receipt_url || null,
         status: existingCheckin?.status || 'pending'
       }, { onConflict: 'reservation_id' });
@@ -155,7 +143,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al registrar identificación en base de datos: ' + dbError.message }, { status: 500 });
     }
 
-    const okRes = NextResponse.json({ success: true, url: publicUrl });
+    // Al huésped solo se le devuelve el enlace propio de su reserva (la cookie se entrega en esta misma respuesta)
+    const okRes = NextResponse.json({ success: true, url: guestFileUrl(guestId, 'dni', storedUrl) });
     await grantGuestAccess(okRes, guestId); // quien sube su identificación queda autorizado en este dispositivo
     return okRes;
 

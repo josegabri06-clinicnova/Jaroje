@@ -3923,7 +3923,7 @@ function ReservasListInner() {
                         `CFDI: ${br.cfdi_use}`,
                         `Monto: $${Number(br.amount || 0).toLocaleString('es-MX')} MXN`,
                         `Observaciones: ${br.notes || '(Ninguna)'}`,
-                        `PDF: ${br.pdf_url}`
+                        `PDF: ${typeof br.pdf_url === 'string' && br.pdf_url.startsWith('/') ? window.location.origin + br.pdf_url : br.pdf_url}`
                       ].join('\n');
                       navigator.clipboard.writeText(text).catch(() => {});
                     }}
