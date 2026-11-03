@@ -779,6 +779,21 @@ export async function GET(req: Request) {
       }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Revisar respuestas de huéspedes en OTAs (Airbnb / Booking / Expedia)
+    // ─────────────────────────────────────────────────────────────────────────────
+    try {
+      const { checkAndProcessOtaGuestReplies } = await import('@/lib/beds24-messages');
+      const otaRes = await checkAndProcessOtaGuestReplies();
+      if (otaRes.upgradedCount > 0) {
+        otaRes.details.forEach(d => {
+          reports.push(`🎉 Huésped OTA ${d.guestName} respondió su teléfono (${d.phone}) en ${d.channel}! WhatsApp activado.`);
+        });
+      }
+    } catch (otaWorkerErr) {
+      console.warn('[Cron WhatsApp] Fallo no crítico en worker OTA:', otaWorkerErr);
+    }
+
     return NextResponse.json({
       success: true,
       mexicoTime: new Date().toLocaleString('es-MX', { timeZone: 'America/Mexico_City' }),

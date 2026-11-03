@@ -10,6 +10,7 @@ import {
 } from '@/lib/whatsapp';
 import { getBeds24Token, clearBeds24Cache, syncBeds24BookingLocal, isInvoicePayment, extractPhoneFromBookingData, updateBeds24BookingPhone } from '@/lib/beds24';
 import { deleteCancelledReservationFinances } from '@/lib/finances';
+import { isOtaChannel, sendOtaWelcomeMessage } from '@/lib/beds24-messages';
 
 // POST: Beds24 envía un Webhook aquí cuando entra una reserva en Airbnb/Booking/Google/Directo o se cancela
 export async function POST(req: Request) {
@@ -365,6 +366,33 @@ export async function POST(req: Request) {
               console.log(`[Webhook Beds24] ✅ WhatsApp solicitud_recibida enviado AL INSTANTE a reserva ${bookingIdStr} (${bookingForWA.guest_name})`);
             } else {
               console.error(`[Webhook Beds24] Error al enviar WhatsApp de solicitud_recibida:`, waRes.error);
+            }
+          }
+        } else {
+          // ═══════════════════════════════════════════════════════════════════════
+          // CASO 3: RESERVACIÓN ACTIVA SIN TELÉFONO (OTAs: Booking, Airbnb, Expedia)
+          // ═══════════════════════════════════════════════════════════════════════
+          const rawChannel = String(b.channel || source || b.referer || '').trim();
+          if (isOtaChannel(rawChannel) && !isCancelled) {
+            console.log(`[Webhook Beds24] Reserva OTA sin teléfono recibida (${rawChannel}, ID: ${bookingIdStr}, Huésped: ${b.firstName || ''} ${b.lastName || ''}). Enviando plantilla OTA solicitando WhatsApp...`);
+            try {
+              const otaRes = await sendOtaWelcomeMessage({
+                bookingId: bookingIdStr,
+                guestName: `${b.firstName || ''} ${b.lastName || ''}`.trim() || b.guestName || guestName || 'Huésped',
+                channel: rawChannel,
+                country: country
+              });
+              if (otaRes.success) {
+                if (otaRes.alreadySent) {
+                  console.log(`[Webhook Beds24] Mensaje OTA ya enviado previamente para ${bookingIdStr}.`);
+                } else {
+                  console.log(`[Webhook Beds24] ✅ Mensaje OTA solicitando WhatsApp enviado exitosamente para ${bookingIdStr}.`);
+                }
+              } else {
+                console.error(`[Webhook Beds24] ❌ Error enviando mensaje OTA para ${bookingIdStr}:`, otaRes.error);
+              }
+            } catch (otaErr) {
+              console.error(`[Webhook Beds24] Error crítico en envío de mensaje OTA para ${bookingIdStr}:`, otaErr);
             }
           }
         }
