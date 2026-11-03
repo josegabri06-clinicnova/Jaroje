@@ -2498,6 +2498,20 @@ export function extractPhoneFromBookingData(b: any): string | null {
     }
   }
 
+  // Patrón B2: Formato internacional flexible con espacios o separadores libres (ej: +34 639 36 79 30 o +52 1 958 116 8698)
+  const flexibleIntlMatches = fullText.match(/(?:\+|00)\s*(?:\d[\s().-]*){8,16}\d/g);
+  if (flexibleIntlMatches) {
+    for (const rawCandidate of flexibleIntlMatches) {
+      const digits = rawCandidate.replace(/\D/g, '');
+      if (digits.length >= 9 && digits.length <= 16 && digits !== bookingIdStr && digits !== '0000000000') {
+        const norm = normalizePhone(rawCandidate, b.country2 || b.country || b.guestCountry2 || b.guestCountry);
+        if (norm) {
+          return norm;
+        }
+      }
+    }
+  }
+
   // Patrón C: Formato mexicano estándar de 10 dígitos (ej: 958 116 8698 o 55 1234 5678)
   const mxMatches = fullText.match(/\b([2-9]\d{2}[\s.-]?\d{3}[\s.-]?\d{4})\b/g);
   if (mxMatches) {

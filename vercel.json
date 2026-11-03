@@ -5,6 +5,10 @@
       "schedule": "*/10 * * * *"
     },
     {
+      "path": "/api/cron/ota-messages",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/analytics-sync",
       "schedule": "0 4 * * *"
     },

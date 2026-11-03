@@ -321,6 +321,21 @@ export function extractPhoneFromMessages(messages: any[], country?: string, book
 
     const phone = extractPhoneFromBookingData(dummyBooking);
     if (phone) return phone;
+
+    // Extractor directo con espacios libres para chats de Airbnb / Booking / Expedia
+    const flexibleMatches = text.match(/(?:\+|00)?\s*(?:\d[\s().-]*){8,16}\d/g);
+    if (flexibleMatches) {
+      const bookingIdStr = String(bookingId || '').replace(/\D/g, '');
+      for (const raw of flexibleMatches) {
+        const digits = raw.replace(/\D/g, '');
+        if (digits.length >= 9 && digits.length <= 16 && digits !== bookingIdStr && !isDummyOrInvalidPhone(digits)) {
+          const norm = normalizePhone(raw, country);
+          if (norm && !isDummyOrInvalidPhone(norm)) {
+            return norm;
+          }
+        }
+      }
+    }
   }
 
   return null;
