@@ -447,16 +447,14 @@ export async function checkAndProcessOtaGuestReplies(): Promise<{
           deposit: b.deposit
         };
 
-        const isAirbnb = String(b.channel || '').toLowerCase().includes('airbnb');
-        const isBooking = String(b.channel || '').toLowerCase().includes('booking');
-        let waResult;
-
-        if (isAirbnb || isBooking) {
-          // Reservas confirmadas de OTA -> Plantilla de reservación confirmada
-          waResult = await sendTemplate3_ReservacionConfirmada(bookingForWA, false);
+        // 5. Disparar WhatsApp oficial: Enviar INMEDIATAMENTE la plantilla de reservación confirmada
+        // Se utiliza forceResend: true y bypassPause: true para garantizar la entrega inmediata al número recién captado
+        console.log(`[OTA Replies Worker] 🚀 Enviando plantilla de reserva confirmada por WhatsApp a ${detectedPhone} (reserva ${bId})...`);
+        const waResult = await sendTemplate3_ReservacionConfirmada(bookingForWA, true, true);
+        if (waResult?.success) {
+          console.log(`[OTA Replies Worker] ✅ WhatsApp reservacion_confirmada entregado exitosamente a ${detectedPhone} para reserva ${bId}.`);
         } else {
-          // Expedia o sin anticipo -> Plantilla de solicitud recibida
-          waResult = await sendTemplate1_SolicitudRecibida(bookingForWA, false);
+          console.warn(`[OTA Replies Worker] ⚠️ Resultado envío WhatsApp para ${bId}:`, waResult?.error);
         }
 
         upgradedCount++;
