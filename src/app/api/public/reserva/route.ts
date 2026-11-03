@@ -3,6 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { getBeds24Bookings, getBeds24Token, getUnitName, JAROJE_CATALOG, detectAndAdjustGroupGuests, clearBeds24Cache, areBookingsInSameGroup, isInvoicePayment } from '@/lib/beds24';
 import { normalizePhone, detectLanguageFromPhone } from '@/lib/whatsapp';
 import { isGuestAuthorized, grantGuestAccess, normalizeBookingId, guestFileRef, guestFileUrl, hasUsablePhone } from '@/lib/guest-auth';
+import { filesProxyUrl } from '@/lib/storage-files';
 
 export const dynamic = 'force-dynamic';
 
@@ -555,8 +556,9 @@ export async function POST(req: Request) {
     }
 
     // 2. Obtener la extensión del archivo
-    const fileExt = file.name.split('.').pop() || 'jpg';
-    const filePath = `${id}_${Date.now()}.${fileExt}`;
+    const rawExt = (file.name.split('.').pop() || '').toLowerCase();
+    const fileExt = ['jpg', 'jpeg', 'png', 'webp', 'pdf', 'heic'].includes(rawExt) ? rawExt : 'jpg';
+    const filePath = `${guestId}_${Date.now()}.${fileExt}`;
 
     // 3. Subir directamente como File/Blob a Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
@@ -571,22 +573,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al subir comprobante a storage: ' + uploadError.message }, { status: 500 });
     }
 
-    // 4. Generar URL de acceso segura (firmada para privacidad de comprobantes de pago)
-    let finalReceiptUrl = '';
-    const { data: signedData } = await supabase.storage
-      .from('payment_receipts')
-      .createSignedUrl(filePath, 60 * 60 * 24 * 180); // 180 días de vigencia
-
-    if (signedData?.signedUrl) {
-      finalReceiptUrl = signedData.signedUrl;
-    } else {
-      const { data: urlData } = supabase.storage
-        .from('payment_receipts')
-        .getPublicUrl(filePath);
-      finalReceiptUrl = urlData.publicUrl;
-    }
-
-    const publicUrl = finalReceiptUrl;
+    // 4. Enlace que se guarda en la base de datos: el del servidor (/api/files), nunca uno público o firmado de almacenamiento
+    const publicUrl = filesProxyUrl('payment_receipts', filePath);
 
     // 5. Actualizar o insertar en la tabla 'checkins' de Supabase
     const cleanId = String(id).toLowerCase().trim();
@@ -613,7 +601,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Fallo al registrar en base de datos: ' + dbError.message }, { status: 500 });
     }
 
-    const okRes = NextResponse.json({ success: true, receiptUrl: publicUrl });
+    const okRes = NextResponse.json({ success: true, receiptUrl: guestFileUrl(guestId, 'receipt', publicUrl) });
     await grantGuestAccess(okRes, guestId); // quien sube su comprobante queda autorizado en este dispositivo
     return okRes;
 

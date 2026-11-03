@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { normalizeBookingId } from '@/lib/guest-auth';
+import { filesProxyUrl, parseStoredFileUrl } from '@/lib/storage-files';
 
 // POST: Upload the constancia PDF to Supabase Storage
 export async function POST(req: NextRequest) {
@@ -16,9 +18,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Solo se aceptan archivos PDF.' }, { status: 400 });
     }
 
+    const guestId = normalizeBookingId(reservationId);
+    if (!guestId) {
+      return NextResponse.json({ success: false, error: 'ID de reserva no válido.' }, { status: 400 });
+    }
+
     const timestamp = Date.now();
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const fileName = `facturas/${reservationId}_${timestamp}_${safeName}`;
+    const safeName = (file.name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^[^a-zA-Z0-9]+/, '') || 'constancia.pdf').slice(0, 80);
+    const fileName = `facturas/${guestId}_${timestamp}_${safeName}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -32,19 +39,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: uploadError.message }, { status: 500 });
     }
 
-    let finalDocUrl = '';
-    const { data: signedData } = await supabase.storage
-      .from('dni_images')
-      .createSignedUrl(fileName, 60 * 60 * 24 * 180); // 180 días de vigencia
-
-    if (signedData?.signedUrl) {
-      finalDocUrl = signedData.signedUrl;
-    } else {
-      const { data: publicUrlData } = supabase.storage.from('dni_images').getPublicUrl(fileName);
-      finalDocUrl = publicUrlData?.publicUrl || '';
-    }
-
-    const url = finalDocUrl;
+    // Enlace del servidor (/api/files): el PDF no tiene dirección pública. Solo lo abre el personal con sesión.
+    const url = filesProxyUrl('dni_images', fileName);
     return NextResponse.json({ success: true, url });
   } catch (err: any) {
     console.error('[Factura POST] Error:', err);
@@ -62,16 +58,13 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Datos incompletos.' }, { status: 400 });
     }
 
-    // Validar que pdfUrl pertenece exclusivamente a nuestro almacenamiento oficial de Supabase
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-    const isSupabaseStorageUrl = typeof pdfUrl === 'string' && (
-      (supabaseUrl && pdfUrl.startsWith(supabaseUrl)) ||
-      pdfUrl.includes('.supabase.co/storage/v1/')
-    );
-
-    if (!isSupabaseStorageUrl) {
+    // El enlace debe ser de una constancia subida por nuestro propio sistema (almacén dni_images, carpeta facturas).
+    // Se guarda el enlace normalizado del servidor, nunca el texto que envíe el navegador.
+    const parsed = parseStoredFileUrl(typeof pdfUrl === 'string' ? pdfUrl : '');
+    if (!parsed || parsed.bucket !== 'dni_images' || !parsed.path.startsWith('facturas/')) {
       return NextResponse.json({ success: false, error: 'URL de constancia fiscal no autorizada o inválida.' }, { status: 400 });
     }
+    const storedPdfUrl = filesProxyUrl(parsed.bucket, parsed.path);
 
     const { error: insertError } = await supabase.from('billing_requests').insert([{
       reservation_id: String(reservationId),
@@ -80,7 +73,7 @@ export async function PUT(req: NextRequest) {
       amount: Number(amount) || 0,
       email,
       cfdi_use: cfdiUse,
-      pdf_url: pdfUrl,
+      pdf_url: storedPdfUrl,
       notes: notes || '',
       status: 'pending'
     }]);

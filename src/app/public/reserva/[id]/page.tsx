@@ -991,7 +991,7 @@ export default function PublicReservaPage() {
       const waMsgLines = [
         '📑 SOLICITUD DE FACTURA',
         '',
-        `1. Constancia: ${pdfUrl}`,
+        `1. Constancia: ${typeof pdfUrl === 'string' && pdfUrl.startsWith('/') ? window.location.origin + pdfUrl : pdfUrl}`,
         `2. Correo: ${facturaEmail}`,
         `3. Uso del CFDI: ${facturaCfdi}`,
         `4. Total pagado: $${(booking.deposit || booking.price || 0).toLocaleString('es-MX')} ${curr}`,
